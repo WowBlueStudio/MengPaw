@@ -41,6 +41,15 @@ class AgentEngine(
     private val _output = MutableStateFlow<String>("")
     val output: StateFlow<String> = _output.asStateFlow()
 
+    /** Prefix-cache-optimized request builder with stable system prompt. */
+    private val llmRequestBuilder = LlmRequestBuilder(systemPrompt = promptEngine.buildSystemPrompt())
+
+    /** Cumulative cache hit tokens from LlmRequestBuilder. */
+    val cacheHitTokens: Long get() = llmRequestBuilder.cumulativeCacheHitTokens
+
+    /** Cumulative cache miss tokens from LlmRequestBuilder. */
+    val cacheMissTokens: Long get() = llmRequestBuilder.cumulativeCacheMissTokens
+
     /**
      * Run a task through the ReAct loop.
      * @param task The user's task description
@@ -52,8 +61,7 @@ class AgentEngine(
         _state.value = AgentState.Running(task, 0, maxSteps)
         _output.value = ""
 
-        // Initialize conversation with system prompt
-        sessionManager.addMessage(session.id, Message("system", promptEngine.buildSystemPrompt()))
+        // Initialize conversation — system prompt injected by buildConversation via LlmRequestBuilder
         sessionManager.addMessage(session.id, Message("user", task))
 
         try {
@@ -123,7 +131,13 @@ class AgentEngine(
     }
 
     private fun buildConversation(sessionId: String): List<Map<String, String>> {
-        return sessionManager.getStructuredHistory(sessionId)
+        sessionManager.compressIfNeeded()
+        val history = sessionManager.getStructuredHistory(sessionId)
+        // If no system message at index 0, inject via LlmRequestBuilder for prefix cache
+        if (history.isEmpty() || history[0]["role"] != "system") {
+            return llmRequestBuilder.buildMessages(history)
+        }
+        return history
     }
 
     private fun buildCommandString(action: ToolCall): String {
