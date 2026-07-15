@@ -8,7 +8,13 @@
       "Bash(git commit:*)",
       "Bash(./gradlew --stop)",
       "Bash(./gradlew --no-daemon :mengpaw-core:testDebugUnitTest)",
-      "Bash(./gradlew --no-daemon clean :mengpaw-core:testDebugUnitTest)"
+      "Bash(./gradlew --no-daemon clean :mengpaw-core:testDebugUnitTest)",
+      "Bash(./gradlew :mengpaw-core:testDebugUnitTest --no-daemon --stop)",
+      "Bash(./gradlew :mengpaw-core:testDebugUnitTest --no-daemon)",
+      "Bash(./gradlew clean:*)",
+      "Bash(.gradlew :mengpaw-core:testDebugUnitTest --no-daemon)",
+      "Bash(cmd.exe /c \".\\\\gradlew.bat :mengpaw-core:testDebugUnitTest --no-daemon\")",
+      "Bash(./gradlew.bat :mengpaw-core:testDebugUnitTest --no-daemon)"
     ]
   }
 }

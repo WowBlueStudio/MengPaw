@@ -155,6 +155,8 @@ class AgentEngine(
             registry.registerNamespace("self", SelfExecutor.commands)
             registry.registerNamespace("memory", MemoryExecutor.commands)
             registry.registerNamespace("skill", SkillExecutor.commands)
+            registry.registerNamespace("clipboard", ClipboardExecutor.commands)
+            registry.registerNamespace("notification", NotificationExecutor.commands)
             return Pipeline(registry = registry)
         }
     }
