@@ -24,7 +24,6 @@ import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import java.io.File
-import java.net.URLEncoder
 
 /**
  * Preview a file: Markdown (.md) or Image (.png/.jpg/.jpeg/.gif/.bmp).

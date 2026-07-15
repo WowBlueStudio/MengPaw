@@ -5,7 +5,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import android.webkit.*
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -81,7 +80,7 @@ fun BrowserApp(initialUrl: String = "https://www.baidu.com") {
                 context.startActivity(intent)
             }
         } catch (e: Exception) {
-            
+            android.util.Log.w("BrowserActivity", "Failed to wake main app: ${e.message}")
         }
     }
 

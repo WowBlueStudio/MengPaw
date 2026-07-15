@@ -36,7 +36,8 @@ object FsExecutor {
             ?.sortedWith(compareBy<java.io.File> { it.isFile }.thenBy { it.name })
             ?.joinToString("\n") { file ->
                 val type = if (file.isDirectory) "d" else "-"
-                "$type ${if (file.isDirectory) file.name else file.name} (${formatSize(file.length())})"
+                val suffix = if (file.isDirectory) "/" else ""
+                "$type ${file.name}$suffix (${formatSize(file.length())})"
             } ?: ""
         return ExecutionResult.ok(listing.ifEmpty { "(empty directory)" })
     }

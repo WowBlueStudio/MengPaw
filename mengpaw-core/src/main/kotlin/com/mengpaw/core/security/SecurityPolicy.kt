@@ -11,11 +11,6 @@ class SecurityPolicy {
         Regex("chmod\\s+777\\s+/"),                    // Permission escalation
     )
 
-    private val allowList = listOf(
-        "fs.cat", "fs.ls", "fs.stat",
-        "self.status", "self.stats", "self.version"
-    )
-
     private val blockList = listOf(
         "proc.exec"
     )

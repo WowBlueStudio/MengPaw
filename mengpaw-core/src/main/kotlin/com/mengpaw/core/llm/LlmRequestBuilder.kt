@@ -16,8 +16,11 @@ class LlmRequestBuilder(
     private val systemPrompt: String
 ) {
     var cumulativeCacheHitTokens: Long = 0
+        private set
     var cumulativeCacheMissTokens: Long = 0
+        private set
     var lastPromptTokens: Int = 0
+        private set
 
     /**
      * Build the messages list with the system prompt as messages[0].

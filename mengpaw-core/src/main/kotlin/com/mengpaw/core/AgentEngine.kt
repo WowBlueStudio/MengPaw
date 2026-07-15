@@ -89,7 +89,6 @@ class AgentEngine(
 
                 // 4. ACT: Execute the command
                 if (parsed.action != null) {
-                    val command = buildCommandString(parsed.action)
                     val commandLine = "${parsed.action.name} ${parsed.action.parameters.values.joinToString(" ")}"
 
                     // Loop detection
@@ -133,11 +132,14 @@ class AgentEngine(
     private fun buildConversation(sessionId: String): List<Map<String, String>> {
         sessionManager.compressIfNeeded()
         val history = sessionManager.getStructuredHistory(sessionId)
-        // If no system message at index 0, inject via LlmRequestBuilder for prefix cache
-        if (history.isEmpty() || history[0]["role"] != "system") {
-            return llmRequestBuilder.buildMessages(history)
+        // Always inject the stable system prompt via LlmRequestBuilder for prefix-cache optimization.
+        // If history already has a system message (e.g. compression summary), skip it to avoid double system.
+        val nonSystemHistory = if (history.isNotEmpty() && history[0]["role"] == "system") {
+            history.drop(1)
+        } else {
+            history
         }
-        return history
+        return llmRequestBuilder.buildMessages(nonSystemHistory)
     }
 
     private fun buildCommandString(action: ToolCall): String {

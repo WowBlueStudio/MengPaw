@@ -20,8 +20,6 @@ import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.*
 
 /**
  * Execution log viewer — shows agent command history and results.
