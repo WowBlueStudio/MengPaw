@@ -20,28 +20,32 @@ class Pipeline(
         try {
             val trimmed = input.trim()
             if (trimmed.isBlank()) {
-                return ExecutionResult.fail("Empty command")
+                return ExecutionResult.fail("Empty command", errorCode = ErrorCodes.ERR_INVALID_INPUT)
             }
 
             val parsed = interpreter.parse(trimmed)
             if (parsed.command.isBlank()) {
-                return ExecutionResult.fail("Empty command")
+                return ExecutionResult.fail("Empty command", errorCode = ErrorCodes.ERR_INVALID_INPUT)
             }
 
             // Security check
             if (!securityPolicy.isAllowed(parsed.command)) {
                 return ExecutionResult.fail(
-                    "Command '${parsed.command}' is blocked by security policy"
+                    "Command '${parsed.command}' is blocked by security policy",
+                    errorCode = ErrorCodes.ERR_PERMISSION_DENIED
                 )
             }
 
             // Find and execute
             val executor = registry.find(parsed.command)
-                ?: return ExecutionResult.fail("Unknown command: ${parsed.command}")
+                ?: return ExecutionResult.fail("Unknown command: ${parsed.command}", errorCode = ErrorCodes.ERR_NOT_FOUND)
 
             return executor(parsed.args, context)
         } catch (e: Exception) {
-            return ExecutionResult.fail("Execution error: ${e.message ?: e::class.simpleName}")
+            return ExecutionResult.fail(
+                "Execution error: ${e.message ?: e::class.simpleName}",
+                errorCode = ErrorCodes.ERR_INTERNAL
+            )
         }
     }
 }

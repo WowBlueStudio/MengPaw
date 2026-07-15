@@ -1,17 +1,30 @@
 package com.mengpaw.core.cli
 
 /**
+ * Standard error codes for CLI command execution.
+ */
+object ErrorCodes {
+    const val ERR_NOT_FOUND = "ERR_NOT_FOUND"
+    const val ERR_PERMISSION_DENIED = "ERR_PERMISSION_DENIED"
+    const val ERR_INVALID_INPUT = "ERR_INVALID_INPUT"
+    const val ERR_INTERNAL = "ERR_INTERNAL"
+    const val ERR_TIMEOUT = "ERR_TIMEOUT"
+}
+
+/**
  * Represents the result of executing a CLI command.
  */
 data class ExecutionResult(
     val success: Boolean,
     val output: String,
     val error: String? = null,
-    val exitCode: Int = if (success) 0 else 1
+    val exitCode: Int = if (success) 0 else 1,
+    val errorCode: String? = null
 ) {
     companion object {
         fun ok(output: String) = ExecutionResult(true, output)
-        fun fail(error: String, code: Int = 1) = ExecutionResult(false, "", error, code)
+        fun fail(error: String, code: Int = 1, errorCode: String? = null) =
+            ExecutionResult(false, "", error, code, errorCode)
     }
 }
 

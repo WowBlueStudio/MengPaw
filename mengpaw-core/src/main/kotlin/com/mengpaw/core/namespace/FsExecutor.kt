@@ -2,6 +2,7 @@ package com.mengpaw.core.namespace
 
 import com.mengpaw.core.cli.ExecutionContext
 import com.mengpaw.core.cli.ExecutionResult
+import com.mengpaw.core.cli.ErrorCodes
 
 /**
  * File system operations namespace.
@@ -19,18 +20,18 @@ object FsExecutor {
     )
 
     private suspend fun cat(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs cat <path>")
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs cat <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val path = resolvePath(args[0], ctx)
         val file = java.io.File(path)
-        if (!file.exists()) return ExecutionResult.fail("File not found: $path")
-        if (!file.canRead()) return ExecutionResult.fail("Permission denied: $path")
+        if (!file.exists()) return ExecutionResult.fail("File not found: $path", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        if (!file.canRead()) return ExecutionResult.fail("Permission denied: $path", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
         return ExecutionResult.ok(file.readText())
     }
 
     private suspend fun ls(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val path = if (args.isNotEmpty()) resolvePath(args[0], ctx) else ctx.workDir
         val dir = java.io.File(path)
-        if (!dir.isDirectory) return ExecutionResult.fail("Not a directory: $path")
+        if (!dir.isDirectory) return ExecutionResult.fail("Not a directory: $path", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val listing = dir.listFiles()
             ?.sortedWith(compareBy<java.io.File> { it.isFile }.thenBy { it.name })
             ?.joinToString("\n") { file ->
@@ -41,7 +42,7 @@ object FsExecutor {
     }
 
     private suspend fun write(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.size < 2) return ExecutionResult.fail("Usage: fs write <path> <content>")
+        if (args.size < 2) return ExecutionResult.fail("Usage: fs write <path> <content>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val path = resolvePath(args[0], ctx)
         val content = args.drop(1).joinToString(" ")
         val file = java.io.File(path)
@@ -51,46 +52,46 @@ object FsExecutor {
     }
 
     private suspend fun rm(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs rm <path>")
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs rm <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val path = resolvePath(args[0], ctx)
         val file = java.io.File(path)
-        if (!file.exists()) return ExecutionResult.fail("Not found: $path")
+        if (!file.exists()) return ExecutionResult.fail("Not found: $path", errorCode = ErrorCodes.ERR_NOT_FOUND)
         file.deleteRecursively()
         return ExecutionResult.ok("Deleted: $path")
     }
 
     private suspend fun mkdir(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs mkdir <path>")
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs mkdir <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val path = resolvePath(args[0], ctx)
         java.io.File(path).mkdirs()
         return ExecutionResult.ok("Created directory: $path")
     }
 
     private suspend fun cp(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.size < 2) return ExecutionResult.fail("Usage: fs cp <source> <dest>")
+        if (args.size < 2) return ExecutionResult.fail("Usage: fs cp <source> <dest>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val src = java.io.File(resolvePath(args[0], ctx))
         val dst = java.io.File(resolvePath(args[1], ctx))
-        if (!src.exists()) return ExecutionResult.fail("Source not found: ${args[0]}")
+        if (!src.exists()) return ExecutionResult.fail("Source not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
         dst.parentFile?.mkdirs()
         src.copyTo(dst, overwrite = true)
         return ExecutionResult.ok("Copied ${src.name} to ${dst.name}")
     }
 
     private suspend fun mv(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.size < 2) return ExecutionResult.fail("Usage: fs mv <source> <dest>")
+        if (args.size < 2) return ExecutionResult.fail("Usage: fs mv <source> <dest>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val src = java.io.File(resolvePath(args[0], ctx))
         val dst = java.io.File(resolvePath(args[1], ctx))
-        if (!src.exists()) return ExecutionResult.fail("Source not found: ${args[0]}")
+        if (!src.exists()) return ExecutionResult.fail("Source not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
         dst.parentFile?.mkdirs()
         src.renameTo(dst)
         return ExecutionResult.ok("Moved ${src.name} to ${dst.name}")
     }
 
     private suspend fun stat(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs stat <path>")
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs stat <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val path = resolvePath(args[0], ctx)
         val file = java.io.File(path)
-        if (!file.exists()) return ExecutionResult.fail("Not found: $path")
+        if (!file.exists()) return ExecutionResult.fail("Not found: $path", errorCode = ErrorCodes.ERR_NOT_FOUND)
         return ExecutionResult.ok(
             """
             Path: ${file.absolutePath}

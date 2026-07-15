@@ -2,6 +2,7 @@ package com.mengpaw.core.namespace
 
 import com.mengpaw.core.cli.ExecutionContext
 import com.mengpaw.core.cli.ExecutionResult
+import com.mengpaw.core.cli.ErrorCodes
 
 /**
  * Process management namespace.
@@ -25,12 +26,12 @@ object ProcExecutor {
     }
 
     private suspend fun kill(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: proc kill <pid>")
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: proc kill <pid>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         return ExecutionResult.ok("Kill signal sent to PID ${args[0]}")
     }
 
     private suspend fun exec(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: proc exec <command>")
-        return ExecutionResult.fail("proc exec disabled in sandbox mode")
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: proc exec <command>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        return ExecutionResult.fail("proc exec disabled in sandbox mode", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
     }
 }

@@ -5,7 +5,10 @@
       "Bash(./gradlew :mengpaw-shell:assembleDebug)",
       "Bash(.gradlew :mengpaw-core:testDebugUnitTest)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(./gradlew --stop)",
+      "Bash(./gradlew --no-daemon :mengpaw-core:testDebugUnitTest)",
+      "Bash(./gradlew --no-daemon clean :mengpaw-core:testDebugUnitTest)"
     ]
   }
 }

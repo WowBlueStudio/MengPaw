@@ -54,6 +54,6 @@ object SelfExecutor {
     }
 
     private suspend fun version(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        return ExecutionResult.ok("檬爪 MengPaw v0.1.0-alpha (core)")
+        return ExecutionResult.ok("檬爪 v0.1.0-alpha (core)")
     }
 }

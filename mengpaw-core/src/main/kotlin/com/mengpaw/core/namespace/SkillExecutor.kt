@@ -2,6 +2,7 @@ package com.mengpaw.core.namespace
 
 import com.mengpaw.core.cli.ExecutionContext
 import com.mengpaw.core.cli.ExecutionResult
+import com.mengpaw.core.cli.ErrorCodes
 import com.mengpaw.core.skill.SkillManager
 
 /**
@@ -33,26 +34,26 @@ object SkillExecutor {
     }
 
     private suspend fun run(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("用法: skill.run <名称>")
+        if (args.isEmpty()) return ExecutionResult.fail("用法: skill.run <名称>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val skill = manager.get(args[0])
-            ?: return ExecutionResult.fail("Skill 未找到: ${args[0]}")
-        if (!skill.enabled) return ExecutionResult.fail("Skill 已禁用: ${args[0]}")
+            ?: return ExecutionResult.fail("Skill 未找到: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        if (!skill.enabled) return ExecutionResult.fail("Skill 已禁用: ${args[0]}", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
         return ExecutionResult.ok(
             "执行 Skill: ${skill.name}\n---\n${skill.content}\n---\n请按照上述步骤执行。"
         )
     }
 
     private suspend fun enable(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("用法: skill.enable <名称>")
+        if (args.isEmpty()) return ExecutionResult.fail("用法: skill.enable <名称>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         return if (manager.setEnabled(args[0], true))
             ExecutionResult.ok("已启用: ${args[0]}")
-        else ExecutionResult.fail("未找到: ${args[0]}")
+        else ExecutionResult.fail("未找到: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
     }
 
     private suspend fun disable(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("用法: skill.disable <名称>")
+        if (args.isEmpty()) return ExecutionResult.fail("用法: skill.disable <名称>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         return if (manager.setEnabled(args[0], false))
             ExecutionResult.ok("已禁用: ${args[0]}")
-        else ExecutionResult.fail("未找到: ${args[0]}")
+        else ExecutionResult.fail("未找到: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
     }
 }

@@ -2,6 +2,7 @@ package com.mengpaw.core.namespace
 
 import com.mengpaw.core.cli.ExecutionContext
 import com.mengpaw.core.cli.ExecutionResult
+import com.mengpaw.core.cli.ErrorCodes
 import com.mengpaw.core.memory.MemoryManager
 
 /**
@@ -37,9 +38,9 @@ object MemoryExecutor {
     }
 
     private suspend fun read(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: memory read <id>")
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: memory read <id>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val memory = manager.get(args[0])
-            ?: return ExecutionResult.fail("Memory not found: ${args[0]}")
+            ?: return ExecutionResult.fail("Memory not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
         return ExecutionResult.ok("""
             # ${memory.title}
             ${if (memory.tags.isNotEmpty()) "Tags: ${memory.tags.joinToString(", ")}" else ""}
@@ -49,7 +50,7 @@ object MemoryExecutor {
     }
 
     private suspend fun write(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.size < 2) return ExecutionResult.fail("Usage: memory write <id> <content>")
+        if (args.size < 2) return ExecutionResult.fail("Usage: memory write <id> <content>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val id = args[0]
         val content = args.drop(1).joinToString(" ")
         val title = id.replace("-", " ").replace("_", " ")
@@ -59,13 +60,13 @@ object MemoryExecutor {
     }
 
     private suspend fun rm(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: memory rm <id>")
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: memory rm <id>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         return if (manager.delete(args[0])) ExecutionResult.ok("Deleted: ${args[0]}")
-        else ExecutionResult.fail("Not found: ${args[0]}")
+        else ExecutionResult.fail("Not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
     }
 
     private suspend fun search(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: memory search <query>")
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: memory search <query>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val results = manager.search(args.joinToString(" "))
         if (results.isEmpty()) return ExecutionResult.ok("(no results)")
         return ExecutionResult.ok(results.joinToString("\n") { m ->
