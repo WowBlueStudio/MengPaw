@@ -56,6 +56,38 @@ class SessionManager {
     }
 
     /**
+     * Compress conversation history if it exceeds the token budget.
+     * Keeps the last 10 messages intact and compresses older messages
+     * into a single summary inserted as messages[0].
+     */
+    fun compressIfNeeded(maxTokens: Int = 50) {
+        val sessionId = _activeSessionId.value ?: return
+        val session = _sessions.value[sessionId] ?: return
+        if (session.messages.size <= maxTokens) return
+
+        val keepCount = 10
+        val toCompress = session.messages.dropLast(keepCount)
+        val toKeep = session.messages.takeLast(keepCount)
+
+        val summary = buildString {
+            append("[压缩摘要] 以下为之前 ${toCompress.size} 条消息的摘要：\n")
+            toCompress.take(20).forEach { msg ->
+                val preview = msg.content.take(120).replace("\n", " ")
+                append("- [${msg.role}] $preview\n")
+            }
+            if (toCompress.size > 20) {
+                append("...（省略 ${toCompress.size - 20} 条消息）")
+            }
+        }
+
+        val summaryMsg = Message(role = "system", content = summary)
+        session.messages.clear()
+        session.messages.add(summaryMsg)
+        session.messages.addAll(toKeep)
+        _sessions.value = _sessions.value + (sessionId to session)
+    }
+
+    /**
      * Get the structured conversation history as a list of role/content maps.
      * Used for prefix-cache-optimized LLM requests where messages[0] is the system prompt.
      */
