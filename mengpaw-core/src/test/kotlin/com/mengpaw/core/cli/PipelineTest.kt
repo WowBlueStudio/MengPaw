@@ -31,6 +31,16 @@ class PipelineTest {
         val ctx = ExecutionContext(sessionId = "test")
         val result = pipeline.execute("", ctx)
         assertFalse(result.success)
+        assertEquals(ErrorCodes.ERR_INVALID_INPUT, result.errorCode)
+    }
+
+    @Test
+    fun `execute whitespace-only command`() = runTest {
+        val pipeline = createPipeline()
+        val ctx = ExecutionContext(sessionId = "test")
+        val result = pipeline.execute("   ", ctx)
+        assertFalse(result.success)
+        assertEquals(ErrorCodes.ERR_INVALID_INPUT, result.errorCode)
     }
 
     @Test
@@ -40,6 +50,7 @@ class PipelineTest {
         val result = pipeline.execute("unknown.cmd", ctx)
         assertFalse(result.success)
         assertTrue(result.error?.contains("Unknown command") == true)
+        assertEquals(ErrorCodes.ERR_NOT_FOUND, result.errorCode)
     }
 
     @Test
@@ -49,6 +60,16 @@ class PipelineTest {
         val result = pipeline.execute("proc.exec rm -rf /", ctx)
         assertFalse(result.success)
         assertTrue(result.error?.contains("blocked by security") == true)
+        assertEquals(ErrorCodes.ERR_PERMISSION_DENIED, result.errorCode)
+    }
+
+    @Test
+    fun `execute rm minus rf slash is blocked as dangerous`() = runTest {
+        val pipeline = createPipeline()
+        val ctx = ExecutionContext(sessionId = "test")
+        val result = pipeline.execute("rm -rf /", ctx)
+        assertFalse(result.success)
+        assertEquals(ErrorCodes.ERR_PERMISSION_DENIED, result.errorCode)
     }
 
     @Test
@@ -69,5 +90,14 @@ class PipelineTest {
 
         // Cleanup
         File(testFile).delete()
+    }
+
+    @Test
+    fun `successful result has no errorCode`() = runTest {
+        val pipeline = createPipeline()
+        val ctx = ExecutionContext(sessionId = "test")
+        val result = pipeline.execute("self.version", ctx)
+        assertTrue(result.success)
+        assertNull(result.errorCode)
     }
 }

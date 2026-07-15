@@ -53,4 +53,40 @@ class CliInterpreterTest {
         assertEquals(listOf("source.txt", "dest.txt"), result.args)
         assertEquals(mapOf("force" to "true"), result.flags)
     }
+
+    @Test
+    fun `parse command with special characters`() {
+        val result = interpreter.parse("fs.write /tmp/file --content \"hello@world!#test\"")
+        assertEquals("fs.write", result.command)
+        assertTrue(result.args.isNotEmpty())
+    }
+
+    @Test
+    fun `parse long input`() {
+        val longArg = "x".repeat(1000)
+        val result = interpreter.parse("fs.cat $longArg")
+        assertEquals("fs.cat", result.command)
+        assertEquals(1, result.args.size)
+        assertEquals(longArg, result.args[0])
+    }
+
+    @Test
+    fun `parse whitespace-only input`() {
+        val result = interpreter.parse("   \t  \n  ")
+        assertEquals("", result.command)
+    }
+
+    @Test
+    fun `parse backslash escaped quotes`() {
+        val result = interpreter.parse("fs.write path \\\"escaped\\\"")
+        assertEquals("fs.write", result.command)
+        assertTrue(result.args.isNotEmpty())
+    }
+
+    @Test
+    fun `parse command with many args`() {
+        val result = interpreter.parse("fs.write a b c d e f g h i j")
+        assertEquals("fs.write", result.command)
+        assertEquals(10, result.args.size)
+    }
 }

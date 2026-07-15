@@ -63,4 +63,33 @@ class SecurityPolicyTest {
         assertFalse(policy.isAllowed("rm -rf /"))
         assertFalse(policy.isAllowed("rm /"))
     }
+
+    @Test
+    fun `mkfs pattern blocked`() {
+        assertFalse(policy.isAllowed("mkfs.ext4 /dev/sda"))
+    }
+
+    @Test
+    fun `dd pattern blocked`() {
+        assertFalse(policy.isAllowed("dd if=/dev/zero of=/dev/sda"))
+    }
+
+    @Test
+    fun `chmod 777 slash pattern blocked`() {
+        assertFalse(policy.isAllowed("chmod 777 /"))
+    }
+
+    @Test
+    fun `normal commands pass for any namespace`() {
+        assertTrue(policy.isAllowed("ui.click 100 200"))
+        assertTrue(policy.isAllowed("memory.ls"))
+        assertTrue(policy.isAllowed("skill.run test"))
+        assertTrue(policy.isAllowed("net.curl https://example.com"))
+    }
+
+    @Test
+    fun `blockList command blocked`() {
+        assertFalse(policy.isAllowed("proc.exec"))
+        assertFalse(policy.isAllowed("proc.exec ls"))
+    }
 }
