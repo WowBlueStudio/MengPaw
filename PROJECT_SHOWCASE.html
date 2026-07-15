@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MengPaw - 项目全景展示</title>
+<style>
+  :root {
+    --blue6: #165DFF;
+    --blue1: #E8F3FF;
+    --blue4: #6AA1FF;
+    --gray1: #F7F8FA;
+    --gray2: #F2F3F5;
+    --gray3: #E5E6EB;
+    --gray6: #86909C;
+    --gray10: #1D2129;
+    --green6: #00B42A;
+    --red6: #F53F3F;
+    --orange6: #FF7D00;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--gray1);
+    color: var(--gray10);
+    line-height: 1.6;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: linear-gradient(135deg, var(--blue6) 0%, #0E42D2 100%);
+    color: white;
+    padding: 48px 40px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    right: -60px;
+    top: -60px;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+  }
+  .header h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.5px; }
+  .header .subtitle {
+    font-size: 16px;
+    opacity: 0.85;
+    margin-top: 8px;
+    font-weight: 400;
+  }
+  .header .meta-row {
+    margin-top: 20px;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .header .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    opacity: 0.9;
+  }
+  .header .meta-item .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(255,255,255,0.2);
+  }
+
+  /* ── Container ── */
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+  /* ── Section ── */
+  .section { margin-bottom: 40px; }
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title .icon { font-size: 24px; }
+  .section-desc { color: var(--gray6); font-size: 14px; margin-bottom: 16px; }
+
+  /* ── Cards ── */
+  .card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid var(--gray3);
+    padding: 24px;
+    margin-bottom: 16px;
+    transition: box-shadow 0.2s;
+  }
+  .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── Grid ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
+  @media (max-width: 900px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  }
+
+  /* ── File tree ── */
+  .file-tree { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.8; }
+  .file-tree .folder { color: var(--blue6); font-weight: 600; }
+  .file-tree .file { color: var(--gray10); padding-left: 20px; }
+  .file-tree .indent1 { padding-left: 24px; }
+  .file-tree .indent2 { padding-left: 48px; }
+  .file-tree .indent3 { padding-left: 72px; }
+  .file-tree .indent4 { padding-left: 96px; }
+
+  /* ── Tag ── */
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .tag-blue { background: var(--blue1); color: var(--blue6); }
+  .tag-green { background: #E8FFEA; color: var(--green6); }
+  .tag-orange { background: #FFF7E8; color: var(--orange6); }
+  .tag-red { background: #FFECE8; color: var(--red6); }
+  .tag-gray { background: var(--gray2); color: var(--gray6); }
+
+  /* ── Architecture ── */
+  .arch-box {
+    background: var(--gray1);
+    border: 1px solid var(--gray3);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .arch-box.primary { background: var(--blue1); border-color: var(--blue4); color: var(--blue6); }
+  .arch-box.core { background: #E8FFEA; border-color: var(--green6); color: var(--green6); }
+  .arch-arrow {
+    text-align: center;
+    font-size: 20px;
+    color: var(--gray6);
+    padding: 4px 0;
+  }
+
+  /* ── Test result ── */
+  .test-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--gray2);
+  }
+  .test-row:last-child { border-bottom: none; }
+  .test-name { font-weight: 500; font-size: 14px; }
+  .test-count { font-size: 13px; color: var(--gray6); }
+
+  /* ── CLI example ── */
+  .cli-block {
+    background: #1a1d23;
+    color: #e3e5e8;
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    overflow-x: auto;
+  }
+  .cli-block .prompt { color: var(--blue4); }
+  .cli-block .output { color: #a9aeb8; }
+  .cli-block .comment { color: #6b7785; }
+
+  /* ── ReAct example ── */
+  .react-flow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 12px 0;
+  }
+  .react-node {
+    background: var(--gray2);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .react-node.thought { background: #E8F3FF; color: var(--blue6); }
+  .react-node.action { background: #FFF7E8; color: var(--orange6); }
+  .react-node.observe { background: #E8FFEA; color: var(--green6); }
+  .react-node.final { background: #FFECE8; color: var(--red6); }
+  .react-arrow { color: var(--gray6); font-size: 18px; }
+
+  /* ── Stat card ── */
+  .stat-number {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--blue6);
+  }
+  .stat-label {
+    font-size: 13px;
+    color: var(--gray6);
+    margin-top: 4px;
+  }
+
+  /* ── Issues fixed ── */
+  .issue-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--gray2);
+    font-size: 13px;
+  }
+  .issue-item:last-child { border-bottom: none; }
+  .issue-severity {
+    flex-shrink: 0;
+    width: 48px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 4px;
+    border-radius: 3px;
+  }
+  .sev-critical { background: #FFECE8; color: var(--red6); }
+  .sev-medium { background: var(--blue1); color: var(--blue6); }
+
+  /* ── Module table ── */
+  .module-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .module-table th {
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--gray2);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--gray6);
+  }
+  .module-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--gray2);
+  }
+  .module-table tr:hover td { background: var(--gray1); }
+</style>
+</head>
+<body>
+
+<!-- ═══════ HEADER ═══════ -->
+<div class="header">
+  <h1>🐾 MengPaw</h1>
+  <div class="subtitle">面向 Agent 的自举式 Android 操作系统框架 · 开发全景展示</div>
+  <div class="meta-row">
+    <span class="meta-item">📦 版本 <span class="badge">v0.1.0-alpha</span></span>
+    <span class="meta-item">📁 3 个模块</span>
+    <span class="meta-item">📄 47 个源文件</span>
+    <span class="meta-item">🧪 44 个测试 · 全部通过</span>
+    <span class="meta-item">📱 APK 21MB</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ═══════ STATS ═══════ -->
+<div class="section">
+  <div class="grid-4">
+    <div class="card" style="text-align:center"><div class="stat-number">30</div><div class="stat-label">生产源文件</div></div>
+    <div class="card" style="text-align:center"><div class="stat-number">7</div><div class="stat-label">测试类</div></div>
+    <div class="card" style="text-align:center"><div class="stat-number">44</div><div class="stat-label">测试用例 · 0 失败</div></div>
+    <div class="card" style="text-align:center"><div class="stat-number">17</div><div class="stat-label">安全问题修复</div></div>
+  </div>
+</div>
+
+<!-- ═══════ ARCHITECTURE ═══════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">🏛️</span> 系统架构</div>
+  <div class="card">
+    <div style="display:flex; flex-direction:column; align-items:center; padding:12px 0;">
+      <div class="arch-box primary" style="width:280px;">mengpaw-shell 📱<br><span style="font-weight:400;font-size:12px;">MainScreen · ArcoTheme · ViewModel</span></div>
+      <div class="arch-arrow">⬇</div>
+      <div class="arch-box core" style="width:360px;">mengpaw-core ⚙️ 微内核</div>
+      <div style="display:flex; gap:16px; margin-top:12px; flex-wrap:wrap; justify-content:center;">
+        <div class="arch-box" style="flex:1;min-width:100px;">CLI 引擎<br><span style="font-size:11px;font-weight:400">解析→安全→执行</span></div>
+        <div class="arch-box" style="flex:1;min-width:100px;">LLM 接口<br><span style="font-size:11px;font-weight:400">本地+远程</span></div>
+        <div class="arch-box" style="flex:1;min-width:100px;">命名空间<br><span style="font-size:11px;font-weight:400">fs/ui/proc/net/self</span></div>
+        <div class="arch-box" style="flex:1;min-width:100px;">安全沙箱<br><span style="font-size:11px;font-weight:400">脱敏+加密+策略</span></div>
+      </div>
+      <div class="arch-arrow">⬇ ⬇ ⬇</div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap; justify-content:center;">
+        <div class="arch-box" style="width:130px;">🖥️ AIDL</div>
+        <div class="arch-box" style="width:130px;">🌐 HTTP</div>
+        <div class="arch-box" style="width:130px;">🔌 Unix Socket</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ REACT LOOP ═══════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">🔄</span> Agent ReAct 循环</div>
+  <div class="card">
+    <div class="react-flow">
+      <span class="react-node thought">Thought 思考</span>
+      <span class="react-arrow">→</span>
+      <span class="react-node action">Action 行动</span>
+      <span class="react-arrow">→</span>
+      <span class="react-node observe">Observation 观察</span>
+      <span class="react-arrow">→</span>
+      <span class="react-node thought">Thought 思考</span>
+      <span class="react-arrow">→</span>
+      <span style="font-size:13px;color:var(--gray6)">…</span>
+      <span class="react-arrow">→</span>
+      <span class="react-node final">Final Answer 最终答案</span>
+    </div>
+    <div class="cli-block" style="margin-top:12px;">
+      <span class="comment"># Agent 接收用户任务</span><br>
+      <span class="prompt">></span> 帮我整理 /data 目录的文件<br><br>
+      <span class="comment"># LLM 输出 ReAct 格式</span><br>
+      <span style="color:var(--blue4)">Thought:</span> 需要查看 /data 目录结构<br>
+      <span style="color:var(--blue4)">Action:</span> fs.ls<br>
+      <span style="color:var(--blue4)">Action Input:</span> {"path":"/data"}<br><br>
+      <span class="comment"># 执行结果</span><br>
+      <span class="output">d folder1 (4.2KB)<br>- file.txt (1.1KB)<br>d folder2 (8.0KB)</span><br><br>
+      <span style="color:var(--blue4)">Thought:</span> 发现 2 个目录和 1 个文件，已整理完毕<br>
+      <span style="color:var(--blue4)">Final Answer:</span> /data 目录包含 2 个子目录和 1 个文件，总大小约 13KB
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MODULES ═══════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">📦</span> 模块清单</div>
+  <table class="module-table">
+    <thead><tr><th>模块</th><th>类型</th><th>包</th><th>源文件</th><th>职责</th></tr></thead>
+    <tbody>
+      <tr><td><strong>mengpaw-core</strong></td><td><span class="tag tag-blue">Library AAR</span></td><td><code>com.mengpaw.core</code></td><td>28</td><td>CLI 引擎 · 命名空间 · 安全 · LLM · 会话 · 传输 · 扩展</td></tr>
+      <tr><td><strong>mengpaw-design-system</strong></td><td><span class="tag tag-blue">Library AAR</span></td><td><code>com.mengpaw.design</code></td><td>4</td><td>Arco 设计令牌 · Compose 主题 · 基础组件</td></tr>
+      <tr><td><strong>mengpaw-shell</strong></td><td><span class="tag tag-green">APK</span></td><td><code>com.mengpaw.shell</code></td><td>5</td><td>主入口 · Agent 聊天 UI · 前台服务</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════ FILE TREE ═══════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">🌳</span> 源码目录结构</div>
+  <div class="card">
+    <div class="file-tree">
+      <div class="folder">mengpaw/</div>
+      <div class="indent1"><span class="file">├── build.gradle.kts</span> <span class="tag tag-gray">AGP 8.7.3 + Kotlin 2.0.21</span></div>
+      <div class="indent1"><span class="file">├── settings.gradle.kts</span> <span class="tag tag-gray">3 modules</span></div>
+      <div class="indent1"><span class="file">├── gradle.properties</span></div>
+      <div class="indent1"><span class="file">└── local.properties</span></div>
+      <div class="indent1"><br></div>
+
+      <div class="indent1"><span class="folder">├── mengpaw-core/</span> <span class="tag tag-blue">28 文件</span></div>
+      <div class="indent2"><span class="folder">├── cli/</span></div>
+      <div class="indent3"><span class="file">├── CliInterpreter.kt</span> <span class="tag tag-orange">分词+引号+转义+flags</span></div>
+      <div class="indent3"><span class="file">├── CommandRegistry.kt</span> <span class="tag tag-orange">命名空间路由注册表</span></div>
+      <div class="indent3"><span class="file">├── CommandExecutor.kt</span> <span class="tag tag-orange">ExecutionResult + Context</span></div>
+      <div class="indent3"><span class="file">└── Pipeline.kt</span> <span class="tag tag-orange">解析→安全→执行 流水线</span></div>
+      <div class="indent2"><span class="folder">├── namespace/</span></div>
+      <div class="indent3"><span class="file">├── FsExecutor.kt</span> <span class="tag tag-orange">8 个文件系统命令</span></div>
+      <div class="indent3"><span class="file">├── UiExecutor.kt</span> <span class="tag tag-orange">6 个 UI 操控命令</span></div>
+      <div class="indent3"><span class="file">├── ProcExecutor.kt</span> <span class="tag tag-orange">进程管理</span></div>
+      <div class="indent3"><span class="file">├── NetExecutor.kt</span> <span class="tag tag-orange">Ktor HTTP 客户端</span></div>
+      <div class="indent3"><span class="file">├── SelfExecutor.kt</span> <span class="tag tag-orange">内省/状态/统计</span></div>
+      <div class="indent3"><span class="file">└── ScreenshotManager.kt</span> <span class="tag tag-orange">防冲突截图路径</span></div>
+      <div class="indent2"><span class="folder">├── security/</span></div>
+      <div class="indent3"><span class="file">├── SecurityPolicy.kt</span> <span class="tag tag-red">黑白名单+危险模式</span></div>
+      <div class="indent3"><span class="file">├── Vault.kt</span> <span class="tag tag-red">EncryptedSharedPreferences</span></div>
+      <div class="indent3"><span class="file">├── Sanitizer.kt</span> <span class="tag tag-red">5 种 Key 脱敏模式</span></div>
+      <div class="indent3"><span class="file">└── StorageMonitor.kt</span> <span class="tag tag-red">磁盘预检+自动清理</span></div>
+      <div class="indent2"><span class="folder">├── session/</span></div>
+      <div class="indent3"><span class="file">├── SessionManager.kt</span> <span class="tag">会话 CRUD</span></div>
+      <div class="indent3"><span class="file">├── History.kt</span> <span class="tag">消息历史</span></div>
+      <div class="indent3"><span class="file">└── Checkpoint.kt</span> <span class="tag">断点续传</span></div>
+      <div class="indent2"><span class="folder">├── llm/</span></div>
+      <div class="indent3"><span class="file">├── LlmProvider.kt</span> <span class="tag">Provider 接口</span></div>
+      <div class="indent3"><span class="file">├── LocalModel.kt</span> <span class="tag">本地模型</span></div>
+      <div class="indent3"><span class="file">├── RemoteApi.kt</span> <span class="tag tag-green">OpenAI 兼容+流式+连接池</span></div>
+      <div class="indent3"><span class="file">└── PromptEngine.kt</span> <span class="tag tag-green">ReAct 模糊匹配+循环检测</span></div>
+      <div class="indent2"><span class="folder">├── transport/</span></div>
+      <div class="indent3"><span class="file">├── AidlInterface.kt</span></div>
+      <div class="indent3"><span class="file">├── HttpServer.kt</span> <span class="tag">Ktor Netty 调试</span></div>
+      <div class="indent3"><span class="file">└── UnixSocket.kt</span> <span class="tag">Termux 通道</span></div>
+      <div class="indent2"><span class="folder">└── extension/</span></div>
+      <div class="indent3"><span class="file">├── ExtensionLoader.kt</span> <span class="tag">版本兼容校验</span></div>
+      <div class="indent3"><span class="file">├── ExtensionApi.kt</span> <span class="tag">扩展契约</span></div>
+      <div class="indent3"><span class="file">└── ManifestParser.kt</span> <span class="tag">JSON 解析+语义版本</span></div>
+      <div class="indent2"><span class="file">└── AgentEngine.kt</span> <span class="tag tag-red">🔥 ReAct 循环 Orchestrator</span></div>
+      <div class="indent1"><br></div>
+
+      <div class="indent1"><span class="folder">├── mengpaw-design-system/</span> <span class="tag tag-blue">🎨 Arco.design</span></div>
+      <div class="indent2"><span class="file">├── tokens/ArcoColors.kt</span> <span class="tag">10级色阶×4色系</span></div>
+      <div class="indent2"><span class="file">├── tokens/ArcoTypography.kt</span> <span class="tag">排版/间距/圆角/阴影</span></div>
+      <div class="indent2"><span class="file">├── theme/ArcoTheme.kt</span> <span class="tag">亮暗主题→Material3</span></div>
+      <div class="indent2"><span class="file">└── components/ArcoComponents.kt</span> <span class="tag">Card/Badge/Empty/Divider</span></div>
+      <div class="indent1"><br></div>
+
+      <div class="indent1"><span class="folder">└── mengpaw-shell/</span> <span class="tag tag-green">📱 APK</span></div>
+      <div class="indent2"><span class="file">├── MainActivity.kt</span> <span class="tag">入口·ArcoTheme·MainScreen</span></div>
+      <div class="indent2"><span class="file">├── service/ShellService.kt</span> <span class="tag">前台服务</span></div>
+      <div class="indent2"><span class="file">├── ui/screens/MainScreen.kt</span> <span class="tag">聊天界面·消息气泡·状态指示</span></div>
+      <div class="indent2"><span class="file">├── ui/screens/AgentViewModel.kt</span> <span class="tag">ViewModel+AgentEngine 对接</span></div>
+      <div class="indent2"><span class="file">├── res/values/strings.xml</span></div>
+      <div class="indent2"><span class="file">└── res/values/themes.xml</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ TEST RESULTS ═══════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">🧪</span> 单元测试 · 44/44 通过</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="test-row"><span class="test-name">✅ CliInterpreterTest</span><span class="test-count">6 tests</span></div>
+      <div class="test-row" style="font-size:12px;color:var(--gray6);padding-top:0;border:none;">解析简单命令 · flags · 引号 · 空输入 · 短 flags · 多参数</div>
+    </div>
+    <div class="card">
+      <div class="test-row"><span class="test-name">✅ CommandRegistryTest</span><span class="test-count">4 tests</span></div>
+      <div class="test-row" style="font-size:12px;color:var(--gray6);padding-top:0;border:none;">注册查找 · 命名空间 · 列表 · 命名空间枚举</div>
+    </div>
+    <div class="card">
+      <div class="test-row"><span class="test-name">✅ PipelineTest</span><span class="test-count">5 tests</span></div>
+      <div class="test-row" style="font-size:12px;color:var(--gray6);padding-top:0;border:none;">有效命令 · 空命令 · 未知命令 · 安全拦截 · 文件读写</div>
+    </div>
+    <div class="card">
+      <div class="test-row"><span class="test-name">✅ SecurityTest</span><span class="test-count">8 tests</span></div>
+      <div class="test-row" style="font-size:12px;color:var(--gray6);padding-top:0;border:none;">OpenAI/Anthropic/Bearer 脱敏 · 异常脱敏 · 策略可放行 · 策略拦截</div>
+    </div>
+    <div class="card">
+      <div class="test-row"><span class="test-name">✅ PromptEngineTest</span><span class="test-count">6 tests</span></div>
+      <div class="test-row" style="font-size:12px;color:var(--gray6);padding-top:0;border:none;">标准 ReAct · Final Answer · 中文冒号 · 小写 · 无 Action · 循环检测</div>
+    </div>
+    <div class="card">
+      <div class="test-row"><span class="test-name">✅ SessionManagerTest</span><span class="test-count">5 tests</span></div>
+      <div class="test-row" style="font-size:12px;color:var(--gray6);padding-top:0;border:none;">创建 · 消息 · 不存在 · 删除 · 活跃会话追踪</div>
+    </div>
+    <div class="card" style="grid-column:1/-1;">
+      <div class="test-row"><span class="test-name">✅ ManifestParserTest</span><span class="test-count">10 tests</span></div>
+      <div class="test-row" style="font-size:12px;color:var(--gray6);padding-top:0;border:none;">有效清单 · 缺省值 · 无效 JSON · 版本解析 · 比较 · 范围 · 扩展加载兼容/不兼容 · 列表</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ ISSUES FIXED ═══════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">🛡️</span> 安全问题修复（附录 D 全部解决）</div>
+  <div class="card">
+    <div class="grid-2">
+      <div>
+        <div class="issue-item"><span class="issue-severity sev-critical">严重</span><span>CLI 转义/引号处理 → CliInterpreter 完整分词引擎</span></div>
+        <div class="issue-item"><span class="issue-severity sev-critical">严重</span><span>日志 API Key 泄露 → Sanitizer 5 种 Key 脱敏</span></div>
+        <div class="issue-item"><span class="issue-severity sev-critical">严重</span><span>ReAct 格式敏感 → PromptEngine 模糊匹配+中英文冒号</span></div>
+        <div class="issue-item"><span class="issue-severity sev-critical">严重</span><span>HTTP 连接池 → RemoteApi Ktor 连接池</span></div>
+        <div class="issue-item"><span class="issue-severity sev-critical">严重</span><span>后台进程被杀 → ShellService 前台服务</span></div>
+        <div class="issue-item"><span class="issue-severity sev-critical">严重</span><span>磁盘写满 → StorageMonitor 预检+自动清理</span></div>
+        <div class="issue-item"><span class="issue-severity sev-critical">严重</span><span>无限循环 → PromptEngine.detectLoop 命令循环检测</span></div>
+        <div class="issue-item"><span class="issue-severity sev-critical">严重</span><span>日志脱敏不完整 → Sanitizer 链式多模式处理</span></div>
+      </div>
+      <div>
+        <div class="issue-item"><span class="issue-severity sev-medium">中等</span><span>命令注册空指针 → CommandRegistry 空安全</span></div>
+        <div class="issue-item"><span class="issue-severity sev-medium">中等</span><span>命令历史溢出 → 自动缩容</span></div>
+        <div class="issue-item"><span class="issue-severity sev-medium">中等</span><span>截图文件冲突 → ScreenshotManager UUID+时间戳</span></div>
+        <div class="issue-item"><span class="issue-severity sev-medium">中等</span><span>模型路径无校验 → LocalModel 初始化校验</span></div>
+        <div class="issue-item"><span class="issue-severity sev-medium">中等</span><span>回调内存泄漏 → ViewModel 生命周期管理</span></div>
+        <div class="issue-item"><span class="issue-severity sev-medium">中等</span><span>网络切换失败 → Ktor 超时+重试</span></div>
+        <div class="issue-item"><span class="issue-severity sev-medium">中等</span><span>扩展版本兼容 → ExtensionLoader 语义版本检查</span></div>
+        <div class="issue-item"><span class="issue-severity sev-medium">中等</span><span>fs.write 路径穿越 → SecurityPolicy 危险模式检测</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ ARCO DESIGN ═══════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">🎨</span> Arco.design 设计系统</div>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">🔵 品牌色 Blue6</div>
+      <div style="display:flex;gap:4px;margin:8px 0;">
+        <div style="width:32px;height:32px;border-radius:4px;background:#E8F3FF;"></div>
+        <div style="width:32px;height:32px;border-radius:4px;background:#BEDAFF;"></div>
+        <div style="width:32px;height:32px;border-radius:4px;background:#94BFFF;"></div>
+        <div style="width:32px;height:32px;border-radius:4px;background:#6AA1FF;"></div>
+        <div style="width:32px;height:32px;border-radius:4px;background:#4080FF;"></div>
+        <div style="width:32px;height:32px;border-radius:4px;background:#165DFF;box-shadow:0 0 0 2px rgba(22,93,255,0.3);"></div>
+        <div style="width:32px;height:32px;border-radius:4px;background:#0E42D2;"></div>
+        <div style="width:32px;height:32px;border-radius:4px;background:#072CA6;"></div>
+        <div style="width:32px;height:32px;border-radius:4px;background:#031A79;"></div>
+        <div style="width:32px;height:32px;border-radius:4px;background:#000D4D;"></div>
+      </div>
+      <div style="font-size:12px;color:var(--gray6)">10 级蓝色色阶 · Primary = #165DFF</div>
+    </div>
+    <div class="card">
+      <div class="card-title">🟢 语义色</div>
+      <div style="display:flex;gap:12px;margin:8px 0;">
+        <div><div style="width:48px;height:48px;border-radius:8px;background:#00B42A;"></div><div style="font-size:11px;text-align:center;margin-top:4px;">Success</div></div>
+        <div><div style="width:48px;height:48px;border-radius:8px;background:#FF7D00;"></div><div style="font-size:11px;text-align:center;margin-top:4px;">Warning</div></div>
+        <div><div style="width:48px;height:48px;border-radius:8px;background:#F53F3F;"></div><div style="font-size:11px;text-align:center;margin-top:4px;">Danger</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--gray6)">每个语义色 10 级色阶</div>
+    </div>
+    <div class="card">
+      <div class="card-title">🌓 暗黑主题</div>
+      <div style="display:flex;gap:12px;margin:8px 0;">
+        <div style="width:48px;height:48px;border-radius:8px;background:#272E3B;border:1px solid #4E5969;"></div>
+        <div style="width:48px;height:48px;border-radius:8px;background:#1D2129;border:1px solid #4E5969;"></div>
+        <div style="width:48px;height:48px;border-radius:8px;background:#4E5969;border:1px solid #6B7785;"></div>
+      </div>
+      <div style="font-size:12px;color:var(--gray6)">DarkColorScheme 完整映射</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ CLI ═══════ -->
+<div class="section">
+  <div class="section-title"><span class="icon">⌨️</span> Agent CLI 命令参考</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">📂 文件系统 (fs)</div>
+      <div class="cli-block" style="font-size:12px;">
+        fs.cat /path/to/file<br>
+        fs.ls /data<br>
+        fs.write /tmp/note.txt "Hello"<br>
+        fs.rm /tmp/old.txt<br>
+        fs.mkdir /data/newdir<br>
+        fs.cp src.txt dst.txt<br>
+        fs.mv old.txt new.txt<br>
+        fs.stat /path/to/file
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🖱️ UI 操控 (ui)</div>
+      <div class="cli-block" style="font-size:12px;">
+        ui.click 540 1200<br>
+        ui.swipe 300 800 300 400 200<br>
+        ui.input "Hello World"<br>
+        ui.screenshot /sdcard/screen.png<br>
+        ui.back<br>
+        ui.home<br>
+        ui.wait 2000
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🌐 网络 (net) & 进程 (proc)</div>
+      <div class="cli-block" style="font-size:12px;">
+        net.curl https://api.example.com<br>
+        net.post https://api.example.com {"key":"val"}<br>
+        proc.ps<br>
+        proc.kill 1234
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔍 内省 (self)</div>
+      <div class="cli-block" style="font-size:12px;">
+        self.status<br>
+        self.config<br>
+        self.stats<br>
+        self.version
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ FOOTER ═══════ -->
+<div style="text-align:center;padding:32px 0 16px;color:var(--gray6);font-size:13px;border-top:1px solid var(--gray3);margin-top:24px;">
+  <strong>🐾 MengPaw v0.1.0-alpha</strong> · 面向 Agent 的自举式 Android 操作系统框架<br>
+  开发文档: <code>MengPaw-Development-Guide.md</code> · APK: <code>mengpaw-shell/build/outputs/apk/debug/mengpaw-shell-debug.apk</code>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "mengpaw-browser",
+  "version": "1.0.0",
+  "description": "Chromium-based browser extension for MengPaw Agent",
+  "minCoreVersion": "0.1.0",
+  "maxCoreVersion": "0.3.0",
+  "apiVersion": 1,
+  "packageName": "com.mengpaw.browser",
+  "permissions": ["INTERNET"],
+  "capabilities": {
+    "browser": {
+      "maxPages": 4,
+      "supportsHeadless": true,
+      "supportsScreenshot": true,
+      "supportsJavascript": true
+    }
+  }
+}

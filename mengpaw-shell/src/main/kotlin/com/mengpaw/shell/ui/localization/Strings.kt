@@ -1,0 +1,137 @@
+package com.mengpaw.shell.ui.localization
+
+/**
+ * Localized strings for the MengPaw UI.
+ * Switch between Chinese (zh) and English (en) with one click.
+ */
+data class AppStrings(
+    // App
+    val appName: String,
+    val settings: String,
+    val back: String,
+
+    // Main Screen
+    val systemBanner: String,
+    val inputPlaceholder: String,
+    val thinking: String,
+    val agentLabel: String,
+    val stop: String,
+    val send: String,
+
+    // Settings - LLM Provider
+    val llmProvider: String,
+    val useSimulated: String,
+    val useSimulatedDesc: String,
+    val apiEndpoint: String,
+    val apiKey: String,
+    val apiKeyShow: String,
+    val apiKeyHide: String,
+    val model: String,
+
+    // Settings - Agent
+    val agent: String,
+    val maxSteps: String,
+    val maxStepsDesc: String,
+
+    // Settings - Appearance
+    val appearance: String,
+    val darkTheme: String,
+    val darkThemeDesc: String,
+    val language: String,
+    val languageDesc: String,
+    val languageZh: String,
+    val languageEn: String,
+
+    // Settings - About
+    val about: String,
+    val version: String,
+    val core: String,
+    val design: String,
+    val resetDefaults: String
+)
+
+/**
+ * English strings (default).
+ */
+val EnglishStrings = AppStrings(
+    appName = "MengPaw",
+    settings = "Settings",
+    back = "Back",
+
+    systemBanner = "Agent is ready. Describe the task you want to accomplish.",
+    inputPlaceholder = "Describe a task for the Agent...",
+    thinking = "🤔 Thinking...",
+    agentLabel = "Agent",
+    stop = "Stop",
+    send = "Send",
+
+    llmProvider = "LLM Provider",
+    useSimulated = "Use Simulated Provider",
+    useSimulatedDesc = "Simulated responses for testing (no API key needed)",
+    apiEndpoint = "API Endpoint",
+    apiKey = "API Key",
+    apiKeyShow = "Show",
+    apiKeyHide = "Hide",
+    model = "Model",
+
+    agent = "Agent",
+    maxSteps = "Max Steps",
+    maxStepsDesc = "Maximum ReAct iterations before forced stop",
+
+    appearance = "Appearance",
+    darkTheme = "Dark Theme",
+    darkThemeDesc = "Switch between light and dark color scheme",
+    language = "Language",
+    languageDesc = "Switch UI language",
+    languageZh = "中文",
+    languageEn = "English",
+
+    about = "About",
+    version = "Version",
+    core = "Core",
+    design = "Design",
+    resetDefaults = "Reset to Defaults"
+)
+
+/**
+ * Chinese (Simplified) strings.
+ */
+val ChineseStrings = AppStrings(
+    appName = "檬爪",
+    settings = "设置",
+    back = "返回",
+
+    systemBanner = "Agent 已就绪。描述你想要完成的任务。",
+    inputPlaceholder = "描述一个任务给 Agent...",
+    thinking = "🤔 思考中...",
+    agentLabel = "Agent",
+    stop = "停止",
+    send = "发送",
+
+    llmProvider = "LLM 提供商",
+    useSimulated = "使用模拟 Provider",
+    useSimulatedDesc = "模拟响应用于测试（无需 API Key）",
+    apiEndpoint = "API 端点",
+    apiKey = "API 密钥",
+    apiKeyShow = "显示",
+    apiKeyHide = "隐藏",
+    model = "模型",
+
+    agent = "Agent",
+    maxSteps = "最大步数",
+    maxStepsDesc = "ReAct 循环最大迭代次数",
+
+    appearance = "外观",
+    darkTheme = "暗黑主题",
+    darkThemeDesc = "切换亮色/暗色配色方案",
+    language = "语言",
+    languageDesc = "切换界面语言",
+    languageZh = "中文",
+    languageEn = "English",
+
+    about = "关于",
+    version = "版本",
+    core = "内核",
+    design = "设计",
+    resetDefaults = "恢复默认设置"
+)

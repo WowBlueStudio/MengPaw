@@ -1,0 +1,55 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.12/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :mengpaw-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :mengpaw-shell:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :mengpaw-design-system:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :mengpaw-core:preBuild UP-TO-DATE
+> Task :mengpaw-core:preDebugBuild UP-TO-DATE
+> Task :mengpaw-design-system:preBuild UP-TO-DATE
+> Task :mengpaw-shell:preBuild UP-TO-DATE
+> Task :mengpaw-design-system:preDebugBuild UP-TO-DATE
+> Task :mengpaw-shell:preDebugBuild UP-TO-DATE
+> Task :mengpaw-design-system:generateDebugResValues UP-TO-DATE
+> Task :mengpaw-shell:generateDebugResValues UP-TO-DATE
+> Task :mengpaw-core:generateDebugResValues UP-TO-DATE
+> Task :mengpaw-shell:generateDebugResources UP-TO-DATE
+> Task :mengpaw-core:generateDebugResources UP-TO-DATE
+> Task :mengpaw-design-system:generateDebugResources UP-TO-DATE
+> Task :mengpaw-shell:packageDebugResources UP-TO-DATE
+> Task :mengpaw-core:packageDebugResources UP-TO-DATE
+> Task :mengpaw-design-system:packageDebugResources UP-TO-DATE
+> Task :mengpaw-design-system:parseDebugLocalResources UP-TO-DATE
+> Task :mengpaw-core:parseDebugLocalResources UP-TO-DATE
+> Task :mengpaw-design-system:generateDebugRFile UP-TO-DATE
+> Task :mengpaw-core:generateDebugRFile UP-TO-DATE
+> Task :mengpaw-shell:mapDebugSourceSetPaths UP-TO-DATE
+> Task :mengpaw-shell:mergeDebugResources UP-TO-DATE
+> Task :mengpaw-shell:parseDebugLocalResources UP-TO-DATE
+> Task :mengpaw-shell:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :mengpaw-shell:extractDeepLinksDebug UP-TO-DATE
+> Task :mengpaw-core:compileDebugKotlin UP-TO-DATE
+> Task :mengpaw-design-system:compileDebugKotlin UP-TO-DATE
+> Task :mengpaw-core:javaPreCompileDebug UP-TO-DATE
+> Task :mengpaw-design-system:javaPreCompileDebug UP-TO-DATE
+> Task :mengpaw-core:compileDebugJavaWithJavac NO-SOURCE
+> Task :mengpaw-design-system:compileDebugJavaWithJavac NO-SOURCE
+> Task :mengpaw-design-system:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :mengpaw-core:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :mengpaw-design-system:compileDebugLibraryResources UP-TO-DATE
+> Task :mengpaw-core:compileDebugLibraryResources UP-TO-DATE
+> Task :mengpaw-core:writeDebugAarMetadata UP-TO-DATE
+> Task :mengpaw-core:extractDeepLinksDebug UP-TO-DATE
+> Task :mengpaw-design-system:writeDebugAarMetadata UP-TO-DATE
+> Task :mengpaw-design-system:extractDeepLinksDebug UP-TO-DATE
+> Task :mengpaw-core:processDebugManifest UP-TO-DATE
+> Task :mengpaw-design-system:processDebugManifest UP-TO-DATE
+> Task :mengpaw-shell:checkDebugAarMetadata UP-TO-DATE
+> Task :mengpaw-shell:processDebugMainManifest UP-TO-DATE
+> Task :mengpaw-shell:processDebugManifest UP-TO-DATE
+> Task :mengpaw-shell:processDebugManifestForPackage UP-TO-DATE
+> Task :mengpaw-shell:processDebugResources UP-TO-DATE
+
+> Task :mengpaw-shell:compileDebugKotlin
+
+> Task :mengpaw-shell:compileDebugKotlin FAILED
+38 actionable tasks: 1 executed, 37 up-to-date

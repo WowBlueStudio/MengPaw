@@ -1,0 +1,24 @@
+# Contributing to MengPaw
+
+## 开发流程
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feat/amazing-feature`)
+3. 提交改动 (`git commit -m 'feat: add amazing feature'`)
+4. 推送到分支 (`git push origin feat/amazing-feature`)
+5. 创建 Pull Request
+
+## 代码规范
+
+- Kotlin 代码风格遵循官方规范
+- 所有 UI 文字优先使用中文
+- 每个文件不超过 400 行
+- 单元测试覆盖核心逻辑
+
+## 模块职责
+
+| 模块 | 职责 |
+|------|------|
+| mengpaw-core | 纯逻辑，不依赖 Android 框架（除安全存储） |
+| mengpaw-shell | Compose UI + 前台服务 |
+| mengpaw-design-system | Arco 设计令牌 + 基础组件 |

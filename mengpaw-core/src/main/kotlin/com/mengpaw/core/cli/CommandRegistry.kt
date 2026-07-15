@@ -1,0 +1,52 @@
+package com.mengpaw.core.cli
+
+/**
+ * Registry that maps command names (e.g. "fs.cat") to their executors.
+ */
+class CommandRegistry {
+    private val commands = mutableMapOf<String, suspend (List<String>, ExecutionContext) -> ExecutionResult>()
+    private val namespaces = mutableMapOf<String, MutableMap<String, suspend (List<String>, ExecutionContext) -> ExecutionResult>>()
+
+    /**
+     * Register a command with full path like "fs.cat"
+     */
+    fun register(fullName: String, executor: suspend (List<String>, ExecutionContext) -> ExecutionResult) {
+        commands[fullName] = executor
+        val parts = fullName.split(".", limit = 2)
+        if (parts.size == 2) {
+            namespaces.computeIfAbsent(parts[0]) { mutableMapOf() }[parts[1]] = executor
+        }
+    }
+
+    /**
+     * Register all commands for a namespace at once.
+     */
+    fun registerNamespace(namespace: String, executors: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult>) {
+        executors.forEach { (name, executor) ->
+            register("$namespace.$name", executor)
+        }
+    }
+
+    /**
+     * Find a command by its full name.
+     */
+    fun find(fullName: String): (suspend (List<String>, ExecutionContext) -> ExecutionResult)? {
+        return commands[fullName]
+    }
+
+    /**
+     * List all registered commands, optionally filtered by namespace.
+     */
+    fun list(namespace: String? = null): List<String> {
+        return if (namespace != null) {
+            namespaces[namespace]?.keys?.map { "$namespace.$it" } ?: emptyList()
+        } else {
+            commands.keys.toList()
+        }
+    }
+
+    /**
+     * List all registered namespaces.
+     */
+    fun namespaces(): Set<String> = namespaces.keys
+}

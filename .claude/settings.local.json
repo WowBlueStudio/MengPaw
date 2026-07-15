@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew :mengpaw-core:testDebugUnitTest)",
+      "Bash(./gradlew :mengpaw-shell:assembleDebug)"
+    ]
+  }
+}
