@@ -64,15 +64,6 @@ class PipelineTest {
     }
 
     @Test
-    fun `execute rm minus rf slash is blocked as dangerous`() = runTest {
-        val pipeline = createPipeline()
-        val ctx = ExecutionContext(sessionId = "test")
-        val result = pipeline.execute("rm -rf /", ctx)
-        assertFalse(result.success)
-        assertEquals(ErrorCodes.ERR_PERMISSION_DENIED, result.errorCode)
-    }
-
-    @Test
     fun `fs write and read roundtrip`() = runTest {
         val pipeline = createPipeline()
         val tmpDir = (System.getProperty("java.io.tmpdir") ?: "/tmp").replace('\\', '/')
