@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(./gradlew :mengpaw-core:testDebugUnitTest)",
-      "Bash(./gradlew :mengpaw-shell:assembleDebug)"
+      "Bash(./gradlew :mengpaw-shell:assembleDebug)",
+      "Bash(.gradlew :mengpaw-core:testDebugUnitTest)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

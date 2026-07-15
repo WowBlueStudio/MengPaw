@@ -27,7 +27,7 @@ class PromptEngine {
      * Build the system prompt that instructs the LLM on how to use CLI commands.
      */
     fun buildSystemPrompt(): String = """
-        你是 檬爪，运行在 Android 上的自主 Agent。
+        你是檬爪 MengPaw
         你通过 CLI 命令操控设备。
 
         ## 快速索引（被动加载）
