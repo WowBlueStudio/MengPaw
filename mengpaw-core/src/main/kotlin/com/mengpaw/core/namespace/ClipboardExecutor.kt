@@ -6,7 +6,7 @@ import com.mengpaw.core.cli.ErrorCodes
 
 /**
  * Clipboard operations namespace.
- * On Android, uses ClipboardManager; falls back to java.awt.Toolkit on desktop/JVM.
+ * Uses reflection to access platform clipboard (Android or desktop AWT).
  */
 object ClipboardExecutor {
     val commands = mapOf(
@@ -16,7 +16,7 @@ object ClipboardExecutor {
 
     private suspend fun get(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         return try {
-            val text = getClipboardText()
+            val text = readClipboard()
             ExecutionResult.ok(text.ifEmpty { "(clipboard is empty)" })
         } catch (e: Exception) {
             ExecutionResult.fail(
@@ -33,7 +33,7 @@ object ClipboardExecutor {
         )
         val text = args.joinToString(" ")
         return try {
-            setClipboardText(text)
+            writeClipboard(text)
             ExecutionResult.ok("Copied to clipboard (${text.length} chars)")
         } catch (e: Exception) {
             ExecutionResult.fail(
@@ -43,31 +43,36 @@ object ClipboardExecutor {
         }
     }
 
-    private fun getClipboardText(): String {
-        // Try Android first
-        try {
-            val cls = Class.forName("android.content.ClipboardManager")
-            // Android clipboard requires Context; stub returns empty on pure JVM
-        } catch (_: ClassNotFoundException) { /* not Android */ }
-
-        // java.awt fallback
+    private fun readClipboard(): String {
         return try {
-            val toolkit = java.awt.Toolkit.getDefaultToolkit()
-            val clipboard = toolkit.systemClipboard
-            val transferable = clipboard.getContents(null)
-            if (transferable?.isDataFlavorSupported(java.awt.datatransfer.DataFlavor.stringFlavor) == true) {
-                transferable.getTransferData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String ?: ""
+            val toolkitClass = Class.forName("java.awt.Toolkit")
+            val toolkit = toolkitClass.getMethod("getDefaultToolkit").invoke(null)
+            val clipboard = toolkitClass.getMethod("getSystemClipboard").invoke(toolkit)
+            val contents = clipboard.javaClass.getMethod("getContents", Any::class.java).invoke(clipboard, null)
+            if (contents != null) {
+                val flavorClass = Class.forName("java.awt.datatransfer.DataFlavor")
+                val flavorField = flavorClass.getField("stringFlavor")
+                val stringFlavor = flavorField.get(null)
+                val supported = contents.javaClass.getMethod("isDataFlavorSupported", flavorClass)
+                    .invoke(contents, stringFlavor) as? Boolean ?: false
+                if (supported) {
+                    val data = contents.javaClass.getMethod("getTransferData", flavorClass)
+                        .invoke(contents, stringFlavor)
+                    data as? String ?: ""
+                } else ""
             } else ""
         } catch (e: Exception) {
             ""
         }
     }
 
-    private fun setClipboardText(text: String) {
-        // java.awt fallback
-        val toolkit = java.awt.Toolkit.getDefaultToolkit()
-        val clipboard = toolkit.systemClipboard
-        val selection = java.awt.datatransfer.StringSelection(text)
-        clipboard.setContents(selection, null)
+    private fun writeClipboard(text: String) {
+        val toolkitClass = Class.forName("java.awt.Toolkit")
+        val toolkit = toolkitClass.getMethod("getDefaultToolkit").invoke(null)
+        val clipboard = toolkitClass.getMethod("getSystemClipboard").invoke(toolkit)
+        val selectionClass = Class.forName("java.awt.datatransfer.StringSelection")
+        val selection = selectionClass.getConstructor(String::class.java).newInstance(text)
+        clipboard.javaClass.getMethod("setContents", selectionClass, Any::class.java)
+            .invoke(clipboard, selection, null)
     }
 }
