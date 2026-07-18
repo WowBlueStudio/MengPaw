@@ -1,0 +1,32 @@
+v0.2.0-alpha — Initial F-Droid release
+
+Architecture
+- Microkernel + 15 plugin modules
+- ACP encrypted device-to-device communication
+- MCP bidirectional JSON-RPC protocol
+- Dream Engine for memory consolidation
+- Cron + lifetime trigger engine
+
+UI
+- Adaptive layout (Compact / Medium / Expanded)
+- Chinese/English bilingual interface
+- Plugin marketplace with install progress
+- Floating pad for Agent status visualization
+
+Security
+- EncryptedSharedPreferences with AES-256-GCM
+- 3-layer command interception
+- Prompt injection detection
+- Unicode spoofing protection
+- SSRF prevention for network plugins
+
+Translation
+- Google Translate integration (130+ languages)
+- Free public endpoint — zero setup required
+- Also works with official Cloud Translation API
+
+Browser
+- Standalone WebView browser with tab management
+- Ad blocking (40+ domain rules + regex patterns)
+- Page translation via free Google endpoint
+- Long-press image/video detection
