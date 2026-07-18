@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 MengPaw
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
