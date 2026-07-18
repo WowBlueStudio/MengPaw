@@ -414,7 +414,22 @@ Agent 通过 memory 命令按需加载文档，而非一次性加载全部上下
 
 ---
 
-## 10. 构建与部署
+## 10. 开发工具链
+
+本项目全程由 AI 辅助开发。不同阶段的工具链：
+
+| 阶段 | 时间范围 | 编排工具 | 主力模型 | 产出 |
+|------|---------|---------|---------|------|
+| **早期** | 2026-07-12 ~ 07-15 | [Reasonix](https://github.com/reasonix-com/reasonix) | DeepSeek Flash | US-001 ~ US-012：品牌重塑、CLI 基础设施、安全测试、三审三校 |
+| **中期** | 2026-07-16 ~ 至今 | [Claude Code](https://claude.ai/code) | DeepSeek Pro | 架构重构（plugin/acp/agent/mcp/trigger）、插件系统迁移、代码轻量化、GitHub 发布准备 |
+
+模型推理通过 [DeepSeek API](https://api.deepseek.com) (`api.deepseek.com`)，配置文件：
+- **Reasonix** — `reasonix.toml`（仓库根目录）
+- **Claude Code** — `.claude/settings.local.json`（本地，已 gitignore）
+
+---
+
+## 11. 构建与部署
 
 要求：Android SDK 35+, JDK 17+, Gradle 8.12 (Wrapper)
 
@@ -452,7 +467,7 @@ Agent 通过 memory 命令按需加载文档，而非一次性加载全部上下
 
 ---
 
-## 11. 常见问题
+## 12. 常见问题
 
 - **两个 APK 关系**: Shell 是核心 Agent 应用；Browser 是独立浏览器，可互相唤醒也可独立使用
 - **配置 API Key**: 设置 → 模型提供商 → 选择服务商 → 输入 Key
@@ -467,7 +482,7 @@ Agent 通过 memory 命令按需加载文档，而非一次性加载全部上下
 
 ---
 
-## 12. 项目交接
+## 13. 项目交接
 
 ### 12.1 环境搭建
 

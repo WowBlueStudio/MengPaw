@@ -91,6 +91,17 @@ Agent 通过 CLI 命令操控设备：
 - JDK 17
 - Gradle 8.12 (Wrapper 已包含)
 
+## 开发工具
+
+本项目由 AI 辅助开发，不同阶段使用的工具链：
+
+| 阶段 | 时间 | 编排工具 | 主力模型 | 说明 |
+|------|------|---------|---------|------|
+| 早期 | 2026-07-12 ~ 07-15 | [Reasonix](https://github.com/reasonix-com/reasonix) | DeepSeek Flash | 基础架构搭建、品牌重塑、CLI 系统 |
+| 中期 | 2026-07-16 ~ 至今 | [Claude Code](https://claude.ai/code) | DeepSeek Pro | 三审三校、架构重构、插件系统迁移、代码轻量化 |
+
+> 模型推理通过 DeepSeek API (`api.deepseek.com`)，配置见 `reasonix.toml`。
+
 ## 测试
 
 ```bash
