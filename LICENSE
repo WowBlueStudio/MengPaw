@@ -624,8 +624,10 @@ to attach them to the start of each source file to most effectively
 state the exclusion of warranty; and each file should have at least the
 "copyright" line and a pointer to where the full notice is found.
 
-    MengPaw — 面向 Agent 的自举式 Android 操作系统框架
-    Copyright (C) 2026  MengPaw
+    MengPaw (檬爪) — 面向 Agent 的自举式 Android 操作系统框架
+    Copyright (C) 2026  深圳哇蓝文化科技有限公司
+    ShenZhen wowblue culture and technology CO.,LTD.
+    Email: 1138018324@qq.com
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as
