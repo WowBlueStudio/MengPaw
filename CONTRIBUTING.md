@@ -15,6 +15,17 @@
 - 每个文件不超过 400 行
 - 单元测试覆盖核心逻辑
 
+## AI 辅助开发
+
+本项目全程由 AI 辅助编码。若你也使用 AI 工具贡献：
+
+| 阶段 | 编排工具 | 模型 |
+|------|---------|------|
+| 早期 (US-001 ~ US-012) | Reasonix | DeepSeek Flash |
+| 中期 (架构重构 ~ 至今) | Claude Code | DeepSeek Pro |
+
+推荐配置见 `reasonix.toml`（Reasonix）或 `.claude/` 目录（Claude Code）。
+
 ## 模块职责
 
 | 模块 | 职责 |
