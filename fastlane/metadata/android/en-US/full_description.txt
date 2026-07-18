@@ -1,0 +1,41 @@
+MengPaw is a self-bootstrapping AI Agent operating system framework for Android.
+The Agent controls itself through a built-in CLI — the API Key is the only
+security forbidden zone.
+
+<b>Core Features</b>
+• Microkernel + plugin architecture with 15 plugins
+• ReAct loop: Thought → Action → Observation → Final Answer
+• Multi-model LLM support: OpenAI, DeepSeek, Kimi, GLM, Qwen, Custom
+• Agent Communication Protocol (AES-256-CBC encrypted device-to-device)
+• Model Context Protocol (JSON-RPC bidirectional)
+• Dream Engine — memory consolidation inspired by QwenPaw (never delete originals)
+• Secure vault with Android EncryptedSharedPreferences (AES-256-GCM)
+• Adaptive layout: Compact &lt;600dp / Medium 600-840dp / Expanded &gt;840dp
+
+<b>Key Plugins</b>
+• File System (cat, ls, write, rm, mkdir, cp, mv, stat)
+• HTTP Networking (curl, get, post)
+• Memory System (Markdown persistent storage with LRU cache)
+• Skill System (reusable YAML+Markdown playbooks)
+• Multi-Agent Collaboration (file-inbox based team coordination)
+• DAG Workflow Engine (topological sort + parallel execution)
+• Image Generation (Replicate, Stability AI, DALL-E 3)
+• ComfyUI Integration (workflow builder + API submission)
+• Google Translate (130+ languages, free public endpoint, zero setup)
+
+<b>Privacy & Security</b>
+• 3-layer command interception (allowList / blockList / restrictedPatterns)
+• API keys encrypted with Android Keystore (hardware-backed when available)
+• Prompt injection detection (Chinese + English patterns)
+• Unicode spoofing protection (RTL override, zero-width, homoglyphs)
+• SSRF protection for plugin downloads
+• No telemetry, no tracking, no ads — ever.
+
+<b>Requirements</b>
+Android 8.0+ (API 26), ~20MB disk space. Internet required for LLM features.
+Network-based plugins (translation, search, image generation) need API keys from
+the respective providers. Most plugins work fully offline with zero configuration.
+
+<b>Open Source</b>
+Licensed under AGPL-3.0. Developed by WowBlue Studio (ShenZhen, China).
+Built with AI assistance using Claude Code + DeepSeek Pro.

@@ -1,0 +1,1 @@
+Self-bootstrapping AI Agent framework for Android — control your device via CLI.
