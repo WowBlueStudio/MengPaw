@@ -8,6 +8,7 @@ import io.ktor.client.engine.okhttp.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import java.io.File
 import java.security.MessageDigest
@@ -23,6 +24,8 @@ data class MarketplaceEntry(
     val author: String = "",
     val description: String = "",
     val downloadUrl: String,
+    /** Mirror download URL (Gitee for China, GitHub for others — auto-selected by GeoRouter) */
+    val mirrorUrl: String = "",
     val checksum: String = "",
     val sizeBytes: Long = 0,
     val minCoreVersion: String = "0.1.0",
@@ -42,15 +45,50 @@ data class MarketplaceIndex(
 )
 
 /**
- * Client for the MengPaw plugin marketplace.
+ * Smart geo-router for plugin downloads.
  *
- * Features:
- * - Fetch marketplace index with ETag/If-Modified-Since caching
- * - Download plugins with SHA256 verification
- * - Local cache for marketplace index
+ * Detects device location via IP and routes requests:
+ *   China (CN) → Gitee primary, GitHub fallback
+ *   Other       → GitHub primary, Gitee fallback
+ */
+object GeoRouter {
+    /** Cached country code — null until first detection. */
+    @Volatile private var cachedCountry: String? = null
+
+    /** Returns true if the device is likely in mainland China. */
+    suspend fun isChina(): Boolean {
+        cachedCountry?.let { return it == "CN" }
+        return try {
+            val client = HttpClient(OkHttp) { engine { config { connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS) } } }
+            val resp = client.get("http://ip-api.com/json?fields=countryCode")
+            val json = Json.parseToJsonElement(resp.bodyAsText()).jsonObject
+            val code = json["countryCode"]?.jsonPrimitive?.content ?: "XX"
+            client.close()
+            cachedCountry = code
+            code == "CN"
+        } catch (e: Exception) {
+            // If geo-detection fails, default to primary (GitHub) — safe for non-China users
+            false
+        }
+    }
+
+    /** Force re-detect on next call (e.g., after network change). */
+    fun reset() { cachedCountry = null }
+}
+
+/**
+ * Client for the MengPaw plugin marketplace with dual-source smart routing.
+ *
+ * Architecture:
+ *   China (CN) → fetches index from Gitee, downloads from Gitee first
+ *   Other       → fetches index from GitHub, downloads from GitHub first
+ *   On failure  → automatically retries with the alternate source
+ *
+ * Free public endpoints used:
+ *   GitHub: raw.githubusercontent.com  (global CDN)
+ *   Gitee:  gitee.com/raw/              (China CDN, no VPN needed)
  */
 class PluginMarketplaceClient(
-    private val marketplaceUrl: String = DEFAULT_MARKETPLACE_URL,
     private val cacheDir: File = File(com.mengpaw.core.DataPaths.PLUGIN_CACHE)
 ) {
     private val client = HttpClient(OkHttp)
@@ -60,13 +98,25 @@ class PluginMarketplaceClient(
     private val cacheTtlMs = 300_000L // 5 minutes
 
     companion object {
-        const val DEFAULT_MARKETPLACE_URL =
+        const val GITHUB_INDEX_URL =
             "https://raw.githubusercontent.com/WowBlueStudio/MengPaw/master/plugins.json"
+        const val GITEE_INDEX_URL =
+            "https://gitee.com/WowBlueStudio/MengPaw/raw/master/plugins.json"
+    }
+
+    /** Resolve the best index URL based on geo-location. */
+    private suspend fun resolveIndexUrl(): String {
+        val useGitee = GeoRouter.isChina()
+        return if (useGitee) GITEE_INDEX_URL else GITHUB_INDEX_URL
+    }
+
+    /** Get the fallback index URL. */
+    private fun fallbackIndexUrl(primary: String): String {
+        return if (primary == GITEE_INDEX_URL) GITHUB_INDEX_URL else GITEE_INDEX_URL
     }
 
     /**
-     * Fetch the marketplace index. Uses ETag caching to minimize bandwidth.
-     * Returns cached result if within TTL.
+     * Fetch the marketplace index with geo-routing and automatic fallback.
      */
     suspend fun fetchIndex(forceRefresh: Boolean = false): Result<MarketplaceIndex> {
         if (!forceRefresh && cachedIndex != null &&
@@ -75,11 +125,20 @@ class PluginMarketplaceClient(
             return Result.success(cachedIndex!!)
         }
 
+        val primary = resolveIndexUrl()
+        val result = tryFetch(primary)
+        if (result.isSuccess) return result
+
+        // Fallback: try the alternate source
+        val fallback = fallbackIndexUrl(primary)
+        return tryFetch(fallback)
+    }
+
+    private suspend fun tryFetch(url: String): Result<MarketplaceIndex> {
         return try {
-            val response = client.get(marketplaceUrl) {
+            val response = client.get(url) {
                 lastEtag?.let { header(HttpHeaders.IfNoneMatch, it) }
             }
-
             when {
                 response.status == HttpStatusCode.NotModified -> {
                     lastFetchTime = System.currentTimeMillis()
@@ -94,11 +153,10 @@ class PluginMarketplaceClient(
                     Result.success(index)
                 }
                 else -> Result.failure(
-                    RuntimeException("Marketplace HTTP ${response.status.value}: ${response.bodyAsText().take(200)}")
+                    RuntimeException("HTTP ${response.status.value}")
                 )
             }
         } catch (e: Exception) {
-            // Return cached index if available, even if expired
             if (cachedIndex != null) Result.success(cachedIndex!!)
             else Result.failure(e)
         }
@@ -124,54 +182,54 @@ class PluginMarketplaceClient(
     suspend fun getPlugin(id: String): Result<MarketplaceEntry> {
         return fetchIndex().map { index ->
             index.plugins.find { it.id == id }
-                ?: throw NoSuchElementException("Plugin not found in marketplace: $id")
+                ?: throw NoSuchElementException("Plugin not found: $id")
         }
     }
 
     /**
-     * Download a plugin JAR/APK and verify its SHA256 checksum.
-     * Enforces HTTPS-only and blocks internal/private IP ranges (SSRF protection).
-     *
-     * @param entry The marketplace entry with downloadUrl and checksum.
-     * @param destDir Destination directory for the downloaded file.
-     * @return The downloaded file.
+     * Download a plugin with geo-routing.
+     * Tries the best regional source first, falls back to the alternate.
      */
     suspend fun download(entry: MarketplaceEntry, destDir: File): Result<File> {
+        val primary = if (GeoRouter.isChina() && entry.mirrorUrl.isNotBlank())
+            entry.mirrorUrl else entry.downloadUrl
+        val fallback = if (primary == entry.mirrorUrl) entry.downloadUrl else entry.mirrorUrl
+
+        val result = tryDownload(primary, entry, destDir)
+        if (result.isSuccess) return result
+
+        // Try alternate source
+        if (fallback.isNotBlank() && fallback != primary) {
+            return tryDownload(fallback, entry, destDir)
+        }
+        return result
+    }
+
+    private suspend fun tryDownload(url: String, entry: MarketplaceEntry, destDir: File): Result<File> {
         return try {
-            // VULN-FIX: Validate download URL — HTTPS only, no SSRF to internal networks
-            val url = entry.downloadUrl
             if (!url.startsWith("https://")) {
                 return Result.failure(SecurityException("Plugin download requires HTTPS: $url"))
             }
             if (isPrivateUrl(url)) {
-                return Result.failure(SecurityException("Plugin download blocked: internal/private network address"))
+                return Result.failure(SecurityException("Plugin download blocked: internal network address"))
             }
-
-            cacheDir.mkdirs()
-            val destFile = File(destDir, "${entry.id}-${entry.version}.jar")
-
+            destDir.mkdirs()
+            val ext = if (url.endsWith(".aar")) "aar" else "jar"
+            val destFile = File(destDir, "${entry.id}-${entry.version}.$ext")
             val response = client.get(url)
             if (!response.status.isSuccess()) {
-                return Result.failure(
-                    RuntimeException("Download failed: HTTP ${response.status.value}")
-                )
+                return Result.failure(RuntimeException("Download HTTP ${response.status.value}"))
             }
-
             val bytes = response.bodyAsBytes()
             destFile.writeBytes(bytes)
-
-            // Verify checksum if provided
             if (entry.checksum.isNotBlank()) {
                 val actual = sha256(bytes)
                 val expected = entry.checksum.removePrefix("sha256:")
                 if (!actual.equals(expected, ignoreCase = true)) {
                     destFile.delete()
-                    return Result.failure(
-                        SecurityException("Checksum mismatch: expected $expected, got $actual")
-                    )
+                    return Result.failure(SecurityException("Checksum mismatch"))
                 }
             }
-
             Result.success(destFile)
         } catch (e: Exception) {
             Result.failure(e)
@@ -179,8 +237,7 @@ class PluginMarketplaceClient(
     }
 
     /**
-     * Check for available updates by comparing installed plugin versions
-     * against the marketplace.
+     * Check for available updates by comparing installed versions against the marketplace.
      */
     suspend fun checkUpdates(installed: Map<String, String>): Result<List<Pair<String, String>>> {
         return fetchIndex().map { index ->
@@ -190,20 +247,19 @@ class PluginMarketplaceClient(
                 if (installedVersion != null) {
                     val current = PluginVersion.parse(installedVersion)
                     val latest = PluginVersion.parse(entry.version)
-                    if (latest > current) {
-                        updates.add(entry.id to entry.version)
-                    }
+                    if (latest > current) updates.add(entry.id to entry.version)
                 }
             }
             updates
         }
     }
 
-    /** Clear the in-memory cache (forces refresh on next fetchIndex). */
+    /** Clear the in-memory cache (forces refresh + re-detect geo). */
     fun clearCache() {
         cachedIndex = null
         lastEtag = null
         lastFetchTime = 0L
+        GeoRouter.reset()
     }
 
     // ── Private helpers ───────────────────────────────────────────────
@@ -217,9 +273,7 @@ class PluginMarketplaceClient(
                 updated = root["updated"]?.jsonPrimitive?.content ?: "",
                 plugins = root["plugins"]?.jsonArray?.map { parseEntry(it.jsonObject) } ?: emptyList()
             )
-        } catch (e: Exception) {
-            MarketplaceIndex()
-        }
+        } catch (e: Exception) { MarketplaceIndex() }
     }
 
     private fun parseEntry(obj: JsonObject): MarketplaceEntry = MarketplaceEntry(
@@ -230,6 +284,7 @@ class PluginMarketplaceClient(
         author = obj["author"]?.jsonPrimitive?.content ?: "",
         description = obj["description"]?.jsonPrimitive?.content ?: "",
         downloadUrl = obj["downloadUrl"]?.jsonPrimitive?.content ?: "",
+        mirrorUrl = obj["mirrorUrl"]?.jsonPrimitive?.content ?: "",
         checksum = obj["checksum"]?.jsonPrimitive?.content ?: "",
         sizeBytes = obj["size"]?.jsonPrimitive?.long ?: 0L,
         minCoreVersion = obj["minCoreVersion"]?.jsonPrimitive?.content ?: "0.1.0",
@@ -243,21 +298,11 @@ class PluginMarketplaceClient(
         return digest.digest(bytes).joinToString("") { "%02x".format(it) }
     }
 
-    /**
-     * Check if a URL points to a private/internal network (SSRF prevention).
-     * Blocks: localhost, 10.x, 172.16-31.x, 192.168.x, 127.x, 0.0.0.0, [::1]
-     */
     private fun isPrivateUrl(url: String): Boolean {
-        val host = try {
-            val uri = java.net.URI(url)
-            uri.host ?: return true // No host = suspicious
-        } catch (e: Exception) { return true }
-
-        return host == "localhost" ||
-            host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" ||
-            host.startsWith("10.") ||
-            host.startsWith("192.168.") ||
+        val host = try { java.net.URI(url).host ?: return true } catch (e: Exception) { return true }
+        return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" ||
+            host.startsWith("10.") || host.startsWith("192.168.") ||
             host.startsWith("172.") && host.substringAfter("172.").substringBefore(".").toIntOrNull()?.let { it in 16..31 } == true ||
-            host.startsWith("169.254.")  // link-local
+            host.startsWith("169.254.")
     }
 }
