@@ -1,0 +1,1 @@
+{"id":"translate-plugin","name":"Google 翻译","version":"1.0.0","type":"native","author":"MengPaw","description":"Google Cloud Translation — 130+ 语言翻译，支持自动检测源语言","minCoreVersion":"0.2.0","permissions":[],"commands":["translate.text","translate.auto","translate.langs","translate.setup"]}
