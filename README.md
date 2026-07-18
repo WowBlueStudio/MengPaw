@@ -110,4 +110,6 @@ Agent 通过 CLI 命令操控设备：
 
 ## 许可证
 
-Apache 2.0 — 详见 [LICENSE](LICENSE)
+GNU Affero General Public License v3.0 (AGPL-3.0) — 详见 [LICENSE](LICENSE)
+
+> **核心要求**：如果你修改了本软件并作为网络服务运行，必须公开你的修改版源代码。
