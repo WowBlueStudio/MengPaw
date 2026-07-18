@@ -54,6 +54,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -195,6 +196,60 @@ private fun isAdRequest(url: String): Boolean {
            AD_PATTERNS.any { it.containsMatchIn(url) }
 }
 
+/**
+ * Free Google Translate client using the public web endpoint.
+ * No API key required — uses the same backend as translate.google.com.
+ * For higher-volume/critical use, switch to the official Cloud Translation API.
+ */
+object GoogleTranslate {
+    private const val ENDPOINT = "https://translate.googleapis.com/translate_a/single"
+
+    /** Common target language codes. */
+    val LANGUAGES = mapOf(
+        "中文(简)" to "zh-CN", "中文(繁)" to "zh-TW", "English" to "en",
+        "日本語" to "ja", "한국어" to "ko", "Français" to "fr",
+        "Deutsch" to "de", "Español" to "es", "Português" to "pt",
+        "Italiano" to "it", "Русский" to "ru", "العربية" to "ar",
+        "हिन्दी" to "hi", "ไทย" to "th", "Tiếng Việt" to "vi",
+        "Bahasa Indonesia" to "id", "Türkçe" to "tr"
+    )
+
+    /** Translate text using the free public endpoint. */
+    suspend fun translate(text: String, targetLang: String, sourceLang: String = "auto"): String {
+        return withContext(Dispatchers.IO) {
+            val encoded = URLEncoder.encode(text, "UTF-8")
+            val url = "$ENDPOINT?client=gtx&sl=$sourceLang&tl=$targetLang&dt=t&q=$encoded"
+            val conn = URL(url).openConnection() as HttpURLConnection
+            conn.connectTimeout = 10000
+            conn.readTimeout = 15000
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+            val raw = conn.inputStream.bufferedReader().readText()
+            conn.disconnect()
+            parseResult(raw)
+        }
+    }
+
+    /** Parse Google's JSON response: [[["translated","orig",...]],null,"en"] */
+    private fun parseResult(json: String): String {
+        return try {
+            // Remove the outer array wrapper, extract first string from each sentence
+            val sb = StringBuilder()
+            // Simple parser: find all ["translated","original",...] patterns
+            val sentenceRegex = Regex("""\[\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"""")
+            sentenceRegex.findAll(json).forEach { match ->
+                val translated = match.groupValues[1]
+                    .replace("\\\"", "\"")
+                    .replace("\\n", "\n")
+                    .replace("\\\\", "\\")
+                sb.append(translated)
+            }
+            sb.toString().ifBlank { "(translation empty)" }
+        } catch (e: Exception) {
+            "(translation failed: ${e.message})"
+        }
+    }
+}
+
 /** Smart URL detection: returns search URL for keywords, original URL with https for domains. */
 private fun smartNavigate(input: String, engine: SearchEngine): String {
     val trimmed = input.trim()
@@ -252,6 +307,7 @@ fun BrowserApp(initialUrl: String? = null) {
     var showSettings by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var showPasswords by remember { mutableStateOf(false) }
+    var showTranslate by remember { mutableStateOf(false) }
     var historyEnabled by remember { mutableStateOf(prefs.historyEnabled) }
     val historyStore = remember { HistoryStore(ctx) }
     var searchEngine by remember { mutableStateOf(prefs.defaultEngine()) }
@@ -361,6 +417,9 @@ fun BrowserApp(initialUrl: String? = null) {
                                             tabs = tabs + TabState(id = newId); activeTabId = newId; isColdStart = true
                                             menuExpanded = false
                                         })
+                                    DropdownMenuItem(text = { Text("翻译页面") }, leadingIcon = { Icon(Icons.Default.Refresh, null) },
+                                        enabled = !isColdStart && activeTab.title.isNotBlank(),
+                                        onClick = { showTranslate = true; menuExpanded = false })
                                     DropdownMenuItem(
                                         text = { Text(if (adBlockEnabled) "广告拦截: 开" else "广告拦截: 关") },
                                         leadingIcon = { Icon(if (adBlockEnabled) Icons.Default.Star else Icons.Default.Close, null) },
@@ -592,6 +651,75 @@ fun BrowserApp(initialUrl: String? = null) {
                         }
                     },
                     confirmButton = { TextButton(onClick = { showPasswords = false }) { Text("关闭") } }
+                )
+            }
+
+            // ── Translate dialog ──
+            if (showTranslate) {
+                val targetLang = remember { mutableStateOf("zh-CN") }
+                val translating = remember { mutableStateOf(false) }
+                val result = remember { mutableStateOf("") }
+                val sysLang = java.util.Locale.getDefault().language.let {
+                    when (it) { "zh" -> "zh-CN"; "en" -> "en"; "ja" -> "ja"; "ko" -> "ko"; else -> "zh-CN" }
+                }
+                LaunchedEffect(showTranslate) { targetLang.value = sysLang }
+                AlertDialog(
+                    onDismissRequest = { showTranslate = false; result.value = "" },
+                    title = { Text("翻译页面") },
+                    text = {
+                        Column {
+                            Text(activeTab.title.ifBlank { activeTab.url.take(60) }, fontWeight = FontWeight.Medium, maxLines = 1)
+                            Spacer(Modifier.height(12.dp))
+                            // Language picker
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("翻译为:", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                                var expanded by remember { mutableStateOf(false) }
+                                Box {
+                                    OutlinedButton(onClick = { expanded = true }) {
+                                        Text(GoogleTranslate.LANGUAGES.entries.find { it.value == targetLang.value }?.key ?: targetLang.value, fontSize = 12.sp)
+                                    }
+                                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                        GoogleTranslate.LANGUAGES.forEach { (name, code) ->
+                                            DropdownMenuItem(text = { Text(name) },
+                                                onClick = { targetLang.value = code; expanded = false })
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            // Translate button
+                            Button(
+                                onClick = {
+                                    translating.value = true
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        try {
+                                            val pageText = activeTab.title
+                                            val translated = GoogleTranslate.translate(pageText, targetLang.value)
+                                            result.value = translated
+                                        } catch (e: Exception) {
+                                            result.value = "翻译失败: ${e.message}"
+                                        }
+                                        translating.value = false
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !translating.value
+                            ) {
+                                if (translating.value) {
+                                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Text(if (translating.value) "翻译中..." else "翻译")
+                            }
+                            if (result.value.isNotBlank()) {
+                                Spacer(Modifier.height(12.dp))
+                                Surface(color = ThemeColors.bgCardHigh, shape = RoundedCornerShape(8.dp)) {
+                                    Text(result.value, modifier = Modifier.padding(12.dp), fontSize = 14.sp)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = { TextButton(onClick = { showTranslate = false; result.value = "" }) { Text("关闭") } }
                 )
             }
 

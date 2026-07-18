@@ -8,30 +8,25 @@ import com.mengpaw.core.plugin.PluginMetadata
 import com.mengpaw.core.plugin.PluginType
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
+import io.ktor.client.call.body
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.serialization.json.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
- * Google Cloud Translation plugin — provides translate.* CLI commands.
+ * Google Translate plugin — provides translate.* CLI commands.
  *
- * ## Setup
- * Users need a Google Cloud API key with Translation API enabled.
- * Run `translate.setup` for step-by-step instructions (Agent can guide the user).
+ * ## Two modes (automatic fallback)
+ * **Free mode (default):** Uses Google's public web endpoint — zero setup, always available.
+ * **Pro mode:** Uses official Cloud Translation API v2 when GOOGLE_TRANSLATE_API_KEY is set.
+ * The plugin auto-detects which mode to use.
  *
  * ## Features
- * - 130+ languages via Google Cloud Translation v2 REST API
- * - Auto-detect source language when not specified
- * - 500K chars/month free tier (sufficient for personal use)
- * - API key stored in Vault or GOOGLE_TRANSLATE_API_KEY env var
- *
- * ## Architecture
- * Uses Google's REST v2 endpoint (simpler than v3 — no project ID needed).
- * ```
- * POST https://translation.googleapis.com/language/translate/v2?key={KEY}
- * Body: {"q":"text","target":"en"}
- * ```
+ * - 130+ languages
+ * - Auto-detect source language
+ * - 500K chars/month free via official API; unlimited via public endpoint
  */
 class TranslatePlugin : Plugin {
     override val metadata = PluginMetadata(
@@ -40,7 +35,7 @@ class TranslatePlugin : Plugin {
         version = "1.0.0",
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "Google Cloud Translation — 130+ 语言翻译，自动检测源语言",
+        description = "Google 翻译 — 支持 130+ 语言，免费免设置",
         minCoreVersion = "0.2.0",
         commands = listOf("translate.text", "translate.auto", "translate.langs", "translate.setup")
     )
@@ -56,212 +51,202 @@ class TranslatePlugin : Plugin {
         engine { config { connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS) } }
     }
 
-    /** Resolve API key: Vault > env var > empty. */
-    private fun resolveKey(): String {
-        return try {
-            // Attempt Vault via reflection (avoids compile-time dependency on Android Context)
-            val vaultClass = Class.forName("com.mengpaw.core.security.Vault")
-            // Can't instantiate Vault without Context — fallback to env
-            System.getenv("GOOGLE_TRANSLATE_API_KEY") ?: ""
-        } catch (e: Exception) {
-            System.getenv("GOOGLE_TRANSLATE_API_KEY") ?: ""
-        }
-    }
+    private val hasApiKey: Boolean
+        get() = System.getenv("GOOGLE_TRANSLATE_API_KEY")?.isNotBlank() == true
 
     // ── translate.text ─────────────────────────────────────────────
 
     private suspend fun translateText(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val key = resolveKey()
-        if (key.isBlank()) return missingKeyMessage()
-
         if (args.isEmpty()) return ExecutionResult.fail(
-            "Usage: translate.text <content> [--from=<lang>] [--to=<lang>]\n" +
-            "Example: translate.text Hello World --to=zh",
+            "Usage: translate.text <content> [--from=<lang>] [--to=<lang>]\nExample: translate.text Hello World --to=zh",
             errorCode = ErrorCodes.ERR_INVALID_INPUT
         )
-
-        // Parse flags
         val flags = args.filter { it.startsWith("--") }
-        val to = flags.find { it.startsWith("--to=") }?.removePrefix("--to=")
-            ?: systemLanguageCode()
+        val to = flags.find { it.startsWith("--to=") }?.removePrefix("--to=") ?: systemLang()
         val from = flags.find { it.startsWith("--from=") }?.removePrefix("--from=")
         val text = args.filter { !it.startsWith("--") }.joinToString(" ")
-
         if (text.isBlank()) return ExecutionResult.fail("No text to translate.", errorCode = ErrorCodes.ERR_INVALID_INPUT)
 
-        return try {
-            val body = buildJsonObject {
-                put("q", text)
-                put("target", to)
-                if (from != null) put("source", from)
-                put("format", "text")
-            }
-            val url = "https://translation.googleapis.com/language/translate/v2?key=$key"
-            val resp = client.post(url) {
-                contentType(ContentType.Application.Json)
-                setBody(body.toString())
-            }
-            parseTranslation(resp.bodyAsText(), text, to)
-        } catch (e: Exception) {
-            ExecutionResult.fail("Translation error: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
-        }
+        return if (hasApiKey) translateWithApi(text, from, to) else translateFree(text, from, to)
     }
 
     // ── translate.auto ─────────────────────────────────────────────
 
     private suspend fun translateAuto(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val key = resolveKey()
-        if (key.isBlank()) return missingKeyMessage()
-
         if (args.isEmpty()) return ExecutionResult.fail(
-            "Usage: translate.auto <content>\nAuto-detects source language and translates to system language.",
+            "Usage: translate.auto <content>\nAuto-detects source language → system language.",
             errorCode = ErrorCodes.ERR_INVALID_INPUT
         )
-
         val text = args.joinToString(" ")
-        val to = systemLanguageCode()
+        val to = systemLang()
 
-        return try {
-            // Detect source language
-            val detectBody = buildJsonObject { put("q", text) }
-            val detectResp = client.post("https://translation.googleapis.com/language/translate/v2/detect?key=$key") {
-                contentType(ContentType.Application.Json)
-                setBody(detectBody.toString())
+        return if (hasApiKey) {
+            // Detect + translate via official API
+            try {
+                val key = System.getenv("GOOGLE_TRANSLATE_API_KEY") ?: ""
+                val detectBody = """{"q":"$text"}"""
+                val detectResp = client.post("https://translation.googleapis.com/language/translate/v2/detect?key=$key") {
+                    contentType(ContentType.Application.Json); setBody(detectBody)
+                }
+                val from = parseDetectedLang(detectResp.body<String>())
+                val resp = translateWithApi(text, from, to)
+                val translated = resp.output
+                if (resp.success) ExecutionResult.ok("[$from → $to] $translated") else resp
+            } catch (e: Exception) {
+                translateFree(text, "auto", to) // fallback to free
             }
-            val detectJson = Json.parseToJsonElement(detectResp.bodyAsText()).jsonObject
-            val detections = detectJson["data"]?.jsonObject?.get("detections")?.jsonArray
-            val detected = detections?.firstOrNull()?.jsonArray?.firstOrNull()?.jsonObject
-            val from = detected?.get("language")?.jsonPrimitive?.content ?: "auto"
-
-            // Translate
-            val body = buildJsonObject {
-                put("q", text)
-                put("target", to)
-                put("format", "text")
-            }
-            val resp = client.post("https://translation.googleapis.com/language/translate/v2?key=$key") {
-                contentType(ContentType.Application.Json)
-                setBody(body.toString())
-            }
-            val result = parseTranslation(resp.bodyAsText(), text, to)
-            val translated = result.output
-            ExecutionResult.ok("[$from → $to] $translated")
-        } catch (e: Exception) {
-            ExecutionResult.fail("Translation error: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        } else {
+            translateFree(text, "auto", to)
         }
     }
 
     // ── translate.langs ────────────────────────────────────────────
 
     private suspend fun listLanguages(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        return ExecutionResult.ok(
-            """
-            ## Google Translate — 常用语言代码
-            | 语言 | 代码 |
-            |------|------|
-            | 中文 (简体) | zh |     | 中文 (繁体) | zh-TW |
-            | 英文 | en |           | 日文 | ja |
-            | 韩文 | ko |           | 法文 | fr |
-            | 德文 | de |           | 西班牙文 | es |
-            | 葡萄牙文 | pt |       | 意大利文 | it |
-            | 俄文 | ru |           | 阿拉伯文 | ar |
-            | 印地文 | hi |         | 泰文 | th |
-            | 越南文 | vi |         | 印尼文 | id |
-            | 马来文 | ms |         | 菲律宾文 | fil |
-            | 土耳其文 | tr |       | 荷兰文 | nl |
-            | 波兰文 | pl |         | 乌克兰文 | uk |
-            | 瑞典文 | sv |         | 挪威文 | no |
-            | 丹麦文 | da |         | 芬兰文 | fi |
-            | 希腊文 | el |         | 希伯来文 | he |
+        val mode = if (hasApiKey) "Pro (Cloud API)" else "Free (public endpoint)"
+        return ExecutionResult.ok("""
+## Google 翻译 — 语言代码 ($mode)
 
-            完整列表 130+ 语言: https://cloud.google.com/translate/docs/languages
+| 语言 | 代码 |     | 语言 | 代码 |
+|------|------|-----|------|------|
+| 中文 (简体) | zh-CN | | 中文 (繁体) | zh-TW |
+| 英文 | en |     | 日文 | ja |
+| 韩文 | ko |     | 法文 | fr |
+| 德文 | de |     | 西班牙文 | es |
+| 葡萄牙文 | pt |     | 意大利文 | it |
+| 俄文 | ru |     | 阿拉伯文 | ar |
+| 印地文 | hi |     | 泰文 | th |
+| 越南文 | vi |     | 印尼文 | id |
+| 马来文 | ms |     | 菲律宾文 | fil |
+| 土耳其文 | tr |     | 荷兰文 | nl |
+| 波兰文 | pl |     | 乌克兰文 | uk |
+| 瑞典文 | sv |     | 挪威文 | no |
+| 丹麦文 | da |     | 芬兰文 | fi |
+| 希腊文 | el |     | 希伯来文 | he |
 
-            用法:
-              translate.text Hello World --to=ja     # 英→日
-              translate.auto 你好世界                  # 自动检测→系统语言
-            """.trimIndent()
-        )
+完整: https://cloud.google.com/translate/docs/languages
+
+用法:
+  translate.text Hello --to=ja    # → こんにちは
+  translate.auto 你好世界          # → Hello World (自动检测)
+        """.trimIndent())
     }
 
     // ── translate.setup ────────────────────────────────────────────
 
     private suspend fun setupGuide(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        return ExecutionResult.ok(
-            """
-            ## Google Cloud Translation API — 配置指南
+        return ExecutionResult.ok("""
+## Google 翻译 — 配置指南
 
-            ### 1. 创建 Google Cloud 项目（5分钟，免费）
-            1. 打开 https://console.cloud.google.com
-            2. 登录 Google 账号（需绑定信用卡，验证身份，不扣费）
-            3. 点击顶部 "选择项目" → "新建项目" → 命名后创建
+### 当前模式: ${if (hasApiKey) "Pro (Cloud API Key 已配置)" else "Free (公开端点，无需设置)"}
 
-            ### 2. 启用 Translation API
-            1. 在 Console 搜索 "Cloud Translation API"
-            2. 点击 "启用" (ENABLE)
-            3. 等待几秒激活
+### Free 模式（默认，推荐）
+开箱即用 — 无需任何设置。
+Agent 可以直接使用 translate.text / translate.auto 翻译文本。
 
-            ### 3. 创建 API Key
-            1. 左侧菜单 → "凭据" (Credentials)
-            2. 点击 "+ 创建凭据" → "API 密钥"
-            3. 复制生成的密钥（格式: AIza...）
+### Pro 模式（可选，更高稳定性）
+如需官方 SLA 保证和更高并发上限:
+1. 打开 https://console.cloud.google.com
+2. 创建项目 → 启用 Cloud Translation API → 创建 API Key
+3. 设置环境变量: export GOOGLE_TRANSLATE_API_KEY=AIza...
+4. 验证: translate.text Hello --to=zh
 
-            ### 4. 设置到 MengPaw
-            将 API Key 设置为环境变量:
-              export GOOGLE_TRANSLATE_API_KEY=AIza...
-
-            或通过 Agent 配置（推荐）:
-              将密钥告诉 Agent，Agent 会自动保存到安全保险库。
-
-            ### 5. 验证
-              translate.text Hello --to=zh   # 应返回 "你好"
-
-            ### 费用
-            每月免费 500,000 字符（约 25 万汉字），个人使用绰绰有余。
-            超出后 $20/百万字符。新账号另有 $300 赠金。
-            """.trimIndent()
-        )
+### 费用对比
+- Free 模式: 完全免费，无需账号
+- Pro 模式: 每月 500,000 字符免费，超出 $20/百万字符
+        """.trimIndent())
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────
+    // ── Translation engines ────────────────────────────────────────
 
-    private fun missingKeyMessage() = ExecutionResult.fail(
-        "Google Translate API key not configured.\n\n" +
-        "Run `translate.setup` for a step-by-step guide to get your free API key.\n" +
-        "The Agent can also walk you through the setup interactively.",
-        errorCode = ErrorCodes.ERR_INTERNAL
-    )
-
-    /** Best-effort system language from JVM, falls back to "zh". */
-    private fun systemLanguageCode(): String {
+    /**
+     * Free translation using Google's public web endpoint.
+     * Same backend as translate.google.com — no API key needed.
+     */
+    private suspend fun translateFree(text: String, from: String?, to: String): ExecutionResult {
         return try {
-            val sysLang = java.util.Locale.getDefault().language
-            if (sysLang.isNotBlank() && sysLang.length == 2) sysLang else "zh"
-        } catch (e: Exception) { "zh" }
-    }
-
-    private fun parseTranslation(jsonStr: String, original: String, target: String): ExecutionResult {
-        return try {
-            val root = Json.parseToJsonElement(jsonStr).jsonObject
-            val data = root["data"]?.jsonObject
-            val translations = data?.get("translations")?.jsonArray
-            val translated = translations?.firstOrNull()?.jsonObject?.get("translatedText")?.jsonPrimitive?.content
-                ?: return ExecutionResult.fail("Unexpected API response: no translatedText found", errorCode = ErrorCodes.ERR_INTERNAL)
-
-            // If source was auto-detected, include it
-            val detectedSource = translations.firstOrNull()?.jsonObject?.get("detectedSourceLanguage")?.jsonPrimitive?.content
-            val prefix = if (detectedSource != null) "[$detectedSource → $target] " else ""
+            val encoded = java.net.URLEncoder.encode(text, "UTF-8")
+            val sl = from ?: "auto"
+            val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=$sl&tl=$to&dt=t&q=$encoded"
+            val resp: HttpResponse = client.get(url) {
+                headers { append("User-Agent", "Mozilla/5.0") }
+            }
+            val body: String = resp.body<String>()
+            val translated = parseFreeResponse(body)
+            val prefix = if (from == null || from == "auto") "[auto→$to] " else "[$from→$to] "
             ExecutionResult.ok(prefix + translated)
         } catch (e: Exception) {
-            // Fallback: try parsing as v3 response
-            try {
-                val root = Json.parseToJsonElement(jsonStr).jsonObject
-                val translations = root["translations"]?.jsonArray
-                val translated = translations?.firstOrNull()?.jsonObject?.get("translatedText")?.jsonPrimitive?.content
-                    ?: return ExecutionResult.fail("Unexpected API response", errorCode = ErrorCodes.ERR_INTERNAL)
-                ExecutionResult.ok(translated)
-            } catch (e2: Exception) {
-                ExecutionResult.fail("Failed to parse translation response: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
-            }
+            ExecutionResult.fail("Translation error: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
         }
     }
+
+    /**
+     * Official Cloud Translation API v2 (requires API key).
+     */
+    private suspend fun translateWithApi(text: String, from: String?, to: String): ExecutionResult {
+        val key = System.getenv("GOOGLE_TRANSLATE_API_KEY") ?: ""
+        return try {
+            val body = kotlinx.serialization.json.buildJsonObject {
+                put("q", kotlinx.serialization.json.JsonPrimitive(text))
+                put("target", kotlinx.serialization.json.JsonPrimitive(to))
+                put("format", kotlinx.serialization.json.JsonPrimitive("text"))
+                if (from != null) put("source", kotlinx.serialization.json.JsonPrimitive(from))
+            }
+            val resp = client.post("https://translation.googleapis.com/language/translate/v2?key=$key") {
+                contentType(ContentType.Application.Json); setBody(body.toString())
+            }
+            parseApiResponse(resp.body<String>(), to)
+        } catch (e: Exception) {
+            ExecutionResult.fail("API error: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+    }
+
+    // ── Parsers ────────────────────────────────────────────────────
+
+    /** Parse free endpoint response: [[["text","orig",...]],null,"en"] */
+    private fun parseFreeResponse(json: String): String {
+        val sb = StringBuilder()
+        val re = Regex("""\[\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"""")
+        re.findAll(json).forEach { m ->
+            sb.append(m.groupValues[1].replace("\\\"", "\"").replace("\\n", "\n").replace("\\\\", "\\"))
+        }
+        return sb.toString().ifBlank { "(empty)" }
+    }
+
+    /** Parse official API v2 response. */
+    private fun parseApiResponse(jsonStr: String, target: String): ExecutionResult {
+        return try {
+            val root = kotlinx.serialization.json.Json.parseToJsonElement(jsonStr) as? kotlinx.serialization.json.JsonObject ?:
+                return ExecutionResult.fail("Invalid JSON", errorCode = ErrorCodes.ERR_INTERNAL)
+            val data = root["data"] as? kotlinx.serialization.json.JsonObject
+            val translations = data?.get("translations") as? kotlinx.serialization.json.JsonArray
+            val first = translations?.firstOrNull() as? kotlinx.serialization.json.JsonObject
+            val translated = (first?.get("translatedText") as? kotlinx.serialization.json.JsonPrimitive)?.content
+                ?: return ExecutionResult.fail("No translatedText in response", errorCode = ErrorCodes.ERR_INTERNAL)
+            val detected = (first?.get("detectedSourceLanguage") as? kotlinx.serialization.json.JsonPrimitive)?.content
+            val prefix = if (detected != null) "[$detected→$target] " else ""
+            ExecutionResult.ok(prefix + translated)
+        } catch (e: Exception) {
+            ExecutionResult.fail("Parse error: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+    }
+
+    /** Parse detect-language response. */
+    private fun parseDetectedLang(jsonStr: String): String {
+        return try {
+            val root = kotlinx.serialization.json.Json.parseToJsonElement(jsonStr) as? kotlinx.serialization.json.JsonObject
+            val data = root?.get("data") as? kotlinx.serialization.json.JsonObject
+            val detections = data?.get("detections") as? kotlinx.serialization.json.JsonArray
+            val first = detections?.firstOrNull() as? kotlinx.serialization.json.JsonArray
+            val entry = first?.firstOrNull() as? kotlinx.serialization.json.JsonObject
+            (entry?.get("language") as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "auto"
+        } catch (e: Exception) { "auto" }
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────
+
+    /** Best-effort system language. */
+    private fun systemLang(): String = try {
+        java.util.Locale.getDefault().language.let { if (it.length == 2) it else "zh" }
+    } catch (e: Exception) { "zh" }
 }
