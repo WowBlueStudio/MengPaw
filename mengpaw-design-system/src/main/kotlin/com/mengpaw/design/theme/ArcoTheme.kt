@@ -38,6 +38,11 @@ private val LightColorScheme = lightColorScheme(
     onSurface = ArcoColors.TextPrimary,
     surfaceVariant = ArcoColors.BgSecondary,
     onSurfaceVariant = ArcoColors.TextSecondary,
+    surfaceContainerLowest = ArcoColors.Gray1,
+    surfaceContainerLow = ArcoColors.BgPrimary,
+    surfaceContainer = ArcoColors.Gray1,
+    surfaceContainerHigh = ArcoColors.Gray2,
+    surfaceContainerHighest = ArcoColors.Gray3,
 
     outline = ArcoColors.BorderDefault,
     outlineVariant = ArcoColors.Gray2,
@@ -74,6 +79,11 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = Color(0xFFE5E6EB),
     surfaceVariant = ArcoColors.Gray8,
     onSurfaceVariant = ArcoColors.Gray4,
+    surfaceContainerLowest = ArcoColors.Gray10,
+    surfaceContainerLow = ArcoColors.Gray9,
+    surfaceContainer = ArcoColors.Gray8,
+    surfaceContainerHigh = ArcoColors.Gray7,
+    surfaceContainerHighest = ArcoColors.Gray6,
 
     outline = ArcoColors.Gray7,
     outlineVariant = ArcoColors.Gray8,
@@ -94,4 +104,37 @@ fun ArcoTheme(
         colorScheme = colorScheme,
         content = content
     )
+}
+
+/**
+ * Theme-aware color references — always read current MaterialTheme.colorScheme
+ * instead of hardcoded ArcoColors. Use these in @Composable functions.
+ */
+object ThemeColors {
+    val surface: Color @Composable get() = MaterialTheme.colorScheme.surface
+    val onSurface: Color @Composable get() = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+    val primary: Color @Composable get() = MaterialTheme.colorScheme.primary
+    val primaryContainer: Color @Composable get() = MaterialTheme.colorScheme.primaryContainer
+    val onPrimaryContainer: Color @Composable get() = MaterialTheme.colorScheme.onPrimaryContainer
+    val surfaceContainer: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainer
+    val surfaceContainerHigh: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainerHigh
+    val surfaceContainerHighest: Color @Composable get() = MaterialTheme.colorScheme.surfaceContainerHighest
+    val surfaceVariant: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant
+    val outline: Color @Composable get() = MaterialTheme.colorScheme.outline
+    val error: Color @Composable get() = MaterialTheme.colorScheme.error
+    val errorContainer: Color @Composable get() = MaterialTheme.colorScheme.errorContainer
+
+    // Semantic aliases
+    val bgPrimary: Color @Composable get() = surface
+    val bgSecondary: Color @Composable get() = surfaceVariant
+    val bgCard: Color @Composable get() = surfaceContainer
+    val bgCardHigh: Color @Composable get() = surfaceContainerHigh
+    val textPrimary: Color @Composable get() = onSurface
+    val textSecondary: Color @Composable get() = onSurfaceVariant
+    val border: Color @Composable get() = outline
+
+    // Brand (always from primary — theme-aware)
+    val brand: Color @Composable get() = primary
+    val brandContainer: Color @Composable get() = primaryContainer
 }

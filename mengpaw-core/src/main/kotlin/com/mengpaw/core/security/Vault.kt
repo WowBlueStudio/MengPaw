@@ -1,13 +1,16 @@
 package com.mengpaw.core.security
 
 import android.content.Context
-import android.content.SharedPreferences
-import android.content.Context.MODE_PRIVATE
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 
 /**
  * Secure vault for storing API keys and sensitive data.
- * Uses Android's sandboxed SharedPreferences (files are app-private).
- * For production use, add EncryptedSharedPreferences from security-crypto.
+ * Uses Android EncryptedSharedPreferences with AES-256-GCM via Android Keystore.
+ *
+ * The master key is generated on first use and stored in Android Keystore
+ * (hardware-backed when available). Data is encrypted at rest and cannot be
+ * read via ADB backup or root without the Keystore key.
  *
  * Usage:
  *   val vault = Vault(context)
@@ -16,8 +19,17 @@ import android.content.Context.MODE_PRIVATE
  */
 class Vault(context: Context) {
 
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences("mengpaw_vault", MODE_PRIVATE)
+    private val masterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
+
+    private val prefs = EncryptedSharedPreferences.create(
+        context,
+        PREFS_FILE,
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
 
     fun store(key: String, value: String) {
         prefs.edit().putString(safeKey(key), value).apply()
@@ -40,4 +52,8 @@ class Vault(context: Context) {
     }
 
     private fun safeKey(raw: String): String = "vault_$raw"
+
+    companion object {
+        private const val PREFS_FILE = "mengpaw_vault_encrypted"
+    }
 }

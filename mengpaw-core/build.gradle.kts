@@ -45,8 +45,8 @@ dependencies {
     implementation("io.ktor:ktor-client-core:3.0.3")
     implementation("io.ktor:ktor-client-okhttp:3.0.3")
 
-    // Vault uses basic SharedPreferences (Android file-level encryption is sufficient)
-    // No additional security-crypto dependency needed
+    // Encrypted SharedPreferences for secure API key storage
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

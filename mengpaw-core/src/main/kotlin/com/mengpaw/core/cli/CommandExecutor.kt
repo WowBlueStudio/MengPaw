@@ -34,6 +34,6 @@ data class ExecutionResult(
 data class ExecutionContext(
     val sessionId: String,
     val userId: String = "agent",
-    val workDir: String = "/data/data/com.mengpaw/files",
+    val workDir: String = com.mengpaw.core.DataPaths.BASE,
     val environment: Map<String, String> = emptyMap()
 )

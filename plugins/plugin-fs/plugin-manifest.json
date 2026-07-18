@@ -1,0 +1,13 @@
+{
+  "id": "fs-plugin",
+  "name": "File System",
+  "version": "1.0.0",
+  "type": "native",
+  "author": "MengPaw",
+  "description": "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat",
+  "minCoreVersion": "0.2.0",
+  "maxCoreVersion": "0.9.0",
+  "permissions": [],
+  "dependencies": [],
+  "commands": ["fs.cat", "fs.ls", "fs.write", "fs.rm", "fs.mkdir", "fs.cp", "fs.mv", "fs.stat"]
+}

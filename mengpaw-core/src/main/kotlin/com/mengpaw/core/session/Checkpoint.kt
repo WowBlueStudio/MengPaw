@@ -1,20 +1,23 @@
 package com.mengpaw.core.session
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import java.io.File
 
 /**
  * Persistence handler for checkpoints (save/resume Agent progress).
+ * All I/O operations run on Dispatchers.IO to avoid blocking the main thread.
  */
-class CheckpointManager(private val storageDir: String = "/data/data/com.mengpaw/files/checkpoints") {
+class CheckpointManager(private val storageDir: String = com.mengpaw.core.DataPaths.CHECKPOINTS) {
 
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
 
     /**
-     * Save a checkpoint to disk.
+     * Save a checkpoint to disk asynchronously.
      */
-    fun save(checkpoint: Checkpoint) {
+    suspend fun save(checkpoint: Checkpoint) = withContext(Dispatchers.IO) {
         val dir = File(storageDir)
         dir.mkdirs()
         val file = File(dir, "${checkpoint.sessionId}_step_${checkpoint.step}.json")
@@ -22,16 +25,16 @@ class CheckpointManager(private val storageDir: String = "/data/data/com.mengpaw
     }
 
     /**
-     * Load the latest checkpoint for a session.
+     * Load the latest checkpoint for a session asynchronously.
      */
-    fun loadLatest(sessionId: String): Checkpoint? {
+    suspend fun loadLatest(sessionId: String): Checkpoint? = withContext(Dispatchers.IO) {
         val dir = File(storageDir)
-        if (!dir.exists()) return null
+        if (!dir.exists()) return@withContext null
         val files = dir.listFiles { f -> f.name.startsWith(sessionId) }
             ?.sortedByDescending { it.lastModified() }
-            ?: return null
-        if (files.isEmpty()) return null
-        return try {
+            ?: return@withContext null
+        if (files.isEmpty()) return@withContext null
+        try {
             json.decodeFromString<Checkpoint>(files.first().readText())
         } catch (e: Exception) {
             null
@@ -41,12 +44,12 @@ class CheckpointManager(private val storageDir: String = "/data/data/com.mengpaw
     /**
      * Clean up old checkpoints, keeping only the N most recent.
      */
-    fun cleanup(sessionId: String, keep: Int = 3) {
+    suspend fun cleanup(sessionId: String, keep: Int = 3) = withContext(Dispatchers.IO) {
         val dir = File(storageDir)
-        if (!dir.exists()) return
+        if (!dir.exists()) return@withContext
         val files = dir.listFiles { f -> f.name.startsWith(sessionId) }
             ?.sortedByDescending { it.lastModified() }
-            ?: return
+            ?: return@withContext
         if (files.size > keep) {
             files.drop(keep).forEach { it.delete() }
         }

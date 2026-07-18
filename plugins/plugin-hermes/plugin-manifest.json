@@ -1,0 +1,1 @@
+{"id":"hermes-plugin","name":"Hermes 多Agent协作","version":"1.0.0","type":"native","author":"MengPaw","description":"多Agent对话协作：发现、委派、组队、共享记忆","minCoreVersion":"0.2.0","commands":["hermes.team","hermes.discover","hermes.delegate","hermes.ask","hermes.memo","hermes.role"]}

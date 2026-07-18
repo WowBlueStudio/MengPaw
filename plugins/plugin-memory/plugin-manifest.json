@@ -1,0 +1,1 @@
+{"id":"memory-plugin","name":"记忆系统","version":"1.0.0","type":"native","author":"MengPaw","description":"Markdown 持久化记忆系统","minCoreVersion":"0.2.0","commands":["memory.ls","memory.read","memory.write","memory.rm","memory.search","memory.stats"]}

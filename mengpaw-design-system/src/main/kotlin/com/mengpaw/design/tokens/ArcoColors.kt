@@ -6,6 +6,15 @@ import androidx.compose.ui.graphics.Color
  * Arco Design color palette adapted for Jetpack Compose.
  * Reference: https://arco.design/docs/spec/color
  */
+/**
+ * Arco Design static color tokens.
+ *
+ * IMPORTANT: Use ArcoTheme + MaterialTheme.colorScheme for dynamic theme-aware colors.
+ * These static tokens are the light-mode baseline only.
+ * For dark mode support, always read from MaterialTheme.colorScheme:
+ *   surface/inverseSurface, surfaceContainer/surfaceContainerHigh,
+ *   primary/primaryContainer, onSurface/onSurfaceVariant, outline
+ */
 object ArcoColors {
     // Primary - Brand blue
     val Blue1 = Color(0xFFE8F3FF)

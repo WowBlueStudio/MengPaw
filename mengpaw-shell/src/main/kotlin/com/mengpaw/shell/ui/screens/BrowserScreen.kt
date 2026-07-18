@@ -1,4 +1,5 @@
 package com.mengpaw.shell.ui.screens
+import androidx.compose.material.icons.outlined.*
 
 import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
@@ -40,14 +41,14 @@ fun PreviewScreen(
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(fileName, fontWeight = FontWeight.SemiBold, maxLines = 1) },
-            navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "返回") }},
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = ArcoColors.BgPrimary))
+            navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Outlined.ArrowBack, "返回") }},
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = com.mengpaw.design.theme.ThemeColors.bgPrimary))
     }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (ext) {
                 "png", "jpg", "jpeg", "gif", "bmp", "webp" -> ImagePreview(filePath)
                 "md", "markdown" -> MarkdownPreview(filePath)
-                else -> Text("不支持的文件格式: .$ext", modifier = Modifier.padding(ArcoSpacing.lg), color = ArcoColors.TextSecondary)
+                else -> Text("不支持的文件格式: .$ext", modifier = Modifier.padding(ArcoSpacing.lg), color = com.mengpaw.design.theme.ThemeColors.textSecondary)
             }
         }
     }
@@ -57,13 +58,13 @@ fun PreviewScreen(
 private fun ImagePreview(path: String) {
     val bitmap = remember { BitmapFactory.decodeFile(path) }
     if (bitmap == null) {
-        Text("无法加载图片", color = ArcoColors.TextSecondary, modifier = Modifier.padding(ArcoSpacing.lg))
+        Text("无法加载图片", color = com.mengpaw.design.theme.ThemeColors.textSecondary, modifier = Modifier.padding(ArcoSpacing.lg))
     } else {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(ArcoSpacing.lg), horizontalAlignment = Alignment.CenterHorizontally) {
             Image(bitmap = bitmap.asImageBitmap(), contentDescription = null,
                 modifier = Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.md))
             Spacer(Modifier.height(ArcoSpacing.sm))
-            Text("${bitmap.width} × ${bitmap.height}px", style = MaterialTheme.typography.bodySmall, color = ArcoColors.TextSecondary)
+            Text("${bitmap.width} × ${bitmap.height}px", style = MaterialTheme.typography.bodySmall, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
         }
     }
 }
@@ -85,12 +86,12 @@ private fun MarkdownPreview(path: String) {
                     style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = ArcoSpacing.md, bottom = 4.dp))
                 line.startsWith("> ") -> Text(line.removePrefix("> ").trim(),
-                    style = MaterialTheme.typography.bodyMedium, color = ArcoColors.TextSecondary,
+                    style = MaterialTheme.typography.bodyMedium, color = com.mengpaw.design.theme.ThemeColors.textSecondary,
                     modifier = Modifier.padding(start = ArcoSpacing.md, top = 2.dp, bottom = 2.dp))
                 line.startsWith("- ") || line.startsWith("* ") -> Text("• ${line.removePrefix("- ").removePrefix("* ")}",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(start = ArcoSpacing.md))
-                line.startsWith("---") -> HorizontalDivider(color = ArcoColors.BorderDefault, modifier = Modifier.padding(vertical = ArcoSpacing.sm))
+                line.startsWith("---") -> HorizontalDivider(color = com.mengpaw.design.theme.ThemeColors.border, modifier = Modifier.padding(vertical = ArcoSpacing.sm))
                 line.isBlank() -> Spacer(Modifier.height(ArcoSpacing.xs))
                 else -> Text(line, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
             }
@@ -114,9 +115,9 @@ fun BrowserScreen(
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text("浏览器", fontWeight = FontWeight.SemiBold) },
-            navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "返回") }},
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = ArcoColors.BgPrimary))
+            title = { Text("浏览器 Browser", fontWeight = FontWeight.SemiBold) },
+            navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Outlined.ArrowBack, "返回") }},
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = com.mengpaw.design.theme.ThemeColors.bgPrimary))
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             // URL bar
@@ -137,12 +138,12 @@ fun BrowserScreen(
                     currentUrl = finalUrl
                     inputUrl = finalUrl
                 }) {
-                    Icon(Icons.Default.Send, "前往", tint = ArcoColors.Blue6)
+                    Icon(Icons.Outlined.Send, "前往", tint = com.mengpaw.design.theme.ThemeColors.brand)
                 }
             }
 
             // Loading indicator
-            if (isLoading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = ArcoColors.Blue6)
+            if (isLoading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = com.mengpaw.design.theme.ThemeColors.brand)
 
             // WebView
             AndroidView(

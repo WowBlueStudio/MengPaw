@@ -1,0 +1,1 @@
+- [dev-guide-as-single-source](dev-guide-as-single-source.md) — MengPaw-Development-Guide.md 是项目唯一权威知识中心，所有开发工作必须同步更新该文档

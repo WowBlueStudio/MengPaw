@@ -1,15 +1,15 @@
 package com.mengpaw.shell
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import com.mengpaw.design.theme.ArcoTheme
 import com.mengpaw.shell.ui.localization.AppStrings
 import com.mengpaw.shell.ui.localization.ChineseStrings
@@ -17,112 +17,81 @@ import com.mengpaw.shell.ui.localization.EnglishStrings
 import com.mengpaw.shell.ui.screens.*
 
 class MainActivity : ComponentActivity() {
-
     private val settingsViewModel = SettingsViewModel()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        com.mengpaw.plugin.pad.PadPlugin.init(this)
+
+        // Register system-level wake alarms — survive Doze
+        com.mengpaw.core.trigger.TriggerEngine.registerSystemWake(this, 10)
+        com.mengpaw.core.trigger.TriggerEngine.registerCronAlarm(this)
+
+        // Register zero-overhead system event receiver (no polling)
+        com.mengpaw.shell.service.EventReceiver.register(this)
+        PluginViewModel.registerPluginClass("fs-plugin", "com.mengpaw.plugin.fs.FsPlugin")
+        PluginViewModel.registerPluginClass("net-plugin", "com.mengpaw.plugin.net.NetPlugin")
+        PluginViewModel.registerPluginClass("memory-plugin", "com.mengpaw.plugin.memory.MemoryPlugin")
+        PluginViewModel.registerPluginClass("skill-plugin", "com.mengpaw.plugin.skill.SkillPlugin")
+        PluginViewModel.registerPluginClass("self-plugin", "com.mengpaw.plugin.self.SelfPlugin")
+        PluginViewModel.registerPluginClass("ui-plugin", "com.mengpaw.plugin.ui.UiPlugin")
+        PluginViewModel.registerPluginClass("proc-plugin", "com.mengpaw.plugin.proc.ProcPlugin")
+        PluginViewModel.registerPluginClass("clipboard-plugin", "com.mengpaw.plugin.clipboard.ClipboardPlugin")
+        PluginViewModel.registerPluginClass("notification-plugin", "com.mengpaw.plugin.notification.NotificationPlugin")
+        PluginViewModel.registerPluginClass("pad-plugin", "com.mengpaw.plugin.pad.PadPlugin")
 
         setContent {
             val settingsState by settingsViewModel.state.collectAsState()
-            val strings: AppStrings =
-                if (settingsState.useChinese) ChineseStrings else EnglishStrings
-
+            val strings: AppStrings = if (settingsState.useChinese) ChineseStrings else EnglishStrings
             ArcoTheme(darkTheme = settingsState.darkTheme) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    AppNavigation(
-                        settingsViewModel = settingsViewModel,
-                        strings = strings
-                    )
-                }
+                Surface(modifier = Modifier.fillMaxSize()) { MengPawApp(strings, settingsViewModel) }
             }
         }
     }
 }
 
-enum class Screen {
-    Main, Settings, Memories, AgentSettings, Skills, Browser, Preview, LogViewer, ExtensionMarket
-}
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppNavigation(
-    settingsViewModel: SettingsViewModel,
-    strings: AppStrings
-) {
-    var currentScreen by remember { mutableStateOf(Screen.Main) }
-    var browserUrl by remember { mutableStateOf("https://www.baidu.com") }
-    var previewPath by remember { mutableStateOf("") }
-    var previewName by remember { mutableStateOf("") }
-    val context = LocalContext.current
+fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
+    var showSidebar by remember { mutableStateOf(false) }
+    var showPlugins by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
 
-    val browserPackage = "com.mengpaw.browser"
-    val isBrowserInstalled = remember {
-        try {
-            context.packageManager.getPackageInfo(browserPackage, 0)
-            true
-        } catch (e: Exception) { false }
-    }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
-    // Launch browser: prefer external APK, fallback to built-in
-    val launchBrowser = { url: String ->
-        if (isBrowserInstalled) {
-            try {
-                val intent = Intent("com.mengpaw.action.OPEN_URL").apply {
-                    putExtra("url", url)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            } catch (e: Exception) {
-                // Fallback to built-in
-                browserUrl = url; currentScreen = Screen.Browser
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                SidebarContent(
+                    onNavigateToPlugins = { showPlugins = true; showSidebar = false },
+                    onNavigateToSettings = { showSettings = true; showSidebar = false },
+                    onClose = { showSidebar = false }
+                )
             }
-        } else {
-            browserUrl = url; currentScreen = Screen.Browser
         }
+    ) {
+        // ── Main Chat Screen ──
+        MainScreen(
+            strings = strings,
+            settingsViewModel = settingsViewModel,
+            onOpenSidebar = { showSidebar = true }
+        )
     }
 
-    when (currentScreen) {
-        Screen.Main -> MainScreen(
-            onNavigateToSettings = { currentScreen = Screen.Settings },
-            onNavigateToMemories = { currentScreen = Screen.Memories },
-            onNavigateToBrowser = { launchBrowser("https://www.baidu.com") },
-            onNavigateToSkills = { currentScreen = Screen.Skills },
-            strings = strings
+    // ── Full-screen overlays for Plugins/Settings ──
+    if (showPlugins) {
+        PluginMarketScreen(
+            onNavigateBack = { showPlugins = false },
+            onNavigateToDetail = {}
         )
-        Screen.Settings -> SettingsScreen(
-            onNavigateBack = { currentScreen = Screen.Main },
-            onNavigateToAgentSettings = { currentScreen = Screen.AgentSettings },
-            onNavigateToMemories = { currentScreen = Screen.Memories },
-            onNavigateToSkills = { currentScreen = Screen.Skills },
+    }
+    if (showSettings) {
+        SettingsScreen(
+            onNavigateBack = { showSettings = false },
+            onNavigateToPluginMarket = { showPlugins = true; showSettings = false },
             viewModel = settingsViewModel
-        )
-        Screen.Memories -> MemoriesScreen(
-            onNavigateBack = { currentScreen = Screen.Main },
-            onPreviewFile = { path, name ->
-                previewPath = path; previewName = name; currentScreen = Screen.Preview
-            }
-        )
-        Screen.AgentSettings -> AgentSettingsScreen(
-            onNavigateBack = { currentScreen = Screen.Settings }
-        )
-        Screen.Skills -> SkillsScreen(
-            onNavigateBack = { currentScreen = Screen.Main }
-        )
-        Screen.Browser -> BrowserScreen(
-            url = browserUrl,
-            onNavigateBack = { currentScreen = Screen.Main }
-        )
-        Screen.Preview -> PreviewScreen(
-            filePath = previewPath,
-            fileName = previewName,
-            onNavigateBack = { currentScreen = Screen.Memories }
-        )
-        Screen.LogViewer -> LogViewerScreen(
-            onNavigateBack = { currentScreen = Screen.Settings }
-        )
-        Screen.ExtensionMarket -> ExtensionMarketScreen(
-            onNavigateBack = { currentScreen = Screen.Settings }
         )
     }
 }

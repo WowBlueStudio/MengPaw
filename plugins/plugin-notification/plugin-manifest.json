@@ -1,0 +1,1 @@
+{"id":"notification-plugin","name":"通知管理","version":"1.0.0","type":"native","author":"MengPaw","description":"通知管理：send, list, dismiss","minCoreVersion":"0.2.0","permissions":["POST_NOTIFICATIONS"],"commands":["notification.send","notification.list","notification.dismiss"]}

@@ -1,0 +1,1 @@
+{"id":"comfy-plugin","name":"ComfyUI工作流","version":"1.0.0","type":"native","author":"MengPaw","description":"ComfyUI工作流搭建：节点编排/JSON导出/API执行/MP浏览器预览","minCoreVersion":"0.2.0","commands":["comfy.nodes","comfy.workflow","comfy.run","comfy.preview","comfy.export"]}

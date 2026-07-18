@@ -1,0 +1,1 @@
+{"id":"net-plugin","name":"网络请求","version":"1.0.0","type":"native","author":"MengPaw","description":"HTTP 网络请求：curl, get, post","minCoreVersion":"0.2.0","permissions":["INTERNET"],"commands":["net.curl","net.get","net.post"]}
