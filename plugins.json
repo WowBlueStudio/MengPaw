@@ -187,6 +187,19 @@
       "size": 0,
       "minCoreVersion": "0.2.0",
       "commands": ["comfy.create", "comfy.addNode", "comfy.connect", "comfy.show", "comfy.list", "comfy.submit", "comfy.export"]
+    },
+    {
+      "id": "translate-plugin",
+      "name": "Google 翻译",
+      "version": "1.0.0",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "Google Cloud Translation — 130+ 语言翻译，自动检测源语言，500K 字符/月免费",
+      "downloadUrl": "https://github.com/mengpaw/plugins/releases/download/v1.0.0/translate-plugin-1.0.0.jar",
+      "checksum": "",
+      "size": 0,
+      "minCoreVersion": "0.2.0",
+      "commands": ["translate.text", "translate.auto", "translate.langs", "translate.setup"]
     }
   ]
 }
