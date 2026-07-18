@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 MengPaw
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 package com.mengpaw.browser.plugin
 
 import android.webkit.WebResourceRequest

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 MengPaw
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 plugins {
     id("com.android.application") version "8.7.3" apply false
     id("com.android.library") version "8.7.3" apply false

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 MengPaw
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 package com.mengpaw.shell.ui
 
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
