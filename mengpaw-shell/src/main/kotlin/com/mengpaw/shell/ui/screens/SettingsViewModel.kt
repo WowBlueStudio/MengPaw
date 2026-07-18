@@ -2,6 +2,7 @@ package com.mengpaw.shell.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mengpaw.core.llm.PromptEngine
 import com.mengpaw.shell.ui.localization.AppStrings
 import com.mengpaw.shell.ui.localization.ChineseStrings
 import com.mengpaw.shell.ui.localization.EnglishStrings
@@ -50,6 +51,9 @@ data class SavedProvider(
     val balance: String = ""
 )
 
+/** Agent language modes for controlling LLM output language. */
+enum class AgentLanguageMode(val labelKey: String) { FOLLOW_UI("followUi"), CHINESE("chinese"), ENGLISH("english") }
+
 data class SettingsState(
     val selectedProvider: LlmProviderPreset = LlmProviderPreset.OPENAI,
     val apiEndpoint: String = LlmProviderPreset.OPENAI.endpoint,
@@ -60,6 +64,7 @@ data class SettingsState(
     val useSimulatedProvider: Boolean = true,
     val showApiKey: Boolean = false,
     val useChinese: Boolean = true,
+    val agentLanguageMode: AgentLanguageMode = AgentLanguageMode.FOLLOW_UI,
     // API section state
     val apiSectionExpanded: Boolean = true,
     val savedProviders: List<SavedProvider> = emptyList(),
@@ -67,6 +72,13 @@ data class SettingsState(
     val balance: String = ""
 ) {
     val strings: AppStrings get() = if (useChinese) ChineseStrings else EnglishStrings
+
+    /** Resolved Agent language: follow UI or user override. */
+    val effectiveAgentLanguage: com.mengpaw.core.llm.PromptEngine.AgentLanguage get() = when (agentLanguageMode) {
+        AgentLanguageMode.FOLLOW_UI -> PromptEngine.AgentLanguage.fromUiChinese(useChinese)
+        AgentLanguageMode.CHINESE -> PromptEngine.AgentLanguage.CHINESE
+        AgentLanguageMode.ENGLISH -> PromptEngine.AgentLanguage.ENGLISH
+    }
 }
 
 /**
@@ -116,6 +128,12 @@ class SettingsViewModel : ViewModel() {
 
     fun toggleLanguage() {
         _state.value = _state.value.copy(useChinese = !_state.value.useChinese)
+    }
+
+    fun cycleAgentLanguage() {
+        val modes = AgentLanguageMode.entries
+        val next = modes[(modes.indexOf(_state.value.agentLanguageMode) + 1) % modes.size]
+        _state.value = _state.value.copy(agentLanguageMode = next)
     }
 
     fun toggleApiSection() {

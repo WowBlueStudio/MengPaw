@@ -13,8 +13,25 @@ import kotlinx.serialization.json.*
  *   Cache hit  = $0.0028/1K tokens (50x cheaper)
  */
 class LlmRequestBuilder(
-    private val systemPrompt: String
+    systemPrompt: String
 ) {
+    /** Current system prompt — changing it resets the prefix cache. */
+    @Volatile
+    private var _systemPrompt: String = systemPrompt
+
+    val currentSystemPrompt: String get() = _systemPrompt
+
+    /**
+     * Update the system prompt (e.g., when user switches Agent language).
+     * Resets cache counters since the new prompt will be a cache miss.
+     */
+    fun updateSystemPrompt(newPrompt: String) {
+        if (newPrompt != _systemPrompt) {
+            _systemPrompt = newPrompt
+            cumulativeCacheHitTokens = 0
+            cumulativeCacheMissTokens = 0
+        }
+    }
     var cumulativeCacheHitTokens: Long = 0
         private set
     var cumulativeCacheMissTokens: Long = 0
@@ -30,7 +47,7 @@ class LlmRequestBuilder(
         messages: List<Map<String, String>>
     ): List<Map<String, String>> {
         val fullMessages = mutableListOf<Map<String, String>>(
-            mapOf("role" to "system", "content" to systemPrompt)
+            mapOf("role" to "system", "content" to _systemPrompt)
         )
         fullMessages.addAll(messages)
         return fullMessages

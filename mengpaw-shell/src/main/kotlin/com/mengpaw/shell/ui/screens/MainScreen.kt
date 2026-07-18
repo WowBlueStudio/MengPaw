@@ -57,7 +57,16 @@ fun MainScreen(
     val settingsState by settingsViewModel?.state?.collectAsState() ?: remember { mutableStateOf(null) }
     LaunchedEffect(settingsState) {
         settingsState?.let { s ->
-            viewModel.configureLlm(s.apiEndpoint, s.apiKey, s.modelName, s.useSimulatedProvider)
+            viewModel.configureLlm(
+                s.apiEndpoint, s.apiKey, s.modelName, s.useSimulatedProvider,
+                agentLang = s.effectiveAgentLanguage
+            )
+        }
+    }
+    // React to language-only changes without full reconfig
+    LaunchedEffect(settingsState?.agentLanguageMode, settingsState?.useChinese) {
+        settingsState?.let { s ->
+            viewModel.setAgentLanguage(s.effectiveAgentLanguage)
         }
     }
 

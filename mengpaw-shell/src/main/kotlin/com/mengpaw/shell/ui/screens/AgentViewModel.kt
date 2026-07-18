@@ -26,7 +26,8 @@ class AgentViewModel : ViewModel() {
         endpoint: String,
         apiKey: String,
         model: String,
-        useSimulated: Boolean
+        useSimulated: Boolean,
+        agentLang: com.mengpaw.core.llm.PromptEngine.AgentLanguage = com.mengpaw.core.llm.PromptEngine.AgentLanguage.CHINESE
     ) {
         llmProvider = if (useSimulated || apiKey.isBlank()) {
             SimulatedLlmProvider()
@@ -41,7 +42,12 @@ class AgentViewModel : ViewModel() {
                 SimulatedLlmProvider()
             }
         }
-        agentEngine = AgentEngine(llmProvider)
+        agentEngine = AgentEngine(llmProvider).also { it.setAgentLanguage(agentLang) }
+    }
+
+    /** Update Agent language without re-creating the engine. */
+    fun setAgentLanguage(lang: com.mengpaw.core.llm.PromptEngine.AgentLanguage) {
+        agentEngine.setAgentLanguage(lang)
     }
 
     private val _messages = MutableStateFlow<List<ChatMessageUi>>(
