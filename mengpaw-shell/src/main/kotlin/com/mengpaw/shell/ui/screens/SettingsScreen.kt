@@ -303,6 +303,33 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(ArcoSpacing.lg))
 
+            // ─── Agent Language (LLM output language) ───
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.Chat, contentDescription = null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(ArcoSpacing.md))
+                Column(Modifier.weight(1f)) {
+                    Text(s.agentLanguage, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Text(s.agentLanguageDesc, style = MaterialTheme.typography.bodySmall, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
+                }
+                OutlinedButton(
+                    onClick = { viewModel.cycleAgentLanguage() },
+                    shape = RoundedCornerShape(ArcoRadius.md),
+                    contentPadding = PaddingValues(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm)
+                ) {
+                    Text(
+                        text = when (state.agentLanguageMode) {
+                            AgentLanguageMode.FOLLOW_UI -> s.agentLanguageFollowUi
+                            AgentLanguageMode.CHINESE -> s.agentLanguageChinese
+                            AgentLanguageMode.ENGLISH -> s.agentLanguageEnglish
+                        },
+                        fontWeight = FontWeight.SemiBold,
+                        color = com.mengpaw.design.theme.ThemeColors.brand
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(ArcoSpacing.lg))
+
             // ─── 触发器 Triggers ───
             SectionHeader("触发器 Triggers")
             val triggers = remember { com.mengpaw.core.trigger.TriggerEngine.list() }

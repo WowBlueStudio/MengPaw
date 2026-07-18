@@ -42,6 +42,13 @@ data class AppStrings(
     val languageZh: String,
     val languageEn: String,
 
+    // Settings - Agent Language
+    val agentLanguage: String,
+    val agentLanguageDesc: String,
+    val agentLanguageFollowUi: String,
+    val agentLanguageChinese: String,
+    val agentLanguageEnglish: String,
+
     // Settings - About
     val about: String,
     val version: String,
@@ -86,6 +93,12 @@ val EnglishStrings = AppStrings(
     languageZh = "中文",
     languageEn = "English",
 
+    agentLanguage = "Agent Language",
+    agentLanguageDesc = "Language for Agent's thinking and responses",
+    agentLanguageFollowUi = "Follow UI",
+    agentLanguageChinese = "中文",
+    agentLanguageEnglish = "English",
+
     about = "About",
     version = "Version",
     core = "Core",
@@ -128,6 +141,12 @@ val ChineseStrings = AppStrings(
     languageDesc = "切换界面语言",
     languageZh = "中文",
     languageEn = "English",
+
+    agentLanguage = "Agent 语言",
+    agentLanguageDesc = "控制 Agent 思考和输出的语言",
+    agentLanguageFollowUi = "跟随界面",
+    agentLanguageChinese = "中文",
+    agentLanguageEnglish = "English",
 
     about = "关于",
     version = "版本",

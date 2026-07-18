@@ -86,6 +86,22 @@ class AgentEngine(
     /** Cumulative cache miss tokens from LlmRequestBuilder. */
     val cacheMissTokens: Long get() = llmRequestBuilder.cumulativeCacheMissTokens
 
+    /** Current Agent language setting. */
+    var agentLanguage: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE
+        private set
+
+    /**
+     * Switch the Agent's thinking/output language.
+     * Updates the system prompt and resets prefix cache counters.
+     * Call this when the user changes language preference.
+     */
+    fun setAgentLanguage(lang: PromptEngine.AgentLanguage) {
+        if (lang != agentLanguage) {
+            agentLanguage = lang
+            llmRequestBuilder.updateSystemPrompt(promptEngine.buildSystemPrompt(lang))
+        }
+    }
+
     /** Plugin marketplace client for plugin.* commands. */
     private val marketplaceClient = PluginMarketplaceClient()
 
