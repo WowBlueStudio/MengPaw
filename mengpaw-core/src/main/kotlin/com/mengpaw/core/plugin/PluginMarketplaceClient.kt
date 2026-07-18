@@ -61,7 +61,7 @@ class PluginMarketplaceClient(
 
     companion object {
         const val DEFAULT_MARKETPLACE_URL =
-            "https://raw.githubusercontent.com/mengpaw/plugins/main/plugins.json"
+            "https://raw.githubusercontent.com/WowBlueStudio/MengPaw/master/plugins.json"
     }
 
     /**
