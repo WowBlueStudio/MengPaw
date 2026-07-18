@@ -48,6 +48,6 @@ MengPaw 的开发受益于以下开源项目和框架的启发。
 
 ## 许可证
 
-MengPaw: Apache 2.0
+MengPaw: AGPL-3.0
 
 上述所有参考项目归各自原作者所有。
