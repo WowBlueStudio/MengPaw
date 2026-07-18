@@ -46,6 +46,35 @@ class CommandRegistry {
     }
 
     /**
+     * Unregister a single command by its full name.
+     * @return true if a command was removed, false if it didn't exist.
+     */
+    fun unregister(fullName: String): Boolean {
+        val removed = commands.remove(fullName) != null
+        val parts = fullName.split(".", limit = 2)
+        if (parts.size == 2) {
+            namespaces[parts[0]]?.remove(parts[1])
+            if (namespaces[parts[0]]?.isEmpty() == true) {
+                namespaces.remove(parts[0])
+            }
+        }
+        return removed
+    }
+
+    /**
+     * Unregister all commands belonging to a namespace.
+     * @return the number of commands removed.
+     */
+    fun unregisterNamespace(namespace: String): Int {
+        val nsCommands = namespaces.remove(namespace) ?: return 0
+        var count = 0
+        nsCommands.keys.forEach { cmdName ->
+            if (commands.remove("$namespace.$cmdName") != null) count++
+        }
+        return count
+    }
+
+    /**
      * List all registered namespaces.
      */
     fun namespaces(): Set<String> = namespaces.keys

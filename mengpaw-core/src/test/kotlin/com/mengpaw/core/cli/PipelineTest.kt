@@ -1,6 +1,5 @@
 package com.mengpaw.core.cli
 
-import com.mengpaw.core.namespace.FsExecutor
 import com.mengpaw.core.namespace.SelfExecutor
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -11,7 +10,20 @@ class PipelineTest {
 
     private fun createPipeline(): Pipeline {
         val registry = CommandRegistry()
-        registry.registerNamespace("fs", FsExecutor.commands)
+        // Mock fs commands (replaces deleted FsExecutor — fs is now a plugin)
+        registry.register("fs.cat") { args, ctx ->
+            val path = args.firstOrNull() ?: return@register ExecutionResult.fail("Usage: fs cat <path>")
+            val file = File(path)
+            if (!file.exists()) ExecutionResult.fail("File not found: $path", errorCode = "ERR_NOT_FOUND")
+            else ExecutionResult.ok(file.readText())
+        }
+        registry.register("fs.write") { args, ctx ->
+            if (args.size < 2) return@register ExecutionResult.fail("Usage: fs write <path> <content>")
+            val file = File(args[0])
+            file.parentFile?.mkdirs()
+            file.writeText(args.drop(1).joinToString(" "))
+            ExecutionResult.ok("Written")
+        }
         registry.registerNamespace("self", SelfExecutor.commands)
         return Pipeline(registry = registry)
     }
@@ -70,16 +82,13 @@ class PipelineTest {
         val testFile = "$tmpDir/mengpaw_test_${System.currentTimeMillis()}.txt"
         val ctx = ExecutionContext(sessionId = "test", workDir = tmpDir)
 
-        // Write using a simple relative path (no backslash issues)
         val writeResult = pipeline.execute("fs.write \"$testFile\" \"HelloWorld\"", ctx)
         assertTrue("Write failed: ${writeResult.error}", writeResult.success)
 
-        // Read back
         val readResult = pipeline.execute("fs.cat \"$testFile\"", ctx)
         assertTrue("Read failed: ${readResult.error}", readResult.success)
         assertEquals("HelloWorld", readResult.output)
 
-        // Cleanup
         File(testFile).delete()
     }
 

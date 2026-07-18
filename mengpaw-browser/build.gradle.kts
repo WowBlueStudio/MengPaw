@@ -41,6 +41,7 @@ android {
 dependencies {
     // Apply same theme as main app
     implementation(project(":mengpaw-design-system"))
+    implementation(project(":mengpaw-core"))
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))
@@ -51,6 +52,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material")
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.runtime:runtime")

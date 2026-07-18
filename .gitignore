@@ -1,0 +1,39 @@
+# ── Gradle ──────────────────────────────────────────
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# ── IDE ─────────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.swp
+*.swo
+
+# ── Android ─────────────────────────────────────────
+local.properties
+*.hprof
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# ── Kotlin ──────────────────────────────────────────
+.kotlin/
+
+# ── OS ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*~
+
+# ── Claude Code (local settings only) ────────────────
+.claude/settings.local.json
+.claude/worktrees/
+
+# ── Temporary files ─────────────────────────────────
+*.log
+*.tmp
+*.bak

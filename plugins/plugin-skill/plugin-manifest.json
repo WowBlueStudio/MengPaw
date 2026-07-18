@@ -1,0 +1,1 @@
+{"id":"skill-plugin","name":"技能系统","version":"1.0.0","type":"native","author":"MengPaw","description":"可复用的 Agent 剧本系统","minCoreVersion":"0.2.0","commands":["skill.ls","skill.run","skill.enable","skill.disable"]}

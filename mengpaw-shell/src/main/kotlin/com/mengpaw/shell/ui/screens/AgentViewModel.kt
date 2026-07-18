@@ -15,9 +15,34 @@ import kotlinx.coroutines.launch
  */
 class AgentViewModel : ViewModel() {
 
-    // Currently using simulated LLM; swap to RemoteApi when API key is configured
-    private val llmProvider = SimulatedLlmProvider()
-    private val agentEngine = AgentEngine(llmProvider)
+    private var llmProvider: com.mengpaw.core.llm.LlmProvider = SimulatedLlmProvider()
+    private var agentEngine = AgentEngine(llmProvider)
+
+    /**
+     * Reconfigure the LLM provider with real API settings.
+     * Call this from MainScreen when SettingsViewModel state changes.
+     */
+    fun configureLlm(
+        endpoint: String,
+        apiKey: String,
+        model: String,
+        useSimulated: Boolean
+    ) {
+        llmProvider = if (useSimulated || apiKey.isBlank()) {
+            SimulatedLlmProvider()
+        } else {
+            try {
+                com.mengpaw.core.llm.AdaptiveLlmProvider(
+                    apiEndpoint = endpoint,
+                    apiKey = apiKey,
+                    model = model
+                )
+            } catch (e: Exception) {
+                SimulatedLlmProvider()
+            }
+        }
+        agentEngine = AgentEngine(llmProvider)
+    }
 
     private val _messages = MutableStateFlow<List<ChatMessageUi>>(
         listOf(ChatMessageUi.System("Agent is ready. Describe the task you want to accomplish."))
@@ -31,26 +56,31 @@ class AgentViewModel : ViewModel() {
     val inputEnabled: StateFlow<Boolean> = _inputEnabled.asStateFlow()
 
     init {
-        // Observe agent state changes
+        // Observe agent state changes — update UI + floating dot
         viewModelScope.launch {
             agentEngine.state.collect { state ->
                 when (state) {
                     is AgentState.Idle -> {
                         _isRunning.value = false
                         _inputEnabled.value = true
+                        com.mengpaw.plugin.pad.PadPlugin.updateState(com.mengpaw.plugin.pad.PadPlugin.DotState.IDLE)
                     }
                     is AgentState.Running -> {
                         _isRunning.value = true
                         _inputEnabled.value = false
+                        com.mengpaw.plugin.pad.PadPlugin.updateState(com.mengpaw.plugin.pad.PadPlugin.DotState.WORKING)
                     }
                     is AgentState.Finished -> {
                         _isRunning.value = false
                         _inputEnabled.value = true
+                        com.mengpaw.plugin.pad.PadPlugin.updateState(com.mengpaw.plugin.pad.PadPlugin.DotState.IDLE)
                     }
                     is AgentState.Error -> {
                         _isRunning.value = false
                         _inputEnabled.value = true
                         _messages.value = _messages.value + ChatMessageUi.Agent("⚠️ ${state.message}")
+                        com.mengpaw.plugin.pad.PadPlugin.updateState(
+                            com.mengpaw.plugin.pad.PadPlugin.DotState.ERROR)
                     }
                 }
             }
@@ -69,8 +99,9 @@ class AgentViewModel : ViewModel() {
 
     /**
      * Submit a task for the agent to execute.
+     * Checks for missing plugin commands and emits adaptive suggestions.
      */
-    fun submitTask(task: String) {
+    fun submitTask(task: String, pluginViewModel: PluginViewModel? = null) {
         if (task.isBlank() || _isRunning.value) return
 
         _messages.value = _messages.value + ChatMessageUi.User(task)
@@ -85,15 +116,52 @@ class AgentViewModel : ViewModel() {
             } else {
                 current.add(ChatMessageUi.Agent(result))
             }
+
+            // Adaptive suggestion: check if result mentions unknown commands
+            val suggestion = checkMissingPlugin(result)
+            if (suggestion != null && pluginViewModel != null) {
+                current.add(ChatMessageUi.Suggestion(suggestion))
+                pluginViewModel.suggestPluginForCommand(result)
+            }
+
             _messages.value = current
         }
     }
 
     /**
+     * Check if the agent output contains an "Unknown command" error,
+     * and generate a plugin suggestion if the relevant plugin exists.
+     */
+    private fun checkMissingPlugin(output: String): PluginSuggestion? {
+        val unknownRegex = Regex("Unknown command: (\\w+)\\.")
+        val match = unknownRegex.find(output) ?: return null
+        val namespace = match.groupValues[1]
+        val pluginId = "$namespace-plugin"
+
+        // Map known namespaces to plugin info for offline suggestions
+        val knownPlugins = mapOf(
+            "fs" to PluginSuggestion("fs", "fs-plugin", "File System", "文件系统操作：cat, ls, write, rm 等", "fs.${match.value.substringAfter("$namespace.").take(20)}"),
+            "net" to PluginSuggestion("net", "net-plugin", "Network", "HTTP 网络请求：curl, get, post", "net.*"),
+            "memory" to PluginSuggestion("memory", "memory-plugin", "Memory System", "Markdown 持久化记忆系统", "memory.*"),
+            "skill" to PluginSuggestion("skill", "skill-plugin", "Skill System", "可复用的 Agent 剧本系统", "skill.*"),
+            "ui" to PluginSuggestion("ui", "ui-plugin", "UI Automation", "界面操控：click, swipe, input 等", "ui.*"),
+            "proc" to PluginSuggestion("proc", "proc-plugin", "Process Management", "进程管理：ps, kill, exec", "proc.*"),
+            "clipboard" to PluginSuggestion("clipboard", "clipboard-plugin", "Clipboard", "剪贴板操作", "clipboard.*"),
+            "notification" to PluginSuggestion("notification", "notification-plugin", "Notification", "通知管理", "notification.*"),
+        )
+
+        return knownPlugins[namespace]
+    }
+
+    /**
      * Stop the current agent execution.
      */
-    fun stopAgent() {
-        agentEngine.stop()
+    fun stopAgent() { agentEngine.stop() }
+
+    fun getSessions(): List<String> = listOf("当前会话")
+
+    fun newSession() {
+        _messages.value = listOf(ChatMessageUi.Agent("新会话已创建。"))
     }
 }
 
@@ -144,4 +212,5 @@ sealed class ChatMessageUi {
     data class User(val content: String) : ChatMessageUi()
     data class Agent(val content: String) : ChatMessageUi()
     data class System(val content: String) : ChatMessageUi()
+    data class Suggestion(val suggestion: PluginSuggestion) : ChatMessageUi()
 }

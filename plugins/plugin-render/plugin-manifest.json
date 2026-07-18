@@ -1,0 +1,1 @@
+{"id":"render-plugin","name":"API生图引擎","version":"1.0.0","type":"native","author":"MengPaw","description":"多后端API生图：Replicate/Stability/DALL-E，提交Job→轮询→下载","minCoreVersion":"0.2.0","commands":["render.models","render.generate","render.status","render.preview"]}

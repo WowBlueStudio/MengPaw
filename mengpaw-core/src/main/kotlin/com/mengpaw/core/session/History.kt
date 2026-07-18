@@ -1,5 +1,6 @@
 package com.mengpaw.core.session
 
+import com.mengpaw.core.llm.LlmProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,35 +57,49 @@ class SessionManager {
     }
 
     /**
-     * Compress conversation history if it exceeds the token budget.
-     * Keeps the last 10 messages intact and compresses older messages
-     * into a single summary inserted as messages[0].
+     * Compress conversation history if it exceeds the message budget.
+     * When over [maxMessages] (default 50), uses [llmProvider] to summarize
+     * older messages and replaces them with a single system summary message.
+     * Keeps the last 10 messages intact for immediate context.
      */
-    fun compressIfNeeded(maxTokens: Int = 50) {
+    suspend fun compressIfNeeded(llmProvider: LlmProvider, maxMessages: Int = 50) {
         val sessionId = _activeSessionId.value ?: return
         val session = _sessions.value[sessionId] ?: return
-        if (session.messages.size <= maxTokens) return
+        if (session.messages.size <= maxMessages) return
 
         val keepCount = 10
         val toCompress = session.messages.dropLast(keepCount)
         val toKeep = session.messages.takeLast(keepCount)
 
-        val summary = buildString {
-            append("[压缩摘要] 以下为之前 ${toCompress.size} 条消息的摘要：\n")
-            toCompress.take(20).forEach { msg ->
-                val preview = msg.content.take(120).replace("\n", " ")
-                append("- [${msg.role}] $preview\n")
-            }
-            if (toCompress.size > 20) {
-                append("...（省略 ${toCompress.size - 20} 条消息）")
-            }
-        }
+        val summary = summarizeMessages(llmProvider, toCompress)
 
-        val summaryMsg = Message(role = "system", content = summary)
+        val summaryMsg = Message(
+            role = "system",
+            content = "[Compressed: previous ${toCompress.size} messages summarized as: $summary]"
+        )
         session.messages.clear()
         session.messages.add(summaryMsg)
         session.messages.addAll(toKeep)
         _sessions.value = _sessions.value + (sessionId to session)
+    }
+
+    /**
+     * Calls the LLM to produce a concise summary of the given messages.
+     */
+    private suspend fun summarizeMessages(
+        llmProvider: LlmProvider,
+        messages: List<Message>
+    ): String {
+        val conversationText = messages.joinToString("\n") { "[${it.role}] ${it.content}" }
+        val summaryPrompt = listOf(
+            mapOf(
+                "role" to "user",
+                "content" to "Summarize the following conversation history concisely. " +
+                    "Capture key decisions, actions taken, important context, and outcomes. " +
+                    "Keep the summary under 500 words.\n\n$conversationText"
+            )
+        )
+        return llmProvider.completeWithMessages(summaryPrompt)
     }
 
     /**

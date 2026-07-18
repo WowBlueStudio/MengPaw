@@ -12,7 +12,7 @@ object ScreenshotManager {
     private val counter = AtomicInteger(0)
 
     private const val MAX_SCREENSHOTS = 50
-    private const val SCREENSHOTS_DIR = "/data/data/com.mengpaw/files/screenshots"
+    private val SCREENSHOTS_DIR = com.mengpaw.core.DataPaths.SCREENSHOTS
 
     /**
      * Generate a unique screenshot path for a session.

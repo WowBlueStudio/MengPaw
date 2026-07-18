@@ -54,6 +54,11 @@ dependencies {
     implementation(project(":mengpaw-core"))
     implementation(project(":mengpaw-design-system"))
 
+    // Bundled plugins (pre-installed in base APK)
+    implementation(project(":plugin-memory"))
+    implementation(project(":plugin-skill"))
+    implementation(project(":plugin-pad"))
+
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
@@ -64,6 +69,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3-window-size-class")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.runtime:runtime")

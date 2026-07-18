@@ -1,0 +1,1 @@
+{"id":"workflow-plugin","name":"工作流引擎","version":"1.0.0","type":"native","author":"MengPaw","description":"DAG 工作流编排：节点串联/并行/条件分支/上下文传递","minCoreVersion":"0.2.0","commands":["workflow.run","workflow.define","workflow.list","workflow.status"]}

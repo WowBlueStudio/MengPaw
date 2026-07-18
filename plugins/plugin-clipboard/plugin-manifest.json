@@ -1,0 +1,1 @@
+{"id":"clipboard-plugin","name":"剪贴板","version":"1.0.0","type":"native","author":"MengPaw","description":"剪贴板操作：copy, paste, clear","minCoreVersion":"0.2.0","commands":["clipboard.copy","clipboard.paste","clipboard.clear"]}

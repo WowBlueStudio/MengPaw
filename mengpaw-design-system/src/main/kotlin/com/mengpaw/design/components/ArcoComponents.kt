@@ -29,7 +29,7 @@ fun ArcoCard(
         modifier = modifier,
         shape = RoundedCornerShape(ArcoRadius.lg),
         colors = CardDefaults.cardColors(
-            containerColor = ArcoColors.BgPrimary
+            containerColor = com.mengpaw.design.theme.ThemeColors.bgPrimary
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -39,7 +39,7 @@ fun ArcoCard(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = ArcoColors.TextPrimary
+                    color = com.mengpaw.design.theme.ThemeColors.textPrimary
                 )
             }
             if (subtitle != null) {
@@ -47,7 +47,7 @@ fun ArcoCard(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = ArcoColors.TextSecondary
+                    color = com.mengpaw.design.theme.ThemeColors.textSecondary
                 )
             }
             if (title != null || subtitle != null) {
@@ -102,7 +102,7 @@ fun ArcoEmpty(
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
-            color = ArcoColors.TextSecondary
+            color = com.mengpaw.design.theme.ThemeColors.textSecondary
         )
         if (actionLabel != null && onAction != null) {
             Spacer(modifier = Modifier.height(ArcoSpacing.lg))
@@ -121,6 +121,6 @@ fun ArcoDivider(modifier: Modifier = Modifier) {
     HorizontalDivider(
         modifier = modifier,
         thickness = 1.dp,
-        color = ArcoColors.BorderDefault
+        color = com.mengpaw.design.theme.ThemeColors.border
     )
 }

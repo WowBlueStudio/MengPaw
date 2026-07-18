@@ -1,0 +1,1 @@
+{"id":"incubator-plugin","name":"Agent孵化器","version":"1.0.0","type":"native","author":"MengPaw","description":"子Agent孵化：创建/配置/监控/终止/结果收集","minCoreVersion":"0.2.0","commands":["incubator.spawn","incubator.list","incubator.terminate","incubator.inbox"]}

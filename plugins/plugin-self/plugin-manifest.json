@@ -1,0 +1,1 @@
+{"id":"self-plugin","name":"自省","version":"1.0.0","type":"native","author":"MengPaw","description":"Agent 自省：查看运行状态、配置、系统统计、版本信息","minCoreVersion":"0.2.0","commands":["self.status","self.config","self.stats","self.version"]}
