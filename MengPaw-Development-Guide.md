@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.2.0-alpha | **更新**: 2026-07-17 | **定位**: 面向 Agent 的自举式 Android 操作系统框架（21插件+7类Skills+ACP加密+触发器+梦境模式+语音体系）
+> **版本**: 0.2.2 | **更新**: 2026-07-19 | **定位**: Android Agent 框架 — 多智能体会话隔离 + 跨模型缓存优化 + 中间件架构 + Markdown/Emoji 渲染 + Dream 梦境模式 + 框架通讯录
 
 ---
 
