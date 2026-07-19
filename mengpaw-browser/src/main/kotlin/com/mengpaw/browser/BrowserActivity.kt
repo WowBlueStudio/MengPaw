@@ -93,12 +93,12 @@ class BrowserPrefs(ctx: Context) {
 
     /** Ordered list of enabled engine keys (comma-separated). */
     var engineKeys: List<String>
-        get() = p.getString("engines", "bing,google,baidu,duckduckgo")!!.split(",").filter { it.isNotBlank() }
+        get() = (p.getString("engines", "bing,google,baidu,duckduckgo") ?: "bing,google,baidu,duckduckgo").split(",").filter { it.isNotBlank() }
         set(v) = p.edit().putString("engines", v.joinToString(",")).apply()
 
     /** Last-used engine key. */
     var lastEngineKey: String
-        get() = p.getString("last_engine", "bing")!!
+        get() = p.getString("last_engine", "bing") ?: "bing"
         set(v) = p.edit().putString("last_engine", v).apply()
 
     /** Get the ordered list of enabled SearchEngine instances. */

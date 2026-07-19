@@ -147,7 +147,7 @@ fun BigBangPopup(
                     Button(
                         onClick = {
                             if (selectedText.isNotEmpty()) {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return@Button
                                 // Detect if content looks like a table — format as Markdown
                                 val formatted = if (selectedText.lines().all { '|' in it }) {
                                     selectedText

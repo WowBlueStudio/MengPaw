@@ -66,7 +66,7 @@ class AgentDocManager(
 
     fun getDoc(docType: AgentDocType): String {
         val f = file(docType)
-        return if (f.exists()) f.readText() else ""
+        return if (f.exists()) try { f.readText() } catch (_: Exception) { "" } else ""
     }
 
     fun getDocPath(docType: AgentDocType): String = file(docType).absolutePath
@@ -81,7 +81,7 @@ class AgentDocManager(
      */
     fun updateMemory(entry: MemoryRecord) {
         val memFile = file(AgentDocType.MEMORY)
-        val content = if (memFile.exists()) memFile.readText() else DEFAULT_MEMORY_MD
+        val content = if (memFile.exists()) try { memFile.readText() } catch (_: Exception) { "" } else DEFAULT_MEMORY_MD
 
         // Build new entry
         val entryMd = """
@@ -113,7 +113,7 @@ class AgentDocManager(
         val memFile = file(AgentDocType.MEMORY)
         if (!memFile.exists()) return emptyList()
 
-        val text = memFile.readText()
+        val text = try { memFile.readText() } catch (_: Exception) { "" }
         val records = parseMemoryRecords(text)
         return records.filter {
             it.title.lowercase().contains(q) ||
@@ -125,7 +125,7 @@ class AgentDocManager(
     fun getMemoryStats(): Pair<Int, Long> {
         val memFile = file(AgentDocType.MEMORY)
         if (!memFile.exists()) return 0 to 0L
-        val records = parseMemoryRecords(memFile.readText())
+        val records = parseMemoryRecords(try { memFile.readText() } catch (_: Exception) { "" })
         return records.size to memFile.length()
     }
 
@@ -133,7 +133,7 @@ class AgentDocManager(
     fun getMemoryIndex(): String {
         val memFile = file(AgentDocType.MEMORY)
         if (!memFile.exists()) return "(No memories)"
-        val records = parseMemoryRecords(memFile.readText())
+        val records = parseMemoryRecords(try { memFile.readText() } catch (_: Exception) { "" })
         if (records.isEmpty()) return "(No memories)"
         return buildString {
             appendLine("| ID | 日期 | 标题 | 关键词 |")
@@ -380,7 +380,7 @@ class AgentDocManager(
     private fun rebuildIndex() {
         val memFile = file(AgentDocType.MEMORY)
         if (!memFile.exists()) return
-        val text = memFile.readText()
+        val text = try { memFile.readText() } catch (_: Exception) { "" }
         val records = parseMemoryRecords(text)
         val idx = buildString {
             appendLine("# 记忆索引")
@@ -405,7 +405,7 @@ class AgentDocManager(
     private fun enforceLimits() {
         val memFile = file(AgentDocType.MEMORY)
         if (!memFile.exists()) return
-        val records = parseMemoryRecords(memFile.readText())
+        val records = parseMemoryRecords(try { memFile.readText() } catch (_: Exception) { "" })
         if (records.size > maxMemories) {
             // Archive oldest 10 entries
             val toArchive = records.takeLast(10)
