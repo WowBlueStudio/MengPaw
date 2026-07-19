@@ -34,12 +34,42 @@ android {
 
     buildTypes {
         debug {
-            // Keep debug build fast
+            applicationVariants.all {
+                outputs.all {
+                    (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
+                        it.outputFileName = "mengpaw-shell-v${versionName}-debug.apk"
+                    }
+                }
+            }
         }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+
+    // Release signing — loads keystore from local.properties at config time.
+    // If keystore is missing, release builds still work (unsigned). Generate with:
+    //   keytool -genkey -keystore mengpaw-release.jks -alias mengpaw -keyalg RSA -keysize 2048 -validity 10000
+    // Then add to local.properties: keystore.file=mengpaw-release.jks, keystore.storepass=..., keystore.keypass=...
+    val keystoreFile = project.findProperty("keystore.file") as? String ?: "mengpaw-release.jks"
+    val keystoreStorePass = project.findProperty("keystore.storepass") as? String ?: ""
+    val keystoreKeyPass = project.findProperty("keystore.keypass") as? String ?: ""
+    val releaseKeystoreFile = rootProject.file(keystoreFile)
+    if (releaseKeystoreFile.exists()) {
+        signingConfigs {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = keystoreStorePass
+                keyAlias = "mengpaw"
+                keyPassword = keystoreKeyPass
+            }
+        }
+        buildTypes {
+            getByName("release") {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
