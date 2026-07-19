@@ -40,6 +40,7 @@ include(":plugin-incubator")
 include(":plugin-render")
 include(":plugin-comfy")
 include(":plugin-translate")
+include(":plugin-dev")
 
 // Map plugin modules to their directory under plugins/
 project(":plugin-fs").projectDir = File(rootDir, "plugins/plugin-fs")
@@ -57,3 +58,4 @@ project(":plugin-incubator").projectDir = File(rootDir, "plugins/plugin-incubato
 project(":plugin-render").projectDir = File(rootDir, "plugins/plugin-render")
 project(":plugin-comfy").projectDir = File(rootDir, "plugins/plugin-comfy")
 project(":plugin-translate").projectDir = File(rootDir, "plugins/plugin-translate")
+project(":plugin-dev").projectDir = File(rootDir, "plugins/plugin-dev")
