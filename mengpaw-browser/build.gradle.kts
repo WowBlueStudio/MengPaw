@@ -33,10 +33,39 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationVariants.all {
+                outputs.all {
+                    (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
+                        it.outputFileName = "mengpaw-browser-v${versionName}-debug.apk"
+                    }
+                }
+            }
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+
+    val keystoreFile = project.findProperty("keystore.file") as? String ?: "mengpaw-release.jks"
+    val keystoreStorePass = project.findProperty("keystore.storepass") as? String ?: ""
+    val keystoreKeyPass = project.findProperty("keystore.keypass") as? String ?: ""
+    val releaseKeystoreFile = rootProject.file(keystoreFile)
+    if (releaseKeystoreFile.exists()) {
+        signingConfigs {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = keystoreStorePass
+                keyAlias = "mengpaw"
+                keyPassword = keystoreKeyPass
+            }
+        }
+        buildTypes {
+            getByName("release") {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 }
