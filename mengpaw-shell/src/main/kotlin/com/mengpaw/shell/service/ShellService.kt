@@ -28,10 +28,21 @@ class ShellService : Service() {
         }
     }
 
+    private var powerReceiver: android.content.BroadcastReceiver? = null
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
+
+        // Register dream mode charging trigger
+        powerReceiver = PowerConnectionReceiver.register(this)
+        DreamWorker.schedule(this)
+    }
+
+    override fun onDestroy() {
+        powerReceiver?.let { unregisterReceiver(it) }
+        super.onDestroy()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

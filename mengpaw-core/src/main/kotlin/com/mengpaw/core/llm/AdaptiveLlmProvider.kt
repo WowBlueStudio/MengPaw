@@ -192,6 +192,12 @@ class AdaptiveLlmProvider(
                     addJsonObject {
                         put("role", msg["role"] ?: "user")
                         put("content", msg["content"] ?: "")
+                        // Inject cache_control annotation for supported providers
+                        if (msg["_cache_control"] == "ephemeral") {
+                            putJsonObject("cache_control") {
+                                put("type", "ephemeral")
+                            }
+                        }
                     }
                 }
             }

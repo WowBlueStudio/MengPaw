@@ -1,53 +1,60 @@
-# 致谢与灵感来源
+# 致谢
 
-MengPaw 的开发受益于以下开源项目和框架的启发。
+MengPaw 的开发受益于以下项目和框架。此处严格区分「代码参考」（有具体代码移植/适配）与「灵感来源」（概念/架构启发，无代码引用），以避免版权纠纷。
 
-## 直接灵感来源
+---
 
-| 项目 | 借鉴内容 | 位置 |
-|------|---------|------|
-| **QwenPaw** (通义千问 Agent) | Skill Scanner 安全规则体系 — Prompt Injection 中英双语检测、ToolGuard 命令过滤、default_policy 分层安全策略；梦境模式(Dream Mode)记忆整理机制 | `core/security/SecurityPolicy.kt`, `core/security/Sanitizer.kt`, `core/agent/DreamEngine.kt` |
-| **Hermes** (多Agent协作框架) | 多Agent角色委派、inbox任务分发、团队共享记忆 | `plugins/plugin-hermes/`, `core/acp/` |
-| **OpenClaw** | Agent桌面自动化、跨设备任务委派概念 | `plugins/plugin-workflow/`, ACP 设备通信 |
-| **Claude Code** (Anthropic) | MCP 协议双向通信、Sub-agent 模式、Prompt 安全审计日志 | `core/mcp/McpServer.kt`, `core/mcp/McpClient.kt` |
-| **ReAct** (Google) | Thought → Action → Observation 循环推理模式 | `core/llm/PromptEngine.kt`, `core/AgentEngine.kt` |
+## 代码参考（Code References）
 
-## 参考项目
+以下项目的具体代码模式、算法或实现被移植/适配到 MengPaw 中。所有引用均符合原项目的开源协议。
 
-| 项目 | 参考方向 |
-|------|---------|
-| **Tavily** | AI 优化搜索引擎 API — Agent 搜索能力 |
-| **ComfyUI** | 节点式工作流编排 — 图像生成管线 |
-| **LangChain** | Tool/Chain/Agent 抽象模式 |
-| **CrewAI** | 多Agent角色协作 |
-| **Dify** | 可视化工作流编排 |
-| **Arco Design** (字节跳动) | 设计系统色彩/间距/排版令牌 |
-| **Material Design 3** (Google) | WindowSizeClass 响应式布局、Tonal Surface 层级、动态配色 |
-| **Replicate** | 云端模型推理 API — 生图后端 |
-| **Stability AI** | Stable Diffusion API |
-| **OpenAI** | GPT-4o/Realtime/DALL-E API |
-| **DeepSeek** | Prefix Cache 优化、DeepSeek API |
-| **Kimi** (月之暗面) | Moonshot API |
-| **GLM** (智谱) | ChatGLM API |
-| **Qwen** (通义千问) | Qwen API |
+| 项目 | 许可证 | 引用内容 | MengPaw 位置 | 说明 |
+|------|--------|---------|-------------|------|
+| **Reasonix** | MIT | 上下文折叠阈值体系（50%/60%/80%/90% 四级）；陈旧工具结果裁剪；tokPerChar 动态校准；折叠经济性检查；卡死检测 | `AgentEngine.kt`, `LlmRequestBuilder.kt` | 参考 `internal/agent/compact.go` 和 `internal/agent/cache_shape.go`，移植为 Kotlin 实现。Copyright (c) 2026 Reasonix Contributors |
+| **QwenPaw** | Apache 2.0 | Agent 文档模板体系（SOUL / BOOTSTRAP / MEMORY / PROFILE / AGENTS / HEARTBEAT 六文件结构） | `AgentDocs.kt` | 文件结构和引导流程参考 QwenPaw Desktop 的 `agents/md_files/zh/` 目录，内容已完全改写为 MengPaw 专属。Copyright 2025 The QwenPaw Authors |
+| **ReAct** (Google) | Apache 2.0 | Thought → Action → Observation 循环推理模式 | `PromptEngine.kt`, `AgentEngine.kt` | 论文《ReAct: Synergizing Reasoning and Acting in Language Models》提出的范式 |
 
-## 安全规则层级（'核心/插件' 归属）
+---
 
-| 规则类别 | 归属 | 原因 |
-|---------|------|------|
-| Shell 命令拦截 (rm/mkfs/dd/reboot/...) | **core** `SecurityPolicy` | 所有插件共享的底线安全 |
-| Prompt Injection 检测 (中英双语) | **core** `Sanitizer` | 所有 LLM 通信必经之路 |
-| 控制字符/Unicode 注入 | **core** `Sanitizer` | 输入层通用防护 |
-| API Key 脱敏 (AWS/Stripe/GitHub/...) | **core** `Sanitizer` | 所有日志输出 |
-| File 扩展名分类 (inert/code/archive) | **plugin-skill** | Skill 扫描专用 |
-| ToolGuard 命令审查 (systemctl/crontab/...) | **core** `SecurityPolicy` | 跨插件命令安全 |
-| 供应链检测 (隐藏代码文件) | **plugin-skill** | Skill 安全审核 |
-| ACP 来宾隔离 (PromptFirewall) | **core** `PromptFirewall` | 设备间通信安全 |
-| 审计日志 (agent.audit) | **core** `Pipeline` | 所有命令执行追溯 |
-| 速率限制 (30 cmd/s) | **core** `Pipeline` | DoS 防护 |
+## 灵感来源（Inspiration）
+
+以下项目的概念、架构或设计思想启发了 MengPaw 的设计，但**未直接使用其代码**。
+
+| 项目 | 启发方向 | 体现位置 |
+|------|---------|---------|
+| **Claude Code** (Anthropic) | MCP 协议双向通信、Sub-agent 委托模式 | `core/mcp/`, ACP 框架设计 |
+| **Hermes** | 多 Agent 角色委派、inbox 任务分发 | `plugins/plugin-hermes/` |
+| **Arco Design** (字节跳动) | 设计系统色彩/间距/排版令牌体系 | `mengpaw-design-system/` |
+| **Material Design 3** (Google) | WindowSizeClass 响应式布局、Tonal Surface 动态配色 | `AdaptiveLayout.kt`, `ArcoTheme.kt` |
+| **LangChain** | Tool / Chain / Agent 抽象模式 | `Pipeline.kt` 命令注册链 |
+| **CrewAI** | 多 Agent 角色协作范式 | ACP 框架通讯录 |
+| **Dify** | 可视化工作流编排概念 | `plugin-workflow` |
+| **OpenClaw** | Agent 桌面自动化、跨设备任务委派 | `plugin-workflow` |
+| **Tavily** | AI 优化搜索引擎 API | `plugin-tavily` |
+| **ComfyUI** | 节点式工作流编排 | `plugin-comfy` |
+
+---
+
+## API / 模型集成
+
+以下为 MengPaw 集成的第三方 API 和模型服务（均为 API 调用，非代码引用）：
+
+| 服务商 | 集成方式 |
+|--------|---------|
+| **OpenAI** (GPT-4o / GPT-4o-mini) | REST API |
+| **DeepSeek** (V4 / Chat / Reasoner) | REST API |
+| **Kimi / Moonshot** (月之暗面) | REST API |
+| **GLM / 智谱** (ChatGLM) | REST API |
+| **Qwen / 通义千问** (阿里云) | REST API |
+| **Stability AI** (Stable Diffusion) | REST API |
+| **Replicate** | REST API |
+
+---
 
 ## 许可证
 
-MengPaw: AGPL-3.0
+MengPaw: **AGPL-3.0-or-later**
 
-上述所有参考项目归各自原作者所有。
+Copyright (c) 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+
+上述所有参考项目归各自原作者所有。引用的开源代码片段在原项目许可证下使用。

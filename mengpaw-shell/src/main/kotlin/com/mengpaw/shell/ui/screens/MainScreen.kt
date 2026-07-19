@@ -5,6 +5,8 @@ package com.mengpaw.shell.ui.screens
 
 import android.graphics.BitmapFactory
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -22,19 +25,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mengpaw.design.tokens.ArcoColors
+import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mengpaw.design.components.ArcoDivider
+import com.mengpaw.design.components.MarkdownText
 import com.mengpaw.design.theme.ThemeColors
-import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.shell.ui.MAX_CONTENT_WIDTH
+import com.mengpaw.shell.ui.isWide
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -96,15 +103,24 @@ fun MainScreen(
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.fillMaxSize().widthIn(max = MAX_CONTENT_WIDTH.dp)) {
-            // ── Header bar ── (unchanged)
-            Surface(tonalElevation = 1.dp, color = ThemeColors.bgPrimary) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    // Sidebar toggle
-                    IconButton(onClick = onOpenSidebar, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Outlined.Menu, "侧边栏", tint = ThemeColors.textSecondary)
+            // ── Header bar ──
+            Surface(
+                shadowElevation = 2.dp,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Sidebar toggle — only on tablets (mouse users need it)
+                    if (isWide()) {
+                        IconButton(onClick = onOpenSidebar, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Outlined.Menu, "侧边栏", tint = ThemeColors.textSecondary)
+                        }
+                        Spacer(Modifier.width(4.dp))
                     }
-                    Spacer(Modifier.width(4.dp))
                     // Agent avatar
                     val avatarFile = File(com.mengpaw.core.DataPaths.AGENTS, "avatar.png")
                     val avatarBitmap = remember { if (avatarFile.exists()) BitmapFactory.decodeFile(avatarFile.absolutePath) else null }
@@ -141,6 +157,7 @@ fun MainScreen(
                     when (message) {
                         is ChatMessageUi.User -> UserBubble(message.content)
                         is ChatMessageUi.Agent -> AgentBubble(message.content)
+                        is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message)
                         is ChatMessageUi.Suggestion -> PluginSuggestionCard(message.suggestion,
                             onInstall = { pluginViewModel.installPlugin(message.suggestion.pluginId) },
                             onViewDetail = onNavigateToPlugins)
@@ -149,12 +166,20 @@ fun MainScreen(
                 }
             }
 
-            // ── Bottom input bar (clean: input + send + expand) ──
+            // ── Bottom input bar ──
             Surface(shadowElevation = 8.dp, color = ThemeColors.bgPrimary) {
-                Row(Modifier.fillMaxWidth().padding(start = ArcoSpacing.lg, end = 8.dp, bottom = ArcoSpacing.lg, top = ArcoSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    // Expand button (left of input)
-                    IconButton(onClick = { showExpandSheet = true }, modifier = Modifier.size(40.dp)) {
+                Row(
+                    Modifier.fillMaxWidth()
+                        .imePadding()
+                        .navigationBarsPadding()
+                        .padding(start = ArcoSpacing.lg, end = 8.dp, bottom = ArcoSpacing.sm, top = ArcoSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Expand button — circular 44dp
+                    IconButton(
+                        onClick = { showExpandSheet = true },
+                        modifier = Modifier.size(44.dp)
+                    ) {
                         Icon(Icons.Outlined.AddCircle, "扩展", tint = ThemeColors.textSecondary, modifier = Modifier.size(24.dp))
                     }
                     // Input field
@@ -164,13 +189,38 @@ fun MainScreen(
                         shape = RoundedCornerShape(ArcoRadius.lg),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ThemeColors.brand, unfocusedBorderColor = ThemeColors.border),
                         minLines = 1, maxLines = 4)
-                    // Send button
-                    FilledIconButton(onClick = {
-                        if (inputText.isNotBlank()) { viewModel.submitTask(inputText, pluginViewModel); inputText = "" }
-                    }, enabled = inputEnabled, shape = RoundedCornerShape(ArcoRadius.lg),
+                    // Send button — circular 44dp, animated ↑
+                    val maxSteps = settingsState?.maxSteps ?: 50
+                    val scope = rememberCoroutineScope()
+                    val sendOffset = remember { Animatable(0f) }
+                    val sendAlpha = remember { Animatable(1f) }
+                    FilledIconButton(
+                        onClick = {
+                            if (inputText.isNotBlank()) {
+                                val text = inputText; inputText = ""
+                                scope.launch {
+                                    launch { sendOffset.animateTo(-60f, tween(280)) }
+                                    launch { sendAlpha.animateTo(0f, tween(280)) }
+                                    viewModel.submitTask(text, pluginViewModel, maxSteps = maxSteps)
+                                    sendOffset.snapTo(0f)
+                                    sendAlpha.snapTo(1f)
+                                }
+                            }
+                        },
+                        enabled = inputEnabled,
+                        shape = CircleShape,
                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = ThemeColors.brand),
-                        modifier = Modifier.size(44.dp))
-                    { Icon(Icons.Default.Send, "发送", tint = Color.White) }
+                        modifier = Modifier
+                            .size(44.dp)
+                            .offset(y = sendOffset.value.dp)
+                            .alpha(sendAlpha.value)
+                    ) {
+                        Icon(
+                            if (inputText.isEmpty()) Icons.Outlined.ArrowUpward else Icons.Filled.ArrowUpward,
+                            "发送",
+                            tint = Color.White
+                        )
+                    }
                 }
             }
         }
@@ -256,17 +306,147 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
 @Composable private fun UserBubble(content: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Surface(shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm), color = ThemeColors.brand) {
-            Text(content, Modifier.padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+            SelectionContainer {
+                MarkdownText(
+                    content = content,
+                    modifier = Modifier.padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
+                    inlineCodeColor = Color.White.copy(alpha = 0.9f),
+                    linkColor = Color.White
+                )
+            }
         }
     }
 }
+
 @Composable private fun AgentBubble(content: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
         Surface(shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm, ArcoRadius.lg), color = ThemeColors.bgCardHigh) {
             Column(Modifier.padding(ArcoSpacing.lg)) {
                 Text("MengPaw", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
                 Spacer(Modifier.height(ArcoSpacing.xs))
-                Text(content, color = ThemeColors.textPrimary, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
+                SelectionContainer {
+                    MarkdownText(
+                        content = content,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── Agent Bubble with Trace (expandable thinking steps) ──
+@Composable private fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace) {
+    var expanded by remember { mutableStateOf(false) }
+    val traces = message.traces
+
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        Surface(
+            shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm, ArcoRadius.lg),
+            color = ThemeColors.bgCardHigh
+        ) {
+            Column(Modifier.padding(ArcoSpacing.lg)) {
+                Text("MengPaw", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
+                Spacer(Modifier.height(ArcoSpacing.xs))
+
+                // Collapsible trace steps
+                if (traces.isNotEmpty()) {
+                    Surface(
+                        onClick = { expanded = !expanded },
+                        shape = RoundedCornerShape(ArcoRadius.sm),
+                        color = ArcoColors.Blue1.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                null, Modifier.size(16.dp), tint = ThemeColors.brand
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                if (expanded) "收起思考过程" else "思考过程 (${traces.size} 步)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ThemeColors.brand,
+                                fontWeight = FontWeight.Medium
+                            )
+                            if (message.isRunning) {
+                                Spacer(Modifier.width(ArcoSpacing.sm))
+                                LinearProgressIndicator(
+                                    Modifier.width(40.dp).height(4.dp),
+                                    color = ThemeColors.brand
+                                )
+                            }
+                        }
+                    }
+
+                    AnimatedVisibility(visible = expanded) {
+                        Column(Modifier.padding(top = ArcoSpacing.xs)) {
+                            traces.forEach { trace -> TraceStepItem(trace) }
+                        }
+                    }
+
+                    Spacer(Modifier.height(ArcoSpacing.sm))
+                } else if (message.isRunning) {
+                    // Initial "thinking" with no traces yet
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LinearProgressIndicator(Modifier.width(80.dp).height(4.dp), color = ThemeColors.brand)
+                        Spacer(Modifier.width(ArcoSpacing.sm))
+                        Text("思考中...", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                    }
+                    Spacer(Modifier.height(ArcoSpacing.sm))
+                }
+
+                // Final content
+                SelectionContainer {
+                    MarkdownText(
+                        content = message.finalContent,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun TraceStepItem(trace: AgentTrace) {
+    Surface(
+        shape = RoundedCornerShape(ArcoRadius.sm),
+        color = ThemeColors.bgCard,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+    ) {
+        Column(Modifier.padding(ArcoSpacing.sm)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Text("Step ${trace.step}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = ThemeColors.brand)
+                Spacer(Modifier.width(ArcoSpacing.xs))
+                Text(
+                    "🤔 ${trace.thought.take(150)}${if (trace.thought.length > 150) "..." else ""}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ThemeColors.textSecondary,
+                    maxLines = 3
+                )
+            }
+            if (trace.action != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "🔧 ${trace.action}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ThemeColors.brand,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
+                )
+            }
+            if (trace.observation != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "📊 ${trace.observation.take(120)}${if (trace.observation.length > 120) "..." else ""}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ThemeColors.textSecondary,
+                    maxLines = 2
+                )
             }
         }
     }

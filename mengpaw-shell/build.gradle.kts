@@ -15,8 +15,8 @@ android {
         applicationId = "com.mengpaw.shell"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0-alpha"
+        versionCode = 2
+        versionName = "0.2.1"
     }
 
     compileOptions {
@@ -79,6 +79,9 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+
+    // WorkManager — Dream mode background scheduling
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")

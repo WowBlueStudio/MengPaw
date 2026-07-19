@@ -23,10 +23,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mengpaw.core.llm.CacheStrategy
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 
 /**
  * Settings screen for MengPaw configuration.
@@ -124,24 +127,40 @@ fun SettingsScreen(
                 Column {
                     Row(horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
                         listOf(LlmProviderPreset.OPENAI, LlmProviderPreset.DEEPSEEK, LlmProviderPreset.KIMI).forEach { preset ->
-                            FilterChip(selected = state.selectedProvider == preset,
-                                onClick = { viewModel.selectProvider(preset) },
-                                label = { Text(preset.label.split(" ")[0], fontSize = MaterialTheme.typography.labelMedium.fontSize) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = ArcoColors.Blue1, selectedLabelColor = ArcoColors.Blue6))
+                            ProviderChip(preset, state.selectedProvider, viewModel)
                         }
                     }
                     Spacer(Modifier.height(ArcoSpacing.sm))
                     Row(horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
                         listOf(LlmProviderPreset.GLM, LlmProviderPreset.QWEN, LlmProviderPreset.CUSTOM).forEach { preset ->
-                            FilterChip(selected = state.selectedProvider == preset,
-                                onClick = { viewModel.selectProvider(preset) },
-                                label = { Text(preset.label.split(" ")[0], fontSize = MaterialTheme.typography.labelMedium.fontSize) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = ArcoColors.Blue1, selectedLabelColor = ArcoColors.Blue6))
+                            ProviderChip(preset, state.selectedProvider, viewModel)
                         }
                     }
                 }
+                Spacer(Modifier.height(ArcoSpacing.sm))
+
+                // ── Cache optimization indicator ──
+                val cacheStrategy = CacheStrategy.forProvider(state.apiEndpoint)
+                if (cacheStrategy != CacheStrategy.NONE) {
+                    Surface(
+                        shape = RoundedCornerShape(ArcoRadius.sm),
+                        color = Color(0xFF52C41A).copy(alpha = 0.08f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(Modifier.padding(horizontal = ArcoSpacing.md, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.CheckCircle, null, Modifier.size(14.dp), tint = Color(0xFF52C41A))
+                            Spacer(Modifier.width(6.dp))
+                            Text(CacheStrategy.labelFor(cacheStrategy),
+                                style = MaterialTheme.typography.labelSmall, color = Color(0xFF52C41A))
+                            Spacer(Modifier.weight(1f))
+                            Text("已优化", style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold, color = Color(0xFF52C41A))
+                        }
+                    }
+                    Spacer(Modifier.height(ArcoSpacing.sm))
+                }
+
                 Spacer(Modifier.height(ArcoSpacing.lg))
 
                 SettingsTextField(Icons.Outlined.Key, "API Key", state.apiKey,
@@ -507,4 +526,30 @@ private fun NavigationLink(icon: androidx.compose.ui.graphics.vector.ImageVector
             Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = ArcoColors.Gray5)
         }
     }
+}
+
+@Composable
+private fun ProviderChip(
+    preset: LlmProviderPreset,
+    selected: LlmProviderPreset,
+    viewModel: SettingsViewModel
+) {
+    val strategy = CacheStrategy.forProvider(preset.endpoint)
+    val optimized = strategy != CacheStrategy.NONE
+
+    FilterChip(
+        selected = selected == preset,
+        onClick = { viewModel.selectProvider(preset) },
+        label = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(preset.label.split(" ")[0], fontSize = MaterialTheme.typography.labelMedium.fontSize)
+                if (optimized) {
+                    Spacer(Modifier.width(3.dp))
+                    Text("✓", fontSize = 10.sp, color = Color(0xFF52C41A))
+                }
+            }
+        },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = ArcoColors.Blue1, selectedLabelColor = ArcoColors.Blue6)
+    )
 }

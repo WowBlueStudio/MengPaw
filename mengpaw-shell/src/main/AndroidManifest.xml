@@ -18,6 +18,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MengPaw">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
