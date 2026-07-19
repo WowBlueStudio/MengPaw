@@ -91,6 +91,7 @@ dependencies {
     implementation(project(":plugin-memory"))
     implementation(project(":plugin-skill"))
     implementation(project(":plugin-pad"))
+    implementation(project(":plugin-dev"))
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))
