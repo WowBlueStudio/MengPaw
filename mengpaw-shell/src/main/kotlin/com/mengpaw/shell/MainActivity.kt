@@ -12,6 +12,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import com.mengpaw.design.theme.ArcoTheme
 import com.mengpaw.shell.ui.localization.AppStrings
@@ -57,20 +59,28 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
-    var showSidebar by remember { mutableStateOf(false) }
     var showPlugins by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val agentViewModel: AgentViewModel = viewModel()
+    val activeAgent by agentViewModel.activeAgent.collectAsState()
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet {
                 SidebarContent(
-                    onNavigateToPlugins = { showPlugins = true; showSidebar = false },
-                    onNavigateToSettings = { showSettings = true; showSidebar = false },
-                    onClose = { showSidebar = false }
+                    onNavigateToPlugins = { showPlugins = true; scope.launch { drawerState.close() } },
+                    onNavigateToSettings = { showSettings = true; scope.launch { drawerState.close() } },
+                    onClose = { scope.launch { drawerState.close() } },
+                    activeAgent = activeAgent,
+                    onSwitchAgent = { name -> agentViewModel.switchAgent(name); scope.launch { drawerState.close() } },
+                    onCreateAgent = { name ->
+                        agentViewModel.createAgent(name)
+                        scope.launch { drawerState.close() }
+                    }
                 )
             }
         }
@@ -79,7 +89,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
         MainScreen(
             strings = strings,
             settingsViewModel = settingsViewModel,
-            onOpenSidebar = { showSidebar = true }
+            onOpenSidebar = { scope.launch { drawerState.open() } }
         )
     }
 

@@ -5,7 +5,10 @@ package com.mengpaw.core
 
 import com.mengpaw.core.agent.AgentDocManager
 import com.mengpaw.core.agent.AgentExecutor
+import com.mengpaw.core.agent.AgentMiddleware
 import com.mengpaw.core.agent.MemoryRecord
+import com.mengpaw.core.agent.PostCallMiddleware
+import com.mengpaw.core.agent.ScrollContextManager
 import com.mengpaw.core.cli.*
 import com.mengpaw.core.llm.*
 import com.mengpaw.core.namespace.SelfExecutor
@@ -72,7 +75,10 @@ class AgentEngine(
     private val sessionManager: SessionManager = SessionManager(),
     private val promptEngine: PromptEngine = PromptEngine(),
     private val agentDocManager: AgentDocManager = AgentDocManager(),
-    private val integrityGuard: IntegrityGuard = IntegrityGuard()
+    private val integrityGuard: IntegrityGuard = IntegrityGuard(),
+    private val middleware: AgentMiddleware = AgentMiddleware.NoOp,
+    private val postCallMiddleware: PostCallMiddleware = PostCallMiddleware.NoOp,
+    val scrollContext: ScrollContextManager? = null
 ) {
     private val _state = MutableStateFlow<AgentState>(AgentState.Idle)
     val state: StateFlow<AgentState> = _state.asStateFlow()
@@ -89,20 +95,185 @@ class AgentEngine(
     /** Cumulative cache miss tokens from LlmRequestBuilder. */
     val cacheMissTokens: Long get() = llmRequestBuilder.cumulativeCacheMissTokens
 
+    /** Approximate cache hit ratio (0.0–1.0) across all calls. */
+    val cacheHitRatio: Double get() {
+        val total = cacheHitTokens + cacheMissTokens
+        return if (total > 0) cacheHitTokens.toDouble() / total else 0.0
+    }
+
+    /** Estimated USD cost saved by cache hits (DeepSeek V4 flash pricing). */
+    val estimatedSavingsUsd: Double get() {
+        val hit = cacheHitTokens
+        // Cache miss = $0.14/1K, Cache hit = $0.0028/1K → save $0.1372/1K tokens
+        return hit * 0.0001372
+    }
+
+    /** Current cache strategy label for UI display. */
+    val cacheStrategyLabel: String get() = CacheStrategy.labelFor(llmRequestBuilder.cacheStrategy)
+
+    /** Auto-configure cache strategy from the LLM provider's endpoint. */
+    fun configureCacheStrategy(endpoint: String) {
+        llmRequestBuilder.cacheStrategy = CacheStrategy.forProvider(endpoint)
+    }
+
+    // ── Context folding (Reasonix-inspired, MIT license) ──
+    // Thresholds are ratios of the context window (not absolute tokens),
+    // so they adapt to different models automatically.
+    private companion object {
+        const val SOFT_COMPACT_RATIO = 0.50     // 50% → notify growing, no action
+        const val TOOL_SNIP_RATIO = 0.60        // 60% → snip stale tool results first
+        const val COMPACT_RATIO = 0.80          // 80% → trigger full compaction
+        const val COMPACT_FORCE_RATIO = 0.90    // 90% → force even low-value folds
+        const val MIN_FOLD_TOKENS = 400         // skip folds smaller than this (not worth the API call)
+        const val DEFAULT_CONTEXT_WINDOW = 131_072  // fallback when model window is unknown
+    }
+
+    private var consecutiveCompacts = 0
+    private var compactStuck = false
+
+    /**
+     * Estimate context usage ratio using calibrated tokPerChar when available,
+     * falling back to the hardcoded heuristic.
+     */
+    private fun estimateContextRatio(promptTokens: Int): Double {
+        val window = DEFAULT_CONTEXT_WINDOW.toDouble()
+        return promptTokens / window
+    }
+
+    /** Estimate tokens for a string using the calibrated ratio. */
+    private fun estimateTokens(text: String): Int {
+        val ratio = llmRequestBuilder.calibratedTokPerChar
+        return (text.length * ratio).toInt()
+    }
+
+    /**
+     * Snip stale tool results: rewrite old observation messages to short markers.
+     * This alone often brings context under the threshold without a full compaction,
+     * preserving the prefix cache that would be lost on a summarize API call.
+     * @return number of messages snipped
+     */
+    private fun snipStaleToolResults(sessionId: String, currentStep: Int): Int {
+        var count = 0
+        val history = sessionManager.getStructuredHistory(sessionId)
+        val threshold = currentStep - 3 // steps older than this are "stale"
+
+        history.forEachIndexed { index, msg ->
+            if (msg["role"] == "assistant" && threshold > 0) {
+                val content = msg["content"] ?: ""
+                if (content.startsWith("Command:") && content.length > 120) {
+                    // Replace with snipped marker — keeps the message in the array
+                    // but drastically reduces its token footprint
+                    sessionManager.addMessage(sessionId,
+                        Message("system", "[snip — tool result from earlier step compressed]"))
+                    count++
+                }
+            }
+        }
+        return count
+    }
+
+    /**
+     * Check whether context folding is needed after an LLM response.
+     * Three-stage pipeline: soft notify → snip stale results → full compaction.
+     * Includes fold-economics check and stuck-detection per Reasonix compact.go.
+     * @return true if folding was performed
+     */
+    private suspend fun maybeFoldContext(sessionId: String, promptTokens: Int): Boolean {
+        if (compactStuck) return false
+
+        val ratio = estimateContextRatio(promptTokens)
+
+        // Stage 0: below 50% — healthy, reset counters
+        if (ratio < SOFT_COMPACT_RATIO) {
+            consecutiveCompacts = 0
+            compactStuck = false
+            return false
+        }
+
+        // Stage 1: 50%-60% — soft notice, no action (cache stays warm)
+        if (ratio < TOOL_SNIP_RATIO) {
+            return false
+        }
+
+        // Stage 2: 60%-80% — try snipping stale tool results first
+        if (ratio < COMPACT_RATIO) {
+            val snipped = snipStaleToolResults(sessionId, promptTokens.hashCode() % 50)
+            // Snip alone may have brought us under the trigger; no need for full compaction
+            return snipped > 0
+        }
+
+        // Stage 3: 80%+ — full compaction needed
+        // Fold economics: skip if foldable region is too small
+        val estimatedFoldTokens = (promptTokens * 0.3).toInt() // rough: ~30% of prompt is foldable
+        if (ratio < COMPACT_FORCE_RATIO && estimatedFoldTokens < MIN_FOLD_TOKENS) {
+            return false
+        }
+
+        // Call session compression
+        sessionManager.compressIfNeeded(llmProvider)
+        consecutiveCompacts++
+
+        // Stuck detection: if compaction fires twice in a row, the tail alone is too large
+        if (consecutiveCompacts >= 2) {
+            compactStuck = true
+            val msg = when (agentLanguage) {
+                PromptEngine.AgentLanguage.CHINESE ->
+                    "上下文窗口不足以容纳当前对话。自动折叠已暂停。建议手动清理历史或增大模型的 context_window 设置。"
+                PromptEngine.AgentLanguage.ENGLISH ->
+                    "Context window too small for current conversation. Auto-compaction paused. Consider clearing history or increasing the model's context_window."
+            }
+            sessionManager.addMessage(sessionId, Message("system", msg))
+        }
+
+        return true
+    }
+
     /** Current Agent language setting. */
     var agentLanguage: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE
         private set
 
+    /** This agent's display name. */
+    var agentName: String = "MengPaw"
+        private set
+
+    /** Framework this agent belongs to (null = local). */
+    var framework: String? = null
+        private set
+
+    /** Model name powering this agent. */
+    var modelName: String = "unknown"
+        private set
+
+    /**
+     * Update agent identity and rebuild the system prompt.
+     */
+    fun setAgentIdentity(name: String, framework: String?, model: String) {
+        agentName = name
+        this.framework = framework
+        this.modelName = model
+        rebuildSystemPrompt()
+    }
+
     /**
      * Switch the Agent's thinking/output language.
      * Updates the system prompt and resets prefix cache counters.
-     * Call this when the user changes language preference.
      */
     fun setAgentLanguage(lang: PromptEngine.AgentLanguage) {
         if (lang != agentLanguage) {
             agentLanguage = lang
-            llmRequestBuilder.updateSystemPrompt(promptEngine.buildSystemPrompt(lang))
+            rebuildSystemPrompt()
         }
+    }
+
+    private fun rebuildSystemPrompt() {
+        val base = promptEngine.buildSystemPrompt(
+            lang = agentLanguage,
+            agentName = agentName,
+            framework = framework,
+            modelName = modelName
+        )
+        val processed = middleware.onSystemPrompt(base, agentName)
+        llmRequestBuilder.updateSystemPrompt(processed)
     }
 
     /** Plugin marketplace client for plugin.* commands. */
@@ -150,11 +321,22 @@ class AgentEngine(
     }
 
     /**
+     * A single trace step emitted during ReAct execution.
+     */
+    data class TraceStep(
+        val step: Int,
+        val thought: String,
+        val action: String?,
+        val observation: String?
+    )
+
+    /**
      * Run a task through the ReAct loop.
      * @param task The user's task description
      * @param maxSteps Maximum ReAct iterations before forced stop
+     * @param onStep Optional callback invoked after each ReAct iteration with trace data
      */
-    suspend fun run(task: String, maxSteps: Int = 50): String {
+    suspend fun run(task: String, maxSteps: Int = 50, onStep: ((TraceStep) -> Unit)? = null): String {
         val session = sessionManager.createSession(task)
         val context = ExecutionContext(sessionId = session.id)
         _state.value = AgentState.Running(task, 0, maxSteps)
@@ -167,13 +349,34 @@ class AgentEngine(
             for (step in 0 until maxSteps) {
                 _state.value = AgentState.Running(task, step + 1, maxSteps)
 
-                // 1. THINK: Get LLM response
+                // 1. THINK: Get LLM response (prefix cache anchored by LlmRequestBuilder)
                 val conversation = buildConversation(session.id)
                 val llmResponse = llmProvider.completeWithMessages(conversation)
                 val sanitized = Sanitizer.sanitize(llmResponse)
 
-                sessionManager.addMessage(session.id, Message("assistant", sanitized))
-                _output.value = sanitized
+                // Post-call middleware: trim oversized results, check context health, trigger scroll eviction
+                val totalChars = llmRequestBuilder.currentSystemPrompt.length +
+                    sessionManager.getStructuredHistory(session.id).sumOf { (it["content"]?.length ?: 0) }
+                val estimatedTokens = (totalChars * llmRequestBuilder.calibratedTokPerChar).toInt()
+                llmRequestBuilder.lastPromptTokens = estimatedTokens
+                llmRequestBuilder.calibrateFromUsage(estimatedTokens, totalChars)
+
+                val postResult = postCallMiddleware.onPostCall(sanitized, step + 1, totalChars, estimatedTokens)
+
+                sessionManager.addMessage(session.id, Message("assistant", postResult.text))
+                _output.value = postResult.text
+
+                // Middleware-triggered context folding or scroll eviction
+                if (postResult.shouldFold) {
+                    // Scroll eviction: index old spans before folding
+                    scrollContext?.evictSpan(
+                        seqLo = maxOf(0, step - 10),
+                        seqHi = step,
+                        text = postResult.text.take(6000),
+                        headline = postResult.foldReason ?: "Step ${step + 1} context eviction"
+                    )
+                    maybeFoldContext(session.id, estimatedTokens)
+                }
 
                 // 2. PARSE: Extract Thought/Action from LLM output
                 val parsed = promptEngine.parse(sanitized)
@@ -193,9 +396,10 @@ class AgentEngine(
 
                     // Loop detection
                     if (promptEngine.detectLoop(commandLine)) {
-                        val errorMsg = "Error: Detected command loop - '$commandLine' repeated 3+ times"
+                        val errorMsg = localizedError("loop_detected", commandLine)
                         sessionManager.addMessage(session.id, Message("assistant", errorMsg))
                         _state.value = AgentState.Error(errorMsg)
+                        onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, errorMsg))
                         return errorMsg
                     }
 
@@ -203,22 +407,48 @@ class AgentEngine(
                     val result = buildPipeline().execute(commandLine, context)
                     val observation = if (result.success) result.output else "Error: ${result.error}"
 
+                    // Emit trace step
+                    onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, observation))
+
                     // Add observation to conversation
                     val observationEntry = "Command: $commandLine\nResult: $observation"
                     sessionManager.addMessage(session.id, Message("assistant", observationEntry))
+                } else {
+                    // Thought without action — still emit trace
+                    onStep?.invoke(TraceStep(step + 1, parsed.thought, null, null))
                 }
             }
 
             // Max steps reached
-            val msg = "Max steps ($maxSteps) reached without final answer"
+            val msg = localizedError("max_steps", maxSteps.toString())
             sessionManager.addMessage(session.id, Message("assistant", msg))
             _state.value = AgentState.Finished(msg)
             return msg
         } catch (e: Exception) {
-            val errorMsg = "Agent error: ${e.message ?: e::class.simpleName}"
+            val errorMsg = localizedError("agent_error", e.message ?: e::class.simpleName ?: "unknown")
             sessionManager.addMessage(session.id, Message("assistant", errorMsg))
             _state.value = AgentState.Error(errorMsg)
             return errorMsg
+        }
+    }
+
+    /**
+     * Produce a localized error message based on the current [agentLanguage].
+     */
+    private fun localizedError(key: String, detail: String): String = when (agentLanguage) {
+        PromptEngine.AgentLanguage.CHINESE -> when (key) {
+            "loop_detected" -> "错误：检测到命令循环 — '$detail' 已重复 3+ 次"
+            "max_steps" -> "已达到最大步数 ($detail)，未获得最终答案"
+            "agent_error" -> "Agent 错误：$detail"
+            "no_plan" -> "无法为任务生成计划：$detail"
+            else -> detail
+        }
+        PromptEngine.AgentLanguage.ENGLISH -> when (key) {
+            "loop_detected" -> "Error: Detected command loop — '$detail' repeated 3+ times"
+            "max_steps" -> "Max steps ($detail) reached without final answer"
+            "agent_error" -> "Agent error: $detail"
+            "no_plan" -> "Could not generate a plan for: $detail"
+            else -> detail
         }
     }
 
@@ -237,7 +467,7 @@ class AgentEngine(
         // Phase 1: Generate execution plan
         val plan = generatePlan(task)
         if (plan.steps.isEmpty()) {
-            val msg = "Could not generate a plan for: $task"
+            val msg = localizedError("no_plan", task)
             _state.value = AgentState.Error(msg)
             return msg
         }
@@ -403,7 +633,7 @@ class AgentEngine(
         } else {
             history
         }
-        return llmRequestBuilder.buildMessages(nonSystemHistory)
+        return llmRequestBuilder.buildMessages(nonSystemHistory, injectCacheAnnotations = true)
     }
 
     private fun buildCommandString(action: ToolCall): String {

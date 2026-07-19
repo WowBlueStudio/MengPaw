@@ -3,6 +3,7 @@
 
 package com.mengpaw.core.llm
 
+import com.mengpaw.core.agent.AgentDocs
 import kotlinx.serialization.json.*
 
 /**
@@ -27,12 +28,71 @@ class PromptEngine {
     private val recentCommands = java.util.LinkedList<String>()
 
     /**
-     * Build the system prompt in the specified language.
-     * Defaults to Chinese if not specified.
+     * Build the system prompt with agent identity, framework context, and model info.
+     * @param lang Output language
+     * @param agentName The name of this agent (e.g. "MengPaw", "平板-Agent")
+     * @param framework The framework this agent belongs to (null = local)
+     * @param modelName The LLM model powering this agent (for self-awareness)
      */
-    fun buildSystemPrompt(lang: AgentLanguage = AgentLanguage.CHINESE): String = when (lang) {
-        AgentLanguage.CHINESE -> CHINESE_PROMPT
-        AgentLanguage.ENGLISH -> ENGLISH_PROMPT
+    fun buildSystemPrompt(
+        lang: AgentLanguage = AgentLanguage.CHINESE,
+        agentName: String = "MengPaw",
+        framework: String? = null,
+        modelName: String = "unknown"
+    ): String {
+        val identity = if (lang == AgentLanguage.CHINESE) {
+            buildString {
+                append("你是 **$agentName**，MengPaw 智能体系统中的一员。\n")
+                if (framework != null) {
+                    append("你运行在远程框架「**$framework**」上，通过网络与该框架协作。你的操作会传递给该框架执行。\n")
+                } else {
+                    append("你运行在**本地设备**上，可以直接操控本设备。\n")
+                }
+                append("你当前由 **$modelName** 模型驱动。\n")
+                append("\n")
+            }
+        } else {
+            buildString {
+                append("You are **$agentName**, a member of the MengPaw agent system.\n")
+                if (framework != null) {
+                    append("You run on the remote framework \"**$framework**\" and collaborate over the network. Your actions are forwarded to that framework for execution.\n")
+                } else {
+                    append("You run on the **local device** and can control it directly.\n")
+                }
+                append("You are currently powered by the **$modelName** model.\n")
+                append("\n")
+            }
+        }
+
+        val basePrompt = when (lang) {
+            AgentLanguage.CHINESE -> CHINESE_PROMPT
+            AgentLanguage.ENGLISH -> ENGLISH_PROMPT
+        }
+
+        val fewShot = when (lang) {
+            AgentLanguage.CHINESE -> CHINESE_FEWSHOT
+            AgentLanguage.ENGLISH -> ENGLISH_FEWSHOT
+        }
+
+        // Inject agent's own documentation (AGENTS.md + SOUL.md)
+        val agentsDoc = AgentDocs.readAgentsDoc(agentName)
+        val soulDoc = AgentDocs.readSoulDoc(agentName)
+        val memoryDoc = AgentDocs.readMemoryDoc(agentName)
+
+        val docsBlock = buildString {
+            append("\n## 你的操作手册（AGENTS.md）\n\n")
+            append(agentsDoc)
+            if (soulDoc.isNotBlank()) {
+                append("\n\n## 你的灵魂准则（SOUL.md）\n\n")
+                append(soulDoc)
+            }
+            if (memoryDoc.isNotBlank()) {
+                append("\n\n## 你的长期记忆（MEMORY.md）\n\n")
+                append(memoryDoc)
+            }
+        }
+
+        return identity + basePrompt + "\n" + fewShot + "\n" + docsBlock
     }
 
     /**
@@ -48,6 +108,143 @@ class PromptEngine {
     }
 
     companion object {
+        // ── Few-shot examples: demonstrate correct ReAct usage with real MengPaw commands ──
+        val CHINESE_FEWSHOT = """
+            ## 示例对话（请严格模仿格式）
+
+            **示例 1 — 简单查询**
+
+            用户：检查一下设备状态
+
+            Thought: 用户想了解设备当前状态。我先用 self.status 获取基本信息。
+            Action: self.status
+            Action Input: {}
+
+            Observation: {"status":"online","version":"0.2.1","uptime":"2h 15m"}
+
+            Thought: 设备在线，运行正常。可以用 sys.battery 和 sys.storage 获取更多信息。
+            Action: sys.battery
+            Action Input: {}
+
+            Observation: Battery: 85%, Charging: false
+
+            Final Answer: 设备状态正常。\n- MengPaw 版本：0.2.1\n- 运行时间：2小时15分钟\n- 电量：85%（未充电）
+
+            ---
+
+            **示例 2 — 文件操作**
+
+            用户：看看 /sdcard/Download 下有什么文件
+
+            Thought: 用户想查看下载目录。文件系统操作需要用 fs 插件。先确认 fs 插件是否已安装。
+            Action: plugin.list
+            Action Input: {}
+
+            Observation: 已安装插件：fs-plugin, net-plugin, memory-plugin
+
+            Thought: fs-plugin 已安装。使用 fs.ls 列出目录内容。
+            Action: fs.ls
+            Action Input: {"path":"/sdcard/Download"}
+
+            Observation: [文件] report.pdf (2.3MB)\n[文件] photo.jpg (1.1MB)\n[目录] temp/
+
+            Final Answer: /sdcard/Download 目录下有：\n- report.pdf（2.3MB）\n- photo.jpg（1.1MB）\n- temp/（子目录）
+
+            ---
+
+            **示例 3 — 插件发现**
+
+            用户：我需要搜索网页
+
+            Thought: 用户需要网页搜索能力。我先查 CLI 参考看看有没有相关命令，然后搜索可用插件。
+            Action: agent.cli
+            Action Input: {}
+
+            Observation: [CLI.md 内容——列出所有 namespace 和命令]
+
+            Thought: CLI.md 没有直接列出网页搜索命令。让我搜索插件市场。
+            Action: plugin.search
+            Action Input: {"keyword":"web search"}
+
+            Observation: 找到插件：tavily-plugin（网页搜索），hermes-plugin（多引擎搜索）
+
+            Thought: 找到了两个搜索插件。向用户推荐并安装 tavily-plugin。
+            Action: plugin.install
+            Action Input: {"id":"tavily-plugin"}
+
+            Observation: tavily-plugin 安装成功。
+
+            Final Answer: 已为你安装网页搜索插件。现在可以用 tavily.search 搜索了。需要我帮你搜什么？
+        """.trimIndent()
+
+        val ENGLISH_FEWSHOT = """
+            ## Examples (follow this format exactly)
+
+            **Example 1 — System Check**
+
+            User: Check the device status
+
+            Thought: The user wants to know the device state. Let me start with self.status.
+            Action: self.status
+            Action Input: {}
+
+            Observation: {"status":"online","version":"0.2.1","uptime":"2h 15m"}
+
+            Thought: Device is online and healthy. Let me also check battery.
+            Action: sys.battery
+            Action Input: {}
+
+            Observation: Battery: 85%, Charging: false
+
+            Final Answer: Device status is normal.\n- MengPaw version: 0.2.1\n- Uptime: 2h 15m\n- Battery: 85% (not charging)
+
+            ---
+
+            **Example 2 — File Operations**
+
+            User: What's in /sdcard/Download?
+
+            Thought: User wants to list files. File operations use the fs plugin. Let me verify it's installed.
+            Action: plugin.list
+            Action Input: {}
+
+            Observation: Installed plugins: fs-plugin, net-plugin, memory-plugin
+
+            Thought: fs-plugin is available. Using fs.ls to list the directory.
+            Action: fs.ls
+            Action Input: {"path":"/sdcard/Download"}
+
+            Observation: [file] report.pdf (2.3MB)\n[file] photo.jpg (1.1MB)\n[dir] temp/
+
+            Final Answer: Contents of /sdcard/Download:\n- report.pdf (2.3MB)\n- photo.jpg (1.1MB)\n- temp/ (subdirectory)
+
+            ---
+
+            **Example 3 — Plugin Discovery**
+
+            User: I need web search capability
+
+            Thought: User needs web search. Let me check CLI reference first, then search plugins.
+            Action: agent.cli
+            Action Input: {}
+
+            Observation: [CLI.md content — lists all namespaces and commands]
+
+            Thought: CLI.md doesn't have web search built-in. Let me search the plugin marketplace.
+            Action: plugin.search
+            Action Input: {"keyword":"web search"}
+
+            Observation: Found plugins: tavily-plugin (web search), hermes-plugin (multi-engine search)
+
+            Thought: Found search plugins. Let me install tavily-plugin.
+            Action: plugin.install
+            Action Input: {"id":"tavily-plugin"}
+
+            Observation: tavily-plugin installed successfully.
+
+            Final Answer: Web search plugin installed. You can now use tavily.search. What should I search for?
+        """.trimIndent()
+
         val CHINESE_PROMPT = """
             你是檬爪 MengPaw
             你通过 CLI 命令操控设备。
@@ -72,6 +269,8 @@ class PromptEngine {
             Final Answer: （最终答案）
 
             使用中文思考和输出。
+
+            **注意**：每次任务有步数限制，请在接近限制时主动给出当前最佳答案，避免因步数耗尽而中断。
         """.trimIndent()
 
         val ENGLISH_PROMPT = """
@@ -97,6 +296,8 @@ class PromptEngine {
             Final Answer: (your final response)
 
             Think and respond in English.
+
+            **Note**: You have a limited number of steps per task. Provide your best answer proactively when approaching the limit to avoid interruption.
         """.trimIndent()
     }
 
