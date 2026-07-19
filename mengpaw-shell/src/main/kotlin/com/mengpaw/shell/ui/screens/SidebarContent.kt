@@ -233,7 +233,7 @@ fun SidebarContent(
         SidebarNavItem(Icons.Outlined.Terminal, "CLI 参考", onClick = {})
 
         Spacer(Modifier.weight(1f))
-        Text("MengPaw v0.2.1 · ACP 已启用", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(bottom = ArcoSpacing.sm))
+        Text("MengPaw v0.2.2 · ACP 已启用", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(bottom = ArcoSpacing.sm))
     }
 }
 

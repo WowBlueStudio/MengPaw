@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.2.2 (2026-07-20) — MengPaw Shell
+
+### 致命漏洞修复
+- **DataPaths 路径 Crash**：`/Android/data/...` 硬编码路径在真实设备上不存在 → 改为 `Context.filesDir` 动态初始化
+- **文件 IO 全量保护**：所有 `readText()` 调用包裹 try/catch，防止文件损坏闪退
+- **EventReceiver 内存泄漏**：新增 `unregister()`，修复永不注销的广播接收器
+- **HttpClient 泄漏**：`AgentViewModel.onCleared()` 中关闭所有 Ktor 客户端
+- **跨智能体状态串扰**：`isRunning` 从全局共享改为每 `AgentSession` 独立
+- **BrowserActivity NPE**：两处 SharedPreferences `!!` 改为安全默认值
+- **BigBangPopup NPE**：`ClipboardManager` 强制转型改为 `as?`
+- **框架通讯录**：移除假数据，空态显示"你的智能体还没有朋友"
+
 ## v0.2.1 (2026-07-20) — MengPaw Shell
 
 > **勘误**：MengPaw 浏览器此前误标为 v1.0.0，实际为首个公开发布版本，已更正为 v0.1.0。
