@@ -29,7 +29,9 @@ class AgentSession(
     var provider: LlmProvider,
     val engine: AgentEngine,
     val messages: MutableStateFlow<List<ChatMessageUi>>,
-    val scrollContext: ScrollContextManager
+    val scrollContext: ScrollContextManager,
+    val isRunning: MutableStateFlow<Boolean> = MutableStateFlow(false),
+    val inputEnabled: MutableStateFlow<Boolean> = MutableStateFlow(true)
 )
 
 /**
@@ -37,6 +39,14 @@ class AgentSession(
  * Manages multiple agent sessions — each agent has its own AgentEngine and message history.
  */
 class AgentViewModel : ViewModel() {
+
+    override fun onCleared() {
+        super.onCleared()
+        // Close all HTTP clients to prevent resource leaks
+        sessions.values.forEach { session ->
+            try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) {}
+        }
+    }
 
     // ── Global LLM config (shared across new agents as default) ──
     private var globalEndpoint: String = ""
@@ -205,8 +215,9 @@ class AgentViewModel : ViewModel() {
      */
     fun submitTask(task: String, pluginViewModel: PluginViewModel? = null, maxSteps: Int = 50) {
         if (task.isBlank() || _isRunning.value) return
-
         val session = activeSession()
+        if (session.isRunning.value) return
+
         session.messages.value = session.messages.value + ChatMessageUi.User(task)
 
         viewModelScope.launch {
@@ -286,23 +297,23 @@ class AgentViewModel : ViewModel() {
             session.engine.state.collect { state ->
                 when (state) {
                     is AgentState.Idle -> {
-                        _isRunning.value = false
-                        _inputEnabled.value = true
+                        session.isRunning.value = false; _isRunning.value = false
+                        session.inputEnabled.value = true; _inputEnabled.value = true
                         com.mengpaw.plugin.pad.PadPlugin.updateState(com.mengpaw.plugin.pad.PadPlugin.DotState.IDLE)
                     }
                     is AgentState.Running -> {
-                        _isRunning.value = true
-                        _inputEnabled.value = false
+                        session.isRunning.value = true; _isRunning.value = true
+                        session.inputEnabled.value = false; _inputEnabled.value = false
                         com.mengpaw.plugin.pad.PadPlugin.updateState(com.mengpaw.plugin.pad.PadPlugin.DotState.WORKING)
                     }
                     is AgentState.Finished -> {
-                        _isRunning.value = false
-                        _inputEnabled.value = true
+                        session.isRunning.value = false; _isRunning.value = false
+                        session.inputEnabled.value = true; _inputEnabled.value = true
                         com.mengpaw.plugin.pad.PadPlugin.updateState(com.mengpaw.plugin.pad.PadPlugin.DotState.IDLE)
                     }
                     is AgentState.Error -> {
-                        _isRunning.value = false
-                        _inputEnabled.value = true
+                        session.isRunning.value = false; _isRunning.value = false
+                        session.inputEnabled.value = true; _inputEnabled.value = true
                         session.messages.value = session.messages.value + ChatMessageUi.Agent("⚠️ ${state.message}")
                         com.mengpaw.plugin.pad.PadPlugin.updateState(com.mengpaw.plugin.pad.PadPlugin.DotState.ERROR)
                     }

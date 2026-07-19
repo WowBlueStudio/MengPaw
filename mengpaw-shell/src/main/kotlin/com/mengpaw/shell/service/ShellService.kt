@@ -42,6 +42,7 @@ class ShellService : Service() {
 
     override fun onDestroy() {
         powerReceiver?.let { unregisterReceiver(it) }
+        EventReceiver.unregister(this)
         super.onDestroy()
     }
 

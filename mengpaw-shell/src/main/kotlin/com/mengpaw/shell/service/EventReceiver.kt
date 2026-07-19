@@ -27,8 +27,12 @@ import java.io.File
 class EventReceiver : BroadcastReceiver() {
 
     companion object {
+        @Volatile
+        private var registered: EventReceiver? = null
+
         /** Register for all supported system events. Call once at app startup. */
         fun register(context: Context) {
+            if (registered != null) return
             val receiver = EventReceiver()
             val filter = IntentFilter().apply {
                 addAction(Intent.ACTION_POWER_CONNECTED)
@@ -42,6 +46,12 @@ class EventReceiver : BroadcastReceiver() {
                 addDataScheme("package")
             }
             context.registerReceiver(receiver, filter)
+            registered = receiver
+        }
+
+        fun unregister(context: Context) {
+            registered?.let { try { context.unregisterReceiver(it) } catch (_: Exception) {} }
+            registered = null
         }
     }
 
@@ -57,7 +67,7 @@ class EventReceiver : BroadcastReceiver() {
                 TriggerEngine.onSystemWake()
                 // 触发梦境模式 — 整理记忆、归档、摘要
                 try {
-                    val result = com.mengpaw.core.agent.DreamEngine.dream("agent-001")
+                    val result = com.mengpaw.core.agent.DreamEngine.dream("MengPaw")
                     android.util.Log.d("EventReceiver", "Dream: reviewed=${result.memoriesReviewed} archived=${result.archived}")
                 } catch (e: Exception) {
                     android.util.Log.w("EventReceiver", "Dream failed: ${e.message}")
