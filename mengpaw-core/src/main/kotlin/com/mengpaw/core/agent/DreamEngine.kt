@@ -82,7 +82,7 @@ object DreamEngine {
         val memory = AgentDocs.readMemoryDoc(agentName)
         if (memory.isNotBlank()) parts.add("## 记忆\n${memory.take(800)}")
         val profile = File(agentsDir, "$agentName/PROFILE.md")
-        if (profile.exists()) parts.add("## 档案\n${profile.readText().take(600)}")
+        if (profile.exists()) parts.add("## 档案\n${try { profile.readText().take(600) } catch (_: Exception) { "" }}")
         if (parts.isEmpty()) return null
         val combined = parts.joinToString("\n\n")
         return if (combined.length > MAX_CONTEXT_CHARS) combined.take(MAX_CONTEXT_CHARS) else combined
@@ -93,7 +93,7 @@ object DreamEngine {
             val dir = File(agentsDir, agentName); if (!dir.exists()) dir.mkdirs()
             val entry = "\n---\n## ${DATE_FMT.format(Date())}\n\n$content\n"
             val file = File(dir, "DREAM.md")
-            val existing = if (file.exists()) file.readText() else "# $agentName · 梦境记录\n"
+            val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else "# $agentName · 梦境记录\n"
             file.writeText(entry + existing)
         } catch (_: Exception) {}
     }
@@ -154,7 +154,7 @@ object DreamEngine {
         val memFile = File(agentDir, "Memory.md")
         val archiveFile = File(agentDir, "Memory.archive.md")
         if (!memFile.exists()) return MemResult(0, 0, 0, 0, 0)
-        val records = parseMemories(memFile.readText())
+        val records = parseMemories(try { memFile.readText() } catch (_: Exception) { "" })
         val reviewed = records.size
         var tagsAdded = 0; var linksFound = 0; var archived = 0; var summarized = 0
 

@@ -67,8 +67,8 @@ class DreamWorker(
             return Result.failure()
         }
 
-        // Find all agent directories
-        val agentsDir = File(applicationContext.filesDir.parent, "Agent文档")
+        // Find all agent directories using DataPaths
+        val agentsDir = File(com.mengpaw.core.DataPaths.AGENTS)
         if (!agentsDir.exists()) return Result.success()
 
         val agentDirs = agentsDir.listFiles()?.filter {
@@ -93,7 +93,7 @@ class DreamWorker(
         val storage = DreamEngine.storageReport()
 
         // Persist to dream log for agent inspection
-        val logFile = File(applicationContext.filesDir.parent, "Agent文档/dream.log")
+        val logFile = File(com.mengpaw.core.DataPaths.AGENTS, "dream.log")
         logFile.parentFile?.mkdirs()
         logFile.appendText(
             "${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())} " +

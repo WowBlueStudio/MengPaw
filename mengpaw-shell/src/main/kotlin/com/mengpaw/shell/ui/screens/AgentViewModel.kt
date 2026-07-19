@@ -119,7 +119,7 @@ class AgentViewModel : ViewModel() {
 
     private fun activeSession(): AgentSession {
         ensureDefaultSession()
-        return sessions[_activeAgentName] ?: sessions["MengPaw"]!!
+        return sessions.getOrPut(_activeAgentName) { createSession(_activeAgentName, null) }
     }
 
     // ── Observable state (backed by active session) ──

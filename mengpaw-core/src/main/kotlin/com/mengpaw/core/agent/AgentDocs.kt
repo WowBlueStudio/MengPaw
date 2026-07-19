@@ -28,19 +28,19 @@ object AgentDocs {
     /** Read the content of AGENTS.md for a given agent, or return the default. */
     fun readAgentsDoc(agentName: String): String {
         val file = File(DataPaths.AGENTS, "$agentName/AGENTS.md")
-        return if (file.exists()) file.readText() else agentsTemplate(agentName)
+        return if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else agentsTemplate(agentName)
     }
 
     /** Read SOUL.md content. */
     fun readSoulDoc(agentName: String): String {
         val file = File(DataPaths.AGENTS, "$agentName/SOUL.md")
-        return if (file.exists()) file.readText() else soulTemplate(agentName)
+        return if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else soulTemplate(agentName)
     }
 
     /** Read MEMORY.md content. */
     fun readMemoryDoc(agentName: String): String {
         val file = File(DataPaths.AGENTS, "$agentName/MEMORY.md")
-        return if (file.exists()) file.readText() else ""
+        return if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
     }
 
     private fun writeIfMissing(file: File, content: String) {

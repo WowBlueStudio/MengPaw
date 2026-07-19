@@ -114,30 +114,11 @@ fun SidebarContent(
         Text("框架通讯录", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(ArcoSpacing.sm))
 
-        val frameworks = remember {
-            listOf(
-                FrameworkContact(
-                    name = "我的平板",
-                    address = "192.168.0.100:9876",
-                    online = true,
-                    trusted = true,
-                    agents = listOf("平板-Agent", "平板-翻译")
-                ),
-                FrameworkContact(
-                    name = "同事的工作站",
-                    address = "192.168.0.101:9876",
-                    online = false,
-                    trusted = false,
-                    agents = listOf("分析助手")
-                ),
-                FrameworkContact(
-                    name = "实验室服务器",
-                    address = "10.0.0.50:9876",
-                    online = true,
-                    trusted = true,
-                    agents = listOf("数据清洗", "模型训练", "部署Agent")
-                )
-            )
+        val frameworks = remember { mutableStateListOf<FrameworkContact>() }
+
+        if (frameworks.isEmpty()) {
+            Text("你的智能体还没有朋友", style = MaterialTheme.typography.bodySmall,
+                color = ThemeColors.textSecondary, modifier = Modifier.padding(vertical = ArcoSpacing.sm))
         }
 
         frameworks.forEach { framework ->

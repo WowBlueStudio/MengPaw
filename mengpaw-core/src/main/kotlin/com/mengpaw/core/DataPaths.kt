@@ -29,53 +29,39 @@ package com.mengpaw.core
  *   └── mengpaw.sock           ← Unix Socket (Termux IPC)
  */
 object DataPaths {
-    const val BASE = "/Android/data/com.mengpaw"
+    /** Set by the app on startup. Falls back to `/sdcard/MengPaw` if not initialized. */
+    @Volatile
+    var BASE: String = "/sdcard/MengPaw"
+        private set
+
+    /** Must be called in Application.onCreate() or MainActivity.onCreate(). */
+    fun initialize(context: android.content.Context) {
+        BASE = context.filesDir.absolutePath
+    }
 
     /** 记忆数据 — memory-plugin markdown 文件 */
-    const val MEMORIES = "$BASE/记忆数据"
-
-    /** 技能剧本 — skill-plugin YAML+markdown 文件 */
-    const val SKILLS = "$BASE/技能剧本"
-
-    /** 会话检查点 — session checkpoint JSON */
-    const val CHECKPOINTS = "$BASE/会话检查点"
-
-    /** 截图存档 — UI screenshots */
-    const val SCREENSHOTS = "$BASE/截图存档"
-
-    /** 插件仓库 — 下载的插件 JAR + manifests */
-    const val PLUGIN_CACHE = "$BASE/插件仓库"
-
-    /** Agent文档 — Agents.md/Soul.md/Profile.md/Memory.md/CLI.md */
-    const val AGENTS = "$BASE/Agent文档"
-
-    /** Unix domain socket for Termux IPC */
-    const val SOCKET = "$BASE/mengpaw.sock"
-
-    /** Agent 收件箱 (inbox) */
-    const val AGENT_INBOX = "$AGENTS/inbox"
-
-    /** 多智能体协作 — team 目录 */
-    const val TEAM = "$AGENTS/team"
-    const val TEAM_INBOX = "$TEAM/inbox"
-    const val TEAM_MEMOS = "$TEAM/memos"
-
-    /** 子 Agent 孵化器 */
-    const val INCUBATOR = "$AGENTS/incubator"
-
-    /** ACP 信任设备目录 */
-    const val ACP_TRUSTED = "$AGENTS/acp/trusted"
-
-    /** 插件输出目录 */
-    const val COMFY_WORKFLOWS = "$PLUGIN_CACHE/comfy/workflows"
-    const val COMFY_OUTPUTS = "$PLUGIN_CACHE/comfy/outputs"
-    const val RENDER_OUTPUTS = "$PLUGIN_CACHE/renders"
-    const val WORKFLOW_DIR = "$PLUGIN_CACHE/workflows"
-    const val WORKFLOW_OUTPUTS = "$PLUGIN_CACHE/workflows/outputs"
+    val MEMORIES get() = "$BASE/记忆数据"
+    val SKILLS get() = "$BASE/技能剧本"
+    val CHECKPOINTS get() = "$BASE/会话检查点"
+    val SCREENSHOTS get() = "$BASE/截图存档"
+    val PLUGIN_CACHE get() = "$BASE/插件仓库"
+    val AGENTS get() = "$BASE/Agent文档"
+    val SOCKET get() = "$BASE/mengpaw.sock"
+    val AGENT_INBOX get() = "$AGENTS/inbox"
+    val TEAM get() = "$AGENTS/team"
+    val TEAM_INBOX get() = "$TEAM/inbox"
+    val TEAM_MEMOS get() = "$TEAM/memos"
+    val INCUBATOR get() = "$AGENTS/incubator"
+    val ACP_TRUSTED get() = "$AGENTS/acp/trusted"
+    val COMFY_WORKFLOWS get() = "$PLUGIN_CACHE/comfy/workflows"
+    val COMFY_OUTPUTS get() = "$PLUGIN_CACHE/comfy/outputs"
+    val RENDER_OUTPUTS get() = "$PLUGIN_CACHE/renders"
+    val WORKFLOW_DIR get() = "$PLUGIN_CACHE/workflows"
+    val WORKFLOW_OUTPUTS get() = "$PLUGIN_CACHE/workflows/outputs"
 
     // ── Plugin-specific storage ───────────────────────────────────
 
-    fun pluginDir(pluginId: String): String = "$PLUGIN_CACHE/${pluginFolderName(pluginId)}"
+    fun pluginDir(pluginId: String): String = "${PLUGIN_CACHE}/${pluginFolderName(pluginId)}"
 
     /** Human-readable folder name from plugin ID. */
     fun pluginFolderName(pluginId: String): String = when (pluginId) {
