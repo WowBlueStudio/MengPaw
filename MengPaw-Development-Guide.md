@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.2.2 | **更新**: 2026-07-19 | **定位**: Android Agent 框架 — 多智能体会话隔离 + 跨模型缓存优化 + 中间件架构 + Markdown/Emoji 渲染 + Dream 梦境模式 + 框架通讯录
+> **版本**: 0.2.2 | **更新**: 2026-07-19 | **定位**: Android Agent 框架 — 多智能体会话隔离 + 跨模型缓存优化 + 中间件架构 + 自建插件 CLI + Agent 文档系统 + Dream 梦境模式 + 框架通讯录
 
 ---
 
@@ -554,28 +554,24 @@ Agent 通过 memory 命令按需加载文档，而非一次性加载全部上下
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| 0.2.0-alpha | 2026-07-16 | **微内核+插件架构**：Plugin 框架、PluginManager、PluginMarketplaceClient、plugin.* 命令族(10)、9 个独立插件模块、AgentEngine 解耦 Pipeline |
-| 0.2.0-alpha | 2026-07-17 | **UI重构+语音体系+梦境模式+安全增强**：左侧边栏(Agent切换/ACP通讯录)、底部扩展面板、语音体系(TTS合成/音频输入/语音通话)、梦境模式(QwenPaw启发,永不删除原文)、Zero-overhead事件监听(电源/WiFi/存储/应用)、GPU硬件加速+低功耗后台、21插件体系、QwenPaw安全规则(Core:14类Shell拦截+14模式Prompt注入+Unicode注入/Plugin:Skill扫描) |
-| 0.2.0-alpha | 2026-07-17 | **多Agent协作+ACP设备间加密通信**：Hermes多Agent协作(发现/委派/组队)、PromptFirewall访客隔离、ACP AES-256-CBC加密+自动降级明文、MCP双向客户端(OpenClaw/QwenPaw/Office)、触发器引擎(Cron+真人感Lifetime)、Settings触发器可视编辑、多模型供应商管理 |
-| 0.2.0-alpha | 2026-07-16 | **审美优化+响应式+深浅主题**：ThemeColors 动态存取器、5级 Tonal Surface、WindowSizeClass 响应式导航、Browser 设计统一、状态栏 insets 修复 |
-| 0.2.0-alpha | 2026-07-16 | **目录收敛+系统接口**：DataPaths 傻瓜式目录(/Android/data/...)、sys.* 系统信息(11命令)、按需权限、vision/audio 插件、IntegrityGuard 微内核保护、Agent 文档系统、MCP/ACP 协议 |
-| 0.2.0-alpha | 2026-07-16 | **UI 重构**：PluginMarketScreen(双Tab+安装进度)、PluginDetailScreen、自适应建议卡片、MainScreen 精简 |
-| 0.1.0-alpha | 2026-07-13 | 完整实现：CLI 引擎、Chat UI、设置、记忆、Skill、独立浏览器、跨 APK 通信、R8 瘦身 |
-| 0.1.0-alpha | 2026-07-16 | 新增 clipboard/notification 命名空间、AdaptiveLlmProvider 降级链、Prefix Cache 优化、计划执行模式、对话压缩、被动索引系统、测试增至 86 |
+| **0.2.2** | 2026-07-19 | **致命漏洞修复 + 插件开发体系**: DataPaths 动态初始化(修复闪退)、4轮安全审计(EventReceiver/HttpClient/状态串扰)、plugin-dev CLI(create/audit/share)、PLUGIN_DEV_GUIDE.md(安全规则+UI规范+模板) |
+| 0.2.1 | 2026-07-19 | **多智能体+缓存优化+Dream模式**: 多会话架构(AgentSession隔离)、Reasonix 四级折叠、跨模型CacheStrategy、ScrollContext索引、中间件链、PromptBuilder锚点、DreamWorker充电触发、Markdown/Emoji渲染、框架通讯录层级、BigBangPopup |
+| 0.2.0-alpha | 2026-07-17 | **UI重构+语音体系+梦境模式+安全增强**：左侧边栏、底部扩展面板、语音体系、梦境模式、Zero-overhead事件监听、21插件体系、QwenPaw安全规则 |
+| 0.2.0-alpha | 2026-07-17 | **多Agent协作+ACP**: Hermes多Agent协作、PromptFirewall、ACP加密通信、MCP双向客户端、触发器引擎、多模型供应商管理 |
+| 0.2.0-alpha | 2026-07-16 | **微内核+插件架构**：Plugin框架、PluginManager、PluginMarketplaceClient、plugin.* 命令族、9个独立插件模块、AgentEngine解耦Pipeline |
+| 0.2.0-alpha | 2026-07-16 | **审美优化+深浅主题**: ThemeColors、WindowSizeClass、Browser设计统一、状态栏insets |
+| 0.2.0-alpha | 2026-07-16 | **目录收敛+系统接口**: DataPaths、sys.* 系统信息、vision/audio插件、IntegrityGuard、Agent文档系统、MCP/ACP |
+| 0.1.0-alpha | 2026-07-13 | 完整实现：CLI引擎、Chat UI、设置、记忆、Skill、独立浏览器、跨APK通信、R8瘦身 |
 
 ## 附录 B: 审校记录
 
 | 日期 | 审校项 | 结果 |
 |------|--------|------|
-| 2026-07-12 | 代码静态审查 | contentDescription→中文、移除废弃 package |
-| 2026-07-12 | 全量编译+测试 | BUILD SUCCESSFUL |
-| 2026-07-12 | UI 中文全覆盖 | 所有硬编码英文已替换 |
-| 2026-07-13 | APK 轻量化 | Debug 21MB, Release 6.8MB (-68%) |
-| 2026-07-13 | 跨 APK 通信 | 两个 APK 互相唤醒/跳转 |
-| 2026-07-13 | 被动索引系统 | tool-index/skill-index/cli-reference |
-| 2026-07-13 | 内存优化 | MemoryManager LRU, SessionManager 200 上限 |
-| 2026-07-16 | 全量源码审查+文档增量更新 | 修正文件数/命令数/测试数，补充 9 项新特性，移除不存在的 PreviewScreen |
+| 2026-07-19 | 四审四校 Crash漏洞 | DataPaths路径/文件IO/EventReceiver/HttpClient/状态串扰/!!空安全/假数据 — 全部修复 |
+| 2026-07-19 | 插件版本统一 | 16插件回调至0.1.0，遵循SemVer |
+| 2026-07-19 | 代码静态审查 | 无硬编码路径、无!!强制解包、全量readText()保护 |
+| 2026-07-16 | 全量源码审查+文档增量更新 | 修正文件数/命令数/测试数，补充9项新特性 |
 
 ---
 
-*文档结束 · 最后更新: 2026-07-16*
+*文档结束 · 最后更新: 2026-07-19*
