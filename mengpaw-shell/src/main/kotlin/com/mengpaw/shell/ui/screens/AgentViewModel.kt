@@ -349,7 +349,7 @@ class AgentViewModel : ViewModel() {
         return when (msg) {
             is ChatMessageUi.User -> "> 用户说: ${msg.content.take(200)}"
             is ChatMessageUi.Agent -> "> Agent 回复: ${msg.content.take(200)}"
-            is ChatMessageUi.AgentWithTrace -> "> Agent 回复: ${msg.content.take(200)}"
+            is ChatMessageUi.AgentWithTrace -> "> Agent 回复: ${msg.finalContent.take(200)}"
             else -> ""
         }
     }
