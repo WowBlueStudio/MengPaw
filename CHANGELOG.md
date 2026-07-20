@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.4.0 (2026-07-21) — 全项目安全加固 + UI/AI 层深度修复
+
+### 安全修复 (38 项)
+- **WebView 安全**: 禁用混合内容, SSL 证书错误拒绝, 移除 JS Bridge eval() 暴露, URL scheme 白名单, 文件访问限制, 第三方 Cookie 禁用
+- **网络安全**: NetPlugin SSRF 防护 (URL scheme 白名单 + 私有 IP 黑名单 + 禁用重定向)
+- **文件系统**: FsPlugin 路径沙箱 (canonicalFile + workDir 限制 + 符号链接检测 + 50MB 读上限)
+- **API Key**: Vault 加密存储替代明文 SharedPreferences (Shell/TV/DreamWorker), 禁用 allowBackup, Sanitizer 密钥脱敏
+- **ACP 加密**: 设备指纹改用 Build.FINGERPRINT SHA-256 哈希, Android 10+ 兼容
+- **插件安全**: APK 签名验证 (安装前), ProcessBuilder 命令白名单, 插件市场 HTTPS
+
+### Agent 层修复 (11 项 CRITICAL)
+- AgentEngine: snipStaleToolResults 步数修复, stop() 真正取消协程, planExecute 跨步骤上下文, compactStuck 不泄漏
+- SessionManager: compressIfNeeded 快照防并发丢失
+- PromptEngine: Final Answer 只在最后位置返回, 循环检测
+- LlmRequestBuilder: buildRequest 正确传递 cache_control 和 _image 字段
+- AgentDocs: 统一小写文件名 (与 AgentDocManager 一致)
+- DreamEngine: 延迟路径获取 (避免 object 初始化时固化)
+- PluginManager: 生命周期回调, install 允许覆盖更新
+
+### UI 层修复 (15 项 CRITICAL)
+- 聊天界面: 消息响应式绑定修复 (_messages 断开), 滚动索引修复, LazyColumn key
+- 浏览器: 标签页切换修复 (key activeTabId), WebView 泄漏修复 (DisposableEffect), 协程泄漏修复
+- 设置: ProviderCard 折叠状态, triggers 响应式刷新, 暗色模式颜色修复
+- TV: MainScope → lifecycleScope 泄漏修复
+- BigBangPopup: 重复词选择 Bug, selectedIndices 越界修复
+- PadPlugin: 闪烁动画修复 (InfiniteTransition), R8 安全 Intent, Manifest 服务声明
+
+### 按钮系统 (25 项)
+- 12 个空操作按钮获得实际功能 (文件选择器/相机/电池优化/测试连接/广告拦截持久化)
+- 插件按钮声明系统: PluginUiButton + ButtonPlacement 枚举, 未安装插件自动隐藏按钮
+- 5 个 Stub/Mock 按钮修复 (testConnection 真实 API 调用, 翻译/升级/DevPlugin)
+
+### 基础设施
+- R8 混淆启用 (Shell + Browser) + ProGuard 规则
+- 版本号: Shell 0.3.4→0.4.0, Browser 0.2.2→0.3.0
+- 审计方法论固化到 memory/bug-audit-methodology.md
+
+---
+
 ## v0.3.0 (2026-07-20) — MengPaw Shell + MP 浏览器 v0.2.0
 
 ### 新模块

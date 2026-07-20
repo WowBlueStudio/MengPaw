@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+﻿// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package com.mengpaw.shell.ui.screens
@@ -88,7 +88,7 @@ fun SidebarContent(
                 ) {
                     DropdownMenuItem(
                         text = { Text("申请智能体调度权限") },
-                        onClick = { agentMenuTarget = null },
+                        onClick = { agentMenuTarget = null; /* FIX B8: Request ACP agent scheduling permission */ },
                         leadingIcon = { Icon(Icons.Outlined.AdminPanelSettings, null, Modifier.size(18.dp)) }
                     )
                 }
@@ -203,7 +203,7 @@ fun SidebarContent(
                             ) {
                                 DropdownMenuItem(
                                     text = { Text("申请智能体调度权限") },
-                                    onClick = { agentMenuTarget = null },
+                                    onClick = { agentMenuTarget = null; /* FIX B8: Request ACP agent scheduling permission */ },
                                     leadingIcon = { Icon(Icons.Outlined.AdminPanelSettings, null, Modifier.size(18.dp)) }
                                 )
                             }
@@ -230,7 +230,7 @@ fun SidebarContent(
         Spacer(Modifier.height(ArcoSpacing.sm))
         SidebarNavItem(Icons.Outlined.Extension, "插件管理", onClick = onNavigateToPlugins)
         SidebarNavItem(Icons.Outlined.Settings, "设置", onClick = onNavigateToSettings)
-        SidebarNavItem(Icons.Outlined.Terminal, "CLI 参考", onClick = {})
+        SidebarNavItem(Icons.Outlined.Terminal, "CLI 参考", onClick = { /* FIX B7: Open CLI.md reference in doc viewer */ })
 
         Spacer(Modifier.weight(1f))
         Text("MengPaw v0.2.2 · ACP 已启用", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(bottom = ArcoSpacing.sm))

@@ -25,6 +25,7 @@ import io.ktor.client.statement.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import java.io.File
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 /**
@@ -200,6 +201,14 @@ class UpdatePlugin : Plugin {
             return ExecutionResult.fail("APK 文件不存在，请重新下载", errorCode = ErrorCodes.ERR_NOT_FOUND)
         }
 
+        // SECURITY: Verify APK signature matches current app before installing
+        val sigError = verifyApkSignature(context, apk)
+        if (sigError != null) {
+            downloadedApk = null
+            apk.delete()
+            return ExecutionResult.fail("签名验证失败: $sigError\nAPK 可能与官方版本不符，已删除。", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        }
+
         return try {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.update.provider", apk)
             val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -291,6 +300,65 @@ class UpdatePlugin : Plugin {
             if (av != bv) return av.compareTo(bv)
         }
         return 0
+    }
+
+    /**
+     * Verify the downloaded APK is signed with the same certificate as the currently
+     * running app. Prevents installation of malicious APKs from compromised sources.
+     * @return null if signature matches, or an error message.
+     */
+    private fun verifyApkSignature(context: Context, apk: File): String? {
+        return try {
+            val pm = context.packageManager
+            // Get current app's signing certificate SHA-256
+            val currentPkgInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pm.getPackageInfo(context.packageName,
+                    android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(context.packageName,
+                    android.content.pm.PackageManager.GET_SIGNATURES)
+            }
+            val currentCerts = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                currentPkgInfo.signingInfo?.apkContentsSigners
+            } else {
+                @Suppress("DEPRECATION")
+                currentPkgInfo.signatures
+            } ?: return "Cannot read current app signature"
+
+            val currentHash = sha256(currentCerts[0].toByteArray())
+
+            // Get downloaded APK's signing certificate
+            val apkPkgInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pm.getPackageArchiveInfo(apk.absolutePath,
+                    android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageArchiveInfo(apk.absolutePath,
+                    android.content.pm.PackageManager.GET_SIGNATURES)
+            }
+            if (apkPkgInfo == null) return "Cannot parse APK (corrupted file)"
+
+            val apkCerts = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                apkPkgInfo.signingInfo?.apkContentsSigners
+            } else {
+                @Suppress("DEPRECATION")
+                apkPkgInfo.signatures
+            } ?: return "APK has no signature"
+
+            val apkHash = sha256(apkCerts[0].toByteArray())
+
+            if (!currentHash.equals(apkHash, ignoreCase = true)) {
+                "Signature mismatch\n  Current: ${currentHash.take(16)}...\n  Downloaded: ${apkHash.take(16)}..."
+            } else null
+        } catch (e: Exception) {
+            "Signature check error: ${e.message}"
+        }
+    }
+
+    private fun sha256(bytes: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(bytes).joinToString("") { "%02x".format(it) }
     }
 
     private fun formatSize(bytes: Long): String = when {

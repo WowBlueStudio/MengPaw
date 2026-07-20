@@ -55,28 +55,108 @@ class IntegrityGuard(
     /** Whether init() has been called. */
     private var initialized = false
 
+    /** Cached Android context for APK signature verification. */
+    private var appContext: android.content.Context? = null
+
     /**
-     * Initialize the integrity guard by computing baseline hashes.
-     * Must be called once at app startup before any Agent commands execute.
+     * Initialize the integrity guard.
+     * - On JVM/Desktop: computes baseline SHA-256 hashes of core .kt source files.
+     * - On Android: stores context for APK signature verification (source files don't
+     *   exist as .kt on disk; they are compiled into the DEX).
      */
-    fun init() {
+    fun init(context: android.content.Context? = null) {
         baselineHashes.clear()
+        appContext = context
+
+        // Desktop path: hash .kt source files
         trackedFiles.forEach { name ->
             val file = File(coreDir, name)
             if (file.exists()) {
                 baselineHashes[name] = sha256(file)
             }
         }
+
+        // Android path: verify APK signature via PackageManager
+        if (context != null && baselineHashes.isEmpty()) {
+            try {
+                val pm = context.packageManager
+                val packageName = context.packageName
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    val signingInfo = pm.getPackageInfo(packageName,
+                        android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES).signingInfo
+                    if (signingInfo != null && signingInfo.hasMultipleSigners()) {
+                        // Multiple signers may indicate tampering
+                        initialized = true // mark initialized but fail verify()
+                        return
+                    }
+                    val certs = signingInfo?.apkContentsSigners ?: signingInfo?.signingCertificateHistory
+                    if (certs != null && certs.isNotEmpty()) {
+                        // Store the first signing certificate's SHA-256 as baseline
+                        baselineHashes["android:apk-signature"] = sha256(certs[0].toByteArray())
+                        android.util.Log.i("IntegrityGuard",
+                            "APK signature baseline established: ${baselineHashes["android:apk-signature"]?.take(16)}...")
+                    }
+                } else {
+                    // API 26-27: use deprecated GET_SIGNATURES
+                    @Suppress("DEPRECATION")
+                    val pkgInfo = pm.getPackageInfo(packageName,
+                        android.content.pm.PackageManager.GET_SIGNATURES)
+                    val sigs = pkgInfo.signatures
+                    if (sigs != null && sigs.isNotEmpty()) {
+                        baselineHashes["android:apk-signature"] = sha256(sigs[0].toByteArray())
+                        android.util.Log.i("IntegrityGuard",
+                            "APK signature baseline (legacy): ${baselineHashes["android:apk-signature"]?.take(16)}...")
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("IntegrityGuard", "Cannot verify APK signature: ${e.message}")
+            }
+        }
         initialized = true
+    }
+
+    /** Compute SHA-256 of a byte array (for APK certificate). */
+    private fun sha256(data: ByteArray): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        return digest.digest(data).joinToString("") { "%02x".format(it) }
     }
 
     /**
      * Verify that all tracked core files match their baseline hashes.
+     * - On Desktop: checks .kt source file hashes.
+     * - On Android: verifies APK signing certificate matches baseline.
      * @return true if integrity is intact, false if any file has been modified
      *         OR if the guard was never initialized (fail-secure).
      */
     fun verify(): Boolean {
         if (!initialized) return false // Fail-secure: reject if never initialized
+
+        // Android path: re-verify APK signature
+        val ctx = appContext
+        if (ctx != null && baselineHashes.containsKey("android:apk-signature")) {
+            return try {
+                val pm = ctx.packageManager
+                val currentHash = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    val signingInfo = pm.getPackageInfo(ctx.packageName,
+                        android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES).signingInfo
+                    val certs = signingInfo?.apkContentsSigners ?: signingInfo?.signingCertificateHistory
+                    if (certs == null || certs.isEmpty()) return false
+                    sha256(certs[0].toByteArray())
+                } else {
+                    @Suppress("DEPRECATION")
+                    val pkgInfo = pm.getPackageInfo(ctx.packageName,
+                        android.content.pm.PackageManager.GET_SIGNATURES)
+                    val sigs = pkgInfo.signatures
+                    if (sigs == null || sigs.isEmpty()) return false
+                    sha256(sigs[0].toByteArray())
+                }
+                val expectedHash = baselineHashes["android:apk-signature"] ?: return false
+                currentHash.equals(expectedHash, ignoreCase = true)
+            } catch (e: Exception) { false }
+        }
+
+        // Desktop path: check file hashes
+        if (baselineHashes.isEmpty()) return initialized // no baselines = nothing to verify
         trackedFiles.forEach { name ->
             val expected = baselineHashes[name] ?: return@forEach
             val file = File(coreDir, name)

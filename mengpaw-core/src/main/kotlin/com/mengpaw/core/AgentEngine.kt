@@ -24,6 +24,7 @@ import com.mengpaw.core.session.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
 
 /**
  * Represents the current state of the agent execution.
@@ -84,6 +85,9 @@ class AgentEngine(
 ) {
     private val _state = MutableStateFlow<AgentState>(AgentState.Idle)
     val state: StateFlow<AgentState> = _state.asStateFlow()
+
+    /** FIX A6: Track running job so stop() can cancel it. */
+    @Volatile private var runningJob: Job? = null
 
     private val _output = MutableStateFlow<String>("")
     val output: StateFlow<String> = _output.asStateFlow()
@@ -180,7 +184,7 @@ class AgentEngine(
      * Includes fold-economics check and stuck-detection per Reasonix compact.go.
      * @return true if folding was performed
      */
-    private suspend fun maybeFoldContext(sessionId: String, promptTokens: Int): Boolean {
+    private suspend fun maybeFoldContext(sessionId: String, promptTokens: Int, currentStep: Int = 0): Boolean {
         if (compactStuck) return false
 
         val ratio = estimateContextRatio(promptTokens)
@@ -199,7 +203,8 @@ class AgentEngine(
 
         // Stage 2: 60%-80% — try snipping stale tool results first
         if (ratio < COMPACT_RATIO) {
-            val snipped = snipStaleToolResults(sessionId, promptTokens.hashCode() % 50)
+            // FIX A1: Use the currentStep parameter passed from the ReAct loop
+            val snipped = snipStaleToolResults(sessionId, currentStep)
             // Snip alone may have brought us under the trigger; no need for full compaction
             return snipped > 0
         }
@@ -354,7 +359,13 @@ class AgentEngine(
         sessionManager.addMessage(session.id, Message("user", task))
 
         try {
+            // FIX A6: Track current coroutine job so stop() can cancel it
+            val job = kotlinx.coroutines.currentCoroutineContext()[Job]
+            runningJob = job
+
             for (step in 0 until maxSteps) {
+                // FIX A6: Check for cancellation via tracked job
+                runningJob?.let { if (!it.isActive) throw kotlinx.coroutines.CancellationException("Agent stopped") }
                 _state.value = AgentState.Running(task, step + 1, maxSteps)
 
                 // 1. THINK: Get LLM response (prefix cache anchored by LlmRequestBuilder)
@@ -383,7 +394,7 @@ class AgentEngine(
                         text = postResult.text.take(6000),
                         headline = postResult.foldReason ?: "Step ${step + 1} context eviction"
                     )
-                    maybeFoldContext(session.id, estimatedTokens)
+                    maybeFoldContext(session.id, estimatedTokens, step + 1)
                 }
 
                 // 2. PARSE: Extract Thought/Action from LLM output
@@ -637,9 +648,12 @@ class AgentEngine(
 
     /**
      * Stop the current agent execution.
+     * FIX A6: Actually cancels the running coroutine, not just sets a flag.
      */
     fun stop() {
         _state.value = AgentState.Idle
+        runningJob?.cancel()
+        runningJob = null
     }
 
     private suspend fun buildConversation(sessionId: String): List<Map<String, String>> {

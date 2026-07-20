@@ -68,6 +68,24 @@ object BrowserPluginRegistry {
 
     fun menuItems(): List<BrowserMenuItem> = plugins.flatMap { it.menuItems() }
 
+    /**
+     * Returns menu items ONLY from plugins that are ACTIVE in the PluginManager.
+     * This ensures uninstalled/disabled plugins don't show dead buttons.
+     * Falls back to all menu items if no PluginManager is bound.
+     */
+    fun activeMenuItems(): List<BrowserMenuItem> {
+        val pm = pluginManager
+        return if (pm != null) {
+            plugins.filter { plugin ->
+                val status = pm.status(plugin.metadata.id)
+                status == PluginStatus.ACTIVE
+            }.flatMap { it.menuItems() }
+        } else plugins.flatMap { it.menuItems() }
+    }
+
+    /** Optional binding to PluginManager for plugin-status-aware filtering. */
+    var pluginManager: PluginManager? = null
+
     fun onLongPress(element: BrowserElement): List<BrowserAction> =
         plugins.flatMap { it.onLongPress(element) }
 

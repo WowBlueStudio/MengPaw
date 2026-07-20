@@ -59,8 +59,21 @@ object McpClient {
         )
     )
 
+    /** SECURITY: Whitelist of known-safe stdio commands. */
+    private val ALLOWED_STDIO_COMMANDS = setOf("openclaw", "python", "python3", "node")
+
     /** Connect to a preset or custom MCP Server. */
     fun connect(id: String, config: McpConnectionConfig): McpConnection {
+        // SECURITY: Validate stdio commands against allowlist
+        if (config.transport == "stdio" && config.command.isNotBlank()) {
+            val cmd = config.command.split(" ").first()
+            if (cmd !in ALLOWED_STDIO_COMMANDS && !java.io.File(config.command).isAbsolute) {
+                throw SecurityException(
+                    "MCP stdio command '$config.command' not allowed. " +
+                    "Use an absolute path or one of: ${ALLOWED_STDIO_COMMANDS.joinToString()}"
+                )
+            }
+        }
         val conn = McpConnection(id, config)
         clients[id] = conn
         return conn

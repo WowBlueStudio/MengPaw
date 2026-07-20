@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- SECURITY: Must declare FloatingDotService for pad.show to work -->
+    <application>
+        <service
+            android:name="com.mengpaw.plugin.pad.FloatingDotService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+    </application>
+</manifest>

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+﻿// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package com.mengpaw.shell.ui.screens
@@ -65,12 +65,18 @@ fun MainScreen(
     val inputEnabled by viewModel.inputEnabled.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showExpandSheet by remember { mutableStateOf(false) }
+    var showMissionOverlay by remember { mutableStateOf(false) }
 
-    val settingsState by settingsViewModel?.state?.collectAsState() ?: remember { mutableStateOf(null) }
-    LaunchedEffect(settingsState) {
-        settingsState?.let { s ->
+    // FIX U17+U6: Derive filtered list once to avoid allocation per recomposition
+    val displayedMessages by remember(messages) {
+        derivedStateOf { messages.filter { it !is ChatMessageUi.System } }
+    }
+
+    val settingsState = settingsViewModel?.state?.collectAsState()
+    LaunchedEffect(settingsState?.value) {
+        settingsState?.value?.let { s ->
             viewModel.configureLlm(
                 s.apiEndpoint, s.apiKey, s.modelName,
                 agentLang = s.effectiveAgentLanguage
@@ -78,16 +84,21 @@ fun MainScreen(
         }
     }
     // React to language-only changes without full reconfig
-    LaunchedEffect(settingsState?.agentLanguageMode, settingsState?.useChinese) {
-        settingsState?.let { s ->
+    LaunchedEffect(settingsState?.value?.agentLanguageMode, settingsState?.value?.useChinese) {
+        settingsState?.value?.let { s ->
             viewModel.setAgentLanguage(s.effectiveAgentLanguage)
         }
     }
 
     var agentName by remember { mutableStateOf("MengPaw") }
     var showHistory by remember { mutableStateOf(false) }
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+    // FIX U2: Scroll uses filtered list size, and only auto-scrolls when user is at bottom
+    LaunchedEffect(displayedMessages.size) {
+        if (displayedMessages.isNotEmpty()) {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val nearBottom = lastVisible >= displayedMessages.size - 3
+            if (nearBottom) listState.animateScrollToItem(displayedMessages.size - 1)
+        }
     }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -137,8 +148,22 @@ fun MainScreen(
                     }
                     // Mission monitor toggle (visible when mission is active)
                     if (com.mengpaw.core.mission.MissionMonitor.missionActive) {
-                        IconButton(onClick = { /* toggle monitor overlay */ }, modifier = Modifier.size(44.dp)) {
-                            Icon(Icons.Outlined.Monitor, "Mission", tint = Color(0xFF165DFF))
+                        IconButton(onClick = { showMissionOverlay = !showMissionOverlay }, modifier = Modifier.size(44.dp)) {
+                            Icon(Icons.Outlined.Monitor, "Mission", tint = ThemeColors.brand)
+                        }
+                    }
+                    // FIX: Dynamic plugin buttons from HEADER_BAR placement
+                    val headerButtons = remember { pluginViewModel.activeButtons[com.mengpaw.core.plugin.ButtonPlacement.HEADER_BAR] ?: emptyList() }
+                    if (headerButtons.isNotEmpty()) {
+                        headerButtons.take(2).forEach { btn ->
+                            IconButton(
+                                onClick = {
+                                    if (btn.command.isNotBlank()) inputText = btn.command
+                                },
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(pluginIconForName(btn.iconName), btn.label, tint = ThemeColors.brand)
+                            }
                         }
                     }
                     IconButton(onClick = onOpenHistory, modifier = Modifier.size(44.dp)) {
@@ -154,7 +179,7 @@ fun MainScreen(
                 state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
                 contentPadding = PaddingValues(vertical = ArcoSpacing.md)
             ) {
-                items(messages.filter { it !is ChatMessageUi.System }) { message ->
+                items(displayedMessages, key = { it.stableId }) { message ->
                     BubbleWrapper(
                         message = message,
                         viewModel = viewModel,
@@ -200,7 +225,7 @@ fun MainScreen(
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ThemeColors.brand, unfocusedBorderColor = ThemeColors.border),
                         minLines = 1, maxLines = 4)
                     // Send button — circular 44dp, animated ↑
-                    val maxSteps = settingsState?.maxSteps ?: 50
+                    val maxSteps = settingsState?.value?.maxSteps ?: 50
                     val scope = rememberCoroutineScope()
                     val sendOffset = remember { Animatable(0f) }
                     val sendAlpha = remember { Animatable(1f) }
@@ -244,11 +269,16 @@ fun MainScreen(
                 Text("扩展功能", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(ArcoSpacing.lg))
 
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    ExpandItem(Icons.Outlined.Image, "图片") {}
-                    ExpandItem(Icons.Outlined.Description, "文档") {}
-                    ExpandItem(Icons.Outlined.AttachFile, "文件") {}
-                    ExpandItem(Icons.Outlined.PhotoCamera, "拍照") {}
+                val sheetButtons = pluginViewModel.activeButtons[com.mengpaw.core.plugin.ButtonPlacement.BOTTOM_SHEET] ?: emptyList()
+                if (sheetButtons.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        sheetButtons.take(4).forEach { btn ->
+                            ExpandItem(pluginIconForName(btn.iconName), btn.label) {
+                                showExpandSheet = false; inputText = btn.command
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(24.dp))
                 }
 
                 Spacer(Modifier.height(24.dp))
@@ -260,7 +290,7 @@ fun MainScreen(
                     Text("暂无已激活插件。在插件管理中安装并启用。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                 } else {
                     installed.take(6).forEach { p ->
-                        Row(Modifier.fillMaxWidth().clickable { showExpandSheet = false }.padding(vertical = ArcoSpacing.sm)) {
+                        Row(Modifier.fillMaxWidth().clickable { showExpandSheet = false; onNavigateToPlugins() }.padding(vertical = ArcoSpacing.sm)) {
                             Icon(Icons.Outlined.Extension, null, Modifier.size(20.dp), tint = ThemeColors.brand)
                             Spacer(Modifier.width(ArcoSpacing.sm))
                             Text(p.name, style = MaterialTheme.typography.bodyMedium)
@@ -466,7 +496,30 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
 // Bubble long-press context menu
 // ═══════════════════════════════════════════════════════════════════════
 
-@OptIn(ExperimentalFoundationApi::class)
+
+// Helper: resolve icon name string to Material ImageVector
+private fun pluginIconForName(name: String): androidx.compose.ui.graphics.vector.ImageVector = when (name.lowercase()) {
+    "image", "photo", "picture" -> Icons.Outlined.Image
+    "search" -> Icons.Outlined.Search
+    "description", "document" -> Icons.Outlined.Description
+    "attachfile", "file" -> Icons.Outlined.AttachFile
+    "camera", "photocamera" -> Icons.Outlined.PhotoCamera
+    "star", "favorite" -> Icons.Outlined.Star
+    "extension" -> Icons.Outlined.Extension
+    "language", "translate" -> Icons.Outlined.Language
+    "terminal", "code" -> Icons.Outlined.Terminal
+    "settings" -> Icons.Outlined.Settings
+    "notifications" -> Icons.Outlined.Notifications
+    "contentpaste", "clipboard" -> Icons.Outlined.ContentPaste
+    "touchapp", "gesture" -> Icons.Outlined.TouchApp
+    "android" -> Icons.Outlined.Android
+    "smarttoy", "robot" -> Icons.Outlined.SmartToy
+    "send" -> Icons.Outlined.Send
+    "share" -> Icons.Outlined.Share
+    "lock" -> Icons.Outlined.Lock
+    "history" -> Icons.Outlined.History
+    else -> Icons.Outlined.Extension
+}@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BubbleWrapper(
     message: ChatMessageUi,

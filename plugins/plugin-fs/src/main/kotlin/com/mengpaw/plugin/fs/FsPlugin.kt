@@ -18,6 +18,12 @@ import java.util.Locale
 /**
  * File system plugin — provides fs.* CLI commands.
  * Pure JVM implementation, zero Android dependencies.
+ *
+ * SECURITY: All paths are sandboxed to the Agent's workDir.
+ * - Symlinks are detected and rejected to prevent escape.
+ * - Path traversal (..) is normalized and validated.
+ * - Absolute paths outside workDir are blocked.
+ * - File reads are capped at 50MB to prevent OOM.
  */
 class FsPlugin : Plugin {
     override val metadata = PluginMetadata(
@@ -43,15 +49,24 @@ class FsPlugin : Plugin {
         "stat" to ::stat
     )
 
+    companion object {
+        private const val MAX_READ_SIZE = 50L * 1024 * 1024 // 50MB cap
+    }
+
     // ── Command handlers ──────────────────────────────────────────────
 
     private suspend fun cat(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: fs cat <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val path = resolvePath(args[0], ctx)
-        val file = File(path)
-        if (!file.exists()) return ExecutionResult.fail("File not found: $path", errorCode = ErrorCodes.ERR_NOT_FOUND)
-        if (!file.canRead()) return ExecutionResult.fail("Permission denied: $path", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        val resolved = resolveSafe(args[0], ctx)
+        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        val file = resolved.file
+        if (!file.exists()) return ExecutionResult.fail("File not found: ${file.name}", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        if (!file.canRead()) return ExecutionResult.fail("Permission denied", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
         return try {
+            if (file.length() > MAX_READ_SIZE) {
+                return ExecutionResult.fail("File too large: ${formatSize(file.length())} (max ${formatSize(MAX_READ_SIZE)})",
+                    errorCode = ErrorCodes.ERR_INVALID_INPUT)
+            }
             ExecutionResult.ok(file.readText())
         } catch (e: Exception) {
             ErrorCollector.report(e, "FsPlugin.cat")
@@ -60,9 +75,11 @@ class FsPlugin : Plugin {
     }
 
     private suspend fun ls(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val path = if (args.isNotEmpty()) resolvePath(args[0], ctx) else ctx.workDir
-        val dir = File(path)
-        if (!dir.isDirectory) return ExecutionResult.fail("Not a directory: $path", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val path = if (args.isNotEmpty()) args[0] else "."
+        val resolved = resolveSafe(path, ctx)
+        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        val dir = resolved.file
+        if (!dir.isDirectory) return ExecutionResult.fail("Not a directory", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val listing = dir.listFiles()
             ?.sortedWith(compareBy<File> { it.isFile }.thenBy { it.name })
             ?.joinToString("\n") { file ->
@@ -75,13 +92,14 @@ class FsPlugin : Plugin {
 
     private suspend fun write(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.size < 2) return ExecutionResult.fail("Usage: fs write <path> <content>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val path = resolvePath(args[0], ctx)
+        val resolved = resolveSafe(args[0], ctx)
+        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
         val content = args.drop(1).joinToString(" ")
-        val file = File(path)
+        val file = resolved.file
         file.parentFile?.mkdirs()
         return try {
             file.writeText(content)
-            ExecutionResult.ok("Written ${content.length} bytes to $path")
+            ExecutionResult.ok("Written ${content.length} bytes")
         } catch (e: Exception) {
             ErrorCollector.report(e, "FsPlugin.write")
             ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
@@ -90,29 +108,33 @@ class FsPlugin : Plugin {
 
     private suspend fun rm(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: fs rm <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val path = resolvePath(args[0], ctx)
-        val file = File(path)
-        if (!file.exists()) return ExecutionResult.fail("Not found: $path", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        val resolved = resolveSafe(args[0], ctx)
+        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        val file = resolved.file
+        if (!file.exists()) return ExecutionResult.fail("Not found", errorCode = ErrorCodes.ERR_NOT_FOUND)
         file.deleteRecursively()
-        return ExecutionResult.ok("Deleted: $path")
+        return ExecutionResult.ok("Deleted")
     }
 
     private suspend fun mkdir(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: fs mkdir <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val path = resolvePath(args[0], ctx)
-        File(path).mkdirs()
-        return ExecutionResult.ok("Created directory: $path")
+        val resolved = resolveSafe(args[0], ctx)
+        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        resolved.file.mkdirs()
+        return ExecutionResult.ok("Created directory")
     }
 
     private suspend fun cp(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.size < 2) return ExecutionResult.fail("Usage: fs cp <source> <dest>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val src = File(resolvePath(args[0], ctx))
-        val dst = File(resolvePath(args[1], ctx))
-        if (!src.exists()) return ExecutionResult.fail("Source not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
-        dst.parentFile?.mkdirs()
+        val srcResolved = resolveSafe(args[0], ctx)
+        val dstResolved = resolveSafe(args[1], ctx)
+        if (srcResolved.isFailure) return ExecutionResult.fail("Source: ${srcResolved.error}", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        if (dstResolved.isFailure) return ExecutionResult.fail("Dest: ${dstResolved.error}", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        if (!srcResolved.file.exists()) return ExecutionResult.fail("Source not found", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        dstResolved.file.parentFile?.mkdirs()
         return try {
-            src.copyTo(dst, overwrite = true)
-            ExecutionResult.ok("Copied ${src.name} to ${dst.name}")
+            srcResolved.file.copyTo(dstResolved.file, overwrite = true)
+            ExecutionResult.ok("Copied")
         } catch (e: Exception) {
             ErrorCollector.report(e, "FsPlugin.cp")
             ExecutionResult.fail("Copy error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
@@ -121,13 +143,15 @@ class FsPlugin : Plugin {
 
     private suspend fun mv(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.size < 2) return ExecutionResult.fail("Usage: fs mv <source> <dest>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val src = File(resolvePath(args[0], ctx))
-        val dst = File(resolvePath(args[1], ctx))
-        if (!src.exists()) return ExecutionResult.fail("Source not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
-        dst.parentFile?.mkdirs()
+        val srcResolved = resolveSafe(args[0], ctx)
+        val dstResolved = resolveSafe(args[1], ctx)
+        if (srcResolved.isFailure) return ExecutionResult.fail("Source: ${srcResolved.error}", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        if (dstResolved.isFailure) return ExecutionResult.fail("Dest: ${dstResolved.error}", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        if (!srcResolved.file.exists()) return ExecutionResult.fail("Source not found", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        dstResolved.file.parentFile?.mkdirs()
         return try {
-            src.renameTo(dst)
-            ExecutionResult.ok("Moved ${src.name} to ${dst.name}")
+            srcResolved.file.renameTo(dstResolved.file)
+            ExecutionResult.ok("Moved")
         } catch (e: Exception) {
             ErrorCollector.report(e, "FsPlugin.mv")
             ExecutionResult.fail("Move error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
@@ -136,9 +160,10 @@ class FsPlugin : Plugin {
 
     private suspend fun stat(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: fs stat <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val path = resolvePath(args[0], ctx)
-        val file = File(path)
-        if (!file.exists()) return ExecutionResult.fail("Not found: $path", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        val resolved = resolveSafe(args[0], ctx)
+        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        val file = resolved.file
+        if (!file.exists()) return ExecutionResult.fail("Not found", errorCode = ErrorCodes.ERR_NOT_FOUND)
         return ExecutionResult.ok("""
             Path: ${file.absolutePath}
             Size: ${formatSize(file.length())}
@@ -149,12 +174,61 @@ class FsPlugin : Plugin {
         """.trimIndent())
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────
+    // ── Path Sandbox ──────────────────────────────────────────────────
 
-    private fun resolvePath(path: String, ctx: ExecutionContext): String {
-        val file = File(path)
-        return if (file.isAbsolute) file.absolutePath
-        else File(ctx.workDir, path).absolutePath
+    /**
+     * Container for a safely resolved file path.
+     * [isFailure] is true if the path violates the sandbox.
+     */
+    private data class ResolvedPath(val file: File, val isFailure: Boolean = false, val error: String = "") {
+        companion object {
+            fun ok(file: File) = ResolvedPath(file, false)
+            fun fail(error: String) = ResolvedPath(File("."), true, error)
+        }
+    }
+
+    /**
+     * Resolve and validate a path against the sandbox.
+     *
+     * Rules:
+     * 1. Relative paths are resolved against [ctx.workDir].
+     * 2. Absolute paths must be within the workDir subtree.
+     * 3. Canonical path (with .. and symlinks resolved) must start with workDir.
+     * 4. Symlinks pointing outside the sandbox are rejected.
+     */
+    private fun resolveSafe(path: String, ctx: ExecutionContext): ResolvedPath {
+        // canonicalFile throws IOException if the directory doesn't exist — fall back to absoluteFile
+        val workDir = try {
+            File(ctx.workDir).canonicalFile
+        } catch (e: Exception) {
+            File(ctx.workDir).absoluteFile // fallback — sandbox still works with absolute paths
+        }
+        val rawFile = File(path)
+        val absolute = if (rawFile.isAbsolute) rawFile else File(workDir, path)
+
+        return try {
+            val canonical = absolute.canonicalFile
+            val canonicalPath = canonical.path
+            val workDirPath = workDir.path
+
+            // Must be within the workDir sandbox
+            if (!canonicalPath.startsWith(workDirPath + File.separator) && canonicalPath != workDirPath) {
+                return ResolvedPath.fail("Path outside allowed directory: $path")
+            }
+
+            // Detect symlinks that escape the sandbox
+            if (canonical.path != absolute.canonicalPath) {
+                // If the canonical paths differ, there's a symlink involved.
+                // Re-verify the canonical path is still in the sandbox.
+                if (!canonical.path.startsWith(workDirPath + File.separator) && canonical.path != workDirPath) {
+                    return ResolvedPath.fail("Symlink escape blocked: $path -> ${canonical.path}")
+                }
+            }
+
+            ResolvedPath.ok(canonical)
+        } catch (e: Exception) {
+            ResolvedPath.fail("Path resolution error: ${e.message}")
+        }
     }
 
     private fun formatSize(bytes: Long): String = when {

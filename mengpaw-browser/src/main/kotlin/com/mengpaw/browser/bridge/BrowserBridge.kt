@@ -150,8 +150,8 @@ class BrowserBridge(
     /**
      * Execute arbitrary JavaScript in the page and return the result.
      * Result is truncated to 5000 chars for safety.
+     * SECURITY: NOT exposed via @JavascriptInterface — only callable from Kotlin (Agent).
      */
-    @JavascriptInterface
     fun eval(js: String): String {
         return evalJs("""
             (function() {

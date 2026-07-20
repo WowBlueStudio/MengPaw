@@ -1,11 +1,13 @@
-// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+﻿// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package com.mengpaw.shell.ui.screens
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mengpaw.core.llm.PromptEngine
+import com.mengpaw.core.security.Vault
 import com.mengpaw.shell.ui.localization.AppStrings
 import com.mengpaw.shell.ui.localization.ChineseStrings
 import com.mengpaw.shell.ui.localization.EnglishStrings
@@ -13,7 +15,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers; import kotlinx.coroutines.launch; import kotlinx.coroutines.withContext
 
 /**
  * Preset LLM providers with known endpoints and models.
@@ -102,7 +104,10 @@ data class SettingsState(
 /**
  * ViewModel for the settings screen.
  */
-class SettingsViewModel : ViewModel() {
+class SettingsViewModel(application: Application) : AndroidViewModel(application) {
+
+    // SECURITY: Use encrypted Vault for API key persistence
+    private val vault = Vault(application)
 
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
@@ -215,6 +220,10 @@ class SettingsViewModel : ViewModel() {
         )
         existing.removeAll { it.preset == entry.preset }
         existing.add(entry)
+        // SECURITY: Persist API key to encrypted Vault so DreamWorker can read it securely
+        vault.store("api_key", _state.value.apiKey)
+        vault.store("api_endpoint", _state.value.apiEndpoint)
+        vault.store("model_name", _state.value.modelName)
         _state.value = _state.value.copy(savedProviders = existing, apiSectionExpanded = false)
     }
 
@@ -238,8 +247,24 @@ class SettingsViewModel : ViewModel() {
     fun testConnection() {
         _state.value = _state.value.copy(isTesting = true)
         viewModelScope.launch {
-            delay(1200)
-            _state.value = _state.value.copy(isTesting = false, balance = "1.23")
+            try {
+                val ep = _state.value.apiEndpoint
+                if (ep.isBlank()) { _state.value = _state.value.copy(isTesting = false, balance = "N/A"); return@launch }
+                val base = ep.substringBefore("/chat/completions").substringBefore("/v1/chat")
+                val url = java.net.URL("$base/v1/models")
+                withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 10000; conn.readTimeout = 10000
+                    val key = _state.value.apiKey
+                    if (key.isNotBlank()) conn.setRequestProperty("Authorization", "Bearer $key")
+                    val code = conn.responseCode
+                    conn.disconnect()
+                    val result = if (code in 200..299) "OK" else "Err $code"
+                    _state.value = _state.value.copy(isTesting = false, balance = result)
+                }
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(isTesting = false, balance = "Error")
+            }
         }
     }
 

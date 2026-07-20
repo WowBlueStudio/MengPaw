@@ -21,11 +21,13 @@ object ScreenshotManager {
      * Generate a unique screenshot path for a session.
      */
     fun generatePath(sessionId: String, suffix: String = ""): String {
+        // FIX A13: Sanitize suffix to prevent path traversal (block ../ / ..\ etc.)
+        val safeSuffix = suffix.replace(Regex("[/\\\\:\\.]"), "_").take(30)
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
         val seq = counter.incrementAndGet()
         val dir = File(SCREENSHOTS_DIR)
         dir.mkdirs()
-        return "${SCREENSHOTS_DIR}/${sessionId}_${timestamp}_${seq}${suffix}.png"
+        return "${SCREENSHOTS_DIR}/${sessionId}_${timestamp}_${seq}${safeSuffix}.png"
     }
 
     /**

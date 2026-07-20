@@ -46,6 +46,8 @@ fun BigBangPopup(
     }
 
     var selectedIndices by remember { mutableStateOf(setOf<Int>()) }
+    // FIX U14: Reset selection when text changes (prevents IndexOutOfBounds with stale indices)
+    LaunchedEffect(text) { selectedIndices = emptySet() }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -71,9 +73,10 @@ fun BigBangPopup(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Group into rows
-                    val rows = mutableListOf<List<String>>()
-                    var currentRow = mutableListOf<String>()
+                    // FIX U11: Track original index per word to handle duplicates correctly
+                    data class IndexedWord(val index: Int, val text: String)
+                    val rows = mutableListOf<List<IndexedWord>>()
+                    var currentRow = mutableListOf<IndexedWord>()
                     var rowLen = 0
                     words.forEachIndexed { idx, word ->
                         val display = if (word.length > 15) word.take(15) + "…" else word
@@ -82,7 +85,7 @@ fun BigBangPopup(
                             currentRow = mutableListOf()
                             rowLen = 0
                         }
-                        currentRow.add(word)
+                        currentRow.add(IndexedWord(idx, word))
                         rowLen += display.length
                     }
                     if (currentRow.isNotEmpty()) rows.add(currentRow.toList())
@@ -92,14 +95,16 @@ fun BigBangPopup(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            row.forEach { word ->
-                                val isSelected = selectedIndices.contains(words.indexOf(word))
+                            row.forEach { iw ->
+                                val wordIdx = iw.index
+                                val word = iw.text
+                                val isSelected = selectedIndices.contains(wordIdx)
                                 SuggestionChip(
                                     onClick = {
                                         selectedIndices = if (isSelected) {
-                                            selectedIndices - words.indexOf(word)
+                                            selectedIndices - wordIdx
                                         } else {
-                                            selectedIndices + words.indexOf(word)
+                                            selectedIndices + wordIdx
                                         }
                                     },
                                     label = {

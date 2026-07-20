@@ -1,21 +1,50 @@
-# MengPaw Shell ProGuard Rules
+﻿# MengPaw Shell ProGuard Rules
+# SECURITY: R8 enabled - keep critical runtime classes
 
-# Keep all mengpaw-core classes (includes new MissionMonitor, TranslateMiddleware, etc.)
--keep class com.mengpaw.core.** { *; }
--dontwarn com.mengpaw.core.**
+# Keep core classes that use reflection
+-keep class com.mengpaw.core.DataPaths { *; }
+-keep class com.mengpaw.core.security.Vault { *; }
+-keep class com.mengpaw.core.security.IntegrityGuard { *; }
+-keep class com.mengpaw.core.cli.** { *; }
 
-# Keep all plugins
--keep class com.mengpaw.plugin.** { *; }
--dontwarn com.mengpaw.plugin.**
+# Keep Kotlin serialization
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,includedescriptorclasses class com.mengpaw.core.**$$serializer { *; }
+-keepclassmembers class com.mengpaw.core.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.mengpaw.core.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
 
-# Design system
--keep class com.mengpaw.design.** { *; }
+# Keep plugin interface
+-keep interface com.mengpaw.core.plugin.Plugin { *; }
+-keep class * implements com.mengpaw.core.plugin.Plugin { *; }
 
-# Shell classes
--keep class com.mengpaw.shell.** { *; }
+# Keep Android Security Crypto
+-keep class androidx.security.crypto.** { *; }
 
-# Kotlin/compose compatibility
+# Keep WebView JS bridge methods
+-keepclassmembers class com.mengpaw.shell.ui.screens.ShellBrowserBridge {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# Keep Ktor HTTP client
+-keep class io.ktor.** { *; }
+-dontwarn io.ktor.**
+
+# Compose — prevent R8 from stripping Compose runtime
+-keep class androidx.compose.** { *; }
+-dontwarn androidx.compose.**
+-keep class kotlin.Metadata { *; }
+
+# R8: Suppress warnings for compile-time-only annotations
 -dontwarn com.google.errorprone.annotations.**
--dontwarn java.lang.invoke.StringConcatFactory
--dontwarn kotlin.Result
+-dontwarn com.google.crypto.tink.**
 -dontwarn javax.annotation.**
+-dontwarn org.conscrypt.**
