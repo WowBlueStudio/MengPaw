@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+﻿// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package com.mengpaw.shell.ui.screens
@@ -42,7 +42,7 @@ fun SettingsScreen(
     onNavigateToPluginMarket: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel()
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsState(); var powerSaverEnabled by remember { mutableStateOf(false) }
     val s = state.strings
 
     Scaffold(
@@ -341,7 +341,9 @@ fun SettingsScreen(
 
             // ─── 触发器 Triggers ───
             SectionHeader("触发器 Triggers")
-            val triggers = remember { com.mengpaw.core.trigger.TriggerEngine.list() }
+            // FIX U12: Use mutableStateOf so TriggerEngine changes trigger recomposition
+            var triggerVersion by remember { mutableStateOf(0) }
+            val triggers = remember(triggerVersion) { com.mengpaw.core.trigger.TriggerEngine.list() }
             if (triggers.isEmpty()) {
                 Text("暂无触发器。Agent 可使用 self.trigger 命令创建。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(horizontal = ArcoSpacing.lg))
                 Spacer(Modifier.height(ArcoSpacing.sm))
@@ -357,9 +359,11 @@ fun SettingsScreen(
                                 Text(trigger.id, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodySmall)
                                 Text("${trigger.config} → ${trigger.action.take(30)}", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
                             }
-                            Switch(checked = trigger.enabled, onCheckedChange = {
-                                if (trigger.enabled) com.mengpaw.core.trigger.TriggerEngine.disable(trigger.id)
+                            // FIX U14: Use the Boolean parameter from onCheckedChange callback
+                            Switch(checked = trigger.enabled, onCheckedChange = { newChecked ->
+                                if (!newChecked) com.mengpaw.core.trigger.TriggerEngine.disable(trigger.id)
                                 else com.mengpaw.core.trigger.TriggerEngine.enable(trigger.id)
+                                triggerVersion++  // FIX U12: force triggers list refresh
                             }, modifier = Modifier.size(32.dp))
                         }
                     }
@@ -380,13 +384,14 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column { Text("后台省电模式", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                     Text("降低后台轮询频率和动画帧率，延长续航", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary) }
-                Switch(checked = true, onCheckedChange = { /* toggle low-power mode */ })
+                Switch(checked = powerSaverEnabled, onCheckedChange = { powerSaverEnabled = it })
             }
+            val ctx = androidx.compose.ui.platform.LocalContext.current
             OutlinedButton(onClick = {
                 try {
                     val intent = android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
                     intent.data = android.net.Uri.parse("package:com.mengpaw.shell")
-                    // context.startActivity not directly available here
+                    ctx.startActivity(intent)
                 } catch (_: Exception) {}
             }, modifier = Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg), shape = RoundedCornerShape(ArcoRadius.md)) {
                 Text("忽略电池优化（推荐开启）", style = MaterialTheme.typography.labelSmall)
@@ -553,7 +558,11 @@ private fun ProviderCard(
     onSelectModel: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(isSelected) }
-    if (isSelected && !expanded) expanded = true
+    // FIX U9+U10: Sync expanded with isSelected via LaunchedEffect (no side effects in composition)
+    LaunchedEffect(isSelected) {
+        if (isSelected) expanded = true   // auto-expand when card becomes selected
+        else expanded = false             // auto-collapse when card loses selection
+    }
 
     val strategy = CacheStrategy.forProvider(preset.endpoint)
     val optimized = strategy != CacheStrategy.NONE

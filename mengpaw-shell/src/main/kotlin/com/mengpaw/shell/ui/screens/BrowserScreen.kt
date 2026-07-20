@@ -7,7 +7,11 @@ import androidx.compose.material.icons.outlined.*
 import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
 import android.graphics.Bitmap
+import android.net.http.SslError
 import android.webkit.JavascriptInterface
+import android.webkit.SslErrorHandler
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.Image
@@ -156,8 +160,20 @@ fun BrowserScreen(
                     WebView(ctx).apply {
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
+                        // SECURITY: Apply same protections as Browser APK
+                        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
                         addJavascriptInterface(ShellBrowserBridge(this), "MengPaw")
                         webViewClient = object : WebViewClient() {
+                            override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                                handler?.cancel()
+                            }
+                            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                val u = request?.url?.toString() ?: return false
+                                if (!u.startsWith("http://") && !u.startsWith("https://")) return true
+                                return false
+                            }
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 isLoading = false
                                 url?.let { inputUrl = it; currentUrl = it }
@@ -191,7 +207,7 @@ private class ShellBrowserBridge(private val webView: WebView) {
     @JavascriptInterface
     fun content(): String = evalJs(
         "(function(){try{var ls=[];document.querySelectorAll('a[href]').forEach(function(a){var t=(a.textContent||'').trim().substring(0,80);if(t&&a.href&&!a.href.startsWith('javascript:'))ls.push({text:t,href:a.href})});return JSON.stringify({title:document.title,url:location.href,links:ls.slice(0,50),text:(document.body?document.body.innerText:'').replace(/\\s+/g,' ').trim().substring(0,3000)})}catch(e){return JSON.stringify({error:e.message})}})()")
-    @JavascriptInterface
+    // SECURITY: NOT exposed via @JavascriptInterface — only callable from Kotlin (Agent)
     fun eval(js: String): String = evalJs(js)
 
     private fun evalJs(script: String): String {

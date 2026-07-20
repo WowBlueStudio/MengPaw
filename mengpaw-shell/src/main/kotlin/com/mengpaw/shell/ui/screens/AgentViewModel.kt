@@ -160,6 +160,7 @@ class AgentViewModel : ViewModel() {
     val agentNames: Set<String> get() = sessions.keys
 
     private var stateObserverJob: Job? = null
+    private var messageBindingJob: Job? = null
 
     /**
      * Reconfigure the LLM provider with real API settings.
@@ -432,7 +433,12 @@ class AgentViewModel : ViewModel() {
         ensureDefaultSession()
         val session = sessions[_activeAgentName] ?: return
         _activeAgent.value = _activeAgentName
-        _messages.value = session.messages.value
+
+        // FIX U1: Reactively bind session.messages → _messages so UI updates on every message change
+        messageBindingJob?.cancel()
+        messageBindingJob = viewModelScope.launch {
+            session.messages.collect { msgs -> _messages.value = msgs }
+        }
 
         // Re-bind state observer to the new engine
         stateObserverJob?.cancel()
@@ -543,13 +549,25 @@ data class AgentTrace(
 )
 
 sealed class ChatMessageUi {
-    data class User(val content: String) : ChatMessageUi()
-    data class Agent(val content: String) : ChatMessageUi()
+    /** Stable unique ID for LazyColumn key — prevents animation/state bugs during streaming. */
+    abstract val stableId: String
+    data class User(val content: String) : ChatMessageUi() {
+        override val stableId get() = "u_${content.hashCode()}"
+    }
+    data class Agent(val content: String) : ChatMessageUi() {
+        override val stableId get() = "a_${content.hashCode()}"
+    }
     data class AgentWithTrace(
         val finalContent: String,
         val traces: List<AgentTrace>,
         val isRunning: Boolean = false
-    ) : ChatMessageUi()
-    data class System(val content: String) : ChatMessageUi()
-    data class Suggestion(val suggestion: PluginSuggestion) : ChatMessageUi()
+    ) : ChatMessageUi() {
+        override val stableId get() = "t_${traces.size}_${finalContent.hashCode()}"
+    }
+    data class System(val content: String) : ChatMessageUi() {
+        override val stableId get() = "s_${content.hashCode()}"
+    }
+    data class Suggestion(val suggestion: PluginSuggestion) : ChatMessageUi() {
+        override val stableId get() = "sg_${suggestion.pluginId}"
+    }
 }

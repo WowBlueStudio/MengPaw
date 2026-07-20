@@ -71,8 +71,11 @@ class SessionManager {
         if (session.messages.size <= maxMessages) return
 
         val keepCount = 10
-        val toCompress = session.messages.dropLast(keepCount)
-        val toKeep = session.messages.takeLast(keepCount)
+        // FIX A2: Snapshot BEFORE the suspend LLM call to avoid losing concurrently-added messages
+        val snapshot = session.messages.toList()
+        val toCompress = snapshot.dropLast(keepCount)
+        if (toCompress.isEmpty()) return
+        val toKeep = snapshot.takeLast(keepCount)
 
         val summary = summarizeMessages(llmProvider, toCompress)
 
@@ -80,9 +83,14 @@ class SessionManager {
             role = "system",
             content = "[Compressed: previous ${toCompress.size} messages summarized as: $summary]"
         )
+        // Preserve any messages added during the LLM call
+        val afterSnap = session.messages.toList()
+        val concurrentNew = if (afterSnap.size > snapshot.size) afterSnap.drop(snapshot.size) else emptyList()
+
         session.messages.clear()
         session.messages.add(summaryMsg)
         session.messages.addAll(toKeep)
+        if (concurrentNew.isNotEmpty()) session.messages.addAll(concurrentNew)
         _sessions.value = _sessions.value + (sessionId to session)
     }
 

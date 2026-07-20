@@ -68,7 +68,9 @@ class Pipeline(
 
             val result = executor(parsed.args, context)
             // VULN-FIX: Audit trail — log all executions to shared static log
-            val entry = AuditEntry(startTime, context.sessionId, trimmed, result.success, result.output.take(200))
+            // SECURITY: Sanitize output to prevent API key/token leakage in audit log
+            val sanitizedOutput = com.mengpaw.core.security.Sanitizer.sanitize(result.output.take(200))
+            val entry = AuditEntry(startTime, context.sessionId, trimmed, result.success, sanitizedOutput)
             auditLog.add(entry)
             Pipeline.addAuditEntry(entry)
             if (auditLog.size > MAX_AUDIT_ENTRIES) auditLog.removeAt(0)

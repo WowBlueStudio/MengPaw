@@ -99,8 +99,24 @@ object AcpCrypto {
 
     /** Generate a stable device fingerprint for key derivation. */
     fun myFingerprint(): String {
-        val model = System.getProperty("android.os.Build.MODEL") ?: "device"
-        val id = System.getProperty("android.os.Build.ID") ?: "000"
-        return "${model}_${id}".replace(" ", "_").take(32)
+        // SECURITY: Use only publicly accessible Build fields.
+        // Build.SERIAL is blocked by hidden API restrictions on Android 10+ (API 29+).
+        // System.getProperty("android.os.Build.*") returns null on modern Android.
+        // Fallback chain: Build.FINGERPRINT → Build.HARDWARE → Build.MODEL → random UUID.
+        val fingerprint = try {
+            Class.forName("android.os.Build").getField("FINGERPRINT").get(null) as? String
+        } catch (_: Exception) { null }
+            ?: try { Class.forName("android.os.Build").getField("HARDWARE").get(null) as? String }
+            catch (_: Exception) { null }
+            ?: try { Class.forName("android.os.Build").getField("MODEL").get(null) as? String }
+            catch (_: Exception) { "device" }
+            ?: "device"
+
+        val raw = fingerprint.replace(" ", "_").replace("/", "_").replace(":", "_").replace(";", "_")
+        // Hash for uniform 32-char fingerprint
+        return java.security.MessageDigest.getInstance("SHA-256")
+            .digest(raw.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+            .take(32)
     }
 }

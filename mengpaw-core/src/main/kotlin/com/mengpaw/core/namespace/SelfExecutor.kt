@@ -246,10 +246,20 @@ object SelfExecutor {
     private suspend fun avatar(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: self.avatar <image-path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val src = java.io.File(args[0])
-        if (!src.exists()) return ExecutionResult.fail("Not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        // FIX A12: Block path traversal — only allow paths within agent workspace
+        val canonical: java.io.File = try { src.canonicalFile } catch (_: Exception) { return ExecutionResult.fail("Invalid path", errorCode = ErrorCodes.ERR_INVALID_INPUT) }
+        if (!canonical.absolutePath.startsWith(com.mengpaw.core.DataPaths.AGENTS) &&
+            !canonical.absolutePath.startsWith(com.mengpaw.core.DataPaths.BASE) &&
+            !canonical.absolutePath.startsWith("/sdcard/Pictures") &&
+            !canonical.absolutePath.startsWith("/sdcard/DCIM") &&
+            !canonical.absolutePath.startsWith("/storage/emulated/0/Pictures") &&
+            !canonical.absolutePath.startsWith("/storage/emulated/0/DCIM")) {
+            return ExecutionResult.fail("Path not allowed: outside agent workspace and known media directories", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        }
+        if (!canonical.exists()) return ExecutionResult.fail("Not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
         val dst = java.io.File(com.mengpaw.core.DataPaths.AGENTS, "avatar.png")
         dst.parentFile?.mkdirs()
-        src.copyTo(dst, overwrite = true)
+        canonical.copyTo(dst, overwrite = true)
         return ExecutionResult.ok("Avatar updated.")
     }
 

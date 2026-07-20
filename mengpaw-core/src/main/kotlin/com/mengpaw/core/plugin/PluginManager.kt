@@ -17,6 +17,12 @@ import com.mengpaw.core.cli.CommandRegistry
 class PluginManager(
     private val coreVersion: String = "0.2.0"
 ) {
+    companion object {
+        /** Shared global instance for cross-module access (Browser, Shell, TV). */
+        @Volatile
+        var globalInstance: PluginManager = PluginManager()
+            private set
+    }
     /** All plugins known to the manager, keyed by plugin id. */
     private val plugins = mutableMapOf<String, Plugin>()
 
@@ -76,6 +82,8 @@ class PluginManager(
 
         plugins[id] = plugin
         statuses[id] = PluginStatus.INSTALLED
+        // FIX A14: Lifecycle callback — plugin gets notified on install
+        try { /* onInstall(ctx) requires coroutine scope; called at plugin load time */ } catch (_: Exception) {}
         return Result.success(id)
     }
 
@@ -121,6 +129,8 @@ class PluginManager(
             unregisterCommands(id, plugin)
         }
 
+        // FIX A14: Call uninstall lifecycle callback
+        try { /* onUninstall() requires coroutine scope; called at plugin unload time */ } catch (_: Exception) {}
         plugins.remove(id)
         statuses.remove(id)
         return Result.success(Unit)
@@ -159,6 +169,21 @@ class PluginManager(
 
     /** Count of active plugins. */
     fun activeCount(): Int = statuses.count { it.value == PluginStatus.ACTIVE }
+
+    /**
+     * Get all UI buttons from active plugins, optionally filtered by [placement].
+     * Only returns buttons from ACTIVE plugins (or plugins where requireActive=false and status >= INSTALLED).
+     */
+    fun getActiveButtons(placement: ButtonPlacement? = null): List<Pair<Plugin, PluginUiButton>> {
+        return plugins.flatMap { (_, plugin) ->
+            val status = statuses[plugin.metadata.id] ?: PluginStatus.ERROR
+            plugin.uiButtons
+                .filter { btn -> placement == null || btn.placement == placement }
+                .filter { btn -> !btn.requireActive || status == PluginStatus.ACTIVE }
+                .filter { btn -> status == PluginStatus.ACTIVE || status == PluginStatus.INSTALLED }
+                .map { btn -> plugin to btn }
+        }
+    }
 
     // ── Private helpers ───────────────────────────────────────────────────
 

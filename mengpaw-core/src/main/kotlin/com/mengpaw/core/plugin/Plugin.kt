@@ -59,11 +59,44 @@ interface PluginContext {
 }
 
 /**
+ * Where a plugin's UI button should appear in the MengPaw interface.
+ */
+enum class ButtonPlacement {
+    /** MainScreen bottom expand sheet (the + button tray). */
+    BOTTOM_SHEET,
+    /** MainScreen header bar (next to new-session / history buttons). */
+    HEADER_BAR,
+    /** BrowserActivity dropdown overflow menu. */
+    BROWSER_MENU,
+    /** Browser toolbar (next to back/forward/refresh). */
+    BROWSER_TOOLBAR,
+    /** Settings screen — appears as a section card. */
+    SETTINGS_SECTION
+}
+
+/**
+ * A UI button contributed by a plugin. Plugins declare these in their metadata,
+ * and the UI framework creates/hides them automatically based on plugin status.
+ */
+data class PluginUiButton(
+    /** Unique ID within this plugin (e.g. "search", "summarize", "config"). */
+    val id: String,
+    /** Display label. */
+    val label: String,
+    /** Material icon name (e.g. "Search", "Image", "Star"). */
+    val iconName: String = "Extension",
+    /** Where this button appears in the UI. */
+    val placement: ButtonPlacement = ButtonPlacement.BOTTOM_SHEET,
+    /** CLI command to execute when clicked (e.g. "tavily.search <query>"). */
+    val command: String = "",
+    /** Only show when the plugin is ACTIVE (true) or also when disabled/installed (false). */
+    val requireActive: Boolean = true
+)
+
+/**
  * Unified plugin interface — the single contract every MengPaw plugin implements.
  *
- * A plugin contributes CLI commands and can react to lifecycle events.
- * All 9 namespace executors (fs, ui, proc, net, self, memory, skill, clipboard,
- * notification) will be refactored to implement this interface.
+ * A plugin contributes CLI commands, can declare UI buttons, and can react to lifecycle events.
  */
 interface Plugin {
     /** Immutable metadata describing this plugin. */
@@ -71,6 +104,9 @@ interface Plugin {
 
     /** CLI commands contributed by this plugin, keyed by command name (e.g. "cat"). */
     val commands: Map<String, CommandHandler>
+
+    /** UI buttons contributed by this plugin. The framework shows/hides them based on plugin status. */
+    val uiButtons: List<PluginUiButton> get() = emptyList()
 
     /** Called after the plugin is downloaded and before it is activated. */
     suspend fun onInstall(ctx: PluginContext) {}

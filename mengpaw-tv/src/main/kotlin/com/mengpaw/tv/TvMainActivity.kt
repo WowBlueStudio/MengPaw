@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.mengpaw.core.security.Vault
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -163,7 +165,7 @@ class TvMainActivity : ComponentActivity() {
                 middleware = AgentMiddleware.NoOp,
                 postCallMiddleware = PostCallMiddleware.NoOp
             ).also {
-                it.agentName = "MengPaw TV"
+                it.setAgentIdentity("MengPaw TV", null, modelName)
                 it.configureCacheStrategy(apiEndpoint)
             }
             isAgentReady.value = true
@@ -184,7 +186,7 @@ class TvMainActivity : ComponentActivity() {
             return
         }
 
-        MainScope().launch {
+        lifecycleScope.launch {
             try {
                 val result = engine.run(userText, maxSteps = 10)
                 messages.add(TvChatMessage("agent", result))
@@ -220,7 +222,7 @@ class TvMainActivity : ComponentActivity() {
 
     private fun startVoiceInput() {
         voiceJob?.cancel()
-        voiceJob = MainScope().launch {
+        voiceJob = lifecycleScope.launch {
             voiceInput.listen().collect { text ->
                 when {
                     text == "🎤 正在听..." -> { }
@@ -282,20 +284,19 @@ class TvMainActivity : ComponentActivity() {
         } catch (_: Exception) { }
     }
 
+    // SECURITY: Use encrypted Vault instead of plain SharedPreferences
+    private val vault by lazy { Vault(this) }
+
     private fun loadApiConfig() {
-        val prefs = getSharedPreferences("mengpaw_tv", Context.MODE_PRIVATE)
-        apiEndpoint = prefs.getString("api_endpoint", DEFAULT_API_ENDPOINT) ?: DEFAULT_API_ENDPOINT
-        apiKey = prefs.getString("api_key", DEFAULT_API_KEY) ?: DEFAULT_API_KEY
-        modelName = prefs.getString("model_name", DEFAULT_MODEL) ?: DEFAULT_MODEL
+        apiEndpoint = vault.retrieve("api_endpoint") ?: DEFAULT_API_ENDPOINT
+        apiKey = vault.retrieve("api_key") ?: DEFAULT_API_KEY
+        modelName = vault.retrieve("model_name") ?: DEFAULT_MODEL
     }
 
     private fun saveApiConfig() {
-        getSharedPreferences("mengpaw_tv", Context.MODE_PRIVATE).edit().apply {
-            putString("api_endpoint", apiEndpoint)
-            putString("api_key", apiKey)
-            putString("model_name", modelName)
-            apply()
-        }
+        vault.store("api_endpoint", apiEndpoint)
+        vault.store("api_key", apiKey)
+        vault.store("model_name", modelName)
     }
 
     override fun onDestroy() {

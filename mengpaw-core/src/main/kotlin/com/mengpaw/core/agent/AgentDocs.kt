@@ -18,29 +18,31 @@ object AgentDocs {
         val dir = File(DataPaths.AGENTS, agentName)
         if (!dir.exists()) dir.mkdirs()
 
-        writeIfMissing(File(dir, "SOUL.md"), soulTemplate(agentName))
-        writeIfMissing(File(dir, "BOOTSTRAP.md"), bootstrapTemplate(agentName))
-        writeIfMissing(File(dir, "MEMORY.md"), memoryTemplate(agentName))
-        writeIfMissing(File(dir, "PROFILE.md"), profileTemplate(agentName))
-        writeIfMissing(File(dir, "AGENTS.md"), agentsTemplate(agentName))
+        // FIX A7: Use lowercase filenames consistent with AgentDocManager
+        writeIfMissing(File(dir, "soul.md"), soulTemplate(agentName))
+        writeIfMissing(File(dir, "bootstrap.md"), bootstrapTemplate(agentName))
+        writeIfMissing(File(dir, "memory.md"), memoryTemplate(agentName))
+        writeIfMissing(File(dir, "profile.md"), profileTemplate(agentName))
+        writeIfMissing(File(dir, "agents.md"), agentsTemplate(agentName))
         writeIfMissing(File(dir, "HEARTBEAT.md"), heartbeatTemplate())
     }
 
-    /** Read the content of AGENTS.md for a given agent, or return the default. */
+    // FIX A7: Use lowercase filenames consistent with AgentDocManager
+    /** Read the content of agents.md for a given agent, or return the default. */
     fun readAgentsDoc(agentName: String): String {
-        val file = File(DataPaths.AGENTS, "$agentName/AGENTS.md")
+        val file = File(DataPaths.AGENTS, "$agentName/agents.md")
         return if (file.exists()) try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocs.readAgentsDoc"); "" } else agentsTemplate(agentName)
     }
 
-    /** Read SOUL.md content. */
+    /** Read soul.md content. */
     fun readSoulDoc(agentName: String): String {
-        val file = File(DataPaths.AGENTS, "$agentName/SOUL.md")
+        val file = File(DataPaths.AGENTS, "$agentName/soul.md")
         return if (file.exists()) try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocs.readSoulDoc"); "" } else soulTemplate(agentName)
     }
 
-    /** Read MEMORY.md content. */
+    /** Read memory.md content. */
     fun readMemoryDoc(agentName: String): String {
-        val file = File(DataPaths.AGENTS, "$agentName/MEMORY.md")
+        val file = File(DataPaths.AGENTS, "$agentName/memory.md")
         return if (file.exists()) try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocs.readMemoryDoc"); "" } else ""
     }
 

@@ -93,9 +93,18 @@ class PluginExecutor(
         )
         val id = args[0]
 
-        // Already installed?
-        if (pluginManager.get(id) != null) {
-            return ExecutionResult.ok("Plugin '$id' is already installed. Use plugin.update to upgrade.")
+        // FIX A11: Allow re-install for updates — only block if same version is already installed
+        val installed = pluginManager.get(id)
+        if (installed != null) {
+            val entry = marketplaceClient.getPlugin(id).getOrElse {
+                return ExecutionResult.fail("Plugin not found in marketplace: $id", errorCode = ErrorCodes.ERR_NOT_FOUND)
+            }
+            val updateAvailable = pluginManager.checkUpdate(id, entry.version)
+            if (updateAvailable == null) {
+                return ExecutionResult.ok("Plugin '$id' v${installed.metadata.version} is already up to date.")
+            }
+            // Uninstall old version first, then proceed with download
+            pluginManager.uninstall(id)
         }
 
         // Fetch marketplace entry

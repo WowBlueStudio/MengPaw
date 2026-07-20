@@ -315,10 +315,22 @@ class PromptEngine {
         val thought = thoughtRegex.find(normalized)?.groupValues?.get(1)?.trim()
             ?: normalized.take(200)
 
-        // Check for Final Answer
-        val finalRegex = Regex("(?i)final answer[:：]\\s*(.+)", RegexOption.DOT_MATCHES_ALL)
-        finalRegex.find(normalized)?.let {
-            return ReActResponse(it.groupValues[1].trim(), null, isFinal = true)
+        // FIX A5: Only treat as Final Answer if it's the LAST section (not before an Action)
+        // Find all occurrences of "Final Answer:" and "Action:"
+        val finalLocs = Regex("(?i)final answer[:：]", RegexOption.MULTILINE).findAll(normalized).map { it.range.first }.toList()
+        val actionLocs = Regex("(?i)action[:：]", RegexOption.MULTILINE).findAll(normalized).map { it.range.first }.toList()
+
+        // Final Answer is valid only if it appears AFTER the last Action (or there are no Actions)
+        if (finalLocs.isNotEmpty()) {
+            val lastFinalPos = finalLocs.last()
+            val lastActionPos = actionLocs.lastOrNull() ?: -1
+            if (lastFinalPos > lastActionPos) {
+                val finalRegex = Regex("(?i)final answer[:：]\\s*(.+)", RegexOption.DOT_MATCHES_ALL)
+                val finalMatch = finalRegex.find(normalized.substring(lastFinalPos))
+                if (finalMatch != null) {
+                    return ReActResponse(finalMatch.groupValues[1].trim(), null, isFinal = true)
+                }
+            }
         }
 
         // Parse Action

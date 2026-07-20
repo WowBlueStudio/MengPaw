@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+﻿// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package com.mengpaw.plugin.pad
@@ -61,6 +61,10 @@ class PadPlugin : Plugin {
         commands = listOf("pad.show", "pad.hide")
     )
 
+    override val uiButtons: List<com.mengpaw.core.plugin.PluginUiButton> = listOf(
+        com.mengpaw.core.plugin.PluginUiButton("show", "悬浮窗", "TouchApp", com.mengpaw.core.plugin.ButtonPlacement.BOTTOM_SHEET, "pad.show"),
+        com.mengpaw.core.plugin.PluginUiButton("hide", "隐藏悬浮窗", "TouchApp", com.mengpaw.core.plugin.ButtonPlacement.HEADER_BAR, "pad.hide")
+    )
     override val commands: Map<String, suspend (List<String>, com.mengpaw.core.cli.ExecutionContext) -> com.mengpaw.core.cli.ExecutionResult> = mapOf(
         "show" to { _, _ ->
             FloatingDotService.show()
@@ -175,6 +179,12 @@ class FloatingDotService : Service() {
                     infiniteRepeatable(tween(1500, easing = EaseInOutCubic), RepeatMode.Reverse),
                     label = "bs"
                 )
+                // FIX U5: Use InfiniteTransition for ERROR blinking (not System.currentTimeMillis)
+                val blinkScale by rememberInfiniteTransition(label = "blink").animateFloat(
+                    1f, 0.25f,
+                    infiniteRepeatable(tween(300), RepeatMode.Reverse),
+                    label = "blink_s"
+                )
 
                 val dotColor = when (dotState) {
                     PadPlugin.DotState.IDLE -> Color(0xFF9E9E9E)
@@ -184,7 +194,7 @@ class FloatingDotService : Service() {
                 val scale = when (dotState) {
                     PadPlugin.DotState.IDLE -> 1f
                     PadPlugin.DotState.WORKING -> breathScale
-                    PadPlugin.DotState.ERROR -> if (System.currentTimeMillis() % 600 < 300) 1f else 0.5f
+                    PadPlugin.DotState.ERROR -> blinkScale  // FIX U5: reactive blinking
                 }
                 val alpha = when (dotState) {
                     PadPlugin.DotState.IDLE -> 0.7f
@@ -223,8 +233,9 @@ class FloatingDotService : Service() {
     private fun createNotification(): Notification = NotificationCompat.Builder(this, "pad_dot")
         .setContentTitle("MengPaw PAD").setContentText("悬浮窗运行中")
         .setSmallIcon(android.R.drawable.ic_menu_manage).setOngoing(true)
+        // FIX U6: Use setClassName (R8-safe) instead of Class.forName (crashes when R8 renames)
         .setContentIntent(PendingIntent.getActivity(this, 0,
-            Intent(this, Class.forName("com.mengpaw.shell.MainActivity")),
+            Intent().setClassName(this, "com.mengpaw.shell.MainActivity"),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
         .build()
 }

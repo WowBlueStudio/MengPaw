@@ -68,7 +68,7 @@ object GeoRouter {
         cachedCountry?.let { return it == "CN" }
         return try {
             val client = HttpClient(OkHttp) { engine { config { connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS) } } }
-            val resp = client.get("http://ip-api.com/json?fields=countryCode")
+            val resp = client.get("https://ip-api.com/json?fields=countryCode")
             val json = Json.parseToJsonElement(resp.bodyAsText()).jsonObject
             val code = json["countryCode"]?.jsonPrimitive?.content ?: "XX"
             client.close()

@@ -18,8 +18,9 @@ import java.util.*
  * Inspired by QwenPaw's proactive mode (Apache 2.0), adapted for Android.
  */
 object DreamEngine {
-    private val agentsDir = File(DataPaths.AGENTS)
-    private val dreamLog = File(agentsDir, "dream.log")
+    // FIX A8: Use lazy getter so DataPaths.AGENTS is resolved at access time, not at class load
+    private val agentsDir: File get() = File(DataPaths.AGENTS)
+    private val dreamLog: File get() = File(agentsDir, "dream.log")
     private val DATE_FMT = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
     // ── LLM-based Dream Pass ────────────────────────────────────────

@@ -11,6 +11,7 @@ import androidx.work.*
 import com.mengpaw.core.agent.DreamEngine
 import com.mengpaw.core.agent.ScrollContextManager
 import com.mengpaw.core.llm.AdaptiveLlmProvider
+import com.mengpaw.core.security.Vault
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -52,10 +53,11 @@ class DreamWorker(
     }
 
     override suspend fun doWork(): Result {
-        val prefs = applicationContext.getSharedPreferences("mengpaw_settings", Context.MODE_PRIVATE)
-        val endpoint = prefs.getString("api_endpoint", "") ?: ""
-        val apiKey = prefs.getString("api_key", "") ?: ""
-        val model = prefs.getString("model_name", "") ?: ""
+        // SECURITY: Use encrypted Vault instead of plain SharedPreferences
+        val vault = Vault(applicationContext)
+        val endpoint = vault.retrieve("api_endpoint") ?: ""
+        val apiKey = vault.retrieve("api_key") ?: ""
+        val model = vault.retrieve("model_name") ?: ""
         // Only run if we have real API config
         if (apiKey.isBlank()) return Result.success()
 

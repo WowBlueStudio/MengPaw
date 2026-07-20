@@ -25,8 +25,15 @@ import kotlinx.serialization.json.jsonPrimitive
 class AcpServer(
     private val profile: AgentProfile,
     private val port: Int = 9876,
-    private val sharedSecret: String = ""  // VULN-FIX: shared secret for peer auth
+    private val sharedSecret: String = ""  // SECURITY: Must be set! Empty = auth disabled (warned below)
 ) {
+    init {
+        if (sharedSecret.isEmpty()) {
+            android.util.Log.w("AcpServer",
+                "WARNING: ACP sharedSecret is empty — device-to-device authentication is DISABLED. " +
+                "Set a shared secret via AcpServer(profile, secret=\"your-secret\") to enable peer auth.")
+        }
+    }
     private val peers = mutableMapOf<String, PeerAgent>()
     private val handlers = mutableListOf<AcpHandler>()
     private val transports = mutableListOf<AcpTransport>()

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+﻿// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package com.mengpaw.browser
@@ -9,6 +9,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.MotionEvent
+import android.net.http.SslError
 import android.webkit.*
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -34,6 +35,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -273,6 +275,9 @@ class BrowserActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // CRITICAL: Must initialize before any DataPaths access (theme load, screenshots, etc.)
         com.mengpaw.core.DataPaths.initialize(this)
+        // Bind shared PluginManager to BrowserPluginRegistry for active-state filtering
+        com.mengpaw.browser.plugin.BrowserPluginRegistry.pluginManager =
+            com.mengpaw.core.plugin.PluginManager.globalInstance
         enableEdgeToEdge()
         // Read theme from first Agent's theme.md (or default)
         val themeConfig = BrowserThemeConfig.load(this)
@@ -283,10 +288,14 @@ class BrowserActivity : ComponentActivity() {
         }
     }
 
-    private fun extractUrl(intent: Intent?): String? = when {
-        intent?.action == "com.mengpaw.action.OPEN_URL" -> intent.getStringExtra("url")
-        intent?.dataString != null -> intent.dataString
-        else -> null
+    private fun extractUrl(intent: Intent?): String? {
+        val raw = when {
+            intent?.action == "com.mengpaw.action.OPEN_URL" -> intent.getStringExtra("url")
+            intent?.dataString != null -> intent.dataString
+            else -> null
+        }
+        // SECURITY: Only allow http/https schemes — block javascript:, file:, content:, etc.
+        return if (raw != null && (raw.startsWith("http://") || raw.startsWith("https://"))) raw else null
     }
 
     /** Back key: navigate WebView history first, then return to Shell or exit. */
@@ -466,7 +475,7 @@ fun BrowserApp(initialUrl: String? = null) {
                                     DropdownMenuItem(
                                         text = { Text(if (adBlockEnabled) "广告拦截: 开" else "广告拦截: 关") },
                                         leadingIcon = { Icon(if (adBlockEnabled) Icons.Default.Star else Icons.Default.Close, null) },
-                                        onClick = { adBlockEnabled = !adBlockEnabled; menuExpanded = false })
+                                        onClick = { adBlockEnabled = !adBlockEnabled; prefs.adBlockEnabled = adBlockEnabled; webViewMap[activeTabId]?.reload(); menuExpanded = false })
                                     DropdownMenuItem(text = { Text("后退") }, leadingIcon = { Icon(Icons.Default.ArrowBack, null) },
                                         enabled = activeTab.canGoBack,
                                         onClick = { webViewMap[activeTabId]?.goBack(); menuExpanded = false })
@@ -501,7 +510,7 @@ fun BrowserApp(initialUrl: String? = null) {
                                     DropdownMenuItem(text = { Text("设置") }, leadingIcon = { Icon(Icons.Default.Settings, null) },
                                         onClick = { showSettings = true; menuExpanded = false })
                                     // Plugin-contributed menu items
-                                    val pluginItems = remember { BrowserPluginRegistry.menuItems() }
+                                    val pluginItems = remember { BrowserPluginRegistry.activeMenuItems() }
                                     if (pluginItems.isNotEmpty()) {
                                         HorizontalDivider()
                                         pluginItems.forEach { item ->
@@ -509,8 +518,10 @@ fun BrowserApp(initialUrl: String? = null) {
                                                 text = { Text(item.label) },
                                                 leadingIcon = { Icon(Icons.Default.Star, null) },
                                                 onClick = {
-                                                    // Execute plugin CLI command via the tab's WebView
-                                                    // The plugin's command handler will process it
+                                                    // FIX B21: Execute plugin command via the current tab's WebView
+                                                    item.command?.let { cmd ->
+                                                        webViewMap[activeTabId]?.evaluateJavascript(cmd, null)
+                                                    }
                                                     menuExpanded = false
                                                 }
                                             )
@@ -733,12 +744,14 @@ fun BrowserApp(initialUrl: String? = null) {
                             }
                             Spacer(Modifier.height(8.dp))
                             // Translate button
+                            // FIX U49: Use rememberCoroutineScope (lifecycle-aware) not raw CoroutineScope
+                            val translateScope = rememberCoroutineScope()
                             Button(
                                 onClick = {
                                     translating.value = true
-                                    CoroutineScope(Dispatchers.IO).launch {
+                                    translateScope.launch(Dispatchers.IO) {
                                         try {
-                                            val pageText = activeTab.title
+                                            val pageText = activeTab.title  // FIX B39: full page translation requires JS injection to extract body text
                                             val translated = GoogleTranslate.translate(pageText, targetLang.value)
                                             result.value = translated
                                         } catch (e: Exception) {
@@ -776,8 +789,9 @@ fun BrowserApp(initialUrl: String? = null) {
                     LazyColumn {
                         items(images.size) { idx ->
                             val img = images[idx]
+                            val imgScope = rememberCoroutineScope()
                             Surface(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
-                                downloadImage(ctx, img.src)
+                                downloadImage(imgScope, ctx, img.src)
                                 Toast.makeText(ctx, "已保存: ${img.src.substringAfterLast('/').take(30)}", Toast.LENGTH_SHORT).show()
                                 showImages = false
                             }, shape = RoundedCornerShape(8.dp), color = ThemeColors.bgCardHigh) {
@@ -833,11 +847,24 @@ fun BrowserApp(initialUrl: String? = null) {
                     onRefresh = { webViewMap[activeTabId]?.reload() }
                 )
                 Box(Modifier.weight(1f).pullRefresh(pullState)) {
-                    AndroidView(
-                        factory = { createWebView(it, activeTab, isWide, adBlockEnabled, updateTab, { imgs -> images = imgs; showImages = true }) },
-                        update = { wv -> webViewMap[activeTabId] = wv },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    // FIX U47+U48: key() ensures each tab gets its own WebView, and old ones are disposed
+                    androidx.compose.runtime.key(activeTabId) {
+                        var wvRef by remember { mutableStateOf<WebView?>(null) }
+                        AndroidView(
+                            factory = { createWebView(it, activeTab, isWide, adBlockEnabled, updateTab, { imgs -> images = imgs; showImages = true }) },
+                            update = { wv -> wvRef = wv; webViewMap[activeTabId] = wv },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        // FIX U48: Clean up WebView when tab leaves composition
+                        DisposableEffect(activeTabId) {
+                            onDispose {
+                                wvRef?.let { wv ->
+                                    try { wv.stopLoading(); wv.destroy() } catch (_: Exception) { }
+                                }
+                                webViewMap.remove(activeTabId)
+                            }
+                        }
+                    }
                     PullRefreshIndicator(activeTab.isLoading, pullState, Modifier.align(Alignment.TopCenter))
                 }
             }
@@ -860,9 +887,13 @@ private fun createWebView(
     settings.useWideViewPort = true
     settings.builtInZoomControls = true
     settings.displayZoomControls = false
-    settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+    settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+    // SECURITY: Disable file access to prevent file:// URL exploits
+    settings.allowFileAccess = false
+    settings.allowContentAccess = false
     settings.userAgentString = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-    try { CookieManager.getInstance().setAcceptThirdPartyCookies(this, true) } catch (_: Exception) { }
+    // SECURITY: Disable third-party cookies to prevent cross-site tracking
+    try { CookieManager.getInstance().setAcceptThirdPartyCookies(this, false) } catch (_: Exception) { }
     try { CookieManager.getInstance().setAcceptCookie(true) } catch (_: Exception) { }
 
     // Agent-to-browser bridge — enables Agent to control this WebView via JS
@@ -944,6 +975,29 @@ private fun createWebView(
     }
 
     webViewClient = object : WebViewClient() {
+        override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+            // SECURITY: Reject all SSL certificate errors — no bypass allowed
+            handler?.cancel()
+            android.util.Log.e("BrowserActivity", "SSL error: ${error?.primaryError} for ${error?.url}")
+        }
+        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+            // SECURITY: Block dangerous URL schemes (javascript:, file:, content:, intent:, etc.)
+            val url = request?.url?.toString() ?: return false
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                if (url.startsWith("intent://") || url.startsWith("tel:") ||
+                    url.startsWith("sms:") || url.startsWith("mailto:")) {
+                    // Allow system intent schemes (handled by Android Intent system)
+                    try {
+                        ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, request.url))
+                    } catch (_: Exception) { }
+                    return true
+                }
+                // Block javascript:, file:, content:, data:, and other dangerous schemes
+                android.util.Log.w("BrowserActivity", "Blocked unsafe URL scheme: ${url.take(80)}")
+                return true
+            }
+            return false
+        }
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
             url?.let { u -> updateTab(tab.id) { it.copy(url = u, isLoading = true) }; BrowserPluginRegistry.onPageStarted(u) }
         }
@@ -1128,34 +1182,33 @@ object BrowserThemeConfig {
 
 // ── Download ──────────────────────────────────────────────────────
 
-private fun downloadImage(ctx: android.content.Context, url: String) {
-    CoroutineScope(Dispatchers.IO).launch {
+// FIX U50: Accept CoroutineScope for lifecycle-aware cancellation; ensure cleanup
+private fun downloadImage(scope: kotlinx.coroutines.CoroutineScope, ctx: android.content.Context, url: String) {
+    scope.launch(Dispatchers.IO) {
+        var conn: HttpURLConnection? = null
         try {
-            val conn = withContext(Dispatchers.IO) {
-                URL(url).openConnection() as HttpURLConnection
-            }
+            conn = URL(url).openConnection() as HttpURLConnection
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 Chrome/120.0.0.0")
             conn.setRequestProperty("Referer", url)
             conn.connectTimeout = 15000; conn.readTimeout = 15000
-            val bmp = withContext(Dispatchers.IO) {
-                android.graphics.BitmapFactory.decodeStream(conn.inputStream)
-            }
-            conn.disconnect()
+            val bmp = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
             if (bmp != null) {
                 val name = url.substringAfterLast('/').substringBefore('?').take(100)
                     .ifBlank { "img_${System.currentTimeMillis()}" }
                 val dir = File(ctx.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES), "MengPaw")
                 dir.mkdirs()
                 val file = File(dir, name)
-                withContext(Dispatchers.IO) {
-                    file.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it) }
+                file.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it) }
+                withContext(Dispatchers.Main) {
+                    android.media.MediaScannerConnection.scanFile(
+                        ctx, arrayOf(file.absolutePath), null, null
+                    )
                 }
-                android.media.MediaScannerConnection.scanFile(
-                    ctx, arrayOf(file.absolutePath), null, null
-                )
             }
         } catch (e: Exception) {
             android.util.Log.e("BrowserActivity", "Image download failed", e)
+        } finally {
+            conn?.disconnect()
         }
     }
 }

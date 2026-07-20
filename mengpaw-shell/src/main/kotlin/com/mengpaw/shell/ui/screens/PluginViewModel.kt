@@ -70,7 +70,7 @@ data class PluginUiItem(
  */
 class PluginViewModel : ViewModel() {
 
-    private val pluginManager = PluginManager()
+    private val pluginManager = PluginManager.globalInstance
     private val marketplace = PluginMarketplaceClient()
 
     /** Last-seen marketplace "updated" timestamp — used to detect remote version changes. */
@@ -135,6 +135,11 @@ class PluginViewModel : ViewModel() {
     val activeCount: StateFlow<Int> = pluginItems
         .map { items -> items.count { it.isActive } }
         .stateIn(viewModelScope, SharingStarted.Lazily, 0)
+
+    /** Active plugin UI buttons grouped by placement. Lazily initialized, refreshed on plugin state changes. */
+    val activeButtons: Map<com.mengpaw.core.plugin.ButtonPlacement, List<com.mengpaw.core.plugin.PluginUiButton>> get() {
+        return pluginManager.getActiveButtons().groupBy({ it.second.placement }, { it.second })
+    }
 
     // ── Actions ───────────────────────────────────────────────────────
 

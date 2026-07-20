@@ -56,8 +56,23 @@ class LlmRequestBuilder(systemPrompt: String) {
         return buildJsonObject {
             put("model", model); put("max_tokens", maxTokens)
             put("temperature", temperature); put("stream", streaming)
+            // FIX A3: Include _cache_control and _image fields that buildMessages() injects
             putJsonArray("messages") { full.forEach { msg ->
-                addJsonObject { put("role", msg["role"] ?: "user"); put("content", msg["content"] ?: "") }
+                addJsonObject {
+                    put("role", msg["role"] ?: "user")
+                    put("content", msg["content"] ?: "")
+                    // Pass through cache control annotation for prefix-cache optimization
+                    msg["_cache_control"]?.let { if (it.isNotBlank()) putJsonObject("cache_control") { put("type", "ephemeral") } }
+                    // Pass through image URL for multimodal vision requests
+                    msg["_image"]?.let { img ->
+                        if (img.isNotBlank()) {
+                            putJsonArray("content") {
+                                addJsonObject { put("type", "text"); put("text", msg["content"] ?: "") }
+                                addJsonObject { put("type", "image_url"); putJsonObject("image_url") { put("url", img) } }
+                            }
+                        }
+                    }
+                }
             }}
             if (tools != null && tools.isNotEmpty()) putJsonArray("tools") { tools.forEach { add(toolToJson(it)) } }
         }.toString()

@@ -2,3 +2,5 @@
 - [copyright-header](copyright-header.md) — 所有新建 .kt/.kts 文件必须添加 SPDX 版权头
 - [no-release-without-ask](no-release-without-ask.md) — 禁止未经用户明确指令的版本发布
 - [release-checklist](release-checklist.md) — 版本发布必须带 APK + CHANGELOG
+- [bug-audit-methodology](bug-audit-methodology.md) — 完整 Bug 审计方法论：安全/UI/Agent/按钮 四维度 70+ 检查项
+- [release-process](release-process.md) — 完整发布流程：版本更新→编译→模拟器验证→APK构建→GitHub+Gitee上传

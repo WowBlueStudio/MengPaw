@@ -15,8 +15,8 @@ android {
         applicationId = "com.mengpaw.browser"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.2.2"
+        versionCode = 5
+        versionName = "0.3.0"
     }
 
     compileOptions {
@@ -43,9 +43,12 @@ android {
             }
         }
         release {
-            isMinifyEnabled = false  // TODO: enable after ProGuard rules fully verified
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             isShrinkResources = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             applicationVariants.all {
                 outputs.all {
                     (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {

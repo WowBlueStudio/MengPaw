@@ -92,9 +92,7 @@ object Sanitizer {
 
         // Step 2: Redact API keys / tokens
         for (pattern in secretPatterns) {
-            result = pattern.replace(result) { match ->
-                "***REDACTED_${match.value.take(4)}***"
-            }
+            result = pattern.replace(result) { "***REDACTED***" }
         }
 
         // Step 3: Strip ANSI escape sequences and control characters
