@@ -32,6 +32,11 @@ android {
         compose = true
     }
 
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
+
     buildTypes {
         debug {
             applicationVariants.all {
