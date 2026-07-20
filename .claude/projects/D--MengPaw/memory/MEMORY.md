@@ -1,3 +1,4 @@
 - [dev-guide-as-single-source](dev-guide-as-single-source.md) — MengPaw-Development-Guide.md 是项目唯一权威知识中心，所有开发工作必须同步更新该文档
 - [copyright-header](copyright-header.md) — 所有新建 .kt/.kts 文件必须添加 SPDX 版权头
 - [no-release-without-ask](no-release-without-ask.md) — 禁止未经用户明确指令的版本发布
+- [release-checklist](release-checklist.md) — 版本发布必须带 APK + CHANGELOG
