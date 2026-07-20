@@ -11,6 +11,7 @@ import com.mengpaw.core.agent.AgentMiddleware
 import com.mengpaw.core.agent.PostCallMiddleware
 import com.mengpaw.core.agent.PostCallResult
 import com.mengpaw.core.agent.ScrollContextManager
+import com.mengpaw.core.llm.AdaptiveLlmProvider
 import com.mengpaw.core.llm.LlmProvider
 import com.mengpaw.core.llm.PromptEngine
 import com.mengpaw.core.llm.ProviderInfo
@@ -121,7 +122,7 @@ class AgentViewModel : ViewModel() {
         val msgs = MutableStateFlow<List<ChatMessageUi>>(
             listOf(ChatMessageUi.System("$name 就绪。请描述你想完成的任务。"))
         )
-        return AgentSession(name, framework, model, provider, engine, msgs, scroll)
+        return AgentSession(name, framework, model, globalEndpoint, globalApiKey, provider, engine, msgs, scroll)
     }
 
     /** Ensure the default "MengPaw" agent session always exists. */
