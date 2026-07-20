@@ -71,7 +71,22 @@ class LlmRequestBuilder(systemPrompt: String) {
         else -> JsonPrimitive(v.toString())
     }
 
-    companion object { const val FALLBACK_TOK_PER_CHAR = 0.25 }
+    companion object {
+        const val FALLBACK_TOK_PER_CHAR = 0.25
+
+        fun multimodalMessage(text: String, imageUrl: String? = null): Map<String, String> {
+            val msg = mutableMapOf("role" to "user", "content" to text)
+            if (imageUrl != null && imageUrl.isNotBlank()) msg["_image"] = imageUrl
+            return msg
+        }
+        fun visionMessage(prompt: String, imagePath: String): Map<String, String> {
+            val base64 = try {
+                val bytes = java.io.File(imagePath).readBytes()
+                "data:image/png;base64,${android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)}"
+            } catch (_: Exception) { imagePath }
+            return multimodalMessage(prompt, base64)
+        }
+    }
 }
 
 /** Per-provider cache strategy for automatic prompt caching. */
@@ -99,33 +114,6 @@ enum class CacheStrategy {
             PREFIX_STABLE -> "自动前缀缓存（DeepSeek 模式）"
             CACHE_CONTROL -> "Prompt Caching（OpenAI 模式）"
             NONE -> "未优化"
-        }
-    }
-
-    companion object {
-        /**
-         * Build a multimodal user message with optional image.
-         * GROK, GPT-4V, Claude, Qwen-VL, etc. all support this format.
-         *
-         * @param text The text content of the message
-         * @param imageUrl Image URL or base64 data URI (e.g., "data:image/png;base64,...")
-         * @return A map suitable for LlmProvider.completeWithMessages()
-         */
-        fun multimodalMessage(text: String, imageUrl: String? = null): Map<String, String> {
-            val msg = mutableMapOf("role" to "user", "content" to text)
-            if (imageUrl != null && imageUrl.isNotBlank()) {
-                msg["_image"] = imageUrl
-            }
-            return msg
-        }
-
-        /** Shorthand for sending an image with a text prompt to vision models. */
-        fun visionMessage(prompt: String, imagePath: String): Map<String, String> {
-            val base64 = try {
-                val bytes = java.io.File(imagePath).readBytes()
-                "data:image/png;base64,${android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)}"
-            } catch (_: Exception) { imagePath }
-            return multimodalMessage(prompt, base64)
         }
     }
 }

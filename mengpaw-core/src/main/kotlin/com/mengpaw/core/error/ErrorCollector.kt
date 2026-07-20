@@ -125,7 +125,7 @@ object ErrorCollector {
                     type = ErrorType.APP_CRASH,
                     source = "Thread:${thread.name}",
                     message = throwable.message ?: "(no message)",
-                    stackTrace = stackTraceToString(throwable)
+                    throwable = throwable
                 )
             } catch (_: Exception) { /* must not throw */ }
             originalUncaughtHandler?.uncaughtException(thread, throwable)
