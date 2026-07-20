@@ -93,6 +93,49 @@
 
 ---
 
+## 2026-07-20 — v0.3.x 发布日惨案合集
+
+### 流程教训（最重要）
+
+26. **绝对不推送未编译的代码**
+    - 后果：v0.3.0 push 后有 7 个编译错误，连续 5 次修复提交
+    - 教训：`./gradlew assembleRelease` 通过后才 commit+push
+27. **绝对不在模拟器验证前发布**
+    - 后果：v0.3.0-v0.3.3 连续 4 个版本都是发布后才测试，全部有崩溃
+    - 教训：每次改完→编译→模拟器安装→启动→确认无崩溃→发布
+28. **hotfix 必须迭代版本号**
+    - 后果：修了 bug 没改版本号，Release 混乱
+    - 教训：0.3.0→0.3.1→...→0.3.4，每次都递增
+29. **发布必须带 APK + CHANGELOG**
+    - 后果：用户多次提醒"带APK一起上传"
+    - 教训：发布前确认：CHANGELOG ✓、Shell APK ✓、Browser APK ✓
+
+### R8 混淆教训
+
+30. **库模块的 R8 比应用模块更危险**
+    - 后果：mengpaw-core `isMinifyEnabled=true` 导致所有引用它的 APK 都缺类
+    - 教训：库模块 R8 要格外谨慎，DataPaths 这种基础类被删会影响所有 APK
+31. **R8 开启后 APK 从 13MB→2MB 是危险信号**
+    - 教训：正常 release APK 应该在 8-13MB，过小说明类被过度删除
+
+### 编译教训
+
+32. **sealed class 子类字段名必须一致**
+    - `AgentWithTrace.finalContent` ≠ `Agent.content` → 批量替换出错
+33. **companion object 同文件只能有一个** → 合并
+34. **跨模块 data class 放 core** → MissionMonitor 放 plugin 导致 shell 引用不到
+35. **新模块必须加 ProGuard keep 规则** → 不然 R8 删光
+36. **能用 Regex 替代就不加新依赖** → kotlinx.serialization 跨模块引用失败
+
+### 运行时崩溃
+
+37. **嵌套 ModalNavigationDrawer 在 Material3 某些版本会崩**
+    - 改为单抽屉
+38. **ShellService 前台服务 Android 12+ 会崩**
+    - try/catch `startForeground()`
+39. **模拟器 "System UI isn't responding" 不是 app 的问题**
+    - 模拟器性能不足导致，app 本身没崩
+
 ## 2026-07-20 — v0.3.1 紧急修复
 
 24. **R8 混淆必须在真机验证后才能发布**
