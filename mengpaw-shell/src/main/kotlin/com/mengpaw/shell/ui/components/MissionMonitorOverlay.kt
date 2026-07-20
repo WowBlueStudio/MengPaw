@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
-import com.mengpaw.plugin.agentloop.MissionMonitor
-import com.mengpaw.plugin.agentloop.WorkerMonitor
+import com.mengpaw.core.mission.MissionMonitor
+import com.mengpaw.core.mission.WorkerMonitor
 
 /**
  * Two floating monitor windows for Mission mode:

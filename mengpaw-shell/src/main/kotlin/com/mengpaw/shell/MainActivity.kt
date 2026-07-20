@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.mengpaw.design.theme.ArcoTheme
 import com.mengpaw.shell.ui.localization.AppStrings
 import com.mengpaw.shell.ui.localization.ChineseStrings

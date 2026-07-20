@@ -139,7 +139,7 @@ fun MainScreen(
                         Icon(Icons.Outlined.Add, "新建会话", tint = ThemeColors.textSecondary)
                     }
                     // Mission monitor toggle (visible when mission is active)
-                    if (com.mengpaw.plugin.agentloop.MissionMonitor.missionActive) {
+                    if (com.mengpaw.core.mission.MissionMonitor.missionActive) {
                         IconButton(onClick = { /* toggle monitor overlay */ }, modifier = Modifier.size(44.dp)) {
                             Icon(Icons.Outlined.Monitor, "Mission", tint = Color(0xFF165DFF))
                         }
