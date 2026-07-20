@@ -15,6 +15,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
+import androidx.compose.runtime.SideEffect
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.Image
@@ -141,7 +142,7 @@ class HistoryStore(ctx: Context) {
 
     fun all(): List<Entry> {
         val now = System.currentTimeMillis()
-        if (cached != null && now - cacheTimestamp < CACHE_TTL_MS) return cached!!
+        if (cached != null && now - cacheTimestamp < CACHE_TTL_MS) return cached ?: emptyList()
         val raw = p.getString("entries", "") ?: ""
         val entries = if (raw.isBlank()) emptyList()
         else raw.split("|").mapNotNull { decode(it) }.filter { it.time > cutoffTime }
@@ -270,6 +271,8 @@ private fun smartNavigate(input: String, engine: SearchEngine): String {
 class BrowserActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // CRITICAL: Must initialize before any DataPaths access (theme load, screenshots, etc.)
+        com.mengpaw.core.DataPaths.initialize(this)
         enableEdgeToEdge()
         // Read theme from first Agent's theme.md (or default)
         val themeConfig = BrowserThemeConfig.load(this)
@@ -285,7 +288,37 @@ class BrowserActivity : ComponentActivity() {
         intent?.dataString != null -> intent.dataString
         else -> null
     }
-}
+
+    /** Back key: navigate WebView history first, then return to Shell or exit. */
+    override fun onBackPressed() {
+        // Check all WebViews — any with history goes back first
+        for ((_, wv) in webViewMapRef) {
+            if (wv.canGoBack()) { wv.goBack(); return }
+        }
+        // No WebView history — return to Shell if installed
+        try {
+            val shellIntent = packageManager.getLaunchIntentForPackage("com.mengpaw.shell")
+            if (shellIntent != null) {
+                shellIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                startActivity(shellIntent)
+                return
+            }
+        } catch (_: Exception) { }
+        super.onBackPressed()
+    }
+
+    /** Mutable reference to Compose's webViewMap, synced via SideEffect. */
+    internal var webViewMapRef: MutableMap<Int, WebView> = mutableMapOf()
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // CRITICAL: Destroy all WebViews to free native renderer memory
+        webViewMapRef.values.forEach { wv ->
+            try { wv.stopLoading(); wv.destroy() } catch (_: Exception) { }
+        }
+        webViewMapRef.clear()
+        try { android.webkit.CookieManager.getInstance().flush() } catch (_: Exception) { }
+    }
 
 // ── Main Browser App ──────────────────────────────────────────────
 
@@ -316,6 +349,8 @@ fun BrowserApp(initialUrl: String? = null) {
     var searchEngine by remember { mutableStateOf(prefs.defaultEngine()) }
     var adBlockEnabled by remember { mutableStateOf(prefs.adBlockEnabled) }
     val webViewMap = remember { mutableMapOf<Int, WebView>() }
+    // Sync WebView map to Activity for system back-key navigation
+    SideEffect { (ctx as? BrowserActivity)?.webViewMapRef = webViewMap }
 
     val activeTab = tabs.find { it.id == activeTabId } ?: tabs.first()
 
@@ -344,20 +379,24 @@ fun BrowserApp(initialUrl: String? = null) {
                                 var editUrl by remember(activeTabId) { mutableStateOf(activeTab.url) }
                                 OutlinedTextField(
                                     value = editUrl, onValueChange = { editUrl = it },
-                                    modifier = Modifier.fillMaxWidth().height(40.dp), singleLine = true,
-                                    textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                                    modifier = Modifier.fillMaxWidth(if (isWide) 0.6f else 0.8f).height(44.dp), singleLine = true,
+                                    textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
                                     shape = RoundedCornerShape(ArcoRadius.round),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = ThemeColors.brand, unfocusedBorderColor = ThemeColors.border
                                     ),
                                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri
+                                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
+                                        imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                                    ),
+                                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                        onSearch = { navigate(editUrl) }
                                     ),
                                     trailingIcon = {
                                         FilledIconButton(onClick = { navigate(editUrl) },
                                             modifier = Modifier.size(32.dp), shape = CircleShape,
                                             colors = IconButtonDefaults.filledIconButtonColors(containerColor = ThemeColors.brand)
-                                        ) { Icon(Icons.Default.Send, "前往", tint = Color.White, modifier = Modifier.size(14.dp)) }
+                                        ) { Icon(Icons.Default.ArrowForward, "→", tint = Color.White, modifier = Modifier.size(16.dp)) }
                                     }
                                 )
                             } else {
@@ -450,7 +489,9 @@ fun BrowserApp(initialUrl: String? = null) {
                                                 val intent = Intent("com.mengpaw.action.OPEN_URL").apply {
                                                     setClassName("com.mengpaw.shell", "com.mengpaw.shell.MainActivity")
                                                     putExtra("url", activeTab.url)
-                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                                                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                                        Intent.FLAG_ACTIVITY_SINGLE_TOP)
                                                 }
                                                 try { ctx.startActivity(intent) } catch (_: Exception) { Toast.makeText(ctx, "MengPaw 未安装", Toast.LENGTH_SHORT).show() }
                                                 menuExpanded = false
@@ -760,7 +801,7 @@ fun BrowserApp(initialUrl: String? = null) {
                     Text("MengPaw 浏览器", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(24.dp))
                     OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it },
-                        modifier = Modifier.fillMaxWidth(), placeholder = { Text("搜索关键词或输入网址...") },
+                        modifier = Modifier.fillMaxWidth(if (isWide) 0.6f else 0.8f), placeholder = { Text("搜索关键词或输入网址...") },
                         leadingIcon = {
                             // Engine icon — tap to cycle through search engines
                             IconButton(onClick = {
@@ -774,8 +815,14 @@ fun BrowserApp(initialUrl: String? = null) {
                                 SearchEngineLogo(searchEngine, size = 28)
                             }
                         },
-                        trailingIcon = { if (searchQuery.isNotEmpty()) IconButton(onClick = { navigate(searchQuery) }) { Icon(Icons.Default.Send, "搜索", tint = ThemeColors.brand) } },
+                        trailingIcon = { if (searchQuery.isNotEmpty()) IconButton(onClick = { navigate(searchQuery) }) { Icon(Icons.Default.ArrowForward, "→", tint = ThemeColors.brand) } },
                         singleLine = true, shape = RoundedCornerShape(ArcoRadius.round),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                            onSearch = { navigate(searchQuery) }
+                        ),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ThemeColors.brand, unfocusedBorderColor = ThemeColors.border))
                 }
             } else {
@@ -814,8 +861,24 @@ private fun createWebView(
     settings.displayZoomControls = false
     settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
     settings.userAgentString = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-    CookieManager.getInstance().setAcceptCookie(true)
+    try { CookieManager.getInstance().setAcceptThirdPartyCookies(this, true) } catch (_: Exception) { }
+    try { CookieManager.getInstance().setAcceptCookie(true) } catch (_: Exception) { }
+
+    // Agent-to-browser bridge — enables Agent to control this WebView via JS
+    addJavascriptInterface(
+        com.mengpaw.browser.bridge.BrowserBridge(this) { bitmap ->
+            var path = ""
+            try {
+                val dir = java.io.File(com.mengpaw.core.DataPaths.SCREENSHOTS)
+                dir.mkdirs()
+                val file = java.io.File(dir, "browser_${System.currentTimeMillis()}.png")
+                java.io.FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 90, it) }
+                path = file.absolutePath
+            } catch (_: Exception) { }
+            path
+        },
+        "MengPaw"
+    )
 
     var lastScrollY = 0
     setOnScrollChangeListener { _, _, scrollY, _, _ ->

@@ -10,6 +10,7 @@ import com.mengpaw.core.plugin.Plugin
 import com.mengpaw.core.plugin.PluginContext
 import com.mengpaw.core.plugin.PluginMetadata
 import com.mengpaw.core.plugin.PluginType
+import com.mengpaw.core.error.ErrorCollector
 import java.io.File
 
 /**
@@ -84,13 +85,18 @@ class SkillPlugin : Plugin {
             Regex("(?m)^enabled:\\s*(true|false)"),
             "enabled: $enabled"
         )
-        File(dir, "$name.md").writeText(newContent)
-        return true
+        return try {
+            File(dir, "$name.md").writeText(newContent)
+            true
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "SkillPlugin.setEnabled")
+            false
+        }
     }
 
     private fun parseSkill(file: File): SkillDef? {
         if (!file.exists()) return null
-        val text = file.readText()
+        val text = try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.parseSkill"); return null }
         val fm = Regex("^---\\s*\n(.+?)\\n---", RegexOption.DOT_MATCHES_ALL).find(text.trimStart())
         val frontmatter = fm?.groupValues?.get(1) ?: ""
         val contentStart = fm?.range?.last?.plus(1) ?: 0

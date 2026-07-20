@@ -3,6 +3,8 @@
 
 package com.mengpaw.core.cli
 
+import com.mengpaw.core.error.ErrorCollector
+import com.mengpaw.core.error.ErrorType
 import com.mengpaw.core.security.SecurityPolicy
 
 /**
@@ -73,6 +75,7 @@ class Pipeline(
             return result
 
         } catch (e: Exception) {
+            ErrorCollector.report(e, "Pipeline.execute", context.sessionId, context.agentName)
             return failAudit(
                 "Execution error: ${e.message ?: e::class.simpleName}",
                 ErrorCodes.ERR_INTERNAL, input, context, startTime
@@ -122,6 +125,9 @@ class Pipeline(
     private fun failAudit(
         error: String, errorCode: String, command: String, context: ExecutionContext, startTime: Long
     ): ExecutionResult {
+        ErrorCollector.report(ErrorType.PLUGIN_ERROR, "Pipeline", "$error [$errorCode]",
+            sessionId = context.sessionId, agentName = context.agentName,
+            metadata = mapOf("command" to command.take(200), "errorCode" to errorCode))
         auditLog.add(AuditEntry(
             timestamp = startTime, sessionId = context.sessionId,
             command = command, success = false, output = error.take(200)

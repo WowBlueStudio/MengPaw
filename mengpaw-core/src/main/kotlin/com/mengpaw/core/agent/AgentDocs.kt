@@ -4,6 +4,7 @@
 package com.mengpaw.core.agent
 
 import com.mengpaw.core.DataPaths
+import com.mengpaw.core.error.ErrorCollector
 import java.io.File
 
 /**
@@ -28,23 +29,23 @@ object AgentDocs {
     /** Read the content of AGENTS.md for a given agent, or return the default. */
     fun readAgentsDoc(agentName: String): String {
         val file = File(DataPaths.AGENTS, "$agentName/AGENTS.md")
-        return if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else agentsTemplate(agentName)
+        return if (file.exists()) try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocs.readAgentsDoc"); "" } else agentsTemplate(agentName)
     }
 
     /** Read SOUL.md content. */
     fun readSoulDoc(agentName: String): String {
         val file = File(DataPaths.AGENTS, "$agentName/SOUL.md")
-        return if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else soulTemplate(agentName)
+        return if (file.exists()) try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocs.readSoulDoc"); "" } else soulTemplate(agentName)
     }
 
     /** Read MEMORY.md content. */
     fun readMemoryDoc(agentName: String): String {
         val file = File(DataPaths.AGENTS, "$agentName/MEMORY.md")
-        return if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
+        return if (file.exists()) try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocs.readMemoryDoc"); "" } else ""
     }
 
     private fun writeIfMissing(file: File, content: String) {
-        if (!file.exists()) file.writeText(content)
+        if (!file.exists()) try { file.writeText(content) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocs.writeIfMissing") }
     }
 
     // ── Templates ──

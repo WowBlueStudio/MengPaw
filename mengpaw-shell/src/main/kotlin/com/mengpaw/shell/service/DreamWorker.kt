@@ -56,10 +56,8 @@ class DreamWorker(
         val endpoint = prefs.getString("api_endpoint", "") ?: ""
         val apiKey = prefs.getString("api_key", "") ?: ""
         val model = prefs.getString("model_name", "") ?: ""
-        val useSimulated = prefs.getBoolean("use_simulated", true)
-
         // Only run if we have real API config
-        if (useSimulated || apiKey.isBlank()) return Result.success()
+        if (apiKey.isBlank()) return Result.success()
 
         val llmProvider = try {
             AdaptiveLlmProvider(endpoint, apiKey, model)

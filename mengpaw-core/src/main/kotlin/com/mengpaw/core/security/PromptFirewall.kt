@@ -4,6 +4,7 @@
 package com.mengpaw.core.security
 
 import com.mengpaw.core.DataPaths
+import com.mengpaw.core.error.ErrorCollector
 import java.io.File
 
 /**
@@ -92,7 +93,7 @@ object PromptFirewall {
 
     fun trust(peerId: String, fingerprint: String) {
         trustedDir.mkdirs()
-        File(trustedDir, "$peerId.trusted").writeText(fingerprint)
+        try { File(trustedDir, "$peerId.trusted").writeText(fingerprint) } catch (e: Exception) { ErrorCollector.report(e, "PromptFirewall.trust") }
     }
 
     fun untrust(peerId: String) {

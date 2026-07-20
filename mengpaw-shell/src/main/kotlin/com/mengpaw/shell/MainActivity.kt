@@ -3,6 +3,7 @@
 
 package com.mengpaw.shell
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -48,11 +49,30 @@ class MainActivity : ComponentActivity() {
         PluginViewModel.registerPluginClass("pad-plugin", "com.mengpaw.plugin.pad.PadPlugin")
         PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
 
+        // Handle URL sent from Browser APK (singleTask — onNewIntent)
+        handleOpenUrl(intent)
+
         setContent {
             val settingsState by settingsViewModel.state.collectAsState()
             val strings: AppStrings = if (settingsState.useChinese) ChineseStrings else EnglishStrings
             ArcoTheme(darkTheme = settingsState.darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) { MengPawApp(strings, settingsViewModel) }
+            }
+        }
+    }
+
+    /** Handle incoming OPEN_URL intent from Browser APK without creating a new task. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleOpenUrl(intent)
+    }
+
+    private fun handleOpenUrl(intent: Intent?) {
+        if (intent?.action == "com.mengpaw.action.OPEN_URL") {
+            val url = intent.getStringExtra("url")
+            if (url != null) {
+                // Store URL so Agent can access it via browser.open or as context
+                intent.putExtra("url", url)
             }
         }
     }
@@ -64,35 +84,71 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     var showPlugins by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
 
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val leftDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val rightDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val agentViewModel: AgentViewModel = viewModel()
     val activeAgent by agentViewModel.activeAgent.collectAsState()
+    val sessionHistory by agentViewModel.sessionHistory.collectAsState()
+    val hideCompacted by agentViewModel.hideCompacted.collectAsState()
+    val isTablet = com.mengpaw.shell.ui.isWide()
 
+    // Tablet: permanent left sidebar drawer open, right sidebar as second drawer
+    LaunchedEffect(isTablet) {
+        if (isTablet) leftDrawerState.open() else leftDrawerState.close()
+    }
+
+    // Left sidebar drawer
     ModalNavigationDrawer(
-        drawerState = drawerState,
+        drawerState = leftDrawerState,
+        gesturesEnabled = !isTablet, // tablet: permanent, phone: swipe to open
         drawerContent = {
             ModalDrawerSheet {
                 SidebarContent(
-                    onNavigateToPlugins = { showPlugins = true; scope.launch { drawerState.close() } },
-                    onNavigateToSettings = { showSettings = true; scope.launch { drawerState.close() } },
-                    onClose = { scope.launch { drawerState.close() } },
+                    onNavigateToPlugins = { showPlugins = true; scope.launch { leftDrawerState.close() } },
+                    onNavigateToSettings = { showSettings = true; scope.launch { leftDrawerState.close() } },
+                    onClose = { scope.launch { leftDrawerState.close() } },
                     activeAgent = activeAgent,
-                    onSwitchAgent = { name -> agentViewModel.switchAgent(name); scope.launch { drawerState.close() } },
+                    onSwitchAgent = { name -> agentViewModel.switchAgent(name); scope.launch { leftDrawerState.close() } },
                     onCreateAgent = { name ->
                         agentViewModel.createAgent(name)
-                        scope.launch { drawerState.close() }
+                        scope.launch { leftDrawerState.close() }
                     }
                 )
             }
         }
     ) {
-        // ── Main Chat Screen ──
-        MainScreen(
-            strings = strings,
-            settingsViewModel = settingsViewModel,
-            onOpenSidebar = { scope.launch { drawerState.open() } }
-        )
+        // Right sidebar drawer (history)
+        ModalNavigationDrawer(
+            drawerState = rightDrawerState,
+            gesturesEnabled = true,
+            drawerContent = {
+                ModalDrawerSheet(
+                    drawerContainerColor = com.mengpaw.design.theme.ThemeColors.bgPrimary,
+                    drawerShape = androidx.compose.foundation.shape.RoundedCornerShape(
+                        topStart = 12.dp, bottomStart = 12.dp
+                    )
+                ) {
+                    HistorySidebar(
+                        sessions = sessionHistory,
+                        hideCompacted = hideCompacted,
+                        onToggleHideCompacted = { agentViewModel.toggleHideCompacted() },
+                        onSelectSession = { /* TODO: restore session */ },
+                        onDeleteSession = { agentViewModel.deleteSession(it) },
+                        onCompactSession = { agentViewModel.compactSession(it) }
+                    )
+                }
+            }
+        ) {
+            // ── Main Chat Screen ──
+            MainScreen(
+                strings = strings,
+                settingsViewModel = settingsViewModel,
+                onOpenSidebar = { scope.launch { leftDrawerState.open() } },
+                onOpenHistory = { scope.launch { rightDrawerState.open() } },
+                agentViewModel = agentViewModel
+            )
+        }
     }
 
     // ── Full-screen overlays for Plugins/Settings ──

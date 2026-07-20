@@ -1,0 +1,323 @@
+// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package com.mengpaw.plugin.update
+
+import android.content.Context
+import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
+import androidx.core.content.FileProvider
+import com.mengpaw.core.DataPaths
+import com.mengpaw.core.cli.ExecutionContext
+import com.mengpaw.core.cli.ExecutionResult
+import com.mengpaw.core.cli.ErrorCodes
+import com.mengpaw.core.error.ErrorCollector
+import com.mengpaw.core.plugin.Plugin
+import com.mengpaw.core.plugin.PluginContext
+import com.mengpaw.core.plugin.PluginMetadata
+import com.mengpaw.core.plugin.PluginType
+import io.ktor.client.*
+import io.ktor.client.engine.okhttp.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import kotlinx.coroutines.*
+import kotlinx.serialization.json.*
+import java.io.File
+import java.util.concurrent.TimeUnit
+
+/**
+ * Automatic update plugin for MengPaw Shell and Browser.
+ *
+ * ## Features
+ * - Checks GitHub Releases for new versions
+ * - WiFi-only scanning (optional, configurable)
+ * - Auto-download option
+ * - Installs APK via system package installer
+ * - CLI: update.check / update.download / update.install / update.auto
+ */
+class UpdatePlugin : Plugin {
+    override val metadata = PluginMetadata(
+        id = "update-plugin", name = "自动更新", version = "0.1.0",
+        type = PluginType.NATIVE, author = "MengPaw",
+        description = "WiFi 环境自动检测更新，可选自动下载安装。检查 GitHub Releases。",
+        permissions = listOf("INTERNET", "ACCESS_NETWORK_STATE", "REQUEST_INSTALL_PACKAGES"),
+        minCoreVersion = "0.2.3",
+        commands = listOf("update.check", "update.download", "update.install", "update.auto")
+    )
+    override val commands: Map<String, com.mengpaw.core.plugin.CommandHandler> = mapOf(
+        "check" to ::check, "download" to ::download,
+        "install" to ::install, "auto" to ::autoConfig,
+    )
+
+    private val client = HttpClient(OkHttp) {
+        engine { config { connectTimeout(15, TimeUnit.SECONDS); readTimeout(30, TimeUnit.SECONDS) } }
+    }
+    private var appContext: Context? = null
+    private var autoCheckEnabled = false
+    private var autoDownloadEnabled = false
+    private var lastCheckTime = 0L
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var latestRelease: ReleaseInfo? = null
+    private var downloadedApk: File? = null
+
+    data class ReleaseInfo(
+        val tag: String, val name: String, val body: String,
+        val shellUrl: String, val shellSize: Long,
+        val browserUrl: String, val browserSize: Long
+    )
+
+    // ── Lifecycle ───────────────────────────────────────────────────────
+
+    override suspend fun onInstall(ctx: PluginContext) {
+        try {
+            appContext = Class.forName("com.mengpaw.shell.MainActivity")
+                .getMethod("getAppContext").invoke(null) as? Context
+        } catch (_: Exception) { }
+        loadConfig()
+        if (autoCheckEnabled) scheduleAutoCheck()
+        ctx.log("自动更新插件已激活。${if (autoCheckEnabled) "WiFi 自动扫描已启用。" else ""}")
+    }
+
+    override suspend fun onUninstall() {
+        scope.cancel()
+        client.close()
+    }
+
+    // ── update.check ────────────────────────────────────────────────────
+
+    private suspend fun check(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val currentVersion = getCurrentVersion() ?: return ExecutionResult.fail("无法获取当前版本", errorCode = ErrorCodes.ERR_INTERNAL)
+        val force = args.contains("--force")
+
+        // Cache: skip if checked within last hour (unless forced)
+        if (!force && System.currentTimeMillis() - lastCheckTime < 3_600_000 && latestRelease != null) {
+            return formatCheckResult(currentVersion, latestRelease!!)
+        }
+
+        return try {
+            val response = client.get(GITHUB_API_URL) {
+                header("Accept", "application/vnd.github.v3+json")
+            }
+            if (!response.status.isSuccess()) return ExecutionResult.fail("GitHub API error: ${response.status.value}", errorCode = ErrorCodes.ERR_INTERNAL)
+
+            val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val tag = json["tag_name"]?.jsonPrimitive?.content ?: "unknown"
+            val name = json["name"]?.jsonPrimitive?.content ?: tag
+            val body = json["body"]?.jsonPrimitive?.content?.take(500) ?: ""
+
+            // Find shell + browser APK assets
+            val assets = json["assets"]?.jsonArray ?: emptyList()
+            var shellUrl = ""; var shellSize = 0L
+            var browserUrl = ""; var browserSize = 0L
+            assets.forEach { a ->
+                val obj = a.jsonObject
+                val dUrl = obj["browser_download_url"]?.jsonPrimitive?.content ?: ""
+                val dSize = obj["size"]?.jsonPrimitive?.long ?: 0L
+                when {
+                    dUrl.contains("mengpaw-shell") -> { shellUrl = dUrl; shellSize = dSize }
+                    dUrl.contains("mengpaw-browser") -> { browserUrl = dUrl; browserSize = dSize }
+                }
+            }
+
+            latestRelease = ReleaseInfo(tag, name, body, shellUrl, shellSize, browserUrl, browserSize)
+            lastCheckTime = System.currentTimeMillis()
+            formatCheckResult(currentVersion, latestRelease!!)
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "UpdatePlugin.check")
+            ExecutionResult.fail("检查更新失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+    }
+
+    private fun formatCheckResult(current: String, release: ReleaseInfo): ExecutionResult {
+        val isNewer = compareVersions(release.tag.removePrefix("v"), current) > 0
+        val sb = StringBuilder()
+        sb.appendLine(if (isNewer) "🔔 发现新版本!" else "✅ 已是最新版本")
+        sb.appendLine("- 当前: v$current")
+        sb.appendLine("- 最新: ${release.tag} — ${release.name}")
+        if (release.shellUrl.isNotEmpty()) sb.appendLine("- Shell APK: ${formatSize(release.shellSize)}")
+        if (release.browserUrl.isNotEmpty()) sb.appendLine("- Browser APK: ${formatSize(release.browserSize)}")
+        if (isNewer) {
+            sb.appendLine()
+            sb.appendLine("更新内容:")
+            sb.appendLine(release.body.take(300))
+            sb.appendLine()
+            sb.appendLine("执行 update.download 下载更新。")
+        }
+        return ExecutionResult.ok(sb.toString())
+    }
+
+    // ── update.download ─────────────────────────────────────────────────
+
+    private suspend fun download(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val release = latestRelease ?: return ExecutionResult.fail("请先执行 update.check", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val target = args.firstOrNull()?.lowercase() ?: "shell"
+
+        val (url, label) = when (target) {
+            "shell" -> release.shellUrl to "Shell"
+            "browser" -> release.browserUrl to "Browser"
+            else -> return ExecutionResult.fail("请指定 shell 或 browser", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        }
+        if (url.isEmpty()) return ExecutionResult.fail("该组件无可用下载", errorCode = ErrorCodes.ERR_NOT_FOUND)
+
+        // Check WiFi if configured
+        if (autoCheckEnabled && !isWifiConnected()) {
+            return ExecutionResult.fail("未连接 WiFi。使用 update.auto wifi_only=false 允许移动网络下载。", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+
+        return try {
+            val downloadDir = File(DataPaths.PLUGIN_CACHE, "updates").also { it.mkdirs() }
+            val apkFile = File(downloadDir, "mengpaw-$target-${release.tag}.apk")
+
+            val response = client.get(url)
+            if (!response.status.isSuccess()) return ExecutionResult.fail("下载失败 HTTP ${response.status.value}", errorCode = ErrorCodes.ERR_INTERNAL)
+
+            apkFile.writeBytes(response.bodyAsBytes())
+            downloadedApk = apkFile
+
+            ExecutionResult.ok("""
+## 下载完成: $label ${release.tag}
+文件: ${apkFile.absolutePath}
+大小: ${formatSize(apkFile.length())}
+
+执行 update.install $target 安装更新。
+""".trimIndent())
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "UpdatePlugin.download")
+            ExecutionResult.fail("下载失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+    }
+
+    // ── update.install ──────────────────────────────────────────────────
+
+    private suspend fun install(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val apk = downloadedApk ?: return ExecutionResult.fail("请先执行 update.download", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val context = appContext ?: return ExecutionResult.fail("无法获取 Context", errorCode = ErrorCodes.ERR_INTERNAL)
+
+        if (!apk.exists()) {
+            downloadedApk = null
+            return ExecutionResult.fail("APK 文件不存在，请重新下载", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        }
+
+        return try {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.update.provider", apk)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            ExecutionResult.ok("正在安装 ${apk.name}...\n安装完成后请重启应用。")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "UpdatePlugin.install")
+            ExecutionResult.fail("安装失败: ${e.message}\n可能需要允许"未知来源"安装。", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+    }
+
+    // ── update.auto ─────────────────────────────────────────────────────
+
+    private suspend fun autoConfig(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) {
+            return ExecutionResult.ok("""
+## 自动更新配置
+- WiFi 扫描: ${if (autoCheckEnabled) "✅ 已启用" else "⛔ 已禁用"}
+- 自动下载: ${if (autoDownloadEnabled) "✅ 已启用" else "⛔ 已禁用"}
+- 上次检查: ${if (lastCheckTime > 0) java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(lastCheckTime)) else "从未"}
+
+用法:
+  update.auto on              — 启用 WiFi 自动扫描
+  update.auto off             — 禁用自动扫描
+  update.auto download=on     — 启用自动下载(检测到更新后自动下载)
+  update.auto download=off    — 禁用自动下载
+""".trimIndent())
+        }
+
+        when (args[0].lowercase()) {
+            "on" -> { autoCheckEnabled = true; scheduleAutoCheck(); saveConfig() }
+            "off" -> { autoCheckEnabled = false; saveConfig() }
+            "download=on" -> { autoDownloadEnabled = true; saveConfig() }
+            "download=off" -> { autoDownloadEnabled = false; saveConfig() }
+        }
+        return autoConfig(emptyList(), ctx)
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────
+
+    private fun scheduleAutoCheck() {
+        scope.launch {
+            while (isActive) {
+                delay(3_600_000) // Check every hour
+                if (isWifiConnected()) {
+                    try { check(emptyList(), ExecutionContext("auto")) } catch (_: Exception) { }
+                    if (autoDownloadEnabled && latestRelease != null) {
+                        val current = getCurrentVersion()
+                        if (current != null && compareVersions(latestRelease!!.tag.removePrefix("v"), current) > 0) {
+                            try { download(listOf("shell"), ExecutionContext("auto")) } catch (_: Exception) { }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun isWifiConnected(): Boolean {
+        val ctx = appContext ?: return false
+        return try {
+            val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+            val net = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(net) ?: return false
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+        } catch (_: Exception) { false }
+    }
+
+    private fun getCurrentVersion(): String? {
+        val ctx = appContext ?: return null
+        return try {
+            val pkgInfo = if (Build.VERSION.SDK_INT >= 33) {
+                ctx.packageManager.getPackageInfo(ctx.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0L))
+            } else {
+                ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+            }
+            pkgInfo.versionName
+        } catch (_: Exception) { null }
+    }
+
+    private fun compareVersions(a: String, b: String): Int {
+        val ap = a.split(".").map { it.toIntOrNull() ?: 0 }
+        val bp = b.split(".").map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(ap.size, bp.size)) {
+            val av = ap.getOrElse(i) { 0 }; val bv = bp.getOrElse(i) { 0 }
+            if (av != bv) return av.compareTo(bv)
+        }
+        return 0
+    }
+
+    private fun formatSize(bytes: Long): String = when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
+        else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+    }
+
+    private fun loadConfig() {
+        val ctx = appContext ?: return
+        val prefs = ctx.getSharedPreferences("mengpaw_settings", Context.MODE_PRIVATE)
+        autoCheckEnabled = prefs.getBoolean("update_auto_check", true)
+        autoDownloadEnabled = prefs.getBoolean("update_auto_download", false)
+        lastCheckTime = prefs.getLong("update_last_check", 0L)
+    }
+
+    private fun saveConfig() {
+        val ctx = appContext ?: return
+        ctx.getSharedPreferences("mengpaw_settings", Context.MODE_PRIVATE).edit().apply {
+            putBoolean("update_auto_check", autoCheckEnabled)
+            putBoolean("update_auto_download", autoDownloadEnabled)
+            putLong("update_last_check", lastCheckTime)
+            apply()
+        }
+    }
+
+    companion object {
+        private const val GITHUB_API_URL = "https://api.github.com/repos/WowBlueStudio/MengPaw/releases/latest"
+    }
+}

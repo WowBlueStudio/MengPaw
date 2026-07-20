@@ -33,6 +33,18 @@ data class PluginSuggestion(
 )
 
 /**
+ * Whether a plugin can be installed from the marketplace.
+ */
+enum class PluginAvailability {
+    /** Already compiled into the APK — no download needed. */
+    BUILTIN,
+    /** Available for download from the marketplace. */
+    DOWNLOADABLE,
+    /** Listed but not yet released. */
+    UNAVAILABLE
+}
+
+/**
  * UI-ready plugin item combining marketplace info with install status.
  */
 data class PluginUiItem(
@@ -46,7 +58,8 @@ data class PluginUiItem(
     val commands: List<String>,
     val isInstalled: Boolean,
     val isActive: Boolean,
-    val installState: InstallState = InstallState.Idle
+    val installState: InstallState = InstallState.Idle,
+    val availability: PluginAvailability = PluginAvailability.BUILTIN
 )
 
 /**
@@ -59,6 +72,9 @@ class PluginViewModel : ViewModel() {
 
     private val pluginManager = PluginManager()
     private val marketplace = PluginMarketplaceClient()
+
+    /** Last-seen marketplace "updated" timestamp — used to detect remote version changes. */
+    private var lastRemoteUpdated: String = ""
 
     // ── Observable state ──────────────────────────────────────────────
 
@@ -102,7 +118,12 @@ class PluginViewModel : ViewModel() {
                     commands = entry.commands,
                     isInstalled = installed != null,
                     isActive = status == PluginStatus.ACTIVE,
-                    installState = states[entry.id] ?: InstallState.Idle
+                    installState = states[entry.id] ?: InstallState.Idle,
+                    availability = when {
+                        entry.isBuiltin -> PluginAvailability.BUILTIN
+                        entry.isDownloadable -> PluginAvailability.DOWNLOADABLE
+                        else -> PluginAvailability.UNAVAILABLE
+                    }
                 )
             }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -117,17 +138,30 @@ class PluginViewModel : ViewModel() {
 
     // ── Actions ───────────────────────────────────────────────────────
 
-    /** Fetch marketplace index (uses ETag cache internally). */
-    fun refreshMarketplace() {
+    /** Fetch marketplace index. Auto-detects remote version changes; pass forceRefresh to skip ETag cache. */
+    fun refreshMarketplace(forceRefresh: Boolean = true) {
         viewModelScope.launch {
             _isLoading.value = true
-            marketplace.fetchIndex().fold(
+            marketplace.fetchIndex(forceRefresh).fold(
                 onSuccess = { index ->
+                    // Store timestamp so next auto-refresh can detect remote changes
+                    lastRemoteUpdated = index.updated
                     _marketplacePlugins.value = index.plugins
+                    registerBuiltins(index)
                 },
                 onFailure = { /* keep cached data */ }
             )
             _isLoading.value = false
+        }
+    }
+
+    /** Auto-register builtin plugins so they show as "已内置" and can be activated. */
+    private fun registerBuiltins(index: MarketplaceIndex) {
+        index.plugins.filter { it.isBuiltin }.forEach { entry ->
+            val className = pluginClassRegistry[entry.id] ?: builtinPluginClass(entry.id)
+            if (className != null) {
+                PluginViewModel.registerPluginClass(entry.id, className)
+            }
         }
     }
 
@@ -136,11 +170,9 @@ class PluginViewModel : ViewModel() {
         _searchQuery.value = query
     }
 
-    /** Install a plugin: download → verify → install → activate. */
+    /** Install a plugin: builtin → instantiate via reflection; remote → download → verify → install → activate. */
     fun installPlugin(id: String) {
         viewModelScope.launch {
-            updateInstallState(id, InstallState.Downloading(0f))
-
             // Find marketplace entry
             val entry = _marketplacePlugins.value.find { it.id == id }
             if (entry == null) {
@@ -148,11 +180,35 @@ class PluginViewModel : ViewModel() {
                 return@launch
             }
 
-            // Download (in-memory for pre-compiled plugins — real download for remote)
+            // Builtin plugins: register and activate locally without downloading
+            if (entry.isBuiltin) {
+                updateInstallState(id, InstallState.Installing("正在激活 ${entry.name}..."))
+                val plugin = createPluginInstance(entry)
+                if (plugin == null) {
+                    updateInstallState(id, InstallState.Failed("无法激活内置插件: ${entry.id}"))
+                    return@launch
+                }
+                pluginManager.install(plugin).fold(
+                    onSuccess = {
+                        pluginManager.activate(id).fold(
+                            onSuccess = { updateInstallState(id, InstallState.Done(id)) },
+                            onFailure = { e -> updateInstallState(id, InstallState.Failed("激活失败: ${e.message}")) }
+                        )
+                    },
+                    onFailure = { e -> updateInstallState(id, InstallState.Failed("安装失败: ${e.message}")) }
+                )
+                return@launch
+            }
+
+            // Remote plugins: download → verify → install → activate
+            if (!entry.isDownloadable) {
+                updateInstallState(id, InstallState.Failed("${entry.name} 暂未发布，无法下载"))
+                return@launch
+            }
+
+            updateInstallState(id, InstallState.Downloading(0f))
             updateInstallState(id, InstallState.Verifying)
 
-            // For pre-compiled Gradle plugins, create the Plugin instance directly.
-            // In production, this would download a JAR and use ClassLoader.
             val plugin = createPluginInstance(entry)
             if (plugin == null) {
                 updateInstallState(id, InstallState.Failed("Cannot instantiate plugin: ${entry.id}"))
@@ -161,22 +217,14 @@ class PluginViewModel : ViewModel() {
 
             updateInstallState(id, InstallState.Installing("Installing ${entry.name}..."))
 
-            // Install into PluginManager
             pluginManager.install(plugin).fold(
                 onSuccess = {
-                    // Activate (register commands)
                     pluginManager.activate(id).fold(
-                        onSuccess = {
-                            updateInstallState(id, InstallState.Done(id))
-                        },
-                        onFailure = { e ->
-                            updateInstallState(id, InstallState.Failed("Activation failed: ${e.message}"))
-                        }
+                        onSuccess = { updateInstallState(id, InstallState.Done(id)) },
+                        onFailure = { e -> updateInstallState(id, InstallState.Failed("Activation failed: ${e.message}")) }
                     )
                 },
-                onFailure = { e ->
-                    updateInstallState(id, InstallState.Failed("Install failed: ${e.message}"))
-                }
+                onFailure = { e -> updateInstallState(id, InstallState.Failed("Install failed: ${e.message}")) }
             )
         }
     }
@@ -269,8 +317,7 @@ class PluginViewModel : ViewModel() {
     companion object {
         /**
          * Registry mapping plugin IDs to their fully-qualified class names.
-         * Populated at app startup. In production, this would be populated
-         * dynamically after downloading plugin JARs.
+         * Populated at app startup and auto-registered for builtin plugins from marketplace.
          */
         val pluginClassRegistry = mutableMapOf<String, String>()
 
@@ -278,5 +325,37 @@ class PluginViewModel : ViewModel() {
         fun registerPluginClass(pluginId: String, className: String) {
             pluginClassRegistry[pluginId] = className
         }
+
+        /** Mapping from plugin ID to known builtin class name. */
+        private val BUILTIN_CLASSES = mapOf(
+            "fs-plugin" to "com.mengpaw.plugin.fs.FsPlugin",
+            "net-plugin" to "com.mengpaw.plugin.net.NetPlugin",
+            "memory-plugin" to "com.mengpaw.plugin.memory.MemoryPlugin",
+            "skill-plugin" to "com.mengpaw.plugin.skill.SkillPlugin",
+            "self-plugin" to "com.mengpaw.plugin.self.SelfPlugin",
+            "clipboard-plugin" to "com.mengpaw.plugin.clipboard.ClipboardPlugin",
+            "notification-plugin" to "com.mengpaw.plugin.notification.NotificationPlugin",
+            "pad-plugin" to "com.mengpaw.plugin.pad.PadPlugin",
+            "tavily-plugin" to "com.mengpaw.plugin.tavily.TavilyPlugin",
+            "hermes-plugin" to "com.mengpaw.plugin.hermes.HermesPlugin",
+            "workflow-plugin" to "com.mengpaw.plugin.workflow.WorkflowPlugin",
+            "incubator-plugin" to "com.mengpaw.plugin.incubator.IncubatorPlugin",
+            "render-plugin" to "com.mengpaw.plugin.render.RenderPlugin",
+            "comfy-plugin" to "com.mengpaw.plugin.comfy.ComfyPlugin",
+            "translate-plugin" to "com.mengpaw.plugin.translate.TranslatePlugin",
+            "dev-plugin" to "com.mengpaw.plugin.dev.DevPlugin",
+            "error-report-plugin" to "com.mengpaw.plugin.errorreport.ErrorReportPlugin",
+            "browser-push-plugin" to "com.mengpaw.plugin.browserpush.BrowserPushPlugin",
+            "browser-search-plugin" to "com.mengpaw.plugin.browsersearch.BrowserSearchPlugin",
+            "browser-mcp-plugin" to "com.mengpaw.plugin.browsermcp.BrowserMcpPlugin",
+            "browser-cdp-plugin" to "com.mengpaw.plugin.browsercdp.BrowserCdpPlugin",
+            "browser-inspector-plugin" to "com.mengpaw.plugin.browserinspector.BrowserInspectorPlugin",
+            "update-plugin" to "com.mengpaw.plugin.update.UpdatePlugin",
+            "agent-loop-plugin" to "com.mengpaw.plugin.agentloop.AgentLoopPlugin",
+            "agent-mission-plugin" to "com.mengpaw.plugin.agentmission.AgentMissionPlugin"
+        )
+
+        /** Look up the class name for a builtin plugin by its ID. */
+        fun builtinPluginClass(pluginId: String): String? = BUILTIN_CLASSES[pluginId]
     }
 }

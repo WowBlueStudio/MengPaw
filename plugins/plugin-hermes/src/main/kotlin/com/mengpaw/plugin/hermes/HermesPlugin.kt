@@ -10,6 +10,7 @@ import com.mengpaw.core.cli.ErrorCodes
 import com.mengpaw.core.plugin.Plugin
 import com.mengpaw.core.plugin.PluginMetadata
 import com.mengpaw.core.plugin.PluginType
+import com.mengpaw.core.error.ErrorCollector
 import java.io.File
 
 /**
@@ -59,8 +60,13 @@ class HermesPlugin : Plugin {
         if (args[0] == "invite" && args.size >= 3) {
             val id = args[1]; val r = args.drop(2).joinToString(" ")
             val file = File(teamDir, "$id.md")
-            file.writeText("name: $id\nrole: $r\njoined: ${System.currentTimeMillis()}\nstatus: active")
-            return ExecutionResult.ok("已邀请 Agent $id 加入团队，角色: $r")
+            return try {
+                file.writeText("name: $id\nrole: $r\njoined: ${System.currentTimeMillis()}\nstatus: active")
+                ExecutionResult.ok("已邀请 Agent $id 加入团队，角色: $r")
+            } catch (e: Exception) {
+                ErrorCollector.report(e, "HermesPlugin.team")
+                ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+            }
         }
         if (args[0] == "remove" && args.size >= 2) {
             File(teamDir, "${args[1]}.md").delete()
@@ -75,7 +81,7 @@ class HermesPlugin : Plugin {
         val agentsDir = File(DataPaths.AGENTS)
         val dirs = agentsDir.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name } ?: emptyList()
         val discovered = dirs.filter { it.name != "team" }.map { dir ->
-            val profile = File(dir, "Profile.md").let { if (it.exists()) it.readText() else "(无档案)" }
+            val profile = File(dir, "Profile.md").let { if (it.exists()) try { it.readText() } catch (e: Exception) { ErrorCollector.report(e, "HermesPlugin.discover"); "(读取失败)" } else "(无档案)" }
             val name = Regex("名称:\\s*(.+)").find(profile)?.groupValues?.get(1)?.trim() ?: dir.name
             val role = Regex("角色:\\s*(.+)").find(profile)?.groupValues?.get(1)?.trim() ?: "未设定"
             "• $name (ID: ${dir.name}) — 角色: $role"
@@ -98,7 +104,8 @@ class HermesPlugin : Plugin {
         // Write delegation task to target agent's inbox
         val inboxDir = File(DataPaths.AGENTS, "${member.id}/inbox").also { it.mkdirs() }
         val taskFile = File(inboxDir, "task_${System.currentTimeMillis()}.md")
-        taskFile.writeText("""
+        return try {
+            taskFile.writeText("""
 # 委派任务
 - 来自: ${ctx.sessionId}
 - 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}
@@ -110,7 +117,11 @@ $task
 ## 响应方式
 完成后将结果写入 Memory.md 并通过 hermes.memo 通知。
 """.trimIndent())
-        return ExecutionResult.ok("任务已委派给 ${member.name}。任务文件: ${taskFile.name}")
+            ExecutionResult.ok("任务已委派给 ${member.name}。任务文件: ${taskFile.name}")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "HermesPlugin.delegate")
+            ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 
     // ── hermes.ask — 向其他 Agent 提问 ───────────────────────────
@@ -125,12 +136,17 @@ $task
 
         val inboxDir = File(DataPaths.AGENTS, "${member.id}/inbox").also { it.mkdirs() }
         val qFile = File(inboxDir, "ask_${System.currentTimeMillis()}.md")
-        qFile.writeText("""
+        return try {
+            qFile.writeText("""
 # 提问
 - 来自: ${ctx.sessionId}
 - 问题: $question
 """.trimIndent())
-        return ExecutionResult.ok("已向 ${member.name} 提问。等待对方通过 hermes.memo 回复。")
+            ExecutionResult.ok("已向 ${member.name} 提问。等待对方通过 hermes.memo 回复。")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "HermesPlugin.ask")
+            ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 
     // ── hermes.memo — 团队共享记忆 ──────────────────────────────
@@ -140,13 +156,18 @@ $task
             val memos = File(DataPaths.TEAM_MEMOS).also { it.mkdirs() }
                 .listFiles()?.filter { it.extension == "md" }?.sortedByDescending { it.lastModified() } ?: emptyList()
             if (memos.isEmpty()) return ExecutionResult.ok("(无团队共享记忆)")
-            return ExecutionResult.ok(memos.take(10).joinToString("\n---\n") { it.readText().take(300) })
+            return ExecutionResult.ok(memos.take(10).joinToString("\n---\n") { try { it.readText().take(300) } catch (e: Exception) { ErrorCollector.report(e, "HermesPlugin.memo"); "(read error)" } })
         }
         val content = args.joinToString(" ")
         val memoFile = File(DataPaths.TEAM_MEMOS, "memo_${System.currentTimeMillis()}.md")
         memoFile.parentFile?.mkdirs()
-        memoFile.writeText("# 团队共享记忆\n- 作者: ${ctx.sessionId}\n- 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}\n\n$content")
-        return ExecutionResult.ok("共享记忆已发布。")
+        return try {
+            memoFile.writeText("# 团队共享记忆\n- 作者: ${ctx.sessionId}\n- 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}\n\n$content")
+            ExecutionResult.ok("共享记忆已发布。")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "HermesPlugin.memo")
+            ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 
     // ── hermes.role — 设定自身角色 ───────────────────────────────
@@ -156,12 +177,18 @@ $task
             "Usage: hermes.role <role-description>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val roleDesc = args.joinToString(" ")
         val profile = File(DataPaths.AGENTS, "${ctx.sessionId.take(8)}/Profile.md")
-        val current = if (profile.exists()) profile.readText() else ""
+        val current = if (profile.exists()) try { profile.readText() } catch (e: Exception) { ErrorCollector.report(e, "HermesPlugin.role"); "" } else ""
         val updated = if (current.contains("角色:"))
             current.replace(Regex("角色:\\s*.+"), "角色: $roleDesc")
         else current + "\n角色: $roleDesc"
-        profile.parentFile?.mkdirs(); profile.writeText(updated)
-        return ExecutionResult.ok("角色已设定: $roleDesc")
+        profile.parentFile?.mkdirs()
+        return try {
+            profile.writeText(updated)
+            ExecutionResult.ok("角色已设定: $roleDesc")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "HermesPlugin.role")
+            ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────
@@ -170,7 +197,7 @@ $task
 
     private fun discoverTeamMembers(): List<TeamMember> {
         return teamDir.listFiles()?.filter { it.extension == "md" }?.map { file ->
-            val text = file.readText()
+            val text = try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "HermesPlugin.discoverTeamMembers"); "" }
             TeamMember(
                 id = file.nameWithoutExtension,
                 name = Regex("name:\\s*(.+)").find(text)?.groupValues?.get(1)?.trim() ?: file.nameWithoutExtension,

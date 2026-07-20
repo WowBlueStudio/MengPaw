@@ -59,6 +59,40 @@
 
 ---
 
+## 2026-07-20 — 防御性编程补全
+
+### `!!` 强制解包清理
+
+12. **所有 `!!` 必须消除**
+    - 后果：即使上面有 `!= null` 检查，可变属性仍存在线程竞争 → NPE 崩溃
+    - 教训：`cached!!` → `cached ?: emptyList()`；`map[key]!!.copy()` → `map[key]?.let { copy() }`
+    - 修复数量：4 处（RenderPlugin, BrowserActivity, PluginMarketplaceClient, MemoryPlugin）
+
+### 文件 IO 保护补全
+
+13. **`readText()` 即使有 `exists()` 检查也会崩**
+    - 后果：文件在 `exists()` 和 `readText()` 之间被锁定/损坏 → 崩溃
+    - 教训：`if (file.exists()) file.readText()` 这样的模式不够，必须再加 `try/catch`
+    - 修复数量：20+ 处（FsPlugin, SelfExecutor, MemoryPlugin, SkillPlugin, WorkflowPlugin, IncubatorPlugin, ComfyPlugin, HermesPlugin, DevPlugin）
+
+14. **`writeText()` 同样需要保护**
+    - 后果：磁盘满 / 权限变更 / 目录被删 → 写入失败崩溃
+    - 教训：所有 `file.writeText()` / `file.writeText()` / `file.appendText()` 必须包裹 try/catch。对于返回 `ExecutionResult` 的命令，catch 中返回 `ExecutionResult.fail(..., ERR_IO)`；对于内部辅助函数，静默吞下
+    - 修复数量：25+ 处（AgentDocManager 7 处, HermesPlugin 5 处, DevPlugin 4 处, IncubatorPlugin 3 处, ComfyPlugin 2 处，以及 AgentDocs, DreamEngine, PromptFirewall, SelfExecutor, Checkpoint, MemoryPlugin, SkillPlugin 各 1 处）
+
+15. **新增错误码 `ERR_IO`**
+    - 后果：文件 IO 失败时只能用 `ERR_INTERNAL`，不精确
+    - 教训：为文件 IO 错误添加专用错误码 `ERR_IO`，方便 Agent 区分和处理
+    - 位置：`CommandExecutor.kt` → `ErrorCodes.ERR_IO`
+
+### 流程错误
+
+16. **未授权发布版本**
+    - 后果：2026-07-19 在 bug 修复完成后自动发布了版本，用户明确表示"这个不行"
+    - 教训：任何发布操作（git tag, GitHub Release, APK 上传）必须等待用户说"发布新版本"。修复后只做本地 commit。
+
+---
+
 ## 版本规则
 
 按用户要求，MengPaw 版本号规则：

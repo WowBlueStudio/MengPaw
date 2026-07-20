@@ -6,6 +6,7 @@ package com.mengpaw.core.namespace
 import com.mengpaw.core.cli.ExecutionContext
 import com.mengpaw.core.cli.ExecutionResult
 import com.mengpaw.core.cli.ErrorCodes
+import com.mengpaw.core.error.ErrorCollector
 
 /**
  * Self-introspection namespace - allows Agent to query its own state.
@@ -273,8 +274,13 @@ object SelfExecutor {
             containerDark = parseHex(map["containerDark"]) ?: current.containerDark,
         )
         themeFile.parentFile?.mkdirs()
-        themeFile.writeText(updated.toMarkdown())
-        return ExecutionResult.ok("Theme updated:\n${updated.toMarkdown()}")
+        return try {
+            themeFile.writeText(updated.toMarkdown())
+            ExecutionResult.ok("Theme updated:\n${updated.toMarkdown()}")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "SelfExecutor.theme")
+            ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 
     private fun parseHex(s: String?): Long? = s?.removePrefix("#")?.toLongOrNull(16)?.let { 0xFF000000 or it }
@@ -322,7 +328,7 @@ self.theme primary=#FF6B35 surface=#FFF8F0
     companion object {
         fun fromFile(f: java.io.File): AgentTheme {
             if (!f.exists()) return AgentTheme()
-            val text = f.readText()
+            val text = try { f.readText() } catch (_: Exception) { "" }
             fun readHex(key: String, default: Long): Long {
                 val m = Regex("$key.*?#([0-9A-Fa-f]{6})").find(text)
                 return m?.groupValues?.get(1)?.toLongOrNull(16)?.let { 0xFF000000 or it } ?: default

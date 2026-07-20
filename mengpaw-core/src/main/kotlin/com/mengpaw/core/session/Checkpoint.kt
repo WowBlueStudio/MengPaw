@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import java.io.File
+import com.mengpaw.core.error.ErrorCollector
 
 /**
  * Persistence handler for checkpoints (save/resume Agent progress).
@@ -24,7 +25,7 @@ class CheckpointManager(private val storageDir: String = com.mengpaw.core.DataPa
         val dir = File(storageDir)
         dir.mkdirs()
         val file = File(dir, "${checkpoint.sessionId}_step_${checkpoint.step}.json")
-        file.writeText(json.encodeToString(checkpoint))
+        try { file.writeText(json.encodeToString(checkpoint)) } catch (e: Exception) { ErrorCollector.report(e, "CheckpointManager.save") }
     }
 
     /**
@@ -40,6 +41,7 @@ class CheckpointManager(private val storageDir: String = com.mengpaw.core.DataPa
         try {
             json.decodeFromString<Checkpoint>(files.first().readText())
         } catch (e: Exception) {
+            ErrorCollector.report(e, "CheckpointManager.loadLatest")
             null
         }
     }

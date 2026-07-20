@@ -58,6 +58,8 @@ object DataPaths {
     val RENDER_OUTPUTS get() = "$PLUGIN_CACHE/renders"
     val WORKFLOW_DIR get() = "$PLUGIN_CACHE/workflows"
     val WORKFLOW_OUTPUTS get() = "$PLUGIN_CACHE/workflows/outputs"
+    val ERROR_LOG get() = "$BASE/错误报告"
+    val ERROR_QUEUE get() = "$ERROR_LOG/queue"
 
     // ── Plugin-specific storage ───────────────────────────────────
 

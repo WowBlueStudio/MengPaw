@@ -22,7 +22,9 @@ enum class AcpMessageType {
     RESULT,         // 任务结果
     SHARE_MEMORY,   // 共享记忆条目
     SHARE_SKILL,    // 共享技能定义
-    HEARTBEAT       // 存活检测
+    HEARTBEAT,      // 存活检测
+    BROWSER_PUSH,           // 推送网页到对端
+    BROWSER_PUSH_RESPONSE   // 推送响应（接受/拒绝）
 }
 
 /** ACP 消息。 */
@@ -41,6 +43,12 @@ data class AcpMessage(
         fun shareMemory(from: String, to: String, memoryId: String) = AcpMessage(from, to, AcpMessageType.SHARE_MEMORY.name, memoryId)
         fun shareSkill(from: String, to: String, skillName: String) = AcpMessage(from, to, AcpMessageType.SHARE_SKILL.name, skillName)
         fun heartbeat(from: String) = AcpMessage(from, "*", AcpMessageType.HEARTBEAT.name, ttl = 1)
+        fun browserPush(from: String, to: String, url: String, title: String = "") =
+            AcpMessage(from, to, AcpMessageType.BROWSER_PUSH.name,
+                """{"url":"$url","title":"$title"}""")
+        fun browserPushResponse(from: String, to: String, accepted: Boolean, reason: String = "") =
+            AcpMessage(from, to, AcpMessageType.BROWSER_PUSH_RESPONSE.name,
+                """{"accepted":$accepted,"reason":"$reason"}""")
     }
 }
 

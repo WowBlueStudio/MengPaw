@@ -4,6 +4,7 @@
 package com.mengpaw.core.agent
 
 import com.mengpaw.core.DataPaths
+import com.mengpaw.core.error.ErrorCollector
 import com.mengpaw.core.llm.LlmProvider
 import java.io.File
 import java.text.SimpleDateFormat
@@ -70,7 +71,10 @@ object DreamEngine {
                 writeDreamMd(agentName, trimmed)
                 DreamPassResult(trimmed, ctx.length, trimmed.length)
             } else null
-        } catch (_: Exception) { null }
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "DreamEngine.dreamPass")
+            null
+        }
     }
 
     private fun buildContext(agentName: String, scroll: ScrollContextManager?): String? {
@@ -82,7 +86,7 @@ object DreamEngine {
         val memory = AgentDocs.readMemoryDoc(agentName)
         if (memory.isNotBlank()) parts.add("## 记忆\n${memory.take(800)}")
         val profile = File(agentsDir, "$agentName/PROFILE.md")
-        if (profile.exists()) parts.add("## 档案\n${try { profile.readText().take(600) } catch (_: Exception) { "" }}")
+        if (profile.exists()) parts.add("## 档案\n${try { profile.readText().take(600) } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.buildContext"); "" }}")
         if (parts.isEmpty()) return null
         val combined = parts.joinToString("\n\n")
         return if (combined.length > MAX_CONTEXT_CHARS) combined.take(MAX_CONTEXT_CHARS) else combined
@@ -93,9 +97,11 @@ object DreamEngine {
             val dir = File(agentsDir, agentName); if (!dir.exists()) dir.mkdirs()
             val entry = "\n---\n## ${DATE_FMT.format(Date())}\n\n$content\n"
             val file = File(dir, "DREAM.md")
-            val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else "# $agentName · 梦境记录\n"
+            val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.writeDreamMd"); "" } else "# $agentName · 梦境记录\n"
             file.writeText(entry + existing)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "DreamEngine.writeDreamMd")
+        }
     }
 
     // ── Workspace Cleanup (existing) ─────────────────────────────────
@@ -154,7 +160,7 @@ object DreamEngine {
         val memFile = File(agentDir, "Memory.md")
         val archiveFile = File(agentDir, "Memory.archive.md")
         if (!memFile.exists()) return MemResult(0, 0, 0, 0, 0)
-        val records = parseMemories(try { memFile.readText() } catch (_: Exception) { "" })
+        val records = parseMemories(try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream"); "" })
         val reviewed = records.size
         var tagsAdded = 0; var linksFound = 0; var archived = 0; var summarized = 0
 
@@ -210,8 +216,8 @@ object DreamEngine {
                 DreamRecord(m.groupValues[1].trim(), m.groupValues[3].trim(), m.groupValues[2].trim(),
                     m.groupValues[5].trim().take(500),
                     m.groupValues[4].split(",", "，").map { it.trim() }.filter { it.isNotBlank() },
-                    try { SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(m.groupValues[3].trim())?.time ?: 0L } catch (_: Exception) { 0L })
-            } catch (_: Exception) { null }
+                    try { SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(m.groupValues[3].trim())?.time ?: 0L } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.parseMemories"); 0L })
+            } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.parseMemories"); null }
         }.toList()
     }
 

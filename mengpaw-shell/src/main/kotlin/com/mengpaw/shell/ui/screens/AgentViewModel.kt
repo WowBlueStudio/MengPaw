@@ -26,13 +26,32 @@ class AgentSession(
     val name: String,
     val framework: String?,       // null = local device, non-null = remote framework name
     var modelName: String,
+    var endpoint: String = "",
+    var apiKey: String = "",
     var provider: LlmProvider,
     val engine: AgentEngine,
     val messages: MutableStateFlow<List<ChatMessageUi>>,
     val scrollContext: ScrollContextManager,
     val isRunning: MutableStateFlow<Boolean> = MutableStateFlow(false),
     val inputEnabled: MutableStateFlow<Boolean> = MutableStateFlow(true)
-)
+) {
+    /** Human-readable provider + model label for UI display. */
+    val providerLabel: String get() {
+        val p = when {
+            endpoint.contains("openai.com") -> "OpenAI"
+            endpoint.contains("deepseek.com") -> "DeepSeek"
+            endpoint.contains("x.ai") -> "Grok"
+            endpoint.contains("moonshot.cn") -> "Kimi"
+            endpoint.contains("bigmodel.cn") -> "GLM"
+            endpoint.contains("dashscope") -> "Qwen"
+            endpoint.contains("volces.com") -> "火山引擎"
+            endpoint.contains("openmodel.ai") -> "OpenModel"
+            endpoint.isBlank() -> "未配置"
+            else -> "Custom"
+        }
+        return "$p / ${modelName.take(20)}"
+    }
+}
 
 /**
  * ViewModel for the main agent chat screen.
@@ -52,26 +71,14 @@ class AgentViewModel : ViewModel() {
     private var globalEndpoint: String = ""
     private var globalApiKey: String = ""
     private var globalModel: String = "unknown"
-    private var globalUseSimulated: Boolean = true
     private var globalAgentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE
 
     // ── Multi-session store ──
     private val sessions = mutableMapOf<String, AgentSession>()
 
     private fun defaultProvider(): LlmProvider =
-        if (globalUseSimulated || globalApiKey.isBlank()) {
-            SimulatedLlmProvider()
-        } else {
-            try {
-                com.mengpaw.core.llm.AdaptiveLlmProvider(
-                    apiEndpoint = globalEndpoint,
-                    apiKey = globalApiKey,
-                    model = globalModel
-                )
-            } catch (_: Exception) {
-                SimulatedLlmProvider()
-            }
-        }
+        if (globalApiKey.isBlank()) SimulatedLlmProvider()
+        else try { AdaptiveLlmProvider(globalEndpoint, globalApiKey, globalModel) } catch (_: Exception) { SimulatedLlmProvider() }
 
     private fun createSession(name: String, framework: String?): AgentSession {
         val model = globalModel.ifBlank { "unknown" }
@@ -145,6 +152,9 @@ class AgentViewModel : ViewModel() {
     private val _activeAgent = MutableStateFlow("MengPaw")
     val activeAgent: StateFlow<String> = _activeAgent.asStateFlow()
 
+    /** Provider/model label for the active agent (shown under agent name). */
+    val activeSessionLabel: String get() = activeSession().providerLabel
+
     /** All agent names currently in the session map. */
     val agentNames: Set<String> get() = sessions.keys
 
@@ -154,35 +164,65 @@ class AgentViewModel : ViewModel() {
      * Reconfigure the LLM provider with real API settings.
      * Applies to all existing sessions and will be used as default for new ones.
      */
+    /**
+     * Configure LLM for the active agent (or all agents if agentName is null).
+     * Each agent can have a different provider/model.
+     */
     fun configureLlm(
         endpoint: String,
         apiKey: String,
         model: String,
-        useSimulated: Boolean,
-        agentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE
+        agentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE,
+        agentName: String? = null  // null = all agents, non-null = specific agent
     ) {
+        // Always update global defaults for new agents
         globalEndpoint = endpoint
         globalApiKey = apiKey
         globalModel = model
-        globalUseSimulated = useSimulated
         globalAgentLang = agentLang
 
-        // Update all existing sessions' providers
-        val newProvider = defaultProvider()
-        sessions.values.forEach { session ->
-            session.provider = newProvider
+        val targetName = agentName ?: _activeAgentName
+
+        if (agentName == null) {
+            // Apply to ALL existing sessions
+            val newProvider = defaultProvider()
+            sessions.values.forEach { session ->
+                try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) { }
+                session.provider = newProvider
+                session.modelName = model
+                session.endpoint = endpoint
+                session.apiKey = apiKey
+                session.engine.setAgentIdentity(session.name, session.framework, model)
+                session.engine.setAgentLanguage(agentLang)
+                session.engine.configureCacheStrategy(endpoint)
+            }
+        } else {
+            // Apply to a specific agent only
+            val session = sessions[targetName] ?: return
+            try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) { }
+            session.provider = createProviderForSession(endpoint, apiKey, model)
             session.modelName = model
+            session.endpoint = endpoint
+            session.apiKey = apiKey
             session.engine.setAgentIdentity(session.name, session.framework, model)
             session.engine.setAgentLanguage(agentLang)
+            session.engine.configureCacheStrategy(endpoint)
         }
 
-        // Re-bind to active session
         bindActiveSession()
     }
 
-    /** Switch to a different agent. */
+    private fun createProviderForSession(endpoint: String, apiKey: String, model: String): LlmProvider =
+        if (apiKey.isBlank()) SimulatedLlmProvider()
+        else try { AdaptiveLlmProvider(endpoint, apiKey, model) } catch (_: Exception) { SimulatedLlmProvider() }
+
+    /** Switch to a different agent. Stops old agent engine to prevent orphaned execution. */
     fun switchAgent(name: String) {
         if (name == _activeAgentName) return
+        stopAgent() // Stop old agent engine before switching
+        // Reset old session state
+        val old = sessions[_activeAgentName]
+        old?.isRunning?.value = false
         _activeAgentName = name
         bindActiveSession()
     }
@@ -221,6 +261,11 @@ class AgentViewModel : ViewModel() {
         session.messages.value = session.messages.value + ChatMessageUi.User(task)
 
         viewModelScope.launch {
+            // Auto-translate for English-optimized models (saves ~40% tokens)
+            val doTranslate = translator.shouldTranslate(session.modelName)
+            val translatedTask = if (doTranslate) translator.toEnglish(task) else task
+            val actualTask = if (doTranslate && translatedTask != task) translatedTask else task
+
             val traces = mutableListOf<AgentTrace>()
 
             session.messages.value = session.messages.value + ChatMessageUi.AgentWithTrace(
@@ -230,7 +275,7 @@ class AgentViewModel : ViewModel() {
             )
 
             val result = session.engine.run(
-                task = task,
+                task = actualTask,
                 maxSteps = maxSteps,
                 onStep = { trace ->
                     traces.add(AgentTrace(trace.step, trace.thought, trace.action, trace.observation))
@@ -250,17 +295,20 @@ class AgentViewModel : ViewModel() {
             )
 
             val current = session.messages.value.toMutableList()
+            // Translate result back to Chinese for US models
+            val displayResult = if (doTranslate) translator.toChinese(result) else result
+
             val runningIndex = current.indexOfLast {
                 it is ChatMessageUi.AgentWithTrace && it.isRunning
             }
             if (runningIndex >= 0) {
                 current[runningIndex] = ChatMessageUi.AgentWithTrace(
-                    finalContent = result,
+                    finalContent = displayResult,
                     traces = traces.toList(),
                     isRunning = false
                 )
             } else {
-                current.add(ChatMessageUi.Agent(result))
+                current.add(ChatMessageUi.Agent(displayResult))
             }
 
             val suggestion = checkMissingPlugin(result)
@@ -275,12 +323,106 @@ class AgentViewModel : ViewModel() {
 
     fun stopAgent() { activeSession().engine.stop() }
 
-    /** Get all sessions for the current agent. */
-    fun getSessions(): List<String> = listOf(_activeAgentName)
+    // ── Translation middleware (auto for US models) ────────────────────
 
-    /** Clear the active agent's messages. */
+    private val translator = com.mengpaw.core.llm.TranslateMiddleware()
+
+    // ── Retract & Quote ─────────────────────────────────────────────────
+
+    /** Retract the last user message: stop agent, remove user+agent msgs, return text to input. */
+    fun retractLastUserMessage(): String? {
+        stopAgent()
+        val msgs = activeSession().messages.value.toMutableList()
+        // Find last user message
+        val lastUserIdx = msgs.indexOfLast { it is ChatMessageUi.User }
+        if (lastUserIdx < 0) return null
+        val userMsg = msgs[lastUserIdx] as ChatMessageUi.User
+        // Remove user message and everything after it (agent responses)
+        val keep = msgs.take(lastUserIdx)
+        activeSession().messages.value = keep
+        return userMsg.content
+    }
+
+    /** Build a quoted reference string for Agent context. */
+    fun formatQuote(msg: ChatMessageUi): String {
+        return when (msg) {
+            is ChatMessageUi.User -> "> 用户说: ${msg.content.take(200)}"
+            is ChatMessageUi.Agent -> "> Agent 回复: ${msg.content.take(200)}"
+            is ChatMessageUi.AgentWithTrace -> "> Agent 回复: ${msg.content.take(200)}"
+            else -> ""
+        }
+    }
+
+    /** Whether the given message is the last user message (retractable). */
+    fun isLastUserMessage(msg: ChatMessageUi): Boolean {
+        val msgs = activeSession().messages.value
+        val lastUser = msgs.lastOrNull { it is ChatMessageUi.User }
+        return msg == lastUser
+    }
+
+    // ── Session History ─────────────────────────────────────────────────
+
+    /** A recorded chat session (persists across newSession() calls). */
+    data class SessionRecord(
+        val id: String,
+        val title: String,
+        val preview: String,
+        val timestamp: Long,
+        val messageCount: Int,
+        val compacted: Boolean = false,
+        val compactedSummary: String = ""
+    )
+
+    private val _sessionHistory = MutableStateFlow<List<SessionRecord>>(emptyList())
+    val sessionHistory: StateFlow<List<SessionRecord>> = _sessionHistory.asStateFlow()
+
+    /** Auto-save current session and start a new one. */
     fun newSession() {
+        stopAgent() // Stop running agent before clearing messages
+        val msgs = activeSession().messages.value.filter { it !is ChatMessageUi.System }
+        if (msgs.isNotEmpty()) {
+            val firstUser = msgs.firstOrNull { it is ChatMessageUi.User }
+            val title = (firstUser as? ChatMessageUi.User)?.content?.take(40) ?: "新会话"
+            val preview = msgs.last().let {
+                when (it) {
+                    is ChatMessageUi.Agent -> it.content.take(60)
+                    is ChatMessageUi.User -> it.content.take(60)
+                    else -> ""
+                }
+            }
+            val record = SessionRecord(
+                id = "sess_${System.currentTimeMillis()}",
+                title = title, preview = preview,
+                timestamp = System.currentTimeMillis(),
+                messageCount = msgs.size
+            )
+            _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
+        }
         activeSession().messages.value = listOf(ChatMessageUi.Agent("新会话已创建。"))
+    }
+
+    /** Compact a session — keep summary, mark as read-only. */
+    fun compactSession(id: String) {
+        _sessionHistory.value = _sessionHistory.value.map {
+            if (it.id == id) it.copy(compacted = true, compactedSummary = "已压缩: ${it.preview.take(100)}")
+            else it
+        }
+    }
+
+    /** Delete a session record. */
+    fun deleteSession(id: String) {
+        _sessionHistory.value = _sessionHistory.value.filter { it.id != id }
+    }
+
+    /** Toggle visibility of compacted sessions. */
+    private val _hideCompacted = MutableStateFlow(false)
+    val hideCompacted: StateFlow<Boolean> = _hideCompacted.asStateFlow()
+    fun toggleHideCompacted() { _hideCompacted.value = !_hideCompacted.value }
+
+    /** Get sessions for the current agent (excluding compacted if hidden). */
+    fun getSessions(): List<SessionRecord> {
+        val all = _sessionHistory.value.sortedByDescending { it.timestamp }
+        return if (_hideCompacted.value) all.filter { !it.compacted } else all
     }
 
     // ── Internals ──

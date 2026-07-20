@@ -23,8 +23,6 @@ data class AppStrings(
 
     // Settings - LLM Provider
     val llmProvider: String,
-    val useSimulated: String,
-    val useSimulatedDesc: String,
     val apiEndpoint: String,
     val apiKey: String,
     val apiKeyShow: String,
@@ -76,8 +74,6 @@ val EnglishStrings = AppStrings(
     send = "Send",
 
     llmProvider = "LLM Provider",
-    useSimulated = "Use Simulated Provider",
-    useSimulatedDesc = "Simulated responses for testing (no API key needed)",
     apiEndpoint = "API Endpoint",
     apiKey = "API Key",
     apiKeyShow = "Show",
@@ -125,8 +121,6 @@ val ChineseStrings = AppStrings(
     send = "发送",
 
     llmProvider = "LLM 提供商 (Provider)",
-    useSimulated = "使用模拟服务 (Simulated)",
-    useSimulatedDesc = "使用内置模拟响应进行测试（无需 API Key）",
     apiEndpoint = "API 地址 (Endpoint)",
     apiKey = "API 密钥 (Key)",
     apiKeyShow = "显示",

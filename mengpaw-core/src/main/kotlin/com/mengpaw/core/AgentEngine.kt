@@ -10,6 +10,8 @@ import com.mengpaw.core.agent.MemoryRecord
 import com.mengpaw.core.agent.PostCallMiddleware
 import com.mengpaw.core.agent.ScrollContextManager
 import com.mengpaw.core.cli.*
+import com.mengpaw.core.error.ErrorCollector
+import com.mengpaw.core.error.ErrorType
 import com.mengpaw.core.llm.*
 import com.mengpaw.core.namespace.SelfExecutor
 import com.mengpaw.core.namespace.SysExecutor
@@ -266,6 +268,11 @@ class AgentEngine(
     }
 
     private fun rebuildSystemPrompt() {
+        // Reset compaction state — new model = new context window dynamics
+        consecutiveCompacts = 0
+        compactStuck = false
+        // Reset loop detection — new session shouldn't inherit old commands
+        promptEngine.resetLoopDetection()
         val base = promptEngine.buildSystemPrompt(
             lang = agentLanguage,
             agentName = agentName,
@@ -337,8 +344,9 @@ class AgentEngine(
      * @param onStep Optional callback invoked after each ReAct iteration with trace data
      */
     suspend fun run(task: String, maxSteps: Int = 50, onStep: ((TraceStep) -> Unit)? = null): String {
+        ErrorCollector.init()
         val session = sessionManager.createSession(task)
-        val context = ExecutionContext(sessionId = session.id)
+        val context = ExecutionContext(sessionId = session.id, agentName = agentName)
         _state.value = AgentState.Running(task, 0, maxSteps)
         _output.value = ""
 
@@ -396,6 +404,8 @@ class AgentEngine(
 
                     // Loop detection
                     if (promptEngine.detectLoop(commandLine)) {
+                        ErrorCollector.report(ErrorType.LOOP_DETECTED, "AgentEngine", commandLine,
+                            sessionId = session.id, agentName = agentName)
                         val errorMsg = localizedError("loop_detected", commandLine)
                         sessionManager.addMessage(session.id, Message("assistant", errorMsg))
                         _state.value = AgentState.Error(errorMsg)
@@ -405,6 +415,11 @@ class AgentEngine(
 
                     // Execute
                     val result = buildPipeline().execute(commandLine, context)
+                    if (!result.success) {
+                        ErrorCollector.report(ErrorType.TOOL_CALL_FAILED, "AgentEngine",
+                            "$commandLine → ${result.error}", sessionId = session.id, agentName = agentName,
+                            metadata = mapOf("errorCode" to (result.errorCode ?: ""), "command" to commandLine))
+                    }
                     val observation = if (result.success) result.output else "Error: ${result.error}"
 
                     // Emit trace step
@@ -425,6 +440,8 @@ class AgentEngine(
             _state.value = AgentState.Finished(msg)
             return msg
         } catch (e: Exception) {
+            ErrorCollector.report(ErrorType.AGENT_CRASH, "AgentEngine.run", e.message ?: "(no message)",
+                throwable = e, sessionId = session.id, agentName = agentName)
             val errorMsg = localizedError("agent_error", e.message ?: e::class.simpleName ?: "unknown")
             sessionManager.addMessage(session.id, Message("assistant", errorMsg))
             _state.value = AgentState.Error(errorMsg)
@@ -489,6 +506,8 @@ class AgentEngine(
                 results.add("[OK] Step ${step.index + 1}: ${stepResult}")
                 step.status = PlanStepStatus.COMPLETED
             } catch (e: Exception) {
+                ErrorCollector.report(ErrorType.AGENT_CRASH, "AgentEngine.runWithPlan",
+                    "Step ${step.index + 1}: ${step.description}", throwable = e, agentName = agentName)
                 val errorMsg = "[FAIL] Step ${step.index + 1}: ${e.message}"
                 results.add(errorMsg)
                 step.status = PlanStepStatus.FAILED

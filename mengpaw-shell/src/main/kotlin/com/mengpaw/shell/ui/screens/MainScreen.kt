@@ -9,7 +9,9 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -54,7 +56,9 @@ fun MainScreen(
     settingsViewModel: SettingsViewModel? = null,
     viewModel: AgentViewModel = viewModel(),
     pluginViewModel: PluginViewModel = viewModel(),
-    onOpenSidebar: () -> Unit = {}
+    onOpenSidebar: () -> Unit = {},
+    onOpenHistory: () -> Unit = {},
+    agentViewModel: AgentViewModel? = null
 ) {
     val messages by viewModel.messages.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
@@ -68,7 +72,7 @@ fun MainScreen(
     LaunchedEffect(settingsState) {
         settingsState?.let { s ->
             viewModel.configureLlm(
-                s.apiEndpoint, s.apiKey, s.modelName, s.useSimulatedProvider,
+                s.apiEndpoint, s.apiKey, s.modelName,
                 agentLang = s.effectiveAgentLanguage
             )
         }
@@ -82,24 +86,12 @@ fun MainScreen(
 
     var agentName by remember { mutableStateOf("MengPaw") }
     var showHistory by remember { mutableStateOf(false) }
-    var showNewChatConfirm by remember { mutableStateOf(false) }
-
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
 
     // ── Dialogs ──
-    if (showHistory) {
-        AlertDialog(onDismissRequest = { showHistory = false }, title = { Text("历史会话") },
-            text = { Text("暂无历史会话", color = ThemeColors.textSecondary, modifier = Modifier.padding(16.dp)) },
-            confirmButton = { TextButton(onClick = { showHistory = false }) { Text("关闭") } })
-    }
-    if (showNewChatConfirm) {
-        AlertDialog(onDismissRequest = { showNewChatConfirm = false }, title = { Text("新建会话") },
-            text = { Text("当前会话将被清除，确定创建新会话？") },
-            confirmButton = { TextButton(onClick = { viewModel.newSession(); showNewChatConfirm = false }) { Text("确定") } },
-            dismissButton = { TextButton(onClick = { showNewChatConfirm = false }) { Text("取消") } })
-    }
+    var showHistory by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.fillMaxSize().widthIn(max = MAX_CONTENT_WIDTH.dp)) {
@@ -116,32 +108,44 @@ fun MainScreen(
                 ) {
                     // Sidebar toggle — only on tablets (mouse users need it)
                     if (isWide()) {
-                        IconButton(onClick = onOpenSidebar, modifier = Modifier.size(36.dp)) {
+                        IconButton(onClick = onOpenSidebar, modifier = Modifier.size(44.dp)) {
                             Icon(Icons.Outlined.Menu, "侧边栏", tint = ThemeColors.textSecondary)
                         }
                         Spacer(Modifier.width(4.dp))
                     }
-                    // Agent avatar
+                    // Agent avatar — 44dp circle, matching send button
                     val avatarFile = File(com.mengpaw.core.DataPaths.AGENTS, "avatar.png")
                     val avatarBitmap = remember { if (avatarFile.exists()) BitmapFactory.decodeFile(avatarFile.absolutePath) else null }
                     if (avatarBitmap != null) {
-                        Image(bitmap = avatarBitmap.asImageBitmap(), null, Modifier.size(32.dp).clip(CircleShape))
+                        Image(bitmap = avatarBitmap.asImageBitmap(), null, Modifier.size(44.dp).clip(CircleShape))
                     } else {
-                        Surface(shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.brandContainer) {
-                            Text(agentName.take(1), Modifier.padding(6.dp), color = ThemeColors.brand, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Surface(shape = CircleShape, color = ThemeColors.brandContainer, modifier = Modifier.size(44.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(agentName.take(1), color = ThemeColors.brand, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            }
                         }
                     }
                     Spacer(Modifier.width(ArcoSpacing.sm))
-                    Text(agentName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    Column(Modifier.weight(1f)) {
+                        Text(agentName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                        Text(agentViewModel?.activeSessionLabel ?: "MengPaw / 未配置",
+                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
+                    }
                     if (isRunning) {
                         LinearProgressIndicator(Modifier.width(60.dp).height(4.dp), color = ThemeColors.brand)
                         Spacer(Modifier.width(ArcoSpacing.sm))
                     }
-                    IconButton(onClick = { showHistory = true }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Outlined.Star, "历史", tint = ThemeColors.textSecondary)
+                    IconButton(onClick = { viewModel.newSession() }, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Outlined.Add, "新建会话", tint = ThemeColors.textSecondary)
                     }
-                    IconButton(onClick = { showNewChatConfirm = true }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Outlined.Add, "新建", tint = ThemeColors.textSecondary)
+                    // Mission monitor toggle (visible when mission is active)
+                    if (com.mengpaw.plugin.agentloop.MissionMonitor.missionActive) {
+                        IconButton(onClick = { /* toggle monitor overlay */ }, modifier = Modifier.size(44.dp)) {
+                            Icon(Icons.Outlined.Monitor, "Mission", tint = Color(0xFF165DFF))
+                        }
+                    }
+                    IconButton(onClick = onOpenHistory, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Outlined.History, "历史", tint = ThemeColors.textSecondary)
                     }
                 }
             }
@@ -154,14 +158,23 @@ fun MainScreen(
                 contentPadding = PaddingValues(vertical = ArcoSpacing.md)
             ) {
                 items(messages.filter { it !is ChatMessageUi.System }) { message ->
-                    when (message) {
-                        is ChatMessageUi.User -> UserBubble(message.content)
-                        is ChatMessageUi.Agent -> AgentBubble(message.content)
-                        is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message)
-                        is ChatMessageUi.Suggestion -> PluginSuggestionCard(message.suggestion,
-                            onInstall = { pluginViewModel.installPlugin(message.suggestion.pluginId) },
-                            onViewDetail = onNavigateToPlugins)
-                        else -> {}
+                    BubbleWrapper(
+                        message = message,
+                        viewModel = viewModel,
+                        onRetract = { inputText = it },
+                        onQuote = { quoteText -> inputText = "$quoteText\n$inputText" },
+                        pluginViewModel = pluginViewModel,
+                        onNavigateToPlugins = onNavigateToPlugins
+                    ) {
+                        when (message) {
+                            is ChatMessageUi.User -> UserBubble(message.content)
+                            is ChatMessageUi.Agent -> AgentBubble(message.content)
+                            is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message)
+                            is ChatMessageUi.Suggestion -> PluginSuggestionCard(message.suggestion,
+                                onInstall = { pluginViewModel.installPlugin(message.suggestion.pluginId) },
+                                onViewDetail = onNavigateToPlugins)
+                            else -> {}
+                        }
                     }
                 }
             }
@@ -448,6 +461,94 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
                     maxLines = 2
                 )
             }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Bubble long-press context menu
+// ═══════════════════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BubbleWrapper(
+    message: ChatMessageUi,
+    viewModel: AgentViewModel,
+    onRetract: (String) -> Unit,
+    onQuote: (String) -> Unit,
+    pluginViewModel: PluginViewModel,
+    onNavigateToPlugins: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    var showBigBang by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Box {
+        Box(
+            Modifier.combinedClickable(
+                onClick = {},
+                onLongClick = { showMenu = true }
+            )
+        ) { content() }
+
+        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+            val bubbleText = when (message) {
+                is ChatMessageUi.User -> message.content
+                is ChatMessageUi.Agent -> message.content
+                is ChatMessageUi.AgentWithTrace -> message.content
+                else -> ""
+            }
+            DropdownMenuItem(text = { Text("📋 复制") }, onClick = {
+                (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
+                    ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", bubbleText))
+                showMenu = false
+            })
+            DropdownMenuItem(text = { Text("💥 大爆炸") }, onClick = { showBigBang = true; showMenu = false })
+            DropdownMenuItem(text = { Text("💬 引用") }, onClick = {
+                onQuote(viewModel.formatQuote(message)); showMenu = false
+            })
+            if (message is ChatMessageUi.User && viewModel.isLastUserMessage(message)) {
+                DropdownMenuItem(text = { Text("↩ 撤回") }, onClick = {
+                    viewModel.retractLastUserMessage()?.let { onRetract(it) }; showMenu = false
+                })
+            }
+            // Image save for Agent messages
+            val imgs = Regex("!\\[.*?]\\((.*?)\\)").findAll(bubbleText).toList()
+            if (imgs.isNotEmpty()) {
+                DropdownMenuItem(text = { Text("💾 保存图片 (${imgs.size})") }, onClick = {
+                    imgs.forEach { m ->
+                        val p = m.groupValues[1]
+                        if (!p.startsWith("http")) try {
+                            java.io.File(p).copyTo(java.io.File(com.mengpaw.core.DataPaths.SCREENSHOTS, "saved_${System.currentTimeMillis()}.png"), overwrite = true)
+                        } catch (_: Exception) { }
+                    }
+                    showMenu = false
+                })
+                DropdownMenuItem(text = { Text("✏️ 标注图片发回") }, onClick = {
+                    imgs.firstOrNull()?.groupValues?.get(1)?.let { if (!it.startsWith("http")) onQuote("📎 标注图片: $it") }
+                    showMenu = false
+                })
+            }
+            DropdownMenuItem(text = { Text("📤 一键分享") }, onClick = {
+                val si = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, bubbleText.take(500))
+                }
+                context.startActivity(android.content.Intent.createChooser(si, "分享到"))
+                showMenu = false
+            })
+        }
+
+        if (showBigBang) {
+            com.mengpaw.shell.ui.components.BigBangPopup(
+                text = bubbleText,
+                onDismiss = { showBigBang = false },
+                onCopy = { sel ->
+                    (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
+                        ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", sel))
+                    showBigBang = false
+                }
+            )
         }
     }
 }

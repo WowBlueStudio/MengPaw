@@ -55,7 +55,7 @@ fun PluginMarketScreen(
                     Spacer(Modifier.width(ArcoSpacing.sm))
                 }
                 IconButton(onClick = { viewModel.refreshMarketplace() }) {
-                    Icon(Icons.Default.Refresh, "刷新")
+                    Icon(Icons.Default.Refresh, "强制刷新")
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = com.mengpaw.design.theme.ThemeColors.bgPrimary)
@@ -187,6 +187,16 @@ private fun PluginCard(
                             Text(label, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                                 style = MaterialTheme.typography.labelSmall, color = fg)
                         }
+                    } else if (item.availability == PluginAvailability.BUILTIN) {
+                        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Blue1) {
+                            Text("已内置", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                style = MaterialTheme.typography.labelSmall, color = ArcoColors.Blue6)
+                        }
+                    } else if (item.availability == PluginAvailability.UNAVAILABLE) {
+                        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
+                            Text("暂未发布", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                style = MaterialTheme.typography.labelSmall, color = ArcoColors.Gray6)
+                        }
                     }
                     item.permissions.take(2).forEach { perm ->
                         Spacer(Modifier.width(4.dp))
@@ -214,12 +224,20 @@ private fun PluginCard(
                                 Icon(Icons.Default.Delete, "卸载", tint = com.mengpaw.design.theme.ThemeColors.error, modifier = Modifier.size(20.dp))
                             }
                         }
-                    } else {
+                    } else if (item.availability == PluginAvailability.BUILTIN) {
+                        Button(onClick = onInstall, shape = RoundedCornerShape(ArcoRadius.md),
+                            contentPadding = PaddingValues(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.xs),
+                            colors = ButtonDefaults.buttonColors(containerColor = ArcoColors.Blue6)) {
+                            Text("激活 Activate", color = androidx.compose.ui.graphics.Color.White)
+                        }
+                    } else if (item.availability == PluginAvailability.DOWNLOADABLE) {
                         Button(onClick = onInstall, shape = RoundedCornerShape(ArcoRadius.md),
                             contentPadding = PaddingValues(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.xs),
                             colors = ButtonDefaults.buttonColors(containerColor = com.mengpaw.design.theme.ThemeColors.brand)) {
                             Text("安装 Install", color = androidx.compose.ui.graphics.Color.White)
                         }
+                    } else {
+                        // UNAVAILABLE — no action button
                     }
                 }
                 is InstallState.Downloading -> {

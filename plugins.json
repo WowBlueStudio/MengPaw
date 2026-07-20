@@ -1,289 +1,286 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
-  "version": 1,
-  "updated": "2026-07-18T09:00:00Z",
+  "version": 2,
+  "updated": "2026-07-20T18:30:00Z",
   "plugins": [
     {
       "id": "fs-plugin",
       "name": "文件系统",
-      "version": "1.0.0",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
+      "author": "MengPaw",
       "description": "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-fs-release.aar",
-      "checksum": "sha256:182c1c2c5756720f783885a2af67e3925fa4924741cf8b9b002a93ec693490d0",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "fs.cat",
-        "fs.ls",
-        "fs.write",
-        "fs.rm",
-        "fs.mkdir",
-        "fs.cp",
-        "fs.mv",
-        "fs.stat"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-fs-release.aar"
+      "commands": ["fs.cat", "fs.ls", "fs.write", "fs.rm", "fs.mkdir", "fs.cp", "fs.mv", "fs.stat"]
     },
     {
       "id": "net-plugin",
       "name": "网络请求",
-      "version": "1.0.0",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "HTTP 网络请求：curl, get, post",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-net-release.aar",
-      "checksum": "sha256:b381aa9563fabb7afe435e13b1c94482c23acdf72930b9736c132e65d8f8684c",
+      "author": "MengPaw",
+      "description": "HTTP 请求：GET/POST，支持自定义 Header 和超时",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "permissions": [
-        "INTERNET"
-      ],
-      "commands": [
-        "net.curl",
-        "net.get",
-        "net.post"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-net-release.aar"
+      "commands": ["net.get", "net.post", "net.status"]
     },
     {
       "id": "memory-plugin",
       "name": "记忆系统",
-      "version": "1.0.0",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "Markdown 持久化记忆系统，含 LRU 缓存",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-memory-release.aar",
-      "checksum": "sha256:5f6cbd369402ceb3e53c8e7bb0a8559b86f31160401d1fec3c6fc2f9751fcf4d",
+      "author": "MengPaw",
+      "description": "Markdown 持久化记忆系统，含 LRU 缓存和被动索引",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "memory.ls",
-        "memory.read",
-        "memory.write",
-        "memory.rm",
-        "memory.search",
-        "memory.stats"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-memory-release.aar"
+      "commands": ["memory.ls", "memory.read", "memory.write", "memory.rm", "memory.search", "memory.stats"]
     },
     {
       "id": "skill-plugin",
       "name": "技能系统",
-      "version": "1.0.0",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "可复用的 Agent 剧本系统（YAML+Markdown）",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-skill-release.aar",
-      "checksum": "sha256:74e119b793623e17657041d83035298be7acc6e6676cd0e5e7c3448c751cd011",
+      "author": "MengPaw",
+      "description": "可复用的 Agent 剧本系统（YAML+Markdown），含 3 个默认 Skill",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "skill.ls",
-        "skill.run",
-        "skill.enable",
-        "skill.disable"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-skill-release.aar"
+      "commands": ["skill.ls", "skill.run", "skill.enable", "skill.disable"]
     },
     {
       "id": "self-plugin",
-      "name": "Self Introspection",
-      "version": "1.0.0",
+      "name": "Agent 自省",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "Agent 自省命令：status, config, stats, version",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-self-release.aar",
-      "checksum": "sha256:7ce0ca1f80c430c7813939e81736a4106a8426811b857d7df07036775a8f1f25",
+      "author": "MengPaw",
+      "description": "Agent 自身状态查询和配置管理",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "self.status",
-        "self.config",
-        "self.stats",
-        "self.version"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-self-release.aar"
+      "commands": ["self.status", "self.config", "self.stats", "self.version", "self.avatar", "self.theme"]
     },
     {
       "id": "clipboard-plugin",
       "name": "剪贴板",
-      "version": "1.0.0",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "剪贴板操作：copy, paste, clear",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-clipboard-release.aar",
-      "checksum": "sha256:9d340070870eb2f66d07616e14b7a53a306952938c72bbbace6a92a728a24ab8",
+      "author": "MengPaw",
+      "description": "系统剪贴板读写操作",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "clipboard.copy",
-        "clipboard.paste",
-        "clipboard.clear"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-clipboard-release.aar"
+      "commands": ["clipboard.copy", "clipboard.paste", "clipboard.clear"]
     },
     {
       "id": "notification-plugin",
       "name": "通知管理",
-      "version": "1.0.0",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "通知管理：send, list, dismiss",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-notification-release.aar",
-      "checksum": "sha256:dd983ff205a6c56ac927782bd2e4194f9465910eabd05a0b4c82f65dcb871f83",
+      "author": "MengPaw",
+      "description": "系统通知发送和管理",
+      "status": "builtin",
+      "permissions": ["POST_NOTIFICATIONS"],
       "minCoreVersion": "0.2.0",
-      "permissions": [
-        "POST_NOTIFICATIONS"
-      ],
-      "commands": [
-        "notification.send",
-        "notification.list",
-        "notification.dismiss"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-notification-release.aar"
+      "commands": ["notification.send", "notification.list", "notification.dismiss"]
     },
     {
       "id": "pad-plugin",
-      "name": "悬浮窗",
-      "version": "1.0.0",
+      "name": "PAD 悬浮窗",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "Compose 悬浮窗，Agent 工作状态可视化",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-pad-release.aar",
-      "checksum": "sha256:e1462cf4160d195354ce9c7fd21ef9be6c066aafe7f36f5edb6e22257fe766d2",
+      "author": "MengPaw",
+      "description": "可拖动悬浮窗界面，支持自定义 Web 内容",
+      "status": "builtin",
+      "permissions": ["SYSTEM_ALERT_WINDOW", "FOREGROUND_SERVICE"],
       "minCoreVersion": "0.2.0",
-      "permissions": [
-        "SYSTEM_ALERT_WINDOW"
-      ],
-      "commands": [
-        "pad.show",
-        "pad.hide",
-        "pad.status"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-pad-release.aar"
+      "commands": ["pad.show", "pad.hide", "pad.load"]
     },
     {
       "id": "tavily-plugin",
       "name": "AI 搜索",
-      "version": "1.0.0",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "Tavily AI 搜索 API 集成",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-tavily-release.aar",
-      "checksum": "sha256:58ae99f9d3a1fcb726c82b54271220309507e0a7cc942e6b82e7f6f151541688",
+      "author": "MengPaw",
+      "description": "Tavily AI 搜索集成，支持深度搜索和实时信息获取",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "tavily.search",
-        "tavily.extract"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-tavily-release.aar"
+      "commands": ["tavily.search", "tavily.extract"]
     },
     {
       "id": "hermes-plugin",
-      "name": "多智能体协作",
-      "version": "1.0.0",
+      "name": "多 Agent 协作",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "文件收件箱式多 Agent 协作框架",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-hermes-release.aar",
-      "checksum": "sha256:4bd727dadf7b9f0dec8d7e2914472f855713f949b2ccb2d5e66c4fddd08527c1",
+      "author": "MengPaw",
+      "description": "多 Agent 对话、任务委派和团队共享记忆",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "hermes.team",
-        "hermes.delegate",
-        "hermes.ask",
-        "hermes.memo"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-hermes-release.aar"
+      "commands": ["hermes.discover", "hermes.team", "hermes.delegate", "hermes.ask", "hermes.memo", "hermes.role"]
     },
     {
       "id": "workflow-plugin",
       "name": "工作流引擎",
-      "version": "1.0.0",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "DAG 工作流引擎，拓扑排序 + 并行执行",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-workflow-release.aar",
-      "checksum": "sha256:178f44de77adb4526c05a0dbb0ce2e5a89e398fcbb94c45625f9a9c263fb55f4",
+      "author": "MengPaw",
+      "description": "DAG 工作流编排：节点串联/并行/条件分支/上下文传递",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "workflow.define",
-        "workflow.list",
-        "workflow.run",
-        "workflow.status"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-workflow-release.aar"
+      "commands": ["workflow.run", "workflow.define", "workflow.list", "workflow.status"]
     },
     {
       "id": "incubator-plugin",
-      "name": "子 Agent 孵化器",
-      "version": "1.0.0",
+      "name": "Agent 孵化器",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "子 Agent 生命周期管理：创建、列表、终止、任务委派",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-incubator-release.aar",
-      "checksum": "sha256:71383bfeb69c109b5edeb956b3c6cde266fb69b939263f7b0bb03bd769ca1ff4",
+      "author": "MengPaw",
+      "description": "子 Agent 孵化：创建/配置/监控/终止/结果收集",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "incubator.spawn",
-        "incubator.list",
-        "incubator.terminate",
-        "incubator.task"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-incubator-release.aar"
+      "commands": ["incubator.spawn", "incubator.list", "incubator.terminate", "incubator.inbox"]
     },
     {
       "id": "render-plugin",
-      "name": "图像生成",
-      "version": "1.0.0",
+      "name": "API 生图引擎",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "多后端图像生成：Replicate, Stability AI, DALL-E 3",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-render-release.aar",
-      "checksum": "sha256:f91700fb6fd36da8b824202671f75f956f49b7e1c015e9087afcaebdec513417",
+      "author": "MengPaw",
+      "description": "多后端 API 生图：Replicate/Stability/DALL-E",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "render.models",
-        "render.generate",
-        "render.status",
-        "render.result"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-render-release.aar"
+      "commands": ["render.models", "render.generate", "render.status", "render.preview"]
     },
     {
       "id": "comfy-plugin",
-      "name": "ComfyUI 集成",
-      "version": "1.0.0",
+      "name": "ComfyUI 工作流",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "ComfyUI 工作流管理：创建节点、连接、提交、导出",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-comfy-release.aar",
-      "checksum": "sha256:e57d759c3e0063af829fb55fa4c151ca4d9c0dd0c942a47e15df299258aba317",
+      "author": "MengPaw",
+      "description": "ComfyUI 工作流搭建：节点编排/JSON 导出/API 执行",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "comfy.create",
-        "comfy.addNode",
-        "comfy.connect",
-        "comfy.show",
-        "comfy.list",
-        "comfy.submit",
-        "comfy.export"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-comfy-release.aar"
+      "commands": ["comfy.nodes", "comfy.workflow", "comfy.run", "comfy.preview", "comfy.export"]
     },
     {
       "id": "translate-plugin",
-      "name": "Google 翻译",
-      "version": "1.0.0",
+      "name": "翻译引擎",
+      "version": "0.1.1",
       "type": "native",
-      "author": "WowBlue Studio",
-      "description": "Google 翻译 — 130+ 语言，免费免设置",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.2.0/plugin-translate-release.aar",
-      "checksum": "sha256:5d714f0b502ab60bff1993d66344a85c096fd9413cb5c657c101008f18578a48",
+      "author": "MengPaw",
+      "description": "多语言翻译：Google 翻译集成 + 语种自动检测",
+      "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": [
-        "translate.text",
-        "translate.auto",
-        "translate.langs",
-        "translate.setup"
-      ],
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/raw/master/releases/plugin-translate-release.aar"
+      "commands": ["translate.text", "translate.auto", "translate.langs", "translate.setup"]
+    },
+    {
+      "id": "dev-plugin",
+      "name": "插件开发工具",
+      "version": "0.1.1",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "创建、审计、构建、分享自建插件 — Agent 可自主扩展 MengPaw 功能",
+      "status": "builtin",
+      "minCoreVersion": "0.2.0",
+      "commands": ["plugin.create", "plugin.audit", "plugin.share", "plugin.examples"]
+    },
+    {
+      "id": "agent-mission-plugin",
+      "name": "Mission",
+      "version": "0.1.1",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "任务分解+顺序执行+Mission+分布式分派给授权Agent/设备/框架",
+      "status": "builtin",
+      "minCoreVersion": "0.2.3",
+      "commands": ["mission.start", "mission.status", "mission.stop", "mission.plus", "mission.plus.dispatch", "mission.plus.status"]
+    },
+    {
+      "id": "agent-loop-plugin",
+      "name": "Agent Loop",
+      "version": "0.1.1",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "受控迭代执行: 重复检测+3级干预+完成检查+审计账本。主页扩展功能下激活。",
+      "status": "builtin",
+      "minCoreVersion": "0.2.3",
+      "commands": ["loop.start", "loop.status", "loop.stop", "loop.config", "loop.ledger"]
+    },
+    {
+      "id": "update-plugin",
+      "name": "自动更新",
+      "version": "0.1.1",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "WiFi 环境自动检测更新，可选自动下载安装。检查 GitHub Releases。",
+      "status": "builtin",
+      "permissions": ["INTERNET", "ACCESS_NETWORK_STATE", "REQUEST_INSTALL_PACKAGES"],
+      "minCoreVersion": "0.2.3",
+      "commands": ["update.check", "update.download", "update.install", "update.auto"]
+    },
+    {
+      "id": "browser-inspector-plugin",
+      "name": "网页开发套件",
+      "version": "0.1.1",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "元素选择器+批注：悬停高亮、点击选择、添加备注、导出元素地图",
+      "status": "builtin",
+      "minCoreVersion": "0.2.3",
+      "commands": ["inspector.start", "inspector.stop", "inspector.select", "inspector.annotate", "inspector.list", "inspector.export"]
+    },
+    {
+      "id": "browser-push-plugin",
+      "name": "跨设备推送",
+      "version": "0.1.1",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "Agent 跨设备推送网页。需对端授权。基于 ACP 协议。",
+      "status": "builtin",
+      "minCoreVersion": "0.2.3",
+      "commands": ["browser.push", "browser.push.pending", "browser.push.accept", "browser.push.reject"]
+    },
+    {
+      "id": "browser-search-plugin",
+      "name": "搜索分析",
+      "version": "0.1.1",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "搜索引擎结果提取：Google/Bing/百度/DuckDuckGo 结构化数据",
+      "status": "builtin",
+      "minCoreVersion": "0.2.3",
+      "commands": ["search.extract", "search.summary", "search.engines"]
+    },
+    {
+      "id": "browser-mcp-plugin",
+      "name": "浏览器 MCP",
+      "version": "0.1.1",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取",
+      "status": "builtin",
+      "minCoreVersion": "0.2.3",
+      "commands": ["browser.mcp.tools", "browser.mcp.status"]
+    },
+    {
+      "id": "browser-cdp-plugin",
+      "name": "CDP 调试",
+      "version": "0.1.1",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "Chrome DevTools Protocol 调试支持。仅 debug 构建，仅 localhost。",
+      "status": "builtin",
+      "minCoreVersion": "0.2.3",
+      "commands": ["cdp.enable", "cdp.status"]
+    },
+    {
+      "id": "error-report-plugin",
+      "name": "错误上报",
+      "version": "0.1.1",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "官方错误收集与上报。安装即同意帮助改进框架和插件。WiFi 下自动上传到 Gitee/GitHub。",
+      "status": "builtin",
+      "permissions": ["INTERNET", "ACCESS_NETWORK_STATE"],
+      "minCoreVersion": "0.2.3",
+      "commands": ["error.list", "error.show", "error.clear", "error.export", "error.status", "error.upload"]
     }
   ]
 }
