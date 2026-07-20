@@ -93,6 +93,40 @@
 
 ---
 
+## 2026-07-20 — v0.3.0 发布教训
+
+### 编译教训
+
+17. **不可编译的代码不能 push**
+    - 后果：v0.3.0 push 后编译失败，连续 5 次修复提交
+    - 教训：写完代码先 `./gradlew assembleRelease`，通过再 commit+push
+
+18. **跨模块引用的 data class 放 core**
+    - 后果：MissionMonitor 在 plugin-agent-loop 中，shell 无法引用
+    - 教训：需要多模块共享的对象放在 mengpaw-core
+
+19. **新增模块检查 ProGuard 规则**
+    - 后果：Shell 和 Browser 的 R8 混淆删掉了 core 类
+    - 教训：每个 application 模块都需要 `-keep class com.mengpaw.core.**`
+
+20. **Kotlin companion object 只能有一个**
+    - 后果：CacheStrategy 中两个 companion object 导致 `Unresolved reference`
+    - 教训：合并到同一个 companion object 中
+
+21. **sealed class 子类字段名要一致**
+    - 后果：`AgentWithTrace.finalContent` vs `Agent.content` / `User.content`
+    - 教训：批量替换时检查所有子类，统一字段名
+
+22. **模块间依赖要检查**
+    - 后果：shell 引用 kotlinx.serialization 但未声明依赖
+    - 教训：能用简单替代方案（Regex）就不要引入新依赖
+
+23. **每次编译通过后再 push+发布+上传 APK**
+    - 后果：v0.3.0 首次 push 后有 7 个编译错误，APK 未成功构建
+    - 教训：build → 验证 APK → commit → push → tag → release
+
+---
+
 ## 版本规则
 
 按用户要求，MengPaw 版本号规则：
