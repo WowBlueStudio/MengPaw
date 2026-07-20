@@ -84,72 +84,53 @@ class MainActivity : ComponentActivity() {
 fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     var showPlugins by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
 
-    val leftDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val rightDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val agentViewModel: AgentViewModel = viewModel()
     val activeAgent by agentViewModel.activeAgent.collectAsState()
-    val sessionHistory by agentViewModel.sessionHistory.collectAsState()
-    val hideCompacted by agentViewModel.hideCompacted.collectAsState()
-    val isTablet = com.mengpaw.shell.ui.isWide()
 
-    // Tablet: permanent left sidebar drawer open, right sidebar as second drawer
-    LaunchedEffect(isTablet) {
-        if (isTablet) leftDrawerState.open() else leftDrawerState.close()
-    }
-
-    // Left sidebar drawer
     ModalNavigationDrawer(
-        drawerState = leftDrawerState,
-        gesturesEnabled = !isTablet, // tablet: permanent, phone: swipe to open
+        drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet {
                 SidebarContent(
-                    onNavigateToPlugins = { showPlugins = true; scope.launch { leftDrawerState.close() } },
-                    onNavigateToSettings = { showSettings = true; scope.launch { leftDrawerState.close() } },
-                    onClose = { scope.launch { leftDrawerState.close() } },
+                    onNavigateToPlugins = { showPlugins = true; scope.launch { drawerState.close() } },
+                    onNavigateToSettings = { showSettings = true; scope.launch { drawerState.close() } },
+                    onClose = { scope.launch { drawerState.close() } },
                     activeAgent = activeAgent,
-                    onSwitchAgent = { name -> agentViewModel.switchAgent(name); scope.launch { leftDrawerState.close() } },
+                    onSwitchAgent = { name -> agentViewModel.switchAgent(name); scope.launch { drawerState.close() } },
                     onCreateAgent = { name ->
                         agentViewModel.createAgent(name)
-                        scope.launch { leftDrawerState.close() }
+                        scope.launch { drawerState.close() }
                     }
                 )
             }
         }
     ) {
-        // Right sidebar drawer (history)
-        ModalNavigationDrawer(
-            drawerState = rightDrawerState,
-            gesturesEnabled = true,
-            drawerContent = {
-                ModalDrawerSheet(
-                    drawerContainerColor = com.mengpaw.design.theme.ThemeColors.bgPrimary,
-                    drawerShape = androidx.compose.foundation.shape.RoundedCornerShape(
-                        topStart = 12.dp, bottomStart = 12.dp
-                    )
-                ) {
-                    HistorySidebar(
-                        sessions = sessionHistory,
-                        hideCompacted = hideCompacted,
-                        onToggleHideCompacted = { agentViewModel.toggleHideCompacted() },
-                        onSelectSession = { /* TODO: restore session */ },
-                        onDeleteSession = { agentViewModel.deleteSession(it) },
-                        onCompactSession = { agentViewModel.compactSession(it) }
-                    )
-                }
-            }
-        ) {
-            // ── Main Chat Screen ──
-            MainScreen(
-                strings = strings,
-                settingsViewModel = settingsViewModel,
-                onOpenSidebar = { scope.launch { leftDrawerState.open() } },
-                onOpenHistory = { scope.launch { rightDrawerState.open() } },
-                agentViewModel = agentViewModel
-            )
-        }
+        MainScreen(
+            strings = strings,
+            settingsViewModel = settingsViewModel,
+            onOpenSidebar = { scope.launch { drawerState.open() } },
+            onOpenHistory = { showHistory = !showHistory },
+            agentViewModel = agentViewModel
+        )
+    }
+
+    // History sidebar as overlay
+    if (showHistory) {
+        val sessionHistory by agentViewModel.sessionHistory.collectAsState()
+        val hideCompacted by agentViewModel.hideCompacted.collectAsState()
+        HistorySidebar(
+            sessions = sessionHistory,
+            hideCompacted = hideCompacted,
+            onToggleHideCompacted = { agentViewModel.toggleHideCompacted() },
+            onSelectSession = { showHistory = false },
+            onDeleteSession = { agentViewModel.deleteSession(it) },
+            onCompactSession = { agentViewModel.compactSession(it) },
+            modifier = Modifier
+        )
     }
 
     // ── Full-screen overlays for Plugins/Settings ──
