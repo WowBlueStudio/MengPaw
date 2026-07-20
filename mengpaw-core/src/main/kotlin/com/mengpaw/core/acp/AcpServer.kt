@@ -6,6 +6,8 @@ package com.mengpaw.core.acp
 import com.mengpaw.core.agent.AgentProfile
 import com.mengpaw.core.security.PromptFirewall
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * ACP (Agent Communication Protocol) Server for MengPaw.
@@ -134,6 +136,7 @@ class AcpServer(
                 }
                 AcpResult(true, "alive")
             }
+            AcpMessageType.BROWSER_PUSH_RESPONSE -> AcpResult(true, "ack", msg.type)
             AcpMessageType.DISCOVER -> {
                 val peer = PeerAgent(profile.agentId, profile.agentName, "local", port,
                     listOf("acp/1.0", "mcp/1.0"))

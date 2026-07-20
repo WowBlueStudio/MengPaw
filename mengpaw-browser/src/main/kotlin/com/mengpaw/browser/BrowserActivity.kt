@@ -319,6 +319,7 @@ class BrowserActivity : ComponentActivity() {
         webViewMapRef.clear()
         try { android.webkit.CookieManager.getInstance().flush() } catch (_: Exception) { }
     }
+}
 
 // ── Main Browser App ──────────────────────────────────────────────
 

@@ -130,8 +130,8 @@ class BuiltinBrowserPlugin(
             kotlinx.coroutines.delay(300) // brief settle
             results.add(BrowserBridge(wv).content().let { json ->
                 try {
-                    val obj = kotlinx.serialization.json.Json.parseToJsonElement(json).jsonObject
-                    """{"tab":${t.id},"url":"${t.url.take(80)}","title":${obj["title"]}}"""
+                    val title = Regex("\"title\"\\s*:\\s*\"([^\"]*)\"").find(json)?.groupValues?.get(1) ?: ""
+                    """{"tab":${t.id},"url":"${t.url.take(80)}","title":"$title"}"""
                 } catch (_: Exception) { """{"tab":${t.id},"url":"${t.url}","error":"parse failed"}""" }
             })
         }
