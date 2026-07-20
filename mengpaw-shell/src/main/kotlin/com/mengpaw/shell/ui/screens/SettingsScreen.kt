@@ -4,6 +4,7 @@
 package com.mengpaw.shell.ui.screens
 import androidx.compose.material.icons.outlined.*
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -616,27 +617,6 @@ private fun ProviderCard(
                                     modifier = Modifier.size(18.dp), colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
                                 Spacer(Modifier.width(8.dp))
                                 Text(model, Modifier.weight(1f), fontSize = 13.sp, color = Color(0xFF52C41A))
-                            }
-                        }
-                    }
-                        Row(
-                            Modifier.fillMaxWidth().clickable { onSelectModel(model.name) }
-                                .padding(vertical = 4.dp, horizontal = ArcoSpacing.sm),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selectedModel == model.name,
-                                onClick = { onSelectModel(model.name) },
-                                modifier = Modifier.size(18.dp),
-                                colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(model.name, Modifier.weight(1f), fontSize = 13.sp)
-                            Surface(shape = RoundedCornerShape(ArcoRadius.sm),
-                                color = if (model.type == "多模态") ArcoColors.Orange1 else ArcoColors.Blue1) {
-                                Text(model.type, Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                                    fontSize = 10.sp,
-                                    color = if (model.type == "多模态") ArcoColors.Orange7 else ArcoColors.Blue7)
                             }
                         }
                     }

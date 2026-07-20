@@ -1,37 +1,21 @@
 # MengPaw Shell ProGuard Rules
--keepattributes *Annotation*
 
-# Core microkernel API (tightened from com.mengpaw.**)
--keep class com.mengpaw.core.AgentEngine { public *; }
--keep class com.mengpaw.core.AgentState { *; }
--keep class com.mengpaw.core.llm.LlmProvider { *; }
--keep class com.mengpaw.core.llm.ProviderInfo { *; }
--keep class com.mengpaw.core.llm.ProviderType { *; }
--keep class com.mengpaw.core.plugin.** { *; }
--keep class com.mengpaw.core.cli.ExecutionResult { *; }
--keep class com.mengpaw.core.cli.ExecutionContext { *; }
+# Keep all mengpaw-core classes (includes new MissionMonitor, TranslateMiddleware, etc.)
+-keep class com.mengpaw.core.** { *; }
+-dontwarn com.mengpaw.core.**
 
-# Design system (keep all)
+# Keep all plugins
+-keep class com.mengpaw.plugin.** { *; }
+-dontwarn com.mengpaw.plugin.**
+
+# Design system
 -keep class com.mengpaw.design.** { *; }
 
-# Shell classes (keep all)
+# Shell classes
 -keep class com.mengpaw.shell.** { *; }
 
-# Keep Compose
--keep class androidx.compose.** { *; }
--keep class * extends androidx.compose.ui.platform.ComposeView { *; }
-
-# Keep Kotlin serialization
--keep class kotlinx.serialization.** { *; }
--keepclassmembers class * {
-    @kotlinx.serialization.Serializable *;
-}
-
-# R8/Kotlin/Compose compatibility
+# Kotlin/compose compatibility
+-dontwarn com.google.errorprone.annotations.**
 -dontwarn java.lang.invoke.StringConcatFactory
--dontwarn java.lang.ClassValue
 -dontwarn kotlin.Result
--dontwarn org.jetbrains.annotations.**
 -dontwarn javax.annotation.**
--dontwarn kotlinx.parcelize.**
--dontwarn androidx.compose.**

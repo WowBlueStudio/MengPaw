@@ -131,12 +131,12 @@ class SettingsViewModel : ViewModel() {
                 if (key.isNotBlank()) client.setRequestProperty("Authorization", "Bearer $key")
                 val body = client.inputStream.bufferedReader().readText()
                 client.disconnect()
-                // Parse OpenAI-format model list
+                // Parse OpenAI-format model list: {"data":[{"id":"gpt-4o"},...]}
                 val models = try {
-                    kotlinx.serialization.json.Json.parseToJsonElement(body)
-                        .jsonObject["data"]?.jsonArray?.mapNotNull {
-                            it.jsonObject["id"]?.jsonPrimitive?.content
-                        } ?: emptyList()
+                    Regex("\"id\"\\s*:\\s*\"([^\"]+)\"").findAll(body)
+                        .map { it.groupValues[1] }
+                        .filter { !it.contains(":") && it.length < 80 }
+                        .toList()
                 } catch (_: Exception) { emptyList() }
                 if (models.isNotEmpty()) {
                     _state.value = _state.value.copy(

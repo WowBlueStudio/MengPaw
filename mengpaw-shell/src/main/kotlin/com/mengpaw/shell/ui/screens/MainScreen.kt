@@ -90,9 +90,6 @@ fun MainScreen(
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
 
-    // ── Dialogs ──
-    var showHistory by remember { mutableStateOf(false) }
-
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.fillMaxSize().widthIn(max = MAX_CONTENT_WIDTH.dp)) {
             // ── Header bar ──
@@ -483,6 +480,12 @@ private fun BubbleWrapper(
     var showMenu by remember { mutableStateOf(false) }
     var showBigBang by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val bubbleText = when (message) {
+        is ChatMessageUi.User -> message.content
+        is ChatMessageUi.Agent -> message.content
+        is ChatMessageUi.AgentWithTrace -> message.finalContent
+        else -> ""
+    }
 
     Box {
         Box(
@@ -493,12 +496,6 @@ private fun BubbleWrapper(
         ) { content() }
 
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-            val bubbleText = when (message) {
-                is ChatMessageUi.User -> message.content
-                is ChatMessageUi.Agent -> message.content
-                is ChatMessageUi.AgentWithTrace -> message.content
-                else -> ""
-            }
             DropdownMenuItem(text = { Text("📋 复制") }, onClick = {
                 (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
                     ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", bubbleText))
