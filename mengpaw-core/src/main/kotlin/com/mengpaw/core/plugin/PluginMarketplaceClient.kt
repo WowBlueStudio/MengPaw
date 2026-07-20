@@ -12,6 +12,7 @@ import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import java.io.File
 import java.security.MessageDigest
+import com.mengpaw.core.error.ErrorCollector
 
 /**
  * Marketplace index entry for a single plugin.
@@ -23,7 +24,7 @@ data class MarketplaceEntry(
     val type: PluginType = PluginType.NATIVE,
     val author: String = "",
     val description: String = "",
-    val downloadUrl: String,
+    val downloadUrl: String = "",
     /** Mirror download URL (Gitee for China, GitHub for others — auto-selected by GeoRouter) */
     val mirrorUrl: String = "",
     val checksum: String = "",
@@ -31,8 +32,15 @@ data class MarketplaceEntry(
     val minCoreVersion: String = "0.1.0",
     val dependencies: List<String> = emptyList(),
     val permissions: List<String> = emptyList(),
-    val commands: List<String> = emptyList()
-)
+    val commands: List<String> = emptyList(),
+    /** "builtin" = compiled into APK, no download needed. "remote" = downloadable from marketplace. */
+    val status: String = "builtin"
+) {
+    /** Whether this plugin can be downloaded from the marketplace. */
+    val isDownloadable: Boolean get() = status == "remote" && downloadUrl.isNotBlank()
+    /** Whether this plugin is already built into the app. */
+    val isBuiltin: Boolean get() = status == "builtin"
+}
 
 /**
  * Full marketplace index response.
@@ -67,6 +75,7 @@ object GeoRouter {
             cachedCountry = code
             code == "CN"
         } catch (e: Exception) {
+            ErrorCollector.report(e, "GeoRouter.isChina")
             // If geo-detection fails, default to primary (GitHub) — safe for non-China users
             false
         }
@@ -122,7 +131,7 @@ class PluginMarketplaceClient(
         if (!forceRefresh && cachedIndex != null &&
             System.currentTimeMillis() - lastFetchTime < cacheTtlMs
         ) {
-            return Result.success(cachedIndex!!)
+            return Result.success(cachedIndex ?: MarketplaceIndex())
         }
 
         val primary = resolveIndexUrl()
@@ -157,7 +166,8 @@ class PluginMarketplaceClient(
                 )
             }
         } catch (e: Exception) {
-            if (cachedIndex != null) Result.success(cachedIndex!!)
+            ErrorCollector.report(e, "PluginMarketClient.tryFetch")
+            if (cachedIndex != null) Result.success(cachedIndex ?: MarketplaceIndex())
             else Result.failure(e)
         }
     }
@@ -191,6 +201,9 @@ class PluginMarketplaceClient(
      * Tries the best regional source first, falls back to the alternate.
      */
     suspend fun download(entry: MarketplaceEntry, destDir: File): Result<File> {
+        if (!entry.isDownloadable) {
+            return Result.failure(RuntimeException("${entry.name} 已内置在 APK 中，无需下载"))
+        }
         val primary = if (GeoRouter.isChina() && entry.mirrorUrl.isNotBlank())
             entry.mirrorUrl else entry.downloadUrl
         val fallback = if (primary == entry.mirrorUrl) entry.downloadUrl else entry.mirrorUrl
@@ -232,6 +245,7 @@ class PluginMarketplaceClient(
             }
             Result.success(destFile)
         } catch (e: Exception) {
+            ErrorCollector.report(e, "PluginMarketClient.tryDownload")
             Result.failure(e)
         }
     }
@@ -273,14 +287,14 @@ class PluginMarketplaceClient(
                 updated = root["updated"]?.jsonPrimitive?.content ?: "",
                 plugins = root["plugins"]?.jsonArray?.map { parseEntry(it.jsonObject) } ?: emptyList()
             )
-        } catch (e: Exception) { MarketplaceIndex() }
+        } catch (e: Exception) { ErrorCollector.report(e, "PluginMarketClient.parseIndex"); MarketplaceIndex() }
     }
 
     private fun parseEntry(obj: JsonObject): MarketplaceEntry = MarketplaceEntry(
         id = obj["id"]?.jsonPrimitive?.content ?: "",
         name = obj["name"]?.jsonPrimitive?.content ?: "",
         version = obj["version"]?.jsonPrimitive?.content ?: "0.0.0",
-        type = try { PluginType.valueOf((obj["type"]?.jsonPrimitive?.content ?: "native").uppercase()) } catch (e: Exception) { PluginType.NATIVE },
+        type = try { PluginType.valueOf((obj["type"]?.jsonPrimitive?.content ?: "native").uppercase()) } catch (e: Exception) { ErrorCollector.report(e, "PluginMarketClient.parseEntry"); PluginType.NATIVE },
         author = obj["author"]?.jsonPrimitive?.content ?: "",
         description = obj["description"]?.jsonPrimitive?.content ?: "",
         downloadUrl = obj["downloadUrl"]?.jsonPrimitive?.content ?: "",
@@ -290,7 +304,8 @@ class PluginMarketplaceClient(
         minCoreVersion = obj["minCoreVersion"]?.jsonPrimitive?.content ?: "0.1.0",
         dependencies = obj["dependencies"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
         permissions = obj["permissions"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
-        commands = obj["commands"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
+        commands = obj["commands"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
+        status = obj["status"]?.jsonPrimitive?.content ?: "builtin"
     )
 
     private fun sha256(bytes: ByteArray): String {
@@ -299,7 +314,7 @@ class PluginMarketplaceClient(
     }
 
     private fun isPrivateUrl(url: String): Boolean {
-        val host = try { java.net.URI(url).host ?: return true } catch (e: Exception) { return true }
+        val host = try { java.net.URI(url).host ?: return true } catch (e: Exception) { ErrorCollector.report(e, "PluginMarketClient.isPrivateUrl"); return true }
         return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" ||
             host.startsWith("10.") || host.startsWith("192.168.") ||
             host.startsWith("172.") && host.substringAfter("172.").substringBefore(".").toIntOrNull()?.let { it in 16..31 } == true ||

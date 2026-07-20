@@ -34,9 +34,19 @@ enum class LlmProviderPreset(
     KIMI("Kimi (月之暗面)", "https://api.moonshot.cn/v1/chat/completions", "moonshot-v1-8k", "sk-",
         listOf(ModelInfo("moonshot-v1-8k", "Chat"), ModelInfo("moonshot-v1-32k", "Chat"), ModelInfo("moonshot-v1-128k", "Chat"))),
     GLM("GLM (智谱)", "https://open.bigmodel.cn/api/paas/v4/chat/completions", "glm-4-plus", "",
-        listOf(ModelInfo("glm-4-plus", "Chat"), ModelInfo("glm-4-flash", "Chat"), ModelInfo("glm-4v", "多模态"))),
+        listOf(ModelInfo("glm-4-plus", "Chat"), ModelInfo("glm-4-flash", "Chat"), ModelInfo("glm-4v-plus", "多模态"), ModelInfo("glm-4v-flash", "多模态"))),
     QWEN("Qwen (通义千问)", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", "qwen-plus", "sk-",
         listOf(ModelInfo("qwen-plus", "Chat"), ModelInfo("qwen-max", "Chat"), ModelInfo("qwen-turbo", "Chat"), ModelInfo("qwen-vl-plus", "多模态"), ModelInfo("qwen-vl-max", "多模态"), ModelInfo("qwen-coder-turbo", "Chat"))),
+    GROK("Grok (xAI)", "https://api.x.ai/v1/chat/completions", "grok-2", "xai-",
+        listOf(ModelInfo("grok-3", "多模态"), ModelInfo("grok-2", "多模态"), ModelInfo("grok-2-vision", "多模态"))),
+    VOLCANO("火山引擎 (豆包)", "https://ark.cn-beijing.volces.com/api/v3/chat/completions", "doubao-pro-32k", "",
+        listOf(ModelInfo("doubao-pro-32k", "Chat"), ModelInfo("doubao-pro-128k", "Chat"), ModelInfo("doubao-lite-32k", "Chat"), ModelInfo("doubao-vision-pro", "多模态"),
+            // 注意: 火山引擎 ARK 需先在控制台创建推理接入点, 将接入点 ID 作为 model 参数
+            ModelInfo("(需创建接入点)", "提示"))),
+    OPENMODEL("OpenModel", "https://api.openmodel.ai/v1/chat/completions", "deepseek-v4-flash", "sk-",
+        listOf(ModelInfo("deepseek-v4-flash", "Chat"), ModelInfo("deepseek-r1", "Chat"))),
+    SELF_HOSTED("Self-Hosted (自建)", "http://192.168.1.100:9877/v1/chat/completions", "local-model", "",
+        listOf(ModelInfo("local-model", "Chat"), ModelInfo("qwen2.5:7b", "Chat"), ModelInfo("llama3.1:8b", "Chat"))),
     CUSTOM("Custom", "", "", "", emptyList());
 }
 
@@ -62,9 +72,14 @@ data class SettingsState(
     val apiEndpoint: String = LlmProviderPreset.OPENAI.endpoint,
     val apiKey: String = "",
     val modelName: String = LlmProviderPreset.OPENAI.defaultModel,
+    val remoteModels: List<String> = emptyList(),
+    val remoteModelsFetched: Boolean = false,
     val maxSteps: Int = 50,
+    val commandTimeoutSec: Int = 60,
+    val timezone: String = java.util.TimeZone.getDefault().id,
+    val contextStrategy: String = "default",
+    val memoryBackend: String = "memory-plugin",
     val darkTheme: Boolean = false,
-    val useSimulatedProvider: Boolean = true,
     val showApiKey: Boolean = false,
     val useChinese: Boolean = true,
     val agentLanguageMode: AgentLanguageMode = AgentLanguageMode.FOLLOW_UI,
@@ -92,13 +107,47 @@ class SettingsViewModel : ViewModel() {
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
-    /** Switch to a preset provider and auto-fill endpoint + model. */
+    /** Switch to a preset provider and auto-fill endpoint + model. Triggers model list fetch. */
     fun selectProvider(preset: LlmProviderPreset) {
         _state.value = _state.value.copy(
             selectedProvider = preset,
             apiEndpoint = preset.endpoint,
             modelName = preset.defaultModel
         )
+        fetchRemoteModels()
+    }
+
+    /** Auto-fetch available models from the provider's /models endpoint. */
+    fun fetchRemoteModels() {
+        val ep = _state.value.apiEndpoint
+        if (ep.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val base = ep.substringBefore("/chat/completions").substringBefore("/v1/chat")
+                val url = "$base/v1/models"
+                val client = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                client.connectTimeout = 5000; client.readTimeout = 10000
+                val key = _state.value.apiKey
+                if (key.isNotBlank()) client.setRequestProperty("Authorization", "Bearer $key")
+                val body = client.inputStream.bufferedReader().readText()
+                client.disconnect()
+                // Parse OpenAI-format model list
+                val models = try {
+                    kotlinx.serialization.json.Json.parseToJsonElement(body)
+                        .jsonObject["data"]?.jsonArray?.mapNotNull {
+                            it.jsonObject["id"]?.jsonPrimitive?.content
+                        } ?: emptyList()
+                } catch (_: Exception) { emptyList() }
+                if (models.isNotEmpty()) {
+                    _state.value = _state.value.copy(
+                        remoteModels = models,
+                        remoteModelsFetched = true
+                    )
+                }
+            } catch (_: Exception) {
+                // API unreachable — keep preset models
+            }
+        }
     }
 
     fun updateApiEndpoint(endpoint: String) {
@@ -121,9 +170,12 @@ class SettingsViewModel : ViewModel() {
         _state.value = _state.value.copy(darkTheme = !_state.value.darkTheme)
     }
 
-    fun toggleSimulatedProvider() {
-        _state.value = _state.value.copy(useSimulatedProvider = !_state.value.useSimulatedProvider)
+    fun updateCommandTimeout(sec: Int) {
+        _state.value = _state.value.copy(commandTimeoutSec = sec.coerceIn(10, 600))
     }
+    fun updateTimezone(tz: String) { _state.value = _state.value.copy(timezone = tz) }
+    fun updateContextStrategy(s: String) { _state.value = _state.value.copy(contextStrategy = s) }
+    fun updateMemoryBackend(b: String) { _state.value = _state.value.copy(memoryBackend = b) }
 
     fun toggleShowApiKey() {
         _state.value = _state.value.copy(showApiKey = !_state.value.showApiKey)

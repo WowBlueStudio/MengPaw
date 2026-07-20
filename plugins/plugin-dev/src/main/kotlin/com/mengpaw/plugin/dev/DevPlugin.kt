@@ -7,6 +7,7 @@ import com.mengpaw.core.DataPaths
 import com.mengpaw.core.cli.ExecutionContext
 import com.mengpaw.core.cli.ExecutionResult
 import com.mengpaw.core.plugin.*
+import com.mengpaw.core.error.ErrorCollector
 import java.io.File
 import java.security.MessageDigest
 
@@ -77,22 +78,32 @@ class DevPlugin : Plugin {
                     appendLine("}")
                 }
                 dir.mkdirs()
-                File(dir, "plugin.json").writeText(json)
-                return ExecutionResult.ok("SCRIPT 插件骨架已创建: ${dir.absolutePath}\n编辑 plugin.json 添加命令后即可使用。")
+                return try {
+                    File(dir, "plugin.json").writeText(json)
+                    ExecutionResult.ok("SCRIPT 插件骨架已创建: ${dir.absolutePath}\n编辑 plugin.json 添加命令后即可使用。")
+                } catch (e: Exception) {
+                    ErrorCollector.report(e, "DevPlugin.create")
+                    ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+                }
             }
             "native" -> {
                 val ns = id.removeSuffix("-plugin")
                 val pkg = "com.mengpaw.plugin.${id.replace("-", "")}"
                 val cls = name.filter { it.isLetterOrDigit() }
                 dir.mkdirs()
-                File(dir, "build.gradle.kts").writeText(JAR_BUILD_TEMPLATE.replace("{ID}", id))
-                val srcDir = File(dir, "src/main/kotlin/${pkg.replace('.', '/')}")
-                srcDir.mkdirs()
-                File(srcDir, "${cls}Plugin.kt")
-                    .writeText(JAR_PLUGIN_TEMPLATE
-                        .replace("{PKG}", pkg).replace("{CLS}", cls)
-                        .replace("{ID}", id).replace("{NAME}", name).replace("{NS}", ns))
-                return ExecutionResult.ok("NATIVE 插件骨架已创建: ${dir.absolutePath}\n\n下一步:\n1. 用 Android Studio 打开 ${id}/\n2. 修改 src/.../${cls}Plugin.kt 中的 example 命令\n3. 用 plugin.audit --target $id 检查\n4. 发布: plugin.share --plugin $id --to <框架>")
+                return try {
+                    File(dir, "build.gradle.kts").writeText(JAR_BUILD_TEMPLATE.replace("{ID}", id))
+                    val srcDir = File(dir, "src/main/kotlin/${pkg.replace('.', '/')}")
+                    srcDir.mkdirs()
+                    File(srcDir, "${cls}Plugin.kt")
+                        .writeText(JAR_PLUGIN_TEMPLATE
+                            .replace("{PKG}", pkg).replace("{CLS}", cls)
+                            .replace("{ID}", id).replace("{NAME}", name).replace("{NS}", ns))
+                    ExecutionResult.ok("NATIVE 插件骨架已创建: ${dir.absolutePath}\n\n下一步:\n1. 用 Android Studio 打开 ${id}/\n2. 修改 src/.../${cls}Plugin.kt 中的 example 命令\n3. 用 plugin.audit --target $id 检查\n4. 发布: plugin.share --plugin $id --to <框架>")
+                } catch (e: Exception) {
+                    ErrorCollector.report(e, "DevPlugin.create")
+                    ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+                }
             }
             else -> return ExecutionResult.fail("type 必须是 'script' 或 'native'")
         }
@@ -114,10 +125,10 @@ class DevPlugin : Plugin {
         val ktFiles = dir.walkTopDown().filter { it.extension == "kt" }.toList()
 
         if (jsonFile.exists()) {
-            val json = try { jsonFile.readText() } catch (_: Exception) { "" }
+            val json = try { jsonFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "DevPlugin.audit"); "" }
             issues.addAll(auditScript(json))
         } else if (ktFiles.isNotEmpty()) {
-            ktFiles.forEach { issues.addAll(auditKotlin(it.readText())) }
+            ktFiles.forEach { issues.addAll(auditKotlin(try { it.readText() } catch (e: Exception) { ErrorCollector.report(e, "DevPlugin.audit"); "" })) }
         } else {
             return ExecutionResult.fail("未找到 plugin.json 或 Kotlin 源文件")
         }
@@ -369,9 +380,9 @@ class MyNetPlugin : Plugin {
         val shareDir = File(DataPaths.AGENTS, "acp/shares/$pluginId")
         shareDir.mkdirs()
         dir.copyRecursively(shareDir, overwrite = true)
-        File(shareDir, "SHARE_MANIFEST.txt").writeText(
+        try { File(shareDir, "SHARE_MANIFEST.txt").writeText(
             "plugin=$pluginId\nframework=$framework\nsha256=$hash\ntimestamp=${System.currentTimeMillis()}\n"
-        )
+        ) } catch (e: Exception) { ErrorCollector.report(e, "DevPlugin.share") }
 
         return ExecutionResult.ok(
             "插件 '$pluginId' 已准备分享给 '$framework'。\n" +

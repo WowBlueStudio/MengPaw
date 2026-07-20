@@ -10,6 +10,7 @@ import com.mengpaw.core.plugin.Plugin
 import com.mengpaw.core.plugin.PluginMetadata
 import com.mengpaw.core.plugin.PluginType
 import com.mengpaw.core.DataPaths
+import com.mengpaw.core.error.ErrorCollector
 import java.io.File
 
 /**
@@ -53,7 +54,8 @@ class IncubatorPlugin : Plugin {
         val agentDir = File(baseDir, id).also { it.mkdirs() }
 
         // Write Soul.md with role and skills
-        File(agentDir, "Soul.md").writeText("""
+        return try {
+            File(agentDir, "Soul.md").writeText("""
 # Agent 灵魂设定
 
 ## 身份
@@ -76,8 +78,8 @@ $skills
 - 团队协作: hermes.memo 共享记忆
 """.trimIndent())
 
-        // Write Profile.md
-        File(agentDir, "Profile.md").writeText("""
+            // Write Profile.md
+            File(agentDir, "Profile.md").writeText("""
 # 关系设定
 - 名称: $name
 - ID: $id
@@ -85,21 +87,25 @@ $skills
 - 角色: $role
 """.trimIndent())
 
-        // Create inbox
-        File(agentDir, "inbox").mkdirs()
+            // Create inbox
+            File(agentDir, "inbox").mkdirs()
 
-        return ExecutionResult.ok("子Agent 已孵化: $name ($id)\n角色: $role\n技能: $skills\n目录: ${agentDir.absolutePath}")
+            ExecutionResult.ok("子Agent 已孵化: $name ($id)\n角色: $role\n技能: $skills\n目录: ${agentDir.absolutePath}")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "IncubatorPlugin.spawn")
+            ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 
     // ── incubator.list ────────────────────────────────────────────
 
     private suspend fun list(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val children = baseDir.listFiles()?.filter { it.isDirectory }?.map { dir ->
-            val soul = File(dir, "Soul.md").let { if (it.exists()) it.readText() else "" }
+            val soul = File(dir, "Soul.md").let { if (it.exists()) try { it.readText() } catch (e: Exception) { ErrorCollector.report(e, "IncubatorPlugin.list"); "" } else "" }
             val name = Regex("名称:\\s*(.+)").find(soul)?.groupValues?.get(1)?.trim() ?: dir.name
             val role = Regex("角色:\\s*(.+)").find(soul)?.groupValues?.get(1)?.trim() ?: "未设定"
             val inbox = File(dir, "inbox").listFiles()?.size ?: 0
-            val completed = File(dir, "Memory.md").let { if (it.exists()) it.readText().lines().count { l -> l.startsWith("## mem-") } else 0 }
+            val completed = File(dir, "Memory.md").let { if (it.exists()) try { it.readText().lines().count { l -> l.startsWith("## mem-") } } catch (e: Exception) { ErrorCollector.report(e, "IncubatorPlugin.list"); 0 } else 0 }
             ChildAgent(dir.name, name, role, if (inbox > 0) "busy ($inbox pending)" else "idle", completed)
         }?.sortedBy { it.name } ?: emptyList()
 
@@ -130,13 +136,18 @@ $skills
         if (args.size == 1) {
             val tasks = inbox.listFiles()?.sortedBy { it.lastModified() } ?: emptyList()
             return if (tasks.isEmpty()) ExecutionResult.ok("(inbox empty)")
-            else ExecutionResult.ok(tasks.joinToString("\n") { "• ${it.name}: ${it.readText().take(100)}" })
+            else ExecutionResult.ok(tasks.joinToString("\n") { "• ${it.name}: ${try { it.readText().take(100) } catch (e: Exception) { ErrorCollector.report(e, "IncubatorPlugin.inbox"); "(read error)" }}" })
         }
 
         // Send task
         val task = args.drop(1).joinToString(" ")
         val taskFile = File(inbox, "task_${System.currentTimeMillis()}.md")
-        taskFile.writeText("# 委派任务\n- 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}\n\n$task")
-        return ExecutionResult.ok("任务已发送到 ${args[0]} 的 inbox。")
+        return try {
+            taskFile.writeText("# 委派任务\n- 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}\n\n$task")
+            ExecutionResult.ok("任务已发送到 ${args[0]} 的 inbox。")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "IncubatorPlugin.inbox")
+            ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 }

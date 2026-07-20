@@ -10,6 +10,7 @@ import com.mengpaw.core.plugin.Plugin
 import com.mengpaw.core.plugin.PluginMetadata
 import com.mengpaw.core.plugin.PluginType
 import com.mengpaw.core.DataPaths
+import com.mengpaw.core.error.ErrorCollector
 import java.io.File
 
 /**
@@ -52,7 +53,8 @@ class WorkflowPlugin : Plugin {
         val name = args[0]; val desc = args.drop(1).joinToString(" ")
         val file = File(dir, "$name.md")
         if (file.exists()) return ExecutionResult.ok("Workflow '$name' already exists. Use fs.cat to edit: ${file.absolutePath}")
-        file.writeText("""---
+        return try {
+            file.writeText("""---
 name: $name
 description: $desc
 nodes:
@@ -65,8 +67,11 @@ nodes:
     description: 列出已安装插件
 ---
 """.trimIndent())
-        return ExecutionResult.ok("Workflow '$name' created. Edit with fs.cat/fs.write: ${file.absolutePath}")
-    }
+            ExecutionResult.ok("Workflow '$name' created. Edit with fs.cat/fs.write: ${file.absolutePath}")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "WorkflowPlugin.define")
+            ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
 
     // ── workflow.run ────────────────────────────────────────────
 
@@ -75,7 +80,7 @@ nodes:
         val name = args[0]
         val file = File(dir, "$name.md")
         if (!file.exists()) return ExecutionResult.fail("Workflow not found: $name", errorCode = ErrorCodes.ERR_NOT_FOUND)
-        val wf = parseWorkflow(file.readText())
+        val wf = try { parseWorkflow(file.readText()) } catch (e: Exception) { ErrorCollector.report(e, "WorkflowPlugin.run"); return ExecutionResult.fail("Read error: ${e.message}", errorCode = ErrorCodes.ERR_IO) }
         val sorted = topologicalSort(wf.nodes)
         val state = WorkflowState(name)
         running[name] = state
@@ -91,7 +96,7 @@ nodes:
             state.running.toMutableList().add(node.id)
             val cmdFile = File(DataPaths.WORKFLOW_OUTPUTS, "${name}_${node.id}.txt")
             cmdFile.parentFile?.mkdirs()
-            cmdFile.writeText("Node: ${node.id}\nCommand: ${node.command}\nStatus: executed\n")
+            try { cmdFile.writeText("Node: ${node.id}\nCommand: ${node.command}\nStatus: executed\n") } catch (e: Exception) { ErrorCollector.report(e, "WorkflowPlugin.run") }
             results.add("[OK] ${node.id}: ${node.command}")
             state.completed.toMutableList().add(node.id)
             state.running.toMutableList().remove(node.id)
@@ -105,7 +110,7 @@ nodes:
     private suspend fun list(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val files = dir.listFiles()?.filter { it.extension == "md" }?.sortedBy { it.name } ?: emptyList()
         if (files.isEmpty()) return ExecutionResult.ok("(No workflows)\n\nCreate: workflow.define <name> <description>")
-        return ExecutionResult.ok(files.joinToString("\n") { "• ${it.nameWithoutExtension} — ${it.readText().lines().firstOrNull { it.contains("description:") }?.trim() ?: ""}" })
+        return ExecutionResult.ok(files.joinToString("\n") { "• ${it.nameWithoutExtension} — ${try { it.readText().lines().firstOrNull { l -> l.contains("description:") }?.trim() } catch (e: Exception) { ErrorCollector.report(e, "WorkflowPlugin.list"); null } ?: ""}" })
     }
 
     private suspend fun status(args: List<String>, ctx: ExecutionContext): ExecutionResult {

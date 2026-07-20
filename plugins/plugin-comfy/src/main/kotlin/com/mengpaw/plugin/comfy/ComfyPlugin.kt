@@ -16,6 +16,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.serialization.json.*
 import com.mengpaw.core.DataPaths
+import com.mengpaw.core.error.ErrorCollector
 import java.io.File
 
 class ComfyPlugin : Plugin {
@@ -64,8 +65,13 @@ class ComfyPlugin : Plugin {
                 if (a.size < 2) return ExecutionResult.fail("Usage: comfy.workflow create <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
                 val f = File(wfDir, "${a[1]}.json")
                 if (f.exists()) return ExecutionResult.ok("Already exists: ${a[1]}")
-                f.writeText("""{"nodes":[],"links":[],"name":"${a[1]}"}""")
-                return ExecutionResult.ok("Created: ${a[1]}")
+                return try {
+                    f.writeText("""{"nodes":[],"links":[],"name":"${a[1]}"}""")
+                    ExecutionResult.ok("Created: ${a[1]}")
+                } catch (e: Exception) {
+                    ErrorCollector.report(e, "ComfyPlugin.workflow")
+                    ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+                }
             }
             "add" -> {
                 if (a.size < 4) return ExecutionResult.fail("Usage: comfy.workflow add <wf> <nodeId> <type> [k=v...]", errorCode = ErrorCodes.ERR_INVALID_INPUT)
@@ -87,7 +93,7 @@ class ComfyPlugin : Plugin {
             }
             "show" -> {
                 if (a.size < 2) return ExecutionResult.fail("Usage: comfy.workflow show <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-                val txt = File(wfDir, "${a[1]}.json").let { if (it.exists()) it.readText().take(3000) else return ExecutionResult.fail("Not found: ${a[1]}", errorCode = ErrorCodes.ERR_NOT_FOUND) }
+                val txt = File(wfDir, "${a[1]}.json").let { if (it.exists()) try { it.readText().take(3000) } catch (e: Exception) { ErrorCollector.report(e, "ComfyPlugin.workflow"); return ExecutionResult.fail("Read error: ${a[1]}", errorCode = ErrorCodes.ERR_IO) } else return ExecutionResult.fail("Not found: ${a[1]}", errorCode = ErrorCodes.ERR_NOT_FOUND) }
                 return ExecutionResult.ok("Workflow: ${a[1]}\n$txt")
             }
             "list" -> {
@@ -108,7 +114,7 @@ class ComfyPlugin : Plugin {
             val resp = client.post("$url/prompt") { contentType(ContentType.Application.Json); setBody(body.toString()) }
             val id = Json.parseToJsonElement(resp.bodyAsText()).jsonObject["prompt_id"]?.jsonPrimitive?.content ?: return ExecutionResult.fail("No prompt_id", errorCode = ErrorCodes.ERR_INTERNAL)
             ExecutionResult.ok("Submitted. Prompt: $id")
-        } catch (e: Exception) { ExecutionResult.fail("ComfyUI not reachable: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+        } catch (e: Exception) { ErrorCollector.report(e, "ComfyPlugin.run"); ExecutionResult.fail("ComfyUI not reachable: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
     }
 
     private suspend fun preview(a: List<String>, c: ExecutionContext): ExecutionResult = ExecutionResult.ok("Preview in MP Browser at ComfyUI output URL.")
@@ -124,12 +130,12 @@ class ComfyPlugin : Plugin {
     private fun loadWf(name: String): MutableMap<String, Any>? {
         val f = File(wfDir, "$name.json")
         if (!f.exists()) return null
-        return try { (Json.parseToJsonElement(f.readText()) as? JsonObject)?.toMap()?.mapValues { it.value.toMutableValue() }?.toMutableMap() } catch (e: Exception) { null }
+        return try { (Json.parseToJsonElement(f.readText()) as? JsonObject)?.toMap()?.mapValues { it.value.toMutableValue() }?.toMutableMap() } catch (e: Exception) { ErrorCollector.report(e, "ComfyPlugin.loadWf"); null }
     }
 
     private fun saveWf(name: String, wf: MutableMap<String, Any>) {
         val json = buildJsonObject { wf.forEach { (k, v) -> put(k, v.toJsonElement()) } }
-        File(wfDir, "$name.json").writeText(json.toString())
+        try { File(wfDir, "$name.json").writeText(json.toString()) } catch (e: Exception) { ErrorCollector.report(e, "ComfyPlugin.saveWf") }
     }
 
     private fun Any.toMutableValue(): Any = when (this) {

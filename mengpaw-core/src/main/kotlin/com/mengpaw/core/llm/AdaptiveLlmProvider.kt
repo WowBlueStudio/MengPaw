@@ -191,7 +191,27 @@ class AdaptiveLlmProvider(
                 messages.forEach { msg ->
                     addJsonObject {
                         put("role", msg["role"] ?: "user")
-                        put("content", msg["content"] ?: "")
+                        // Multimodal: if _image is present, build content array
+                        val imageUrl = msg["_image"]
+                        val textContent = msg["content"] ?: ""
+                        if (imageUrl != null && imageUrl.isNotBlank()) {
+                            putJsonArray("content") {
+                                if (textContent.isNotBlank()) {
+                                    addJsonObject {
+                                        put("type", "text")
+                                        put("text", textContent)
+                                    }
+                                }
+                                addJsonObject {
+                                    put("type", "image_url")
+                                    putJsonObject("image_url") {
+                                        put("url", imageUrl)
+                                    }
+                                }
+                            }
+                        } else {
+                            put("content", textContent)
+                        }
                         // Inject cache_control annotation for supported providers
                         if (msg["_cache_control"] == "ephemeral") {
                             putJsonObject("cache_control") {
@@ -248,6 +268,9 @@ class AdaptiveLlmProvider(
         endpoint.contains("moonshot.cn") -> "kimi"
         endpoint.contains("bigmodel.cn") -> "glm"
         endpoint.contains("dashscope.aliyuncs.com") -> "qwen"
+        endpoint.contains("openmodel.ai") -> "openai"
+        endpoint.contains("x.ai") || endpoint.contains("api.x.ai") -> "grok"
+        endpoint.contains("volces.com") || endpoint.contains("volcengine") -> "volcano"
         else -> "openai"
     }
 

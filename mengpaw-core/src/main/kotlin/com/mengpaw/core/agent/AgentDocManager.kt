@@ -3,6 +3,7 @@
 
 package com.mengpaw.core.agent
 
+import com.mengpaw.core.error.ErrorCollector
 import com.mengpaw.core.plugin.PluginManager
 import java.io.File
 import java.text.SimpleDateFormat
@@ -42,21 +43,21 @@ class AgentDocManager(
         // Agents.md — security rules (only create if not exists)
         val agentsFile = file(AgentDocType.AGENTS)
         if (!agentsFile.exists()) {
-            agentsFile.writeText(DEFAULT_AGENTS_MD)
+            try { agentsFile.writeText(DEFAULT_AGENTS_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs"); return }
             agentsFile.setReadOnly()
         }
 
         // Soul.md — execution style
         val soulFile = file(AgentDocType.SOUL)
-        if (!soulFile.exists()) soulFile.writeText(DEFAULT_SOUL_MD)
+        if (!soulFile.exists()) try { soulFile.writeText(DEFAULT_SOUL_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
 
         // Profile.md — identity
         val profileFile = file(AgentDocType.PROFILE)
-        if (!profileFile.exists()) profileFile.writeText(profile.toMarkdown())
+        if (!profileFile.exists()) try { profileFile.writeText(profile.toMarkdown()) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
 
         // Memory.md — task records
         val memoryFile = file(AgentDocType.MEMORY)
-        if (!memoryFile.exists()) memoryFile.writeText(DEFAULT_MEMORY_MD)
+        if (!memoryFile.exists()) try { memoryFile.writeText(DEFAULT_MEMORY_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
 
         // CLI.md — will be regenerated when plugins are active
         regenerateCliDoc(PluginManager())
@@ -66,7 +67,7 @@ class AgentDocManager(
 
     fun getDoc(docType: AgentDocType): String {
         val f = file(docType)
-        return if (f.exists()) try { f.readText() } catch (_: Exception) { "" } else ""
+        return if (f.exists()) try { f.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.getDoc"); "" } else ""
     }
 
     fun getDocPath(docType: AgentDocType): String = file(docType).absolutePath
@@ -81,7 +82,7 @@ class AgentDocManager(
      */
     fun updateMemory(entry: MemoryRecord) {
         val memFile = file(AgentDocType.MEMORY)
-        val content = if (memFile.exists()) try { memFile.readText() } catch (_: Exception) { "" } else DEFAULT_MEMORY_MD
+        val content = if (memFile.exists()) try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.updateMemory"); "" } else DEFAULT_MEMORY_MD
 
         // Build new entry
         val entryMd = """
@@ -102,7 +103,7 @@ class AgentDocManager(
             content + "\n" + entryMd
         }
 
-        memFile.writeText(newContent)
+        try { memFile.writeText(newContent) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.updateMemory"); return }
         rebuildIndex()
         enforceLimits()
     }
@@ -113,7 +114,7 @@ class AgentDocManager(
         val memFile = file(AgentDocType.MEMORY)
         if (!memFile.exists()) return emptyList()
 
-        val text = try { memFile.readText() } catch (_: Exception) { "" }
+        val text = try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.searchMemory"); "" }
         val records = parseMemoryRecords(text)
         return records.filter {
             it.title.lowercase().contains(q) ||
@@ -125,7 +126,7 @@ class AgentDocManager(
     fun getMemoryStats(): Pair<Int, Long> {
         val memFile = file(AgentDocType.MEMORY)
         if (!memFile.exists()) return 0 to 0L
-        val records = parseMemoryRecords(try { memFile.readText() } catch (_: Exception) { "" })
+        val records = parseMemoryRecords(try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.getMemoryStats"); "" })
         return records.size to memFile.length()
     }
 
@@ -133,7 +134,7 @@ class AgentDocManager(
     fun getMemoryIndex(): String {
         val memFile = file(AgentDocType.MEMORY)
         if (!memFile.exists()) return "(No memories)"
-        val records = parseMemoryRecords(try { memFile.readText() } catch (_: Exception) { "" })
+        val records = parseMemoryRecords(try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.getMemoryIndex"); "" })
         if (records.isEmpty()) return "(No memories)"
         return buildString {
             appendLine("| ID | 日期 | 标题 | 关键词 |")
@@ -148,7 +149,7 @@ class AgentDocManager(
 
     /** Regenerate CLI.md — Agent's primary command reference with permission guides & tutorials. */
     fun regenerateCliDoc(pluginManager: PluginManager) {
-        file(AgentDocType.CLI).writeText(buildString {
+        try { file(AgentDocType.CLI).writeText(buildString {
             appendLine("# MengPaw CLI 命令参考")
             appendLine()
             appendLine("> 本文档是 Agent 的主要命令参考。Agent 在执行任何操作前应查阅本文档，")
@@ -371,6 +372,7 @@ class AgentDocManager(
             appendLine()
             appendLine("*Agent CLI 参考 v0.2 · MengPaw*")
         })
+        } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.regenerateCliDoc") }
     }
 
     // ── Internal helpers ──────────────────────────────────────────────
@@ -380,7 +382,7 @@ class AgentDocManager(
     private fun rebuildIndex() {
         val memFile = file(AgentDocType.MEMORY)
         if (!memFile.exists()) return
-        val text = try { memFile.readText() } catch (_: Exception) { "" }
+        val text = try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.rebuildIndex"); "" }
         val records = parseMemoryRecords(text)
         val idx = buildString {
             appendLine("# 记忆索引")
@@ -399,13 +401,13 @@ class AgentDocManager(
             Regex("---\\n[\\s\\S]*?---"),
             "---\n$idx\n---"
         )
-        memFile.writeText(newText)
+        try { memFile.writeText(newText) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.rebuildIndex") }
     }
 
     private fun enforceLimits() {
         val memFile = file(AgentDocType.MEMORY)
         if (!memFile.exists()) return
-        val records = parseMemoryRecords(try { memFile.readText() } catch (_: Exception) { "" })
+        val records = parseMemoryRecords(try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.enforceLimits"); "" })
         if (records.size > maxMemories) {
             // Archive oldest 10 entries
             val toArchive = records.takeLast(10)
@@ -413,7 +415,7 @@ class AgentDocManager(
             val archiveContent = toArchive.joinToString("\n---\n") { r ->
                 "## ${r.id}: ${r.title}\n日期: ${r.date}\n关键词: ${r.keywords.joinToString(", ")}\n\n${r.content}"
             }
-            archiveFile.appendText("\n---\n$archiveContent")
+            try { archiveFile.appendText("\n---\n$archiveContent") } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.enforceLimits") }
 
             // Remove archived from main memory
             val remaining = records.dropLast(10)
@@ -428,7 +430,7 @@ class AgentDocManager(
                     appendLine()
                 }
             }
-            memFile.writeText(newText)
+            try { memFile.writeText(newText) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.enforceLimits") }
             rebuildIndex()
         }
     }

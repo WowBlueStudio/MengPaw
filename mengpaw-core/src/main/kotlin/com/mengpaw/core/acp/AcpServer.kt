@@ -143,8 +143,17 @@ class AcpServer(
             AcpMessageType.RESULT -> {
                 AcpResult(true, msg.payload, msg.from)
             }
-            AcpMessageType.DELEGATE, AcpMessageType.SHARE_MEMORY, AcpMessageType.SHARE_SKILL -> {
+            AcpMessageType.DELEGATE, AcpMessageType.SHARE_MEMORY, AcpMessageType.SHARE_SKILL,
+            AcpMessageType.BROWSER_PUSH -> {
                 // Firewall check for untrusted peers
+                // For BROWSER_PUSH: trusted peers auto-accept, guest peers go to inbox
+                if (type == AcpMessageType.BROWSER_PUSH) {
+                    if (!PromptFirewall.isTrusted(msg.from)) {
+                        // Write to Agent inbox for manual authorization
+                        writePushToInbox(msg.from, msg.payload)
+                        return AcpResult(true, "push_queued", "Browser push queued for agent approval")
+                    }
+                }
                 val fwCheck = PromptFirewall.check(msg.from, msg.payload)
                 if (fwCheck != null && !PromptFirewall.isTrusted(msg.from)) {
                     return AcpResult(false, "Firewall blocked: $fwCheck")
@@ -168,6 +177,27 @@ class AcpServer(
         .filter { System.currentTimeMillis() - it.lastSeen < 60_000 } // 1 min timeout
 
     fun peerCount(): Int = getPeers().size
+
+    /** Write a browser push request to the Agent inbox for manual authorization. */
+    private fun writePushToInbox(from: String, payload: String) {
+        try {
+            val inbox = java.io.File(com.mengpaw.core.DataPaths.AGENT_INBOX).also { it.mkdirs() }
+            val taskFile = java.io.File(inbox, "push_${System.currentTimeMillis()}.md")
+            val data = try { kotlinx.serialization.json.Json.parseToJsonElement(payload).jsonObject } catch (_: Exception) { null }
+            val url = data?.get("url")?.jsonPrimitive?.content ?: payload
+            val title = data?.get("title")?.jsonPrimitive?.content ?: ""
+            taskFile.writeText("""# 浏览器推送请求
+- 来自: $from
+- 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}
+- URL: $url
+- 标题: $title
+
+## 操作
+- 接受: browser.push.accept push_${taskFile.nameWithoutExtension}
+- 拒绝: browser.push.reject push_${taskFile.nameWithoutExtension}
+""".trimIndent())
+        } catch (_: Exception) { }
+    }
 
     /** Clean up stale peers. */
     fun cleanup() {

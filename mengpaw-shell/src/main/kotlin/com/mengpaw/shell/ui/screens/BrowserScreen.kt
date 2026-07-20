@@ -6,6 +6,8 @@ import androidx.compose.material.icons.outlined.*
 
 import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.Image
@@ -154,6 +156,7 @@ fun BrowserScreen(
                     WebView(ctx).apply {
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
+                        addJavascriptInterface(ShellBrowserBridge(this), "MengPaw")
                         webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 isLoading = false
@@ -164,8 +167,57 @@ fun BrowserScreen(
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
-                update = { it.loadUrl(currentUrl) }
+                // Only reload on URL change — avoid reload loop on recomposition
+                update = { wv -> if (wv.url != currentUrl) wv.loadUrl(currentUrl) }
             )
         }
+    }
+}
+
+/**
+ * Lightweight JS bridge for Shell's built-in WebView.
+ * Provides click/type/scroll/content/eval via @JavascriptInterface.
+ */
+private class ShellBrowserBridge(private val webView: WebView) {
+    @JavascriptInterface
+    fun click(selector: String): String = evalJs(
+        "(function(){try{var e=document.querySelector('${selector.replace("'","\\'")}');if(!e)return JSON.stringify({ok:false,error:'not found'});e.click();return JSON.stringify({ok:true})}catch(e){return JSON.stringify({ok:false,error:e.message})}})()")
+    @JavascriptInterface
+    fun type(selector: String, text: String): String = evalJs(
+        "(function(){try{var e=document.querySelector('${selector.replace("'","\\'")}');if(!e)return JSON.stringify({ok:false,error:'not found'});e.focus();var v=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;v.call(e,'${text.replace("'","\\'")}');e.dispatchEvent(new Event('input',{bubbles:true}));return JSON.stringify({ok:true})}catch(e){return JSON.stringify({ok:false,error:e.message})}})()")
+    @JavascriptInterface
+    fun scroll(x: Float, y: Float): String = evalJs(
+        "(function(){try{window.scrollBy($x,$y);return JSON.stringify({ok:true,scrollX:window.scrollX,scrollY:window.scrollY})}catch(e){return JSON.stringify({ok:false,error:e.message})}})()")
+    @JavascriptInterface
+    fun content(): String = evalJs(
+        "(function(){try{var ls=[];document.querySelectorAll('a[href]').forEach(function(a){var t=(a.textContent||'').trim().substring(0,80);if(t&&a.href&&!a.href.startsWith('javascript:'))ls.push({text:t,href:a.href})});return JSON.stringify({title:document.title,url:location.href,links:ls.slice(0,50),text:(document.body?document.body.innerText:'').replace(/\\s+/g,' ').trim().substring(0,3000)})}catch(e){return JSON.stringify({error:e.message})}})()")
+    @JavascriptInterface
+    fun eval(js: String): String = evalJs(js)
+
+    private fun evalJs(script: String): String {
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var result = """{"ok":false,"error":"timeout"}"""
+        try {
+            val posted = webView.post {
+                try {
+                    webView.evaluateJavascript(script) { r ->
+                        result = r.trim().removeSurrounding("\"").replace("\\\"", "\"").replace("\\\\", "\\")
+                        latch.countDown()
+                    }
+                } catch (e: Exception) {
+                    result = """{"ok":false,"error":"${e.message?.replace("\"","'")}"}"""
+                    latch.countDown()
+                }
+            }
+            if (!posted) return """{"ok":false,"error":"webview detached"}"""
+            val ok = latch.await(2, java.util.concurrent.TimeUnit.SECONDS)
+            if (!ok) return """{"ok":false,"error":"timeout"}"""
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            result = """{"ok":false,"error":"interrupted"}"""
+        } catch (e: Exception) {
+            result = """{"ok":false,"error":"${e.message?.replace("\"","'")}"}"""
+        }
+        return result
     }
 }

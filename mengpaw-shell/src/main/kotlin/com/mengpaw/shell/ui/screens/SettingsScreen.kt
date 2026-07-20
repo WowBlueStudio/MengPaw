@@ -124,19 +124,21 @@ fun SettingsScreen(
             // ─── Expanded editor ───
             if (state.apiSectionExpanded) {
                 SectionHeader(if (state.savedProviders.isNotEmpty()) "编辑模型配置" else "模型提供商")
-                Column {
-                    Row(horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
-                        listOf(LlmProviderPreset.OPENAI, LlmProviderPreset.DEEPSEEK, LlmProviderPreset.KIMI).forEach { preset ->
-                            ProviderChip(preset, state.selectedProvider, viewModel)
-                        }
-                    }
-                    Spacer(Modifier.height(ArcoSpacing.sm))
-                    Row(horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
-                        listOf(LlmProviderPreset.GLM, LlmProviderPreset.QWEN, LlmProviderPreset.CUSTOM).forEach { preset ->
-                            ProviderChip(preset, state.selectedProvider, viewModel)
-                        }
+                // Collapsible provider list — each provider expands to show models
+                LlmProviderPreset.entries.forEach { preset ->
+                    if (preset != LlmProviderPreset.CUSTOM && preset != LlmProviderPreset.SELF_HOSTED) {
+                        ProviderCard(
+                            preset = preset,
+                            isSelected = state.selectedProvider == preset,
+                            selectedModel = state.modelName,
+                            remoteModels = state.remoteModels,
+                            onSelect = { viewModel.selectProvider(preset) },
+                            onSelectModel = { viewModel.updateModelName(it) }
+                        )
                     }
                 }
+                ProviderCard(LlmProviderPreset.SELF_HOSTED, state.selectedProvider == LlmProviderPreset.SELF_HOSTED, state.modelName, state.remoteModels, { viewModel.selectProvider(LlmProviderPreset.SELF_HOSTED) }, { viewModel.updateModelName(it) })
+                ProviderCard(LlmProviderPreset.CUSTOM, state.selectedProvider == LlmProviderPreset.CUSTOM, state.modelName, state.remoteModels, { viewModel.selectProvider(LlmProviderPreset.CUSTOM) }, { viewModel.updateModelName(it) })
                 Spacer(Modifier.height(ArcoSpacing.sm))
 
                 // ── Cache optimization indicator ──
@@ -172,45 +174,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(ArcoSpacing.sm))
                 SettingsTextField(Icons.Outlined.ModelTraining, "模型", state.modelName, onValueChange = { viewModel.updateModelName(it) })
 
-                // ── Model list ──
-                val models = state.selectedProvider.models
-                if (models.isNotEmpty()) {
-                    Spacer(Modifier.height(ArcoSpacing.sm))
-                    Text("可用模型", style = MaterialTheme.typography.labelMedium, color = ThemeColors.textSecondary)
-                    Spacer(Modifier.height(4.dp))
-                    Surface(shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard, tonalElevation = 1.dp) {
-                        Column {
-                            val displayModels = if (models.size <= 5) models else models.take(5)
-                            displayModels.forEach { model ->
-                                Row(Modifier.fillMaxWidth().clickable { viewModel.updateModelName(model.name) }
-                                    .padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.sm),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    RadioButton(
-                                        selected = state.modelName == model.name,
-                                        onClick = { viewModel.updateModelName(model.name) },
-                                        modifier = Modifier.size(20.dp),
-                                        colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
-                                    Spacer(Modifier.width(ArcoSpacing.sm))
-                                    Text(model.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = if (state.modelName == model.name) FontWeight.Medium else FontWeight.Normal)
-                                    Surface(shape = RoundedCornerShape(ArcoRadius.sm),
-                                        color = if (model.type == "多模态") ArcoColors.Orange1 else ArcoColors.Blue1) {
-                                        Text(model.type, modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (model.type == "多模态") ArcoColors.Orange7 else ArcoColors.Blue7)
-                                    }
-                                }
-                            }
-                            if (models.size > 5) {
-                                OutlinedButton(onClick = { /* TODO: scrollable model picker */ },
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.sm, vertical = 4.dp),
-                                    shape = RoundedCornerShape(ArcoRadius.md)) {
-                                    Text("查看全部 ${models.size} 个模型...", style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                        }
-                    }
-                }
+                Spacer(Modifier.height(ArcoSpacing.sm))
 
                 // Action row
                 Spacer(Modifier.height(ArcoSpacing.sm))
@@ -248,17 +212,11 @@ fun SettingsScreen(
 
             // ─── LLM Provider ───
             SectionHeader(s.llmProvider)
-            SettingsSwitch(
-                icon = Icons.Outlined.SmartToy,
-                title = s.useSimulated,
-                subtitle = s.useSimulatedDesc,
-                checked = state.useSimulatedProvider,
-                onCheckedChange = { viewModel.toggleSimulatedProvider() }
-            )
-
-            if (!state.useSimulatedProvider) {
+            if (state.apiKey.isNotBlank()) {
                 Spacer(Modifier.height(ArcoSpacing.sm))
                 SettingsTextField(Icons.Outlined.ModelTraining, s.model, state.modelName, onValueChange = { viewModel.updateModelName(it) })
+            } else {
+                Text("填入 API Key 后自动启用真实模型", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(horizontal = ArcoSpacing.lg))
             }
 
             Spacer(Modifier.height(ArcoSpacing.lg))
@@ -283,6 +241,34 @@ fun SettingsScreen(
                     singleLine = true,
                     shape = RoundedCornerShape(ArcoRadius.md)
                 )
+            }
+
+            // Shell command timeout
+            Spacer(Modifier.height(ArcoSpacing.sm))
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.Timer, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(ArcoSpacing.md))
+                Column(Modifier.weight(1f)) {
+                    Text("Shell 命令超时", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                    Text("单个命令最长执行时间（秒）", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                }
+                var tText by remember(state.commandTimeoutSec) { mutableStateOf(state.commandTimeoutSec.toString()) }
+                OutlinedTextField(value = tText, onValueChange = { tText = it; it.toIntOrNull()?.let { n -> viewModel.updateCommandTimeout(n) } },
+                    modifier = Modifier.width(72.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, shape = RoundedCornerShape(ArcoRadius.md))
+            }
+
+            // Timezone
+            Spacer(Modifier.height(ArcoSpacing.sm))
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.Language, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(ArcoSpacing.md))
+                Column(Modifier.weight(1f)) {
+                    Text("时区", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                    Text(state.timezone, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                }
+                TextButton(onClick = { viewModel.updateTimezone(if (state.timezone == "Asia/Shanghai") java.util.TimeZone.getDefault().id else "Asia/Shanghai") }) {
+                    Text(if (state.timezone == "Asia/Shanghai") "自动" else "上海")
+                }
             }
 
             Spacer(Modifier.height(ArcoSpacing.lg))
@@ -433,6 +419,34 @@ fun SettingsScreen(
             HorizontalDivider(color = com.mengpaw.design.theme.ThemeColors.border)
             Spacer(Modifier.height(ArcoSpacing.lg))
 
+            // ─── Advanced ───
+            SectionHeader("高级设置")
+            // Context strategy
+            Row(Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("上下文策略", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                    Text(if (state.contextStrategy == "default") "内置 · Reasonix 四级折叠" else state.contextStrategy, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                }
+                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
+                    Text("需安装插件", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
+                }
+            }
+            // Memory backend
+            Spacer(Modifier.height(ArcoSpacing.sm))
+            Row(Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("记忆管理后端", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                    Text(if (state.memoryBackend == "memory-plugin") "内置 · Markdown 文件" else state.memoryBackend, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                }
+                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
+                    Text("需安装插件", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
+                }
+            }
+
+            Spacer(Modifier.height(ArcoSpacing.lg))
+            HorizontalDivider(color = com.mengpaw.design.theme.ThemeColors.border)
+            Spacer(Modifier.height(ArcoSpacing.lg))
+
             // ─── About ───
             SectionHeader(s.about)
             InfoRow(s.version, "0.1.0-alpha")
@@ -529,27 +543,106 @@ private fun NavigationLink(icon: androidx.compose.ui.graphics.vector.ImageVector
 }
 
 @Composable
-private fun ProviderChip(
+private fun ProviderCard(
     preset: LlmProviderPreset,
-    selected: LlmProviderPreset,
-    viewModel: SettingsViewModel
+    isSelected: Boolean,
+    selectedModel: String,
+    remoteModels: List<String> = emptyList(),
+    onSelect: () -> Unit,
+    onSelectModel: (String) -> Unit
 ) {
+    var expanded by remember { mutableStateOf(isSelected) }
+    if (isSelected && !expanded) expanded = true
+
     val strategy = CacheStrategy.forProvider(preset.endpoint)
     val optimized = strategy != CacheStrategy.NONE
 
-    FilterChip(
-        selected = selected == preset,
-        onClick = { viewModel.selectProvider(preset) },
-        label = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(preset.label.split(" ")[0], fontSize = MaterialTheme.typography.labelMedium.fontSize)
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = if (isSelected) ArcoColors.Blue1.copy(alpha = 0.3f) else ThemeColors.bgCard,
+        tonalElevation = if (isSelected) 2.dp else 0.dp
+    ) {
+        Column {
+            Row(
+                Modifier.fillMaxWidth().clickable { onSelect(); expanded = !expanded }
+                    .padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    null, Modifier.size(18.dp), tint = ThemeColors.textSecondary
+                )
+                Spacer(Modifier.width(ArcoSpacing.sm))
+                Text(preset.label, Modifier.weight(1f),
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 14.sp, color = if (isSelected) ArcoColors.Blue6 else ThemeColors.textPrimary)
                 if (optimized) {
-                    Spacer(Modifier.width(3.dp))
-                    Text("✓", fontSize = 10.sp, color = Color(0xFF52C41A))
+                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = Color(0xFF52C41A).copy(alpha = 0.1f)) {
+                        Text("已优化", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                            fontSize = 10.sp, color = Color(0xFF52C41A))
+                    }
+                }
+                if (isSelected) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Outlined.CheckCircle, null, Modifier.size(16.dp), tint = ArcoColors.Blue6)
                 }
             }
-        },
-        colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = ArcoColors.Blue1, selectedLabelColor = ArcoColors.Blue6)
-    )
+            // Expanded model list
+            AnimatedVisibility(visible = expanded) {
+                Column(Modifier.padding(start = ArcoSpacing.lg, end = ArcoSpacing.md, bottom = ArcoSpacing.sm)) {
+                    Text(preset.endpoint.take(60), fontSize = 11.sp, color = ThemeColors.textSecondary,
+                        modifier = Modifier.padding(bottom = 6.dp))
+                    // Preset models
+                    preset.models.forEach { model ->
+                        Row(Modifier.fillMaxWidth().clickable { onSelectModel(model.name) }
+                            .padding(vertical = 4.dp, horizontal = ArcoSpacing.sm),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = selectedModel == model.name, onClick = { onSelectModel(model.name) },
+                                modifier = Modifier.size(18.dp), colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
+                            Spacer(Modifier.width(8.dp))
+                            Text(model.name, Modifier.weight(1f), fontSize = 13.sp)
+                            if (model.type == "多模态") Text("🖼", fontSize = 12.sp)
+                        }
+                    }
+                    // Remote models (fetched from API)
+                    if (remoteModels.isNotEmpty()) {
+                        Text("API 返回", fontSize = 10.sp, color = Color(0xFF52C41A), modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
+                        remoteModels.take(10).filter { it !in preset.models.map { m -> m.name } }.forEach { model ->
+                            Row(Modifier.fillMaxWidth().clickable { onSelectModel(model) }
+                                .padding(vertical = 4.dp, horizontal = ArcoSpacing.sm),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = selectedModel == model, onClick = { onSelectModel(model) },
+                                    modifier = Modifier.size(18.dp), colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
+                                Spacer(Modifier.width(8.dp))
+                                Text(model, Modifier.weight(1f), fontSize = 13.sp, color = Color(0xFF52C41A))
+                            }
+                        }
+                    }
+                        Row(
+                            Modifier.fillMaxWidth().clickable { onSelectModel(model.name) }
+                                .padding(vertical = 4.dp, horizontal = ArcoSpacing.sm),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedModel == model.name,
+                                onClick = { onSelectModel(model.name) },
+                                modifier = Modifier.size(18.dp),
+                                colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(model.name, Modifier.weight(1f), fontSize = 13.sp)
+                            Surface(shape = RoundedCornerShape(ArcoRadius.sm),
+                                color = if (model.type == "多模态") ArcoColors.Orange1 else ArcoColors.Blue1) {
+                                Text(model.type, Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                    fontSize = 10.sp,
+                                    color = if (model.type == "多模态") ArcoColors.Orange7 else ArcoColors.Blue7)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(2.dp))
 }

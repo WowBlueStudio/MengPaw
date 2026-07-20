@@ -6,6 +6,7 @@ package com.mengpaw.plugin.render
 import com.mengpaw.core.cli.ExecutionContext
 import com.mengpaw.core.cli.ExecutionResult
 import com.mengpaw.core.cli.ErrorCodes
+import com.mengpaw.core.error.ErrorCollector
 import com.mengpaw.core.plugin.Plugin
 import com.mengpaw.core.plugin.PluginMetadata
 import com.mengpaw.core.plugin.PluginType
@@ -16,6 +17,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.serialization.json.*
 import com.mengpaw.core.DataPaths
+import com.mengpaw.core.error.ErrorCollector
 import java.io.File
 
 /**
@@ -105,7 +107,8 @@ OpenAI DALL-E 模型:
                 else -> ExecutionResult.fail("Unknown backend: $backend", errorCode = ErrorCodes.ERR_INVALID_INPUT)
             }
         } catch (e: Exception) {
-            jobs[jobId] = jobs[jobId]!!.copy(status = "failed")
+            ErrorCollector.report(e, "RenderPlugin.generate")
+            jobs[jobId]?.let { jobs[jobId] = it.copy(status = "failed") }
             ExecutionResult.fail("API error: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
         }
     }

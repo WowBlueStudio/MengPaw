@@ -351,4 +351,7 @@ class PromptEngine {
         if (recentCommands.size > 5) recentCommands.removeFirst()
         return recentCommands.count { it == command } >= 3
     }
+
+    /** Reset loop detection state (call on session/model switch). */
+    fun resetLoopDetection() { recentCommands.clear() }
 }

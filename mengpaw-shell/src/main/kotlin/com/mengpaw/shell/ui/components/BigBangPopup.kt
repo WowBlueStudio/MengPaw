@@ -33,7 +33,8 @@ import com.mengpaw.design.tokens.ArcoSpacing
 @Composable
 fun BigBangPopup(
     text: String,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onCopy: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -147,14 +148,12 @@ fun BigBangPopup(
                     Button(
                         onClick = {
                             if (selectedText.isNotEmpty()) {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return@Button
-                                // Detect if content looks like a table — format as Markdown
-                                val formatted = if (selectedText.lines().all { '|' in it }) {
-                                    selectedText
+                                if (onCopy != null) {
+                                    onCopy(selectedText)
                                 } else {
-                                    selectedText
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return@Button
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("MengPaw", selectedText))
                                 }
-                                clipboard.setPrimaryClip(ClipData.newPlainText("MengPaw", formatted))
                             }
                             onDismiss()
                         },

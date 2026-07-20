@@ -10,6 +10,7 @@ import com.mengpaw.core.plugin.Plugin
 import com.mengpaw.core.plugin.PluginContext
 import com.mengpaw.core.plugin.PluginMetadata
 import com.mengpaw.core.plugin.PluginType
+import com.mengpaw.core.error.ErrorCollector
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -50,7 +51,12 @@ class FsPlugin : Plugin {
         val file = File(path)
         if (!file.exists()) return ExecutionResult.fail("File not found: $path", errorCode = ErrorCodes.ERR_NOT_FOUND)
         if (!file.canRead()) return ExecutionResult.fail("Permission denied: $path", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
-        return ExecutionResult.ok(file.readText())
+        return try {
+            ExecutionResult.ok(file.readText())
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "FsPlugin.cat")
+            ExecutionResult.fail("Read error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 
     private suspend fun ls(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -73,8 +79,13 @@ class FsPlugin : Plugin {
         val content = args.drop(1).joinToString(" ")
         val file = File(path)
         file.parentFile?.mkdirs()
-        file.writeText(content)
-        return ExecutionResult.ok("Written ${content.length} bytes to $path")
+        return try {
+            file.writeText(content)
+            ExecutionResult.ok("Written ${content.length} bytes to $path")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "FsPlugin.write")
+            ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 
     private suspend fun rm(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -99,8 +110,13 @@ class FsPlugin : Plugin {
         val dst = File(resolvePath(args[1], ctx))
         if (!src.exists()) return ExecutionResult.fail("Source not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
         dst.parentFile?.mkdirs()
-        src.copyTo(dst, overwrite = true)
-        return ExecutionResult.ok("Copied ${src.name} to ${dst.name}")
+        return try {
+            src.copyTo(dst, overwrite = true)
+            ExecutionResult.ok("Copied ${src.name} to ${dst.name}")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "FsPlugin.cp")
+            ExecutionResult.fail("Copy error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 
     private suspend fun mv(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -109,8 +125,13 @@ class FsPlugin : Plugin {
         val dst = File(resolvePath(args[1], ctx))
         if (!src.exists()) return ExecutionResult.fail("Source not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
         dst.parentFile?.mkdirs()
-        src.renameTo(dst)
-        return ExecutionResult.ok("Moved ${src.name} to ${dst.name}")
+        return try {
+            src.renameTo(dst)
+            ExecutionResult.ok("Moved ${src.name} to ${dst.name}")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "FsPlugin.mv")
+            ExecutionResult.fail("Move error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 
     private suspend fun stat(args: List<String>, ctx: ExecutionContext): ExecutionResult {

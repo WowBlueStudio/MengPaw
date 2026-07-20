@@ -22,6 +22,7 @@ class LlmRequestBuilder(systemPrompt: String) {
         if (newPrompt != _systemPrompt) {
             _systemPrompt = newPrompt
             cumulativeCacheHitTokens = 0; cumulativeCacheMissTokens = 0
+            calibratedTokPerChar = FALLBACK_TOK_PER_CHAR  // reset — new model = new tokenizer
         }
     }
 
@@ -78,17 +79,53 @@ enum class CacheStrategy {
     PREFIX_STABLE, CACHE_CONTROL, NONE;
     companion object {
         fun forProvider(endpoint: String): CacheStrategy = when {
+            // DeepSeek: native auto-prefix-cache (byte-stable prefix → KV-cache hit)
             "deepseek.com" in endpoint -> PREFIX_STABLE
+            // OpenAI + providers with cache_control breakpoint support
             "openai.com" in endpoint -> CACHE_CONTROL
             "moonshot.cn" in endpoint -> CACHE_CONTROL
             "bigmodel.cn" in endpoint -> CACHE_CONTROL
             "dashscope" in endpoint -> CACHE_CONTROL
+            // Volcano Engine (豆包): supports cache_control annotations
+            "volces.com" in endpoint -> CACHE_CONTROL
+            // Grok (xAI): OpenAI-compatible but no prompt cache yet, PREFIX_STABLE is safe default
+            "x.ai" in endpoint -> PREFIX_STABLE
+            // OpenModel: serves DeepSeek → inherits PREFIX_STABLE
+            "openmodel.ai" in endpoint -> PREFIX_STABLE
+            // Default: PREFIX_STABLE keeps system prompt byte-stable — safe for all providers
             else -> PREFIX_STABLE
         }
         fun labelFor(s: CacheStrategy) = when (s) {
             PREFIX_STABLE -> "自动前缀缓存（DeepSeek 模式）"
             CACHE_CONTROL -> "Prompt Caching（OpenAI 模式）"
             NONE -> "未优化"
+        }
+    }
+
+    companion object {
+        /**
+         * Build a multimodal user message with optional image.
+         * GROK, GPT-4V, Claude, Qwen-VL, etc. all support this format.
+         *
+         * @param text The text content of the message
+         * @param imageUrl Image URL or base64 data URI (e.g., "data:image/png;base64,...")
+         * @return A map suitable for LlmProvider.completeWithMessages()
+         */
+        fun multimodalMessage(text: String, imageUrl: String? = null): Map<String, String> {
+            val msg = mutableMapOf("role" to "user", "content" to text)
+            if (imageUrl != null && imageUrl.isNotBlank()) {
+                msg["_image"] = imageUrl
+            }
+            return msg
+        }
+
+        /** Shorthand for sending an image with a text prompt to vision models. */
+        fun visionMessage(prompt: String, imagePath: String): Map<String, String> {
+            val base64 = try {
+                val bytes = java.io.File(imagePath).readBytes()
+                "data:image/png;base64,${android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)}"
+            } catch (_: Exception) { imagePath }
+            return multimodalMessage(prompt, base64)
         }
     }
 }

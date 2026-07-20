@@ -10,6 +10,7 @@ import com.mengpaw.core.plugin.Plugin
 import com.mengpaw.core.plugin.PluginContext
 import com.mengpaw.core.plugin.PluginMetadata
 import com.mengpaw.core.plugin.PluginType
+import com.mengpaw.core.error.ErrorCollector
 import java.io.File
 
 /**
@@ -91,7 +92,7 @@ class MemoryPlugin : Plugin {
                 ?.sortedByDescending { it.updatedAt } ?: emptyList()
             cacheTime = now
         }
-        return cache!!
+        return cache ?: emptyList()
     }
 
     private val dir: File get() = File(storageDir).also { it.mkdirs() }
@@ -103,7 +104,8 @@ class MemoryPlugin : Plugin {
 
     fun save(id: String, title: String, content: String, tags: List<String> = emptyList()): MemoryEntry {
         val entry = MemoryEntry(id = id, title = title, content = content, tags = tags)
-        File(dir, "$id.md").writeText(entry.toMarkdown()); cache = null
+        try { File(dir, "$id.md").writeText(entry.toMarkdown()) } catch (e: Exception) { ErrorCollector.report(e, "MemoryPlugin.save") }
+        cache = null
         return entry
     }
 
@@ -134,7 +136,7 @@ data class MemoryEntry(
     companion object {
         fun fromMarkdown(file: File): MemoryEntry? {
             if (!file.exists()) return null
-            val text = file.readText()
+            val text = try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "MemoryPlugin.fromMarkdown"); return null }
             val title = text.lines().firstOrNull { it.startsWith("# ") }?.removePrefix("# ")?.trim() ?: file.nameWithoutExtension
             val tags = text.lines().firstOrNull { it.startsWith("> Tags:") }?.removePrefix("> Tags:")?.trim()?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
             val contentStart = text.indexOf("\n---\n")
