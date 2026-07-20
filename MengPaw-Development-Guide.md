@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.3.4 | **更新**: 2026-07-20 | **定位**: Android Agent 框架 — 26 插件生态 + 浏览器操控 + 多模态 + 3 模块(Shell/Browser/TV) + 12 LLM Provider + 模拟器验证通过
+> **版本**: 0.4.0 | **更新**: 2026-07-21 | **定位**: Android Agent 框架 — 26 插件生态 + 浏览器操控 + 多模态 + 3 模块(Shell/Browser/TV) + 12 LLM Provider + R8混淆 + 安全加固 + 模拟器验证通过
 
 ---
 
