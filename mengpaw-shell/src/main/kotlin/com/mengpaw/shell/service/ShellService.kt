@@ -33,11 +33,16 @@ class ShellService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification())
+        try {
+            startForeground(NOTIFICATION_ID, createNotification())
+        } catch (e: Exception) {
+            // Android 12+ may reject foreground service start from background
+            android.util.Log.w("ShellService", "Foreground start failed: ${e.message}")
+        }
 
         // Register dream mode charging trigger
-        powerReceiver = PowerConnectionReceiver.register(this)
-        DreamWorker.schedule(this)
+        try { powerReceiver = PowerConnectionReceiver.register(this) } catch (_: Exception) { }
+        try { DreamWorker.schedule(this) } catch (_: Exception) { }
     }
 
     override fun onDestroy() {
