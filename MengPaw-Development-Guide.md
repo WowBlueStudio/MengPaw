@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.2.2 | **更新**: 2026-07-19 | **定位**: Android Agent 框架 — 多智能体会话隔离 + 跨模型缓存优化 + 中间件架构 + 自建插件 CLI + Agent 文档系统 + Dream 梦境模式 + 框架通讯录
+> **版本**: 0.3.0 | **更新**: 2026-07-20 | **定位**: Android Agent 框架 — 26 插件生态 + 浏览器操控 + 多模态 + 3 模块(Shell/Browser/TV) + 12 LLM Provider + Mission 协作模式
 
 ---
 
@@ -470,13 +470,32 @@ Agent 通过 memory 命令按需加载文档，而非一次性加载全部上下
 ## 12. 常见问题
 
 - **两个 APK 关系**: Shell 是核心 Agent 应用；Browser 是独立浏览器，可互相唤醒也可独立使用
-- **配置 API Key**: 设置 → 模型提供商 → 选择服务商 → 输入 Key
+- **配置 API Key**: 设置 → 模型提供商 → 展开 Provider 卡片 → 选择模型 → 输入 Key。API Key 为空自动用模拟模式
+- **每 Agent 不同模型**: 设置中配置只影响当前 Agent，不同 Agent 可分别用不同模型（顶栏显示）
 - **LLM 调用失败**: AdaptiveLlmProvider 自动重试（指数退避），可配置 fallback 降级链
-- **Prefix Cache 优化**: 仅对 DeepSeek 有效，system prompt 保持字节级一致
+- **切换模型**: 设置中选新 Provider 即可，系统自动切换缓存策略、重置 token 校准、停旧引擎
+- **Prefix Cache 优化**: DeepSeek/Grok/OpenModel → PREFIX_STABLE；OpenAI/Kimi/GLM/Qwen/火山 → CACHE_CONTROL
 - **对话历史过长**: SessionManager 自动压缩（超 50 条触发 LLM 摘要），上限 200 条
-- **查看执行日志**: 设置 → 执行日志
-- **管理记忆**: 主界面 ⭐ 按钮，或 CLI `memory` 命令（含 2s LRU 缓存）
-- **创建 Skill**: Skills 按钮 → 安装默认 Skill（搜索/总结/翻译）或手动导入 YAML+Markdown
+- **历史会话**: 右侧侧边栏，自动保存，左滑删除/压缩。已压缩不可继续对话，只能引用
+- **管理记忆**: 主界面 ⏱ 按钮，或 CLI `memory` 命令（含 2s LRU 缓存）
+- **多标签页**: MP 浏览器支持 4 标签页并行，Agent 通过 `browser.tab.*` 命令操控
+- **Agent 操控浏览器**: `browser.click/type/scroll/content/eval` 等命令，需先 `browser.inject` 注入桥
+- **Mission 模式**: `mission.start` 自动分解任务，Worker 子 Agent 独立执行，Verifier 验证结果
+- **发布流程**: 详见 [RELEASE.md](RELEASE.md)
+
+---
+
+## 13. 发布流程
+
+详见 [RELEASE.md](RELEASE.md)。核心步骤：
+
+1. `./gradlew clean assembleRelease` — 编译验证
+2. 更新 CHANGELOG.md + 版本号
+3. 构建 APK + 验证产物
+4. commit + tag + push
+5. `gh release create` 上传 APK + CHANGELOG
+
+**红线**：编译不过不 push、不验证 APK 不上传、未经指令不发布。
 - **剪贴板操作**: clipboard 命名空间，Desktop 环境通过 AWT 反射实现
 - **APK 瘦身**: Release 自动 R8+资源压缩 (6.8MB)；进一步可移除 material-icons-extended、启用 AAB
 
@@ -554,6 +573,7 @@ Agent 通过 memory 命令按需加载文档，而非一次性加载全部上下
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.3.0** | 2026-07-20 | **插件生态+浏览器操控+多模态+TV模块**: 26插件(新增10)、BrowserBridge双向桥、双侧面栏+会话历史、12 LLM Provider(Grok/火山/OpenModel/SelfHosted)、Mission Worker+Verifier、Agent Loop受控迭代、MengPaw TV、多模态vision message、TranslateMiddleware、15+BUG修复、ProGuard编译修复 |
 | **0.2.2** | 2026-07-19 | **致命漏洞修复 + 插件开发体系**: DataPaths 动态初始化(修复闪退)、4轮安全审计(EventReceiver/HttpClient/状态串扰)、plugin-dev CLI(create/audit/share)、PLUGIN_DEV_GUIDE.md(安全规则+UI规范+模板) |
 | 0.2.1 | 2026-07-19 | **多智能体+缓存优化+Dream模式**: 多会话架构(AgentSession隔离)、Reasonix 四级折叠、跨模型CacheStrategy、ScrollContext索引、中间件链、PromptBuilder锚点、DreamWorker充电触发、Markdown/Emoji渲染、框架通讯录层级、BigBangPopup |
 | 0.2.0-alpha | 2026-07-17 | **UI重构+语音体系+梦境模式+安全增强**：左侧边栏、底部扩展面板、语音体系、梦境模式、Zero-overhead事件监听、21插件体系、QwenPaw安全规则 |
@@ -569,6 +589,9 @@ Agent 通过 memory 命令按需加载文档，而非一次性加载全部上下
 |------|--------|------|
 | 2026-07-19 | 四审四校 Crash漏洞 | DataPaths路径/文件IO/EventReceiver/HttpClient/状态串扰/!!空安全/假数据 — 全部修复 |
 | 2026-07-19 | 插件版本统一 | 16插件回调至0.1.0，遵循SemVer |
+| 2026-07-20 | v0.3.0 编译审查 | 7个编译错误修复: import遗漏/ProGuard/companion object重复/sealed class字段/跨模块依赖 |
+| 2026-07-20 | 模型切换审查 | 15个stale state bug发现, 9个修复: cacheStrategy/tokPerChar/compactStuck/loopDetect/isRunning |
+| 2026-07-20 | 闪退根因审查 | 13个问题发现: WebView线程池死锁/HttpClient泄漏/CookieManager/loadUrl循环/BroadcastReceiver泄漏 |
 | 2026-07-19 | 代码静态审查 | 无硬编码路径、无!!强制解包、全量readText()保护 |
 | 2026-07-16 | 全量源码审查+文档增量更新 | 修正文件数/命令数/测试数，补充9项新特性 |
 
