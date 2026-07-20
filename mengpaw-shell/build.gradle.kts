@@ -43,9 +43,16 @@ android {
             }
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false  // TODO: enable after ProGuard rules fully verified
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            applicationVariants.all {
+                outputs.all {
+                    (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
+                        it.outputFileName = "mengpaw-shell-v${versionName}-release.apk"
+                    }
+                }
+            }
         }
     }
 
