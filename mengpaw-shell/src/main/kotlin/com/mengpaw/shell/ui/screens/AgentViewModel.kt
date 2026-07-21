@@ -219,6 +219,15 @@ class AgentViewModel : ViewModel() {
         if (apiKey.isBlank()) SimulatedLlmProvider()
         else try { AdaptiveLlmProvider(endpoint, apiKey, model) } catch (_: Exception) { SimulatedLlmProvider() }
 
+    /** Get the framework name for an agent, or null if local. */
+    fun frameworkFor(name: String): String? = sessions[name]?.framework
+
+    /** Get (endpoint, model) for an agent. */
+    fun agentConfig(name: String): Pair<String, String> {
+        val s = sessions[name]
+        return (s?.endpoint ?: "") to (s?.modelName ?: "")
+    }
+
     /** Switch to a different agent. Stops old agent engine to prevent orphaned execution. */
     fun switchAgent(name: String) {
         if (name == _activeAgentName) return
@@ -373,11 +382,25 @@ class AgentViewModel : ViewModel() {
         val timestamp: Long,
         val messageCount: Int,
         val compacted: Boolean = false,
-        val compactedSummary: String = ""
+        val compactedSummary: String = "",
+        val agentName: String = "",
+        val framework: String? = null     // null = local agent, non-null = remote framework name
     )
 
     private val _sessionHistory = MutableStateFlow<List<SessionRecord>>(emptyList())
     val sessionHistory: StateFlow<List<SessionRecord>> = _sessionHistory.asStateFlow()
+
+    /** Start a new session for a specific agent (switches to it if needed). */
+    fun newSessionFor(agentName: String, framework: String? = null) {
+        val target = if (framework != null) "$framework/$agentName" else agentName
+        if (_activeAgent.value != target) {
+            switchAgent(target)
+        }
+        if (!sessions.containsKey(target)) {
+            createAgent(agentName, framework)
+        }
+        newSession()
+    }
 
     /** Auto-save current session and start a new one. */
     fun newSession() {
@@ -393,11 +416,14 @@ class AgentViewModel : ViewModel() {
                     else -> ""
                 }
             }
+            val currentAgent = _activeAgent.value
             val record = SessionRecord(
                 id = "sess_${System.currentTimeMillis()}",
                 title = title, preview = preview,
                 timestamp = System.currentTimeMillis(),
-                messageCount = msgs.size
+                messageCount = msgs.size,
+                agentName = currentAgent,
+                framework = activeSession().framework
             )
             _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
         }
@@ -409,6 +435,46 @@ class AgentViewModel : ViewModel() {
         _sessionHistory.value = _sessionHistory.value.map {
             if (it.id == id) it.copy(compacted = true, compactedSummary = "已压缩: ${it.preview.take(100)}")
             else it
+        }
+    }
+
+    /** Repair a session — fixes truncated markdown / unclosed syntax caused by abnormal interruption. */
+    fun repairSession(id: String) {
+        val session = sessions.values.firstOrNull()
+        if (session == null) return
+        val msgs = session.messages.value.toMutableList()
+        var changed = false
+        for (i in msgs.indices) {
+            val msg = msgs[i]
+            if (msg is ChatMessageUi.Agent) {
+                var text = msg.content
+                // Fix unclosed code fences ```
+                val fenceCount = text.count { it == '`' } / 3
+                if (fenceCount % 2 != 0) {
+                    text = text.trimEnd() + "\n```"
+                    changed = true
+                }
+                // Fix unclosed bold **
+                val boldCount = text.split("**").size - 1
+                if (boldCount % 2 != 0) {
+                    text = text.trimEnd() + "**"
+                    changed = true
+                }
+                // Fix unclosed italics *
+                val italicCount = text.replace("**", "").count { it == '*' }
+                if (italicCount % 2 != 0) {
+                    text = text.trimEnd() + "*"
+                    changed = true
+                }
+                if (changed) msgs[i] = ChatMessageUi.Agent(text)
+            }
+        }
+        if (changed) {
+            session.messages.value = msgs
+            // Mark session record as repaired
+            _sessionHistory.value = _sessionHistory.value.map {
+                if (it.id == id) it.copy(compactedSummary = "已修复: ${it.preview.take(60)}") else it
+            }
         }
     }
 
@@ -427,6 +493,45 @@ class AgentViewModel : ViewModel() {
         val all = _sessionHistory.value.sortedByDescending { it.timestamp }
         return if (_hideCompacted.value) all.filter { !it.compacted } else all
     }
+
+    /** Sessions grouped by agent name (local + framework). */
+    data class AgentSessionGroup(
+        val agentName: String,
+        val framework: String?,        // null = local, non-null = remote framework
+        val sessions: List<SessionRecord>
+    )
+
+    /** Sessions grouped by local agents (framework == null), sorted by most recent. */
+    fun getLocalAgentGroups(): List<AgentSessionGroup> {
+        val all = _sessionHistory.value
+            .filter { !_hideCompacted.value || !it.compacted }
+        return all
+            .filter { it.framework == null }
+            .groupBy { it.agentName.ifBlank { "MengPaw" } }
+            .map { (name, sessions) -> AgentSessionGroup(name, null, sessions.sortedByDescending { it.timestamp }) }
+            .sortedByDescending { it.sessions.firstOrNull()?.timestamp ?: 0L }
+    }
+
+    /** Sessions grouped by framework → agent, for the frameworks section. */
+    fun getFrameworkGroups(): List<Pair<String, List<AgentSessionGroup>>> {
+        val all = _sessionHistory.value
+            .filter { !_hideCompacted.value || !it.compacted }
+        return all
+            .filter { it.framework != null }
+            .groupBy { it.framework!! }
+            .mapValues { (_, sessions) ->
+                sessions.groupBy { it.agentName.ifBlank { "Agent" } }
+                    .map { (name, s) -> AgentSessionGroup(name, sessions.first().framework, s.sortedByDescending { it.timestamp }) }
+                    .sortedByDescending { it.sessions.firstOrNull()?.timestamp ?: 0L }
+            }
+            .toList()
+            .sortedByDescending { (_, groups) -> groups.maxOfOrNull { it.sessions.firstOrNull()?.timestamp ?: 0L } ?: 0L }
+    }
+
+    /** All known framework names (even those without sessions yet, from SidebarContent contacts). */
+    fun knownFrameworks(): List<String> = sessions.values
+        .mapNotNull { it.framework }
+        .distinct()
 
     // ── Internals ──
 

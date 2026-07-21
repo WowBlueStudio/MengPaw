@@ -1,10 +1,10 @@
-﻿// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package com.mengpaw.shell.ui.screens
-import androidx.compose.material.icons.outlined.*
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -13,51 +13,95 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.mengpaw.kernel.llm.CacheStrategy
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.sp
+import com.mengpaw.kernel.llm.CacheStrategy
+import com.mengpaw.shell.ui.isWide
+import com.mengpaw.shell.ui.components.TokenLineChart
+import com.mengpaw.shell.ui.components.formatTokenCount
+
+/** Category tag for framework items. */
+enum class ItemCategory(val label: String, val color: Color) {
+    BUILTIN("内置", ArcoColors.Blue6),
+    OFFICIAL("官方", ArcoColors.Green6),
+    CUSTOM("自建", ArcoColors.Orange6)
+}
+
+/** A named item in a framework list (CLI command, plugin, tool, skill). */
+data class FrameworkItem(
+    val name: String,
+    val category: ItemCategory,
+    val summary: String = "",
+    val docMarkdown: String = ""
+)
 
 /**
- * Settings screen for MengPaw configuration.
+ * iPad-style two-column settings screen.
+ *
+ * Layout:
+ *  [Sidebar] | [Content area — switches per section]
+ *
+ * Sections:
+ *  01. Agent 设置      — LLM provider, API key, max steps, agent language
+ *  02. 框架设置         — plugins, memory, triggers, PAD
+ *  03. 系统设置         — appearance, language, permissions, about
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToPluginMarket: () -> Unit = {},
-    viewModel: SettingsViewModel = viewModel()
+    viewModel: SettingsViewModel = viewModel(),
+    activeAgentName: String = "MengPaw",
+    agentFramework: String? = null,
+    activeAgentEndpoint: String = "",
+    activeAgentModel: String = "",
+    onAgentSelectProvider: ((SavedProvider) -> Unit)? = null,
+    cliItems: List<FrameworkItem> = emptyList(),
+    pluginItems: List<FrameworkItem> = emptyList(),
+    toolItems: List<FrameworkItem> = emptyList(),
+    skillItems: List<FrameworkItem> = emptyList(),
+    agentPluginItems: List<FrameworkItem> = emptyList(),
+    agentToolItems: List<FrameworkItem> = emptyList(),
+    agentSkillItems: List<FrameworkItem> = emptyList(),
+    workspaceItems: List<FrameworkItem> = emptyList()
 ) {
-    val state by viewModel.state.collectAsState(); var powerSaverEnabled by remember { mutableStateOf(false) }
+    val state by viewModel.state.collectAsState()
     val s = state.strings
+    var selectedSection by remember { mutableIntStateOf(0) }
+
+    // Section title based on selection
+    val sectionTitle = when (selectedSection) {
+        0 -> "智能体设置 - $activeAgentName"
+        1 -> "框架设置"
+        2 -> "系统设置"
+        else -> s.settings
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Outlined.Settings,
-                            contentDescription = null,
-                            tint = com.mengpaw.design.theme.ThemeColors.brand,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Icon(Icons.Outlined.Settings, null, tint = ThemeColors.brand, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(ArcoSpacing.sm))
-                        Text(s.settings, fontWeight = FontWeight.SemiBold)
+                        Text(sectionTitle, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
                     }
                 },
                 navigationIcon = {
@@ -65,423 +109,1119 @@ fun SettingsScreen(
                         Icon(Icons.Outlined.ArrowBack, contentDescription = s.back)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = com.mengpaw.design.theme.ThemeColors.bgPrimary
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ThemeColors.bgPrimary)
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
+        Row(
+            Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = ArcoSpacing.lg)
         ) {
-            Spacer(Modifier.height(ArcoSpacing.md))
+            // ── Sidebar ──
+            SettingsSidebar(
+                selected = selectedSection,
+                onSelect = { selectedSection = it },
+                activeAgentName = activeAgentName,
+                expanded = isWide()
+            )
 
-            // ─── Saved provider list (collapsed rows) ───
-            if (state.savedProviders.isNotEmpty()) {
-                SectionHeader("已配置的模型")
-                state.savedProviders.forEach { saved ->
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().clickable { viewModel.editProvider(saved) },
-                        shape = RoundedCornerShape(ArcoRadius.lg), color = ThemeColors.bgCard
-                    ) {
-                        Row(Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.brandContainer) {
-                                Icon(Icons.Outlined.Key, null, tint = ThemeColors.brand, modifier = Modifier.size(32.dp).padding(6.dp))
-                            }
-                            Spacer(Modifier.width(ArcoSpacing.md))
-                            Column(Modifier.weight(1f)) {
-                                Text(saved.preset.label, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-                                Text("${saved.model} · ${saved.endpoint.take(35)}",
-                                    style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
-                            }
-                            if (saved.balance.isNotBlank()) {
-                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green1) {
-                                    Text("$${saved.balance}", modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                        style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green7)
-                                }
-                            }
-                            Spacer(Modifier.width(4.dp))
-                            IconButton(onClick = { viewModel.removeProvider(saved.preset) }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Default.Close, "删除", tint = ThemeColors.textSecondary, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(ArcoSpacing.sm))
-                }
-                // Add another provider button
-                OutlinedButton(onClick = { viewModel.expandForNewProvider() },
-                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
-                    Icon(Icons.Default.Add, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("添加模型提供商")
-                }
-                Spacer(Modifier.height(ArcoSpacing.lg))
-            }
-
-            // ─── Expanded editor ───
-            if (state.apiSectionExpanded) {
-                SectionHeader(if (state.savedProviders.isNotEmpty()) "编辑模型配置" else "模型提供商")
-                // Collapsible provider list — each provider expands to show models
-                LlmProviderPreset.entries.forEach { preset ->
-                    if (preset != LlmProviderPreset.CUSTOM && preset != LlmProviderPreset.SELF_HOSTED) {
-                        ProviderCard(
-                            preset = preset,
-                            isSelected = state.selectedProvider == preset,
-                            selectedModel = state.modelName,
-                            remoteModels = state.remoteModels,
-                            onSelect = { viewModel.selectProvider(preset) },
-                            onSelectModel = { viewModel.updateModelName(it) }
-                        )
-                    }
-                }
-                ProviderCard(LlmProviderPreset.SELF_HOSTED, state.selectedProvider == LlmProviderPreset.SELF_HOSTED, state.modelName, state.remoteModels, { viewModel.selectProvider(LlmProviderPreset.SELF_HOSTED) }, { viewModel.updateModelName(it) })
-                ProviderCard(LlmProviderPreset.CUSTOM, state.selectedProvider == LlmProviderPreset.CUSTOM, state.modelName, state.remoteModels, { viewModel.selectProvider(LlmProviderPreset.CUSTOM) }, { viewModel.updateModelName(it) })
-                Spacer(Modifier.height(ArcoSpacing.sm))
-
-                // ── Cache optimization indicator ──
-                val cacheStrategy = CacheStrategy.forProvider(state.apiEndpoint)
-                if (cacheStrategy != CacheStrategy.NONE) {
-                    Surface(
-                        shape = RoundedCornerShape(ArcoRadius.sm),
-                        color = Color(0xFF52C41A).copy(alpha = 0.08f),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(Modifier.padding(horizontal = ArcoSpacing.md, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.CheckCircle, null, Modifier.size(14.dp), tint = Color(0xFF52C41A))
-                            Spacer(Modifier.width(6.dp))
-                            Text(CacheStrategy.labelFor(cacheStrategy),
-                                style = MaterialTheme.typography.labelSmall, color = Color(0xFF52C41A))
-                            Spacer(Modifier.weight(1f))
-                            Text("已优化", style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold, color = Color(0xFF52C41A))
-                        }
-                    }
-                    Spacer(Modifier.height(ArcoSpacing.sm))
-                }
-
-                Spacer(Modifier.height(ArcoSpacing.lg))
-
-                SettingsTextField(Icons.Outlined.Key, "API Key", state.apiKey,
-                    onValueChange = { viewModel.updateApiKey(it) },
-                    visualTransformation = if (state.showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = { IconButton(onClick = { viewModel.toggleShowApiKey() }) { Icon(if (state.showApiKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, contentDescription = if (state.showApiKey) "隐藏" else "显示") } })
-                Spacer(Modifier.height(ArcoSpacing.sm))
-                SettingsTextField(Icons.Outlined.Link, "API 地址", state.apiEndpoint, onValueChange = { viewModel.updateApiEndpoint(it) })
-                Spacer(Modifier.height(ArcoSpacing.sm))
-                SettingsTextField(Icons.Outlined.ModelTraining, "模型", state.modelName, onValueChange = { viewModel.updateModelName(it) })
-
-                Spacer(Modifier.height(ArcoSpacing.sm))
-
-                // Action row
-                Spacer(Modifier.height(ArcoSpacing.sm))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
-                    OutlinedButton(onClick = { viewModel.testConnection() },
-                        modifier = Modifier.weight(1f), enabled = !state.isTesting && state.apiKey.isNotBlank(),
-                        shape = RoundedCornerShape(ArcoRadius.md)) {
-                        if (state.isTesting) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = ThemeColors.brand)
-                        else Icon(Icons.Outlined.Wifi, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("测试", style = MaterialTheme.typography.labelSmall)
-                    }
-                    OutlinedButton(onClick = { viewModel.saveApiKey() },
-                        modifier = Modifier.weight(1f), enabled = state.apiKey.isNotBlank(),
-                        shape = RoundedCornerShape(ArcoRadius.md)) {
-                        Icon(Icons.Outlined.Check, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("保存", style = MaterialTheme.typography.labelSmall)
-                    }
-                    OutlinedButton(onClick = { viewModel.toggleApiSection() },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(ArcoRadius.md)) {
-                        Text("收起", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-                if (state.isTesting) {
-                    Spacer(Modifier.height(4.dp))
-                    Text("正在测试连接...", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-                }
-            }
-
-            Spacer(Modifier.height(ArcoSpacing.lg))
-            HorizontalDivider(color = com.mengpaw.design.theme.ThemeColors.border)
-            Spacer(Modifier.height(ArcoSpacing.lg))
-
-            // ─── LLM Provider ───
-            SectionHeader(s.llmProvider)
-            if (state.apiKey.isNotBlank()) {
-                Spacer(Modifier.height(ArcoSpacing.sm))
-                SettingsTextField(Icons.Outlined.ModelTraining, s.model, state.modelName, onValueChange = { viewModel.updateModelName(it) })
-            } else {
-                Text("填入 API Key 后自动启用真实模型", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(horizontal = ArcoSpacing.lg))
-            }
-
-            Spacer(Modifier.height(ArcoSpacing.lg))
-            HorizontalDivider(color = com.mengpaw.design.theme.ThemeColors.border)
-            Spacer(Modifier.height(ArcoSpacing.lg))
-
-            // ─── Agent ───
-            SectionHeader(s.agent)
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.Repeat, contentDescription = null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(ArcoSpacing.md))
-                Column(Modifier.weight(1f)) {
-                    Text(s.maxSteps, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    Text(s.maxStepsDesc, style = MaterialTheme.typography.bodySmall, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
-                }
-                var stepsText by remember(state.maxSteps) { mutableStateOf(state.maxSteps.toString()) }
-                OutlinedTextField(
-                    value = stepsText,
-                    onValueChange = { stepsText = it; it.toIntOrNull()?.let { n -> viewModel.updateMaxSteps(n) } },
-                    modifier = Modifier.width(80.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    shape = RoundedCornerShape(ArcoRadius.md)
+            // Vertical divider
+            if (isWide()) {
+                VerticalDivider(
+                    modifier = Modifier.fillMaxHeight(),
+                    color = ThemeColors.border,
+                    thickness = 0.5.dp
                 )
             }
 
-            // Shell command timeout
-            Spacer(Modifier.height(ArcoSpacing.sm))
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.Timer, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(ArcoSpacing.md))
-                Column(Modifier.weight(1f)) {
-                    Text("Shell 命令超时", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-                    Text("单个命令最长执行时间（秒）", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                }
-                var tText by remember(state.commandTimeoutSec) { mutableStateOf(state.commandTimeoutSec.toString()) }
-                OutlinedTextField(value = tText, onValueChange = { tText = it; it.toIntOrNull()?.let { n -> viewModel.updateCommandTimeout(n) } },
-                    modifier = Modifier.width(72.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, shape = RoundedCornerShape(ArcoRadius.md))
-            }
-
-            // Timezone
-            Spacer(Modifier.height(ArcoSpacing.sm))
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.Language, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(ArcoSpacing.md))
-                Column(Modifier.weight(1f)) {
-                    Text("时区", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-                    Text(state.timezone, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                }
-                TextButton(onClick = { viewModel.updateTimezone(if (state.timezone == "Asia/Shanghai") java.util.TimeZone.getDefault().id else "Asia/Shanghai") }) {
-                    Text(if (state.timezone == "Asia/Shanghai") "自动" else "上海")
-                }
-            }
-
-            Spacer(Modifier.height(ArcoSpacing.lg))
-            HorizontalDivider(color = com.mengpaw.design.theme.ThemeColors.border)
-            Spacer(Modifier.height(ArcoSpacing.lg))
-
-            // ─── Appearance ───
-            SectionHeader(s.appearance)
-            SettingsSwitch(
-                icon = Icons.Outlined.DarkMode,
-                title = s.darkTheme,
-                subtitle = s.darkThemeDesc,
-                checked = state.darkTheme,
-                onCheckedChange = { viewModel.toggleDarkTheme() }
-            )
-
-            Spacer(Modifier.height(ArcoSpacing.lg))
-
-            // ─── Language (一键切换) ───
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.Translate, contentDescription = null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(ArcoSpacing.md))
-                Column(Modifier.weight(1f)) {
-                    Text(s.language, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    Text(s.languageDesc, style = MaterialTheme.typography.bodySmall, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
-                }
-                // Language toggle button
-                OutlinedButton(
-                    onClick = { viewModel.toggleLanguage() },
-                    shape = RoundedCornerShape(ArcoRadius.md),
-                    contentPadding = PaddingValues(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm)
-                ) {
-                    Text(
-                        if (state.useChinese) s.languageEn else s.languageZh,
-                        fontWeight = FontWeight.SemiBold,
-                        color = com.mengpaw.design.theme.ThemeColors.brand
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(ArcoSpacing.lg))
-
-            // ─── Agent Language (LLM output language) ───
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.Chat, contentDescription = null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(ArcoSpacing.md))
-                Column(Modifier.weight(1f)) {
-                    Text(s.agentLanguage, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    Text(s.agentLanguageDesc, style = MaterialTheme.typography.bodySmall, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
-                }
-                OutlinedButton(
-                    onClick = { viewModel.cycleAgentLanguage() },
-                    shape = RoundedCornerShape(ArcoRadius.md),
-                    contentPadding = PaddingValues(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm)
-                ) {
-                    Text(
-                        text = when (state.agentLanguageMode) {
-                            AgentLanguageMode.FOLLOW_UI -> s.agentLanguageFollowUi
-                            AgentLanguageMode.CHINESE -> s.agentLanguageChinese
-                            AgentLanguageMode.ENGLISH -> s.agentLanguageEnglish
-                        },
-                        fontWeight = FontWeight.SemiBold,
-                        color = com.mengpaw.design.theme.ThemeColors.brand
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(ArcoSpacing.lg))
-
-            // ─── 触发器 Triggers ───
-            SectionHeader("触发器 Triggers")
-            // FIX U12: Use mutableStateOf so TriggerEngine changes trigger recomposition
-            var triggerVersion by remember { mutableStateOf(0) }
-            val triggers = remember(triggerVersion) { com.mengpaw.kernel.trigger.TriggerEngine.list() }
-            if (triggers.isEmpty()) {
-                Text("暂无触发器。Agent 可使用 self.trigger 命令创建。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(horizontal = ArcoSpacing.lg))
-                Spacer(Modifier.height(ArcoSpacing.sm))
-            } else {
-                triggers.forEach { trigger ->
-                    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg, vertical = 2.dp),
-                        shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard) {
-                        Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON) Icons.Outlined.Schedule else Icons.Outlined.Person, null,
-                                tint = if (trigger.enabled) ThemeColors.brand else ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(ArcoSpacing.sm))
-                            Column(Modifier.weight(1f)) {
-                                Text(trigger.id, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodySmall)
-                                Text("${trigger.config} → ${trigger.action.take(30)}", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
-                            }
-                            // FIX U14: Use the Boolean parameter from onCheckedChange callback
-                            Switch(checked = trigger.enabled, onCheckedChange = { newChecked ->
-                                if (!newChecked) com.mengpaw.kernel.trigger.TriggerEngine.disable(trigger.id)
-                                else com.mengpaw.kernel.trigger.TriggerEngine.enable(trigger.id)
-                                triggerVersion++  // FIX U12: force triggers list refresh
-                            }, modifier = Modifier.size(32.dp))
-                        }
-                    }
-                }
-            }
-            // Quick-add lifetime trigger
-            OutlinedButton(onClick = {
-                com.mengpaw.kernel.trigger.TriggerEngine.addLifetime("chat-${(1000..9999).random()}", "10:00-20:00", "随机和用户聊聊")
-            }, modifier = Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg), shape = RoundedCornerShape(ArcoRadius.md)) {
-                Icon(Icons.Default.Add, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("添加真人感触发器", style = MaterialTheme.typography.labelSmall)
-            }
-            Spacer(Modifier.height(ArcoSpacing.lg))
-
-            // ─── 电池优化 ───
-            Row(Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.sm),
-                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column { Text("后台省电模式", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    Text("降低后台轮询频率和动画帧率，延长续航", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary) }
-                Switch(checked = powerSaverEnabled, onCheckedChange = { powerSaverEnabled = it })
-            }
-            val ctx = androidx.compose.ui.platform.LocalContext.current
-            OutlinedButton(onClick = {
-                try {
-                    val intent = android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                    intent.data = android.net.Uri.parse("package:com.mengpaw.shell")
-                    ctx.startActivity(intent)
-                } catch (_: Exception) {}
-            }, modifier = Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg), shape = RoundedCornerShape(ArcoRadius.md)) {
-                Text("忽略电池优化（推荐开启）", style = MaterialTheme.typography.labelSmall)
-            }
-            Spacer(Modifier.height(ArcoSpacing.md))
-
-            // ─── PAD 悬浮窗 ───
-            val context = androidx.compose.ui.platform.LocalContext.current
-            var dotEnabled by remember { mutableStateOf<Boolean>(com.mengpaw.plugin.pad.PadPlugin.isVisible()) }
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.sm),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // ── Content area ──
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md)
             ) {
-                Column {
-                    Text("PAD 悬浮窗", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    Text("呼吸灯小圆点显示 Agent 工作状态", style = MaterialTheme.typography.bodySmall, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
+                when (selectedSection) {
+                    0 -> AgentSettingsContent(state, viewModel, activeAgentEndpoint, activeAgentModel, onAgentSelectProvider, agentPluginItems, agentToolItems, agentSkillItems, workspaceItems)
+                    1 -> FrameworkSettingsContent(state, viewModel, onNavigateToPluginMarket, cliItems, pluginItems, toolItems, skillItems)
+                    2 -> SystemSettingsContent(state, viewModel, onNavigateToPluginMarket)
                 }
-                Switch(checked = dotEnabled, onCheckedChange = { checked ->
-                    dotEnabled = checked
-                    if (checked) com.mengpaw.plugin.pad.PadPlugin.show()
-                    else com.mengpaw.plugin.pad.PadPlugin.hide()
-                })
+                Spacer(Modifier.height(ArcoSpacing.xxxl))
             }
-            Spacer(Modifier.height(ArcoSpacing.sm))
-
-            // ─── Navigation Link ───
-            NavigationLink(Icons.Outlined.Extension, "插件管理 (Plugin Manager)", "浏览、安装、管理 Agent 插件") { onNavigateToPluginMarket() }
-
-            Spacer(Modifier.height(ArcoSpacing.lg))
-            HorizontalDivider(color = com.mengpaw.design.theme.ThemeColors.border)
-            Spacer(Modifier.height(ArcoSpacing.lg))
-
-            // ─── Advanced ───
-            SectionHeader("高级设置")
-            // Context strategy
-            Row(Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("上下文策略", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-                    Text(if (state.contextStrategy == "default") "内置 · Reasonix 四级折叠" else state.contextStrategy, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                }
-                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
-                    Text("需安装插件", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
-                }
-            }
-            // Memory backend
-            Spacer(Modifier.height(ArcoSpacing.sm))
-            Row(Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("记忆管理后端", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-                    Text(if (state.memoryBackend == "memory-plugin") "内置 · Markdown 文件" else state.memoryBackend, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                }
-                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
-                    Text("需安装插件", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
-                }
-            }
-
-            Spacer(Modifier.height(ArcoSpacing.lg))
-            HorizontalDivider(color = com.mengpaw.design.theme.ThemeColors.border)
-            Spacer(Modifier.height(ArcoSpacing.lg))
-
-            // ─── About ───
-            SectionHeader(s.about)
-            InfoRow(s.version, "0.1.0-alpha")
-            InfoRow(s.core, "mengpaw-core")
-            InfoRow(s.design, "Arco.design")
-
-            Spacer(Modifier.height(ArcoSpacing.lg))
-
-            OutlinedButton(
-                onClick = { viewModel.resetToDefaults() },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(ArcoRadius.lg),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = ArcoColors.Red6)
-            ) {
-                Icon(Icons.Outlined.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(ArcoSpacing.sm))
-                Text(s.resetDefaults)
-            }
-            Spacer(Modifier.height(ArcoSpacing.xxxl))
         }
     }
 }
 
-// ─── Helpers ───
+// ─── Sidebar ────────────────────────────────────────────────────────
+
+@Composable
+private fun SettingsSidebar(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    activeAgentName: String,
+    expanded: Boolean
+) {
+    Column(
+        Modifier
+            .width(if (expanded) 240.dp else 68.dp)
+            .fillMaxHeight()
+            .background(ThemeColors.bgSecondary)
+            .padding(top = ArcoSpacing.md)
+    ) {
+        // 01 — Agent (brand background when selected)
+        SidebarItem(
+            number = "01",
+            title = "智能体设置",
+            subtitle = activeAgentName,
+            selected = selected == 0,
+            expanded = expanded,
+            containerColor = if (selected == 0) ThemeColors.brandContainer else Color.Transparent,
+            onClick = { onSelect(0) }
+        )
+
+        // 02 — Framework
+        SidebarItem(
+            number = "02",
+            title = "框架设置",
+            subtitle = null,
+            selected = selected == 1,
+            expanded = expanded,
+            onClick = { onSelect(1) }
+        )
+
+        // 03 — System
+        SidebarItem(
+            number = "03",
+            title = "系统设置",
+            subtitle = null,
+            selected = selected == 2,
+            expanded = expanded,
+            onClick = { onSelect(2) }
+        )
+    }
+}
+
+@Composable
+private fun SidebarItem(
+    number: String,
+    title: String,
+    subtitle: String?,
+    selected: Boolean,
+    expanded: Boolean,
+    containerColor: Color = Color.Transparent,
+    onClick: () -> Unit
+) {
+    val bgColor = if (containerColor != Color.Transparent && selected) containerColor
+        else if (selected) ThemeColors.bgCardHigh
+        else Color.Transparent
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = if (expanded) ArcoSpacing.sm else 4.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(ArcoRadius.md))
+            .clickable { onClick() },
+        color = bgColor,
+        shape = RoundedCornerShape(ArcoRadius.md)
+    ) {
+        if (expanded) {
+            Row(
+                Modifier.padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    number,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = if (selected) ThemeColors.brand else ThemeColors.textSecondary
+                )
+                Spacer(Modifier.width(ArcoSpacing.sm))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        fontSize = 14.sp,
+                        color = if (selected) ThemeColors.textPrimary else ThemeColors.textSecondary
+                    )
+                    if (subtitle != null) {
+                        Text(
+                            subtitle,
+                            fontSize = 11.sp,
+                            color = ThemeColors.textSecondary,
+                            maxLines = 1
+                        )
+                    }
+                }
+                if (selected) {
+                    Icon(
+                        Icons.Outlined.ChevronRight,
+                        null,
+                        Modifier.size(16.dp),
+                        tint = ThemeColors.brand
+                    )
+                }
+            }
+        } else {
+            // Compact: icon + number only
+            Column(
+                Modifier.padding(vertical = ArcoSpacing.sm),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    number,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = if (selected) ThemeColors.brand else ThemeColors.textSecondary
+                )
+                Spacer(Modifier.height(2.dp))
+                Icon(
+                    when (number) {
+                        "01" -> Icons.Outlined.SmartToy
+                        "02" -> Icons.Outlined.Hub
+                        else -> Icons.Outlined.Tune
+                    },
+                    null,
+                    Modifier.size(20.dp),
+                    tint = if (selected) ThemeColors.brand else ThemeColors.textSecondary
+                )
+            }
+        }
+    }
+}
+
+// ─── 01. Agent Settings Content ─────────────────────────────────────
+
+@Composable
+private fun AgentSettingsContent(
+    state: SettingsState,
+    viewModel: SettingsViewModel,
+    activeEndpoint: String,
+    activeModel: String,
+    onSelectProvider: ((SavedProvider) -> Unit)?,
+    agentPluginItems: List<FrameworkItem> = emptyList(),
+    agentToolItems: List<FrameworkItem> = emptyList(),
+    agentSkillItems: List<FrameworkItem> = emptyList(),
+    workspaceItems: List<FrameworkItem> = emptyList()
+) {
+    // ── 选用供应商（从框架已配置的列表中选择） ──
+    SectionHeader("供应商 & 模型")
+    if (state.savedProviders.isEmpty()) {
+        Text("尚未配置供应商，请先在「框架设置」中添加 API Key",
+            style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        Spacer(Modifier.height(ArcoSpacing.sm))
+    } else {
+        state.savedProviders.forEach { saved ->
+            // Match by endpoint + model to identify which provider this agent uses
+            val active = saved.endpoint == activeEndpoint && saved.model == activeModel
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelectProvider?.invoke(saved) },
+                shape = RoundedCornerShape(ArcoRadius.lg),
+                color = if (active) ArcoColors.Blue1.copy(alpha = 0.4f) else ThemeColors.bgCard,
+                tonalElevation = if (active) 2.dp else 0.dp
+            ) {
+                Row(Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
+                    Surface(shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.brandContainer) {
+                        Icon(Icons.Outlined.Key, null, tint = ThemeColors.brand, modifier = Modifier.size(32.dp).padding(6.dp))
+                    }
+                    Spacer(Modifier.width(ArcoSpacing.md))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(saved.preset.label, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                            if (active) {
+                                Spacer(Modifier.width(6.dp))
+                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.12f)) {
+                                    Text("当前", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                        style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
+                                }
+                            }
+                        }
+                        Text(saved.model, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                    }
+                    if (active) {
+                        Icon(Icons.Outlined.CheckCircle, null, Modifier.size(20.dp), tint = ThemeColors.brand)
+                    }
+                }
+            }
+            Spacer(Modifier.height(ArcoSpacing.sm))
+        }
+        Text("在「框架设置」中管理供应商和 API Key", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── Agent 参数 ──
+    SectionHeader("Agent 参数")
+
+    // Max Steps
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Outlined.Repeat, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text(state.strings.maxSteps, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(state.strings.maxStepsDesc, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        var stepsText by remember(state.maxSteps) { mutableStateOf(state.maxSteps.toString()) }
+        OutlinedTextField(value = stepsText, onValueChange = { stepsText = it; it.toIntOrNull()?.let { n -> viewModel.updateMaxSteps(n) } },
+            modifier = Modifier.width(80.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true, shape = RoundedCornerShape(ArcoRadius.md))
+    }
+
+    // Shell timeout
+    Spacer(Modifier.height(ArcoSpacing.sm))
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Outlined.Timer, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text("Shell 命令超时", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text("单个命令最长执行时间（秒）", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        var tText by remember(state.commandTimeoutSec) { mutableStateOf(state.commandTimeoutSec.toString()) }
+        OutlinedTextField(value = tText, onValueChange = { tText = it; it.toIntOrNull()?.let { n -> viewModel.updateCommandTimeout(n) } },
+            modifier = Modifier.width(72.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true, shape = RoundedCornerShape(ArcoRadius.md))
+    }
+
+    // Loop 模式（官方插件，未安装时灰色不可选）
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    SectionHeader("Loop 模式")
+    LoopMode.entries.forEach { mode ->
+        val installed = mode != LoopMode.GOAL // Goal 内置；Mission / Mission+ 需安装插件
+        val selected = state.loopMode == mode && installed
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                .clickable(enabled = installed) {
+                    if (installed) viewModel.setLoopMode(mode)
+                },
+            shape = RoundedCornerShape(ArcoRadius.md),
+            color = if (selected) ArcoColors.Blue1.copy(alpha = 0.3f)
+                    else if (!installed) ArcoColors.Gray3.copy(alpha = 0.5f)
+                    else ThemeColors.bgCard,
+            tonalElevation = if (selected) 2.dp else 0.dp
+        ) {
+            Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
+                if (installed) {
+                    RadioButton(
+                        selected = selected,
+                        onClick = { viewModel.setLoopMode(mode) },
+                        modifier = Modifier.size(20.dp),
+                        colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand)
+                    )
+                } else {
+                    Icon(Icons.Outlined.Block, null, Modifier.size(20.dp), tint = ArcoColors.Gray5)
+                }
+                Spacer(Modifier.width(ArcoSpacing.sm))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(mode.label,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                            fontSize = 14.sp,
+                            color = if (!installed) ArcoColors.Gray5
+                                    else if (selected) ThemeColors.brand
+                                    else ThemeColors.textPrimary)
+                        if (!installed) {
+                            Spacer(Modifier.width(6.dp))
+                            Surface(shape = RoundedCornerShape(ArcoRadius.sm),
+                                    color = ArcoColors.Orange1) {
+                                Text("需安装插件", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                    fontSize = 10.sp, color = ArcoColors.Orange6)
+                            }
+                        }
+                    }
+                    Text(mode.desc, fontSize = 12.sp,
+                        color = if (!installed) ArcoColors.Gray5 else ThemeColors.textSecondary)
+                }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // Agent Language
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Outlined.Chat, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text(state.strings.agentLanguage, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(state.strings.agentLanguageDesc, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        OutlinedButton(onClick = { viewModel.cycleAgentLanguage() },
+            shape = RoundedCornerShape(ArcoRadius.md),
+            contentPadding = PaddingValues(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm)) {
+            Text(
+                text = when (state.agentLanguageMode) {
+                    AgentLanguageMode.FOLLOW_UI -> state.strings.agentLanguageFollowUi
+                    AgentLanguageMode.CHINESE -> state.strings.agentLanguageChinese
+                    AgentLanguageMode.ENGLISH -> state.strings.agentLanguageEnglish
+                }, fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── 定时任务 & 真人触发器 ──
+    SectionHeader("定时任务 & 触发器")
+    var triggerVersion by remember { mutableStateOf(0) }
+    val triggers = remember(triggerVersion) { com.mengpaw.kernel.trigger.TriggerEngine.list() }
+    if (triggers.isEmpty()) {
+        Text("暂无触发器。Agent 可使用 self.trigger 命令创建。",
+            style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        Spacer(Modifier.height(ArcoSpacing.sm))
+    } else {
+        triggers.forEach { trigger ->
+            Surface(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard) {
+                Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON) Icons.Outlined.Schedule
+                        else Icons.Outlined.Person, null,
+                        tint = if (trigger.enabled) ThemeColors.brand else ThemeColors.textSecondary,
+                        modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(ArcoSpacing.sm))
+                    Column(Modifier.weight(1f)) {
+                        Text(trigger.id, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodySmall)
+                        Text("${trigger.config} → ${trigger.action.take(30)}",
+                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
+                    }
+                    Switch(checked = trigger.enabled, onCheckedChange = { newChecked ->
+                        if (!newChecked) com.mengpaw.kernel.trigger.TriggerEngine.disable(trigger.id)
+                        else com.mengpaw.kernel.trigger.TriggerEngine.enable(trigger.id)
+                        triggerVersion++
+                    }, modifier = Modifier.size(32.dp))
+                }
+            }
+        }
+    }
+    OutlinedButton(onClick = {
+        com.mengpaw.kernel.trigger.TriggerEngine.addLifetime("chat-${(1000..9999).random()}", "10:00-20:00", "随机和用户聊聊")
+    }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
+        Icon(Icons.Default.Add, null, Modifier.size(18.dp))
+        Spacer(Modifier.width(4.dp))
+        Text("添加真人感触发器", style = MaterialTheme.typography.labelSmall)
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── Agent 插件（从全局池导入） ──
+    FrameworkItemSection("Agent 插件", Icons.Outlined.Extension, agentPluginItems)
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── Agent Tools（从全局池导入） ──
+    FrameworkItemSection("Agent Tools", Icons.Outlined.Handyman, agentToolItems)
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── Agent Skills（从全局池导入） ──
+    FrameworkItemSection("Agent Skills", Icons.Outlined.AutoAwesome, agentSkillItems)
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── 工作区核心文件 ──
+    FrameworkItemSection("工作区文件", Icons.Outlined.Description, workspaceItems)
+}
+
+// ─── 02. Framework Settings Content ─────────────────────────────────
+
+@Composable
+private fun FrameworkSettingsContent(
+    state: SettingsState,
+    viewModel: SettingsViewModel,
+    onNavigateToPluginMarket: () -> Unit,
+    cliItems: List<FrameworkItem> = emptyList(),
+    pluginItems: List<FrameworkItem> = emptyList(),
+    toolItems: List<FrameworkItem> = emptyList(),
+    skillItems: List<FrameworkItem> = emptyList()
+) {
+    // ── LLM 供应商连接配置 (API Key) ──
+    SectionHeader("供应商连接")
+
+    // Saved connections summary
+    if (state.savedProviders.isNotEmpty()) {
+        state.savedProviders.forEach { saved ->
+            Surface(
+                modifier = Modifier.fillMaxWidth().clickable { viewModel.editProvider(saved) },
+                shape = RoundedCornerShape(ArcoRadius.lg), color = ThemeColors.bgCard
+            ) {
+                Row(Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
+                    Surface(shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.brandContainer) {
+                        Icon(Icons.Outlined.Key, null, tint = ThemeColors.brand, modifier = Modifier.size(32.dp).padding(6.dp))
+                    }
+                    Spacer(Modifier.width(ArcoSpacing.md))
+                    Column(Modifier.weight(1f)) {
+                        Text(saved.preset.label, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                        Text("${saved.model} · ${saved.endpoint.take(35)}",
+                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
+                    }
+                    if (saved.balance.isNotBlank()) {
+                        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green1) {
+                            Text("$${saved.balance}", Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green7)
+                        }
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    IconButton(onClick = { viewModel.removeProvider(saved.preset) }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Close, "删除", tint = ThemeColors.textSecondary, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+            Spacer(Modifier.height(ArcoSpacing.sm))
+        }
+    }
+
+    // Provider editor — with API Key
+    if (state.apiSectionExpanded) {
+        SectionHeader(if (state.savedProviders.isNotEmpty()) "编辑连接" else "新增连接")
+        LlmProviderPreset.entries.forEach { preset ->
+            if (preset != LlmProviderPreset.CUSTOM && preset != LlmProviderPreset.SELF_HOSTED) {
+                ProviderCard(preset, state.selectedProvider == preset, state.modelName, state.remoteModels,
+                    { viewModel.selectProvider(preset) }, { viewModel.updateModelName(it) })
+            }
+        }
+        ProviderCard(LlmProviderPreset.SELF_HOSTED, state.selectedProvider == LlmProviderPreset.SELF_HOSTED,
+            state.modelName, state.remoteModels,
+            { viewModel.selectProvider(LlmProviderPreset.SELF_HOSTED) }, { viewModel.updateModelName(it) })
+        ProviderCard(LlmProviderPreset.CUSTOM, state.selectedProvider == LlmProviderPreset.CUSTOM,
+            state.modelName, state.remoteModels,
+            { viewModel.selectProvider(LlmProviderPreset.CUSTOM) }, { viewModel.updateModelName(it) })
+        Spacer(Modifier.height(ArcoSpacing.sm))
+
+        SettingsTextField(Icons.Outlined.Key, "API Key", state.apiKey,
+            onValueChange = { viewModel.updateApiKey(it) },
+            visualTransformation = if (state.showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = { viewModel.toggleShowApiKey() }) {
+                    Icon(if (state.showApiKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                        contentDescription = if (state.showApiKey) "隐藏" else "显示")
+                }
+            })
+        Spacer(Modifier.height(ArcoSpacing.sm))
+        SettingsTextField(Icons.Outlined.Link, "API 地址", state.apiEndpoint,
+            onValueChange = { viewModel.updateApiEndpoint(it) })
+        Spacer(Modifier.height(ArcoSpacing.sm))
+        SettingsTextField(Icons.Outlined.ModelTraining, "模型", state.modelName,
+            onValueChange = { viewModel.updateModelName(it) })
+        Spacer(Modifier.height(ArcoSpacing.sm))
+
+        // Cache optimization
+        val cacheStrategy = CacheStrategy.forProvider(state.apiEndpoint)
+        if (cacheStrategy != CacheStrategy.NONE) {
+            Surface(shape = RoundedCornerShape(ArcoRadius.sm),
+                color = ArcoColors.Green6.copy(alpha = 0.08f), modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(horizontal = ArcoSpacing.md, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.CheckCircle, null, Modifier.size(14.dp), tint = ArcoColors.Green6)
+                    Spacer(Modifier.width(6.dp))
+                    Text(CacheStrategy.labelFor(cacheStrategy),
+                        style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6)
+                    Spacer(Modifier.weight(1f))
+                    Text("已优化", style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold, color = ArcoColors.Green6)
+                }
+            }
+            Spacer(Modifier.height(ArcoSpacing.sm))
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
+            OutlinedButton(onClick = { viewModel.testConnection() }, modifier = Modifier.weight(1f),
+                enabled = !state.isTesting && state.apiKey.isNotBlank(),
+                shape = RoundedCornerShape(ArcoRadius.md)) {
+                if (state.isTesting) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = ThemeColors.brand)
+                else Icon(Icons.Outlined.Wifi, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("测试", style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(onClick = { viewModel.saveApiKey() }, modifier = Modifier.weight(1f),
+                enabled = state.apiKey.isNotBlank(), shape = RoundedCornerShape(ArcoRadius.md)) {
+                Icon(Icons.Outlined.Check, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("保存", style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(onClick = { viewModel.toggleApiSection() }, modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(ArcoRadius.md)) {
+                Text("收起", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        if (state.isTesting) {
+            Spacer(Modifier.height(4.dp))
+            Text("正在测试连接...", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+        }
+        Spacer(Modifier.height(ArcoSpacing.lg))
+    } else {
+        OutlinedButton(onClick = { viewModel.toggleApiSection() },
+            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
+            Icon(Icons.Default.Add, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("新增供应商连接")
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // Plugin management
+    NavigationLink(Icons.Outlined.Extension, "插件管理", "浏览、安装、管理 Agent 插件") { onNavigateToPluginMarket() }
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // Memory backend
+    SectionHeader("记忆管理")
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("记忆管理后端", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(if (state.memoryBackend == "memory-plugin") "内置 · Markdown 文件" else state.memoryBackend,
+                style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
+            Text("需安装插件", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // Context strategy
+    SectionHeader("上下文策略")
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("上下文策略", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(if (state.contextStrategy == "default") "内置 · Reasonix 四级折叠" else state.contextStrategy,
+                style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
+            Text("需安装插件", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // PAD floating window
+    SectionHeader("界面增强")
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var dotEnabled by remember { mutableStateOf(com.mengpaw.plugin.pad.PadPlugin.isVisible()) }
+    Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.AdsClick, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text("PAD 悬浮窗", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text("呼吸灯小圆点显示 Agent 工作状态", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        Switch(checked = dotEnabled, onCheckedChange = { checked ->
+            dotEnabled = checked
+            if (checked) com.mengpaw.plugin.pad.PadPlugin.show() else com.mengpaw.plugin.pad.PadPlugin.hide()
+        })
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── 安全规则 ──
+    SecurityRulesSection()
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── CLI 命令列表 ──
+    FrameworkItemSection("CLI 命令", Icons.Outlined.Terminal, cliItems)
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── 全局插件 ──
+    FrameworkItemSection("全局插件", Icons.Outlined.Extension, pluginItems)
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── 全局 Tools ──
+    FrameworkItemSection("全局 Tools", Icons.Outlined.Handyman, toolItems)
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── 全局 Skills ──
+    FrameworkItemSection("全局 Skills", Icons.Outlined.AutoAwesome, skillItems)
+}
+
+// ─── 03. System Settings Content ────────────────────────────────────
+
+@Composable
+private fun SystemSettingsContent(
+    state: SettingsState,
+    viewModel: SettingsViewModel,
+    onNavigateToPluginMarket: () -> Unit
+) {
+    // Appearance
+    SectionHeader(state.strings.appearance)
+    SettingsSwitch(Icons.Outlined.DarkMode, state.strings.darkTheme, state.strings.darkThemeDesc,
+        checked = state.darkTheme, onCheckedChange = { viewModel.toggleDarkTheme() })
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // UI Language
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Outlined.Translate, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text(state.strings.language, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(state.strings.languageDesc, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        OutlinedButton(onClick = { viewModel.toggleLanguage() },
+            shape = RoundedCornerShape(ArcoRadius.md),
+            contentPadding = PaddingValues(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm)) {
+            Text(if (state.useChinese) state.strings.languageEn else state.strings.languageZh,
+                fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
+        }
+    }
+
+    // Timezone
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Outlined.Language, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text("时区", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(state.timezone, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        TextButton(onClick = { viewModel.updateTimezone(if (state.timezone == "Asia/Shanghai") java.util.TimeZone.getDefault().id else "Asia/Shanghai") }) {
+            Text(if (state.timezone == "Asia/Shanghai") "自动" else "上海")
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // Battery optimization
+    SectionHeader("后台运行")
+    var powerSaverEnabled by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("后台省电模式", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text("降低后台轮询频率和动画帧率，延长续航", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        Switch(checked = powerSaverEnabled, onCheckedChange = { powerSaverEnabled = it })
+    }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    OutlinedButton(onClick = {
+        try {
+            val intent = android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            intent.data = android.net.Uri.parse("package:com.mengpaw.shell")
+            ctx.startActivity(intent)
+        } catch (_: Exception) {}
+    }, modifier = Modifier.fillMaxWidth().padding(top = ArcoSpacing.sm), shape = RoundedCornerShape(ArcoRadius.md)) {
+        Text("忽略电池优化（推荐开启）", style = MaterialTheme.typography.labelSmall)
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── Token 用量统计 ──
+    SectionHeader("Token 用量统计")
+    var statRange by remember { mutableIntStateOf(0) }  // 0=daily, 1=weekly, 2=monthly
+
+    Row(Modifier.fillMaxWidth().padding(bottom = ArcoSpacing.sm), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
+        listOf("每日", "每周", "每月").forEachIndexed { i, label ->
+            Surface(
+                modifier = Modifier.clickable { statRange = i },
+                shape = RoundedCornerShape(ArcoRadius.sm),
+                color = if (statRange == i) ThemeColors.brand else ThemeColors.bgCard
+            ) {
+                Text(label, Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    fontSize = 12.sp, fontWeight = if (statRange == i) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (statRange == i) Color.White else ThemeColors.textSecondary)
+            }
+        }
+    }
+
+    val collector = com.mengpaw.shell.ui.components.TokenStatsCollector
+    val models = remember { collector.allModels() }
+    val chartData = remember(statRange) {
+        when (statRange) {
+            0 -> collector.dailyRecords().map { it.date.substring(5) to it }
+            1 -> collector.weeklyRecords().map { it.weekLabel to it }
+            2 -> collector.monthlyRecords().map { it.weekLabel to it }
+            else -> emptyList()
+        }
+    }
+
+    // Chart
+    if (chartData.isNotEmpty()) {
+        val modelSeries = models.map { model ->
+            model to chartData.map { (label, record) ->
+                label to (if (record is TokenStatsCollector.DayRecord)
+                    record.modelTokens[model] ?: 0L
+                else (record as TokenStatsCollector.WeeklySummary).modelTokens[model] ?: 0L)
+            }
+        }
+        val cacheSeries = chartData.map { (label, record) ->
+            label to (if (record is TokenStatsCollector.DayRecord) record.cacheHitTokens
+                      else (record as TokenStatsCollector.WeeklySummary).cacheHitTokens)
+        }
+        TokenLineChart(series = modelSeries, cacheSeries = cacheSeries)
+    } else {
+        Text("暂无 Token 用量数据。开始使用后自动记录。",
+            style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary,
+            modifier = Modifier.padding(vertical = ArcoSpacing.lg))
+    }
+
+    // Summary cards
+    val totalTokens = collector.dailyRecords().sumOf { it.totalTokens }
+    val cacheSaved = collector.totalCacheSaved()
+    if (totalTokens > 0) {
+        Spacer(Modifier.height(ArcoSpacing.md))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
+            StatCard("总用量", formatTokenCount(totalTokens), Icons.Outlined.BarChart, ArcoColors.Blue1, ArcoColors.Blue6)
+            StatCard("缓存节省", formatTokenCount(cacheSaved), Icons.Outlined.Cached, ArcoColors.Green1, ArcoColors.Green6)
+            StatCard("预估节省", "\$" + "%.2f".format(collector.estimatedSavingsUsd()),
+                Icons.Outlined.AttachMoney, ArcoColors.Orange1, ArcoColors.Orange6)
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // About
+    SectionHeader(state.strings.about)
+    InfoRow(state.strings.version, "0.5.0")
+    InfoRow(state.strings.core, "mengpaw-kernel + mengpaw-core")
+    InfoRow(state.strings.design, "Arco Design · Compose Material 3")
+
+    Spacer(Modifier.height(ArcoSpacing.md))
+
+    // Legal & contact
+    SectionHeader("法律与联系")
+    Row(Modifier.fillMaxWidth().clickable { /* open license page */ }.padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.Description, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text("许可证", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text("AGPL-3.0", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(16.dp), tint = ArcoColors.Gray5)
+    }
+    Row(Modifier.fillMaxWidth().clickable { /* open open-source attributions */ }.padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.MenuBook, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text("开源声明", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text("第三方库与许可", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(16.dp), tint = ArcoColors.Gray5)
+    }
+    Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.Email, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text("联系我们", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text("support@wowblue.cn", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+    }
+    Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.Info, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text("版权声明", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text("© 2026 深圳哇蓝文化科技有限公司", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // Reset
+    SectionHeader("数据管理")
+    OutlinedButton(
+        onClick = { viewModel.resetToDefaults() },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(ArcoRadius.lg),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = ArcoColors.Red6)
+    ) {
+        Icon(Icons.Outlined.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(ArcoSpacing.sm))
+        Text(state.strings.resetDefaults)
+    }
+}
+
+// ─── Security Rules Section ──────────────────────────────────────────
+
+@Composable
+private fun SecurityRulesSection() {
+    SectionHeader("安全规则")
+
+    // ── 1. 框架信任列表 ──
+    var showTrusted by remember { mutableStateOf(false) }
+    val trustedPeers = remember { com.mengpaw.kernel.security.PromptFirewall.listTrusted() }
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+            .clickable { showTrusted = !showTrusted },
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCard
+    ) {
+        Column(Modifier.padding(ArcoSpacing.md)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.VerifiedUser, null, Modifier.size(20.dp), tint = ArcoColors.Blue6)
+                Spacer(Modifier.width(ArcoSpacing.sm))
+                Column(Modifier.weight(1f)) {
+                    Text("框架信任列表", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                    Text("已信任 ${trustedPeers.size} 个框架设备", fontSize = 12.sp, color = ThemeColors.textSecondary)
+                }
+                Icon(
+                    if (showTrusted) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    null, Modifier.size(18.dp), tint = ThemeColors.textSecondary
+                )
+            }
+            AnimatedVisibility(visible = showTrusted) {
+                Column(Modifier.padding(top = ArcoSpacing.sm)) {
+                    if (trustedPeers.isEmpty()) {
+                        Text("暂无受信任的框架设备。通过 ACP 配对添加。",
+                            fontSize = 12.sp, color = ThemeColors.textSecondary)
+                    } else {
+                        trustedPeers.forEach { peerId ->
+                            val fingerprint = remember(peerId) {
+                                try {
+                                    java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "$peerId.trusted")
+                                        .readText().take(16)
+                                } catch (_: Exception) { "—" }
+                            }
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Outlined.Devices, null, Modifier.size(16.dp), tint = ArcoColors.Green6)
+                                Spacer(Modifier.width(ArcoSpacing.sm))
+                                Column(Modifier.weight(1f)) {
+                                    Text(peerId, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                    Text("指纹: $fingerprint", fontSize = 11.sp, color = ThemeColors.textSecondary)
+                                }
+                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green1) {
+                                    Text("已信任", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                        fontSize = 10.sp, color = ArcoColors.Green6)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── 2. 内核完整性防护 ──
+    var kernelIntegrity by remember { mutableStateOf(true) }
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCard
+    ) {
+        Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Security, null, Modifier.size(20.dp), tint = if (kernelIntegrity) ArcoColors.Green6 else ArcoColors.Gray5)
+            Spacer(Modifier.width(ArcoSpacing.sm))
+            Column(Modifier.weight(1f)) {
+                Text("内核完整性防护", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                Text(
+                    if (kernelIntegrity) "已启用 — 阻止 Agent 修改内核文件" else "已禁用",
+                    fontSize = 12.sp, color = ThemeColors.textSecondary
+                )
+            }
+            Switch(checked = kernelIntegrity, onCheckedChange = { kernelIntegrity = it },
+                modifier = Modifier.size(32.dp),
+                colors = SwitchDefaults.colors(checkedTrackColor = ArcoColors.Green6))
+        }
+    }
+
+    // ── 3. 插件完整性防护 ──
+    var pluginIntegrity by remember { mutableStateOf(true) }
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCard
+    ) {
+        Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Shield, null, Modifier.size(20.dp), tint = if (pluginIntegrity) ArcoColors.Green6 else ArcoColors.Gray5)
+            Spacer(Modifier.width(ArcoSpacing.sm))
+            Column(Modifier.weight(1f)) {
+                Text("插件完整性防护", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                Text(
+                    if (pluginIntegrity) "已启用 — 验证插件签名和哈希" else "已禁用",
+                    fontSize = 12.sp, color = ThemeColors.textSecondary
+                )
+            }
+            Switch(checked = pluginIntegrity, onCheckedChange = { pluginIntegrity = it },
+                modifier = Modifier.size(32.dp),
+                colors = SwitchDefaults.colors(checkedTrackColor = ArcoColors.Green6))
+        }
+    }
+
+    // ── 4. 文件完整性防护 ──
+    var fileIntegrity by remember { mutableStateOf(true) }
+    var showProtectedPaths by remember { mutableStateOf(false) }
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+            .clickable { showProtectedPaths = !showProtectedPaths },
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCard
+    ) {
+        Column(Modifier.padding(ArcoSpacing.md)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Folder, null, Modifier.size(20.dp), tint = if (fileIntegrity) ArcoColors.Green6 else ArcoColors.Gray5)
+                Spacer(Modifier.width(ArcoSpacing.sm))
+                Column(Modifier.weight(1f)) {
+                    Text("文件完整性防护", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                    Text(
+                        if (fileIntegrity) "已启用 — 保护核心目录不被修改" else "已禁用",
+                        fontSize = 12.sp, color = ThemeColors.textSecondary
+                    )
+                }
+                Switch(checked = fileIntegrity, onCheckedChange = { fileIntegrity = it },
+                    modifier = Modifier.size(32.dp),
+                    colors = SwitchDefaults.colors(checkedTrackColor = ArcoColors.Green6))
+            }
+            AnimatedVisibility(visible = showProtectedPaths) {
+                Column(Modifier.padding(top = ArcoSpacing.sm)) {
+                    Text("受保护的目录：", fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                        color = ThemeColors.textSecondary)
+                    Spacer(Modifier.height(4.dp))
+                    val paths = listOf(
+                        "内核目录" to "/data/data/com.mengpaw/core",
+                        "Agent 文档" to com.mengpaw.kernel.DataPaths.AGENTS,
+                        "插件缓存" to com.mengpaw.kernel.DataPaths.PLUGIN_CACHE,
+                        "密钥存储" to "/data/data/com.mengpaw/shared_prefs/mengpaw_vault"
+                    )
+                    paths.forEach { (label, path) ->
+                        Row(Modifier.padding(vertical = 2.dp)) {
+                            Icon(Icons.Outlined.Lock, null, Modifier.size(12.dp), tint = ArcoColors.Gray5)
+                            Spacer(Modifier.width(6.dp))
+                            Text("$label  ", fontSize = 11.sp, color = ThemeColors.textSecondary)
+                            Text(path, fontSize = 11.sp, color = ArcoColors.Gray5)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Reusable Helpers ────────────────────────────────────────────────
+
+@Composable
+private fun StatCard(
+    title: String, value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    bgColor: Color, fgColor: Color
+) {
+    Surface(
+        modifier = Modifier.weight(1f),
+        shape = RoundedCornerShape(ArcoRadius.lg),
+        color = bgColor
+    ) {
+        Column(Modifier.padding(ArcoSpacing.md)) {
+            Icon(icon, null, Modifier.size(20.dp), tint = fgColor)
+            Spacer(Modifier.height(6.dp))
+            Text(value, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = fgColor)
+            Text(title, fontSize = 11.sp, color = fgColor.copy(alpha = 0.7f))
+        }
+    }
+}
+
+@Composable
+private fun FrameworkItemSection(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    items: List<FrameworkItem>
+) {
+    SectionHeader(title)
+    if (items.isEmpty()) {
+        Text("暂无条目", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        Spacer(Modifier.height(ArcoSpacing.sm))
+        return
+    }
+
+    // Group: builtin → official → custom
+    val order = listOf(ItemCategory.BUILTIN, ItemCategory.OFFICIAL, ItemCategory.CUSTOM)
+    val grouped = items.groupBy { it.category }
+
+    order.forEach { cat ->
+        val group = grouped[cat] ?: return@forEach
+        group.forEach { item ->
+            var expanded by remember { mutableStateOf(false) }
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                shape = RoundedCornerShape(ArcoRadius.md),
+                color = ThemeColors.bgCard,
+                onClick = { expanded = !expanded }
+            ) {
+                Column(Modifier.padding(ArcoSpacing.md)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(icon, null, Modifier.size(16.dp), tint = cat.color)
+                        Spacer(Modifier.width(ArcoSpacing.sm))
+                        Column(Modifier.weight(1f)) {
+                            Text(item.name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
+                            if (item.summary.isNotBlank()) {
+                                Text(item.summary, fontSize = 12.sp, color = ThemeColors.textSecondary, maxLines = 1)
+                            }
+                        }
+                        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = cat.color.copy(alpha = 0.1f)) {
+                            Text(cat.label, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                fontSize = 10.sp, color = cat.color)
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                            null, Modifier.size(18.dp), tint = ThemeColors.textSecondary
+                        )
+                    }
+                    // Expanded markdown doc
+                    AnimatedVisibility(visible = expanded) {
+                        if (item.docMarkdown.isNotBlank()) {
+                            MarkdownText(
+                                content = item.docMarkdown,
+                                modifier = Modifier.padding(top = ArcoSpacing.sm)
+                            )
+                        } else {
+                            Text("暂无文档", Modifier.padding(top = ArcoSpacing.sm),
+                                fontSize = 12.sp, color = ThemeColors.textSecondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(ArcoSpacing.sm))
+}
 
 @Composable
 private fun SectionHeader(title: String) {
     Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
-        color = com.mengpaw.design.theme.ThemeColors.brand, modifier = Modifier.padding(bottom = ArcoSpacing.sm))
+        color = ThemeColors.brand, modifier = Modifier.padding(bottom = ArcoSpacing.sm))
 }
 
 @Composable
@@ -495,9 +1235,10 @@ private fun SettingsSwitch(
         Spacer(Modifier.width(ArcoSpacing.md))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = SwitchDefaults.colors(checkedTrackColor = ArcoColors.Blue6))
+        Switch(checked = checked, onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(checkedTrackColor = ArcoColors.Blue6))
     }
 }
 
@@ -516,14 +1257,17 @@ private fun SettingsTextField(
             modifier = Modifier.fillMaxWidth(), singleLine = true,
             shape = RoundedCornerShape(ArcoRadius.md),
             visualTransformation = visualTransformation, trailingIcon = trailingIcon,
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ArcoColors.Blue6, unfocusedBorderColor = com.mengpaw.design.theme.ThemeColors.border, focusedLabelColor = ArcoColors.Blue6))
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = ArcoColors.Blue6,
+                unfocusedBorderColor = ThemeColors.border,
+                focusedLabelColor = ArcoColors.Blue6))
     }
 }
 
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.xs), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = ThemeColors.textSecondary)
         Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
     }
 }
@@ -537,11 +1281,11 @@ private fun NavigationLink(icon: androidx.compose.ui.graphics.vector.ImageVector
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(modifier = Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = com.mengpaw.design.theme.ThemeColors.brand, modifier = Modifier.size(22.dp))
+            Icon(icon, contentDescription = null, tint = ThemeColors.brand, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(ArcoSpacing.md))
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = com.mengpaw.design.theme.ThemeColors.brand)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
+                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = ThemeColors.brand)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
             }
             Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = ArcoColors.Gray5)
         }
@@ -558,10 +1302,8 @@ private fun ProviderCard(
     onSelectModel: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(isSelected) }
-    // FIX U9+U10: Sync expanded with isSelected via LaunchedEffect (no side effects in composition)
     LaunchedEffect(isSelected) {
-        if (isSelected) expanded = true   // auto-expand when card becomes selected
-        else expanded = false             // auto-collapse when card loses selection
+        if (isSelected) expanded = true else expanded = false
     }
 
     val strategy = CacheStrategy.forProvider(preset.endpoint)
@@ -579,18 +1321,16 @@ private fun ProviderCard(
                     .padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                    null, Modifier.size(18.dp), tint = ThemeColors.textSecondary
-                )
+                Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    null, Modifier.size(18.dp), tint = ThemeColors.textSecondary)
                 Spacer(Modifier.width(ArcoSpacing.sm))
                 Text(preset.label, Modifier.weight(1f),
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     fontSize = 14.sp, color = if (isSelected) ArcoColors.Blue6 else ThemeColors.textPrimary)
                 if (optimized) {
-                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = Color(0xFF52C41A).copy(alpha = 0.1f)) {
+                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green6.copy(alpha = 0.1f)) {
                         Text("已优化", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                            fontSize = 10.sp, color = Color(0xFF52C41A))
+                            fontSize = 10.sp, color = ArcoColors.Green6)
                     }
                 }
                 if (isSelected) {
@@ -598,34 +1338,33 @@ private fun ProviderCard(
                     Icon(Icons.Outlined.CheckCircle, null, Modifier.size(16.dp), tint = ArcoColors.Blue6)
                 }
             }
-            // Expanded model list
             AnimatedVisibility(visible = expanded) {
                 Column(Modifier.padding(start = ArcoSpacing.lg, end = ArcoSpacing.md, bottom = ArcoSpacing.sm)) {
                     Text(preset.endpoint.take(60), fontSize = 11.sp, color = ThemeColors.textSecondary,
                         modifier = Modifier.padding(bottom = 6.dp))
-                    // Preset models
                     preset.models.forEach { model ->
                         Row(Modifier.fillMaxWidth().clickable { onSelectModel(model.name) }
                             .padding(vertical = 4.dp, horizontal = ArcoSpacing.sm),
                             verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(selected = selectedModel == model.name, onClick = { onSelectModel(model.name) },
-                                modifier = Modifier.size(18.dp), colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
+                                modifier = Modifier.size(18.dp),
+                                colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
                             Spacer(Modifier.width(8.dp))
                             Text(model.name, Modifier.weight(1f), fontSize = 13.sp)
                             if (model.type == "多模态") Text("🖼", fontSize = 12.sp)
                         }
                     }
-                    // Remote models (fetched from API)
                     if (remoteModels.isNotEmpty()) {
-                        Text("API 返回", fontSize = 10.sp, color = Color(0xFF52C41A), modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
+                        Text("API 返回", fontSize = 10.sp, color = ArcoColors.Green6, modifier = Modifier.padding(top = 4.dp, bottom = 2.dp))
                         remoteModels.take(10).filter { it !in preset.models.map { m -> m.name } }.forEach { model ->
                             Row(Modifier.fillMaxWidth().clickable { onSelectModel(model) }
                                 .padding(vertical = 4.dp, horizontal = ArcoSpacing.sm),
                                 verticalAlignment = Alignment.CenterVertically) {
                                 RadioButton(selected = selectedModel == model, onClick = { onSelectModel(model) },
-                                    modifier = Modifier.size(18.dp), colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
+                                    modifier = Modifier.size(18.dp),
+                                    colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
                                 Spacer(Modifier.width(8.dp))
-                                Text(model, Modifier.weight(1f), fontSize = 13.sp, color = Color(0xFF52C41A))
+                                Text(model, Modifier.weight(1f), fontSize = 13.sp, color = ArcoColors.Green6)
                             }
                         }
                     }

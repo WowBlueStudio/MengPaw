@@ -69,6 +69,13 @@ data class SavedProvider(
 /** Agent language modes for controlling LLM output language. */
 enum class AgentLanguageMode(val labelKey: String) { FOLLOW_UI("followUi"), CHINESE("chinese"), ENGLISH("english") }
 
+/** Agent loop / execution mode. */
+enum class LoopMode(val label: String, val desc: String) {
+    GOAL("Goal 模式", "单目标驱动，完成即停"),
+    MISSION("Mission 模式", "建立临时子 Agent 分解任务链，逐步执行"),
+    MISSION_PLUS("Mission+ 模式", "协调跨 Agent、跨框架、跨设备的多 Agent 协同处理复杂任务")
+}
+
 data class SettingsState(
     val selectedProvider: LlmProviderPreset = LlmProviderPreset.OPENAI,
     val apiEndpoint: String = LlmProviderPreset.OPENAI.endpoint,
@@ -85,6 +92,7 @@ data class SettingsState(
     val showApiKey: Boolean = false,
     val useChinese: Boolean = true,
     val agentLanguageMode: AgentLanguageMode = AgentLanguageMode.FOLLOW_UI,
+    val loopMode: LoopMode = LoopMode.GOAL,
     // API section state
     val apiSectionExpanded: Boolean = true,
     val savedProviders: List<SavedProvider> = emptyList(),
@@ -194,6 +202,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val modes = AgentLanguageMode.entries
         val next = modes[(modes.indexOf(_state.value.agentLanguageMode) + 1) % modes.size]
         _state.value = _state.value.copy(agentLanguageMode = next)
+    }
+
+    fun setLoopMode(mode: LoopMode) {
+        _state.value = _state.value.copy(loopMode = mode)
     }
 
     fun toggleApiSection() {
