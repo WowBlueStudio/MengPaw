@@ -28,7 +28,7 @@ import java.io.File
  */
 class IncubatorPlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "incubator-plugin", name = "Agent孵化器", version = "1.0.0",
+        id = "incubator-plugin", name = "Agent孵化器", version = "0.1.1",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "子Agent孵化：创建/配置/监控/终止/结果收集",
         minCoreVersion = "0.2.0",

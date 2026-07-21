@@ -31,7 +31,7 @@ class NetPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "net-plugin",
         name = "网络请求",
-        version = "1.0.0",
+        version = "0.1.1",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "HTTP 网络请求：curl, get, post",

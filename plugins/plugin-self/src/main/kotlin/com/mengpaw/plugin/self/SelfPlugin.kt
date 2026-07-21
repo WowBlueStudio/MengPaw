@@ -18,7 +18,7 @@ class SelfPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "self-plugin",
         name = "自省",
-        version = "1.0.0",
+        version = "0.1.1",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "Agent 自省：status, config, stats, version",

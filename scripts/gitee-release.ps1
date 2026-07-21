@@ -1,17 +1,17 @@
 $token = "a0808ed6b6665379a4702472d0ea9b70"
 $owner = "WowBlueStudio"
 $repo = "MengPaw"
-$tag = "v0.6.1"
+$tag = "v0.6.2"
 
-# Read first 65 lines of CHANGELOG
-$changelog = Get-Content "D:\MengPaw\CHANGELOG.md" -First 65 -Raw
+# Read v0.6.2 section from CHANGELOG (lines 1-34)
+$changelog = Get-Content "D:\MengPaw\CHANGELOG.md" -First 34 -Raw
 
 # Create release
 Write-Host "Creating Gitee release for $tag..."
 $releaseBody = @{
     access_token = $token
     tag_name = $tag
-    name = "MengPaw v0.6.1 — 内核能力补全 + 安全加固"
+    name = "MengPaw v0.6.2 — Agent 逻辑修复 + API 模型更新 + DeepSeek 解析修复"
     body = $changelog
     target_commitish = "master"
 } | ConvertTo-Json -Compress
@@ -23,7 +23,7 @@ Write-Host "Release ID: $($release.id)"
 
 # Upload Shell APK
 Write-Host "Uploading shell APK..."
-$shellApk = "D:\MengPaw\mengpaw-shell\build\outputs\apk\release\mengpaw-shell-v0.6.1-release.apk"
+$shellApk = "D:\MengPaw\mengpaw-shell\build\outputs\apk\release\mengpaw-shell-v0.6.2-release.apk"
 $shellResult = Invoke-RestMethod -Uri "https://gitee.com/api/v5/repos/$owner/$repo/releases/$($release.id)/attach_files" `
     -Method Post `
     -Form @{

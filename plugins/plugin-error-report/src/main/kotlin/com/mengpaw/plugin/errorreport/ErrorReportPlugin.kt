@@ -45,7 +45,7 @@ class ErrorReportPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "error-report-plugin",
         name = "错误上报",
-        version = "1.0.0",
+        version = "0.1.1",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "官方错误收集与上报。安装即同意帮助改进框架和插件。WiFi下自动上传到Gitee/GitHub。",
