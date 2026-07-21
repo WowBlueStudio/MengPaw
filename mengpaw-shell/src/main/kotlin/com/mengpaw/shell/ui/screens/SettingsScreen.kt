@@ -34,7 +34,9 @@ import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.llm.CacheStrategy
 import com.mengpaw.shell.ui.isWide
 import com.mengpaw.shell.ui.components.TokenLineChart
+import com.mengpaw.shell.ui.components.TokenStatsCollector
 import com.mengpaw.shell.ui.components.formatTokenCount
+import com.mengpaw.design.components.MarkdownText
 
 /** Category tag for framework items. */
 enum class ItemCategory(val label: String, val color: Color) {
@@ -861,7 +863,7 @@ private fun SystemSettingsContent(
         }
     }
 
-    val collector = com.mengpaw.shell.ui.components.TokenStatsCollector
+    val collector = TokenStatsCollector
     val models = remember { collector.allModels() }
     val chartData = remember(statRange) {
         when (statRange) {
@@ -874,16 +876,22 @@ private fun SystemSettingsContent(
 
     // Chart
     if (chartData.isNotEmpty()) {
+        @Suppress("UNCHECKED_CAST")
         val modelSeries = models.map { model ->
             model to chartData.map { (label, record) ->
-                label to (if (record is TokenStatsCollector.DayRecord)
-                    record.modelTokens[model] ?: 0L
-                else (record as TokenStatsCollector.WeeklySummary).modelTokens[model] ?: 0L)
+                val tokens = when (statRange) {
+                    0 -> (record as TokenStatsCollector.DayRecord).modelTokens[model] ?: 0L
+                    else -> (record as TokenStatsCollector.WeeklySummary).modelTokens[model] ?: 0L
+                }
+                label to tokens
             }
         }
         val cacheSeries = chartData.map { (label, record) ->
-            label to (if (record is TokenStatsCollector.DayRecord) record.cacheHitTokens
-                      else (record as TokenStatsCollector.WeeklySummary).cacheHitTokens)
+            val cache = when (statRange) {
+                0 -> (record as TokenStatsCollector.DayRecord).cacheHitTokens
+                else -> (record as TokenStatsCollector.WeeklySummary).cacheHitTokens
+            }
+            label to cache
         }
         TokenLineChart(series = modelSeries, cacheSeries = cacheSeries)
     } else {
@@ -1139,8 +1147,7 @@ private fun StatCard(
     bgColor: Color, fgColor: Color
 ) {
     Surface(
-        modifier = Modifier.weight(1f),
-        shape = RoundedCornerShape(ArcoRadius.lg),
+        modifier = Modifier.fillMaxWidth(),
         color = bgColor
     ) {
         Column(Modifier.padding(ArcoSpacing.md)) {
