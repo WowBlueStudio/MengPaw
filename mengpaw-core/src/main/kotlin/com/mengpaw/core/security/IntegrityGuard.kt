@@ -52,6 +52,9 @@ class IntegrityGuard(
         "PluginManager.kt"
     )
 
+    /** When false, validateCommand always returns null and verify always returns true. */
+    var enabled: Boolean = true
+
     /** Baseline hashes set during init — compared in verify(). */
     private val baselineHashes = mutableMapOf<String, String>()
 
@@ -132,6 +135,7 @@ class IntegrityGuard(
      *         OR if the guard was never initialized (fail-secure).
      */
     fun verify(): Boolean {
+        if (!globalEnabled || !enabled) return true  // bypass when disabled via UI toggle
         if (!initialized) return false // Fail-secure: reject if never initialized
 
         // Android path: re-verify APK signature
@@ -187,6 +191,7 @@ class IntegrityGuard(
      * @return null if allowed, or an error message if blocked.
      */
     override fun validateCommand(command: String, args: List<String>): String? {
+        if (!globalEnabled || !enabled) return null  // bypass when disabled via UI toggle
         val commandName = command.lowercase()
 
         // Write operations — check destination path
@@ -241,6 +246,9 @@ class IntegrityGuard(
     }
 
     companion object {
+        /** Global toggle for file integrity protection (controlled from Settings UI). */
+        @Volatile var globalEnabled: Boolean = true
+
         /** CLI commands that write/create files. */
         private val WRITE_COMMANDS = setOf("fs.write", "fs.cp", "fs.mkdir")
         /** CLI commands that delete files. */

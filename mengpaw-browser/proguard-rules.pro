@@ -35,3 +35,7 @@
 -dontwarn com.google.crypto.tink.**
 -dontwarn javax.annotation.**
 -dontwarn org.conscrypt.**
+
+# Keep Tink crypto internals — required by EncryptedSharedPreferences
+-keep class com.google.crypto.tink.** { *; }
+-keep interface com.google.crypto.tink.** { *; }

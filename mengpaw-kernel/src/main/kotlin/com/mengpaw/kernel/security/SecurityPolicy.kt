@@ -12,6 +12,14 @@ import com.mengpaw.kernel.security.NoOpIntegrityProvider
 class SecurityPolicy(
     private val integrityProvider: IntegrityProvider = NoOpIntegrityProvider
 ) {
+    companion object {
+        /** Global toggle for kernel integrity protection (controlled from Settings UI). */
+        @Volatile var globalEnabled: Boolean = true
+    }
+
+    /** Per-instance toggle; checked together with [globalEnabled]. */
+    var integrityEnabled: Boolean = true
+
     private val restrictedPatterns = listOf(
         Regex("rm\\s+(-rf?\\s+)?/"),
         Regex("mkfs\\."),
@@ -33,6 +41,7 @@ class SecurityPolicy(
     private val blockList = mutableListOf("proc.exec", "proc.system")
 
     fun isAllowed(command: String): Boolean {
+        if (!globalEnabled || !integrityEnabled) return true
         val cmdName = command.split(" ").firstOrNull() ?: return false
         if (blockList.any { cmdName.startsWith(it) }) return false
         for (pattern in restrictedPatterns) {

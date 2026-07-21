@@ -205,7 +205,7 @@ class PluginViewModel : ViewModel() {
                 return@launch
             }
 
-            // Remote plugins: download → verify → install → activate
+            // Remote plugins: download → verify → install → activate via PluginExecutor
             if (!entry.isDownloadable) {
                 updateInstallState(id, InstallState.Failed("${entry.name} 暂未发布，无法下载"))
                 return@launch
@@ -214,23 +214,18 @@ class PluginViewModel : ViewModel() {
             updateInstallState(id, InstallState.Downloading(0f))
             updateInstallState(id, InstallState.Verifying)
 
-            val plugin = createPluginInstance(entry)
-            if (plugin == null) {
-                updateInstallState(id, InstallState.Failed("Cannot instantiate plugin: ${entry.id}"))
-                return@launch
-            }
-
-            updateInstallState(id, InstallState.Installing("Installing ${entry.name}..."))
-
-            pluginManager.install(plugin).fold(
-                onSuccess = {
-                    pluginManager.activate(id).fold(
-                        onSuccess = { updateInstallState(id, InstallState.Done(id)) },
-                        onFailure = { e -> updateInstallState(id, InstallState.Failed("Activation failed: ${e.message}")) }
-                    )
-                },
-                onFailure = { e -> updateInstallState(id, InstallState.Failed("Install failed: ${e.message}")) }
+            // Delegate to PluginExecutor which handles download + SHA256 verify + DexClassLoader activate
+            val executor = PluginExecutor(pluginManager, marketplace)
+            val ctx = com.mengpaw.kernel.cli.ExecutionContext(
+                sessionId = "ui-install", agentName = "MengPaw",
+                workDir = com.mengpaw.kernel.DataPaths.PLUGIN_CACHE
             )
+            val result = executor.commands["install"]?.invoke(listOf(id), ctx)
+            if (result != null && result.success) {
+                updateInstallState(id, InstallState.Done(id))
+            } else {
+                updateInstallState(id, InstallState.Failed(result?.error ?: "Install failed: ${entry.id}"))
+            }
         }
     }
 

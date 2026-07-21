@@ -38,11 +38,26 @@ class SkillPlugin : Plugin {
     override suspend fun onInstall(ctx: PluginContext) {
         storageDir = "${ctx.storageDir}/skills"
         File(storageDir).mkdirs()
+        seedDefaults()
     }
 
     private val dir: File get() = File(storageDir).also { it.mkdirs() }
 
+    /** Create default skills on first run if the skills directory is empty. */
+    fun seedDefaults() {
+        val d = dir
+        // Only seed if no skills exist yet (preserves user-created skills)
+        val existing = d.listFiles { f -> f.extension == "md" }
+        if (existing != null && existing.isNotEmpty()) return
+
+        DEFAULT_SKILLS.forEach { (name, content) ->
+            try { File(d, "$name.md").writeText(content) }
+            catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.seedDefaults") }
+        }
+    }
+
     private suspend fun ls(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        seedDefaults()  // auto-seed on first access
         val skills = listSkills()
         if (skills.isEmpty()) return ExecutionResult.ok("(No skills installed)")
         return ExecutionResult.ok(skills.joinToString("\n") {
@@ -118,4 +133,120 @@ class SkillPlugin : Plugin {
 data class SkillDef(
     val name: String, val description: String, val enabled: Boolean,
     val category: String, val content: String, val rawText: String = ""
+)
+
+/** Default skills seeded on first run — ported & adapted from QwenPaw. */
+private val DEFAULT_SKILLS = mapOf(
+    "make-skill" to """---
+name: make-skill
+description: 把当前会话沉淀为可复用的 skill。触发词：「把这个变成 skill」「记住这个流程」「保存为技能」
+enabled: true
+category: meta
+---
+# Make Skill — 会话沉淀为可复用技能
+
+把当前对话中的工作流、排错路径、配置步骤沉淀为 skill。
+
+## 两阶段流程
+
+### Phase A：提出计划
+1. 从对话中提炼核心流程（最多 5 个关键步骤）
+2. 用自然语言向用户描述计划，等待确认
+
+### Phase B：执行创建
+1. 使用 `fs.write` 将技能内容写入技能目录
+2. 技能文件格式参考本文件的 YAML frontmatter + Markdown 正文
+3. 使用 `skill.ls` 验证技能已创建
+
+## Skill 文件格式
+` + "```" + `markdown
+---
+name: <skill-name>
+description: <一句话描述>
+enabled: true
+category: <general|dev|office|browser|system>
+---
+# <技能标题>
+## 执行步骤
+1. ...
+2. ...
+` + "```" + `
+""",
+
+    "make-plan" to """---
+name: make-plan
+description: 需要多步拆解复杂任务时触发；获取分步骤执行计划，由 Agent 自己逐步执行
+enabled: true
+category: meta
+---
+# Make Plan — 任务拆解与计划
+
+当任务需要多步拆解、步骤之间有依赖关系时使用。
+
+## 执行流程
+
+### 1. 分析任务
+- 用 `self.tools` 确认有哪些可用命令
+- 用 `agent.memory` 查询相关经验
+
+### 2. 制定计划
+向用户输出执行计划表格，确认后开始执行。
+
+### 3. 逐步执行
+每步执行完汇报结果，失败时分析原因调整计划。
+
+### 4. 完成汇报
+汇总完成情况，标记遗留问题。
+""",
+
+    "guidance" to """---
+name: guidance
+description: 用户询问安装、配置、或「怎么用」「报错了」时触发；帮助定位文档和排查问题
+enabled: true
+category: system
+---
+# MengPaw 使用引导
+
+当用户询问安装、配置、功能使用、报错排查时使用。
+
+## 标准流程
+
+### 1. 确定问题类型
+| 关键词 | 查阅内容 |
+|--------|---------|
+| 安装、APK | `agent.memory search 安装` |
+| API Key、模型 | `agent.memory search API` |
+| 插件、命令 | `self.tools` → `plugin.list` |
+| 报错、闪退 | `agent.audit` |
+
+### 2. 查阅文档
+使用 `agent.memory [query]` 搜索已有记忆和文档。
+
+### 3. 如果本地无答案
+建议查看 https://github.com/WowBlueStudio/MengPaw
+""",
+
+    "source-index" to """---
+name: source-index
+description: 回答技术问题时快速定位要读的文档和源码；减少盲目搜索
+enabled: true
+category: system
+---
+# 文档与源码速查
+
+## 关键词 → 源码路径
+| 关键词 | 源码路径 |
+|--------|---------|
+| CLI、命令 | `mengpaw-kernel/.../cli/` |
+| LLM、模型 | `mengpaw-kernel/.../llm/` |
+| 安全 | `mengpaw-kernel/.../security/` |
+| 插件 | `mengpaw-kernel/.../plugin/` |
+| UI、设置 | `mengpaw-shell/.../ui/screens/` |
+| 浏览器 | `mengpaw-browser/.../` |
+
+## 约定
+- 先读文档（`agent.memory`），再读源码（`fs.cat`）
+- `agent.cli` 返回完整 CLI 参考
+- 不确定时先 `fs.ls` 看目录结构
+"""
 )

@@ -26,6 +26,9 @@ import com.mengpaw.shell.ui.localization.ChineseStrings
 import com.mengpaw.shell.ui.localization.EnglishStrings
 import com.mengpaw.shell.ui.screens.*
 
+/** Plugin IDs that are bundled with the shell APK (显示为"内置"分类). */
+private val BUILTIN_PLUGIN_IDS = setOf("memory-plugin", "skill-plugin", "pad-plugin", "dev-plugin")
+
 class MainActivity : ComponentActivity() {
     private val settingsViewModel by viewModels<SettingsViewModel>()
 
@@ -92,6 +95,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     var showSplash by remember { mutableStateOf(true) }
     var showPlugins by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    val settingsState by settingsViewModel.state.collectAsState()
 
     if (showSplash) {
         WowBlueSplash(onFinished = { showSplash = false })
@@ -102,6 +106,8 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     val activeAgent by agentViewModel.activeAgent.collectAsState()
     val sessionHistory by agentViewModel.sessionHistory.collectAsState()
     val hideCompacted by agentViewModel.hideCompacted.collectAsState()
+    // Sync loop mode from settings to agent view model
+    LaunchedEffect(settingsState.loopMode) { agentViewModel.loopMode = settingsState.loopMode }
     // Grouped session data for hierarchical history sidebar
     val localGroups = remember(sessionHistory, hideCompacted) { agentViewModel.getLocalAgentGroups() }
     val frameworkGroups = remember(sessionHistory, hideCompacted) { agentViewModel.getFrameworkGroups() }
@@ -156,34 +162,58 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
         val agentFramework = remember(activeAgent) { agentViewModel.frameworkFor(activeAgent) }
         val (agentEp, agentModel) = remember(activeAgent) { agentViewModel.agentConfig(activeAgent) }
 
-        // ── Framework item lists ──
-        val cliItems = remember {
-            listOf(
-                FrameworkItem("self.trigger", ItemCategory.BUILTIN, "管理 Agent 定时触发器", "## self.trigger\n\n创建、启用、禁用 Agent 的定时触发器（Cron / Lifetime）。\n\n```\nself.trigger add cron \"0 9 * * *\" \"早安播报\"\nself.trigger list\n```"),
-                FrameworkItem("self.log", ItemCategory.BUILTIN, "查看 Agent 运行日志", "## self.log\n\n读取 Agent 的执行日志和错误收集器内容。"),
-                FrameworkItem("plugin.install", ItemCategory.BUILTIN, "安装插件", "## plugin.install\n\n从插件市场或本地文件安装插件。\n\n```\nplugin.install <plugin-id>\nplugin.install fs-plugin\n```"),
-                FrameworkItem("plugin.list", ItemCategory.BUILTIN, "列出已安装插件", "## plugin.list\n\n显示所有已安装插件及其状态（active / installed / error）。"),
-                FrameworkItem("agent.new", ItemCategory.BUILTIN, "创建新智能体", "## agent.new\n\n创建一个新的 Agent 会话，可指定框架隶属。\n\n```\nagent.new <name> [framework]\n```")
-            )
-        }
+        // ── Workspace refresh trigger ──
+        var workspaceVersion by remember { mutableIntStateOf(0) }
+
+        // ── Dynamic framework item lists ──
+        // Plugins: real data from PluginManager
         val pluginItems = remember {
-            listOf(
-                FrameworkItem("pad-plugin", ItemCategory.BUILTIN, "PAD 悬浮窗插件", "## pad-plugin\n\n提供呼吸灯小圆点显示 Agent 工作状态。支持 SYSTEM_ALERT_WINDOW 权限。"),
-                FrameworkItem("fs-plugin", ItemCategory.BUILTIN, "文件系统插件", "## fs-plugin\n\n允许 Agent 读写 Android 文件系统。\n\n权限：READ/WRITE_EXTERNAL_STORAGE"),
-                FrameworkItem("memory-plugin", ItemCategory.BUILTIN, "记忆管理插件", "## memory-plugin\n\n基于 Markdown 文件的长期记忆后端。支持 Agent 自主创建、更新、检索记忆文档。")
-            )
+            com.mengpaw.kernel.plugin.PluginManager.globalInstance.listAll().map { (plugin, status) ->
+                FrameworkItem(
+                    name = plugin.metadata.id,
+                    category = if (plugin.metadata.id in BUILTIN_PLUGIN_IDS) ItemCategory.BUILTIN else ItemCategory.OFFICIAL,
+                    summary = plugin.metadata.description,
+                    docMarkdown = "## ${plugin.metadata.name}\n\n${plugin.metadata.description}\n\n版本: ${plugin.metadata.version}\n状态: ${status.name}"
+                )
+            }.ifEmpty {
+                // Fallback: show built-in info when no plugins installed
+                listOf(
+                    FrameworkItem("fs-plugin", ItemCategory.BUILTIN, "文件系统插件", "## fs-plugin\n\n允许 Agent 读写 Android 文件系统。"),
+                    FrameworkItem("memory-plugin", ItemCategory.BUILTIN, "记忆管理插件", "## memory-plugin\n\n基于 Markdown 文件的长期记忆后端。")
+                )
+            }
         }
-        val toolItems = remember {
-            listOf(
-                FrameworkItem("sys.shell", ItemCategory.BUILTIN, "Shell 命令执行器", "## sys.shell\n\n在 Android 设备上执行 Shell 命令并返回结果。\n\n超时限制：60s（可在 Agent 设置中调整）"),
-                FrameworkItem("sys.screenshot", ItemCategory.BUILTIN, "屏幕截图", "## sys.screenshot\n\n捕获当前屏幕内容并返回给 Agent 分析。")
-            )
+        // CLI namespaces: real data from engine
+        val cliItems = remember(activeAgent) {
+            val ns = agentViewModel.activeNamespaces()
+            ns.map { name ->
+                FrameworkItem(name, ItemCategory.BUILTIN, "$name.* 命令组", "")
+            }
         }
+        // Tools from MCP server (wired via engine)
+        val toolItems = remember(activeAgent) {
+            val engine = agentViewModel.activeEngine() ?: return@remember emptyList<FrameworkItem>()
+            try {
+                val mcp = com.mengpaw.kernel.mcp.McpServer(engine.getPluginManager())
+                mcp.listTools().map { tool ->
+                    FrameworkItem(tool.name, ItemCategory.BUILTIN, tool.description, "")
+                }
+            } catch (_: Exception) { emptyList() }
+        }
+        // Skills: from skill plugin if installed
         val skillItems = remember {
-            listOf(
-                FrameworkItem("translate", ItemCategory.BUILTIN, "中英互译中间件", "## translate\n\n自动检测中英文输入并在发送给 LLM 前翻译。对于英文优化模型可节省约 40% token 消耗。"),
-                FrameworkItem("memory-middleware", ItemCategory.BUILTIN, "记忆注入中间件", "## memory-middleware\n\n在每次 LLM 请求前注入 Agent 的长期记忆文档作为 System Prompt 前缀。")
-            )
+            val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+            val skillPlugin = pm.get("skill-plugin")
+            if (skillPlugin != null && pm.status("skill-plugin") == com.mengpaw.kernel.plugin.PluginStatus.ACTIVE) {
+                skillPlugin.commands.keys.map { name ->
+                    FrameworkItem("skill.$name", ItemCategory.BUILTIN, "", "")
+                }
+            } else {
+                listOf(
+                    FrameworkItem("skill.ls", ItemCategory.BUILTIN, "列出可用技能 (需安装 skill-plugin)", ""),
+                    FrameworkItem("skill.run", ItemCategory.BUILTIN, "运行指定技能 (需安装 skill-plugin)", "")
+                )
+            }
         }
 
         SettingsScreen(
@@ -210,7 +240,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             agentPluginItems = pluginItems,
             agentToolItems = toolItems,
             agentSkillItems = skillItems,
-            workspaceItems = remember(activeAgent) {
+            workspaceItems = remember(activeAgent, workspaceVersion) {
                 val dir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, activeAgent)
                 dir.listFiles()
                     ?.filter { it.extension == "md" }
@@ -224,7 +254,8 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                             docMarkdown = content
                         )
                     } ?: emptyList()
-            }
+            },
+            onRefreshWorkspace = { workspaceVersion++ }
         )
     }
 }

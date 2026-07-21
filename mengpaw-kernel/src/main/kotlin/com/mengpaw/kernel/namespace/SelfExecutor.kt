@@ -20,6 +20,9 @@ object AcpHolder {
 }
 
 object SelfExecutor {
+    /** Set by AgentEngine during buildPipeline so self.tools can enumerate available commands. */
+    @Volatile var commandRegistry: com.mengpaw.kernel.cli.CommandRegistry? = null
+
     val commands = mapOf(
         "status" to ::status,
         "config" to ::config,
@@ -29,7 +32,11 @@ object SelfExecutor {
         "theme" to ::theme,
         "mcp" to ::mcp,
         "trigger" to ::triggerCmd,
-        "acp" to ::acpCmd
+        "acp" to ::acpCmd,
+        "tools" to ::toolsCmd,
+        "time" to ::timeCmd,
+        "notify.message" to ::notifyMessage,
+        "notify.banner" to ::notifyBanner
     )
 
     // ── Top-level commands ─────────────────────────────────────────
@@ -66,7 +73,7 @@ object SelfExecutor {
     }
 
     private suspend fun version(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        return ExecutionResult.ok("檬爪 v0.1.0-alpha (core)")
+        return ExecutionResult.ok("檬爪 v0.6.0 (kernel: ${com.mengpaw.kernel.AgentEngine.CORE_VERSION})")
     }
 
     // ── ACP subcommands ────────────────────────────────────────────
@@ -239,6 +246,73 @@ object SelfExecutor {
             }
         }
     )
+
+    // ── Notify (Agent→User push) ─────────────────────────────────
+
+    /** Push a normal message into the chat. Usage: notify.message <text> */
+    private suspend fun notifyMessage(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: notify.message <text>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val text = args.joinToString(" ")
+        NotifyBus.message(text)
+        return ExecutionResult.ok("已推送消息")
+    }
+
+    /** Push a banner overlay. Usage: notify.banner <text> [--level info|success|warn|error] */
+    private suspend fun notifyBanner(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: notify.banner <text> [--level info|success|warn|error]", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val levelIdx = args.indexOf("--level")
+        val level = if (levelIdx >= 0 && levelIdx + 1 < args.size) {
+            try { NotifyBus.NotifyLevel.valueOf(args[levelIdx + 1].uppercase()) } catch (_: Exception) { NotifyBus.NotifyLevel.INFO }
+        } else NotifyBus.NotifyLevel.INFO
+        val text = args.filterIndexed { i, _ -> i != levelIdx && i != levelIdx + 1 }.joinToString(" ")
+        NotifyBus.banner(text, level)
+        return ExecutionResult.ok("已推送横幅")
+    }
+
+    // ── Time ─────────────────────────────────────────────────────
+
+    /** Get current time/date. Usage: self.time [format|timezone] */
+    private suspend fun timeCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val now = java.time.ZonedDateTime.now()
+        val fmt = java.time.format.DateTimeFormatter.ofPattern(
+            when (args.firstOrNull()) {
+                "iso" -> "yyyy-MM-dd'T'HH:mm:ssXXX"
+                "date" -> "yyyy-MM-dd"
+                "time" -> "HH:mm:ss"
+                "week" -> "eeee"
+                "timestamp" -> now.toInstant().toEpochMilli().toString()
+                else -> "yyyy-MM-dd HH:mm:ss z"
+            }
+        )
+        return ExecutionResult.ok(buildString {
+            appendLine("现在时间: ${now.format(fmt)}")
+            appendLine("时区: ${java.util.TimeZone.getDefault().id}")
+            appendLine("星期: ${now.dayOfWeek}")
+            appendLine("Unix 时间戳: ${now.toInstant().toEpochMilli()}")
+            appendLine()
+            appendLine("用法: self.time [iso|date|time|week|timestamp]")
+        })
+    }
+
+    // ── Local Tools ────────────────────────────────────────────────
+
+    /** List all available local tools/commands the Agent can invoke. Usage: self.tools [namespace] */
+    private suspend fun toolsCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val registry = commandRegistry
+        if (registry == null) return ExecutionResult.fail("Command registry not yet initialized", errorCode = ErrorCodes.ERR_INTERNAL)
+        val ns = args.firstOrNull()
+        val all = registry.list(ns).sorted()
+        if (all.isEmpty()) return ExecutionResult.ok("(No commands available)")
+        val byNs = all.groupBy { it.substringBefore(".") }
+        return ExecutionResult.ok(buildString {
+            appendLine("Available tools (${all.size} commands, ${byNs.size} namespaces):")
+            byNs.forEach { (namespace, cmds) ->
+                appendLine("\n## $namespace (${cmds.size})")
+                cmds.forEach { appendLine("  • $it") }
+            }
+            if (ns == null) appendLine("\nTip: self.tools <namespace> to filter.")
+        })
+    }
 
     // ── Avatar ─────────────────────────────────────────────────────
 

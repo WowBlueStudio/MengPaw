@@ -187,8 +187,8 @@
       "version": "0.1.1",
       "type": "native",
       "author": "MengPaw",
-      "description": "任务分解+顺序执行+Mission+分布式分派给授权Agent/设备/框架",
-      "status": "builtin",
+      "description": "[已内置] Mission 模式已融入 AgentEngine.runWithMission()，无需安装此插件",
+      "status": "deprecated",
       "minCoreVersion": "0.2.3",
       "commands": ["mission.start", "mission.status", "mission.stop", "mission.plus", "mission.plus.dispatch", "mission.plus.status"]
     },
@@ -198,8 +198,8 @@
       "version": "0.1.1",
       "type": "native",
       "author": "MengPaw",
-      "description": "受控迭代执行: 重复检测+3级干预+完成检查+审计账本。主页扩展功能下激活。",
-      "status": "builtin",
+      "description": "[已内置] Goal 模式已融入 AgentEngine.runWithGoal()，无需安装此插件",
+      "status": "deprecated",
       "minCoreVersion": "0.2.3",
       "commands": ["loop.start", "loop.status", "loop.stop", "loop.config", "loop.ledger"]
     },

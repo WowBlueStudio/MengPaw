@@ -28,7 +28,7 @@ class PluginExecutor(
     private val marketplaceClient: PluginMarketplaceClient = PluginMarketplaceClient()
 ) {
     /** Plugins that should never be auto-suspended (core functionality). */
-    private val KEEP_AWAKE = setOf("self-plugin", "plugin-plugin", "agent-plugin", "pad-plugin")
+    private val KEEP_AWAKE = setOf("self-plugin", "agent-plugin", "pad-plugin")
 
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         "marketplace" to ::marketplace,
@@ -123,10 +123,11 @@ class PluginExecutor(
         return if (loadResult != null) {
             ExecutionResult.ok(loadResult)
         } else {
-            ExecutionResult.ok(
-                "Downloaded ${entry.id} v${entry.version} to ${downloaded.absolutePath}\n" +
-                "Note: Runtime loading failed — this plugin requires pre-compilation as a Gradle module. " +
-                "Add to plugins/ directory and rebuild."
+            ExecutionResult.fail(
+                "Downloaded ${entry.id} v${entry.version} but runtime activation failed.\n" +
+                "This plugin requires pre-compilation as a Gradle module. " +
+                "Add to plugins/ directory and rebuild, or contact the plugin author for a DEX-packaged release.",
+                errorCode = ErrorCodes.ERR_INTERNAL
             )
         }
     }

@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.4.0 | **更新**: 2026-07-21 | **架构**: 微内核 — 纯 Kotlin/JVM 内核 + Android 适配层 + 25 插件生态
+> **版本**: 0.6.1 | **更新**: 2026-07-21 | **架构**: 微内核 — 纯 Kotlin/JVM 内核 + Android 适配层 + 23 插件生态 + Goal/Mission 内置模式 + Agent→User 推送
 
 ---
 
@@ -12,15 +12,17 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 
 | 特征 | 说明 |
 |------|------|
-| 微内核 | `mengpaw-kernel` — 纯 Kotlin/JVM 模块，零 Android 依赖，CLI/LLM/安全/会话/插件框架全部可脱离 Android 测试 |
+| 微内核 | `mengpaw-kernel` — 纯 Kotlin/JVM 模块，零 Android 依赖，CLI/LLM/安全/会话/插件框架/Goal-Mission 模式全部可脱离 Android 测试 |
 | 适配层 | `mengpaw-core` — 仅 6 个源文件，提供 Android 桥接（Vault 加密存储 / IntegrityGuard / SysExecutor） |
 | 插件同级 | 内置功能 (`sys`) 与外挂插件同等地位，均实现 `Plugin` 接口，均只依赖 kernel |
 | 零 Python | 纯 Kotlin，无 Python 运行时 |
 | 多通道 | AIDL（系统集成）/ Unix Socket（Termux）/ HTTP（调试） |
-| 独立浏览器 | `mengpaw-browser` (v0.3.0)，Intent 互通，22 条浏览器操控命令 |
+| 独立浏览器 | `mengpaw-browser` (v0.4.0)，Intent 互通，22 条浏览器操控命令 |
 | 多模型 | 12 LLM Provider — OpenAI / DeepSeek / Kimi / GLM / Qwen / Grok / 火山引擎 / OpenModel / Self-Hosted / 自定义 |
 | 插件市场 | GitHub Pages 托管 `plugins.json`，ETag 缓存，SHA256 校验 |
 | Agent 自我升级 | `plugin.marketplace` → `plugin.search` → `plugin.install` → 命令即可用 |
+| 内置 Loop 模式 | Goal / Mission / Mission+ 三种模式直接内置在 AgentEngine，含 RubricGate 自动完成评估 |
+| Agent 推送 | `notify.message` / `notify.banner` — Agent 主动向用户推送消息和横幅 |
 
 适用场景：自动化研究、RPA 替代、数字助手、渗透测试、边缘 AI。
 
@@ -36,11 +38,12 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 ├─────────────────────────────────────────────┤
 │  mengpaw-core (6 文件, Android 适配)         │  ← 平台桥接
 ├─────────────────────────────────────────────┤
-│  mengpaw-kernel (44 文件, 纯 Kotlin/JVM)     │  ← 微内核
+│  mengpaw-kernel (46 文件, 纯 Kotlin/JVM)     │  ← 微内核
 │  CLI · LLM · Session · Plugin · Security     │
-│  AgentEngine · MCP · ACP · Mission · Error   │
+│  AgentEngine · Goal/Mission · MCP · ACP      │
+│  NotifyBus · Error · Trigger · Namespace     │
 ├─────────────────────────────────────────────┤
-│  plugins/ (25 模块, 同级, 均只依赖 kernel)    │  ← 插件层
+│  plugins/ (23 模块, 同级, 均只依赖 kernel)    │  ← 插件层
 └─────────────────────────────────────────────┘
 ```
 
@@ -54,17 +57,17 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 
 | 模块 | 类型 | 源文件 | 版本 | 说明 |
 |------|------|--------|------|------|
-| mengpaw-kernel | JVM Library | 44 | — | 微内核：纯 Kotlin，零 Android 依赖 |
+| mengpaw-kernel | JVM Library | 46 | — | 微内核：纯 Kotlin，零 Android 依赖 |
 | mengpaw-core | Android Library | 6 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 5 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
-| mengpaw-shell | APK | 19 | 0.4.0 (vc=9) | 主应用：Chat UI + 设置 + 插件市场 |
-| mengpaw-browser | APK | 5 | 0.3.0 (vc=5) | 独立浏览器 + BrowserBridge + 22 操控命令 |
+| mengpaw-shell | APK | 22 | 0.6.1 (vc=11) | 主应用：Chat UI + iPad 双栏设置 + 安全规则 + Token 统计 + 推送横幅 |
+| mengpaw-browser | APK | 5 | 0.4.0 (vc=6) | 独立浏览器 + BrowserBridge + 22 操控命令 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
 
 | 命名空间 | 源文件 | 命令数 | 职责 |
 |---------|--------|--------|------|
-| `self` | SelfExecutor.kt | 9 | Agent 自省 (status/config/stats/version/avatar/theme/mcp/trigger/acp) |
+| `self` | SelfExecutor.kt | 14 | Agent 自省 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/time/notify.message/notify.banner) |
 | `agent` | AgentExecutor.kt | 11 | 文档管理 (docs/memory/memory.record/cli/profile/soul/audit/browser-tools/dream/cleanup/storage) |
 | `plugin` | PluginExecutor + DevPlugin | 10 + 4 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade + create/audit/share/examples) |
 
@@ -90,13 +93,15 @@ plugins/ (25 模块)
 
 ### 2.5 响应式布局
 
-基于 Material 3 `WindowSizeClass`：
+基于 Material 3 `WindowSizeClass` + 自定义 `isWide()`（≥ Medium）：
 
-| 宽度 | 导航 | 插件 | 聊天 |
-|------|------|------|------|
-| Compact (<600dp) | `NavigationBar` 底部 | 单页全屏 | 全宽 |
-| Medium (600-840dp) | `NavigationRail` 左侧 | 列表-详情双栏 | 居中 720dp |
-| Expanded (>840dp) | `NavigationRail` | 双栏 + 详情 | 居中 720dp |
+| 宽度 | 左侧栏 | 右侧栏 | 设置页 | 聊天 |
+|------|--------|--------|--------|------|
+| Compact (<600dp) | 浮层叠加 | 浮层叠加 | 68dp 图标侧栏 | 全宽 |
+| Medium+ (≥600dp) | 持久钉住 280dp | 持久钉住 300dp | 240dp 侧栏 + 内容区 | 自适应 |
+
+- 平板模式下左右侧栏可独立钉住，内容区自动收缩
+- 设置页 iPad 式双栏：侧栏 + 内容区，三大分区（Agent / 框架 / 系统）
 
 ### 2.6 跨 APK 通信
 
@@ -109,9 +114,34 @@ plugins/ (25 模块)
 
 用户输入 → LLM Core 生成 CLI 命令 → Pipeline（解析→安全→执行）→ 命名空间 → 结果返回 LLM → 循环至 Final Answer 或达上限
 
-AgentEngine 支持两种执行模式：
-- **ReAct 循环**: Thought → Action → Observation 标准模式，含循环检测（同一命令连续 3 次中止）和最大步数限制（默认 50）
-- **Plan-Execute**: `runWithPlan()` — LLM 分解任务为 3-7 步计划，逐步执行，每步独立 mini ReAct 循环
+AgentEngine 支持四种执行模式：
+
+| 模式 | 方法 | 说明 |
+|------|------|------|
+| **ReAct** | `run()` | Thought → Action → Observation 标准模式，含循环检测和最大步数限制 |
+| **Plan-Execute** | `runWithPlan()` | LLM 分解任务为 3-7 步计划，逐步执行，每步独立 mini ReAct 循环 |
+| **Goal** | `runWithGoal()` | 单目标驱动 + RubricGate 自动完成评估（参考 QwenPaw GoalMode） |
+| **Mission** | `runWithMission()` | LLM 拆解子任务 → Worker 执行 → Verifier 验证（参考 QwenPaw MissionMode） |
+
+**Goal 模式架构**:
+```
+runWithGoal(task, maxTurns, maxTokens)
+  ├── GoalSession — 目标状态 (goal/active/iteration/tokensUsed/verdict)
+  ├── GoalTurnGate — 迭代计数 + 上限检查
+  ├── GoalBudgetGate — token 预算检查
+  └── RubricGate — LLM 评估 "目标完成了吗?" → YES=结束 / NO=继续
+```
+
+**Mission 模式架构**:
+```
+runWithMission(task, maxSubtasks, maxStepsPerSubtask)
+  ├── Phase 1: LLM 拆解 → List<MissionSubtask>
+  ├── Phase 2: 每个子任务 → run() ReAct 独立执行
+  ├── Phase 3: Verifier 验证每个子任务结果
+  └── Phase 4: 最终报告 (verified/failed 统计)
+```
+
+**运行时 Provider 更新**: `updateLlmProvider()` 允许在 Agent 运行中切换 LLM Provider，配合设置页 Per-Agent 模型选择。
 
 ---
 
@@ -133,8 +163,11 @@ AgentEngine 支持两种执行模式：
 | `error/` | 1 | ErrorCollector |
 | `extension/` | 1 | ManifestParser |
 | `trigger/` | 1 | TriggerEngine |
-| `namespace/` | 2 | SelfExecutor, ScreenshotManager |
+| `namespace/` | 3 | SelfExecutor, ScreenshotManager, NotifyBus |
+| `agent/` | 9 | AgentDocManager, AgentDocs, AgentExecutor, AgentMiddleware, AgentProfile, DreamEngine, PromptBuilder, ScrollContext, GoalSession |
 | 根 | 3 | AgentEngine, DataPaths, KernelLog |
+
+> **v0.6.1 新增**: `GoalSession.kt` (GoalSession + RubricEvaluator + MissionSubtask), `NotifyBus.kt` (Agent→User 推送总线), SelfExecutor +5 命令
 
 ### 3.2 mengpaw-core（Android 适配层，6 文件）
 
@@ -147,13 +180,13 @@ AgentEngine 支持两种执行模式：
 | `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)` |
 | `AndroidLogger.kt` | 桥接：`KernelLog.setLogger(AndroidLogger())` |
 
-### 3.3 mengpaw-shell（主应用，19 文件）
+### 3.3 mengpaw-shell（主应用，22 文件）
 
 | 文件 | 职责 |
 |------|------|
-| `MainActivity.kt` | 入口 + 响应式导航 + 初始化 (DataPaths/KernelLog/TriggerEngine) |
-| `ui/screens/` (11 文件) | MainScreen, AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SidebarContent |
-| `ui/components/` (2 文件) | BigBangPopup, MissionMonitorOverlay |
+| `MainActivity.kt` | 入口 + 响应式导航 + 初始化 (DataPaths/KernelLog/TriggerEngine) + LoopMode 同步 |
+| `ui/screens/` (13 文件) | MainScreen, AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SidebarContent, SplashScreen |
+| `ui/components/` (5 文件) | BigBangPopup, MissionMonitorOverlay, TokenChart, TokenStatsCollector, NotifyBanner |
 | `ui/AdaptiveLayout.kt` | WindowSizeClass 计算 |
 | `ui/localization/Strings.kt` | 中英双语注解 |
 | `service/` (4 文件) | ShellService, DreamWorker, EventReceiver, WakeReceiver |
@@ -174,7 +207,7 @@ AgentEngine 支持两种执行模式：
 
 | 模块 | 命名空间 | 命令 | 捆绑 |
 |------|---------|------|:--:|
-| plugin-fs | fs | cat, ls, write, rm, mkdir, cp, mv, stat (8) | |
+| plugin-fs | fs | cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob (10) | |
 | plugin-net | net | curl, get, post (3) | |
 | plugin-memory | memory | ls, read, write, rm, search, stats (6) | ⭐ |
 | plugin-skill | skill | ls, run, enable, disable (4) | ⭐ |
@@ -200,12 +233,16 @@ AgentEngine 支持两种执行模式：
 | plugin-workflow | workflow | run, define, list, status (4) |
 | plugin-incubator | incubator | spawn, list, terminate, inbox (4) |
 
-#### Agent 运行 (2)
+#### Agent 运行模式 (内置)
 
-| 模块 | 命名空间 | 命令 |
-|------|---------|------|
-| plugin-agent-loop | loop | start, status, stop, config, ledger (5) |
-| plugin-agent-mission | mission | start, status, stop, retry, report (5) |
+> Goal / Mission / Mission+ 三种 Loop 模式已内置在 AgentEngine 中，不再作为独立插件。
+> 原 `plugin-agent-loop` 和 `plugin-agent-mission` 已标记为 deprecated。
+
+| 模式 | 引擎方法 | 核心机制 |
+|------|---------|---------|
+| **Goal** | `AgentEngine.runWithGoal()` | GoalSession + 三层 Gate (GoalTurnGate/GoalBudgetGate/RubricGate) — LLM 自动评估完成度 |
+| **Mission** | `AgentEngine.runWithMission()` | LLM 拆解子任务 → Worker 独立 ReAct 执行 → Verifier 验证 |
+| **Mission+** | `runWithMission()` + ACP | Mission 模式 + 跨 ACP 框架/设备协调 |
 
 #### 浏览器扩展 (5)
 
@@ -235,11 +272,18 @@ AgentEngine 支持两种执行模式：
 | compileSdk | 35 | 35 | 35 | — |
 | minSdk | 26 | 26 | 26 | — |
 | targetSdk | 35 | 35 | — | — |
-| versionName | 0.4.0 | 0.3.0 | — | 0.1.0 |
-| versionCode | 9 | 5 | — | — |
+| versionName | 0.6.0 | 0.4.0 | — | 0.1.0 |
+| versionCode | 11 | 6 | — | — |
 | R8 | Release 启用 | Release 启用 | 关闭(库模块) | — |
 
-**Shell 权限**: INTERNET, ACCESS_NETWORK_STATE, FOREGROUND_SERVICE, POST_NOTIFICATIONS, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, SYSTEM_ALERT_WINDOW
+**Shell 权限** (17 项):
+- 网络: INTERNET, ACCESS_NETWORK_STATE
+- 保活: FOREGROUND_SERVICE, POST_NOTIFICATIONS, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, WAKE_LOCK
+- 悬浮窗: SYSTEM_ALERT_WINDOW
+- 内置工具: ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION, CAMERA, QUERY_ALL_PACKAGES
+- 插件: REQUEST_INSTALL_PACKAGES
+- 文件/媒体: READ_MEDIA_IMAGES, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE
+- 未来扩展: RECORD_AUDIO, VIBRATE
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE
 
@@ -295,7 +339,24 @@ AgentEngine 支持两种执行模式：
 
 美国模型 (OpenAI/Grok) 自动中→英→模型→英→中流水线，为中文用户节省约 40% token 消耗。
 
-### 4.5 被动索引系统
+### 4.5 Agent→User 主动推送 (NotifyBus)
+
+Agent 可通过 CLI 命令主动向用户推送消息和横幅，无需等待用户输入。
+
+**架构**:
+```
+Agent CLI → SelfExecutor.notifyMessage/notifyBanner
+         → NotifyBus (SharedFlow)
+         → UI 层观察 → 消息注入聊天 / 横幅覆盖层渲染
+```
+
+**CLI 命令**:
+- `notify.message <text>` — 将消息注入聊天列表 (System 角色)
+- `notify.banner <text> [--level info|success|warn|error]` — 显示顶部横幅，4 秒自动消失
+
+**Usecase**: 长任务完成通知、异常告警、阶段性进度汇报、无需用户追问。
+
+### 4.6 被动索引系统
 
 Agent 通过 memory 命令按需加载文档：
 - `memory read cli-reference` — CLI 完整参考
@@ -308,8 +369,10 @@ Agent 通过 memory 命令按需加载文档：
 
 ### 5.1 内置命名空间（kernel）
 
-#### self — Agent 自省 (9)
-`status` | `config [key=value]` | `stats` | `version` | `avatar` | `theme` | `mcp` | `trigger` | `acp`
+#### self — Agent 自省 (14)
+`status` | `config [key=value]` | `stats` | `version` | `avatar` | `theme` | `mcp` | `trigger` | `acp` | `tools [namespace]` | `time [format]` | `notify.message <text>` | `notify.banner <text> [--level]`
+
+> **v0.6.1 新增**: `tools` — 按命名空间列出所有可用命令；`time` — 获取当前时间 (支持 iso/date/time/timestamp)；`notify.message` — Agent 推送消息到聊天；`notify.banner` — Agent 推送横幅 (支持 info/success/warn/error)
 
 #### agent — 文档管理 (11)
 `docs` | `memory [query]` | `memory.record <content>` | `cli` | `profile` | `soul` | `audit` | `browser-tools` | `dream` | `cleanup` | `storage`
@@ -326,8 +389,10 @@ Agent 通过 memory 命令按需加载文档：
 
 格式 `namespace.command arg1 arg2 "arg with spaces" --flag value`
 
-#### fs — 文件系统 (8)
-`cat <path>` | `ls [path]` | `write <path> <content>` | `rm <path>` | `mkdir <path>` | `cp <src> <dst>` | `mv <src> <dst>` | `stat <path>`
+#### fs — 文件系统 (10)
+`cat <path>` | `ls [path]` | `write <path> <content>` | `rm <path>` | `mkdir <path>` | `cp <src> <dst>` | `mv <src> <dst>` | `stat <path>` | `grep <pattern> [path] [--regex] [-i] [--context N]` | `glob <pattern> [path]`
+
+> **v0.6.1 新增**: `grep` — 按文本/正则搜索文件内容 (含上下文)；`glob` — 文件通配符模式匹配。参考 QwenPaw grep_search / glob_search 移植。
 
 #### net — 网络 (3)
 `curl <url>` | `get <url>` | `post <url> <body>`
@@ -337,6 +402,8 @@ Agent 通过 memory 命令按需加载文档：
 
 #### skill — 技能 (4)
 `ls` | `run <name>` | `enable <name>` | `disable <name>`
+
+> v0.6.1: 内置 4 个默认 Skills (make-skill / make-plan / guidance / source-index)，参考 QwenPaw 移植。首次运行自动播种，已有 skill 时跳过。
 
 #### clipboard — 剪贴板 (3)
 `copy <text>` | `paste` | `clear`
@@ -374,12 +441,6 @@ Agent 通过 memory 命令按需加载文档：
 #### update — 自动更新 (4)
 `check` | `download` | `install` | `auto`
 
-#### loop — Agent 循环 (5)
-`start` | `status` | `stop` | `config` | `ledger`
-
-#### mission — 任务协作 (5)
-`start <desc>` | `status` | `stop` | `retry <step>` | `report`
-
 #### browser.push — 跨设备推送 (4)
 `push <url>` | `pending` | `accept <id>` | `reject <id>`
 
@@ -416,6 +477,10 @@ Agent 通过 memory 命令按需加载文档：
 ### 6.2 Vault
 
 `EncryptedSharedPreferences` + Android Keystore (`security-crypto:1.1.0-alpha06`)。文件级加密 + 应用层加密双层保护。`allowBackup=false` 防止备份泄露。
+
+**容错机制**: 若 Keystore 不可用（部分 OEM 设备已知问题），重试一次后降级到 `InMemoryPreferences`——绝不以明文落盘。`isAvailable` 字段让调用方判断加密是否正常。
+
+**持久化改进** v0.6.1: `savedProviders` 以 JSON 数组加密存储在 `saved_providers_json` 键下，启动时自动恢复。旧版单 Key 格式自动迁移。`removeProvider()` 和 `resetToDefaults()` 同步持久化。
 
 ### 6.3 Sanitizer
 
@@ -484,8 +549,9 @@ GitHub Pages 托管 `plugins.json`，ETag 缓存 (5 分钟)，SHA256 校验。
 - **Phase 3 ✅**: 独立浏览器 (0.3.0)、BrowserBridge 双向桥、22 操控命令、5 浏览器扩展插件
 - **Phase 4 ✅**: 微内核拆分 — kernel (44 文件, 纯 JVM) + core (6 文件, Android 适配)、25 插件生态、12 LLM Provider
 - **Phase 5 ✅**: 安全加固 (WebView/FsPlugin/NetPlugin/Vault/ACP/Sanitizer)、188 Bug 审计、Agent/UI 层深度修复
-- **Phase 6 ⏳**: Device 扩展 (AccessibilityService/MediaProjection/InputManager)
-- **Phase 7 ⏳**: Code 扩展 (QuickJS/Python 沙箱)、CLI Python 工具、在线扩展市场
+- **Phase 6 ✅**: UI 全面重构 — iPad 双栏设置 + 侧栏交互升级 + Per-Agent 模型选择 + Token 统计 + 安全规则 + 设计系统合规 + Loop 模式 + 工作区文件 + 会话修复
+- **Phase 7 ⏳**: Device 扩展 (AccessibilityService/MediaProjection/InputManager)
+- **Phase 8 ⏳**: Code 扩展 (QuickJS/Python 沙箱)、CLI Python 工具、在线扩展市场
 
 ---
 
@@ -543,11 +609,11 @@ GitHub Pages 托管 `plugins.json`，ETag 缓存 (5 分钟)，SHA256 校验。
 | 文件 | 说明 |
 |------|------|
 | `build.gradle.kts` (根) | AGP 8.7.3, Kotlin 2.0.21, Compose BOM 2024.12.01 |
-| `settings.gradle.kts` | 4 核心模块 + 25 插件模块 |
+| `settings.gradle.kts` | 4 核心模块 + 23 插件模块 |
 | `mengpaw-kernel/build.gradle.kts` | JVM 模块, kotlinx-serialization, ktor, coroutines-core |
 | `mengpaw-core/build.gradle.kts` | Android Library, 依赖 kernel, security-crypto |
-| `mengpaw-shell/build.gradle.kts` | Compose, material-icons-extended, work-runtime, 4 捆绑插件, v0.4.0 |
-| `mengpaw-browser/build.gradle.kts` | material-icons-core (轻量), v0.3.0 |
+| `mengpaw-shell/build.gradle.kts` | Compose, material-icons-extended, work-runtime, 4 捆绑插件, v0.6.0 |
+| `mengpaw-browser/build.gradle.kts` | material-icons-core (轻量), v0.4.0 |
 | `mengpaw-shell/.../AndroidManifest.xml` | 6 权限, MainActivity, ShellService (foregroundServiceType=dataSync) |
 | `mengpaw-browser/.../AndroidManifest.xml` | 2 权限, BrowserActivity (3 intent-filter) |
 
@@ -558,9 +624,11 @@ GitHub Pages 托管 `plugins.json`，ETag 缓存 (5 分钟)，SHA256 校验。
 DataPathsInitializer.initialize(this)
 // 2. 日志适配
 KernelLog.setLogger(AndroidLogger())
-// 3. 系统唤醒注册
+// 3. 前台服务启动（通知栏常驻保活）
+ShellService.start(this)
+// 4. 系统唤醒注册
 TriggerEngine.registerSystemWake(this, 10)
-// 4. AgentEngine 注入 Android 命名空间
+// 5. AgentEngine 注入 Android 命名空间
 AgentEngine(
     llmProvider = provider,
     additionalNamespaces = mapOf("sys" to SysExecutor.commands)
@@ -582,10 +650,12 @@ AgentEngine(
 | 问题 | 优先级 | 说明 |
 |------|--------|------|
 | Kernel 测试 5 个预存失败 | 低 | Sanitizer 断言过时 (4) + AgentEngine 语言断言 (1) |
-| Icons.Default.ArrowBack 弃用 | 低 | 迁移至 AutoMirrored |
 | proc 命令未实现 | 低 | SecurityPolicy 已拦截 |
 | ClipboardExecutor 内存存储 | 低 | Android 环境兼容 |
 | NotificationExecutor stub | 中 | 需 NotificationListenerService |
+| SelfPlugin 覆盖 kernel SelfExecutor | 低 | 4 个命令被插件版本覆盖，其余 10 个不受影响 |
+
+> v0.6.1: 所有 6 项 settings-pending 已解决；Goal/Mission/Mission+ 模式已内置；4 个 QwenPaw Skills 已移植
 
 ---
 
@@ -593,7 +663,10 @@ AgentEngine(
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| **0.4.0** | 2026-07-21 | 微内核拆分 — kernel (44 文件, 纯 JVM) + core (6 文件, Android 适配) + 安全加固 + UI/AI 深度修复 + TV 模块移除 |
+| **0.6.1** | 2026-07-21 | 内核功能补全 — Goal/Mission/Mission+ 内置模式 (RubricGate LLM 完成评估) + Agent→User 推送 (NotifyBus) + self 命名空间扩展 (+5 命令: tools/time/notify) + fs 扩展 (+grep/glob) + QwenPaw 4 Skills 移植 + API Key 持久化修复 + Provider 热更新 + Android 权限补全 (17 项) + Vault 安全加固 (绝不明文) + ProGuard Tink keep 规则 |
+| **0.6.0** | 2026-07-21 | UI 全面重构 — iPad 双栏设置 + 侧栏交互升级(左滑/长按多选/框架状态) + Per-Agent 模型选择 + Token 统计折线图 + 安全规则页 + WowBlue 启动动画 + 设计系统合规(硬编码色值清零) + 会话修复 + 通知栏常驻 |
+| **0.5.0** | 2026-07-21 | 微内核拆分 — kernel (44 文件, 纯 JVM) + core (6 文件, Android 适配) + 25 插件生态 |
+| **0.4.0** | 2026-07-21 | 安全加固 + 全项目修复 + 188 Bug 审计 + 89 项修复 + 模拟器验证零闪退 |
 | 0.3.x | 2026-07-20 | 25 插件生态 + 浏览器操控 + 多模态 + 12 LLM Provider + Mission/Worker/Verifier + BrowserBridge |
 | 0.2.2 | 2026-07-19 | DataPaths 动态初始化 + 4 轮安全审计 + plugin-dev CLI |
 | 0.2.1 | 2026-07-19 | 多智能体 + 缓存优化 + Dream 模式 + Markdown/Emoji + BigBangPopup |
@@ -604,6 +677,8 @@ AgentEngine(
 
 | 日期 | 审校项 | 结果 |
 |------|--------|------|
+| 2026-07-21 | v0.6.0 设计系统合规 | 11 个 UI 文件硬编码色值清零, 全部替换为 ArcoColors token |
+| 2026-07-21 | v0.6.0 编译验证 | clean build 4m10s 通过, 15 文件修改, 编译问题 10 项已记录 |
 | 2026-07-21 | 微内核拆分验证 | kernel (44文件) + core (6文件) 编译通过, 25插件编译通过, 83/88 测试通过 |
 | 2026-07-21 | 开发文档全量重构 | 基于微内核架构重写，修正全部数据，移除 TV 模块 |
 | 2026-07-20 | v0.3.0 编译审查 | 7 个编译错误修复 |
@@ -613,4 +688,4 @@ AgentEngine(
 
 ---
 
-*文档结束 · 最后更新: 2026-07-21*
+*文档结束 · 最后更新: 2026-07-21 (v0.6.1)*

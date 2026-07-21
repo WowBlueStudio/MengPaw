@@ -22,6 +22,17 @@ data class FallbackEntry(
 )
 
 /**
+ * Token usage data extracted from LLM API response.
+ */
+data class TokenUsage(
+    val promptTokens: Int,
+    val completionTokens: Int,
+    val totalTokens: Int,
+    val cacheHitTokens: Int = 0,
+    val cacheMissTokens: Int = 0
+)
+
+/**
  * Unified multi-model LLM provider supporting OpenAI, DeepSeek, Kimi, GLM, Qwen APIs.
  * Features:
  * - Provider routing by endpoint
@@ -51,6 +62,9 @@ class AdaptiveLlmProvider(
             connectTimeoutMillis = 10_000
         }
     }
+
+    /** Token usage from the most recent API call. Read by shell layer for stats collection. */
+    @Volatile override var lastUsage: TokenUsage? = null
 
     /** Detect provider type from endpoint URL for request format adaptation. */
     private val providerType: String by lazy { detectProviderType(apiEndpoint) }
@@ -171,6 +185,9 @@ class AdaptiveLlmProvider(
             )
         }
 
+        // Extract token usage from response for stats collection
+        lastUsage = parseUsage(body)
+
         return parseResponse(body)
     }
 
@@ -223,6 +240,26 @@ class AdaptiveLlmProvider(
             }
         }
         return json.toString()
+    }
+
+    /**
+     * Parse the `usage` object from the LLM API response JSON.
+     * Supports OpenAI format: {"usage": {"prompt_tokens": N, "completion_tokens": N, "total_tokens": N}}
+     * DeepSeek additionally returns: prompt_cache_hit_tokens, prompt_cache_miss_tokens
+     */
+    private fun parseUsage(body: String): TokenUsage? {
+        return try {
+            val root = Json.parseToJsonElement(body).jsonObject
+            val usage = root["usage"]?.jsonObject ?: return null
+            val promptTokens = usage["prompt_tokens"]?.jsonPrimitive?.int ?: 0
+            val completionTokens = usage["completion_tokens"]?.jsonPrimitive?.int ?: 0
+            val totalTokens = usage["total_tokens"]?.jsonPrimitive?.int ?: (promptTokens + completionTokens)
+            val cacheHit = usage["prompt_cache_hit_tokens"]?.jsonPrimitive?.int ?: 0
+            val cacheMiss = usage["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
+            TokenUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun parseResponse(body: String): String {

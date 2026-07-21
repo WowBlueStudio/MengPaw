@@ -192,6 +192,7 @@ class AgentViewModel : ViewModel() {
             sessions.values.forEach { session ->
                 try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) { }
                 session.provider = newProvider
+                session.engine.updateLlmProvider(newProvider)
                 session.modelName = model
                 session.endpoint = endpoint
                 session.apiKey = apiKey
@@ -203,7 +204,9 @@ class AgentViewModel : ViewModel() {
             // Apply to a specific agent only
             val session = sessions[targetName] ?: return
             try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) { }
-            session.provider = createProviderForSession(endpoint, apiKey, model)
+            val newProvider = createProviderForSession(endpoint, apiKey, model)
+            session.provider = newProvider
+            session.engine.updateLlmProvider(newProvider)
             session.modelName = model
             session.endpoint = endpoint
             session.apiKey = apiKey
@@ -217,10 +220,20 @@ class AgentViewModel : ViewModel() {
 
     private fun createProviderForSession(endpoint: String, apiKey: String, model: String): LlmProvider =
         if (apiKey.isBlank()) SimulatedLlmProvider()
-        else try { AdaptiveLlmProvider(endpoint, apiKey, model) } catch (_: Exception) { SimulatedLlmProvider() }
+        else try { AdaptiveLlmProvider(endpoint, apiKey, model) }
+        catch (e: Exception) {
+            com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Cannot create real provider, using simulated: ${e.message}")
+            SimulatedLlmProvider()
+        }
 
     /** Get the framework name for an agent, or null if local. */
     fun frameworkFor(name: String): String? = sessions[name]?.framework
+
+    /** Get active CLI namespaces from the current agent's engine. */
+    fun activeNamespaces(): List<String> = sessions[_activeAgentName]?.engine?.getActiveNamespaces() ?: listOf("self", "agent", "plugin", "sys")
+
+    /** Get the active agent's engine (for plugin/tool access). */
+    fun activeEngine(): AgentEngine? = sessions[_activeAgentName]?.engine
 
     /** Get (endpoint, model) for an agent. */
     fun agentConfig(name: String): Pair<String, String> {
@@ -254,6 +267,12 @@ class AgentViewModel : ViewModel() {
         sessions.values.forEach { it.engine.setAgentLanguage(lang) }
     }
 
+    /** Inject an Agent-pushed notification into the chat message list. */
+    fun notifyAgentMessage(text: String) {
+        val session = activeSession()
+        session.messages.value = session.messages.value + ChatMessageUi.System("📢 $text")
+    }
+
     /** Update the system banner text (for localization). */
     fun setBanner(text: String) {
         val current = activeSession().messages.value
@@ -262,8 +281,12 @@ class AgentViewModel : ViewModel() {
         }
     }
 
+    /** Current loop mode — read by submitTask() to choose engine method. */
+    var loopMode: LoopMode = LoopMode.GOAL
+
     /**
      * Submit a task to the currently active agent.
+     * Uses the active [loopMode] to select engine execution strategy.
      */
     fun submitTask(task: String, pluginViewModel: PluginViewModel? = null, maxSteps: Int = 50) {
         if (task.isBlank() || _isRunning.value) return
@@ -286,25 +309,31 @@ class AgentViewModel : ViewModel() {
                 isRunning = true
             )
 
-            val result = session.engine.run(
-                task = actualTask,
-                maxSteps = maxSteps,
-                onStep = { trace ->
-                    traces.add(AgentTrace(trace.step, trace.thought, trace.action, trace.observation))
-                    val current = session.messages.value.toMutableList()
-                    val runningIndex = current.indexOfLast {
-                        it is ChatMessageUi.AgentWithTrace && it.isRunning
-                    }
-                    if (runningIndex >= 0) {
-                        current[runningIndex] = ChatMessageUi.AgentWithTrace(
-                            finalContent = "思考中...",
-                            traces = traces.toList(),
-                            isRunning = true
-                        )
-                        session.messages.value = current
-                    }
+            // Shared step callback for trace collection + token stats + UI update
+            val onStep: (com.mengpaw.kernel.AgentEngine.TraceStep) -> Unit = { trace ->
+                traces.add(AgentTrace(trace.step, trace.thought, trace.action, trace.observation))
+                session.provider.lastUsage?.let { usage ->
+                    com.mengpaw.shell.ui.components.TokenStatsCollector.record(
+                        model = session.modelName,
+                        tokens = usage.totalTokens,
+                        cacheHit = usage.cacheHitTokens > 0,
+                        cacheHitTokens = usage.cacheHitTokens
+                    )
                 }
-            )
+                val cur = session.messages.value.toMutableList()
+                val ri = cur.indexOfLast { it is ChatMessageUi.AgentWithTrace && it.isRunning }
+                if (ri >= 0) {
+                    cur[ri] = ChatMessageUi.AgentWithTrace("思考中...", traces.toList(), isRunning = true)
+                    session.messages.value = cur
+                }
+            }
+
+            // Execute via the appropriate engine mode
+            val result = when (loopMode) {
+                LoopMode.GOAL -> session.engine.run(task = actualTask, maxSteps = maxSteps, onStep = onStep)
+                LoopMode.MISSION -> session.engine.runWithMission(task = actualTask, onStep = onStep)
+                LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = actualTask, onStep = onStep)
+            }
 
             val current = session.messages.value.toMutableList()
             // Translate result back to Chinese for US models

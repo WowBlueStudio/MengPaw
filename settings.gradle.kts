@@ -49,8 +49,8 @@ include(":plugin-browser-mcp")
 include(":plugin-browser-cdp")
 include(":plugin-browser-inspector")
 include(":plugin-update")
-include(":plugin-agent-loop")
-include(":plugin-agent-mission")
+
+// plugin-agent-loop and plugin-agent-mission removed — modes now built into AgentEngine
 
 // Map plugin modules to their directory under plugins/
 project(":plugin-fs").projectDir = File(rootDir, "plugins/plugin-fs")
@@ -76,5 +76,4 @@ project(":plugin-browser-mcp").projectDir = File(rootDir, "plugins/plugin-browse
 project(":plugin-browser-cdp").projectDir = File(rootDir, "plugins/plugin-browser-cdp")
 project(":plugin-browser-inspector").projectDir = File(rootDir, "plugins/plugin-browser-inspector")
 project(":plugin-update").projectDir = File(rootDir, "plugins/plugin-update")
-project(":plugin-agent-loop").projectDir = File(rootDir, "plugins/plugin-agent-loop")
-project(":plugin-agent-mission").projectDir = File(rootDir, "plugins/plugin-agent-mission")
+// plugin-agent-loop / plugin-agent-mission dir mappings removed — modes built into AgentEngine

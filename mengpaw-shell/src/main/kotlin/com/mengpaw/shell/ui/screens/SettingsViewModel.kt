@@ -120,6 +120,84 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
+    init {
+        loadSavedProviders()
+    }
+
+    /** Restore saved providers from encrypted Vault on app startup. */
+    private fun loadSavedProviders() {
+        if (!vault.isAvailable) return
+        try {
+            val json = vault.retrieve(VAULT_KEY_PROVIDERS)
+            if (json.isNullOrBlank()) {
+                // Migration: old single-key format → new multi-provider format
+                migrateLegacyKey()
+                return
+            }
+            val arr = org.json.JSONArray(json)
+            val providers = mutableListOf<SavedProvider>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val preset = try {
+                    LlmProviderPreset.valueOf(obj.getString("preset"))
+                } catch (_: Exception) { LlmProviderPreset.CUSTOM }
+                providers.add(SavedProvider(
+                    preset = preset,
+                    apiKey = obj.optString("apiKey", ""),
+                    endpoint = obj.optString("endpoint", ""),
+                    model = obj.optString("model", ""),
+                    balance = obj.optString("balance", "")
+                ))
+            }
+            if (providers.isNotEmpty()) {
+                _state.value = _state.value.copy(savedProviders = providers)
+            }
+        } catch (_: Exception) {
+            // Corrupted data or first launch — start fresh
+            migrateLegacyKey()
+        }
+    }
+
+    /** Migrate old single-key Vault entries into the new multi-provider format. */
+    private fun migrateLegacyKey() {
+        val oldApiKey = vault.retrieve("api_key") ?: return
+        val oldEndpoint = vault.retrieve("api_endpoint") ?: ""
+        val oldModel = vault.retrieve("model_name") ?: ""
+        if (oldApiKey.isBlank()) return
+
+        // Detect preset from endpoint
+        val preset = LlmProviderPreset.entries.firstOrNull { it.endpoint == oldEndpoint }
+            ?: LlmProviderPreset.CUSTOM
+        val saved = SavedProvider(preset, oldApiKey, oldEndpoint, oldModel)
+        _state.value = _state.value.copy(savedProviders = listOf(saved))
+
+        // Save in new format, then clear old keys
+        persistProviders(listOf(saved))
+        try { vault.remove("api_key") } catch (_: Exception) {}
+        try { vault.remove("api_endpoint") } catch (_: Exception) {}
+        try { vault.remove("model_name") } catch (_: Exception) {}
+    }
+
+    /** Serialize and persist all saved providers to encrypted Vault. */
+    private fun persistProviders(providers: List<SavedProvider>) {
+        if (!vault.isAvailable) return
+        val arr = org.json.JSONArray()
+        providers.forEach { p ->
+            val obj = org.json.JSONObject()
+            obj.put("preset", p.preset.name)
+            obj.put("apiKey", p.apiKey)
+            obj.put("endpoint", p.endpoint)
+            obj.put("model", p.model)
+            obj.put("balance", p.balance)
+            arr.put(obj)
+        }
+        vault.store(VAULT_KEY_PROVIDERS, arr.toString())
+    }
+
+    companion object {
+        private const val VAULT_KEY_PROVIDERS = "saved_providers_json"
+    }
+
     /** Switch to a preset provider and auto-fill endpoint + model. Triggers model list fetch. */
     fun selectProvider(preset: LlmProviderPreset) {
         _state.value = _state.value.copy(
@@ -232,7 +310,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         )
         existing.removeAll { it.preset == entry.preset }
         existing.add(entry)
-        // SECURITY: Persist API key to encrypted Vault so DreamWorker can read it securely
+        // Persist all providers to encrypted Vault
+        persistProviders(existing)
+        // Also update legacy keys for DreamWorker backward compat
         vault.store("api_key", _state.value.apiKey)
         vault.store("api_endpoint", _state.value.apiEndpoint)
         vault.store("model_name", _state.value.modelName)
@@ -240,9 +320,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun removeProvider(preset: LlmProviderPreset) {
-        _state.value = _state.value.copy(
-            savedProviders = _state.value.savedProviders.filter { it.preset != preset }
-        )
+        val updated = _state.value.savedProviders.filter { it.preset != preset }
+        _state.value = _state.value.copy(savedProviders = updated)
+        persistProviders(updated)
     }
 
     fun editProvider(saved: SavedProvider) {
@@ -282,5 +362,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun resetToDefaults() {
         _state.value = SettingsState()
+        try { vault.clear() } catch (_: Exception) {}
     }
 }
