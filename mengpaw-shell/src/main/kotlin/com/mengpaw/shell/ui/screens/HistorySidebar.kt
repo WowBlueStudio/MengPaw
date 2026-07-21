@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -470,7 +471,7 @@ private fun SessionItem(
                     else ThemeColors.bgPrimary
         ) {
             Row(
-                Modifier.padding(start = 56.dp, end = ArcoSpacing.lg, vertical = ArcoSpacing.xs),
+                Modifier.padding(start = 56.dp, end = ArcoSpacing.lg).padding(vertical = ArcoSpacing.xs),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Multi-select checkbox or session icon

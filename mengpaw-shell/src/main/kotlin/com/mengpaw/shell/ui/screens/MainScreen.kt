@@ -75,6 +75,8 @@ fun MainScreen(
     }
 
     val settingsState = settingsViewModel?.state?.collectAsState()
+    val activeAgentState = agentViewModel?.activeAgent?.collectAsState()
+    val displayAgentName = activeAgentState?.value ?: "MengPaw"
     LaunchedEffect(settingsState?.value) {
         settingsState?.value?.let { s ->
             viewModel.configureLlm(
@@ -91,10 +93,8 @@ fun MainScreen(
         }
     }
 
-    val activeAgentState = agentViewModel?.activeAgent?.collectAsState()
-    val displayAgentName = activeAgentState?.value ?: "MengPaw"
     val agentFramework: String? = remember(displayAgentName) {
-        agentViewModel?.sessions?.get(displayAgentName)?.framework
+        agentViewModel?.frameworkFor(displayAgentName)
     }
     var showLeftSidebar by remember { mutableStateOf(false) }
     var showRightSidebar by remember { mutableStateOf(false) }
@@ -187,18 +187,18 @@ fun MainScreen(
             ArcoDivider()
 
             // ── Content area: adaptive — persistent sidebar on wide, overlay on compact ──
-            Row(Modifier.weight(1f).fillMaxWidth()) {
-                // Persistent left sidebar (tablet only)
-                if (isWide() && showLeftSidebar) {
-                    Surface(color = ThemeColors.bgSecondary) {
-                        leftSidebarContent { showLeftSidebar = false }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Row(Modifier.fillMaxSize()) {
+                    // Persistent left sidebar (tablet only)
+                    if (isWide() && showLeftSidebar) {
+                        Surface(color = ThemeColors.bgSecondary) {
+                            leftSidebarContent { showLeftSidebar = false }
+                        }
                     }
-                }
 
-                // Messages + overlay sidebars
-                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    // Messages
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = ArcoSpacing.lg),
+                        modifier = Modifier.weight(1f).fillMaxHeight().padding(horizontal = ArcoSpacing.lg),
                         state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
                         contentPadding = PaddingValues(vertical = ArcoSpacing.md)
                     ) {
@@ -224,46 +224,22 @@ fun MainScreen(
                         }
                     }
 
-                    // Left sidebar overlay (phone only)
-                    if (!isWide()) {
-                        AnimatedVisibility(
-                            visible = showLeftSidebar,
-                            enter = fadeIn(animationSpec = tween(200)) + slideInHorizontally(animationSpec = tween(280)) { -it },
-                            exit = fadeOut(animationSpec = tween(200)) + slideOutHorizontally(animationSpec = tween(280)) { -it }
-                        ) {
-                            Row(Modifier.fillMaxSize()) {
-                                leftSidebarContent { showLeftSidebar = false }
-                                Box(Modifier
-                                    .fillMaxHeight().weight(1f)
-                                    .background(Color.Black.copy(alpha = 0.35f))
-                                    .clickable { showLeftSidebar = false })
-                            }
-                        }
-                    }
-
-                    // Right sidebar overlay (phone only)
-                    if (!isWide()) {
-                        AnimatedVisibility(
-                            visible = showRightSidebar,
-                            enter = fadeIn(animationSpec = tween(200)) + slideInHorizontally(animationSpec = tween(280)) { it },
-                            exit = fadeOut(animationSpec = tween(200)) + slideOutHorizontally(animationSpec = tween(280)) { it }
-                        ) {
-                            Row(Modifier.fillMaxSize()) {
-                                Box(Modifier
-                                    .fillMaxHeight().weight(1f)
-                                    .background(Color.Black.copy(alpha = 0.35f))
-                                    .clickable { showRightSidebar = false })
-                                rightSidebarContent { showRightSidebar = false }
-                            }
+                    // Persistent right sidebar (tablet only)
+                    if (isWide() && showRightSidebar) {
+                        Surface(color = ThemeColors.bgSecondary) {
+                            rightSidebarContent { showRightSidebar = false }
                         }
                     }
                 }
 
-                // Persistent right sidebar (tablet only)
-                if (isWide() && showRightSidebar) {
-                    Surface(color = ThemeColors.bgSecondary) {
-                        rightSidebarContent { showRightSidebar = false }
-                    }
+                // Overlays — outside Row to avoid scope conflict
+                if (!isWide()) {
+                    SidebarOverlay(showLeftSidebar, fromLeft = true,
+                        onDismiss = { showLeftSidebar = false },
+                        content = { leftSidebarContent { showLeftSidebar = false } })
+                    SidebarOverlay(showRightSidebar, fromLeft = false,
+                        onDismiss = { showRightSidebar = false },
+                        content = { rightSidebarContent { showRightSidebar = false } })
                 }
             }
 
@@ -676,6 +652,37 @@ private fun BubbleWrapper(
                     showBigBang = false
                 }
             )
+        }
+    }
+}
+
+/** Standalone composable to escape RowScope/ColumnScope for overlay sidebars. */
+@Composable
+private fun SidebarOverlay(
+    visible: Boolean,
+    fromLeft: Boolean,
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(200)) +
+                slideInHorizontally(animationSpec = tween(280)) { if (fromLeft) -it else it },
+        exit = fadeOut(animationSpec = tween(200)) +
+              slideOutHorizontally(animationSpec = tween(280)) { if (fromLeft) -it else it }
+    ) {
+        Row(Modifier.fillMaxSize()) {
+            if (fromLeft) {
+                content()
+                Box(Modifier.fillMaxHeight().weight(1f)
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .clickable { onDismiss() })
+            } else {
+                Box(Modifier.fillMaxHeight().weight(1f)
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .clickable { onDismiss() })
+                content()
+            }
         }
     }
 }
