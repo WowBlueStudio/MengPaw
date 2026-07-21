@@ -53,7 +53,7 @@ import kotlin.math.roundToInt
 class PadPlugin : Plugin {
 
     override val metadata = PluginMetadata(
-        id = "pad-plugin", name = "PAD 悬浮窗", version = "1.0.0",
+        id = "pad-plugin", name = "PAD 悬浮窗", version = "0.1.1",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "PAD 模式悬浮窗 — 羽化边缘呼吸灯小圆点，直观显示 Agent 工作状态",
         permissions = listOf("SYSTEM_ALERT_WINDOW", "FOREGROUND_SERVICE"),

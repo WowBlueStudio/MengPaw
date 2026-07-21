@@ -26,7 +26,7 @@ import kotlinx.serialization.json.*
  */
 class TavilyPlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "tavily-plugin", name = "Tavily AI 搜索", version = "1.0.0",
+        id = "tavily-plugin", name = "Tavily AI 搜索", version = "0.1.1",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "AI 优化搜索引擎：结构化搜索结果 + 网页内容提取",
         minCoreVersion = "0.2.0",

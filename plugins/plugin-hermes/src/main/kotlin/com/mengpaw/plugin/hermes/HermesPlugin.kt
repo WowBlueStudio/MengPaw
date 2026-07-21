@@ -32,7 +32,7 @@ import java.io.File
  */
 class HermesPlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "hermes-plugin", name = "Hermes 多Agent协作", version = "1.0.0",
+        id = "hermes-plugin", name = "Hermes 多Agent协作", version = "0.1.1",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "多Agent对话协作：团队组建、任务委派、共享记忆、角色管理",
         minCoreVersion = "0.2.0",

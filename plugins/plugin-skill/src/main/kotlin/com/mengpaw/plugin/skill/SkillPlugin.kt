@@ -21,7 +21,7 @@ class SkillPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "skill-plugin",
         name = "技能系统",
-        version = "1.0.0",
+        version = "0.1.1",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "可复用的 Agent 剧本系统（YAML+Markdown），含 3 个默认 Skill",

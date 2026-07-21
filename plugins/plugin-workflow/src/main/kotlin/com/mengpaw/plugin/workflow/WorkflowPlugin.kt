@@ -25,7 +25,7 @@ import java.io.File
  */
 class WorkflowPlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "workflow-plugin", name = "工作流引擎", version = "1.0.0",
+        id = "workflow-plugin", name = "工作流引擎", version = "0.1.1",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "DAG 工作流编排：节点串联/并行/条件分支/上下文传递",
         minCoreVersion = "0.2.0",
