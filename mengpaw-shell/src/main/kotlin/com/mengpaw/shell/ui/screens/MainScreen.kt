@@ -56,9 +56,9 @@ fun MainScreen(
     settingsViewModel: SettingsViewModel? = null,
     viewModel: AgentViewModel = viewModel(),
     pluginViewModel: PluginViewModel = viewModel(),
-    onOpenSidebar: () -> Unit = {},
-    onOpenHistory: () -> Unit = {},
-    agentViewModel: AgentViewModel? = null
+    agentViewModel: AgentViewModel? = null,
+    leftSidebarContent: @Composable (close: () -> Unit) -> Unit = {},
+    rightSidebarContent: @Composable (close: () -> Unit) -> Unit = {}
 ) {
     val messages by viewModel.messages.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
@@ -79,6 +79,7 @@ fun MainScreen(
         settingsState?.value?.let { s ->
             viewModel.configureLlm(
                 s.apiEndpoint, s.apiKey, s.modelName,
+                agentName = displayAgentName,
                 agentLang = s.effectiveAgentLanguage
             )
         }
@@ -90,8 +91,13 @@ fun MainScreen(
         }
     }
 
-    var agentName by remember { mutableStateOf("MengPaw") }
-    var showHistory by remember { mutableStateOf(false) }
+    val activeAgentState = agentViewModel?.activeAgent?.collectAsState()
+    val displayAgentName = activeAgentState?.value ?: "MengPaw"
+    val agentFramework: String? = remember(displayAgentName) {
+        agentViewModel?.sessions?.get(displayAgentName)?.framework
+    }
+    var showLeftSidebar by remember { mutableStateOf(false) }
+    var showRightSidebar by remember { mutableStateOf(false) }
     // FIX U2: Scroll uses filtered list size, and only auto-scrolls when user is at bottom
     LaunchedEffect(displayedMessages.size) {
         if (displayedMessages.isNotEmpty()) {
@@ -106,7 +112,7 @@ fun MainScreen(
             // ── Header bar ──
             Surface(
                 shadowElevation = 2.dp,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                color = ThemeColors.bgPrimary.copy(alpha = 0.92f)
             ) {
                 Row(
                     Modifier.fillMaxWidth()
@@ -114,13 +120,11 @@ fun MainScreen(
                         .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Sidebar toggle — only on tablets (mouse users need it)
-                    if (isWide()) {
-                        IconButton(onClick = onOpenSidebar, modifier = Modifier.size(44.dp)) {
-                            Icon(Icons.Outlined.Menu, "侧边栏", tint = ThemeColors.textSecondary)
-                        }
-                        Spacer(Modifier.width(4.dp))
+                    // Left sidebar toggle
+                    IconButton(onClick = { showLeftSidebar = !showLeftSidebar }, modifier = Modifier.size(44.dp)) {
+                        Icon(Icons.Outlined.Menu, "侧边栏", tint = ThemeColors.textSecondary)
                     }
+                    Spacer(Modifier.width(4.dp))
                     // Agent avatar — 44dp circle, matching send button
                     val avatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "avatar.png")
                     val avatarBitmap = remember { if (avatarFile.exists()) BitmapFactory.decodeFile(avatarFile.absolutePath) else null }
@@ -129,13 +133,22 @@ fun MainScreen(
                     } else {
                         Surface(shape = CircleShape, color = ThemeColors.brandContainer, modifier = Modifier.size(44.dp)) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text(agentName.take(1), color = ThemeColors.brand, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(displayAgentName.take(1), color = ThemeColors.brand, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             }
                         }
                     }
                     Spacer(Modifier.width(ArcoSpacing.sm))
                     Column(Modifier.weight(1f)) {
-                        Text(agentName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(displayAgentName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                            if (agentFramework != null) {
+                                Spacer(Modifier.width(4.dp))
+                                Text("@$agentFramework",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = ThemeColors.textSecondary,
+                                    maxLines = 1)
+                            }
+                        }
                         Text(agentViewModel?.activeSessionLabel ?: "MengPaw / 未配置",
                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
                     }
@@ -166,37 +179,90 @@ fun MainScreen(
                             }
                         }
                     }
-                    IconButton(onClick = onOpenHistory, modifier = Modifier.size(44.dp)) {
+                    IconButton(onClick = { showRightSidebar = !showRightSidebar }, modifier = Modifier.size(44.dp)) {
                         Icon(Icons.Outlined.History, "历史", tint = ThemeColors.textSecondary)
                     }
                 }
             }
             ArcoDivider()
 
-            // ── Messages ──
-            LazyColumn(
-                modifier = Modifier.weight(1f).padding(horizontal = ArcoSpacing.lg),
-                state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
-                contentPadding = PaddingValues(vertical = ArcoSpacing.md)
-            ) {
-                items(displayedMessages, key = { it.stableId }) { message ->
-                    BubbleWrapper(
-                        message = message,
-                        viewModel = viewModel,
-                        onRetract = { inputText = it },
-                        onQuote = { quoteText -> inputText = "$quoteText\n$inputText" },
-                        pluginViewModel = pluginViewModel,
-                        onNavigateToPlugins = onNavigateToPlugins
+            // ── Content area: adaptive — persistent sidebar on wide, overlay on compact ──
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                // Persistent left sidebar (tablet only)
+                if (isWide() && showLeftSidebar) {
+                    Surface(color = ThemeColors.bgSecondary) {
+                        leftSidebarContent { showLeftSidebar = false }
+                    }
+                }
+
+                // Messages + overlay sidebars
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = ArcoSpacing.lg),
+                        state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
+                        contentPadding = PaddingValues(vertical = ArcoSpacing.md)
                     ) {
-                        when (message) {
-                            is ChatMessageUi.User -> UserBubble(message.content)
-                            is ChatMessageUi.Agent -> AgentBubble(message.content)
-                            is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message)
-                            is ChatMessageUi.Suggestion -> PluginSuggestionCard(message.suggestion,
-                                onInstall = { pluginViewModel.installPlugin(message.suggestion.pluginId) },
-                                onViewDetail = onNavigateToPlugins)
-                            else -> {}
+                        items(displayedMessages, key = { it.stableId }) { message ->
+                            BubbleWrapper(
+                                message = message,
+                                viewModel = viewModel,
+                                onRetract = { inputText = it },
+                                onQuote = { quoteText -> inputText = "$quoteText\n$inputText" },
+                                pluginViewModel = pluginViewModel,
+                                onNavigateToPlugins = onNavigateToPlugins
+                            ) {
+                                when (message) {
+                                    is ChatMessageUi.User -> UserBubble(message.content)
+                                    is ChatMessageUi.Agent -> AgentBubble(message.content)
+                                    is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message)
+                                    is ChatMessageUi.Suggestion -> PluginSuggestionCard(message.suggestion,
+                                        onInstall = { pluginViewModel.installPlugin(message.suggestion.pluginId) },
+                                        onViewDetail = onNavigateToPlugins)
+                                    else -> {}
+                                }
+                            }
                         }
+                    }
+
+                    // Left sidebar overlay (phone only)
+                    if (!isWide()) {
+                        AnimatedVisibility(
+                            visible = showLeftSidebar,
+                            enter = fadeIn(animationSpec = tween(200)) + slideInHorizontally(animationSpec = tween(280)) { -it },
+                            exit = fadeOut(animationSpec = tween(200)) + slideOutHorizontally(animationSpec = tween(280)) { -it }
+                        ) {
+                            Row(Modifier.fillMaxSize()) {
+                                leftSidebarContent { showLeftSidebar = false }
+                                Box(Modifier
+                                    .fillMaxHeight().weight(1f)
+                                    .background(Color.Black.copy(alpha = 0.35f))
+                                    .clickable { showLeftSidebar = false })
+                            }
+                        }
+                    }
+
+                    // Right sidebar overlay (phone only)
+                    if (!isWide()) {
+                        AnimatedVisibility(
+                            visible = showRightSidebar,
+                            enter = fadeIn(animationSpec = tween(200)) + slideInHorizontally(animationSpec = tween(280)) { it },
+                            exit = fadeOut(animationSpec = tween(200)) + slideOutHorizontally(animationSpec = tween(280)) { it }
+                        ) {
+                            Row(Modifier.fillMaxSize()) {
+                                Box(Modifier
+                                    .fillMaxHeight().weight(1f)
+                                    .background(Color.Black.copy(alpha = 0.35f))
+                                    .clickable { showRightSidebar = false })
+                                rightSidebarContent { showRightSidebar = false }
+                            }
+                        }
+                    }
+                }
+
+                // Persistent right sidebar (tablet only)
+                if (isWide() && showRightSidebar) {
+                    Surface(color = ThemeColors.bgSecondary) {
+                        rightSidebarContent { showRightSidebar = false }
                     }
                 }
             }
@@ -210,10 +276,13 @@ fun MainScreen(
                         .padding(start = ArcoSpacing.lg, end = 8.dp, bottom = ArcoSpacing.sm, top = ArcoSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Expand button — circular 44dp
-                    IconButton(
-                        onClick = { showExpandSheet = true },
-                        modifier = Modifier.size(44.dp)
+                    // Expand button — circular 44dp, matching send button
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(ThemeColors.surfaceContainerHigh, CircleShape)
+                            .clickable { showExpandSheet = true },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Outlined.AddCircle, "扩展", tint = ThemeColors.textSecondary, modifier = Modifier.size(24.dp))
                     }
@@ -224,36 +293,44 @@ fun MainScreen(
                         shape = RoundedCornerShape(ArcoRadius.lg),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ThemeColors.brand, unfocusedBorderColor = ThemeColors.border),
                         minLines = 1, maxLines = 4)
-                    // Send button — circular 44dp, animated ↑
+                    // Send button — circular 44dp, animated ↑ icon
                     val maxSteps = settingsState?.value?.maxSteps ?: 50
                     val scope = rememberCoroutineScope()
-                    val sendOffset = remember { Animatable(0f) }
-                    val sendAlpha = remember { Animatable(1f) }
-                    FilledIconButton(
-                        onClick = {
-                            if (inputText.isNotBlank()) {
-                                val text = inputText; inputText = ""
-                                scope.launch {
-                                    launch { sendOffset.animateTo(-60f, tween(280)) }
-                                    launch { sendAlpha.animateTo(0f, tween(280)) }
-                                    viewModel.submitTask(text, pluginViewModel, maxSteps = maxSteps)
-                                    sendOffset.snapTo(0f)
-                                    sendAlpha.snapTo(1f)
-                                }
-                            }
-                        },
-                        enabled = inputEnabled,
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = ThemeColors.brand),
+                    val arrowOffsetY = remember { Animatable(0f) }
+                    val arrowAlpha = remember { Animatable(1f) }
+                    Box(
                         modifier = Modifier
                             .size(44.dp)
-                            .offset(y = sendOffset.value.dp)
-                            .alpha(sendAlpha.value)
+                            .background(
+                                if (inputEnabled) ThemeColors.brand
+                                else ThemeColors.brand.copy(alpha = 0.38f),
+                                CircleShape
+                            )
+                            .clickable(enabled = inputEnabled) {
+                                if (inputText.isNotBlank()) {
+                                    val text = inputText; inputText = ""
+                                    scope.launch {
+                                        // ↑ flies upward and out
+                                        launch { arrowOffsetY.animateTo(-60f, tween(280)) }
+                                        launch { arrowAlpha.animateTo(0f, tween(280)) }
+                                        // snap below, then submit
+                                        arrowOffsetY.snapTo(60f)
+                                        viewModel.submitTask(text, pluginViewModel, maxSteps = maxSteps)
+                                        // ↑ flies in from below
+                                        launch { arrowOffsetY.animateTo(0f, tween(280)) }
+                                        launch { arrowAlpha.animateTo(1f, tween(280)) }
+                                    }
+                                }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             if (inputText.isEmpty()) Icons.Outlined.ArrowUpward else Icons.Filled.ArrowUpward,
                             "发送",
-                            tint = Color.White
+                            tint = Color.White,
+                            modifier = Modifier
+                                .offset(y = arrowOffsetY.value.dp)
+                                .alpha(arrowAlpha.value)
                         )
                     }
                 }

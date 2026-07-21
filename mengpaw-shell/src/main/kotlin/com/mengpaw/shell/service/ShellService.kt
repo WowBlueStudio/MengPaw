@@ -73,11 +73,12 @@ class ShellService : Service() {
 
     private fun createNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("MengPaw")
-            .setContentText("Agent is running")
-            .setSmallIcon(android.R.drawable.ic_menu_manage)
+            .setContentTitle("MengPaw 智能助手")
+            .setContentText("后台运行中，智能体随时响应")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setShowWhen(false)
             .build()
     }
 }

@@ -17,14 +17,24 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.design.theme.ThemeColors
+import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+
+/** Agent online / presence status for external frameworks. */
+enum class FrameworkStatus(val label: String, val desc: String, val indicatorColor: Color) {
+    ONLINE("在线", "Chat 开放 · 接受委派任务", ArcoColors.Green6),
+    BUSY("忙碌", "Chat 开放 · 委派任务排队等待", ArcoColors.Orange6),
+    OFFLINE("离线", "Chat 关闭 · 不响应任何外部请求", ArcoColors.Gray6)
+}
 
 /** A framework peer (ACP node) that may host multiple agents. */
 data class FrameworkContact(
@@ -49,6 +59,8 @@ fun SidebarContent(
     onCreateAgent: (String) -> Unit = {}
 ) {
     var agentMenuTarget by remember { mutableStateOf<String?>(null) }
+    var frameworkStatus by remember { mutableStateOf(FrameworkStatus.ONLINE) }
+    var manualStatus by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxHeight().width(280.dp).padding(ArcoSpacing.lg)) {
         // ── Agents ──
@@ -67,8 +79,25 @@ fun SidebarContent(
                         .padding(vertical = ArcoSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(shape = CircleShape, color = if (name == activeAgent) ThemeColors.brand else ThemeColors.bgCardHigh) {
-                        Text(name.take(1), modifier = Modifier.padding(8.dp), color = if (name == activeAgent) Color.White else ThemeColors.textSecondary, fontSize = 14.sp)
+                    // Avatar — loads from agent dir, falls back to initial
+                    val agentAvatarFile = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$name/avatar.png")
+                    val agentAvatarBitmap = remember(name) {
+                        if (agentAvatarFile.exists()) android.graphics.BitmapFactory.decodeFile(agentAvatarFile.absolutePath) else null
+                    }
+                    if (agentAvatarBitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = agentAvatarBitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.size(36.dp).clip(CircleShape)
+                        )
+                    } else {
+                        Surface(shape = CircleShape, modifier = Modifier.size(36.dp),
+                            color = if (name == activeAgent) ThemeColors.brand else ThemeColors.bgCardHigh) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(name.take(1), color = if (name == activeAgent) Color.White else ThemeColors.textSecondary,
+                                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                     Spacer(Modifier.width(ArcoSpacing.sm))
                     Text(name, fontWeight = if (name == activeAgent) FontWeight.SemiBold else FontWeight.Normal, style = MaterialTheme.typography.bodyMedium)
@@ -108,6 +137,42 @@ fun SidebarContent(
             Text("新建智能体", style = MaterialTheme.typography.labelSmall)
         }
 
+        Spacer(Modifier.height(ArcoSpacing.md))
+
+        // ── Framework Status ──
+        Text("框架状态", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(ArcoSpacing.sm))
+        FrameworkStatus.entries.forEach { status ->
+            val selected = frameworkStatus == status
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)
+                    .clickable { frameworkStatus = status; manualStatus = true },
+                shape = RoundedCornerShape(ArcoRadius.md),
+                color = if (selected) status.indicatorColor.copy(alpha = 0.1f) else Color.Transparent
+            ) {
+                Row(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = ArcoSpacing.xs),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    // Status dot
+                    Box(Modifier.size(10.dp).background(status.indicatorColor, CircleShape))
+                    Spacer(Modifier.width(ArcoSpacing.sm))
+                    Column(Modifier.weight(1f)) {
+                        Text(status.label, fontWeight = FontWeight.Medium, fontSize = 14.sp,
+                            color = if (selected) status.indicatorColor else ThemeColors.textPrimary)
+                        Text(status.desc, fontSize = 11.sp, color = ThemeColors.textSecondary)
+                    }
+                    if (selected) {
+                        Icon(Icons.Outlined.Check, null, Modifier.size(16.dp), tint = status.indicatorColor)
+                    }
+                }
+            }
+        }
+        if (manualStatus) {
+            TextButton(onClick = { manualStatus = false; frameworkStatus = FrameworkStatus.ONLINE },
+                modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
+                Text("恢复自动切换", style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
+            }
+        }
+
         HorizontalDivider(Modifier.padding(vertical = ArcoSpacing.lg))
 
         // ── Framework Directory ──
@@ -131,9 +196,10 @@ fun SidebarContent(
                     .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Online indicator
-                Box(Modifier.size(8.dp).then(
-                    Modifier.background(if (framework.online) ThemeColors.brand else ThemeColors.bgCardHigh, CircleShape)))
+                // Framework status dot (uses local status as proxy)
+                val fwStatusColor = if (!framework.online) FrameworkStatus.OFFLINE.indicatorColor
+                    else frameworkStatus.indicatorColor
+                Box(Modifier.size(8.dp).background(fwStatusColor, CircleShape))
 
                 Spacer(Modifier.width(ArcoSpacing.sm))
 
@@ -152,20 +218,28 @@ fun SidebarContent(
                             Spacer(Modifier.width(4.dp))
                             Surface(
                                 shape = RoundedCornerShape(ArcoRadius.sm),
-                                color = Color(0xFF52C41A).copy(alpha = 0.12f)
+                                color = ArcoColors.Green6.copy(alpha = 0.12f)
                             ) {
                                 Text("已信任", Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                    style = MaterialTheme.typography.labelSmall, color = Color(0xFF52C41A), fontSize = 9.sp)
+                                    style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6, fontSize = 9.sp)
                             }
                         }
                     }
                     Text(framework.address, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
                 }
 
-                // Online badge
+                // Status badge
                 if (framework.online) {
-                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.1f)) {
-                        Text("在线", Modifier.padding(horizontal = 4.dp, vertical = 1.dp), style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand, fontSize = 10.sp)
+                    Surface(shape = RoundedCornerShape(ArcoRadius.sm),
+                        color = frameworkStatus.indicatorColor.copy(alpha = 0.1f)) {
+                        Text(frameworkStatus.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            style = MaterialTheme.typography.labelSmall, color = frameworkStatus.indicatorColor, fontSize = 10.sp)
+                    }
+                } else {
+                    Surface(shape = RoundedCornerShape(ArcoRadius.sm),
+                        color = FrameworkStatus.OFFLINE.indicatorColor.copy(alpha = 0.1f)) {
+                        Text(FrameworkStatus.OFFLINE.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            style = MaterialTheme.typography.labelSmall, color = FrameworkStatus.OFFLINE.indicatorColor, fontSize = 10.sp)
                     }
                 }
             }
@@ -185,7 +259,13 @@ fun SidebarContent(
                                     .padding(vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Outlined.SmartToy, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
+                                Surface(shape = CircleShape, modifier = Modifier.size(22.dp),
+                                    color = if (agentName == activeAgent) ThemeColors.brand else ThemeColors.bgCardHigh) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(agentName.take(1), color = if (agentName == activeAgent) Color.White else ThemeColors.textSecondary,
+                                            fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                                 Spacer(Modifier.width(6.dp))
                                 Text(agentName, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textPrimary)
                                 Spacer(Modifier.weight(1f))

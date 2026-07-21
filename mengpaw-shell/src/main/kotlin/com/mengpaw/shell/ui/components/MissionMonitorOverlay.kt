@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.mission.MissionMonitor
@@ -50,7 +51,7 @@ fun MissionMonitorOverlay(
         FloatingActionButton(
             onClick = { minimized = false },
             modifier = Modifier.padding(16.dp),
-            containerColor = Color(0xFF165DFF),
+            containerColor = ArcoColors.Blue6,
             shape = CircleShape
         ) {
             Icon(Icons.Outlined.Monitor, "展开监控", tint = Color.White)
@@ -84,8 +85,8 @@ fun MissionMonitorOverlay(
 
         // Mission goal
         if (MissionMonitor.missionGoal.isNotEmpty()) {
-            Surface(shape = RoundedCornerShape(ArcoRadius.md), color = Color(0x30FFFFFF)) {
-                Text(MissionMonitor.missionGoal, Modifier.padding(12.dp), fontSize = 13.sp, color = Color(0xFFCCCCCC), maxLines = 2)
+            Surface(shape = RoundedCornerShape(ArcoRadius.md), color = Color.White.copy(alpha = 0.19f)) {
+                Text(MissionMonitor.missionGoal, Modifier.padding(12.dp), fontSize = 13.sp, color = ArcoColors.Gray4, maxLines = 2)
             }
         }
 
@@ -96,13 +97,13 @@ fun MissionMonitorOverlay(
                 Surface(
                     Modifier.weight(1f).fillMaxHeight(),
                     shape = RoundedCornerShape(ArcoRadius.lg),
-                    color = Color(0xE01D2129)
+                    color = ArcoColors.Gray10.copy(alpha = 0.88f)
                 ) {
                     Column(Modifier.padding(12.dp)) {
                         Text("👷 Workers (${MissionMonitor.workers.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(Modifier.height(8.dp))
                         if (MissionMonitor.workers.isEmpty()) {
-                            Text("等待 Worker 启动...", fontSize = 12.sp, color = Color(0xFF86909C), modifier = Modifier.padding(8.dp))
+                            Text("等待 Worker 启动...", fontSize = 12.sp, color = ArcoColors.Gray6, modifier = Modifier.padding(8.dp))
                         }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             items(MissionMonitor.workers) { w -> WorkerCard(w) }
@@ -116,16 +117,16 @@ fun MissionMonitorOverlay(
                 Surface(
                     Modifier.weight(1f).fillMaxHeight(),
                     shape = RoundedCornerShape(ArcoRadius.lg),
-                    color = Color(0xE01D2129)
+                    color = ArcoColors.Gray10.copy(alpha = 0.88f)
                 ) {
                     Column(Modifier.padding(12.dp)) {
                         Text("🔍 Verifier", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(Modifier.height(8.dp))
                         val v = MissionMonitor.verifier
                         Text(v.summary, fontSize = 13.sp, color = when {
-                            v.failed > 0 -> Color(0xFFFF7D00)
-                            v.verified + v.failed >= v.totalWorkers && v.failed == 0 -> Color(0xFF00B42A)
-                            else -> Color(0xFF86909C)
+                            v.failed > 0 -> ArcoColors.Orange6
+                            v.verified + v.failed >= v.totalWorkers && v.failed == 0 -> ArcoColors.Green6
+                            else -> ArcoColors.Gray6
                         })
                         Spacer(Modifier.height(8.dp))
                         // Progress bar
@@ -133,13 +134,13 @@ fun MissionMonitorOverlay(
                             LinearProgressIndicator(
                                 progress = { (v.verified + v.failed).toFloat() / v.totalWorkers },
                                 modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                                color = if (v.failed == 0) Color(0xFF00B42A) else Color(0xFFFF7D00),
-                                trackColor = Color(0x30FFFFFF)
+                                color = if (v.failed == 0) ArcoColors.Green6 else ArcoColors.Orange6,
+                                trackColor = Color.White.copy(alpha = 0.19f)
                             )
                         }
                         if (v.currentCheck.isNotEmpty()) {
                             Spacer(Modifier.height(4.dp))
-                            Text(v.currentCheck, fontSize = 11.sp, color = Color(0xFF86909C))
+                            Text(v.currentCheck, fontSize = 11.sp, color = ArcoColors.Gray6)
                         }
                     }
                 }
@@ -151,11 +152,11 @@ fun MissionMonitorOverlay(
 @Composable
 private fun WorkerCard(w: WorkerMonitor) {
     val (bg, border) = when (w.status) {
-        "verified" -> Color(0x2000B42A) to Color(0xFF00B42A)
-        "running" -> Color(0x20165DFF) to Color(0xFF165DFF)
-        "failed" -> Color(0x20F53F3F) to Color(0xFFF53F3F)
-        "done" -> Color(0x2000B42A) to Color(0xFF00B42A)
-        else -> Color(0x20FFFFFF) to Color(0xFF86909C)
+        "verified" -> ArcoColors.Green6.copy(alpha = 0.125f) to ArcoColors.Green6
+        "running" -> ArcoColors.Blue6.copy(alpha = 0.125f) to ArcoColors.Blue6
+        "failed" -> ArcoColors.Red6.copy(alpha = 0.125f) to ArcoColors.Red6
+        "done" -> ArcoColors.Green6.copy(alpha = 0.125f) to ArcoColors.Green6
+        else -> Color.White.copy(alpha = 0.125f) to ArcoColors.Gray6
     }
     val icon = when (w.status) {
         "verified" -> "✅"; "running" -> "▶️"; "failed" -> "❌"; "done" -> "👍"; else -> "⬜"
@@ -172,16 +173,16 @@ private fun WorkerCard(w: WorkerMonitor) {
                 Spacer(Modifier.width(4.dp))
                 Text(w.id, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
                 if (w.progress > 0 && w.status == "running") {
-                    Text("${w.progress}%", fontSize = 10.sp, color = Color(0xFF86909C))
+                    Text("${w.progress}%", fontSize = 10.sp, color = ArcoColors.Gray6)
                 }
             }
-            Text(w.task.take(40), fontSize = 11.sp, color = Color(0xFFCCCCCC), maxLines = 1)
+            Text(w.task.take(40), fontSize = 11.sp, color = ArcoColors.Gray4, maxLines = 1)
             // Progress bar for running workers
             if (w.status == "running") {
                 LinearProgressIndicator(
                     progress = { w.progress / 100f },
                     modifier = Modifier.fillMaxWidth().height(3.dp).padding(top = 4.dp).clip(RoundedCornerShape(2.dp)),
-                    color = Color(0xFF165DFF), trackColor = Color(0x20FFFFFF)
+                    color = ArcoColors.Blue6, trackColor = Color.White.copy(alpha = 0.125f)
                 )
             }
         }
