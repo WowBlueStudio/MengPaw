@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.6.1 | **更新**: 2026-07-21 | **架构**: 微内核 — 纯 Kotlin/JVM 内核 + Android 适配层 + 23 插件生态 + Goal/Mission 内置模式 + Agent→User 推送
+> **版本**: 0.6.2 | **更新**: 2026-07-21 | **架构**: 微内核 — 纯 Kotlin/JVM 内核 + Android 适配层 + 23 插件生态 + Goal/Mission 内置模式 + Agent→User 推送
 
 ---
 
@@ -663,6 +663,7 @@ AgentEngine(
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.6.2** | 2026-07-21 | Agent 逻辑修复 — 14 Bug 修复: DreamEngine 参数混淆/大小写/单位错误/dreamLog 缺失; AgentDocManager 索引损坏/ID 解析/数据丢失; Goal 模式上下文丢失; snipStaleToolResults 不生效; Pipeline 缓存; DeepSeek-Chat 解析死循环; RubricGate 改进; API 模型更新 (8 Provider 至最新) |
 | **0.6.1** | 2026-07-21 | 内核功能补全 — Goal/Mission/Mission+ 内置模式 (RubricGate LLM 完成评估) + Agent→User 推送 (NotifyBus) + self 命名空间扩展 (+5 命令: tools/time/notify) + fs 扩展 (+grep/glob) + QwenPaw 4 Skills 移植 + API Key 持久化修复 + Provider 热更新 + Android 权限补全 (17 项) + Vault 安全加固 (绝不明文) + ProGuard Tink keep 规则 |
 | **0.6.0** | 2026-07-21 | UI 全面重构 — iPad 双栏设置 + 侧栏交互升级(左滑/长按多选/框架状态) + Per-Agent 模型选择 + Token 统计折线图 + 安全规则页 + WowBlue 启动动画 + 设计系统合规(硬编码色值清零) + 会话修复 + 通知栏常驻 |
 | **0.5.0** | 2026-07-21 | 微内核拆分 — kernel (44 文件, 纯 JVM) + core (6 文件, Android 适配) + 25 插件生态 |

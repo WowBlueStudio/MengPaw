@@ -16,7 +16,7 @@ class AdaptiveLlmProviderTest {
         )
         val info = provider.info()
         assertEquals("Openai", info.name)
-        assertEquals("gpt-4o", info.model)
+        assertEquals("gpt-4.1", info.model)
         assertEquals(ProviderType.REMOTE, info.providerType)
     }
 
@@ -111,7 +111,7 @@ class AdaptiveLlmProviderTest {
             apiEndpoint = "https://api.openai.com/v1/chat/completions",
             apiKey = "sk-key"
         )
-        assertEquals("gpt-4o", entry.model)
+        assertEquals("gpt-4.1", entry.model)
     }
 
     @Test

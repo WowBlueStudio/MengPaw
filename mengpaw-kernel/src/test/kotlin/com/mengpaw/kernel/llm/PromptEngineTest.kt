@@ -57,11 +57,23 @@ class PromptEngineTest {
     }
 
     @Test
-    fun `no action returns null action`() {
+    fun `no action returns null action treated as final`() {
+        // FIX: Non-ReAct natural language responses (e.g. from DeepSeek-Chat)
+        // are now treated as final answers instead of causing the loop to spin.
         val input = "Thought: just thinking"
         val result = engine.parse(input)
         assertNull(result.action)
-        assertFalse(result.isFinal)
+        assertTrue(result.isFinal) // No Action + No Final Answer → treated as final
+    }
+
+    @Test
+    fun `natural language response without markers treated as final answer`() {
+        // DeepSeek-Chat / non-reasoning models may respond in plain text
+        val input = "你好！我是AI助手，有什么可以帮助你的吗？"
+        val result = engine.parse(input)
+        assertNull(result.action)
+        assertTrue(result.isFinal)
+        assertEquals(input, result.thought)
     }
 
     @Test

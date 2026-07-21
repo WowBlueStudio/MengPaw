@@ -305,24 +305,21 @@ class PromptEngine {
 
     /**
      * Parse LLM output into a structured ReAct response.
+     *
+     * Tolerant parsing strategy:
+     * 1. If "Final Answer:" present (after last Action) → final answer
+     * 2. If "Action:" present with valid command → execute action
+     * 3. If NEITHER marker present (non-ReAct model / natural response) → treat as final answer
+     * 4. If "Thought:" only (no action, no final) → also treat as final answer
      */
     fun parse(text: String): ReActResponse {
         val normalized = text.trim()
 
-        // Match Thought (case-insensitive, Chinese/English colon)
-        val thoughtRegex = Regex(
-            "(?i)thought[:：]\\s*(.+?)(?=Action[:：]|Final Answer[:：]|$)",
-            RegexOption.DOT_MATCHES_ALL
-        )
-        val thought = thoughtRegex.find(normalized)?.groupValues?.get(1)?.trim()
-            ?: normalized.take(200)
-
-        // FIX A5: Only treat as Final Answer if it's the LAST section (not before an Action)
-        // Find all occurrences of "Final Answer:" and "Action:"
+        // Find all marker positions (case-insensitive, Chinese/English colon)
         val finalLocs = Regex("(?i)final answer[:：]", RegexOption.MULTILINE).findAll(normalized).map { it.range.first }.toList()
         val actionLocs = Regex("(?i)action[:：]", RegexOption.MULTILINE).findAll(normalized).map { it.range.first }.toList()
 
-        // Final Answer is valid only if it appears AFTER the last Action (or there are no Actions)
+        // ── Rule 1: Final Answer (must appear after last Action, or with no Action at all) ──
         if (finalLocs.isNotEmpty()) {
             val lastFinalPos = finalLocs.last()
             val lastActionPos = actionLocs.lastOrNull() ?: -1
@@ -335,26 +332,58 @@ class PromptEngine {
             }
         }
 
-        // Parse Action
+        // ── Rule 2: Parse Action ──
         val actionRegex = Regex("(?i)action[:：]\\s*(\\S+)")
         val actionName = actionRegex.find(normalized)?.groupValues?.get(1)?.trim()
-            ?: return ReActResponse(thought, null, isFinal = false)
 
-        // Parse Action Input (tolerant JSON parsing)
-        val inputRegex = Regex(
-            "(?i)action input[:：]\\s*(.+?)(?=Thought[:：]|Action[:：]|$)",
-            RegexOption.DOT_MATCHES_ALL
-        )
-        val inputText = inputRegex.find(normalized)?.groupValues?.get(1)?.trim() ?: "{}"
+        if (actionName != null) {
+            // Parse Action Input (tolerant JSON parsing)
+            val inputRegex = Regex(
+                "(?i)action input[:：]\\s*(.+?)(?=Thought[:：]|Action[:：]|Final Answer[:：]|$)",
+                RegexOption.DOT_MATCHES_ALL
+            )
+            val inputText = inputRegex.find(normalized)?.groupValues?.get(1)?.trim() ?: "{}"
 
-        val params = try {
-            val obj = Json.parseToJsonElement(inputText) as JsonObject
-            obj.mapValues { (it.value as? JsonPrimitive)?.content ?: it.value.toString() }
-        } catch (e: Exception) {
-            mapOf("raw" to inputText)
+            val params = try {
+                val obj = Json.parseToJsonElement(inputText) as JsonObject
+                obj.mapValues { (it.value as? JsonPrimitive)?.content ?: it.value.toString() }
+            } catch (e: Exception) {
+                mapOf("raw" to inputText)
+            }
+
+            val thought = extractThought(normalized)
+            return ReActResponse(thought, ToolCall(actionName, params), isFinal = false)
         }
 
-        return ReActResponse(thought, ToolCall(actionName, params), isFinal = false)
+        // ── Rule 3: No "Action:" and no "Final Answer:" → natural language response ──
+        // This happens with non-reasoning models (e.g. DeepSeek-Chat) that don't follow
+        // the ReAct format strictly. Treat the entire response as a final answer.
+        // Only extract thought if explicitly marked with "Thought:".
+        if (finalLocs.isEmpty()) {
+            val thought = extractThought(normalized)
+            // If there's an explicit Thought but no Action/Final, the model might be mid-reasoning.
+            // Check if the thought marker was explicitly provided.
+            val hasExplicitThought = Regex("(?i)thought[:：]").containsMatchIn(normalized)
+            if (hasExplicitThought && thought.length > normalized.length / 2) {
+                // Model is thinking but didn't produce an action — treat thought as partial answer
+                return ReActResponse(thought, null, isFinal = true)
+            }
+            // Natural language response without ReAct markers → final answer
+            return ReActResponse(normalized, null, isFinal = true)
+        }
+
+        // Fallback (should not reach here with current rules)
+        return ReActResponse(normalized.take(200), null, isFinal = true)
+    }
+
+    /** Extract Thought content from ReAct-format text, or return truncated beginning. */
+    private fun extractThought(normalized: String): String {
+        val thoughtRegex = Regex(
+            "(?i)thought[:：]\\s*(.+?)(?=Action[:：]|Final Answer[:：]|$)",
+            RegexOption.DOT_MATCHES_ALL
+        )
+        return thoughtRegex.find(normalized)?.groupValues?.get(1)?.trim()
+            ?: normalized.take(200)
     }
 
     /**

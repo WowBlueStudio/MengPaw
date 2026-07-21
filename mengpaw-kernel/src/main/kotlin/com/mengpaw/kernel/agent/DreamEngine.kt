@@ -86,7 +86,8 @@ object DreamEngine {
         }
         val memory = AgentDocs.readMemoryDoc(agentName)
         if (memory.isNotBlank()) parts.add("## 记忆\n${memory.take(800)}")
-        val profile = File(agentsDir, "$agentName/PROFILE.md")
+        // FIX: Use lowercase "profile.md" consistent with AgentDocManager/AgentDocs
+        val profile = File(agentsDir, "$agentName/profile.md")
         if (profile.exists()) parts.add("## 档案\n${try { profile.readText().take(600) } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.buildContext"); "" }}")
         if (parts.isEmpty()) return null
         val combined = parts.joinToString("\n\n")
@@ -158,7 +159,8 @@ object DreamEngine {
     fun dream(agentId: String): MemResult {
         val agentDir = File(agentsDir, agentId)
         if (!agentDir.exists()) return MemResult(0, 0, 0, 0, 0)
-        val memFile = File(agentDir, "Memory.md")
+        // FIX: Use lowercase "memory.md" consistent with AgentDocManager
+        val memFile = File(agentDir, "memory.md")
         val archiveFile = File(agentDir, "Memory.archive.md")
         if (!memFile.exists()) return MemResult(0, 0, 0, 0, 0)
         val records = parseMemories(try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream"); "" })
@@ -187,11 +189,17 @@ object DreamEngine {
                     appendLine("\n${r.content}\n\n---\n")
                 }
             }
-            archiveFile.appendText("\n$arc")
+            try { archiveFile.appendText("\n$arc") } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream") }
             archived = old.size; summarized = old.size
         }
 
-        return MemResult(reviewed, tagsAdded, linksFound, archived, summarized)
+        // FIX: Write dream event to log so dreamStats/dreamHistory work
+        val result = MemResult(reviewed, tagsAdded, linksFound, archived, summarized)
+        try {
+            if (!dreamLog.exists()) dreamLog.parentFile?.mkdirs()
+            dreamLog.appendText("${DATE_FMT.format(Date())} | agent=$agentId | reviewed=$reviewed tags=$tagsAdded links=$linksFound archived=$archived\n")
+        } catch (_: Exception) { /* best-effort log */ }
+        return result
     }
 
     fun dreamStats(): String {
@@ -229,9 +237,11 @@ object DreamEngine {
         return s
     }
 
+    // FIX: Correct unit conversions — was dividing by 1024³ (GB) for MB label
     private fun formatBytes(bytes: Long): String = when {
         bytes < 1024 -> "$bytes B"
         bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        else -> "%.1f MB".format(bytes / (1024.0 * 1024 * 1024))
+        bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024))
+        else -> "%.2f GB".format(bytes / (1024.0 * 1024 * 1024))
     }
 }

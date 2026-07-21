@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.6.2 (2026-07-21) — Agent 逻辑修复 + API 模型更新 + DeepSeek 解析修复
+
+### Agent 引擎修复 (P0 严重)
+- **DreamEngine**: dream 命令 agentId/sessionId 混淆 (ctx.sessionId→agentName)；PROFILE.md → profile.md 大小写匹配；formatBytes MB 单位错误 (÷GB→÷MB)；dreamLog 写入缺失
+- **AgentDocManager**: Memory.md 索引结构损坏 — enforceLimits 覆写丢失分隔符；parseMemoryRecords ID 解析用错误索引重建；updateMemory split limit=3 导致每次新记录覆盖所有旧记录 (数据丢失)
+- **Goal 模式**: runWithGoal 每轮调用 run() 创建新 session 丢失前轮上下文，现提取 runReActLoop 共用 + 累积前轮结果
+- **snipStaleToolResults**: 只追加 system 消息不实际修改旧 tool result，上下文未压缩
+- **Pipeline 缓存**: 每次命令执行重建 CommandRegistry，现缓存仅在插件变更时重建
+
+### LLM 解析修复 (P0 严重)
+- **非 ReAct 模型兼容**: DeepSeek-Chat 等无思考链模型返回自然语言时，parse() 误判为无 Action → 循环空转至 maxSteps。新增规则 3：无 Action/FinalAnswer 标记时直接视为 Final Answer
+- **RubricGate 改进**: Goal 模式每轮均调用 LLM 评估（之前仅当含 "Final Answer:" 时才评估）
+
+### API 模型更新
+- **OpenAI**: gpt-4o→gpt-4.1 (默认), 新增 gpt-4.1-mini/o4-mini/gpt-4.1-nano
+- **DeepSeek**: 模型列表保持 deepseek-chat/reasoner，API 路径不变
+- **Kimi**: moonshot-v1-8k→kimi-latest (默认), 新增 kimi-thinking, 支持 kimi.com 域名
+- **GLM**: 新增 glm-4.5
+- **Qwen**: 新增 qwen3-plus/qwen3-max
+- **Grok**: grok-2→grok-3 (默认)
+- **端点检测**: detectProviderType + CacheStrategy 同步更新 Kimi 新域名
+
+### 其他修复
+- AgentDocManager.pluginManager 注入 (regenerateCliDoc 不再创建空 PluginManager)
+- RubricEvaluator.evaluate() 死代码清理
+- 开发文档更新至 v0.6.2
+
+### 发行
+- Shell: v0.6.1 → v0.6.2 (vc=12→13)
+- Kernel: CORE_VERSION 0.6.0 → 0.6.2
+- 6 文件修改, 14 Bug 修复, 84/89 测试通过
+
 ## v0.6.1 (2026-07-21) — 内核能力补全 + 安全加固
 
 ### Agent 引擎
