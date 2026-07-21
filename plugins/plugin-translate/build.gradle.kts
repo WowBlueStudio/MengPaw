@@ -14,7 +14,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 dependencies {
-    implementation(project(":mengpaw-core"))
+    implementation(project(":mengpaw-kernel"))
     implementation("io.ktor:ktor-client-core:3.0.3")
     implementation("io.ktor:ktor-client-okhttp:3.0.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")

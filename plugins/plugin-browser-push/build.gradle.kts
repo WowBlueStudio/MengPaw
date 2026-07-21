@@ -18,5 +18,5 @@ android {
 }
 
 dependencies {
-    implementation(project(":mengpaw-core"))
+    implementation(project(":mengpaw-kernel"))
 }

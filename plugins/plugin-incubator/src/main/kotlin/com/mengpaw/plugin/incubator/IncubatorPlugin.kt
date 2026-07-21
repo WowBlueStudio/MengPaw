@@ -3,14 +3,14 @@
 
 package com.mengpaw.plugin.incubator
 
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.plugin.Plugin
-import com.mengpaw.core.plugin.PluginMetadata
-import com.mengpaw.core.plugin.PluginType
-import com.mengpaw.core.DataPaths
-import com.mengpaw.core.error.ErrorCollector
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginType
+import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.error.ErrorCollector
 import java.io.File
 
 /**
@@ -35,7 +35,7 @@ class IncubatorPlugin : Plugin {
         commands = listOf("incubator.spawn", "incubator.list", "incubator.terminate", "incubator.inbox")
     )
 
-    override val commands: Map<String, com.mengpaw.core.plugin.CommandHandler> = mapOf(
+    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "spawn" to ::spawn, "list" to ::list, "terminate" to ::terminate, "inbox" to ::inbox
     )
 

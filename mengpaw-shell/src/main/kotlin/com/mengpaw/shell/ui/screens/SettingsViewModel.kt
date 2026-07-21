@@ -6,7 +6,7 @@ package com.mengpaw.shell.ui.screens
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.mengpaw.core.llm.PromptEngine
+import com.mengpaw.kernel.llm.PromptEngine
 import com.mengpaw.core.security.Vault
 import com.mengpaw.shell.ui.localization.AppStrings
 import com.mengpaw.shell.ui.localization.ChineseStrings
@@ -94,7 +94,7 @@ data class SettingsState(
     val strings: AppStrings get() = if (useChinese) ChineseStrings else EnglishStrings
 
     /** Resolved Agent language: follow UI or user override. */
-    val effectiveAgentLanguage: com.mengpaw.core.llm.PromptEngine.AgentLanguage get() = when (agentLanguageMode) {
+    val effectiveAgentLanguage: com.mengpaw.kernel.llm.PromptEngine.AgentLanguage get() = when (agentLanguageMode) {
         AgentLanguageMode.FOLLOW_UI -> PromptEngine.AgentLanguage.fromUiChinese(useChinese)
         AgentLanguageMode.CHINESE -> PromptEngine.AgentLanguage.CHINESE
         AgentLanguageMode.ENGLISH -> PromptEngine.AgentLanguage.ENGLISH

@@ -3,14 +3,14 @@
 
 package com.mengpaw.plugin.memory
 
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.plugin.Plugin
-import com.mengpaw.core.plugin.PluginContext
-import com.mengpaw.core.plugin.PluginMetadata
-import com.mengpaw.core.plugin.PluginType
-import com.mengpaw.core.error.ErrorCollector
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginContext
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginType
+import com.mengpaw.kernel.error.ErrorCollector
 import java.io.File
 
 /**
@@ -29,12 +29,12 @@ class MemoryPlugin : Plugin {
         commands = listOf("memory.ls", "memory.read", "memory.write", "memory.rm", "memory.search", "memory.stats")
     )
 
-    override val commands: Map<String, com.mengpaw.core.plugin.CommandHandler> = mapOf(
+    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "ls" to ::ls, "read" to ::read, "write" to ::write,
         "rm" to ::rm, "search" to ::search, "stats" to ::stats
     )
 
-    private var storageDir = com.mengpaw.core.DataPaths.MEMORIES
+    private var storageDir = com.mengpaw.kernel.DataPaths.MEMORIES
     private var cache: List<MemoryEntry>? = null
     private var cacheTime = 0L
 

@@ -19,11 +19,11 @@ dependencyResolutionManagement {
 
 rootProject.name = "MengPaw"
 
+include(":mengpaw-kernel")
 include(":mengpaw-core")
 include(":mengpaw-design-system")
 include(":mengpaw-shell")
 include(":mengpaw-browser")
-include(":mengpaw-tv")
 
 // ── Plugins (active) ────────────────────────────────────
 include(":plugin-fs")

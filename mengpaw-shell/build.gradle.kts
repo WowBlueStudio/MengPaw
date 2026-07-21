@@ -99,6 +99,7 @@ android {
 
 dependencies {
     // Internal modules
+    implementation(project(":mengpaw-kernel"))
     implementation(project(":mengpaw-core"))
     implementation(project(":mengpaw-design-system"))
 

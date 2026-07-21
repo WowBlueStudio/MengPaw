@@ -6,9 +6,9 @@ package com.mengpaw.shell.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.mengpaw.core.DataPaths
+import com.mengpaw.kernel.DataPaths
 import android.content.IntentFilter
-import com.mengpaw.core.trigger.TriggerEngine
+import com.mengpaw.kernel.trigger.TriggerEngine
 import java.io.File
 
 /**
@@ -67,7 +67,7 @@ class EventReceiver : BroadcastReceiver() {
                 TriggerEngine.onSystemWake()
                 // 触发梦境模式 — 整理记忆、归档、摘要
                 try {
-                    val result = com.mengpaw.core.agent.DreamEngine.dream("MengPaw")
+                    val result = com.mengpaw.kernel.agent.DreamEngine.dream("MengPaw")
                     android.util.Log.d("EventReceiver", "Dream: reviewed=${result.memoriesReviewed} archived=${result.archived}")
                 } catch (e: Exception) {
                     android.util.Log.w("EventReceiver", "Dream failed: ${e.message}")

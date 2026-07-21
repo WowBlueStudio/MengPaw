@@ -5,10 +5,10 @@ package com.mengpaw.browser.plugin
 
 import android.webkit.WebView
 import com.mengpaw.browser.bridge.BrowserBridge
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.error.ErrorCollector
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.error.ErrorCollector
 
 /**
  * Tab metadata exposed to Agent for multi-tab control.

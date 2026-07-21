@@ -24,7 +24,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.mengpaw.core.llm.CacheStrategy
+import com.mengpaw.kernel.llm.CacheStrategy
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
@@ -343,7 +343,7 @@ fun SettingsScreen(
             SectionHeader("触发器 Triggers")
             // FIX U12: Use mutableStateOf so TriggerEngine changes trigger recomposition
             var triggerVersion by remember { mutableStateOf(0) }
-            val triggers = remember(triggerVersion) { com.mengpaw.core.trigger.TriggerEngine.list() }
+            val triggers = remember(triggerVersion) { com.mengpaw.kernel.trigger.TriggerEngine.list() }
             if (triggers.isEmpty()) {
                 Text("暂无触发器。Agent 可使用 self.trigger 命令创建。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(horizontal = ArcoSpacing.lg))
                 Spacer(Modifier.height(ArcoSpacing.sm))
@@ -352,7 +352,7 @@ fun SettingsScreen(
                     Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg, vertical = 2.dp),
                         shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard) {
                         Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (trigger.type == com.mengpaw.core.trigger.TriggerEngine.TriggerType.CRON) Icons.Outlined.Schedule else Icons.Outlined.Person, null,
+                            Icon(if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON) Icons.Outlined.Schedule else Icons.Outlined.Person, null,
                                 tint = if (trigger.enabled) ThemeColors.brand else ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(ArcoSpacing.sm))
                             Column(Modifier.weight(1f)) {
@@ -361,8 +361,8 @@ fun SettingsScreen(
                             }
                             // FIX U14: Use the Boolean parameter from onCheckedChange callback
                             Switch(checked = trigger.enabled, onCheckedChange = { newChecked ->
-                                if (!newChecked) com.mengpaw.core.trigger.TriggerEngine.disable(trigger.id)
-                                else com.mengpaw.core.trigger.TriggerEngine.enable(trigger.id)
+                                if (!newChecked) com.mengpaw.kernel.trigger.TriggerEngine.disable(trigger.id)
+                                else com.mengpaw.kernel.trigger.TriggerEngine.enable(trigger.id)
                                 triggerVersion++  // FIX U12: force triggers list refresh
                             }, modifier = Modifier.size(32.dp))
                         }
@@ -371,7 +371,7 @@ fun SettingsScreen(
             }
             // Quick-add lifetime trigger
             OutlinedButton(onClick = {
-                com.mengpaw.core.trigger.TriggerEngine.addLifetime("chat-${(1000..9999).random()}", "10:00-20:00", "随机和用户聊聊")
+                com.mengpaw.kernel.trigger.TriggerEngine.addLifetime("chat-${(1000..9999).random()}", "10:00-20:00", "随机和用户聊聊")
             }, modifier = Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg), shape = RoundedCornerShape(ArcoRadius.md)) {
                 Icon(Icons.Default.Add, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))

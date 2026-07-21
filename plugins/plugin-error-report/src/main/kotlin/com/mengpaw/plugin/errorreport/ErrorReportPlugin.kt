@@ -9,15 +9,15 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import com.mengpaw.core.DataPaths
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.error.ErrorCollector
-import com.mengpaw.core.plugin.Plugin
-import com.mengpaw.core.plugin.PluginContext
-import com.mengpaw.core.plugin.PluginMetadata
-import com.mengpaw.core.plugin.PluginType
+import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginContext
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginType
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.request.*
@@ -54,7 +54,7 @@ class ErrorReportPlugin : Plugin {
         commands = listOf("error.list", "error.show", "error.clear", "error.export", "error.status", "error.upload")
     )
 
-    override val commands: Map<String, com.mengpaw.core.plugin.CommandHandler> = mapOf(
+    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "list" to ::listErrors,
         "show" to ::showError,
         "clear" to ::clearErrors,

@@ -3,12 +3,12 @@
 
 package com.mengpaw.plugin.agentloop
 
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.plugin.Plugin
-import com.mengpaw.core.plugin.PluginMetadata
-import com.mengpaw.core.plugin.PluginType
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginType
 import java.security.MessageDigest
 
 /**
@@ -34,7 +34,7 @@ class AgentLoopPlugin : Plugin {
         permissions = emptyList(), minCoreVersion = "0.2.3",
         commands = listOf("loop.start", "loop.status", "loop.stop", "loop.config", "loop.ledger")
     )
-    override val commands: Map<String, com.mengpaw.core.plugin.CommandHandler> = mapOf(
+    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "start" to ::start, "status" to ::status, "stop" to ::stop,
         "config" to ::config, "ledger" to ::ledger,
     )
@@ -352,4 +352,4 @@ class LoopLedger(private val maxSize: Int = 2000) {
     fun clear() { entries.clear() }
 }
 
-// MissionMonitor moved to com.mengpaw.core.mission for shared access
+// MissionMonitor moved to com.mengpaw.kernel.mission for shared access

@@ -82,6 +82,7 @@ android {
 
 dependencies {
     // Apply same theme as main app
+    implementation(project(":mengpaw-kernel"))
     implementation(project(":mengpaw-design-system"))
     implementation(project(":mengpaw-core"))
 

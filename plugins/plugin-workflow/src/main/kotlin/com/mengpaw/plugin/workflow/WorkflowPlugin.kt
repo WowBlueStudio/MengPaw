@@ -3,14 +3,14 @@
 
 package com.mengpaw.plugin.workflow
 
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.plugin.Plugin
-import com.mengpaw.core.plugin.PluginMetadata
-import com.mengpaw.core.plugin.PluginType
-import com.mengpaw.core.DataPaths
-import com.mengpaw.core.error.ErrorCollector
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginType
+import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.error.ErrorCollector
 import java.io.File
 
 /**
@@ -32,7 +32,7 @@ class WorkflowPlugin : Plugin {
         commands = listOf("workflow.run", "workflow.define", "workflow.list", "workflow.status")
     )
 
-    override val commands: Map<String, com.mengpaw.core.plugin.CommandHandler> = mapOf(
+    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "run" to ::run, "define" to ::define, "list" to ::list, "status" to ::status
     )
 
