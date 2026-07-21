@@ -115,7 +115,7 @@ class AgentEngine(
     fun getPluginManager(): PluginManager = pluginManager
 
     companion object {
-        const val CORE_VERSION = "0.6.2"
+        const val CORE_VERSION = "0.7.0"
         private const val SOFT_COMPACT_RATIO = 0.50
         const val TOOL_SNIP_RATIO = 0.60
         const val COMPACT_RATIO = 0.80

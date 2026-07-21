@@ -197,10 +197,13 @@ fun MainScreen(
                         }
                     }
 
-                    // Agent-pushed banner notifications
+                    // Agent-pushed banner notifications — click navigates to MengPaw agent
                     NotifyBannerHost(
                         onMessage = { text ->
                             viewModel.notifyAgentMessage(text)
+                        },
+                        onBannerClick = {
+                            (agentViewModel ?: viewModel).switchAgent("MengPaw")
                         }
                     )
 
@@ -260,7 +263,7 @@ fun MainScreen(
                         .padding(start = ArcoSpacing.lg, end = 8.dp, bottom = ArcoSpacing.sm, top = ArcoSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Expand button — circular 44dp, matching send button
+                    // Expand button — circular 44dp, linear "+" icon, matching send button
                     Box(
                         modifier = Modifier
                             .size(44.dp)
@@ -268,7 +271,7 @@ fun MainScreen(
                             .clickable { showExpandSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Outlined.AddCircle, "扩展", tint = ThemeColors.textSecondary, modifier = Modifier.size(24.dp))
+                        Icon(Icons.Outlined.Add, "扩展", tint = ThemeColors.textSecondary, modifier = Modifier.size(24.dp))
                     }
                     // Input field
                     OutlinedTextField(value = inputText, onValueChange = { inputText = it },

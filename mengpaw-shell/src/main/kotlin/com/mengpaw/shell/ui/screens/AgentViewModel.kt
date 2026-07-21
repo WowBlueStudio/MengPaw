@@ -19,6 +19,9 @@ import com.mengpaw.kernel.llm.ProviderType
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 
 /**
  * Per-agent session: independent engine, provider, and message history.
@@ -38,6 +41,7 @@ class AgentSession(
 ) {
     /** Human-readable provider + model label for UI display. */
     val providerLabel: String get() {
+        if (endpoint.isBlank() || apiKey.isBlank()) return "智能体还未配置模型"
         val p = when {
             endpoint.contains("openai.com") -> "OpenAI"
             endpoint.contains("deepseek.com") -> "DeepSeek"
@@ -47,10 +51,10 @@ class AgentSession(
             endpoint.contains("dashscope") -> "Qwen"
             endpoint.contains("volces.com") -> "火山引擎"
             endpoint.contains("openmodel.ai") -> "OpenModel"
-            endpoint.isBlank() -> "未配置"
             else -> "Custom"
         }
-        return "$p / ${modelName.take(20)}"
+        val modelLabel = modelName.take(24).ifBlank { "auto" }
+        return "$p / $modelLabel"
     }
 }
 
@@ -76,6 +80,10 @@ class AgentViewModel : ViewModel() {
 
     // ── Multi-session store ──
     private val sessions = mutableMapOf<String, AgentSession>()
+
+    // Track which agents have completed the bootstrap startup flow.
+    // Prevents re-triggering on every config change.
+    private val bootstrappedAgents = mutableSetOf<String>()
 
     private fun defaultProvider(): LlmProvider =
         if (globalApiKey.isBlank()) SimulatedLlmProvider()
@@ -126,11 +134,14 @@ class AgentViewModel : ViewModel() {
         return AgentSession(name, framework, model, globalEndpoint, globalApiKey, provider, engine, msgs, scroll)
     }
 
-    /** Ensure the default "MengPaw" agent session always exists. */
+    /** Ensure the default "MengPaw" agent session always exists, with workspace files. */
     private fun ensureDefaultSession() {
         if (!sessions.containsKey("MengPaw")) {
             sessions["MengPaw"] = createSession("MengPaw", null)
         }
+        // Bootstrap workspace files if missing (safe: writeIfMissing won't overwrite existing).
+        // This ensures the default agent has all preset .md files (agents, soul, boost, trigger, etc.)
+        com.mengpaw.kernel.agent.AgentDocs.bootstrap("MengPaw")
     }
 
     // ── Active agent state ──
@@ -216,6 +227,20 @@ class AgentViewModel : ViewModel() {
         }
 
         bindActiveSession()
+
+        // ── Auto-start: first time a real API key is configured ──
+        // When switching from simulated → real provider, trigger the agent's
+        // bootstrap flow: read Boost.md, introduce itself, and engage the user.
+        if (apiKey.isNotBlank()) {
+            val agentsToCheck = if (agentName == null) sessions.keys.toList()
+                else listOf(targetName)
+            agentsToCheck.forEach { name ->
+                if (name !in bootstrappedAgents) {
+                    bootstrappedAgents.add(name)
+                    autoStartAgent(name, name) // workspace folder = agent name for default
+                }
+            }
+        }
     }
 
     private fun createProviderForSession(endpoint: String, apiKey: String, model: String): LlmProvider =
@@ -254,11 +279,73 @@ class AgentViewModel : ViewModel() {
 
     /** Create a new agent with the given name and optional framework. */
     fun createAgent(name: String, framework: String? = null) {
+        createAgentWithDetails(name, name, "", framework)
+    }
+
+    /**
+     * Create a new agent with full details.
+     * @param name Agent display name
+     * @param workspaceFolder Folder name for workspace (under AGENTS/)
+     * @param intro Agent introduction/bio
+     * @param framework Optional remote framework
+     */
+    fun createAgentWithDetails(
+        name: String,
+        workspaceFolder: String,
+        intro: String,
+        framework: String? = null
+    ) {
         if (sessions.containsKey(name)) return
-        // Bootstrap agent documentation files
-        com.mengpaw.kernel.agent.AgentDocs.bootstrap(name)
+
+        // Bootstrap agent documentation files into the workspace folder
+        com.mengpaw.kernel.agent.AgentDocs.bootstrap(workspaceFolder)
+
+        // Save profile with intro
+        if (intro.isNotBlank()) {
+            val profile = com.mengpaw.kernel.agent.AgentProfile(
+                agentName = name,
+                name = name,
+                bio = intro
+            )
+            com.mengpaw.kernel.agent.AgentProfile.save(workspaceFolder, profile)
+        }
+
+        // Create session and switch to new agent
         sessions[name] = createSession(name, framework)
         switchAgent(name)
+
+        // Auto-start: send "启动" — agent reads Boost.md and begins onboarding
+        autoStartAgent(name, workspaceFolder)
+    }
+
+    /**
+     * Auto-start a newly created agent: sends "启动" message so the agent reads
+     * Boost.md from its workspace and proactively engages with the user.
+     */
+    private fun autoStartAgent(agentName: String, workspaceFolder: String) {
+        val session = sessions[agentName] ?: return
+        bootstrappedAgents.add(agentName)
+        // Read Boost.md content for the agent to process on startup
+        val boostFile = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$workspaceFolder/boost.md")
+        val boostContent = if (boostFile.exists()) {
+            try { boostFile.readText() } catch (_: Exception) { "" }
+        } else ""
+
+        // Set initial system message, then trigger agent startup
+        session.messages.value = listOf(
+            ChatMessageUi.System("$agentName 已创建。正在读取工作区引导文件...")
+        )
+
+        // Submit startup task — agent reads Boost.md and proactively engages
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(300)
+            val prompt = if (boostContent.isNotBlank()) {
+                "启动。请读取并执行你的工作区引导文件 Boost.md，内容如下：\n\n$boostContent"
+            } else {
+                "启动。请介绍你自己并询问用户如何配置你的身份。"
+            }
+            submitTask(prompt, maxSteps = 30)
+        }
     }
 
     /** Update Agent language without re-creating the engine. */
@@ -364,6 +451,50 @@ class AgentViewModel : ViewModel() {
 
     fun stopAgent() { activeSession().engine.stop() }
 
+    // ── Trigger task: silent background execution ────────────────────
+
+    /**
+     * Called by TriggerEngine.onFire when a CRON/LIFETIME trigger fires.
+     *
+     * Submits the trigger action as a background task. The agent decides how
+     * to handle it based on its workspace rules (trigger.md / agents.md):
+     * - Whether to work silently or chat visibly
+     * - Whether to push a notification banner via [notify.banner]
+     * - What level to use (info/warn/error)
+     *
+     * Users can edit their agent's trigger.md to customize or disable banners.
+     */
+    fun submitTriggerTask(trigger: com.mengpaw.kernel.trigger.TriggerEngine.Trigger) {
+        val targetAgent = "MengPaw"
+        val session = sessions.getOrPut(targetAgent) { createSession(targetAgent, null) }
+
+        // Don't interrupt a running agent; queue to inbox for later pickup
+        if (session.isRunning.value) {
+            val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
+            inbox.mkdirs()
+            java.io.File(inbox, "trigger_${trigger.id}_${System.currentTimeMillis()}.md").writeText(
+                "# 触发器任务\n- ID: ${trigger.id}\n- 类型: ${trigger.type}\n- Cron: ${trigger.config}\n- 时间: ${
+                    java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+                }\n\n${trigger.action}\n"
+            )
+            return
+        }
+
+        // Minimal prompt — behavior governed by trigger.md workspace rules.
+        // Agent can read trigger.md via agent.cli to see the default behavior spec.
+        val prompt = "[触发器任务 · ${trigger.type}] ${trigger.action}\n(行为规范: workspace/trigger.md)"
+
+        // Light system note so user knows something happened
+        session.messages.value = session.messages.value + ChatMessageUi.System(
+            "⏰ ${trigger.action.take(40)}..."
+        )
+
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(200)
+            submitTask(prompt, maxSteps = 20)
+        }
+    }
+
     // ── Translation middleware (auto for US models) ────────────────────
 
     private val translator = com.mengpaw.kernel.llm.TranslateMiddleware()
@@ -403,7 +534,7 @@ class AgentViewModel : ViewModel() {
 
     // ── Session History ─────────────────────────────────────────────────
 
-    /** A recorded chat session (persists across newSession() calls). */
+    /** A recorded chat session (persists across newSession() calls and app restarts). */
     data class SessionRecord(
         val id: String,
         val title: String,
@@ -414,10 +545,70 @@ class AgentViewModel : ViewModel() {
         val compactedSummary: String = "",
         val agentName: String = "",
         val framework: String? = null     // null = local agent, non-null = remote framework name
-    )
+    ) {
+        fun toJson(): JSONObject = JSONObject().apply {
+            put("id", id)
+            put("title", title)
+            put("preview", preview)
+            put("timestamp", timestamp)
+            put("messageCount", messageCount)
+            put("compacted", compacted)
+            put("compactedSummary", compactedSummary)
+            put("agentName", agentName)
+            if (framework != null) put("framework", framework)
+        }
+
+        companion object {
+            fun fromJson(obj: JSONObject): SessionRecord = SessionRecord(
+                id = obj.optString("id", ""),
+                title = obj.optString("title", ""),
+                preview = obj.optString("preview", ""),
+                timestamp = obj.optLong("timestamp", 0L),
+                messageCount = obj.optInt("messageCount", 0),
+                compacted = obj.optBoolean("compacted", false),
+                compactedSummary = obj.optString("compactedSummary", ""),
+                agentName = obj.optString("agentName", ""),
+                framework = if (obj.has("framework")) obj.getString("framework") else null
+            )
+        }
+    }
 
     private val _sessionHistory = MutableStateFlow<List<SessionRecord>>(emptyList())
     val sessionHistory: StateFlow<List<SessionRecord>> = _sessionHistory.asStateFlow()
+
+    /** JSON file path for session persistence. */
+    private val sessionHistoryFile: File
+        get() = File(com.mengpaw.kernel.DataPaths.BASE, "session_history.json")
+
+    /** Load session history from disk. Called once at init. */
+    private fun loadSessionHistory(): List<SessionRecord> {
+        return try {
+            val file = sessionHistoryFile
+            if (file.exists()) {
+                val text = file.readText()
+                if (text.isNotBlank()) {
+                    val arr = JSONArray(text)
+                    (0 until arr.length()).map { i -> SessionRecord.fromJson(arr.getJSONObject(i)) }
+                } else emptyList()
+            } else emptyList()
+        } catch (e: Exception) {
+            com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Failed to load session history: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /** Persist session history to disk. Called after every modification. */
+    private fun saveSessionHistory() {
+        try {
+            val file = sessionHistoryFile
+            file.parentFile?.mkdirs()
+            val arr = JSONArray()
+            _sessionHistory.value.forEach { arr.put(it.toJson()) }
+            file.writeText(arr.toString(2))
+        } catch (e: Exception) {
+            com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Failed to save session history: ${e.message}")
+        }
+    }
 
     /** Start a new session for a specific agent (switches to it if needed). */
     fun newSessionFor(agentName: String, framework: String? = null) {
@@ -455,6 +646,7 @@ class AgentViewModel : ViewModel() {
                 framework = activeSession().framework
             )
             _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
+            saveSessionHistory()
         }
         activeSession().messages.value = listOf(ChatMessageUi.Agent("新会话已创建。"))
     }
@@ -465,6 +657,7 @@ class AgentViewModel : ViewModel() {
             if (it.id == id) it.copy(compacted = true, compactedSummary = "已压缩: ${it.preview.take(100)}")
             else it
         }
+        saveSessionHistory()
     }
 
     /** Repair a session — fixes truncated markdown / unclosed syntax caused by abnormal interruption. */
@@ -504,12 +697,14 @@ class AgentViewModel : ViewModel() {
             _sessionHistory.value = _sessionHistory.value.map {
                 if (it.id == id) it.copy(compactedSummary = "已修复: ${it.preview.take(60)}") else it
             }
+            saveSessionHistory()
         }
     }
 
     /** Delete a session record. */
     fun deleteSession(id: String) {
         _sessionHistory.value = _sessionHistory.value.filter { it.id != id }
+        saveSessionHistory()
     }
 
     /** Toggle visibility of compacted sessions. */
@@ -609,6 +804,8 @@ class AgentViewModel : ViewModel() {
     init {
         ensureDefaultSession()
         bindActiveSession()
+        // Restore persisted session history
+        _sessionHistory.value = loadSessionHistory()
     }
 
     // ── Plugin suggestion logic (unchanged) ──

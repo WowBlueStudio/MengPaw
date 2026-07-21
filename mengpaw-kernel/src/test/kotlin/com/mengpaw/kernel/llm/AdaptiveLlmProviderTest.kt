@@ -23,7 +23,7 @@ class AdaptiveLlmProviderTest {
     @Test
     fun `provider type detection deepseek`() {
         val provider = AdaptiveLlmProvider(
-            apiEndpoint = "https://api.deepseek.com/v1/chat/completions",
+            apiEndpoint = "https://api.deepseek.com/chat/completions",
             apiKey = "test-key"
         )
         assertEquals("Deepseek", provider.info().name)
@@ -82,7 +82,7 @@ class AdaptiveLlmProviderTest {
             maxRetries = 3,
             retryDelayMs = 200,
             fallbacks = listOf(
-                FallbackEntry("https://api.deepseek.com/v1/chat/completions", "sk-ds-key", "deepseek-chat"),
+                FallbackEntry("https://api.deepseek.com/chat/completions", "sk-ds-key", "deepseek-chat"),
                 FallbackEntry("https://api.moonshot.cn/v1/chat/completions", "sk-kimi-key", "moonshot-v1")
             )
         )
@@ -96,11 +96,11 @@ class AdaptiveLlmProviderTest {
     @Test
     fun `fallback entry data class`() {
         val entry = FallbackEntry(
-            apiEndpoint = "https://api.deepseek.com/v1/chat/completions",
+            apiEndpoint = "https://api.deepseek.com/chat/completions",
             apiKey = "sk-test-123",
             model = "deepseek-chat"
         )
-        assertEquals("https://api.deepseek.com/v1/chat/completions", entry.apiEndpoint)
+        assertEquals("https://api.deepseek.com/chat/completions", entry.apiEndpoint)
         assertEquals("sk-test-123", entry.apiKey)
         assertEquals("deepseek-chat", entry.model)
     }

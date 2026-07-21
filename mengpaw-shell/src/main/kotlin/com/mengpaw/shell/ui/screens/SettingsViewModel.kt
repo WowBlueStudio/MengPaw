@@ -29,31 +29,39 @@ enum class LlmProviderPreset(
     val apiKeyPrefix: String = "",
     val models: List<ModelInfo> = emptyList()
 ) {
-    OPENAI("OpenAI", "https://api.openai.com/v1/chat/completions", "gpt-4.1", "sk-",
-        listOf(ModelInfo("gpt-4.1", "多模态"), ModelInfo("gpt-4.1-mini", "Chat"), ModelInfo("gpt-4o", "多模态"),
-            ModelInfo("gpt-4o-mini", "Chat"), ModelInfo("o4-mini", "思维链"), ModelInfo("gpt-4.1-nano", "Chat"))),
-    DEEPSEEK("DeepSeek", "https://api.deepseek.com/v1/chat/completions", "deepseek-chat", "sk-",
-        listOf(ModelInfo("deepseek-chat", "Chat"), ModelInfo("deepseek-reasoner", "思维链"))),
-    KIMI("Kimi (月之暗面)", "https://api.moonshot.cn/v1/chat/completions", "kimi-latest", "sk-",
-        listOf(ModelInfo("kimi-latest", "Chat"), ModelInfo("kimi-thinking", "思维链"),
-            ModelInfo("moonshot-v1-8k", "Chat"), ModelInfo("moonshot-v1-32k", "Chat"), ModelInfo("moonshot-v1-128k", "Chat"))),
-    GLM("GLM (智谱)", "https://open.bigmodel.cn/api/paas/v4/chat/completions", "glm-4-plus", "",
-        listOf(ModelInfo("glm-4-plus", "Chat"), ModelInfo("glm-4.5", "Chat"), ModelInfo("glm-4-flash", "Chat"),
-            ModelInfo("glm-4v-plus", "多模态"), ModelInfo("glm-4v-flash", "多模态"))),
-    QWEN("Qwen (通义千问)", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", "qwen-plus", "sk-",
-        listOf(ModelInfo("qwen-plus", "Chat"), ModelInfo("qwen-max", "Chat"), ModelInfo("qwen-turbo", "Chat"),
-            ModelInfo("qwen3-plus", "Chat"), ModelInfo("qwen3-max", "Chat"),
-            ModelInfo("qwen-vl-plus", "多模态"), ModelInfo("qwen-vl-max", "多模态"),
-            ModelInfo("qwen-coder-turbo", "Chat"))),
-    GROK("Grok (xAI)", "https://api.x.ai/v1/chat/completions", "grok-3", "xai-",
-        listOf(ModelInfo("grok-3", "多模态"), ModelInfo("grok-2", "多模态"), ModelInfo("grok-2-vision", "多模态"))),
-    VOLCANO("火山引擎 (豆包)", "https://ark.cn-beijing.volces.com/api/v3/chat/completions", "doubao-pro-32k", "",
-        listOf(ModelInfo("doubao-pro-32k", "Chat"), ModelInfo("doubao-pro-128k", "Chat"), ModelInfo("doubao-lite-32k", "Chat"),
-            ModelInfo("doubao-vision-pro", "多模态"),
-            // 火山引擎 ARK 需先在控制台创建推理接入点, 将接入点 ID 作为 model 参数
-            ModelInfo("(需创建接入点)", "提示"))),
+    // ═══ Presets verified against official docs — 2026-07-21 ═══
+    // Only top models listed here; full list fetched from API on key entry.
+    OPENAI("OpenAI", "https://api.openai.com/v1/chat/completions", "gpt-5.4", "sk-",
+        listOf(ModelInfo("gpt-5.4", "旗舰"), ModelInfo("gpt-5.4-mini", "快速"), ModelInfo("gpt-5.4-nano", "轻量"),
+            ModelInfo("gpt-5", "前代"), ModelInfo("o4-mini", "思维链"))),
+    DEEPSEEK("DeepSeek", "https://api.deepseek.com/chat/completions", "deepseek-v4-flash", "sk-",
+        listOf(ModelInfo("deepseek-v4-flash", "快速"), ModelInfo("deepseek-v4-pro", "思维链"))),
+    KIMI("Kimi (月之暗面)", "https://api.moonshot.cn/v1/chat/completions", "kimi-k3", "sk-",
+        listOf(ModelInfo("kimi-k3", "旗舰·1M上下文"), ModelInfo("kimi-k2.7-code", "Coding"),
+            ModelInfo("kimi-k2.6", "通用"), ModelInfo("kimi-k2.7-code-highspeed", "高速Coding"))),
+    GLM("GLM (智谱)", "https://open.bigmodel.cn/api/paas/v4/chat/completions", "glm-5.2", "",
+        listOf(ModelInfo("glm-5.2", "旗舰·1M上下文"), ModelInfo("glm-5.1", "Coding"),
+            ModelInfo("glm-5", "前代"), ModelInfo("glm-5-turbo", "高速"), ModelInfo("glm-5v-turbo", "多模态"))),
+    QWEN("Qwen (通义千问)", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", "qwen3.7-max", "sk-",
+        listOf(ModelInfo("qwen3.7-max", "旗舰·1M上下文"), ModelInfo("qwen3.6-35b-a3b", "开源MoE"),
+            ModelInfo("qwen3.5-plus", "均衡"), ModelInfo("qwen-flash", "快速"),
+            ModelInfo("qwen3-coder-plus", "Coding"), ModelInfo("qwq-plus", "思维链"),
+            ModelInfo("qwen3-vl-plus", "多模态"), ModelInfo("qwen3-omni-flash", "全模态"))),
+    GROK("Grok (xAI)", "https://api.x.ai/v1/chat/completions", "grok-4.3", "xai-",
+        listOf(ModelInfo("grok-4.5", "旗舰"), ModelInfo("grok-4.3", "推荐·1M上下文"),
+            ModelInfo("grok-4.20-reasoning", "思维链"), ModelInfo("grok-4.1-fast-non-reasoning", "快速"),
+            ModelInfo("grok-build-0.1", "Coding"))),
+    VOLCANO("火山引擎 (豆包)", "https://ark.cn-beijing.volces.com/api/v3/chat/completions", "doubao-seed-2.0-pro", "",
+        listOf(ModelInfo("doubao-seed-2.0-pro", "旗舰"), ModelInfo("doubao-seed-2.0-lite", "均衡"),
+            ModelInfo("doubao-seed-2.0-mini", "轻量"), ModelInfo("doubao-seed-1.8", "前代"),
+            ModelInfo("doubao-seed-1.6-flash", "快速"), ModelInfo("doubao-seed-1.6-thinking", "思维链"),
+            ModelInfo("deepseek-v3-2", "DeepSeek托管"), ModelInfo("glm-4.7", "GLM托管"),
+            ModelInfo("(需创建接入点 ep-xxx)", "提示"))),
     OPENMODEL("OpenModel", "https://api.openmodel.ai/v1/chat/completions", "deepseek-v4-flash", "sk-",
-        listOf(ModelInfo("deepseek-v4-flash", "Chat"), ModelInfo("deepseek-r1", "思维链"))),
+        listOf(ModelInfo("deepseek-v4-pro", "思维链"), ModelInfo("deepseek-v4-flash", "快速"),
+            ModelInfo("qwen3.7-max", "Qwen托管"), ModelInfo("gpt-5.4-mini", "OpenAI托管"),
+            ModelInfo("kimi-k3", "Kimi托管"), ModelInfo("glm-5.2", "GLM托管"),
+            ModelInfo("grok-4.5", "Grok托管"), ModelInfo("(更多模型见API返回)", "提示"))),
     SELF_HOSTED("Self-Hosted (自建)", "http://192.168.1.100:9877/v1/chat/completions", "local-model", "",
         listOf(ModelInfo("local-model", "Chat"), ModelInfo("qwen2.5:7b", "Chat"), ModelInfo("llama3.1:8b", "Chat"))),
     CUSTOM("Custom", "", "", "", emptyList());
@@ -215,45 +223,81 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         fetchRemoteModels()
     }
 
-    /** Auto-fetch available models from the provider's /models endpoint. */
+    /**
+     * Auto-fetch available models from the provider's GET /models endpoint.
+     *
+     * Most providers expose an OpenAI-compatible `GET /v1/models` (or `/models`)
+     * that returns `{"data":[{"id":"model-name"},...]}`. We try both paths,
+     * filter out non-chat models (embedding, tts, whisper, dall-e, etc.), and
+     * auto-select the first matching model if the current one isn't in the list.
+     */
     fun fetchRemoteModels() {
         val ep = _state.value.apiEndpoint
-        if (ep.isBlank()) return
+        val key = _state.value.apiKey
+        if (ep.isBlank() || key.isBlank()) return
+
         viewModelScope.launch {
-            try {
-                val base = ep.substringBefore("/chat/completions").substringBefore("/v1/chat")
-                val url = "$base/v1/models"
-                val client = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                client.connectTimeout = 5000; client.readTimeout = 10000
-                val key = _state.value.apiKey
-                if (key.isNotBlank()) client.setRequestProperty("Authorization", "Bearer $key")
-                val body = client.inputStream.bufferedReader().readText()
-                client.disconnect()
-                // Parse OpenAI-format model list: {"data":[{"id":"gpt-4o"},...]}
-                val models = try {
-                    Regex("\"id\"\\s*:\\s*\"([^\"]+)\"").findAll(body)
+            val base = ep.substringBefore("/chat/completions")
+                .substringBefore("/v1/chat")
+                .substringBefore("/compatible-mode/v1")
+
+            // Try both common paths — OpenAI uses /v1/models, some use /models
+            val candidatePaths = listOf("$base/v1/models", "$base/models")
+            var models: List<String> = emptyList()
+
+            for (url in candidatePaths) {
+                try {
+                    val client = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    client.connectTimeout = 5000; client.readTimeout = 10000
+                    client.setRequestProperty("Authorization", "Bearer $key")
+                    val body = client.inputStream.bufferedReader().readText()
+                    client.disconnect()
+
+                    val parsed = Regex("\"id\"\\s*:\\s*\"([^\"]+)\"").findAll(body)
                         .map { it.groupValues[1] }
-                        .filter { !it.contains(":") && it.length < 80 }
+                        .filter { id ->
+                            // Exclude non-chat models
+                            id.length < 80 && !id.contains(":") &&
+                            !id.startsWith("dall-e") && !id.startsWith("whisper") &&
+                            !id.startsWith("tts") && !id.contains("embedding") &&
+                            !id.contains("moderation") && !id.contains("babbage") &&
+                            !id.contains("davinci")
+                        }
                         .toList()
-                } catch (_: Exception) { emptyList() }
-                if (models.isNotEmpty()) {
-                    _state.value = _state.value.copy(
-                        remoteModels = models,
-                        remoteModelsFetched = true
-                    )
+
+                    if (parsed.isNotEmpty()) {
+                        models = parsed
+                        break // Got results, stop trying other URLs
+                    }
+                } catch (_: Exception) {
+                    // Try next URL
                 }
-            } catch (_: Exception) {
-                // API unreachable — keep preset models
+            }
+
+            if (models.isNotEmpty()) {
+                val currentModel = _state.value.modelName
+                val currentInList = models.any { it.equals(currentModel, ignoreCase = true) }
+
+                _state.value = _state.value.copy(
+                    remoteModels = models,
+                    remoteModelsFetched = true,
+                    // Auto-select first model if current one isn't in the fetched list
+                    modelName = if (currentInList) currentModel else models.first()
+                )
             }
         }
     }
 
     fun updateApiEndpoint(endpoint: String) {
         _state.value = _state.value.copy(apiEndpoint = endpoint)
+        // Auto-detect models when endpoint changes and key is already set
+        if (_state.value.apiKey.isNotBlank()) fetchRemoteModels()
     }
 
     fun updateApiKey(key: String) {
         _state.value = _state.value.copy(apiKey = key)
+        // Auto-detect models when key is entered and endpoint is set
+        if (key.isNotBlank()) fetchRemoteModels()
     }
 
     fun updateModelName(model: String) {

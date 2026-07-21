@@ -3,6 +3,10 @@
 
 package com.mengpaw.kernel.agent
 
+import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.error.ErrorCollector
+import java.io.File
+
 /**
  * Agent identity and relationship profile.
  * Stored as Profile.md in the agent's document directory.
@@ -14,15 +18,21 @@ data class AgentProfile(
     val language: String = "zh-CN",
     val maxSteps: Int = 50,
     val autoInstallPlugins: Boolean = false,
-    val confirmDangerous: Boolean = true
+    val confirmDangerous: Boolean = true,
+    // Extended fields for Agent Card display
+    val name: String = "",       // display name (may differ from agentName)
+    val position: String = "",   // role/position
+    val bio: String = ""         // intro/description
 ) {
     fun toMarkdown(): String = """
 # 关系设定
 
 ## 自身
-- 名称: $agentName
+- 名称: ${name.ifBlank { agentName }}
 - ID: $agentId
-- 版本: 0.2.0-alpha
+- 定位: $position
+- 简介: $bio
+- 版本: 0.6.2
 
 ## 用户
 - 称呼: $userName
@@ -51,8 +61,35 @@ data class AgentProfile(
                 language = lines["语言"] ?: "zh-CN",
                 maxSteps = lines["最大步数"]?.toIntOrNull() ?: 50,
                 autoInstallPlugins = lines["自动安装插件"]?.contains("是") ?: false,
-                confirmDangerous = lines["危险操作确认"]?.contains("是") ?: true
+                confirmDangerous = lines["危险操作确认"]?.contains("是") ?: true,
+                name = lines["名称"] ?: "",
+                position = lines["定位"] ?: "",
+                bio = lines["简介"] ?: ""
             )
+        }
+
+        /** Load agent profile from disk. */
+        fun load(agentName: String): AgentProfile {
+            return try {
+                val file = File(DataPaths.AGENTS, "$agentName/profile.md")
+                if (file.exists()) fromMarkdown(file.readText())
+                else AgentProfile(agentName = agentName, name = agentName)
+            } catch (e: Exception) {
+                ErrorCollector.report(e, "AgentProfile.load")
+                AgentProfile(agentName = agentName, name = agentName)
+            }
+        }
+
+        /** Save agent profile to disk. */
+        fun save(agentName: String, profile: AgentProfile) {
+            try {
+                val dir = File(DataPaths.AGENTS, agentName)
+                if (!dir.exists()) dir.mkdirs()
+                val file = File(dir, "profile.md")
+                file.writeText(profile.toMarkdown())
+            } catch (e: Exception) {
+                ErrorCollector.report(e, "AgentProfile.save")
+            }
         }
     }
 }

@@ -27,12 +27,15 @@ import kotlinx.coroutines.launch
 
 /**
  * Collects Agent-pushed notifications from [NotifyBus] and renders:
- * - BANNER: animated overlay that auto-dismisses after a few seconds
+ * - BANNER: animated overlay that auto-dismisses after a few seconds.
+ *   Clicking the banner invokes [onBannerClick] before dismissing,
+ *   allowing navigation to the relevant agent session.
  * - MESSAGE: injected into the parent chat message list
  */
 @Composable
 fun NotifyBannerHost(
     onMessage: ((String) -> Unit)? = null,
+    onBannerClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -80,7 +83,10 @@ fun NotifyBannerHost(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.xs)
-                    .clickable { bannerVisible = false },
+                    .clickable {
+                        onBannerClick?.invoke()
+                        bannerVisible = false
+                    },
                 shape = RoundedCornerShape(ArcoRadius.lg),
                 color = bg,
                 shadowElevation = 4.dp

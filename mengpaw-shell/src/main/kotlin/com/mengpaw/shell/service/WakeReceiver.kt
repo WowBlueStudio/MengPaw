@@ -34,7 +34,7 @@ class WakeReceiver : BroadcastReceiver() {
 
         // After Cron fires, re-register next Cron alarm
         if (reason == "cron") {
-            context?.let { TriggerEngine.registerCronAlarm(it) }
+            TriggerEngine.refreshCronAlarm()
         }
 
         // Check ACP inbox
