@@ -9,6 +9,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import com.mengpaw.shell.ui.components.NotifyBannerHost
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -195,6 +196,13 @@ fun MainScreen(
                             leftSidebarContent { showLeftSidebar = false }
                         }
                     }
+
+                    // Agent-pushed banner notifications
+                    NotifyBannerHost(
+                        onMessage = { text ->
+                            viewModel.notifyAgentMessage(text)
+                        }
+                    )
 
                     // Messages
                     LazyColumn(

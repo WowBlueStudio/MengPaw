@@ -35,7 +35,7 @@ class FsPlugin : Plugin {
         description = "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat",
         permissions = emptyList(),
         minCoreVersion = "0.2.0",
-        commands = listOf("fs.cat", "fs.ls", "fs.write", "fs.rm", "fs.mkdir", "fs.cp", "fs.mv", "fs.stat")
+        commands = listOf("fs.cat", "fs.ls", "fs.write", "fs.rm", "fs.mkdir", "fs.cp", "fs.mv", "fs.stat", "fs.grep", "fs.glob")
     )
 
     override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
@@ -46,7 +46,9 @@ class FsPlugin : Plugin {
         "mkdir" to ::mkdir,
         "cp" to ::cp,
         "mv" to ::mv,
-        "stat" to ::stat
+        "stat" to ::stat,
+        "grep" to ::grep,
+        "glob" to ::glob
     )
 
     companion object {
@@ -172,6 +174,78 @@ class FsPlugin : Plugin {
             Writable: ${file.canWrite()}
             Last Modified: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(java.util.Date(file.lastModified()))}
         """.trimIndent())
+    }
+
+    // ── Search (ported from QwenPaw grep_search / glob_search) ─────────
+
+    /** Content search across files. Usage: fs.grep <pattern> [path] [--regex] [-i] [-n N] */
+    private suspend fun grep(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs.grep <pattern> [path] [--regex] [-i] [--context N]", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val pattern = args[0]
+        val isRegex = args.contains("--regex")
+        val caseInsensitive = args.contains("-i")
+        val contextLines = args.indexOf("--context").let { idx ->
+            if (idx >= 0 && idx + 1 < args.size) args[idx + 1].toIntOrNull() ?: 2 else 2
+        }
+        val searchPath = args.find { !it.startsWith("-") && it != pattern && it != contextLines.toString() } ?: "."
+        val resolved = resolveSafe(searchPath, ctx)
+        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+
+        val root = resolved.file
+        val results = mutableListOf<String>()
+        val files = if (root.isDirectory) root.walkTopDown().filter { it.isFile }.toList()
+            else listOf(root)
+
+        val regex = try {
+            val flags = if (caseInsensitive) setOf(RegexOption.IGNORE_CASE) else emptySet()
+            if (isRegex) Regex(pattern, flags) else Regex(Regex.escape(pattern), flags)
+        } catch (e: Exception) { return ExecutionResult.fail("Invalid pattern: ${e.message}", errorCode = ErrorCodes.ERR_INVALID_INPUT) }
+
+        var matchCount = 0
+        for (file in files) {
+            if (matchCount >= 100) { results.add("...(truncated, ${matchCount}+ matches)"); break }
+            try {
+                val lines = file.readLines()
+                for ((i, line) in lines.withIndex()) {
+                    if (regex.containsMatchIn(line)) {
+                        matchCount++
+                        val ctxStart = maxOf(0, i - contextLines)
+                        val ctxEnd = minOf(lines.size - 1, i + contextLines)
+                        results.add("${file.name}:${i + 1}: ${lines.subList(ctxStart, i).joinToString("\n") { "  |$it" }}")
+                        results.add("${file.name}:${i + 1}:> $line")
+                        if (ctxEnd > i) results.add(lines.subList(i + 1, ctxEnd + 1).joinToString("\n") { "  |$it" })
+                        results.add("")
+                    }
+                }
+            } catch (_: Exception) { /* skip unreadable files */ }
+        }
+        return ExecutionResult.ok(results.joinToString("\n").ifEmpty { "(no matches for \"$pattern\")" })
+    }
+
+    /** File pattern matching. Usage: fs.glob <pattern> [path] */
+    private suspend fun glob(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs.glob <pattern> [path]", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val pattern = args[0]
+        val searchPath = args.getOrElse(1) { "." }
+        val resolved = resolveSafe(searchPath, ctx)
+        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+
+        val root = resolved.file
+        val regex = try {
+            Regex(pattern
+                .replace(".", "\\.").replace("*", ".*").replace("?", ".")
+                .replace("{", "(").replace("}", ")").replace(",", "|"))
+        } catch (e: Exception) { return ExecutionResult.fail("Invalid pattern: ${e.message}", errorCode = ErrorCodes.ERR_INVALID_INPUT) }
+
+        val matches = if (root.isDirectory) {
+            root.walkTopDown().filter { it.isFile && regex.matches(it.name) }.toList()
+        } else { emptyList() }
+
+        return ExecutionResult.ok(
+            matches.take(200).joinToString("\n") { f ->
+                "${f.relativeTo(root).path} (${formatSize(f.length())})"
+            }.ifEmpty { "(no files matching \"$pattern\")" }
+        )
     }
 
     // ── Path Sandbox ──────────────────────────────────────────────────

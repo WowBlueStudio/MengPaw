@@ -32,6 +32,13 @@ interface LlmProvider {
      * Get provider metadata.
      */
     fun info(): ProviderInfo
+
+    /**
+     * Token usage from the most recent API call, if available.
+     * Providers that track usage (e.g. AdaptiveLlmProvider) set this after each call.
+     * Default is null (untracked / simulated providers).
+     */
+    val lastUsage: TokenUsage? get() = null
 }
 
 data class ProviderInfo(

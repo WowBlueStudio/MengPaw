@@ -82,7 +82,8 @@ fun SettingsScreen(
     agentPluginItems: List<FrameworkItem> = emptyList(),
     agentToolItems: List<FrameworkItem> = emptyList(),
     agentSkillItems: List<FrameworkItem> = emptyList(),
-    workspaceItems: List<FrameworkItem> = emptyList()
+    workspaceItems: List<FrameworkItem> = emptyList(),
+    onRefreshWorkspace: (() -> Unit)? = null
 ) {
     val state by viewModel.state.collectAsState()
     val s = state.strings
@@ -146,7 +147,7 @@ fun SettingsScreen(
                     .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md)
             ) {
                 when (selectedSection) {
-                    0 -> AgentSettingsContent(state, viewModel, activeAgentEndpoint, activeAgentModel, onAgentSelectProvider, agentPluginItems, agentToolItems, agentSkillItems, workspaceItems)
+                    0 -> AgentSettingsContent(state, viewModel, activeAgentEndpoint, activeAgentModel, onAgentSelectProvider, agentPluginItems, agentToolItems, agentSkillItems, workspaceItems, onRefreshWorkspace)
                     1 -> FrameworkSettingsContent(state, viewModel, onNavigateToPluginMarket, cliItems, pluginItems, toolItems, skillItems)
                     2 -> SystemSettingsContent(state, viewModel, onNavigateToPluginMarket)
                 }
@@ -305,7 +306,8 @@ private fun AgentSettingsContent(
     agentPluginItems: List<FrameworkItem> = emptyList(),
     agentToolItems: List<FrameworkItem> = emptyList(),
     agentSkillItems: List<FrameworkItem> = emptyList(),
-    workspaceItems: List<FrameworkItem> = emptyList()
+    workspaceItems: List<FrameworkItem> = emptyList(),
+    onRefreshWorkspace: (() -> Unit)? = null
 ) {
     // ── 选用供应商（从框架已配置的列表中选择） ──
     SectionHeader("供应商 & 模型")
@@ -389,54 +391,29 @@ private fun AgentSettingsContent(
             singleLine = true, shape = RoundedCornerShape(ArcoRadius.md))
     }
 
-    // Loop 模式（官方插件，未安装时灰色不可选）
+    // Loop 模式（全部内置在 AgentEngine 中）
     Spacer(Modifier.height(ArcoSpacing.lg))
     SectionHeader("Loop 模式")
     LoopMode.entries.forEach { mode ->
-        val installed = mode != LoopMode.GOAL // Goal 内置；Mission / Mission+ 需安装插件
-        val selected = state.loopMode == mode && installed
+        val selected = state.loopMode == mode
         Surface(
             modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                .clickable(enabled = installed) {
-                    if (installed) viewModel.setLoopMode(mode)
-                },
+                .clickable { viewModel.setLoopMode(mode) },
             shape = RoundedCornerShape(ArcoRadius.md),
-            color = if (selected) ArcoColors.Blue1.copy(alpha = 0.3f)
-                    else if (!installed) ArcoColors.Gray3.copy(alpha = 0.5f)
-                    else ThemeColors.bgCard,
+            color = if (selected) ArcoColors.Blue1.copy(alpha = 0.3f) else ThemeColors.bgCard,
             tonalElevation = if (selected) 2.dp else 0.dp
         ) {
             Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
-                if (installed) {
-                    RadioButton(
-                        selected = selected,
-                        onClick = { viewModel.setLoopMode(mode) },
-                        modifier = Modifier.size(20.dp),
-                        colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand)
-                    )
-                } else {
-                    Icon(Icons.Outlined.Block, null, Modifier.size(20.dp), tint = ArcoColors.Gray5)
-                }
+                RadioButton(selected = selected, onClick = { viewModel.setLoopMode(mode) },
+                    modifier = Modifier.size(20.dp),
+                    colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
                 Spacer(Modifier.width(ArcoSpacing.sm))
                 Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(mode.label,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                            fontSize = 14.sp,
-                            color = if (!installed) ArcoColors.Gray5
-                                    else if (selected) ThemeColors.brand
-                                    else ThemeColors.textPrimary)
-                        if (!installed) {
-                            Spacer(Modifier.width(6.dp))
-                            Surface(shape = RoundedCornerShape(ArcoRadius.sm),
-                                    color = ArcoColors.Orange1) {
-                                Text("需安装插件", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                    fontSize = 10.sp, color = ArcoColors.Orange6)
-                            }
-                        }
-                    }
-                    Text(mode.desc, fontSize = 12.sp,
-                        color = if (!installed) ArcoColors.Gray5 else ThemeColors.textSecondary)
+                    Text(mode.label,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                        fontSize = 14.sp,
+                        color = if (selected) ThemeColors.brand else ThemeColors.textPrimary)
+                    Text(mode.desc, fontSize = 12.sp, color = ThemeColors.textSecondary)
                 }
             }
         }
@@ -506,7 +483,7 @@ private fun AgentSettingsContent(
     OutlinedButton(onClick = {
         com.mengpaw.kernel.trigger.TriggerEngine.addLifetime("chat-${(1000..9999).random()}", "10:00-20:00", "随机和用户聊聊")
     }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
-        Icon(Icons.Default.Add, null, Modifier.size(18.dp))
+        Icon(Icons.Filled.Add, null, Modifier.size(18.dp))
         Spacer(Modifier.width(4.dp))
         Text("添加真人感触发器", style = MaterialTheme.typography.labelSmall)
     }
@@ -537,7 +514,16 @@ private fun AgentSettingsContent(
     Spacer(Modifier.height(ArcoSpacing.lg))
 
     // ── 工作区核心文件 ──
-    FrameworkItemSection("工作区文件", Icons.Outlined.Description, workspaceItems)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        SectionHeader("工作区文件")
+        Spacer(Modifier.weight(1f))
+        if (onRefreshWorkspace != null) {
+            IconButton(onClick = onRefreshWorkspace, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Outlined.Refresh, "刷新文件列表", Modifier.size(18.dp), tint = ThemeColors.textSecondary)
+            }
+        }
+    }
+    FrameworkItemSection("", Icons.Outlined.Description, workspaceItems)
 }
 
 // ─── 02. Framework Settings Content ─────────────────────────────────
@@ -580,7 +566,7 @@ private fun FrameworkSettingsContent(
                     }
                     Spacer(Modifier.width(4.dp))
                     IconButton(onClick = { viewModel.removeProvider(saved.preset) }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Close, "删除", tint = ThemeColors.textSecondary, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.Close, "删除", tint = ThemeColors.textSecondary, modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -669,7 +655,7 @@ private fun FrameworkSettingsContent(
     } else {
         OutlinedButton(onClick = { viewModel.toggleApiSection() },
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
-            Icon(Icons.Default.Add, null, Modifier.size(18.dp))
+            Icon(Icons.Filled.Add, null, Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))
             Text("新增供应商连接")
         }
@@ -1044,7 +1030,7 @@ private fun SecurityRulesSection() {
     }
 
     // ── 2. 内核完整性防护 ──
-    var kernelIntegrity by remember { mutableStateOf(true) }
+    var kernelIntegrity by remember { mutableStateOf(com.mengpaw.kernel.security.SecurityPolicy.globalEnabled) }
     Surface(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         shape = RoundedCornerShape(ArcoRadius.md),
@@ -1060,14 +1046,16 @@ private fun SecurityRulesSection() {
                     fontSize = 12.sp, color = ThemeColors.textSecondary
                 )
             }
-            Switch(checked = kernelIntegrity, onCheckedChange = { kernelIntegrity = it },
-                modifier = Modifier.size(32.dp),
+            Switch(checked = kernelIntegrity, onCheckedChange = {
+                kernelIntegrity = it
+                com.mengpaw.kernel.security.SecurityPolicy.globalEnabled = it
+            }, modifier = Modifier.size(32.dp),
                 colors = SwitchDefaults.colors(checkedTrackColor = ArcoColors.Green6))
         }
     }
 
     // ── 3. 插件完整性防护 ──
-    var pluginIntegrity by remember { mutableStateOf(true) }
+    var pluginIntegrity by remember { mutableStateOf(com.mengpaw.kernel.plugin.PluginManager.globalInstance.integrityCheckEnabled) }
     Surface(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         shape = RoundedCornerShape(ArcoRadius.md),
@@ -1083,14 +1071,16 @@ private fun SecurityRulesSection() {
                     fontSize = 12.sp, color = ThemeColors.textSecondary
                 )
             }
-            Switch(checked = pluginIntegrity, onCheckedChange = { pluginIntegrity = it },
-                modifier = Modifier.size(32.dp),
+            Switch(checked = pluginIntegrity, onCheckedChange = {
+                pluginIntegrity = it
+                com.mengpaw.kernel.plugin.PluginManager.globalInstance.integrityCheckEnabled = it
+            }, modifier = Modifier.size(32.dp),
                 colors = SwitchDefaults.colors(checkedTrackColor = ArcoColors.Green6))
         }
     }
 
     // ── 4. 文件完整性防护 ──
-    var fileIntegrity by remember { mutableStateOf(true) }
+    var fileIntegrity by remember { mutableStateOf(com.mengpaw.core.security.IntegrityGuard.globalEnabled) }
     var showProtectedPaths by remember { mutableStateOf(false) }
     Surface(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
@@ -1109,8 +1099,10 @@ private fun SecurityRulesSection() {
                         fontSize = 12.sp, color = ThemeColors.textSecondary
                     )
                 }
-                Switch(checked = fileIntegrity, onCheckedChange = { fileIntegrity = it },
-                    modifier = Modifier.size(32.dp),
+                Switch(checked = fileIntegrity, onCheckedChange = {
+                    fileIntegrity = it
+                    com.mengpaw.core.security.IntegrityGuard.globalEnabled = it
+                }, modifier = Modifier.size(32.dp),
                     colors = SwitchDefaults.colors(checkedTrackColor = ArcoColors.Green6))
             }
             AnimatedVisibility(visible = showProtectedPaths) {
@@ -1165,7 +1157,7 @@ private fun FrameworkItemSection(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     items: List<FrameworkItem>
 ) {
-    SectionHeader(title)
+    if (title.isNotBlank()) SectionHeader(title)
     if (items.isEmpty()) {
         Text("暂无条目", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         Spacer(Modifier.height(ArcoSpacing.sm))

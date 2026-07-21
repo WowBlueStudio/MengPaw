@@ -256,6 +256,7 @@ class PromptEngine {
             - **教程在你手里** — CLI.md 含 USB调试/Root/无障碍 等教程，直接展示给用户
 
             ## 常用命令
+            - self.tools          # 列出所有可用命令（按命名空间分组）
             - agent.cli           # 查阅完整命令参考（含教程）
             - plugin.search <kw>  # 搜索可用插件
             - plugin.install <id> # 安装插件
@@ -283,6 +284,7 @@ class PromptEngine {
             - **Tutorials are in your hands** — CLI.md contains guides for USB debugging, Root, Accessibility, etc.
 
             ## Common Commands
+            - self.tools          # List all available commands (by namespace)
             - agent.cli           # Full command reference (with tutorials)
             - plugin.search <kw>  # Search available plugins
             - plugin.install <id> # Install a plugin

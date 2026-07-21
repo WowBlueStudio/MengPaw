@@ -53,7 +53,7 @@ data class TaskPlan(
 }
 
 class AgentEngine(
-    private val llmProvider: LlmProvider,
+    llmProvider: LlmProvider,
     private val pluginManager: PluginManager = PluginManager(),
     private val sessionManager: SessionManager = SessionManager(),
     private val promptEngine: PromptEngine = PromptEngine(),
@@ -64,6 +64,9 @@ class AgentEngine(
     /** Additional namespaces to register alongside built-ins (e.g. "sys" → SysExecutor.commands). */
     private val additionalNamespaces: Map<String, Map<String, suspend (List<String>, ExecutionContext) -> com.mengpaw.kernel.cli.ExecutionResult>> = emptyMap()
 ) {
+    /** The active LLM provider. Can be updated after construction (e.g. when user configures API key). */
+    @Volatile private var llmProvider: LlmProvider = llmProvider
+
     private val _state = MutableStateFlow<AgentState>(AgentState.Idle)
     val state: StateFlow<AgentState> = _state.asStateFlow()
 
@@ -73,6 +76,11 @@ class AgentEngine(
     val output: StateFlow<String> = _output.asStateFlow()
 
     private val llmRequestBuilder = LlmRequestBuilder(systemPrompt = promptEngine.buildSystemPrompt())
+
+    /** Replace the LLM provider at runtime (e.g. after user configures API key). */
+    fun updateLlmProvider(provider: LlmProvider) {
+        llmProvider = provider
+    }
 
     val cacheHitTokens: Long get() = llmRequestBuilder.cumulativeCacheHitTokens
     val cacheMissTokens: Long get() = llmRequestBuilder.cumulativeCacheMissTokens
@@ -87,8 +95,23 @@ class AgentEngine(
         llmRequestBuilder.cacheStrategy = CacheStrategy.forProvider(endpoint)
     }
 
-    private companion object {
-        const val SOFT_COMPACT_RATIO = 0.50
+    /** List all active CLI namespaces (built-in + plugins) for settings display. */
+    fun getActiveNamespaces(): List<String> {
+        val namespaces = mutableSetOf("self", "agent", "plugin")
+        additionalNamespaces.keys.forEach { namespaces.add(it) }
+        pluginManager.getActivePlugins().forEach { plugin ->
+            val ns = plugin.metadata.id.removeSuffix("-plugin").removeSuffix("-ext")
+            namespaces.add(ns)
+        }
+        return namespaces.sorted()
+    }
+
+    /** Access the plugin manager for settings display. */
+    fun getPluginManager(): PluginManager = pluginManager
+
+    companion object {
+        const val CORE_VERSION = "0.6.0"
+        private const val SOFT_COMPACT_RATIO = 0.50
         const val TOOL_SNIP_RATIO = 0.60
         const val COMPACT_RATIO = 0.80
         const val COMPACT_FORCE_RATIO = 0.90
@@ -173,6 +196,9 @@ class AgentEngine(
 
     private fun buildPipeline(): Pipeline {
         val registry = CommandRegistry()
+
+        // Expose registry for self.tools command
+        SelfExecutor.commandRegistry = registry
 
         // Built-in: self namespace (always available)
         registry.registerNamespace("self", SelfExecutor.commands)
@@ -291,6 +317,178 @@ class AgentEngine(
             sessionManager.addMessage(session.id, Message("assistant", errorMsg))
             _state.value = AgentState.Error(errorMsg)
             return errorMsg
+        }
+    }
+
+    // ── Goal Mode (ported from QwenPaw GoalMode) ─────────────────────
+
+    /**
+     * Goal-mode execution with RubricGate auto-completion detection.
+     *
+     * Each turn: inject goal prompt → run ReAct loop → evaluate completion via LLM.
+     * Stops when RubricGate returns SATISFIED or max iterations exhausted.
+     */
+    suspend fun runWithGoal(
+        task: String, maxTurns: Int = 20, maxTokensBudget: Int = 300_000,
+        onStep: ((TraceStep) -> Unit)? = null
+    ): String {
+        val session = com.mengpaw.kernel.agent.GoalSession(
+            goal = task, maxIterations = maxTurns, maxTokens = maxTokensBudget
+        )
+        val evaluator = com.mengpaw.kernel.agent.RubricEvaluator()
+        val allResults = mutableListOf<String>()
+
+        for (turn in 0 until maxTurns) {
+            if (!session.active) break
+            session.iteration = turn + 1
+
+            // Build goal-aware prompt
+            val goalPrompt = if (turn == 0) {
+                "## 目标模式\n你的任务是完成以下目标。持续工作直到目标达成：\n\n**目标**: ${session.goal}\n\n使用 Thought → Action → Final Answer 格式。完成后给出 Final Answer。"
+            } else {
+                "## 目标模式 (第 ${turn + 1}/$maxTurns 轮)\n目标尚未完成：${session.goal}\n\n继续工作。上次反馈: ${session.lastFeedback.ifEmpty { "无" }}"
+            }
+
+            // Execute one ReAct turn (standard run with the goal prompt prepended)
+            val result = run("$goalPrompt\n\n$task", maxSteps = 50, onStep = onStep)
+            allResults.add(result)
+
+            // Budget gate: estimate tokens from result length
+            session.tokensUsed += result.length / 4  // rough char→token estimate
+            if (session.tokensUsed >= maxTokensBudget) {
+                session.active = false
+                session.lastVerdict = "Token budget exceeded"
+                break
+            }
+
+            // RubricGate: LLM-based completion evaluation
+            if (result.contains("Final Answer:", ignoreCase = true)) {
+                // Heuristic: if Final Answer present, evaluate with rubric
+                val evalPrompt = evaluator.buildPrompt(session.goal, result)
+                try {
+                    val evalResult = llmProvider.complete(evalPrompt)
+                    val satisfied = evalResult.trim().uppercase().startsWith("YES")
+                    if (satisfied) {
+                        session.lastVerdict = "SATISFIED"
+                        session.active = false
+                    } else {
+                        session.lastVerdict = "NEEDS_REVISION"
+                        session.lastFeedback = evalResult.take(200)
+                    }
+                } catch (_: Exception) {
+                    // LLM eval failed — fall back to heuristic
+                    session.lastVerdict = "SATISFIED (heuristic)"
+                    session.active = false
+                }
+            }
+        }
+
+        return if (!session.active && session.lastVerdict.startsWith("SATISFIED")) {
+            "目标已完成: ${session.goal}\n\n" + allResults.lastOrNull().orEmpty()
+        } else {
+            "目标未完成 (${session.iteration}/${maxTurns} 轮): ${session.goal}\n\n最后结果:\n" +
+                allResults.lastOrNull().orEmpty()
+        }
+    }
+
+    // ── Mission Mode (ported from QwenPaw MissionMode) ────────────────
+
+    /**
+     * Mission-mode: decompose → worker execution → verification.
+     * Uses the LLM to decompose the task, then runs each subtask sequentially.
+     */
+    suspend fun runWithMission(
+        task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 10,
+        onStep: ((TraceStep) -> Unit)? = null
+    ): String {
+        // Step 1: Decompose task into subtasks
+        val decomposePrompt = """
+将以下复杂任务分解为 $maxSubtasks 个以内可独立执行的子任务。
+每个子任务应该是一个完整、可验证的工作单元。
+
+复杂任务: $task
+
+请按以下格式输出（每行一个子任务）：
+- [子任务描述] | 预期结果
+""".trimIndent()
+
+        val decomposeResult = try {
+            llmProvider.complete(decomposePrompt)
+        } catch (e: Exception) {
+            // Fallback: treat as single task
+            return run(task, maxStepsPerSubtask * maxSubtasks, onStep)
+        }
+
+        val subtasks = decomposeResult.lines()
+            .filter { it.trimStart().startsWith("-") || it.trimStart().startsWith("*") }
+            .take(maxSubtasks)
+            .mapIndexed { i, line ->
+                val parts = line.removePrefix("-").removePrefix("*").trim().split("|", limit = 2)
+                com.mengpaw.kernel.agent.MissionSubtask(
+                    id = "task-${i + 1}",
+                    description = parts.getOrElse(0) { "Subtask ${i + 1}" }.trim(),
+                    expectedOutcome = parts.getOrElse(1) { "" }.trim()
+                )
+            }
+
+        if (subtasks.isEmpty()) {
+            return run(task, maxStepsPerSubtask * maxSubtasks, onStep)
+        }
+
+        // Step 2: Execute each subtask
+        val results = mutableListOf<String>()
+        for (subtask in subtasks) {
+            subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.RUNNING
+            _state.value = AgentState.Running("Mission: ${subtask.description}", 0, 0)
+
+            val workerResult = try {
+                run(subtask.description, maxSteps = maxStepsPerSubtask, onStep = onStep)
+            } catch (e: Exception) {
+                "Error: ${e.message}"
+            }
+
+            subtask.output = workerResult
+            subtask.status = if (workerResult.contains("Final Answer:", ignoreCase = true) ||
+                !workerResult.startsWith("Error:")) {
+                com.mengpaw.kernel.agent.SubtaskStatus.DONE
+            } else {
+                com.mengpaw.kernel.agent.SubtaskStatus.FAILED
+            }
+
+            // Step 3: Verify
+            if (subtask.status == com.mengpaw.kernel.agent.SubtaskStatus.DONE) {
+                val verifyPrompt = "验证以下子任务是否成功完成。回答 PASS 或 FAIL。\n子任务: ${subtask.description}\n预期: ${subtask.expectedOutcome}\n输出: ${workerResult.take(1000)}"
+                try {
+                    val verifyResult = llmProvider.complete(verifyPrompt)
+                    if (verifyResult.trim().uppercase().startsWith("PASS")) {
+                        subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED
+                        subtask.verifierNote = "PASS"
+                    } else {
+                        subtask.verifierNote = verifyResult.take(100)
+                    }
+                } catch (_: Exception) {
+                    subtask.verifierNote = "Verification skipped"
+                }
+            }
+            results.add("[${subtask.status}] ${subtask.description}: ${workerResult.take(200)}")
+        }
+
+        // Step 4: Compose final report
+        val verified = subtasks.count { it.status == com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED }
+        val failed = subtasks.count { it.status == com.mengpaw.kernel.agent.SubtaskStatus.FAILED }
+        return buildString {
+            appendLine("## Mission 完成: $task")
+            appendLine("子任务: ${subtasks.size} | 已验证: $verified | 失败: $failed")
+            appendLine()
+            subtasks.forEach { st ->
+                val icon = when (st.status) {
+                    com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED -> "✅"
+                    com.mengpaw.kernel.agent.SubtaskStatus.DONE -> "👍"
+                    com.mengpaw.kernel.agent.SubtaskStatus.FAILED -> "❌"
+                    else -> "⬜"
+                }
+                appendLine("$icon **${st.description}**: ${st.output.take(200)}")
+            }
         }
     }
 

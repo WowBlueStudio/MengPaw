@@ -68,7 +68,7 @@ class SelfPlugin : Plugin {
     }
 
     private suspend fun version(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        return ExecutionResult.ok("MengPaw v0.2.0 (microkernel)")
+        return ExecutionResult.ok("MengPaw v${com.mengpaw.kernel.AgentEngine.CORE_VERSION} (microkernel)")
     }
 
     companion object {

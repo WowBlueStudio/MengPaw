@@ -1,6 +1,50 @@
 # Changelog
 
-## v0.6.0 (2026-07-21) — UI 全面重构 + 交互升级
+## v0.6.1 (2026-07-21) — 内核能力补全 + 安全加固
+
+### Agent 引擎
+- **Goal/Mission/Mission+ 内置模式**: `AgentEngine.runWithGoal()` + `runWithMission()`，参考 QwenPaw GoalMode 架构
+- **RubricGate**: LLM 自动评估目标完成度 (SATISFIED/NEEDS_REVISION)，替代简单步数限制
+- **Mission 模式**: LLM 拆解 → Worker 独立 ReAct → Verifier 验证 → 最终报告
+- **Provider 热更新**: `updateLlmProvider()` 支持设置页 Per-Agent 模型实时切换
+- 移除 `plugin-agent-loop` 和 `plugin-agent-mission` (模式已内置)
+
+### Agent 自省扩展 (self 命名空间)
+- `self.tools [namespace]` — 按命名空间列出所有可用命令
+- `self.time [format]` — 获取当前时间 (支持 iso/date/time/timestamp)
+- `notify.message <text>` — Agent 主动推送消息到聊天
+- `notify.banner <text> [--level]` — Agent 推送横幅 (info/success/warn/error)
+- `self` 命名空间从 9 命令扩展至 14 命令
+
+### 文件搜索
+- `fs.grep` — 文本/正则内容搜索 (含上下文行，参考 QwenPaw grep_search)
+- `fs.glob` — 文件通配符模式匹配 (参考 QwenPaw glob_search)
+- `fs` 命名空间从 8 命令扩展至 10 命令
+
+### 技能系统
+- 4 个默认 Skills (make-skill / make-plan / guidance / source-index)，参考 QwenPaw 移植
+- 首次运行自动播种，已有 skill 时跳过
+
+### 安全修复
+- **API Key 持久化**: `savedProviders` JSON 加密存储到 Vault，启动自动恢复，支持多供应商
+- **Vault 安全加固**: Keystore 失效时降级到 InMemoryPreferences (绝不明文)
+- **ProGuard**: Shell + Browser 均添加 `-keep com.google.crypto.tink.**` 规则
+- **Android 权限**: 6→17 项，覆盖 sys.location/camera/apps + 插件安装 + 音频/振动
+
+### Bug 修复
+- 修复引擎使用 SimulatedLlmProvider 导致 "System check complete" 假回复
+- 修复 `plugin.install` DexClassLoader 失败时静默返回 ok
+- 修复 `plugin-plugin` 幽灵条目在 KEEP_AWAKE
+- 修复 `Icons.Default` deprecated warning (×3)
+
+### 开发者体验
+- 编译问题速查表 (10 项已知陷阱) 记录到 `docs/compilation-issues.md`
+- 6 项 Settings 待处理项全部解决 (`docs/settings-pending.md`)
+- 开发文档全量重构至 v0.6.1
+
+### 发行
+- Shell: v0.6.0 → v0.6.1 (vc=11→12)
+- 插件: 25→23 (loop/mission 已内置), fs 8→10 命令, self 9→14 命令
 
 ### 设置页重构
 - **iPad 式双栏布局**: 平板侧栏 240dp + 内容区，手机侧栏 68dp 图标条
