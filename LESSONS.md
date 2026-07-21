@@ -4,6 +4,63 @@
 
 ---
 
+## 2026-07-22 — v0.7.0 发布
+
+### 架构经验
+
+1. **提示词模板 > 硬编码**
+   - 场景：CRON 触发器最初在 `submitTriggerTask` 中用大段 String 硬编码横幅推送指令
+   - 后果：用户无法定制 Agent 行为
+   - 改进：将行为规范写入 `trigger.md` 工作区文件，Agent 自行读取 → 用户可编辑文件控制行为
+   - 原则：**Agent 的行为规则放在 workspace 的 Markdown 文件中，不要硬编码在 Kotlin 代码里**
+
+2. **API 拉取 > 预置列表**
+   - 场景：LLM Provider 模型列表硬编码在 `LlmProviderPreset` 中
+   - 后果：Kimi K2→K3, DeepSeek V3→V4 每次都要手动更新，永远慢半拍
+   - 改进：输入 API Key → 自动调用 `/v1/models` → 下拉选择，预设只放最主流的几个
+   - 原则：**模型列表从 API 实时获取，预设只做 fallback**
+
+3. **ExecutionContext 命名冲突**
+   - 场景：SysExecutor 中 Android `Context` 属性名 `ctx` 与 `ExecutionContext` 参数名 `ctx` 冲突
+   - 后果：大量 `ctx.context` 调用在 bulk replace 中全部损坏，逐个修复耗费大量时间
+   - 教训：**Kotlin 中不要给不同语义的类型用同一个缩写名**。Android Context 用 `app`，ExecutionContext 用 `ec`
+
+4. **kotlinx.serialization vs org.json 的分层**
+   - 场景：TriggerEngine 在 kernel 层用 `org.json` 序列化 → 编译失败（kernel 是 JVM 模块没有 Android SDK）
+   - 改进：kernel 层统一用 `kotlinx.serialization`，shell 层可用 `org.json`
+
+### 设计决策
+
+5. **LIFETIME 从随机间隔 → 心跳 + 预生成时间点**
+   - 旧方案：每次触发后随机计算下次时间，依赖协程轮询
+   - 问题：`start()` 从未被调用 → 触发器永不触发；时间不可预测
+   - 新方案：每日生成 1-3 个精确到分钟的随机时间点，30s 心跳检查 ±2min 匹配
+   - 好处：时间可预测（`dailySlots`），实现简单，易于调试
+
+6. **CRON 模糊窗口**
+   - 用户不需要精确到秒的定时 → ±5 分钟窗口覆盖真实使用场景
+   - `lastFired` 防止同窗口重复触发
+
+### 审校发现
+
+7. **孤儿代码和未使用变量**
+   - `bootstrapTemplate()` 被 `boostTemplate()` 取代后未删除
+   - `newAgentForm` / `fullName` 声明后从未使用
+   - 每次功能替换后应 grep 检查引用，清理死代码
+
+8. **WakeLock 对象泄漏**
+   - `onStartCommand` 中每次创建新 WakeLock 而不释放旧的
+   - 应先尝试 `acquire()` 复用已有实例
+
+### 编译陷阱
+
+9. **bulk replace (`replace_all: true`) 的副作用**
+   - `ctx.context` → `ctx` 的 replace_all 把 Android Context 引用全部破坏
+   - 应该用更精确的匹配字符串，或分步小范围替换
+   - Kotlin 中 `_` 作为参数名在 2.0+ 中受限
+
+---
+
 ## 2026-07-19 — v0.2.2 发布日
 
 ### 致命错误
