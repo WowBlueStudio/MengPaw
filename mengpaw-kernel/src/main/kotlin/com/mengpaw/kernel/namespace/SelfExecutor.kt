@@ -174,7 +174,7 @@ object SelfExecutor {
                 val engine = com.mengpaw.kernel.trigger.TriggerEngine
                 val type = a[1]; val id = a[2]; val expr = a[3]; val action = a.drop(4).joinToString(" ")
                 val ok = when (type) {
-                    "cron" -> { engine.addCron(id, expr, action); engine.registerCronAlarm(null); true }
+                    "cron" -> { engine.addCron(id, expr, action); engine.refreshCronAlarm(); true }
                     "lifetime" -> { engine.addLifetime(id, expr, action); true }
                     else -> false
                 }
@@ -195,7 +195,7 @@ object SelfExecutor {
             ExecutionResult.ok("## 真人感话题\n\n${com.mengpaw.kernel.trigger.TriggerEngine.LIFETIME_TOPICS.joinToString("\n") { "- $it" }}")
         },
         "cron-wake" to { _, _ ->
-            com.mengpaw.kernel.trigger.TriggerEngine.registerCronAlarm(null)
+            com.mengpaw.kernel.trigger.TriggerEngine.refreshCronAlarm()
             ExecutionResult.ok("Cron alarm re-registered.")
         }
     )

@@ -75,7 +75,6 @@ fun SettingsScreen(
     activeAgentEndpoint: String = "",
     activeAgentModel: String = "",
     onAgentSelectProvider: ((SavedProvider) -> Unit)? = null,
-    cliItems: List<FrameworkItem> = emptyList(),
     pluginItems: List<FrameworkItem> = emptyList(),
     toolItems: List<FrameworkItem> = emptyList(),
     skillItems: List<FrameworkItem> = emptyList(),
@@ -125,7 +124,6 @@ fun SettingsScreen(
             SettingsSidebar(
                 selected = selectedSection,
                 onSelect = { selectedSection = it },
-                activeAgentName = activeAgentName,
                 expanded = isWide()
             )
 
@@ -148,7 +146,7 @@ fun SettingsScreen(
             ) {
                 when (selectedSection) {
                     0 -> AgentSettingsContent(state, viewModel, activeAgentEndpoint, activeAgentModel, onAgentSelectProvider, agentPluginItems, agentToolItems, agentSkillItems, workspaceItems, onRefreshWorkspace)
-                    1 -> FrameworkSettingsContent(state, viewModel, onNavigateToPluginMarket, cliItems, pluginItems, toolItems, skillItems)
+                    1 -> FrameworkSettingsContent(state, viewModel, onNavigateToPluginMarket, pluginItems, toolItems, skillItems)
                     2 -> SystemSettingsContent(state, viewModel, onNavigateToPluginMarket)
                 }
                 Spacer(Modifier.height(ArcoSpacing.xxxl))
@@ -163,7 +161,6 @@ fun SettingsScreen(
 private fun SettingsSidebar(
     selected: Int,
     onSelect: (Int) -> Unit,
-    activeAgentName: String,
     expanded: Boolean
 ) {
     Column(
@@ -177,7 +174,7 @@ private fun SettingsSidebar(
         SidebarItem(
             number = "01",
             title = "智能体设置",
-            subtitle = activeAgentName,
+            subtitle = null,
             selected = selected == 0,
             expanded = expanded,
             containerColor = if (selected == 0) ThemeColors.brandContainer else Color.Transparent,
@@ -387,32 +384,26 @@ private fun AgentSettingsContent(
         }
         var tText by remember(state.commandTimeoutSec) { mutableStateOf(state.commandTimeoutSec.toString()) }
         OutlinedTextField(value = tText, onValueChange = { tText = it; it.toIntOrNull()?.let { n -> viewModel.updateCommandTimeout(n) } },
-            modifier = Modifier.width(72.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.width(80.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true, shape = RoundedCornerShape(ArcoRadius.md))
     }
 
-    // Loop 模式（全部内置在 AgentEngine 中）
+    // Loop 模式 — Agent 根据任务复杂度自动选择，此处仅供展示
     Spacer(Modifier.height(ArcoSpacing.lg))
     SectionHeader("Loop 模式")
+    Text("Agent 会根据任务复杂度自动选择合适的执行模式，无需手动切换。",
+        style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary,
+        modifier = Modifier.padding(bottom = ArcoSpacing.xs))
     LoopMode.entries.forEach { mode ->
-        val selected = state.loopMode == mode
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                .clickable { viewModel.setLoopMode(mode) },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
             shape = RoundedCornerShape(ArcoRadius.md),
-            color = if (selected) ArcoColors.Blue1.copy(alpha = 0.3f) else ThemeColors.bgCard,
-            tonalElevation = if (selected) 2.dp else 0.dp
+            color = ThemeColors.bgCard
         ) {
             Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = selected, onClick = { viewModel.setLoopMode(mode) },
-                    modifier = Modifier.size(20.dp),
-                    colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
-                Spacer(Modifier.width(ArcoSpacing.sm))
                 Column(Modifier.weight(1f)) {
-                    Text(mode.label,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                        fontSize = 14.sp,
-                        color = if (selected) ThemeColors.brand else ThemeColors.textPrimary)
+                    Text(mode.label, fontWeight = FontWeight.Medium, fontSize = 14.sp,
+                        color = ThemeColors.textPrimary)
                     Text(mode.desc, fontSize = 12.sp, color = ThemeColors.textSecondary)
                 }
             }
@@ -447,12 +438,15 @@ private fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── 定时任务 & 真人触发器 ──
+    // ── 定时任务 & 触发器 ──
     SectionHeader("定时任务 & 触发器")
     var triggerVersion by remember { mutableStateOf(0) }
+    var showAddCronDialog by remember { mutableStateOf(false) }
+    var showAddLifetimeDialog by remember { mutableStateOf(false) }
     val triggers = remember(triggerVersion) { com.mengpaw.kernel.trigger.TriggerEngine.list() }
+
     if (triggers.isEmpty()) {
-        Text("暂无触发器。Agent 可使用 self.trigger 命令创建。",
+        Text("暂无触发器。添加定时任务让 Agent 在指定时间自动执行。",
             style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         Spacer(Modifier.height(ArcoSpacing.sm))
     } else {
@@ -467,25 +461,84 @@ private fun AgentSettingsContent(
                         modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(ArcoSpacing.sm))
                     Column(Modifier.weight(1f)) {
-                        Text(trigger.id, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodySmall)
-                        Text("${trigger.config} → ${trigger.action.take(30)}",
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(trigger.id, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodySmall)
+                            Spacer(Modifier.width(6.dp))
+                            Surface(shape = RoundedCornerShape(4.dp),
+                                color = if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON)
+                                    ArcoColors.Blue6.copy(alpha = 0.1f) else ArcoColors.Orange6.copy(alpha = 0.1f)) {
+                                Text(
+                                    if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON) "定时" else "真人",
+                                    Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                    fontSize = 9.sp, color = if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON)
+                                        ArcoColors.Blue6 else ArcoColors.Orange6
+                                )
+                            }
+                        }
+                        Text("${trigger.config} → ${trigger.action.take(40)}",
                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
+                        if (trigger.lastFired > 0) {
+                            Text(
+                                "上次触发: ${java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(trigger.lastFired))}",
+                                fontSize = 10.sp, color = ArcoColors.Gray6
+                            )
+                        }
                     }
                     Switch(checked = trigger.enabled, onCheckedChange = { newChecked ->
                         if (!newChecked) com.mengpaw.kernel.trigger.TriggerEngine.disable(trigger.id)
                         else com.mengpaw.kernel.trigger.TriggerEngine.enable(trigger.id)
                         triggerVersion++
                     }, modifier = Modifier.size(32.dp))
+                    // Delete button
+                    IconButton(onClick = {
+                        com.mengpaw.kernel.trigger.TriggerEngine.remove(trigger.id)
+                        triggerVersion++
+                    }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Outlined.Close, "删除", Modifier.size(16.dp), tint = ThemeColors.textSecondary)
+                    }
                 }
             }
         }
     }
-    OutlinedButton(onClick = {
-        com.mengpaw.kernel.trigger.TriggerEngine.addLifetime("chat-${(1000..9999).random()}", "10:00-20:00", "随机和用户聊聊")
-    }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
-        Icon(Icons.Filled.Add, null, Modifier.size(18.dp))
-        Spacer(Modifier.width(4.dp))
-        Text("添加真人感触发器", style = MaterialTheme.typography.labelSmall)
+
+    // Action buttons
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
+        OutlinedButton(onClick = { showAddCronDialog = true },
+            modifier = Modifier.weight(1f), shape = RoundedCornerShape(ArcoRadius.md)) {
+            Icon(Icons.Outlined.Schedule, null, Modifier.size(16.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("添加定时", style = MaterialTheme.typography.labelSmall)
+        }
+        OutlinedButton(onClick = { showAddLifetimeDialog = true },
+            modifier = Modifier.weight(1f), shape = RoundedCornerShape(ArcoRadius.md)) {
+            Icon(Icons.Outlined.Person, null, Modifier.size(16.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("添加真人感", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+
+    // ── Add CRON Dialog ──
+    if (showAddCronDialog) {
+        CronTriggerDialog(
+            onDismiss = { showAddCronDialog = false },
+            onConfirm = { id, expr, action ->
+                com.mengpaw.kernel.trigger.TriggerEngine.addCron(id, expr, action)
+                triggerVersion++
+                showAddCronDialog = false
+            }
+        )
+    }
+
+    // ── Add LIFETIME Dialog ──
+    if (showAddLifetimeDialog) {
+        LifetimeTriggerDialog(
+            onDismiss = { showAddLifetimeDialog = false },
+            onConfirm = { id, timeRange, action ->
+                com.mengpaw.kernel.trigger.TriggerEngine.addLifetime(id, timeRange, action)
+                triggerVersion++
+                showAddLifetimeDialog = false
+            }
+        )
     }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
@@ -499,8 +552,8 @@ private fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── Agent Tools（从全局池导入） ──
-    FrameworkItemSection("Agent Tools", Icons.Outlined.Handyman, agentToolItems)
+    // ── MengPaw CLI（Agent 可用命令） ──
+    FrameworkItemSection("MengPaw CLI", Icons.Outlined.Terminal, agentToolItems)
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
@@ -533,7 +586,6 @@ private fun FrameworkSettingsContent(
     state: SettingsState,
     viewModel: SettingsViewModel,
     onNavigateToPluginMarket: () -> Unit,
-    cliItems: List<FrameworkItem> = emptyList(),
     pluginItems: List<FrameworkItem> = emptyList(),
     toolItems: List<FrameworkItem> = emptyList(),
     skillItems: List<FrameworkItem> = emptyList()
@@ -604,8 +656,63 @@ private fun FrameworkSettingsContent(
         SettingsTextField(Icons.Outlined.Link, "API 地址", state.apiEndpoint,
             onValueChange = { viewModel.updateApiEndpoint(it) })
         Spacer(Modifier.height(ArcoSpacing.sm))
-        SettingsTextField(Icons.Outlined.ModelTraining, "模型", state.modelName,
-            onValueChange = { viewModel.updateModelName(it) })
+        // Model selector — dropdown from API if fetched, else text input
+        if (state.remoteModelsFetched && state.remoteModels.isNotEmpty()) {
+            var modelDropdownExpanded by remember { mutableStateOf(false) }
+            Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.xs),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.ModelTraining, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
+                Spacer(Modifier.width(ArcoSpacing.sm))
+                Column(Modifier.weight(1f)) {
+                    Text("模型", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                    Box {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().clickable { modelDropdownExpanded = true },
+                            shape = RoundedCornerShape(ArcoRadius.md),
+                            color = ThemeColors.bgCardHigh
+                        ) {
+                            Row(Modifier.padding(horizontal = ArcoSpacing.md, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Text(state.modelName, Modifier.weight(1f), fontSize = 14.sp,
+                                    color = ArcoColors.Green6, fontWeight = FontWeight.Medium)
+                                Icon(Icons.Outlined.ArrowDropDown, null, Modifier.size(20.dp),
+                                    tint = ArcoColors.Green6)
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = modelDropdownExpanded,
+                            onDismissRequest = { modelDropdownExpanded = false }
+                        ) {
+                            Text("API 返回 ${state.remoteModels.size} 个模型",
+                                Modifier.padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.xs),
+                                fontSize = 10.sp, color = ThemeColors.textSecondary)
+                            HorizontalDivider()
+                            state.remoteModels.take(30).forEach { model ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(model.take(40),
+                                            fontWeight = if (model == state.modelName) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (model == state.modelName) ArcoColors.Green6 else ThemeColors.textPrimary)
+                                    },
+                                    onClick = { viewModel.updateModelName(model); modelDropdownExpanded = false },
+                                    leadingIcon = if (model == state.modelName) {
+                                        { Icon(Icons.Outlined.Check, null, Modifier.size(16.dp), tint = ArcoColors.Green6) }
+                                    } else null
+                                )
+                            }
+                            if (state.remoteModels.size > 30) {
+                                Text("... 还有 ${state.remoteModels.size - 30} 个模型",
+                                    Modifier.padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.xs),
+                                    fontSize = 10.sp, color = ThemeColors.textSecondary)
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            SettingsTextField(Icons.Outlined.ModelTraining, "模型", state.modelName,
+                onValueChange = { viewModel.updateModelName(it) })
+        }
         Spacer(Modifier.height(ArcoSpacing.sm))
 
         // Cache optimization
@@ -733,13 +840,6 @@ private fun FrameworkSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── CLI 命令列表 ──
-    FrameworkItemSection("CLI 命令", Icons.Outlined.Terminal, cliItems)
-
-    Spacer(Modifier.height(ArcoSpacing.lg))
-    HorizontalDivider(color = ThemeColors.border)
-    Spacer(Modifier.height(ArcoSpacing.lg))
-
     // ── 全局插件 ──
     FrameworkItemSection("全局插件", Icons.Outlined.Extension, pluginItems)
 
@@ -747,8 +847,8 @@ private fun FrameworkSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── 全局 Tools ──
-    FrameworkItemSection("全局 Tools", Icons.Outlined.Handyman, toolItems)
+    // ── MengPaw CLI ──
+    FrameworkItemSection("MengPaw CLI", Icons.Outlined.Terminal, toolItems)
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
@@ -905,7 +1005,7 @@ private fun SystemSettingsContent(
 
     // About
     SectionHeader(state.strings.about)
-    InfoRow(state.strings.version, "0.5.0")
+    InfoRow(state.strings.version, "0.7.0")
     InfoRow(state.strings.core, "mengpaw-kernel + mengpaw-core")
     InfoRow(state.strings.design, "Arco Design · Compose Material 3")
 
@@ -1372,4 +1472,237 @@ private fun ProviderCard(
         }
     }
     Spacer(Modifier.height(2.dp))
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CRON Trigger Dialog — add a scheduled CRON task
+// ═══════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun CronTriggerDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (id: String, cronExpr: String, action: String) -> Unit
+) {
+    var selectedPreset by remember { mutableStateOf(0) }
+    var customCron by remember { mutableStateOf("") }
+    var action by remember { mutableStateOf("") }
+
+    // Preset CRON templates for common use cases
+    data class CronPreset(val label: String, val cron: String, val hint: String)
+    val presets = listOf(
+        CronPreset("每天早上 9:00", "0 9 * * *", "生成昨日摘要并推送"),
+        CronPreset("每天中午 12:00", "0 12 * * *", "检查今日待办事项"),
+        CronPreset("每天晚上 20:00", "0 20 * * *", "总结今日工作进展"),
+        CronPreset("每小时整点", "0 * * * *", "检查系统状态"),
+        CronPreset("自定义 (输入Cron表达式)", "", "")
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("添加定时任务", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)
+            ) {
+                Text("选择时间", style = MaterialTheme.typography.labelMedium, color = ThemeColors.textSecondary)
+                presets.forEachIndexed { i, preset ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable { selectedPreset = i; if (preset.cron.isNotBlank()) customCron = preset.cron },
+                        shape = RoundedCornerShape(ArcoRadius.sm),
+                        color = if (selectedPreset == i) ThemeColors.brand.copy(alpha = 0.08f)
+                            else ThemeColors.bgCardHigh
+                    ) {
+                        Row(
+                            Modifier.padding(ArcoSpacing.sm),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedPreset == i,
+                                onClick = { selectedPreset = i; if (preset.cron.isNotBlank()) customCron = preset.cron },
+                                modifier = Modifier.size(20.dp),
+                                colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand)
+                            )
+                            Spacer(Modifier.width(ArcoSpacing.sm))
+                            Column {
+                                Text(preset.label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                if (preset.cron.isNotBlank()) {
+                                    Text("CRON: ${preset.cron}", fontSize = 10.sp, color = ThemeColors.textSecondary,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Custom CRON input (shown when "自定义" is selected or for manual edit)
+                if (selectedPreset == presets.size - 1 || selectedPreset >= 0) {
+                    OutlinedTextField(
+                        value = customCron,
+                        onValueChange = { customCron = it; selectedPreset = presets.size - 1 },
+                        label = { Text("Cron 表达式") },
+                        placeholder = { Text("分 时 日 月 周，如: 0 9 * * *") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(ArcoRadius.md),
+                        supportingText = {
+                            Text(
+                                "模糊窗口 ±${com.mengpaw.kernel.trigger.TriggerEngine.cronFuzzyWindowMinutes} 分钟，无需精确到秒",
+                                fontSize = 10.sp, color = ThemeColors.textSecondary
+                            )
+                        }
+                    )
+                }
+
+                OutlinedTextField(
+                    value = action,
+                    onValueChange = { action = it },
+                    label = { Text("执行动作") },
+                    placeholder = {
+                        Text(presets.getOrNull(selectedPreset)?.hint ?: "描述 Agent 需要执行的任务...")
+                    },
+                    minLines = 2,
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(ArcoRadius.md)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val expr = customCron.ifBlank { presets[selectedPreset].cron }
+                    val act = action.ifBlank { presets[selectedPreset].hint }
+                    if (expr.isNotBlank() && act.isNotBlank()) {
+                        onConfirm("cron-${(1000..9999).random()}", expr, act)
+                    }
+                },
+                enabled = customCron.isNotBlank() && action.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
+                shape = RoundedCornerShape(ArcoRadius.md)
+            ) { Text("添加", color = Color.White) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// LIFETIME Trigger Dialog — add a human-like random trigger
+// ═══════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun LifetimeTriggerDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (id: String, timeRange: String, action: String) -> Unit
+) {
+    var startHour by remember { mutableStateOf("10") }
+    var startMin by remember { mutableStateOf("00") }
+    var endHour by remember { mutableStateOf("20") }
+    var endMin by remember { mutableStateOf("00") }
+    var action by remember { mutableStateOf("") }
+    var selectedTopic by remember { mutableStateOf(-1) }
+    val topics = remember { com.mengpaw.kernel.trigger.TriggerEngine.LIFETIME_TOPICS }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("添加真人感触发器", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)
+            ) {
+                Text("在这个时间段内随机触发一次", style = MaterialTheme.typography.labelMedium, color = ThemeColors.textSecondary)
+
+                // Time range picker
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)
+                ) {
+                    OutlinedTextField(
+                        value = startHour, onValueChange = { if (it.length <= 2) startHour = it },
+                        label = { Text("开始时") }, singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(ArcoRadius.md),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    Text(":", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = startMin, onValueChange = { if (it.length <= 2) startMin = it },
+                        label = { Text("分") }, singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(ArcoRadius.md),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    Text("—", fontSize = 18.sp, color = ThemeColors.textSecondary)
+                    OutlinedTextField(
+                        value = endHour, onValueChange = { if (it.length <= 2) endHour = it },
+                        label = { Text("结束时") }, singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(ArcoRadius.md),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    Text(":", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = endMin, onValueChange = { if (it.length <= 2) endMin = it },
+                        label = { Text("分") }, singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(ArcoRadius.md),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+
+                // Topic presets
+                Text("话题预设", style = MaterialTheme.typography.labelMedium, color = ThemeColors.textSecondary)
+                topics.forEachIndexed { i, topic ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable { selectedTopic = i; action = topic },
+                        shape = RoundedCornerShape(ArcoRadius.sm),
+                        color = if (selectedTopic == i) ThemeColors.brand.copy(alpha = 0.08f)
+                            else ThemeColors.bgCardHigh
+                    ) {
+                        Row(
+                            Modifier.padding(ArcoSpacing.sm),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedTopic == i,
+                                onClick = { selectedTopic = i; action = topic },
+                                modifier = Modifier.size(20.dp),
+                                colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand)
+                            )
+                            Spacer(Modifier.width(ArcoSpacing.sm))
+                            Text(topic, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+
+                // Custom action
+                OutlinedTextField(
+                    value = action,
+                    onValueChange = { action = it; selectedTopic = -1 },
+                    label = { Text("自定义动作") },
+                    minLines = 2, maxLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(ArcoRadius.md)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val timeRange = "${startHour}:${startMin}-${endHour}:${endMin}"
+                    if (action.isNotBlank()) {
+                        onConfirm("chat-${(1000..9999).random()}", timeRange, action)
+                    }
+                },
+                enabled = action.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
+                shape = RoundedCornerShape(ArcoRadius.md)
+            ) { Text("添加", color = Color.White) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
 }

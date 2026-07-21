@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.6.2 | **更新**: 2026-07-21 | **架构**: 微内核 — 纯 Kotlin/JVM 内核 + Android 适配层 + 23 插件生态 + Goal/Mission 内置模式 + Agent→User 推送
+> **版本**: 0.7.0 | **更新**: 2026-07-22 | **架构**: 微内核 — 纯 Kotlin/JVM 内核 + Android 适配层 + 23 插件生态 + 全类型 Skill 引擎 + Android CLI (38 命令) + CRON 触发器 + 会话持久化 + 智能体名片
 
 ---
 
@@ -60,7 +60,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 | mengpaw-kernel | JVM Library | 46 | — | 微内核：纯 Kotlin，零 Android 依赖 |
 | mengpaw-core | Android Library | 6 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 5 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
-| mengpaw-shell | APK | 22 | 0.6.1 (vc=11) | 主应用：Chat UI + iPad 双栏设置 + 安全规则 + Token 统计 + 推送横幅 |
+| mengpaw-shell | APK | 22 | 0.7.0 (vc=14) | 主应用：Chat UI + iPad 双栏设置 + 安全规则 + Token 统计 + 推送横幅 + 智能体名片 + CRON 触发器 |
 | mengpaw-browser | APK | 5 | 0.4.0 (vc=6) | 独立浏览器 + BrowserBridge + 22 操控命令 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
@@ -382,8 +382,35 @@ Agent 通过 memory 命令按需加载文档：
 
 **dev 插件扩展 (4)**：`create --type script|jar --name <name>` | `audit <id>` | `share <id> --to <target>` | `examples`
 
-#### sys — 系统信息 (11，Android 适配层注入)
-`battery` | `network` | `location` (需权限) | `cpu` | `memory` | `storage` | `camera` (需权限) | `sensors` | `display` | `apps` (需权限) | `clipboard`
+#### sys — Android 系统 (38 命令，38 through Android 适配层注入)
+
+**设备信息 (1)**: `device` (型号/厂商/SDK/架构)
+
+**电源 (4)**: `battery` | `power` | `power.save` | `screen.on`
+
+**网络 (4)**: `network` | `wifi` | `wifi.enable` | `bluetooth`
+
+**定位 (1)**: `location` (需权限)
+
+**硬件 (4)**: `cpu` | `memory` | `storage` | `sensors`
+
+**屏幕 (3)**: `display` | `screen.brightness <0-255>` | `screen.off`
+
+**音量 (2)**: `volume` | `volume.set <type> <level>`
+
+**相机 (1)**: `camera` (需权限)
+
+**应用 (4)**: `apps` (需权限) | `app.launch <pkg>` | `app.uninstall <pkg>` | `app.info <pkg>`
+
+**剪贴板 (2)**: `clipboard` | `clipboard.set <text>`
+
+**Intent (3)**: `intent.open <url\|pkg>` | `intent.share <text>` | `intent.view <file>`
+
+**通知 (3)**: `notification.id` | `notification.send <title> <text>` | `notification.cancel <id>`
+
+**权限 (2)**: `permission.list` | `permission.request <name>`
+
+**其他 (4)**: `telephony` | `vibrate [ms]` | `ringtone.play` | `alarm.set <seconds> <msg>`
 
 ### 5.2 插件命名空间
 
@@ -663,6 +690,7 @@ AgentEngine(
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.7.0** | 2026-07-22 | Android CLI 全功能 (11→38 命令) + 全类型 Skill 引擎 (参数化/分类/搜索/创建) + CRON 触发器 (模糊窗口+横幅推送) + LIFETIME 心跳触发 + 会话持久化 + 智能体名片 + API 模型全量更新 (8 供应商至 2026-07) + 默认 Agent Boost 自动启动 + 通知横幅点击跳转 + 工作区 trigger.md 行为模板 |
 | **0.6.2** | 2026-07-21 | Agent 逻辑修复 — 14 Bug 修复: DreamEngine 参数混淆/大小写/单位错误/dreamLog 缺失; AgentDocManager 索引损坏/ID 解析/数据丢失; Goal 模式上下文丢失; snipStaleToolResults 不生效; Pipeline 缓存; DeepSeek-Chat 解析死循环; RubricGate 改进; API 模型更新 (8 Provider 至最新) |
 | **0.6.1** | 2026-07-21 | 内核功能补全 — Goal/Mission/Mission+ 内置模式 (RubricGate LLM 完成评估) + Agent→User 推送 (NotifyBus) + self 命名空间扩展 (+5 命令: tools/time/notify) + fs 扩展 (+grep/glob) + QwenPaw 4 Skills 移植 + API Key 持久化修复 + Provider 热更新 + Android 权限补全 (17 项) + Vault 安全加固 (绝不明文) + ProGuard Tink keep 规则 |
 | **0.6.0** | 2026-07-21 | UI 全面重构 — iPad 双栏设置 + 侧栏交互升级(左滑/长按多选/框架状态) + Per-Agent 模型选择 + Token 统计折线图 + 安全规则页 + WowBlue 启动动画 + 设计系统合规(硬编码色值清零) + 会话修复 + 通知栏常驻 |
