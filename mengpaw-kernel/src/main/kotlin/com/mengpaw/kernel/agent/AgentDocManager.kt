@@ -25,7 +25,9 @@ import java.util.Locale
  */
 class AgentDocManager(
     private val agentId: String = "agent-001",
-    private val baseDir: String = com.mengpaw.kernel.DataPaths.AGENTS
+    private val baseDir: String = com.mengpaw.kernel.DataPaths.AGENTS,
+    /** Plugin manager for CLI doc generation. Can be set after construction. */
+    @Volatile var pluginManager: PluginManager? = null
 ) {
     private val agentDir: File get() = File(baseDir, agentId).also { it.mkdirs() }
 
@@ -60,7 +62,7 @@ class AgentDocManager(
         if (!memoryFile.exists()) try { memoryFile.writeText(DEFAULT_MEMORY_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
 
         // CLI.md — will be regenerated when plugins are active
-        regenerateCliDoc(PluginManager())
+        regenerateCliDoc(pluginManager ?: PluginManager())
     }
 
     // ── Read ──────────────────────────────────────────────────────────
@@ -94,11 +96,12 @@ class AgentDocManager(
 ---
 """.trimIndent()
 
-        // Append after the index section (after second "---")
+        // FIX: Preserve existing records when inserting new entry after index section.
+        // split("---", limit=3) gives at most 3 parts; parts[2] holds all existing records.
+        // Previous code used parts.drop(3) which was always empty → DATA LOSS on every insert.
         val parts = content.split("---", limit = 3)
         val newContent = if (parts.size >= 3) {
-            parts[0] + "---" + parts[1] + "---\n\n" + entryMd +
-                parts.drop(3).joinToString("---").trimStart()
+            parts[0] + "---" + parts[1] + "---\n\n" + entryMd + parts[2]
         } else {
             content + "\n" + entryMd
         }
@@ -409,7 +412,7 @@ class AgentDocManager(
         if (!memFile.exists()) return
         val records = parseMemoryRecords(try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.enforceLimits"); "" })
         if (records.size > maxMemories) {
-            // Archive oldest 10 entries
+            // Archive oldest 10 entries (sorted by ID desc = newest first, so takeLast = oldest)
             val toArchive = records.takeLast(10)
             val archiveFile = File(agentDir, "Memory.archive.md")
             val archiveContent = toArchive.joinToString("\n---\n") { r ->
@@ -417,30 +420,53 @@ class AgentDocManager(
             }
             try { archiveFile.appendText("\n---\n$archiveContent") } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.enforceLimits") }
 
-            // Remove archived from main memory
+            // Rebuild with proper index section (preserving format that rebuildIndex expects)
             val remaining = records.dropLast(10)
-            val newText = buildString {
+            val idxSection = buildString {
                 appendLine("# 记忆索引")
                 appendLine()
+                appendLine("> 索引更新: ${SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())}")
+                appendLine("> 总条目: ${remaining.size} | 总大小: ${memFile.length() / 1024}KB | 上限: $maxMemories 条")
+                appendLine()
+                appendLine("| ID | 日期 | 标题 | 关键词 |")
+                appendLine("|----|------|------|--------|")
                 remaining.forEach { r ->
-                    appendLine("## ${r.id}: ${r.title}")
-                    appendLine("- 日期: ${r.date}")
-                    appendLine("- 关键词: ${r.keywords.joinToString(", ")}")
-                    appendLine("- 内容: ${r.content.take(200)}")
-                    appendLine()
+                    appendLine("| ${r.id} | ${r.date} | ${r.title} | ${r.keywords.take(3).joinToString(", ")} |")
                 }
             }
+            val recordsSection = remaining.joinToString("\n") { r ->
+                """
+## ${r.id}: ${r.title}
+- **日期**: ${r.date}
+- **关键词**: ${r.keywords.joinToString(", ")}
+- **内容**: ${r.content.take(maxMemoryLines * 80)}
+
+---
+""".trimIndent()
+            }
+            // Preserve the two-section format: index between --- markers, records after
+            val newText = "---\n$idxSection\n---\n\n$recordsSection"
             try { memFile.writeText(newText) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.enforceLimits") }
-            rebuildIndex()
         }
     }
 
     private fun parseMemoryRecords(text: String): List<MemoryRecord> {
         val records = mutableListOf<MemoryRecord>()
-        val sections = text.split(Regex("## (mem-\\d+):"))
-        sections.drop(1).forEachIndexed { i, section ->
-            val id = Regex("mem-\\d+").find("## mem-${i + 1}:$section")?.value ?: "mem-${i + 1}"
-            val title = section.lines().firstOrNull()?.trim() ?: ""
+        // FIX: Use findAll to properly capture the actual ID from each section header.
+        // The previous split() approach lost the captured group and reconstructed fake IDs.
+        val headerPattern = Regex("## (mem-\\d+):\\s*(.+?)(?=\n-|$)", RegexOption.MULTILINE)
+        val matches = headerPattern.findAll(text).toList()
+        if (matches.isEmpty()) return records
+
+        for (i in matches.indices) {
+            val match = matches[i]
+            val id = match.groupValues[1].trim()
+            val title = match.groupValues[2].trim()
+            // Extract section content: from this header to the next header (or end of text)
+            val sectionStart = match.range.last + 1
+            val sectionEnd = if (i + 1 < matches.size) matches[i + 1].range.first else text.length
+            val section = text.substring(sectionStart, sectionEnd)
+
             val date = Regex("日期[:\\s]*([^\n]+)").find(section)?.groupValues?.get(1)?.trim() ?: ""
             val keywords = Regex("关键词[:\\s]*([^\n]+)").find(section)?.groupValues?.get(1)
                 ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()

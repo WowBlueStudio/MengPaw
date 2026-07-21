@@ -18,7 +18,7 @@ import kotlinx.serialization.json.*
 data class FallbackEntry(
     val apiEndpoint: String,
     val apiKey: String,
-    val model: String = "gpt-4o"
+    val model: String = "gpt-4.1"
 )
 
 /**
@@ -43,7 +43,7 @@ data class TokenUsage(
 class AdaptiveLlmProvider(
     private val apiEndpoint: String,
     private val apiKey: String,
-    private val model: String = "gpt-4o",
+    private val model: String = "gpt-4.1",
     private val config: AdaptiveConfig = AdaptiveConfig()
 ) : LlmProvider {
 
@@ -302,7 +302,7 @@ class AdaptiveLlmProvider(
     private fun detectProviderType(endpoint: String): String = when {
         endpoint.contains("openai.com") -> "openai"
         endpoint.contains("deepseek.com") -> "deepseek"
-        endpoint.contains("moonshot.cn") -> "kimi"
+        endpoint.contains("moonshot.cn") || endpoint.contains("kimi.com") -> "kimi"
         endpoint.contains("bigmodel.cn") -> "glm"
         endpoint.contains("dashscope.aliyuncs.com") -> "qwen"
         endpoint.contains("openmodel.ai") -> "openai"

@@ -64,6 +64,11 @@ class AgentEngine(
     /** Additional namespaces to register alongside built-ins (e.g. "sys" → SysExecutor.commands). */
     private val additionalNamespaces: Map<String, Map<String, suspend (List<String>, ExecutionContext) -> com.mengpaw.kernel.cli.ExecutionResult>> = emptyMap()
 ) {
+    init {
+        // Wire real PluginManager into AgentDocManager so CLI.md generation sees installed plugins
+        agentDocManager.pluginManager = pluginManager
+    }
+
     /** The active LLM provider. Can be updated after construction (e.g. when user configures API key). */
     @Volatile private var llmProvider: LlmProvider = llmProvider
 
@@ -110,7 +115,7 @@ class AgentEngine(
     fun getPluginManager(): PluginManager = pluginManager
 
     companion object {
-        const val CORE_VERSION = "0.6.0"
+        const val CORE_VERSION = "0.6.2"
         private const val SOFT_COMPACT_RATIO = 0.50
         const val TOOL_SNIP_RATIO = 0.60
         const val COMPACT_RATIO = 0.80
@@ -126,19 +131,33 @@ class AgentEngine(
 
     private fun estimateTokens(text: String): Int = (text.length * llmRequestBuilder.calibratedTokPerChar).toInt()
 
+    /**
+     * Snip stale tool results from conversation history.
+     * Replaces old observation messages (step < currentStep-3) with compressed markers
+     * to free context window space without losing the fact that a tool was called.
+     *
+     * @return number of messages snipped.
+     */
     private fun snipStaleToolResults(sessionId: String, currentStep: Int): Int {
         var count = 0
-        val history = sessionManager.getStructuredHistory(sessionId)
+        val session = sessionManager.getSession(sessionId) ?: return 0
         val threshold = currentStep - 3
-        history.forEachIndexed { index, msg ->
-            if (msg["role"] == "assistant" && threshold > 0) {
-                val content = msg["content"] ?: ""
-                if (content.startsWith("Command:") && content.length > 120) {
-                    sessionManager.addMessage(sessionId,
-                        Message("system", "[snip — tool result from earlier step compressed]"))
-                    count++
-                }
+        if (threshold <= 0) return 0
+
+        val messages = session.messages
+        for (i in messages.indices) {
+            val msg = messages[i]
+            if (msg.role == "assistant" && msg.content.startsWith("Command:") && msg.content.length > 120) {
+                // FIX: Actually replace the message content instead of just appending a system note
+                val cmdName = msg.content.substringBefore("\n").take(50)
+                messages[i] = msg.copy(content = "[snip] $cmdName ... (result compressed, step < $threshold)")
+                count++
             }
+        }
+        if (count > 0) {
+            // Update session state to reflect modified messages
+            sessionManager.addMessage(sessionId, com.mengpaw.kernel.session.Message(
+                "system", "[snip — $count old tool results compressed to free context]"))
         }
         return count
     }
@@ -194,7 +213,15 @@ class AgentEngine(
     private val pluginExecutor = PluginExecutor(pluginManager, marketplaceClient)
     private val agentExecutor = AgentExecutor(agentDocManager)
 
+    // FIX: Cache pipeline to avoid rebuilding CommandRegistry on every command execution.
+    // Rebuilt only when plugins are installed/uninstalled (via invalidatePipeline).
+    @Volatile private var cachedPipeline: Pipeline? = null
+
+    /** Invalidate cached pipeline when plugins change. Call after plugin install/uninstall. */
+    fun invalidatePipeline() { cachedPipeline = null }
+
     private fun buildPipeline(): Pipeline {
+        cachedPipeline?.let { return it }
         val registry = CommandRegistry()
 
         // Expose registry for self.tools command
@@ -223,12 +250,108 @@ class AgentEngine(
         }
 
         pluginManager.bindRegistry(registry)
-        return Pipeline(registry = registry)
+        val pipeline = Pipeline(registry = registry)
+        cachedPipeline = pipeline
+        return pipeline
     }
 
     data class TraceStep(val step: Int, val thought: String, val action: String?, val observation: String?)
 
     suspend fun run(task: String, maxSteps: Int = 50, onStep: ((TraceStep) -> Unit)? = null): String {
+        return runReActLoop(task = task, maxSteps = maxSteps, onStep = onStep)
+    }
+
+    // ── Goal Mode (ported from QwenPaw GoalMode) ─────────────────────
+
+    /**
+     * Goal-mode execution with RubricGate auto-completion detection.
+     *
+     * Each turn: inject goal prompt → run ReAct loop → evaluate completion via LLM.
+     * Stops when RubricGate returns SATISFIED or max iterations exhausted.
+     */
+    suspend fun runWithGoal(
+        task: String, maxTurns: Int = 20, maxTokensBudget: Int = 300_000,
+        onStep: ((TraceStep) -> Unit)? = null
+    ): String {
+        val session = com.mengpaw.kernel.agent.GoalSession(
+            goal = task, maxIterations = maxTurns, maxTokens = maxTokensBudget
+        )
+        val evaluator = com.mengpaw.kernel.agent.RubricEvaluator()
+        val turnResults = mutableListOf<String>()
+
+        for (turn in 0 until maxTurns) {
+            if (!session.active) break
+            session.iteration = turn + 1
+
+            // FIX: Accumulate context from previous turns so RubricGate has full picture
+            val previousContext = if (turnResults.isNotEmpty()) {
+                "\n## 前轮结果摘要\n" + turnResults.joinToString("\n---\n") { it.take(500) }
+            } else ""
+
+            // Build goal-aware prompt with accumulated context
+            val goalPrompt = if (turn == 0) {
+                "## 目标模式\n你的任务是完成以下目标。持续工作直到目标达成：\n\n**目标**: ${session.goal}\n\n使用 Thought → Action → Final Answer 格式。完成后给出 Final Answer。"
+            } else {
+                "## 目标模式 (第 ${turn + 1}/$maxTurns 轮)\n目标: ${session.goal}\n\n上次反馈: ${session.lastFeedback.ifEmpty { "无" }}\n\n继续工作，基于前轮结果改进。$previousContext"
+            }
+
+            // FIX: Run ReAct loop inline instead of calling run() which creates a fresh session.
+            // This preserves context across goal turns.
+            val result = runReActLoop(
+                task = "$goalPrompt\n\n$task",
+                maxSteps = 50,
+                contextPrefix = previousContext,
+                onStep = onStep
+            )
+            turnResults.add(result)
+
+            // Budget gate: estimate tokens from result length
+            session.tokensUsed += result.length / 4  // rough char→token estimate
+            if (session.tokensUsed >= maxTokensBudget) {
+                session.active = false
+                session.lastVerdict = "Token budget exceeded"
+                break
+            }
+
+            // RubricGate: LLM-based completion evaluation on every turn
+            val evalPrompt = evaluator.buildPrompt(session.goal, result)
+            try {
+                val evalResult = llmProvider.complete(evalPrompt)
+                val satisfied = evalResult.trim().uppercase().startsWith("YES")
+                if (satisfied) {
+                    session.lastVerdict = "SATISFIED"
+                    session.active = false
+                } else {
+                    session.lastVerdict = "NEEDS_REVISION"
+                    session.lastFeedback = evalResult.take(200)
+                }
+            } catch (_: Exception) {
+                // LLM eval failed — fall back to heuristic
+                if (result.contains("Final Answer:", ignoreCase = true)) {
+                    session.lastVerdict = "SATISFIED (heuristic)"
+                    session.active = false
+                }
+            }
+        }
+
+        return if (!session.active && session.lastVerdict.startsWith("SATISFIED")) {
+            "目标已完成: ${session.goal}\n\n" + turnResults.lastOrNull().orEmpty()
+        } else {
+            "目标未完成 (${session.iteration}/${maxTurns} 轮): ${session.goal}\n\n最后结果:\n" +
+                turnResults.lastOrNull().orEmpty()
+        }
+    }
+
+    /**
+     * Internal ReAct loop with optional context prefix.
+     * Shared by run() and runWithGoal() to avoid session-creation overhead.
+     */
+    private suspend fun runReActLoop(
+        task: String,
+        maxSteps: Int,
+        contextPrefix: String = "",
+        onStep: ((TraceStep) -> Unit)? = null
+    ): String {
         ErrorCollector.init()
         val session = sessionManager.createSession(task)
         val context = ExecutionContext(sessionId = session.id, agentName = agentName)
@@ -236,6 +359,9 @@ class AgentEngine(
         _output.value = ""
 
         sessionManager.addMessage(session.id, Message("user", task))
+        if (contextPrefix.isNotBlank()) {
+            sessionManager.addMessage(session.id, Message("system", contextPrefix))
+        }
 
         try {
             val job = kotlinx.coroutines.currentCoroutineContext()[Job]
@@ -311,83 +437,12 @@ class AgentEngine(
             _state.value = AgentState.Finished(msg)
             return msg
         } catch (e: Exception) {
-            ErrorCollector.report(ErrorType.AGENT_CRASH, "AgentEngine.run", e.message ?: "(no message)",
+            ErrorCollector.report(ErrorType.AGENT_CRASH, "AgentEngine.runReActLoop", e.message ?: "(no message)",
                 throwable = e, sessionId = session.id, agentName = agentName)
             val errorMsg = localizedError("agent_error", e.message ?: e::class.simpleName ?: "unknown")
             sessionManager.addMessage(session.id, Message("assistant", errorMsg))
             _state.value = AgentState.Error(errorMsg)
             return errorMsg
-        }
-    }
-
-    // ── Goal Mode (ported from QwenPaw GoalMode) ─────────────────────
-
-    /**
-     * Goal-mode execution with RubricGate auto-completion detection.
-     *
-     * Each turn: inject goal prompt → run ReAct loop → evaluate completion via LLM.
-     * Stops when RubricGate returns SATISFIED or max iterations exhausted.
-     */
-    suspend fun runWithGoal(
-        task: String, maxTurns: Int = 20, maxTokensBudget: Int = 300_000,
-        onStep: ((TraceStep) -> Unit)? = null
-    ): String {
-        val session = com.mengpaw.kernel.agent.GoalSession(
-            goal = task, maxIterations = maxTurns, maxTokens = maxTokensBudget
-        )
-        val evaluator = com.mengpaw.kernel.agent.RubricEvaluator()
-        val allResults = mutableListOf<String>()
-
-        for (turn in 0 until maxTurns) {
-            if (!session.active) break
-            session.iteration = turn + 1
-
-            // Build goal-aware prompt
-            val goalPrompt = if (turn == 0) {
-                "## 目标模式\n你的任务是完成以下目标。持续工作直到目标达成：\n\n**目标**: ${session.goal}\n\n使用 Thought → Action → Final Answer 格式。完成后给出 Final Answer。"
-            } else {
-                "## 目标模式 (第 ${turn + 1}/$maxTurns 轮)\n目标尚未完成：${session.goal}\n\n继续工作。上次反馈: ${session.lastFeedback.ifEmpty { "无" }}"
-            }
-
-            // Execute one ReAct turn (standard run with the goal prompt prepended)
-            val result = run("$goalPrompt\n\n$task", maxSteps = 50, onStep = onStep)
-            allResults.add(result)
-
-            // Budget gate: estimate tokens from result length
-            session.tokensUsed += result.length / 4  // rough char→token estimate
-            if (session.tokensUsed >= maxTokensBudget) {
-                session.active = false
-                session.lastVerdict = "Token budget exceeded"
-                break
-            }
-
-            // RubricGate: LLM-based completion evaluation
-            if (result.contains("Final Answer:", ignoreCase = true)) {
-                // Heuristic: if Final Answer present, evaluate with rubric
-                val evalPrompt = evaluator.buildPrompt(session.goal, result)
-                try {
-                    val evalResult = llmProvider.complete(evalPrompt)
-                    val satisfied = evalResult.trim().uppercase().startsWith("YES")
-                    if (satisfied) {
-                        session.lastVerdict = "SATISFIED"
-                        session.active = false
-                    } else {
-                        session.lastVerdict = "NEEDS_REVISION"
-                        session.lastFeedback = evalResult.take(200)
-                    }
-                } catch (_: Exception) {
-                    // LLM eval failed — fall back to heuristic
-                    session.lastVerdict = "SATISFIED (heuristic)"
-                    session.active = false
-                }
-            }
-        }
-
-        return if (!session.active && session.lastVerdict.startsWith("SATISFIED")) {
-            "目标已完成: ${session.goal}\n\n" + allResults.lastOrNull().orEmpty()
-        } else {
-            "目标未完成 (${session.iteration}/${maxTurns} 轮): ${session.goal}\n\n最后结果:\n" +
-                allResults.lastOrNull().orEmpty()
         }
     }
 

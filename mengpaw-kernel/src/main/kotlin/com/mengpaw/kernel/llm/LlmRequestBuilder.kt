@@ -106,7 +106,7 @@ enum class CacheStrategy {
         fun forProvider(endpoint: String): CacheStrategy = when {
             "deepseek.com" in endpoint -> PREFIX_STABLE
             "openai.com" in endpoint -> CACHE_CONTROL
-            "moonshot.cn" in endpoint -> CACHE_CONTROL
+            "moonshot.cn" in endpoint || "kimi.com" in endpoint -> CACHE_CONTROL
             "bigmodel.cn" in endpoint -> CACHE_CONTROL
             "dashscope" in endpoint -> CACHE_CONTROL
             "volces.com" in endpoint -> CACHE_CONTROL

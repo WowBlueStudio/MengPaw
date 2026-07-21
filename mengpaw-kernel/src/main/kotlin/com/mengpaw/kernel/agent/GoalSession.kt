@@ -40,24 +40,7 @@ enum class SubtaskStatus { PENDING, RUNNING, DONE, FAILED, VERIFIED }
  */
 class RubricEvaluator(private val evaluatorPrompt: String = DEFAULT_RUBRIC_PROMPT) {
 
-    /**
-     * Evaluate whether the goal is complete based on the agent's output.
-     * Returns SATISFIED if the goal is done, NEEDS_REVISION otherwise.
-     */
-    fun evaluate(goal: String, output: String): RubricVerdict {
-        // Simple heuristic fallback when no LLM available for evaluation
-        if (output.contains("Final Answer:", ignoreCase = true)) {
-            return RubricVerdict.SATISFIED
-        }
-        if (output.length < 20) {
-            return RubricVerdict.NEEDS_REVISION
-        }
-        // For full LLM-based evaluation, callers should use the rubric prompt
-        // with their LLM provider: evaluatorPrompt.format(goal, output)
-        return RubricVerdict.NEEDS_REVISION
-    }
-
-    /** Build the evaluation prompt to send to the LLM. */
+    /** Build the evaluation prompt to send to the LLM. Used by AgentEngine.runWithGoal(). */
     fun buildPrompt(goal: String, output: String): String =
         evaluatorPrompt.replace("{goal}", goal).replace("{output}", output.take(3000))
 

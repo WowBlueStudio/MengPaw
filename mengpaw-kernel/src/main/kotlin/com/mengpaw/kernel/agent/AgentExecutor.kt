@@ -87,7 +87,8 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         if (args.isNotEmpty() && args[0] == "history") {
             return ExecutionResult.ok(com.mengpaw.kernel.agent.DreamEngine.dreamHistory())
         }
-        val result = com.mengpaw.kernel.agent.DreamEngine.dream(ctx.sessionId)
+        // FIX: sessionId → agentName; sessionId 是 UUID 而 DreamEngine 需要 agent 目录名
+        val result = com.mengpaw.kernel.agent.DreamEngine.dream(ctx.agentName ?: "agent-001")
         val cleanup = com.mengpaw.kernel.agent.DreamEngine.cleanupWorkspace()
         return ExecutionResult.ok("""
 梦境完成:
