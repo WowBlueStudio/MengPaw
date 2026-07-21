@@ -15,8 +15,8 @@ android {
         applicationId = "com.mengpaw.shell"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.4.0"
+        versionCode = 10
+        versionName = "0.5.0"
     }
 
     compileOptions {

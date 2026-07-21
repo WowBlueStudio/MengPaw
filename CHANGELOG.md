@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.5.0 (2026-07-21) — 微内核拆分 + 架构重构
+
+### 架构重构
+- **mengpaw-kernel**: 新增纯 Kotlin/JVM 微内核模块 (44 文件)，零 Android 依赖，可脱离 Android 独立编译和 JVM 测试
+- **mengpaw-core**: 从 46 文件精简至 6 文件，仅保留 Android 适配层 (Vault/IntegrityGuard/StorageMonitor/SysExecutor/桥接)
+- **插件同级**: 内置 sys 命名空间通过 additionalNamespaces 注入，与 25 个外挂插件地位相同，均只依赖 kernel
+- **插件依赖切换**: 全部 25 个插件从依赖 mengpaw-core 改为依赖 mengpaw-kernel
+- **3 个 Android 解耦**: LlmRequestBuilder (java.util.Base64), AcpServer/TriggerEngine (KernelLog), PluginExecutor (DexClassLoader 反射)
+- **2 个新接口**: IntegrityProvider (kernel) / KernelLog (可替换日志)
+
+### 模块变更
+- **移除 mengpaw-tv**: 预存资源 XML 错误，彻底删除 TV 模块
+- **新增 DataPathsInitializer / AndroidLogger**: Android 桥接模式替代直接耦合
+- **测试迁移**: 9 个测试移至 kernel，JVM 秒级运行 (83/88 PASS)
+
+### 文档
+- **开发文档全量重构**: 基于微内核架构重写，修正全部数据
+- **README 同步更新**: 项目结构树、架构图、LLM Provider 列表
+
+### 发行
+- Shell: v0.4.0 → v0.5.0 (vc=9→10)
+- Browser: v0.3.0 → v0.4.0 (vc=5→6)
+
+---
+
 ## v0.4.0 (2026-07-21) — 全项目安全加固 + UI/AI 层深度修复
 
 ### 安全修复 (38 项)
