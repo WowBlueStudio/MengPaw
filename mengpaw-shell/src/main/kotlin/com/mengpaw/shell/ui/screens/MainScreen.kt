@@ -122,7 +122,7 @@ fun MainScreen(
                         Spacer(Modifier.width(4.dp))
                     }
                     // Agent avatar — 44dp circle, matching send button
-                    val avatarFile = File(com.mengpaw.core.DataPaths.AGENTS, "avatar.png")
+                    val avatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "avatar.png")
                     val avatarBitmap = remember { if (avatarFile.exists()) BitmapFactory.decodeFile(avatarFile.absolutePath) else null }
                     if (avatarBitmap != null) {
                         Image(bitmap = avatarBitmap.asImageBitmap(), null, Modifier.size(44.dp).clip(CircleShape))
@@ -147,13 +147,13 @@ fun MainScreen(
                         Icon(Icons.Outlined.Add, "新建会话", tint = ThemeColors.textSecondary)
                     }
                     // Mission monitor toggle (visible when mission is active)
-                    if (com.mengpaw.core.mission.MissionMonitor.missionActive) {
+                    if (com.mengpaw.kernel.mission.MissionMonitor.missionActive) {
                         IconButton(onClick = { showMissionOverlay = !showMissionOverlay }, modifier = Modifier.size(44.dp)) {
                             Icon(Icons.Outlined.Monitor, "Mission", tint = ThemeColors.brand)
                         }
                     }
                     // FIX: Dynamic plugin buttons from HEADER_BAR placement
-                    val headerButtons = remember { pluginViewModel.activeButtons[com.mengpaw.core.plugin.ButtonPlacement.HEADER_BAR] ?: emptyList() }
+                    val headerButtons = remember { pluginViewModel.activeButtons[com.mengpaw.kernel.plugin.ButtonPlacement.HEADER_BAR] ?: emptyList() }
                     if (headerButtons.isNotEmpty()) {
                         headerButtons.take(2).forEach { btn ->
                             IconButton(
@@ -269,7 +269,7 @@ fun MainScreen(
                 Text("扩展功能", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(ArcoSpacing.lg))
 
-                val sheetButtons = pluginViewModel.activeButtons[com.mengpaw.core.plugin.ButtonPlacement.BOTTOM_SHEET] ?: emptyList()
+                val sheetButtons = pluginViewModel.activeButtons[com.mengpaw.kernel.plugin.ButtonPlacement.BOTTOM_SHEET] ?: emptyList()
                 if (sheetButtons.isNotEmpty()) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         sheetButtons.take(4).forEach { btn ->
@@ -570,7 +570,7 @@ private fun BubbleWrapper(
                     imgs.forEach { m ->
                         val p = m.groupValues[1]
                         if (!p.startsWith("http")) try {
-                            java.io.File(p).copyTo(java.io.File(com.mengpaw.core.DataPaths.SCREENSHOTS, "saved_${System.currentTimeMillis()}.png"), overwrite = true)
+                            java.io.File(p).copyTo(java.io.File(com.mengpaw.kernel.DataPaths.SCREENSHOTS, "saved_${System.currentTimeMillis()}.png"), overwrite = true)
                         } catch (_: Exception) { }
                     }
                     showMenu = false

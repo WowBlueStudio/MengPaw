@@ -25,7 +25,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":mengpaw-core"))
+    implementation(project(":mengpaw-kernel"))
 
     // Ktor HTTP client (required by NetExecutor)
     implementation("io.ktor:ktor-client-core:3.0.3")

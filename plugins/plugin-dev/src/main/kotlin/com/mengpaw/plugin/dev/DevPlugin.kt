@@ -3,12 +3,12 @@
 
 package com.mengpaw.plugin.dev
 
-import com.mengpaw.core.DataPaths
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.plugin.*
-import com.mengpaw.core.error.ErrorCollector
+import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.plugin.*
+import com.mengpaw.kernel.error.ErrorCollector
 import java.io.File
 import java.security.MessageDigest
 
@@ -261,8 +261,8 @@ class DevPlugin : Plugin {
 
 【文件操作插件模板】(参考 fs-plugin)
 
-import com.mengpaw.core.cli.*
-import com.mengpaw.core.plugin.*
+import com.mengpaw.kernel.cli.*
+import com.mengpaw.kernel.plugin.*
 import java.io.File
 
 class MyFsPlugin : Plugin {
@@ -414,8 +414,8 @@ dependencies { implementation(project(":mengpaw-core")) }
         val JAR_PLUGIN_TEMPLATE = """
 package {PKG}
 
-import com.mengpaw.core.cli.*
-import com.mengpaw.core.plugin.*
+import com.mengpaw.kernel.cli.*
+import com.mengpaw.kernel.plugin.*
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale

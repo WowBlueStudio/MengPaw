@@ -3,12 +3,12 @@
 
 package com.mengpaw.plugin.translate
 
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.plugin.Plugin
-import com.mengpaw.core.plugin.PluginMetadata
-import com.mengpaw.core.plugin.PluginType
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginType
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.call.body
@@ -43,7 +43,7 @@ class TranslatePlugin : Plugin {
         commands = listOf("translate.text", "translate.auto", "translate.langs", "translate.setup")
     )
 
-    override val commands: Map<String, com.mengpaw.core.plugin.CommandHandler> = mapOf(
+    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "text" to ::translateText,
         "auto" to ::translateAuto,
         "langs" to ::listLanguages,

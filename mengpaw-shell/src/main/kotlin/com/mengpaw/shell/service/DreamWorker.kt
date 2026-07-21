@@ -8,9 +8,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import androidx.work.*
-import com.mengpaw.core.agent.DreamEngine
-import com.mengpaw.core.agent.ScrollContextManager
-import com.mengpaw.core.llm.AdaptiveLlmProvider
+import com.mengpaw.kernel.agent.DreamEngine
+import com.mengpaw.kernel.agent.ScrollContextManager
+import com.mengpaw.kernel.llm.AdaptiveLlmProvider
 import com.mengpaw.core.security.Vault
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -68,7 +68,7 @@ class DreamWorker(
         }
 
         // Find all agent directories using DataPaths
-        val agentsDir = File(com.mengpaw.core.DataPaths.AGENTS)
+        val agentsDir = File(com.mengpaw.kernel.DataPaths.AGENTS)
         if (!agentsDir.exists()) return Result.success()
 
         val agentDirs = agentsDir.listFiles()?.filter {
@@ -93,7 +93,7 @@ class DreamWorker(
         val storage = DreamEngine.storageReport()
 
         // Persist to dream log for agent inspection
-        val logFile = File(com.mengpaw.core.DataPaths.AGENTS, "dream.log")
+        val logFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "dream.log")
         logFile.parentFile?.mkdirs()
         logFile.appendText(
             "${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())} " +

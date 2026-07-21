@@ -18,7 +18,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.mengpaw.core.AndroidLogger
+import com.mengpaw.core.DataPathsInitializer
 import com.mengpaw.design.theme.ArcoTheme
+import com.mengpaw.kernel.KernelLog
 import com.mengpaw.shell.ui.localization.AppStrings
 import com.mengpaw.shell.ui.localization.ChineseStrings
 import com.mengpaw.shell.ui.localization.EnglishStrings
@@ -29,13 +32,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        com.mengpaw.core.DataPaths.initialize(this)
+        DataPathsInitializer.initialize(this)
+        KernelLog.setLogger(AndroidLogger())
         enableEdgeToEdge()
         com.mengpaw.plugin.pad.PadPlugin.init(this)
 
         // Register system-level wake alarms — survive Doze
-        com.mengpaw.core.trigger.TriggerEngine.registerSystemWake(this, 10)
-        com.mengpaw.core.trigger.TriggerEngine.registerCronAlarm(this)
+        com.mengpaw.kernel.trigger.TriggerEngine.registerSystemWake(this, 10)
+        com.mengpaw.kernel.trigger.TriggerEngine.registerCronAlarm(this)
 
         // Register zero-overhead system event receiver (no polling)
         com.mengpaw.shell.service.EventReceiver.register(this)

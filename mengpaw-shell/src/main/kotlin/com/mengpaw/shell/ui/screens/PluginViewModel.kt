@@ -5,7 +5,7 @@ package com.mengpaw.shell.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mengpaw.core.plugin.*
+import com.mengpaw.kernel.plugin.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -137,7 +137,7 @@ class PluginViewModel : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.Lazily, 0)
 
     /** Active plugin UI buttons grouped by placement. Lazily initialized, refreshed on plugin state changes. */
-    val activeButtons: Map<com.mengpaw.core.plugin.ButtonPlacement, List<com.mengpaw.core.plugin.PluginUiButton>> get() {
+    val activeButtons: Map<com.mengpaw.kernel.plugin.ButtonPlacement, List<com.mengpaw.kernel.plugin.PluginUiButton>> get() {
         return pluginManager.getActiveButtons().groupBy({ it.second.placement }, { it.second })
     }
 

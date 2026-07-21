@@ -6,8 +6,8 @@ package com.mengpaw.shell.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.mengpaw.core.DataPaths
-import com.mengpaw.core.trigger.TriggerEngine
+import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.trigger.TriggerEngine
 
 /**
  * System wake receiver — woken by AlarmManager every N minutes.

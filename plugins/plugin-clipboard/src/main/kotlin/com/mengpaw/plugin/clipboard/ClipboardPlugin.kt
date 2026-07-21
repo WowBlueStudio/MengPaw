@@ -3,12 +3,12 @@
 
 package com.mengpaw.plugin.clipboard
 
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.plugin.Plugin
-import com.mengpaw.core.plugin.PluginMetadata
-import com.mengpaw.core.plugin.PluginType
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginType
 
 /**
  * Agent-internal clipboard plugin.
@@ -24,11 +24,11 @@ class ClipboardPlugin : Plugin {
         description = "剪贴板操作：copy, paste, clear（按会话隔离）", minCoreVersion = "0.2.0",
         commands = listOf("clipboard.copy", "clipboard.paste", "clipboard.clear"),
             uiButtons = listOf(
-                com.mengpaw.core.plugin.PluginUiButton("paste", "粘贴", "ContentPaste", com.mengpaw.core.plugin.ButtonPlacement.BOTTOM_SHEET, "clipboard.paste")
+                com.mengpaw.kernel.plugin.PluginUiButton("paste", "粘贴", "ContentPaste", com.mengpaw.kernel.plugin.ButtonPlacement.BOTTOM_SHEET, "clipboard.paste")
             )
     )
 
-    override val commands: Map<String, com.mengpaw.core.plugin.CommandHandler> = mapOf(
+    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "copy" to ::copy, "paste" to ::paste, "clear" to ::clear
     )
 

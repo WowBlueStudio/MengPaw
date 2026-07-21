@@ -3,6 +3,9 @@
 
 package com.mengpaw.core.security
 
+import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.KernelLog
+import com.mengpaw.kernel.security.IntegrityProvider
 import java.io.File
 import java.security.MessageDigest
 
@@ -27,14 +30,14 @@ import java.security.MessageDigest
  */
 class IntegrityGuard(
     private val coreDir: String = "/data/data/com.mengpaw/core",
-    private val agentsDir: String = com.mengpaw.core.DataPaths.AGENTS
-) {
+    private val agentsDir: String = DataPaths.AGENTS
+) : IntegrityProvider {
     /** Directories whose contents cannot be modified by Agent CLI commands. */
     val protectedPrefixes = listOf(
         coreDir,
         agentsDir,
         "/data/data/com.mengpaw/shared_prefs/mengpaw_vault",
-        com.mengpaw.core.DataPaths.PLUGIN_CACHE
+        DataPaths.PLUGIN_CACHE
     )
 
     /** Core files whose SHA256 is tracked for integrity verification. */
@@ -93,7 +96,7 @@ class IntegrityGuard(
                     if (certs != null && certs.isNotEmpty()) {
                         // Store the first signing certificate's SHA-256 as baseline
                         baselineHashes["android:apk-signature"] = sha256(certs[0].toByteArray())
-                        android.util.Log.i("IntegrityGuard",
+                        KernelLog.i("IntegrityGuard",
                             "APK signature baseline established: ${baselineHashes["android:apk-signature"]?.take(16)}...")
                     }
                 } else {
@@ -104,12 +107,12 @@ class IntegrityGuard(
                     val sigs = pkgInfo.signatures
                     if (sigs != null && sigs.isNotEmpty()) {
                         baselineHashes["android:apk-signature"] = sha256(sigs[0].toByteArray())
-                        android.util.Log.i("IntegrityGuard",
+                        KernelLog.i("IntegrityGuard",
                             "APK signature baseline (legacy): ${baselineHashes["android:apk-signature"]?.take(16)}...")
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.w("IntegrityGuard", "Cannot verify APK signature: ${e.message}")
+                KernelLog.w("IntegrityGuard", "Cannot verify APK signature: ${e.message}")
             }
         }
         initialized = true
@@ -183,7 +186,7 @@ class IntegrityGuard(
      *
      * @return null if allowed, or an error message if blocked.
      */
-    fun validateCommand(command: String, args: List<String>): String? {
+    override fun validateCommand(command: String, args: List<String>): String? {
         val commandName = command.lowercase()
 
         // Write operations — check destination path

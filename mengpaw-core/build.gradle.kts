@@ -32,25 +32,16 @@ android {
 }
 
 dependencies {
+    // Microkernel (pure Kotlin — CLI, LLM, session, plugin framework, security)
+    implementation(project(":mengpaw-kernel"))
+
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
 
-    // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+    // Coroutines (Android flavor for Vault and platform code)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-
-    // Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-
-    // Ktor (HTTP client) - for net.curl
-    implementation("io.ktor:ktor-client-core:3.0.3")
-    implementation("io.ktor:ktor-client-okhttp:3.0.3")
 
     // Encrypted SharedPreferences for secure API key storage
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
-
-    // Testing
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }

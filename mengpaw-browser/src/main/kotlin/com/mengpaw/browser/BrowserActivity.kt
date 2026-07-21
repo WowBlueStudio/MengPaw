@@ -18,6 +18,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.runtime.SideEffect
 import androidx.compose.foundation.clickable
+import com.mengpaw.core.AndroidLogger
+import com.mengpaw.core.DataPathsInitializer
+import com.mengpaw.kernel.KernelLog
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -273,11 +276,11 @@ private fun smartNavigate(input: String, engine: SearchEngine): String {
 class BrowserActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // CRITICAL: Must initialize before any DataPaths access (theme load, screenshots, etc.)
-        com.mengpaw.core.DataPaths.initialize(this)
+        DataPathsInitializer.initialize(this)
+        KernelLog.setLogger(AndroidLogger())
         // Bind shared PluginManager to BrowserPluginRegistry for active-state filtering
         com.mengpaw.browser.plugin.BrowserPluginRegistry.pluginManager =
-            com.mengpaw.core.plugin.PluginManager.globalInstance
+            com.mengpaw.kernel.plugin.PluginManager.globalInstance
         enableEdgeToEdge()
         // Read theme from first Agent's theme.md (or default)
         val themeConfig = BrowserThemeConfig.load(this)
@@ -901,7 +904,7 @@ private fun createWebView(
         com.mengpaw.browser.bridge.BrowserBridge(this) { bitmap ->
             var path = ""
             try {
-                val dir = java.io.File(com.mengpaw.core.DataPaths.SCREENSHOTS)
+                val dir = java.io.File(com.mengpaw.kernel.DataPaths.SCREENSHOTS)
                 dir.mkdirs()
                 val file = java.io.File(dir, "browser_${System.currentTimeMillis()}.png")
                 java.io.FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 90, it) }
@@ -1164,7 +1167,7 @@ object BrowserThemeConfig {
 
     fun load(ctx: android.content.Context? = null): Config {
         try {
-            val agentsDir = java.io.File(com.mengpaw.core.DataPaths.AGENTS)
+            val agentsDir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS)
             val dirs = agentsDir.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name } ?: emptyList()
             for (dir in dirs) {
                 val themeFile = java.io.File(dir, "theme.md")

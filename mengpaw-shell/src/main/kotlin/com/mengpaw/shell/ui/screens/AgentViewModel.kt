@@ -5,17 +5,17 @@ package com.mengpaw.shell.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mengpaw.core.AgentEngine
-import com.mengpaw.core.AgentState
-import com.mengpaw.core.agent.AgentMiddleware
-import com.mengpaw.core.agent.PostCallMiddleware
-import com.mengpaw.core.agent.PostCallResult
-import com.mengpaw.core.agent.ScrollContextManager
-import com.mengpaw.core.llm.AdaptiveLlmProvider
-import com.mengpaw.core.llm.LlmProvider
-import com.mengpaw.core.llm.PromptEngine
-import com.mengpaw.core.llm.ProviderInfo
-import com.mengpaw.core.llm.ProviderType
+import com.mengpaw.kernel.AgentEngine
+import com.mengpaw.kernel.AgentState
+import com.mengpaw.kernel.agent.AgentMiddleware
+import com.mengpaw.kernel.agent.PostCallMiddleware
+import com.mengpaw.kernel.agent.PostCallResult
+import com.mengpaw.kernel.agent.ScrollContextManager
+import com.mengpaw.kernel.llm.AdaptiveLlmProvider
+import com.mengpaw.kernel.llm.LlmProvider
+import com.mengpaw.kernel.llm.PromptEngine
+import com.mengpaw.kernel.llm.ProviderInfo
+import com.mengpaw.kernel.llm.ProviderType
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -90,7 +90,7 @@ class AgentViewModel : ViewModel() {
 
         // Memory middleware: inject agent docs into system prompt
         val memoryMw = AgentMiddleware { prompt, agentName ->
-            val memoryDoc = com.mengpaw.core.agent.AgentDocs.readMemoryDoc(agentName)
+            val memoryDoc = com.mengpaw.kernel.agent.AgentDocs.readMemoryDoc(agentName)
             if (memoryDoc.isNotBlank() && memoryDoc !in prompt) {
                 "$prompt\n\n## 长期记忆\n\n$memoryDoc"
             } else prompt
@@ -112,7 +112,8 @@ class AgentViewModel : ViewModel() {
             llmProvider = provider,
             middleware = memoryMw,
             postCallMiddleware = postMw,
-            scrollContext = scroll
+            scrollContext = scroll,
+            additionalNamespaces = mapOf("sys" to com.mengpaw.core.namespace.SysExecutor.commands)
         ).also {
             it.setAgentIdentity(name, framework, model)
             it.setAgentLanguage(globalAgentLang)
@@ -233,7 +234,7 @@ class AgentViewModel : ViewModel() {
     fun createAgent(name: String, framework: String? = null) {
         if (sessions.containsKey(name)) return
         // Bootstrap agent documentation files
-        com.mengpaw.core.agent.AgentDocs.bootstrap(name)
+        com.mengpaw.kernel.agent.AgentDocs.bootstrap(name)
         sessions[name] = createSession(name, framework)
         switchAgent(name)
     }
@@ -327,7 +328,7 @@ class AgentViewModel : ViewModel() {
 
     // ── Translation middleware (auto for US models) ────────────────────
 
-    private val translator = com.mengpaw.core.llm.TranslateMiddleware()
+    private val translator = com.mengpaw.kernel.llm.TranslateMiddleware()
 
     // ── Retract & Quote ─────────────────────────────────────────────────
 

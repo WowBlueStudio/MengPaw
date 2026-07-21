@@ -3,21 +3,21 @@
 
 package com.mengpaw.plugin.render
 
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.error.ErrorCollector
-import com.mengpaw.core.plugin.Plugin
-import com.mengpaw.core.plugin.PluginMetadata
-import com.mengpaw.core.plugin.PluginType
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginType
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.serialization.json.*
-import com.mengpaw.core.DataPaths
-import com.mengpaw.core.error.ErrorCollector
+import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.error.ErrorCollector
 import java.io.File
 
 /**
@@ -39,7 +39,7 @@ class RenderPlugin : Plugin {
         commands = listOf("render.models", "render.generate", "render.status", "render.preview")
     )
 
-    override val commands: Map<String, com.mengpaw.core.plugin.CommandHandler> = mapOf(
+    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "models" to ::models, "generate" to ::generate, "status" to ::status, "preview" to ::preview
     )
 

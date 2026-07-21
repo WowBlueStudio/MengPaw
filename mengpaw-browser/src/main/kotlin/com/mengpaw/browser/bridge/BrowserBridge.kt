@@ -6,7 +6,7 @@ package com.mengpaw.browser.bridge
 import android.graphics.Bitmap
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import com.mengpaw.core.DataPaths
+import com.mengpaw.kernel.DataPaths
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat

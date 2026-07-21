@@ -31,10 +31,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
-import com.mengpaw.core.plugin.Plugin
-import com.mengpaw.core.plugin.PluginContext
-import com.mengpaw.core.plugin.PluginMetadata
-import com.mengpaw.core.plugin.PluginType
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginContext
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -61,18 +61,18 @@ class PadPlugin : Plugin {
         commands = listOf("pad.show", "pad.hide")
     )
 
-    override val uiButtons: List<com.mengpaw.core.plugin.PluginUiButton> = listOf(
-        com.mengpaw.core.plugin.PluginUiButton("show", "悬浮窗", "TouchApp", com.mengpaw.core.plugin.ButtonPlacement.BOTTOM_SHEET, "pad.show"),
-        com.mengpaw.core.plugin.PluginUiButton("hide", "隐藏悬浮窗", "TouchApp", com.mengpaw.core.plugin.ButtonPlacement.HEADER_BAR, "pad.hide")
+    override val uiButtons: List<com.mengpaw.kernel.plugin.PluginUiButton> = listOf(
+        com.mengpaw.kernel.plugin.PluginUiButton("show", "悬浮窗", "TouchApp", com.mengpaw.kernel.plugin.ButtonPlacement.BOTTOM_SHEET, "pad.show"),
+        com.mengpaw.kernel.plugin.PluginUiButton("hide", "隐藏悬浮窗", "TouchApp", com.mengpaw.kernel.plugin.ButtonPlacement.HEADER_BAR, "pad.hide")
     )
-    override val commands: Map<String, suspend (List<String>, com.mengpaw.core.cli.ExecutionContext) -> com.mengpaw.core.cli.ExecutionResult> = mapOf(
+    override val commands: Map<String, suspend (List<String>, com.mengpaw.kernel.cli.ExecutionContext) -> com.mengpaw.kernel.cli.ExecutionResult> = mapOf(
         "show" to { _, _ ->
             FloatingDotService.show()
-            com.mengpaw.core.cli.ExecutionResult.ok("Floating dot shown")
+            com.mengpaw.kernel.cli.ExecutionResult.ok("Floating dot shown")
         },
         "hide" to { _, _ ->
             FloatingDotService.hideDot()
-            com.mengpaw.core.cli.ExecutionResult.ok("Floating dot hidden")
+            com.mengpaw.kernel.cli.ExecutionResult.ok("Floating dot hidden")
         }
     )
 

@@ -5,8 +5,8 @@ package com.mengpaw.browser.plugin
 
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
-import com.mengpaw.core.plugin.PluginManager
-import com.mengpaw.core.plugin.PluginStatus
+import com.mengpaw.kernel.plugin.PluginManager
+import com.mengpaw.kernel.plugin.PluginStatus
 
 /**
  * Singleton registry for browser plugins.

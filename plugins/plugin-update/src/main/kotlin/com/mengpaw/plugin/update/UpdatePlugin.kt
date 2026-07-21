@@ -9,15 +9,15 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import androidx.core.content.FileProvider
-import com.mengpaw.core.DataPaths
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.error.ErrorCollector
-import com.mengpaw.core.plugin.Plugin
-import com.mengpaw.core.plugin.PluginContext
-import com.mengpaw.core.plugin.PluginMetadata
-import com.mengpaw.core.plugin.PluginType
+import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginContext
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginType
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.request.*
@@ -47,7 +47,7 @@ class UpdatePlugin : Plugin {
         minCoreVersion = "0.2.3",
         commands = listOf("update.check", "update.download", "update.install", "update.auto")
     )
-    override val commands: Map<String, com.mengpaw.core.plugin.CommandHandler> = mapOf(
+    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "check" to ::check, "download" to ::download,
         "install" to ::install, "auto" to ::autoConfig,
     )

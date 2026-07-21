@@ -3,14 +3,14 @@
 
 package com.mengpaw.plugin.skill
 
-import com.mengpaw.core.cli.ExecutionContext
-import com.mengpaw.core.cli.ExecutionResult
-import com.mengpaw.core.cli.ErrorCodes
-import com.mengpaw.core.plugin.Plugin
-import com.mengpaw.core.plugin.PluginContext
-import com.mengpaw.core.plugin.PluginMetadata
-import com.mengpaw.core.plugin.PluginType
-import com.mengpaw.core.error.ErrorCollector
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginContext
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginType
+import com.mengpaw.kernel.error.ErrorCollector
 import java.io.File
 
 /**
@@ -29,11 +29,11 @@ class SkillPlugin : Plugin {
         commands = listOf("skill.ls", "skill.run", "skill.enable", "skill.disable")
     )
 
-    override val commands: Map<String, com.mengpaw.core.plugin.CommandHandler> = mapOf(
+    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "ls" to ::ls, "run" to ::run, "enable" to ::enable, "disable" to ::disable
     )
 
-    private var storageDir = com.mengpaw.core.DataPaths.SKILLS
+    private var storageDir = com.mengpaw.kernel.DataPaths.SKILLS
 
     override suspend fun onInstall(ctx: PluginContext) {
         storageDir = "${ctx.storageDir}/skills"

@@ -26,5 +26,5 @@ android {
 
 dependencies {
     // Microkernel core (Plugin interface + CLI types only)
-    implementation(project(":mengpaw-core"))
+    implementation(project(":mengpaw-kernel"))
 }
