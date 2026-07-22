@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.7.1 | **更新**: 2026-07-22 | **架构**: 微内核 — 纯 Kotlin/JVM 内核 + Android 适配层 + 23 插件生态 + 全类型 Skill 引擎 + Android CLI (38 命令) + CRON 触发器 + 会话持久化 + 智能体名片
+> **版本**: 0.8.0 | **更新**: 2026-07-22 | **架构**: 微内核 + AgentRuntime (UI/运行时分离) + 23 插件 + QwenPaw 风格初始化 + 会话持久化 + 智能体管理
 
 ---
 
@@ -30,37 +30,41 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 
 ## 2. 架构设计
 
-### 2.1 微内核分层
+### 2.1 微内核分层 (v0.8.0)
 
 ```
-┌─────────────────────────────────────────────┐
-│  mengpaw-shell (APK)    mengpaw-browser (APK) │  ← UI 层
-├─────────────────────────────────────────────┤
-│  mengpaw-core (6 文件, Android 适配)         │  ← 平台桥接
-├─────────────────────────────────────────────┤
-│  mengpaw-kernel (46 文件, 纯 Kotlin/JVM)     │  ← 微内核
-│  CLI · LLM · Session · Plugin · Security     │
-│  AgentEngine · Goal/Mission · MCP · ACP      │
-│  NotifyBus · Error · Trigger · Namespace     │
-├─────────────────────────────────────────────┤
-│  plugins/ (23 模块, 同级, 均只依赖 kernel)    │  ← 插件层
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  mengpaw-shell (APK)     mengpaw-browser (APK)   │  ← UI 层
+│  ├─ AgentRuntime  ← UI/运行时分离 (NEW)          │
+│  ├─ AgentViewModel ← 轻量状态持有                 │
+│  └─ Compose UI    ← 纯展示                       │
+├──────────────────────────────────────────────────┤
+│  mengpaw-core (7 文件, Android 适配)              │  ← 平台桥接
+├──────────────────────────────────────────────────┤
+│  mengpaw-kernel (47 文件, 纯 Kotlin/JVM)          │  ← 微内核
+│  CLI · LLM · Session · Plugin · Security          │
+│  AgentEngine · Goal/Mission · MCP · ACP           │
+│  NotifyBus · Error · Trigger · Namespace          │
+├──────────────────────────────────────────────────┤
+│  plugins/ (23 模块, 同级, 均只依赖 kernel)         │  ← 插件层
+└──────────────────────────────────────────────────┘
 ```
 
-**关键设计决策**：
+**关键设计决策 (v0.8.0 更新)**：
+- **UI/运行时分离**: AgentRuntime 处理所有后台 IO 工作，UI 只观察 StateFlow。ViewModel 不含业务逻辑
+- **QwenPaw 风格初始化**: 安装时创建 workspace 文件 → 用户配置 API → 用户发第一条消息才启动 Agent。无后台静默初始化
 - Kernel 是纯 JVM 模块（`kotlin("jvm")`），可脱离 Android 在 JVM 上编译和测试
-- 内置功能与外挂插件**同级**：`sys` 命名空间通过 `AgentEngine.additionalNamespaces` 注入，与 `plugin-fs` / `plugin-net` 地位相同
-- `mengpaw-core` 仅含 Android 专有代码：Vault (Keystore 加密)、IntegrityGuard (APK 签名校验)、StorageMonitor、SysExecutor、以及桥接文件
-- `mengpaw-design-system` 独立于 kernel/core，零业务逻辑依赖
+- 内置功能与外挂插件**同级**：`sys` 命名空间通过 `AgentEngine.additionalNamespaces` 注入
+- `mengpaw-core` 仅含 Android 专有代码：Vault (Keystore 加密)、IntegrityGuard、StorageMonitor、SysExecutor、DataPathsInitializer、AndroidLogger
 
 ### 2.2 模块清单
 
 | 模块 | 类型 | 源文件 | 版本 | 说明 |
 |------|------|--------|------|------|
-| mengpaw-kernel | JVM Library | 46 | — | 微内核：纯 Kotlin，零 Android 依赖 |
-| mengpaw-core | Android Library | 6 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
+| mengpaw-kernel | JVM Library | 47 | 0.8.0 | 微内核：纯 Kotlin，零 Android 依赖 |
+| mengpaw-core | Android Library | 7 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 5 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
-| mengpaw-shell | APK | 22 | 0.7.0 (vc=14) | 主应用：Chat UI + iPad 双栏设置 + 安全规则 + Token 统计 + 推送横幅 + 智能体名片 + CRON 触发器 |
+| mengpaw-shell | APK | 24 | 0.8.0 (vc=30) | 主应用：AgentRuntime + Chat UI + 设置 + 会话持久化 + 智能体管理 |
 | mengpaw-browser | APK | 5 | 0.4.0 (vc=6) | 独立浏览器 + BrowserBridge + 22 操控命令 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
@@ -180,16 +184,24 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)` |
 | `AndroidLogger.kt` | 桥接：`KernelLog.setLogger(AndroidLogger())` |
 
-### 3.3 mengpaw-shell（主应用，22 文件）
+### 3.3 mengpaw-shell（主应用，24 文件，v0.8.0）
 
 | 文件 | 职责 |
 |------|------|
-| `MainActivity.kt` | 入口 + 响应式导航 + 初始化 (DataPaths/KernelLog/TriggerEngine) + LoopMode 同步 |
-| `ui/screens/` (13 文件) | MainScreen, AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SidebarContent, SplashScreen |
+| `MainActivity.kt` | 入口 + 初始化 + 启动恢复配置 + 退出设置时 applyConfiguration |
+| `service/AgentRuntime.kt` | **NEW** UI/运行时分离 — 触发器桥接, 所有 IO 工作在此 |
+| `ui/screens/` (14 文件) | MainScreen, AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SidebarContent, SplashScreen |
 | `ui/components/` (5 文件) | BigBangPopup, MissionMonitorOverlay, TokenChart, TokenStatsCollector, NotifyBanner |
 | `ui/AdaptiveLayout.kt` | WindowSizeClass 计算 |
 | `ui/localization/Strings.kt` | 中英双语注解 |
 | `service/` (4 文件) | ShellService, DreamWorker, EventReceiver, WakeReceiver |
+
+**v0.8.0 核心变更**:
+- **AgentRuntime**: 所有 Agent 初始化(文件 I/O + Provider 创建 + LLM 调用)在 IO 线程, UI 只观察 StateFlow
+- **QwenPaw 初始化**: `安装→配置→用户发消息` 三阶段, 无静默自动启动
+- **会话持久化**: 30s 自动保存 + 退出保存 + 启动恢复, 思考链完整存储
+- **智能体管理**: 点击切换 / 长按名片 / 删除确认 / 添加框架
+- **输入优化**: Enter 发送 / Shift+Enter 换行 / 发送后聚焦
 
 ### 3.4 mengpaw-browser（独立浏览器，5 文件）
 
@@ -644,23 +656,32 @@ GitHub Pages 托管 `plugins.json`，ETag 缓存 (5 分钟)，SHA256 校验。
 | `mengpaw-shell/.../AndroidManifest.xml` | 6 权限, MainActivity, ShellService (foregroundServiceType=dataSync) |
 | `mengpaw-browser/.../AndroidManifest.xml` | 2 权限, BrowserActivity (3 intent-filter) |
 
-### 10.3 初始化代码（MainActivity.onCreate）
+### 10.3 初始化流程 (v0.8.0 — QwenPaw 风格)
 
 ```kotlin
-// 1. 平台路径桥接
-DataPathsInitializer.initialize(this)
-// 2. 日志适配
-KernelLog.setLogger(AndroidLogger())
-// 3. 前台服务启动（通知栏常驻保活）
-ShellService.start(this)
-// 4. 系统唤醒注册
-TriggerEngine.registerSystemWake(this, 10)
-// 5. AgentEngine 注入 Android 命名空间
-AgentEngine(
-    llmProvider = provider,
-    additionalNamespaces = mapOf("sys" to SysExecutor.commands)
-)
+// 1. 崩溃日志
+Thread.setDefaultUncaughtExceptionHandler { ... }  // → crash.log + Downloads
+
+// 2. 平台初始化
+DataPathsInitializer.initialize(this)  // Context.filesDir → DataPaths.BASE
+SysExecutor.init(this)                 // Android 系统命令
+KernelLog.setLogger(AndroidLogger())   // 日志适配
+
+// 3. 触发器引擎
+TriggerEngine.setContext(this)
+TriggerEngine.load()                   // 从 disk 恢复触发器
+TriggerEngine.registerSystemWake(this, 10)  // AlarmManager 定时间隔
+TriggerEngine.refreshCronAlarm()       // 注册下一次 Cron 唤醒
+
+// 4. 前台服务 (通知栏常驻)
+ShellService.start(this)   // startForeground + WakeLock
+
+// 5. UI 层: 启动时自动恢复配置 + 触发 AgentRuntime
+//    退出设置时 applyConfiguration (轻量, 无副作用)
+//    用户发第一条消息 → Agent 调用 LLM
 ```
+
+**设计原则**: Agent 不自动启动。安装→配置→用户驱动。和 QwenPaw 一致。
 
 ### 10.4 代码规范
 
@@ -690,7 +711,8 @@ AgentEngine(
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| **0.7.0** | 2026-07-22 | Android CLI 全功能 (11→38 命令) + 全类型 Skill 引擎 (参数化/分类/搜索/创建) + CRON 触发器 (模糊窗口+横幅推送) + LIFETIME 心跳触发 + 会话持久化 + 智能体名片 + API 模型全量更新 (8 供应商至 2026-07) + 默认 Agent Boost 自动启动 + 通知横幅点击跳转 + 工作区 trigger.md 行为模板 |
+| **0.8.0** | 2026-07-22 | **重大架构重构** — UI/运行时分离 (AgentRuntime) + QwenPaw 风格初始化 + 会话完整持久化 (30s 自动保存 + 思考链) + 智能体管理 (长按/删除/框架) + 输入优化 (Enter 发送/聚焦) + 20+ 崩溃/ANR 修复 + Android 13-17 全版本 + 5大国产 OEM 适配 + PadPlugin 移除 + 系统提示词重构 |
+| **0.7.0** | 2026-07-22 | Android CLI 全功能 (11→38 命令) + 全类型 Skill 引擎 + CRON 触发器 + LIFETIME 心跳 + 会话持久化 + 智能体名片 + API 模型更新 + Boost 自动启动 |
 | **0.6.2** | 2026-07-21 | Agent 逻辑修复 — 14 Bug 修复: DreamEngine 参数混淆/大小写/单位错误/dreamLog 缺失; AgentDocManager 索引损坏/ID 解析/数据丢失; Goal 模式上下文丢失; snipStaleToolResults 不生效; Pipeline 缓存; DeepSeek-Chat 解析死循环; RubricGate 改进; API 模型更新 (8 Provider 至最新) |
 | **0.6.1** | 2026-07-21 | 内核功能补全 — Goal/Mission/Mission+ 内置模式 (RubricGate LLM 完成评估) + Agent→User 推送 (NotifyBus) + self 命名空间扩展 (+5 命令: tools/time/notify) + fs 扩展 (+grep/glob) + QwenPaw 4 Skills 移植 + API Key 持久化修复 + Provider 热更新 + Android 权限补全 (17 项) + Vault 安全加固 (绝不明文) + ProGuard Tink keep 规则 |
 | **0.6.0** | 2026-07-21 | UI 全面重构 — iPad 双栏设置 + 侧栏交互升级(左滑/长按多选/框架状态) + Per-Agent 模型选择 + Token 统计折线图 + 安全规则页 + WowBlue 启动动画 + 设计系统合规(硬编码色值清零) + 会话修复 + 通知栏常驻 |
