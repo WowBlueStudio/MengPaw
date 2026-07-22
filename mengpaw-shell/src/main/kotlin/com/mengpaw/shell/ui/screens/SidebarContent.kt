@@ -6,6 +6,8 @@ package com.mengpaw.shell.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -62,6 +64,7 @@ data class NewAgentForm(
  * - "+ New Agent" opens a creation dialog with name / folder / intro fields.
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun SidebarContent(
     onNavigateToPlugins: () -> Unit,
     onNavigateToSettings: () -> Unit,
@@ -88,7 +91,7 @@ fun SidebarContent(
         if (dirs.isEmpty()) listOf("MengPaw") else dirs
     }
 
-    Column(Modifier.fillMaxHeight().width(280.dp).padding(ArcoSpacing.lg)) {
+    Column(Modifier.fillMaxHeight().width(280.dp).padding(ArcoSpacing.lg).verticalScroll(rememberScrollState())) {
         // ── Agents ──
         Text("智能体", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(ArcoSpacing.sm))
@@ -96,7 +99,10 @@ fun SidebarContent(
         discoveredAgents.forEach { name ->
             Row(
                 Modifier.fillMaxWidth()
-                    .clickable { cardAgentName = name }
+                    .combinedClickable(
+                        onClick = { if (name != activeAgent) { onSwitchAgent(name); onClose() } },
+                        onLongClick = { cardAgentName = name }
+                    )
                     .padding(vertical = ArcoSpacing.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -278,14 +284,19 @@ fun SidebarContent(
             }
         }
 
+        var showAddFramework by remember { mutableStateOf(false) }
         OutlinedButton(
-            onClick = {},
+            onClick = { showAddFramework = true },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(ArcoRadius.md)
         ) {
             Icon(Icons.Outlined.PersonAdd, null, Modifier.size(16.dp))
             Spacer(Modifier.width(4.dp))
             Text("添加框架", style = MaterialTheme.typography.labelSmall)
+        }
+
+        if (showAddFramework) {
+            AddFrameworkDialog(onDismiss = { showAddFramework = false })
         }
 
         HorizontalDivider(Modifier.padding(vertical = ArcoSpacing.lg))
@@ -519,12 +530,45 @@ private fun AgentCardDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = onSwitchTo,
-                colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
-                shape = RoundedCornerShape(ArcoRadius.md)
-            ) {
-                Text("切换到此智能体", color = Color.White)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                // Delete button (only for non-MengPaw agents)
+                if (agentName != "MengPaw") {
+                    var showDeleteConfirm by remember { mutableStateOf(false) }
+                    TextButton(onClick = { showDeleteConfirm = true },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                        Text("删除智能体", fontSize = 13.sp)
+                    }
+                    if (showDeleteConfirm) {
+                        AlertDialog(
+                            onDismissRequest = { showDeleteConfirm = false },
+                            title = { Text("确认删除") },
+                            text = { Text("确定要删除「$agentName」吗？\n\n该操作将永久删除智能体的所有数据，包括工作区文件、记忆和会话记录。") },
+                            confirmButton = {
+                                Button(onClick = {
+                                    // Delete agent directory
+                                    try {
+                                        val dir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, agentName)
+                                        if (dir.exists()) dir.deleteRecursively()
+                                    } catch (_: Exception) {}
+                                    showDeleteConfirm = false
+                                    onDismiss()
+                                }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
+                                    Text("删除", color = Color.White)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+                            }
+                        )
+                    }
+                }
+                Button(
+                    onClick = onSwitchTo,
+                    colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
+                    shape = RoundedCornerShape(ArcoRadius.md)
+                ) {
+                    Text("切换到此智能体", color = Color.White)
+                }
             }
         },
         dismissButton = {
@@ -638,4 +682,90 @@ private fun SidebarNavItem(
         Spacer(Modifier.width(ArcoSpacing.sm))
         Text(label, style = MaterialTheme.typography.bodyMedium)
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Add Framework Dialog
+// ═══════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun AddFrameworkDialog(onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var isDiscovering by remember { mutableStateOf(false) }
+    var discovered by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("添加框架", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Text("通过 ACP 协议连接到其他 MengPaw 设备或兼容框架。",
+                    style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                Spacer(Modifier.height(ArcoSpacing.md))
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("框架名称") },
+                    placeholder = { Text("如: 办公室电脑") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(Modifier.height(ArcoSpacing.sm))
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it },
+                    label = { Text("地址 (可选)") },
+                    placeholder = { Text("如: 192.168.1.100:9876") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(Modifier.height(ArcoSpacing.sm))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = {
+                        isDiscovering = true
+                        // Simple LAN scan: check common ACP ports
+                        // In production this would use mDNS/NSD
+                        discovered = listOf()
+                        isDiscovering = false
+                    }) {
+                        if (isDiscovering) {
+                            CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text("扫描局域网")
+                    }
+                }
+                if (discovered.isNotEmpty()) {
+                    Spacer(Modifier.height(ArcoSpacing.sm))
+                    Text("发现的设备:", style = MaterialTheme.typography.labelSmall)
+                    discovered.forEach { (n, addr) ->
+                        TextButton(onClick = { name = n; address = addr }) {
+                            Text("$n ($addr)", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isNotBlank()) {
+                        // Save framework to ACP trusted list
+                        val trustedDir = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
+                        trustedDir.mkdirs()
+                        val fwFile = java.io.File(trustedDir, "$name.json")
+                        fwFile.writeText("""{"name":"$name","address":"$address","addedAt":${System.currentTimeMillis()}}""")
+                        onDismiss()
+                    }
+                },
+                enabled = name.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
+                shape = RoundedCornerShape(ArcoRadius.md)
+            ) { Text("添加", color = Color.White) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
 }

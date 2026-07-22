@@ -16,6 +16,7 @@ import com.mengpaw.kernel.llm.LlmProvider
 import com.mengpaw.kernel.llm.PromptEngine
 import com.mengpaw.kernel.llm.ProviderInfo
 import com.mengpaw.kernel.llm.ProviderType
+import com.mengpaw.kernel.llm.TokenUsage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -66,10 +67,85 @@ class AgentViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        // Close all HTTP clients to prevent resource leaks
+        saveCurrentSession()
         sessions.values.forEach { session ->
             try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) {}
         }
+    }
+
+    /** Autosave active session every 30s and on pause. */
+    private val autoSaveJob = kotlinx.coroutines.Job()
+
+    private fun scheduleAutoSave() {
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(30_000)
+            saveCurrentSession()
+            scheduleAutoSave()
+        }
+    }
+
+    /** Persist active session messages so they survive process death. */
+    private fun saveCurrentSession() {
+        try {
+            val session = sessions[_activeAgentName] ?: return
+            val msgs = session.messages.value.filter { it !is ChatMessageUi.System }
+            if (msgs.isEmpty()) return
+            val arr = org.json.JSONArray()
+            msgs.forEach { msg ->
+                val obj = org.json.JSONObject()
+                when (msg) {
+                    is ChatMessageUi.User -> { obj.put("type", "user"); obj.put("text", msg.content) }
+                    is ChatMessageUi.Agent -> { obj.put("type", "agent"); obj.put("text", msg.content) }
+                    is ChatMessageUi.AgentWithTrace -> { obj.put("type", "agent"); obj.put("text", msg.finalContent) }
+                    else -> return@forEach
+                }
+                arr.put(obj)
+            }
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
+            file.parentFile?.mkdirs()
+            file.writeText(arr.toString(2))
+        } catch (_: Exception) {}
+    }
+
+    /** Restore last session messages from disk. Returns true if restored. */
+    private fun restoreCurrentSession(): Boolean {
+        return try {
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
+            if (!file.exists()) return false
+            val text = file.readText()
+            if (text.isBlank()) return false
+            val arr = org.json.JSONArray(text)
+            val msgs = mutableListOf<ChatMessageUi>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val type = obj.optString("type", "")
+                val txt = obj.optString("text", "")
+                if (txt.isBlank()) continue
+                when (type) {
+                    "user" -> msgs.add(ChatMessageUi.User(txt))
+                    "agent" -> msgs.add(ChatMessageUi.Agent(txt))
+                }
+            }
+            if (msgs.isNotEmpty()) {
+                activeSession().messages.value = msgs
+                // Also add to sidebar history
+                val preview = msgs.firstOrNull()?.let {
+                    when (it) {
+                        is ChatMessageUi.User -> it.content.take(40)
+                        is ChatMessageUi.Agent -> it.content.take(40)
+                        else -> ""
+                    }
+                } ?: ""
+                val record = SessionRecord(
+                    id = "sess_restored", title = preview, preview = preview,
+                    timestamp = file.lastModified(), messageCount = msgs.size,
+                    agentName = _activeAgentName
+                )
+                _sessionHistory.value = (_sessionHistory.value.filter { it.id != "sess_restored" } + record).takeLast(100)
+                saveSessionHistory()
+            }
+            msgs.isNotEmpty()
+        } catch (_: Exception) { false }
     }
 
     // ── Global LLM config (shared across new agents as default) ──
@@ -86,8 +162,16 @@ class AgentViewModel : ViewModel() {
     private val bootstrappedAgents = mutableSetOf<String>()
 
     private fun defaultProvider(): LlmProvider =
-        if (globalApiKey.isBlank()) SimulatedLlmProvider()
-        else try { AdaptiveLlmProvider(globalEndpoint, globalApiKey, globalModel) } catch (_: Exception) { SimulatedLlmProvider() }
+        if (globalApiKey.isBlank()) UnconfiguredLlmProvider()
+        else try { AdaptiveLlmProvider(globalEndpoint, globalApiKey, globalModel) } catch (_: Exception) { UnconfiguredLlmProvider() }
+
+    private fun createProviderForSession(endpoint: String, apiKey: String, model: String): LlmProvider =
+        if (apiKey.isBlank()) UnconfiguredLlmProvider()
+        else try { AdaptiveLlmProvider(endpoint, apiKey, model) }
+        catch (e: Exception) {
+            com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Cannot create real provider, using unconfigured: ${e.message}")
+            UnconfiguredLlmProvider()
+        }
 
     private fun createSession(name: String, framework: String?): AgentSession {
         val model = globalModel.ifBlank { "unknown" }
@@ -129,7 +213,10 @@ class AgentViewModel : ViewModel() {
         }
 
         val msgs = MutableStateFlow<List<ChatMessageUi>>(
-            listOf(ChatMessageUi.System("$name 就绪。请描述你想完成的任务。"))
+            if (globalApiKey.isBlank())
+                listOf(ChatMessageUi.System("欢迎使用 MengPaw。请先进入设置 → 框架设置，配置 API Key 和模型。"))
+            else
+                listOf(ChatMessageUi.System("$name 就绪。请描述你想完成的任务。"))
         )
         return AgentSession(name, framework, model, globalEndpoint, globalApiKey, provider, engine, msgs, scroll)
     }
@@ -214,14 +301,6 @@ class AgentViewModel : ViewModel() {
         val session = sessions[_activeAgentName] ?: return
         session.messages.value = listOf(ChatMessageUi.System(text))
     }
-
-    private fun createProviderForSession(endpoint: String, apiKey: String, model: String): LlmProvider =
-        if (apiKey.isBlank()) SimulatedLlmProvider()
-        else try { AdaptiveLlmProvider(endpoint, apiKey, model) }
-        catch (e: Exception) {
-            com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Cannot create real provider, using simulated: ${e.message}")
-            SimulatedLlmProvider()
-        }
 
     /** Get the framework name for an agent, or null if local. */
     fun frameworkFor(name: String): String? = sessions[name]?.framework
@@ -813,6 +892,12 @@ class AgentViewModel : ViewModel() {
         bindActiveSession()
         // Restore persisted session history
         _sessionHistory.value = loadSessionHistory()
+        // Restore last active session messages
+        if (!restoreCurrentSession()) {
+            // Only show welcome if no saved session
+        }
+        // Start periodic auto-save
+        scheduleAutoSave()
     }
 
     // ── Plugin suggestion logic (unchanged) ──
@@ -838,46 +923,30 @@ class AgentViewModel : ViewModel() {
     }
 }
 
-// ── Data types (unchanged) ──
+// ── Data types ──
 
 /**
- * Simulated LLM provider for development/testing.
+ * Placeholder provider shown when no API key is configured.
+ * Returns a helpful message instead of fake simulated responses.
  */
-class SimulatedLlmProvider : LlmProvider {
-    private var callCount = 0
+class UnconfiguredLlmProvider : LlmProvider {
+    override suspend fun complete(prompt: String): String =
+        "请先配置 API Key：打开设置 → 框架设置 → 选择服务商 → 粘贴 API Key → 退出设置。"
 
-    override suspend fun complete(prompt: String): String {
-        callCount++
-        return when (callCount) {
-            1 -> """
-                Thought: I need to check the system status first.
-                Action: self.status
-                Action Input: {}
-            """.trimIndent()
-            2 -> """
-                Thought: Let me check the available storage.
-                Action: self.stats
-                Action Input: {}
-            """.trimIndent()
-            3 -> """
-                Thought: The system looks healthy. Let me provide a summary.
-                Final Answer: System check complete. All systems operational.
-            """.trimIndent()
-            else -> """
-                Final Answer: Task completed in $callCount steps.
-            """.trimIndent()
-        }
-    }
+    override suspend fun completeWithMessages(messages: List<Map<String, String>>): String =
+        complete("")
 
     override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String {
-        val result = complete(prompt)
-        result.forEach { onToken(it.toString()) }
-        return result
+        val msg = complete(prompt)
+        msg.forEach { onToken(it.toString()) }
+        return msg
     }
 
     override fun info(): ProviderInfo = ProviderInfo(
-        "Simulated", "simulation-v1", ProviderType.LOCAL
+        "未配置", "none", ProviderType.LOCAL
     )
+
+    override var lastUsage: TokenUsage? = null
 }
 
 data class AgentTrace(

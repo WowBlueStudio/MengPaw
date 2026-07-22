@@ -162,6 +162,18 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     val activeAgent by agentViewModel.activeAgent.collectAsState()
     val sessionHistory by agentViewModel.sessionHistory.collectAsState()
     val hideCompacted by agentViewModel.hideCompacted.collectAsState()
+    // ── Auto-restore saved API config on startup ──
+    LaunchedEffect(Unit) {
+        val saved = settingsViewModel.firstSavedProvider()
+        if (saved != null && saved.apiKey.isNotBlank()) {
+            agentViewModel.applyConfiguration(
+                saved.endpoint, saved.apiKey, saved.model,
+                com.mengpaw.kernel.llm.AdaptiveLlmProvider(saved.endpoint, saved.apiKey, saved.model),
+                settingsViewModel.state.value.effectiveAgentLanguage
+            )
+        }
+    }
+
     // ── Wire triggers once at startup ──
     LaunchedEffect(agentViewModel) {
         com.mengpaw.shell.service.AgentRuntime.wireTriggers(agentViewModel)
