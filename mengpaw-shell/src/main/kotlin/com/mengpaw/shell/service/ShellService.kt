@@ -45,14 +45,22 @@ class ShellService : Service() {
     private var powerReceiver: android.content.BroadcastReceiver? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
+    private var foregroundStarted = false
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         try {
             startForeground(NOTIFICATION_ID, createNotification())
+            foregroundStarted = true
+            android.util.Log.d("ShellService", "Foreground service started successfully")
         } catch (e: Exception) {
-            // Android 12+ may reject foreground service start from background
-            android.util.Log.w("ShellService", "Foreground start failed: ${e.message}")
+            // Android 12+ may reject foreground service start from background.
+            // If startForeground() fails, we MUST stopSelf() — otherwise the system
+            // throws ForegroundServiceDidNotStartInTimeException after 5s → crash.
+            android.util.Log.e("ShellService", "FATAL: startForeground failed: ${e.message}")
+            try { stopSelf() } catch (_: Exception) {}
+            return
         }
 
         // Acquire partial WakeLock to keep CPU running during agent tasks.
@@ -92,6 +100,12 @@ class ShellService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!foregroundStarted) {
+            // Foreground notification failed — cannot run as foreground service.
+            // Stop immediately to avoid ForegroundServiceDidNotStartInTimeException.
+            try { stopSelf() } catch (_: Exception) {}
+            return START_NOT_STICKY
+        }
         // Re-acquire existing WakeLock if it timed out; create one only if null
         if (wakeLock?.isHeld != true) {
             try {

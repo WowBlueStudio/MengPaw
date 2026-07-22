@@ -63,6 +63,7 @@ fun MainScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
+    val isInitializing by viewModel.isInitializing.collectAsState()
     val inputEnabled by viewModel.inputEnabled.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -78,15 +79,8 @@ fun MainScreen(
     val settingsState = settingsViewModel?.state?.collectAsState()
     val activeAgentState = agentViewModel?.activeAgent?.collectAsState()
     val displayAgentName = activeAgentState?.value ?: "MengPaw"
-    LaunchedEffect(settingsState?.value) {
-        settingsState?.value?.let { s ->
-            viewModel.configureLlm(
-                s.apiEndpoint, s.apiKey, s.modelName,
-                agentName = displayAgentName,
-                agentLang = s.effectiveAgentLanguage
-            )
-        }
-    }
+    // Agent configuration is now triggered when user exits Settings (in MengPawApp),
+    // not on every keystroke. This prevents ANR when typing/pasting API key.
     // React to language-only changes without full reconfig
     LaunchedEffect(settingsState?.value?.agentLanguageMode, settingsState?.value?.useChinese) {
         settingsState?.value?.let { s ->
@@ -213,6 +207,12 @@ fun MainScreen(
                         state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
                         contentPadding = PaddingValues(vertical = ArcoSpacing.md)
                     ) {
+                        // Loading indicator while Agent initializes silently
+                        if (isInitializing) {
+                            item(key = "init_loading") {
+                                AgentInitializingCard()
+                            }
+                        }
                         items(displayedMessages, key = { it.stableId }) { message ->
                             BubbleWrapper(
                                 message = message,
@@ -694,6 +694,36 @@ private fun SidebarOverlay(
                     .clickable { onDismiss() })
                 content()
             }
+        }
+    }
+}
+
+/**
+ * Loading card shown in chat while Agent silently initializes.
+ * Static layout — no animation to avoid CPU overhead during init.
+ */
+@Composable
+fun AgentInitializingCard() {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    ) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                "正在初始化 Agent...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

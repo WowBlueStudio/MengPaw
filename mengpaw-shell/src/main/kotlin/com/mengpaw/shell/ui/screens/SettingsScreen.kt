@@ -1005,7 +1005,7 @@ private fun SystemSettingsContent(
 
     // About
     SectionHeader(state.strings.about)
-    InfoRow(state.strings.version, "0.7.2")
+    InfoRow(state.strings.version, "0.8.0")
     InfoRow(state.strings.core, "mengpaw-kernel + mengpaw-core")
     InfoRow(state.strings.design, "Arco Design · Compose Material 3")
 

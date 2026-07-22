@@ -159,6 +159,9 @@ class AgentViewModel : ViewModel() {
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
+    /** Delegated to AgentRuntime — true while initializing on background thread. */
+    val isInitializing: StateFlow<Boolean> get() = com.mengpaw.shell.service.AgentRuntime.isInitializing
+
     private val _inputEnabled = MutableStateFlow(true)
     val inputEnabled: StateFlow<Boolean> = _inputEnabled.asStateFlow()
 
@@ -179,45 +182,25 @@ class AgentViewModel : ViewModel() {
      * Applies to all existing sessions and will be used as default for new ones.
      */
     /**
-     * Configure LLM for the active agent (or all agents if agentName is null).
-     * Each agent can have a different provider/model.
+     * Apply a pre-created LLM provider to the active agent.
+     * Called by AgentRuntime on IO thread — lightweight, no network calls.
      */
-    fun configureLlm(
+    fun applyConfiguration(
         endpoint: String,
         apiKey: String,
         model: String,
-        agentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE,
-        agentName: String? = null  // null = all agents, non-null = specific agent
+        provider: com.mengpaw.kernel.llm.LlmProvider,
+        agentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE
     ) {
-        // Always update global defaults for new agents
         globalEndpoint = endpoint
         globalApiKey = apiKey
         globalModel = model
         globalAgentLang = agentLang
 
-        val targetName = agentName ?: _activeAgentName
-
-        if (agentName == null) {
-            // Apply to ALL existing sessions
-            val newProvider = defaultProvider()
-            sessions.values.forEach { session ->
-                try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) { }
-                session.provider = newProvider
-                session.engine.updateLlmProvider(newProvider)
-                session.modelName = model
-                session.endpoint = endpoint
-                session.apiKey = apiKey
-                session.engine.setAgentIdentity(session.name, session.framework, model)
-                session.engine.setAgentLanguage(agentLang)
-                session.engine.configureCacheStrategy(endpoint)
-            }
-        } else {
-            // Apply to a specific agent only
-            val session = sessions[targetName] ?: return
+        sessions.values.forEach { session ->
             try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) { }
-            val newProvider = createProviderForSession(endpoint, apiKey, model)
-            session.provider = newProvider
-            session.engine.updateLlmProvider(newProvider)
+            session.provider = provider
+            session.engine.updateLlmProvider(provider)
             session.modelName = model
             session.endpoint = endpoint
             session.apiKey = apiKey
@@ -225,22 +208,13 @@ class AgentViewModel : ViewModel() {
             session.engine.setAgentLanguage(agentLang)
             session.engine.configureCacheStrategy(endpoint)
         }
-
         bindActiveSession()
+    }
 
-        // ── Auto-start: first time a real API key is configured ──
-        // When switching from simulated → real provider, trigger the agent's
-        // bootstrap flow: read Boost.md, introduce itself, and engage the user.
-        if (apiKey.isNotBlank()) {
-            val agentsToCheck = if (agentName == null) sessions.keys.toList()
-                else listOf(targetName)
-            agentsToCheck.forEach { name ->
-                if (name !in bootstrappedAgents) {
-                    bootstrappedAgents.add(name)
-                    autoStartAgent(name, name) // workspace folder = agent name for default
-                }
-            }
-        }
+    /** Set a system message for the loading state. Called from AgentRuntime. */
+    fun setInitializingMessage(text: String) {
+        val session = sessions[_activeAgentName] ?: return
+        session.messages.value = listOf(ChatMessageUi.System(text))
     }
 
     private fun createProviderForSession(endpoint: String, apiKey: String, model: String): LlmProvider =

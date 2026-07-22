@@ -223,67 +223,69 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         fetchRemoteModels()
     }
 
+    /** Debounce job for fetchRemoteModels — prevents rapid-fire on paste/keystroke. */
+    private var fetchModelsJob: kotlinx.coroutines.Job? = null
+
     /**
      * Auto-fetch available models from the provider's GET /models endpoint.
-     *
-     * Most providers expose an OpenAI-compatible `GET /v1/models` (or `/models`)
-     * that returns `{"data":[{"id":"model-name"},...]}`. We try both paths,
-     * filter out non-chat models (embedding, tts, whisper, dall-e, etc.), and
-     * auto-select the first matching model if the current one isn't in the list.
+     * Debounced: cancels previous request if re-invoked within 500ms.
+     * Runs on IO dispatcher with short timeouts to avoid ANR.
      */
     fun fetchRemoteModels() {
         val ep = _state.value.apiEndpoint
         val key = _state.value.apiKey
         if (ep.isBlank() || key.isBlank()) return
 
-        viewModelScope.launch(Dispatchers.IO) {
-            val base = ep.substringBefore("/chat/completions")
-                .substringBefore("/v1/chat")
-                .substringBefore("/compatible-mode/v1")
+        // Debounce: cancel pending fetch, restart after 500ms quiet period
+        fetchModelsJob?.cancel()
+        fetchModelsJob = viewModelScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(500) // wait for user to finish typing
+            try {
+                val base = ep.substringBefore("/chat/completions")
+                    .substringBefore("/v1/chat")
+                    .substringBefore("/compatible-mode/v1")
 
-            // Try both common paths — OpenAI uses /v1/models, some use /models
-            val candidatePaths = listOf("$base/v1/models", "$base/models")
-            var models: List<String> = emptyList()
+                // Try both common paths
+                val candidatePaths = listOf("$base/v1/models", "$base/models")
+                var models: List<String> = emptyList()
 
-            for (url in candidatePaths) {
-                try {
-                    val client = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                    client.connectTimeout = 5000; client.readTimeout = 10000
-                    client.setRequestProperty("Authorization", "Bearer $key")
-                    val body = client.inputStream.bufferedReader().readText()
-                    client.disconnect()
+                for (url in candidatePaths) {
+                    try {
+                        val client = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                        client.connectTimeout = 3000; client.readTimeout = 5000
+                        client.setRequestProperty("Authorization", "Bearer $key")
+                        val body = client.inputStream.bufferedReader().readText()
+                        client.disconnect()
 
-                    val parsed = Regex("\"id\"\\s*:\\s*\"([^\"]+)\"").findAll(body)
-                        .map { it.groupValues[1] }
-                        .filter { id ->
-                            // Exclude non-chat models
-                            id.length < 80 && !id.contains(":") &&
-                            !id.startsWith("dall-e") && !id.startsWith("whisper") &&
-                            !id.startsWith("tts") && !id.contains("embedding") &&
-                            !id.contains("moderation") && !id.contains("babbage") &&
-                            !id.contains("davinci")
+                        val parsed = Regex("\"id\"\\s*:\\s*\"([^\"]+)\"").findAll(body)
+                            .map { it.groupValues[1] }
+                            .filter { id ->
+                                id.length < 80 && !id.contains(":") &&
+                                !id.startsWith("dall-e") && !id.startsWith("whisper") &&
+                                !id.startsWith("tts") && !id.contains("embedding") &&
+                                !id.contains("moderation") && !id.contains("babbage") &&
+                                !id.contains("davinci")
+                            }
+                            .toList()
+
+                        if (parsed.isNotEmpty()) {
+                            models = parsed
+                            break
                         }
-                        .toList()
-
-                    if (parsed.isNotEmpty()) {
-                        models = parsed
-                        break // Got results, stop trying other URLs
-                    }
-                } catch (_: Exception) {
-                    // Try next URL
+                    } catch (_: Exception) { /* try next URL */ }
                 }
-            }
 
-            if (models.isNotEmpty()) {
-                val currentModel = _state.value.modelName
-                val currentInList = models.any { it.equals(currentModel, ignoreCase = true) }
-
-                _state.value = _state.value.copy(
-                    remoteModels = models,
-                    remoteModelsFetched = true,
-                    // Auto-select first model if current one isn't in the fetched list
-                    modelName = if (currentInList) currentModel else models.first()
-                )
+                if (models.isNotEmpty()) {
+                    val currentModel = _state.value.modelName
+                    val currentInList = models.any { it.equals(currentModel, ignoreCase = true) }
+                    _state.value = _state.value.copy(
+                        remoteModels = models,
+                        remoteModelsFetched = true,
+                        modelName = if (currentInList) currentModel else models.first()
+                    )
+                }
+            } catch (_: kotlinx.coroutines.CancellationException) {
+                // Cancelled by debounce — normal, ignore
             }
         }
     }
@@ -291,13 +293,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateApiEndpoint(endpoint: String) {
         _state.value = _state.value.copy(apiEndpoint = endpoint)
         // Auto-detect models when endpoint changes and key is already set
-        if (_state.value.apiKey.isNotBlank()) fetchRemoteModels()
+        // Model list is fetched on-demand via refreshModels() — no auto-fetch
     }
 
     fun updateApiKey(key: String) {
         _state.value = _state.value.copy(apiKey = key)
-        // Auto-detect models when key is entered and endpoint is set
-        if (key.isNotBlank()) fetchRemoteModels()
+        // Model list is fetched on-demand via refreshModels() — no auto-fetch on paste
+    }
+
+    /** Manually refresh model list from the provider's API. Called by UI button. */
+    fun refreshModels() {
+        fetchRemoteModels()
     }
 
     fun updateModelName(model: String) {

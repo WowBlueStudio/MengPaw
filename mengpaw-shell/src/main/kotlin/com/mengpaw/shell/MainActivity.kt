@@ -162,17 +162,23 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     val activeAgent by agentViewModel.activeAgent.collectAsState()
     val sessionHistory by agentViewModel.sessionHistory.collectAsState()
     val hideCompacted by agentViewModel.hideCompacted.collectAsState()
+    // ── Bind AgentRuntime to ViewModel (once at startup) ──
+    LaunchedEffect(agentViewModel) {
+        com.mengpaw.shell.service.AgentRuntime.agentViewModel = agentViewModel
+        com.mengpaw.shell.service.AgentRuntime.wireTriggers(agentViewModel)
+    }
+
     // Sync loop mode from settings to agent view model
     LaunchedEffect(settingsState.loopMode) { agentViewModel.loopMode = settingsState.loopMode }
 
-    // ── Wire TriggerEngine.onFire → AgentViewModel, then start polling ──
-    LaunchedEffect(agentViewModel) {
-        com.mengpaw.kernel.trigger.TriggerEngine.onFire = { trigger ->
-            agentViewModel.submitTriggerTask(trigger)
+    // ── Delegate Agent initialization to AgentRuntime (IO thread) when exiting Settings ──
+    LaunchedEffect(showSettings) {
+        if (!showSettings) {
+            val s = settingsState
+            com.mengpaw.shell.service.AgentRuntime.onSettingsSaved(
+                s.apiEndpoint, s.apiKey, s.modelName, s.effectiveAgentLanguage
+            )
         }
-        // Start background polling only after onFire is wired —
-        // prevents triggers from firing with a null callback during startup
-        com.mengpaw.kernel.trigger.TriggerEngine.start()
     }
     // Grouped session data for hierarchical history sidebar
     val localGroups = remember(sessionHistory, hideCompacted) { agentViewModel.getLocalAgentGroups() }
@@ -353,13 +359,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             activeAgentEndpoint = agentEp,
             activeAgentModel = agentModel,
             onAgentSelectProvider = { saved ->
-                agentViewModel.configureLlm(
-                    endpoint = saved.endpoint,
-                    apiKey = saved.apiKey,
-                    model = saved.model,
-                    agentName = activeAgent,
-                    agentLang = settingsViewModel.state.value.effectiveAgentLanguage
-                )
+                // Runtime init is handled by AgentRuntime when user exits settings
             },
             pluginItems = pluginItems,
             toolItems = toolItems,
