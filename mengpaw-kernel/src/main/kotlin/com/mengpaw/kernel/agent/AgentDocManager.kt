@@ -45,21 +45,21 @@ class AgentDocManager(
         // Agents.md — security rules (only create if not exists)
         val agentsFile = file(AgentDocType.AGENTS)
         if (!agentsFile.exists()) {
-            try { agentsFile.writeText(DEFAULT_AGENTS_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs"); return }
+            try { agentsFile.atomicWriteText(DEFAULT_AGENTS_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs"); return }
             agentsFile.setReadOnly()
         }
 
         // Soul.md — execution style
         val soulFile = file(AgentDocType.SOUL)
-        if (!soulFile.exists()) try { soulFile.writeText(DEFAULT_SOUL_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
+        if (!soulFile.exists()) try { soulFile.atomicWriteText(DEFAULT_SOUL_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
 
         // Profile.md — identity
         val profileFile = file(AgentDocType.PROFILE)
-        if (!profileFile.exists()) try { profileFile.writeText(profile.toMarkdown()) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
+        if (!profileFile.exists()) try { profileFile.atomicWriteText(profile.toMarkdown()) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
 
         // Memory.md — task records
         val memoryFile = file(AgentDocType.MEMORY)
-        if (!memoryFile.exists()) try { memoryFile.writeText(DEFAULT_MEMORY_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
+        if (!memoryFile.exists()) try { memoryFile.atomicWriteText(DEFAULT_MEMORY_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
 
         // CLI.md — will be regenerated when plugins are active
         regenerateCliDoc(pluginManager ?: PluginManager())
@@ -106,7 +106,7 @@ class AgentDocManager(
             content + "\n" + entryMd
         }
 
-        try { memFile.writeText(newContent) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.updateMemory"); return }
+        try { memFile.atomicWriteText(newContent) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.updateMemory"); return }
         rebuildIndex()
         enforceLimits()
     }
@@ -152,7 +152,7 @@ class AgentDocManager(
 
     /** Regenerate CLI.md — Agent's primary command reference with permission guides & tutorials. */
     fun regenerateCliDoc(pluginManager: PluginManager) {
-        try { file(AgentDocType.CLI).writeText(buildString {
+        try { file(AgentDocType.CLI).atomicWriteText(buildString {
             appendLine("# MengPaw CLI 命令参考")
             appendLine()
             appendLine("> 本文档是 Agent 的主要命令参考。Agent 在执行任何操作前应查阅本文档，")
@@ -382,6 +382,18 @@ class AgentDocManager(
 
     private fun file(docType: AgentDocType): File = File(agentDir, docType.name.lowercase() + ".md")
 
+    /**
+     * Write text to a file atomically: write to a .tmp sibling, then rename.
+     * Prevents file corruption if the process crashes mid-write.
+     */
+    private fun File.atomicWriteText(text: String) {
+        parentFile?.mkdirs()
+        val tmp = File(parentFile, "$name.tmp")
+        tmp.writeText(text)
+        tmp.renameTo(this)
+        if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+    }
+
     private fun rebuildIndex() {
         val memFile = file(AgentDocType.MEMORY)
         if (!memFile.exists()) return
@@ -404,7 +416,7 @@ class AgentDocManager(
             Regex("---\\n[\\s\\S]*?---"),
             "---\n$idx\n---"
         )
-        try { memFile.writeText(newText) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.rebuildIndex") }
+        try { memFile.atomicWriteText(newText) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.rebuildIndex") }
     }
 
     private fun enforceLimits() {
@@ -446,7 +458,7 @@ class AgentDocManager(
             }
             // Preserve the two-section format: index between --- markers, records after
             val newText = "---\n$idxSection\n---\n\n$recordsSection"
-            try { memFile.writeText(newText) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.enforceLimits") }
+            try { memFile.atomicWriteText(newText) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.enforceLimits") }
         }
     }
 

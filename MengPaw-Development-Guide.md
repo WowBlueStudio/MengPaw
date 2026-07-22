@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.7.0 | **更新**: 2026-07-22 | **架构**: 微内核 — 纯 Kotlin/JVM 内核 + Android 适配层 + 23 插件生态 + 全类型 Skill 引擎 + Android CLI (38 命令) + CRON 触发器 + 会话持久化 + 智能体名片
+> **版本**: 0.7.1 | **更新**: 2026-07-22 | **架构**: 微内核 — 纯 Kotlin/JVM 内核 + Android 适配层 + 23 插件生态 + 全类型 Skill 引擎 + Android CLI (38 命令) + CRON 触发器 + 会话持久化 + 智能体名片
 
 ---
 

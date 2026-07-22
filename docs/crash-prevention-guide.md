@@ -1,7 +1,7 @@
 # MengPaw 闪退防治手册
 
-> 基于 v0.1.0 ~ v0.7.0 开发过程中的真实闪退案例，覆盖 30+ 个崩溃根因与修复模式。
-> 最后更新: 2026-07-22 (v0.7.0)
+> 基于 v0.1.0 ~ v0.7.1 开发过程中的真实闪退案例，覆盖 30+ 个崩溃根因与修复模式。
+> 最后更新: 2026-07-22 (v0.7.1)
 
 ---
 
@@ -158,7 +158,38 @@ file.parentFile?.mkdirs()
 file.writeText(content)
 ```
 
+### 3.4 非原子写入导致崩溃循环 (v0.7.1)
+
+**现象**: App 前台运行正常 → 突然闪退 → 重新点击图标瞬间闪退 1-2 次 → 恢复正常 → 再次闪退（循环）。
+
+**根因**: `File.writeText()` 不是原子操作。进程在写入中途崩溃时，文件处于部分写入状态。重启后加载损坏文件触发二次崩溃。
+
+**修复模式** — 原子写入 (tmp + rename):
+```kotlin
+// ❌ 崩溃时文件损坏
+file.writeText(content)
+
+// ✅ 原子写入: 先写 .tmp 再 rename
+fun File.atomicWriteText(text: String) {
+    parentFile?.mkdirs()
+    val tmp = File(parentFile, "$name.tmp")
+    tmp.writeText(text)
+    tmp.renameTo(this)  // rename 在同文件系统上是原子的
+    if (tmp.exists()) { tmp.delete() }  // 跨设备兜底
+}
+```
+
+**关键点**:
+- `rename()` 在同文件系统上是原子操作 — 要么旧文件完整，要么新文件完整
+- 崩溃发生在 `writeText(tmp)` 时 → old file 完好无损
+- 崩溃发生在 `rename` 之后 → new file 完整写入
+- 绝不会有"一半旧一半新"的状态
+- 加载时若解析失败应**主动删除损坏文件**，不要依赖下次写入覆盖
+
+**适用范围**: 所有覆盖写（triggers.json, session_history.json, memory.md 等），追加写（appendText）不受影响。
+
 ---
+
 
 ## 4. Android 生命周期
 
@@ -347,6 +378,7 @@ val tokens = when (statRange) { 0 -> (r as Day).tokens; else -> (r as Week).toke
 | 0.6.0 | 编译失败 ×10 | scope 冲突 + import 缺失 + padding 错误 | 逐项修复见 compilation-issues.md |
 | 0.7.0 | 进程被杀 | 无 WakeLock | ShellService 加 PARTIAL_WAKE_LOCK |
 | 0.7.0 | 触发器不触发 | start() 未调用 + onFire null | 接入 MainActivity + AgentViewModel |
+| 0.7.1 | 前台闪退 → 重启瞬间闪退循环 | 非原子 writeText() 崩溃时损坏 JSON 文件 | 原子写入 (tmp+rename) + 损坏文件删除 + 协程 try/catch + 启动时序调整 |
 
 ---
 

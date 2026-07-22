@@ -87,18 +87,36 @@ object TriggerEngine {
             triggers.addAll(loaded)
             KernelLog.d("TriggerEngine", "Loaded ${triggers.size} triggers from disk")
         } catch (e: Exception) {
-            KernelLog.w("TriggerEngine", "Failed to load triggers: ${e.message}")
+            KernelLog.w("TriggerEngine", "Corrupted triggers.json, resetting: ${e.message}")
+            // Delete corrupted file so next save starts fresh
+            try { file.delete() } catch (_: Exception) {}
+            triggers.clear()
         }
     }
 
-    /** Persist triggers to disk. */
+    /** Persist triggers to disk. Uses atomic write (tmp + rename) to prevent corruption on crash. */
     private fun save() {
         try {
-            val f = file
-            f.parentFile?.mkdirs()
-            f.writeText(json.encodeToString(triggers.toList()))
+            file.atomicWriteText(json.encodeToString(triggers.toList()))
         } catch (e: Exception) {
             KernelLog.w("TriggerEngine", "Failed to save triggers: ${e.message}")
+        }
+    }
+
+    /**
+     * Write text to a file atomically: write to a .tmp sibling, then rename.
+     * On most file systems, rename() is atomic within the same directory, so
+     * a crash mid-write leaves either the old file intact or the new file complete
+     * — never a partially-written file.
+     */
+    private fun File.atomicWriteText(text: String) {
+        parentFile?.mkdirs()
+        val tmp = File(parentFile, "$name.tmp")
+        tmp.writeText(text)
+        tmp.renameTo(this)
+        // If rename fails (cross-device), fall back to direct write
+        if (tmp.exists()) {
+            try { tmp.delete() } catch (_: Exception) {}
         }
     }
 

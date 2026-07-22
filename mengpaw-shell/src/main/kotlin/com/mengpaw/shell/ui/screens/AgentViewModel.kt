@@ -383,69 +383,98 @@ class AgentViewModel : ViewModel() {
         session.messages.value = session.messages.value + ChatMessageUi.User(task)
 
         viewModelScope.launch {
-            // Auto-translate for English-optimized models (saves ~40% tokens)
-            val doTranslate = translator.shouldTranslate(session.modelName)
-            val translatedTask = if (doTranslate) translator.toEnglish(task) else task
-            val actualTask = if (doTranslate && translatedTask != task) translatedTask else task
+            try {
+                // Auto-translate for English-optimized models (saves ~40% tokens)
+                val doTranslate = translator.shouldTranslate(session.modelName)
+                val translatedTask = if (doTranslate) translator.toEnglish(task) else task
+                val actualTask = if (doTranslate && translatedTask != task) translatedTask else task
 
-            val traces = mutableListOf<AgentTrace>()
+                val traces = mutableListOf<AgentTrace>()
 
-            session.messages.value = session.messages.value + ChatMessageUi.AgentWithTrace(
-                finalContent = "思考中...",
-                traces = emptyList(),
-                isRunning = true
-            )
-
-            // Shared step callback for trace collection + token stats + UI update
-            val onStep: (com.mengpaw.kernel.AgentEngine.TraceStep) -> Unit = { trace ->
-                traces.add(AgentTrace(trace.step, trace.thought, trace.action, trace.observation))
-                session.provider.lastUsage?.let { usage ->
-                    com.mengpaw.shell.ui.components.TokenStatsCollector.record(
-                        model = session.modelName,
-                        tokens = usage.totalTokens,
-                        cacheHit = usage.cacheHitTokens > 0,
-                        cacheHitTokens = usage.cacheHitTokens
-                    )
-                }
-                val cur = session.messages.value.toMutableList()
-                val ri = cur.indexOfLast { it is ChatMessageUi.AgentWithTrace && it.isRunning }
-                if (ri >= 0) {
-                    cur[ri] = ChatMessageUi.AgentWithTrace("思考中...", traces.toList(), isRunning = true)
-                    session.messages.value = cur
-                }
-            }
-
-            // Execute via the appropriate engine mode
-            val result = when (loopMode) {
-                LoopMode.GOAL -> session.engine.run(task = actualTask, maxSteps = maxSteps, onStep = onStep)
-                LoopMode.MISSION -> session.engine.runWithMission(task = actualTask, onStep = onStep)
-                LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = actualTask, onStep = onStep)
-            }
-
-            val current = session.messages.value.toMutableList()
-            // Translate result back to Chinese for US models
-            val displayResult = if (doTranslate) translator.toChinese(result) else result
-
-            val runningIndex = current.indexOfLast {
-                it is ChatMessageUi.AgentWithTrace && it.isRunning
-            }
-            if (runningIndex >= 0) {
-                current[runningIndex] = ChatMessageUi.AgentWithTrace(
-                    finalContent = displayResult,
-                    traces = traces.toList(),
-                    isRunning = false
+                session.messages.value = session.messages.value + ChatMessageUi.AgentWithTrace(
+                    finalContent = "思考中...",
+                    traces = emptyList(),
+                    isRunning = true
                 )
-            } else {
-                current.add(ChatMessageUi.Agent(displayResult))
-            }
 
-            val suggestion = checkMissingPlugin(result)
-            if (suggestion != null && pluginViewModel != null) {
-                current.add(ChatMessageUi.Suggestion(suggestion))
-                pluginViewModel.suggestPluginForCommand(result)
-            }
+                // Shared step callback for trace collection + token stats + UI update
+                val onStep: (com.mengpaw.kernel.AgentEngine.TraceStep) -> Unit = { trace ->
+                    traces.add(AgentTrace(trace.step, trace.thought, trace.action, trace.observation))
+                    session.provider.lastUsage?.let { usage ->
+                        com.mengpaw.shell.ui.components.TokenStatsCollector.record(
+                            model = session.modelName,
+                            tokens = usage.totalTokens,
+                            cacheHit = usage.cacheHitTokens > 0,
+                            cacheHitTokens = usage.cacheHitTokens
+                        )
+                    }
+                    val cur = session.messages.value.toMutableList()
+                    val ri = cur.indexOfLast { it is ChatMessageUi.AgentWithTrace && it.isRunning }
+                    if (ri >= 0) {
+                        cur[ri] = ChatMessageUi.AgentWithTrace("思考中...", traces.toList(), isRunning = true)
+                        session.messages.value = cur
+                    }
+                }
 
-            session.messages.value = current
+                // Execute via the appropriate engine mode
+                val result = when (loopMode) {
+                    LoopMode.GOAL -> session.engine.run(task = actualTask, maxSteps = maxSteps, onStep = onStep)
+                    LoopMode.MISSION -> session.engine.runWithMission(task = actualTask, onStep = onStep)
+                    LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = actualTask, onStep = onStep)
+                }
+
+                val current = session.messages.value.toMutableList()
+                // Translate result back to Chinese for US models
+                val displayResult = if (doTranslate) translator.toChinese(result) else result
+
+                val runningIndex = current.indexOfLast {
+                    it is ChatMessageUi.AgentWithTrace && it.isRunning
+                }
+                if (runningIndex >= 0) {
+                    current[runningIndex] = ChatMessageUi.AgentWithTrace(
+                        finalContent = displayResult,
+                        traces = traces.toList(),
+                        isRunning = false
+                    )
+                } else {
+                    current.add(ChatMessageUi.Agent(displayResult))
+                }
+
+                val suggestion = checkMissingPlugin(result)
+                if (suggestion != null && pluginViewModel != null) {
+                    current.add(ChatMessageUi.Suggestion(suggestion))
+                    pluginViewModel.suggestPluginForCommand(result)
+                }
+
+                session.messages.value = current
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Normal coroutine cancellation — re-throw to maintain cancellation chain
+                throw e
+            } catch (e: Throwable) {
+                // Safety net: catch OOM, unexpected runtime errors, etc.
+                // Prevents process crash — degrades gracefully to error message
+                com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Task execution failed: ${e.message}")
+                val current = session.messages.value.toMutableList()
+                val runningIndex = current.indexOfLast {
+                    it is ChatMessageUi.AgentWithTrace && it.isRunning
+                }
+                val errorMsg = if (e is OutOfMemoryError) {
+                    "⚠️ 内存不足，任务已中断。请清理会话历史后重试。"
+                } else {
+                    "⚠️ 执行出错：${e.message?.take(120) ?: "未知错误"}"
+                }
+                if (runningIndex >= 0) {
+                    current[runningIndex] = ChatMessageUi.AgentWithTrace(
+                        finalContent = errorMsg,
+                        traces = emptyList(),
+                        isRunning = false
+                    )
+                } else {
+                    current.add(ChatMessageUi.Agent(errorMsg))
+                }
+                session.messages.value = current
+                session.isRunning.value = false
+            }
         }
     }
 
@@ -592,19 +621,25 @@ class AgentViewModel : ViewModel() {
                 } else emptyList()
             } else emptyList()
         } catch (e: Exception) {
-            com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Failed to load session history: ${e.message}")
+            com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Corrupted session_history.json, resetting: ${e.message}")
+            // Delete corrupted file so next save starts fresh
+            try { sessionHistoryFile.delete() } catch (_: Exception) {}
             emptyList()
         }
     }
 
-    /** Persist session history to disk. Called after every modification. */
+    /** Persist session history to disk. Uses atomic write to prevent corruption on crash. */
     private fun saveSessionHistory() {
         try {
             val file = sessionHistoryFile
-            file.parentFile?.mkdirs()
             val arr = JSONArray()
             _sessionHistory.value.forEach { arr.put(it.toJson()) }
-            file.writeText(arr.toString(2))
+            // Atomic write: tmp file then rename — avoids partial writes on crash
+            file.parentFile?.mkdirs()
+            val tmp = java.io.File(file.parentFile, "${file.name}.tmp")
+            tmp.writeText(arr.toString(2))
+            tmp.renameTo(file)
+            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
         } catch (e: Exception) {
             com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Failed to save session history: ${e.message}")
         }

@@ -4,6 +4,44 @@
 
 ---
 
+## 2026-07-22 — v0.7.1 闪退修复
+
+### 根因: 非原子文件写入 + 崩溃后状态损坏
+
+10. **`File.writeText()` 非原子 = 崩溃即损坏**
+    - 场景: `TriggerEngine.save()` 和 `AgentViewModel.saveSessionHistory()` 都用 `File.writeText()` 写 JSON
+    - 后果: 进程在写入中途崩溃 (OOM / 系统杀进程) → 文件部分写入 → 重启后加载损坏数据 → 再次崩溃 → 死循环
+    - 崩溃模式: 前台正常 → 崩溃 → 重启瞬间崩溃 ×1-2 → 恢复 → 再崩溃 (经典"持久化状态损坏"症状)
+    - 改进: 原子写入模式 — `tmp.writeText()` → `tmp.renameTo(file)` (rename 在同文件系统上是原子的)
+    - 影响范围: TriggerEngine.save(), AgentViewModel.saveSessionHistory(), AgentDocManager (6 处 writeText)
+    - 原则: **任何覆盖写操作都用原子写入 (tmp + rename)，确保崩溃时要么旧文件完整，要么新文件完整**
+
+11. **损坏文件必须显式删除，不能只吞异常**
+    - 场景: `TriggerEngine.load()` 的 try/catch 只记录了警告日志，损坏文件仍然留在磁盘
+    - 后果: 下次启动再次尝试加载同一损坏文件 → 再次失败 → 如果损坏恰好是合法 JSON (如截断数组) 则解析成功但数据不全 → 后续运行时崩溃
+    - 改进: catch 块中 `file.delete()` 删除损坏文件，确保下次 save() 从干净状态开始
+    - 原则: **加载失败时删除损坏文件，不要依赖下次写入覆盖**
+
+12. **`viewModelScope.launch {}` 必须有 try/catch**
+    - 场景: `submitTask()` 中 `viewModelScope.launch { engine.run() }` 无异常保护
+    - 后果: `runReActLoop` 内部只 catch `Exception`，`OutOfMemoryError` 等 `Error` 类型穿透协程 → 进程崩溃
+    - 改进: 外套 `try { } catch (e: CancellationException) { throw e } catch (e: Throwable) { 降级到错误消息 }`
+    - 原则: **ViewModel 中所有顶层 launch 必须有 catch Throwable，OOM 也优雅降级**
+
+13. **后台轮询不应早于回调注册**
+    - 场景: `TriggerEngine.start()` 在 `MainActivity.onCreate()` 调用，但 `onFire` 在 Composable 中才设置
+    - 后果: 启动窗口期内如果有触发器命中 → `onFire` 为 null → `fireTrigger` 更新 `lastFired` 并落盘 → 触发被静默消耗
+    - 改进: `TriggerEngine.start()` 移到 Composable 的 `LaunchedEffect` 中，`onFire` 设置后再启动轮询
+    - 原则: **异步回调驱动的组件，先注册回调再启动生产者**
+
+14. **bootstrap 模板写入应加快速路径**
+    - 场景: `AgentDocs.bootstrap()` 每次 `ensureDefaultSession()` 都调用，执行 7 次 `file.exists()` 检查
+    - 后果: 每次启动都有不必要的文件系统操作 (主线程)
+    - 改进: 先检查 `soul.md` 是否存在 → 存在就整个跳过 (一个文件存在说明全部已初始化)
+    - 原则: **幂等初始化操作应有 O(1) 快速路径，一个标记文件即可判断是否已初始化**
+
+---
+
 ## 2026-07-22 — v0.7.0 发布
 
 ### 架构经验

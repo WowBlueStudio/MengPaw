@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.7.1 (2026-07-22) — 闪退修复：原子写入 + 损坏恢复 + 协程保护
+
+### 闪退修复 (P0 严重)
+- **非原子写入 → 崩溃循环**: `TriggerEngine.save()` / `AgentViewModel.saveSessionHistory()` / `AgentDocManager` 等 9 处 `File.writeText()` 改为原子写入 (tmp + rename)，避免进程崩溃时文件部分写入导致二次崩溃
+- **损坏文件自动清理**: `TriggerEngine.load()` / `AgentViewModel.loadSessionHistory()` 解析失败时主动删除损坏文件，确保下次从干净状态重建
+- **协程异常保护**: `AgentViewModel.submitTask()` 协程体包裹 try/catch，捕获 `OutOfMemoryError` 等 Error 类型，优雅降级到错误消息而非进程崩溃
+- **触发器启动时序**: `TriggerEngine.start()` 从 `MainActivity.onCreate()` 移至 Composable 中 `onFire` 设置后，防止启动窗口期静默消耗触发
+- **bootstrap 快速路径**: `AgentDocs.bootstrap()` 先检查 `soul.md` 是否存在，存在则跳过 7 次文件系统操作
+
+### 文档更新
+- `LESSONS.md` 新增 5 条教训 (原子写入 / 损坏恢复 / 协程保护 / 启动时序 / bootstrap 优化)
+- `docs/crash-prevention-guide.md` 新增 §3.4 原子写入模式 + v0.7.1 案例
+
 ## v0.6.2 (2026-07-21) — Agent 逻辑修复 + API 模型更新 + DeepSeek 解析修复
 
 ### Agent 引擎修复 (P0 严重)

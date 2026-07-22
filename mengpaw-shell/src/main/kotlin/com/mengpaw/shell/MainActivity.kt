@@ -69,8 +69,8 @@ class MainActivity : ComponentActivity() {
         com.mengpaw.kernel.trigger.TriggerEngine.load()
         com.mengpaw.kernel.trigger.TriggerEngine.registerSystemWake(this, 10)
         com.mengpaw.kernel.trigger.TriggerEngine.refreshCronAlarm()
-        com.mengpaw.kernel.trigger.TriggerEngine.start()
-        // onFire is set inside MengPawApp compose to access AgentViewModel
+        // TriggerEngine.start() deferred to MengPawApp composable —
+        // onFire must be wired first to avoid silent trigger consumption
 
         // Start persistent foreground notification to keep process alive
         com.mengpaw.shell.service.ShellService.start(this)
@@ -138,11 +138,14 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     // Sync loop mode from settings to agent view model
     LaunchedEffect(settingsState.loopMode) { agentViewModel.loopMode = settingsState.loopMode }
 
-    // ── Wire TriggerEngine.onFire → AgentViewModel ──
+    // ── Wire TriggerEngine.onFire → AgentViewModel, then start polling ──
     LaunchedEffect(agentViewModel) {
         com.mengpaw.kernel.trigger.TriggerEngine.onFire = { trigger ->
             agentViewModel.submitTriggerTask(trigger)
         }
+        // Start background polling only after onFire is wired —
+        // prevents triggers from firing with a null callback during startup
+        com.mengpaw.kernel.trigger.TriggerEngine.start()
     }
     // Grouped session data for hierarchical history sidebar
     val localGroups = remember(sessionHistory, hideCompacted) { agentViewModel.getLocalAgentGroups() }
