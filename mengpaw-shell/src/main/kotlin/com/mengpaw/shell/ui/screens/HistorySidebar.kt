@@ -95,7 +95,7 @@ fun HistorySidebar(
         }
 
         LazyColumn(
-            Modifier.fillMaxSize().clipToBounds(),
+            Modifier.weight(1f).fillMaxWidth().clipToBounds(),
             contentPadding = PaddingValues(vertical = ArcoSpacing.sm)
         ) {
             // ── Section: 智能体 (local agents) ──

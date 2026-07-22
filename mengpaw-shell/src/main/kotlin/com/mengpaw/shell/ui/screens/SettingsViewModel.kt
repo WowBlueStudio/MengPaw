@@ -139,6 +139,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         loadSavedProviders()
     }
 
+    /** Returns the first saved provider, or null if none configured. */
+    fun firstSavedProvider(): SavedProvider? = _state.value.savedProviders.firstOrNull()
+
     /** Restore saved providers from encrypted Vault on app startup. */
     private fun loadSavedProviders() {
         if (!vault.isAvailable) return
