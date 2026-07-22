@@ -145,7 +145,7 @@ fun SettingsScreen(
                     .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md)
             ) {
                 when (selectedSection) {
-                    0 -> AgentSettingsContent(state, viewModel, activeAgentEndpoint, activeAgentModel, onAgentSelectProvider, agentPluginItems, agentToolItems, agentSkillItems, workspaceItems, onRefreshWorkspace)
+                    0 -> AgentSettingsContent(state, viewModel, activeAgentEndpoint, activeAgentModel, onAgentSelectProvider, agentPluginItems, agentToolItems, agentSkillItems, toolItems, skillItems, workspaceItems, onRefreshWorkspace)
                     1 -> FrameworkSettingsContent(state, viewModel, onNavigateToPluginMarket, pluginItems, toolItems, skillItems)
                     2 -> SystemSettingsContent(state, viewModel, onNavigateToPluginMarket)
                 }
@@ -303,6 +303,8 @@ private fun AgentSettingsContent(
     agentPluginItems: List<FrameworkItem> = emptyList(),
     agentToolItems: List<FrameworkItem> = emptyList(),
     agentSkillItems: List<FrameworkItem> = emptyList(),
+    globalToolItems: List<FrameworkItem> = emptyList(),
+    globalSkillItems: List<FrameworkItem> = emptyList(),
     workspaceItems: List<FrameworkItem> = emptyList(),
     onRefreshWorkspace: (() -> Unit)? = null
 ) {
@@ -552,15 +554,29 @@ private fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── MengPaw CLI（Agent 可用命令） ──
-    FrameworkItemSection("MengPaw CLI", Icons.Outlined.Terminal, agentToolItems)
+    // ── 智能体工具(Agent Tools) ──
+    AgentItemsSection(
+        title = "智能体工具(Agent Tools)",
+        icon = Icons.Outlined.Terminal,
+        agentItems = agentToolItems,
+        globalPoolItems = globalToolItems,
+        globalPoolLabel = "从全局工具池安装",
+        installHelp = "三种安装方式：①从全局工具池安装 ②Agent 自行搜索下载安装 ③用户手动下载并提供路径，Agent 自行安装"
+    )
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── Agent Skills（从全局池导入） ──
-    FrameworkItemSection("Agent Skills", Icons.Outlined.AutoAwesome, agentSkillItems)
+    // ── 智能体技能(Agent Skills) ──
+    AgentItemsSection(
+        title = "智能体技能(Agent Skills)",
+        icon = Icons.Outlined.AutoAwesome,
+        agentItems = agentSkillItems,
+        globalPoolItems = globalSkillItems,
+        globalPoolLabel = "从全局技能池安装",
+        installHelp = "三种安装方式：①从全局技能池安装 ②Agent 自行搜索下载安装 ③用户手动下载并提供路径，Agent 自行安装"
+    )
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
@@ -847,15 +863,15 @@ private fun FrameworkSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── MengPaw CLI ──
-    FrameworkItemSection("MengPaw CLI", Icons.Outlined.Terminal, toolItems)
+    // ── 全局工具(Tools) ──
+    FrameworkItemSection("全局工具(Tools)", Icons.Outlined.Terminal, toolItems)
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── 全局 Skills ──
-    FrameworkItemSection("全局 Skills", Icons.Outlined.AutoAwesome, skillItems)
+    // ── 全局工具(Skills) ──
+    FrameworkItemSection("全局工具(Skills)", Icons.Outlined.AutoAwesome, skillItems)
 }
 
 // ─── 03. System Settings Content ────────────────────────────────────
@@ -1129,58 +1145,45 @@ private fun SecurityRulesSection() {
         }
     }
 
-    // ── 2. 内核完整性防护 ──
-    var kernelIntegrity by remember { mutableStateOf(com.mengpaw.kernel.security.SecurityPolicy.globalEnabled) }
+    // ── 2. 内核完整性防护（始终启用）──
     Surface(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         shape = RoundedCornerShape(ArcoRadius.md),
         color = ThemeColors.bgCard
     ) {
         Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Security, null, Modifier.size(20.dp), tint = if (kernelIntegrity) ArcoColors.Green6 else ArcoColors.Gray5)
+            Icon(Icons.Outlined.Security, null, Modifier.size(20.dp), tint = ArcoColors.Green6)
             Spacer(Modifier.width(ArcoSpacing.sm))
             Column(Modifier.weight(1f)) {
                 Text("内核完整性防护", fontWeight = FontWeight.Medium, fontSize = 14.sp)
                 Text(
-                    if (kernelIntegrity) "已启用 — 阻止 Agent 修改内核文件" else "已禁用",
+                    "已启用 — 阻止 Agent 执行危险命令",
                     fontSize = 12.sp, color = ThemeColors.textSecondary
                 )
             }
-            Switch(checked = kernelIntegrity, onCheckedChange = {
-                kernelIntegrity = it
-                com.mengpaw.kernel.security.SecurityPolicy.globalEnabled = it
-            }, modifier = Modifier.size(32.dp),
-                colors = SwitchDefaults.colors(checkedTrackColor = ArcoColors.Green6))
         }
     }
 
-    // ── 3. 插件完整性防护 ──
-    var pluginIntegrity by remember { mutableStateOf(com.mengpaw.kernel.plugin.PluginManager.globalInstance.integrityCheckEnabled) }
+    // ── 3. 插件完整性防护（始终启用）──
     Surface(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         shape = RoundedCornerShape(ArcoRadius.md),
         color = ThemeColors.bgCard
     ) {
         Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Shield, null, Modifier.size(20.dp), tint = if (pluginIntegrity) ArcoColors.Green6 else ArcoColors.Gray5)
+            Icon(Icons.Outlined.Shield, null, Modifier.size(20.dp), tint = ArcoColors.Green6)
             Spacer(Modifier.width(ArcoSpacing.sm))
             Column(Modifier.weight(1f)) {
                 Text("插件完整性防护", fontWeight = FontWeight.Medium, fontSize = 14.sp)
                 Text(
-                    if (pluginIntegrity) "已启用 — 验证插件签名和哈希" else "已禁用",
+                    "已启用 — 验证插件签名和版本兼容性",
                     fontSize = 12.sp, color = ThemeColors.textSecondary
                 )
             }
-            Switch(checked = pluginIntegrity, onCheckedChange = {
-                pluginIntegrity = it
-                com.mengpaw.kernel.plugin.PluginManager.globalInstance.integrityCheckEnabled = it
-            }, modifier = Modifier.size(32.dp),
-                colors = SwitchDefaults.colors(checkedTrackColor = ArcoColors.Green6))
         }
     }
 
-    // ── 4. 文件完整性防护 ──
-    var fileIntegrity by remember { mutableStateOf(com.mengpaw.core.security.IntegrityGuard.globalEnabled) }
+    // ── 4. 文件完整性防护（始终启用）──
     var showProtectedPaths by remember { mutableStateOf(false) }
     Surface(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
@@ -1190,20 +1193,15 @@ private fun SecurityRulesSection() {
     ) {
         Column(Modifier.padding(ArcoSpacing.md)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Folder, null, Modifier.size(20.dp), tint = if (fileIntegrity) ArcoColors.Green6 else ArcoColors.Gray5)
+                Icon(Icons.Outlined.Folder, null, Modifier.size(20.dp), tint = ArcoColors.Green6)
                 Spacer(Modifier.width(ArcoSpacing.sm))
                 Column(Modifier.weight(1f)) {
                     Text("文件完整性防护", fontWeight = FontWeight.Medium, fontSize = 14.sp)
                     Text(
-                        if (fileIntegrity) "已启用 — 保护核心目录不被修改" else "已禁用",
+                        "已启用 — 保护核心目录不被修改",
                         fontSize = 12.sp, color = ThemeColors.textSecondary
                     )
                 }
-                Switch(checked = fileIntegrity, onCheckedChange = {
-                    fileIntegrity = it
-                    com.mengpaw.core.security.IntegrityGuard.globalEnabled = it
-                }, modifier = Modifier.size(32.dp),
-                    colors = SwitchDefaults.colors(checkedTrackColor = ArcoColors.Green6))
             }
             AnimatedVisibility(visible = showProtectedPaths) {
                 Column(Modifier.padding(top = ArcoSpacing.sm)) {
@@ -1316,6 +1314,196 @@ private fun FrameworkItemSection(
             } // key(item.name)
         }
     }
+    Spacer(Modifier.height(ArcoSpacing.sm))
+}
+
+/**
+ * Agent-specific items section with per-agent loaded items and "install from global pool" support.
+ *
+ * Three installation methods described in help text:
+ * ① Install from global pool (UI button → dialog)
+ * ② Agent searches and installs on its own via CLI
+ * ③ User downloads manually, provides path, agent installs via CLI
+ */
+@Composable
+private fun AgentItemsSection(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    agentItems: List<FrameworkItem>,
+    globalPoolItems: List<FrameworkItem>,
+    globalPoolLabel: String,
+    installHelp: String
+) {
+    // Mutable local copy of this agent's loaded items
+    val loadedItems = remember { mutableStateListOf<FrameworkItem>().also { it.addAll(agentItems) } }
+    var showInstallDialog by remember { mutableStateOf(false) }
+
+    SectionHeader(title)
+
+    // Help text about three installation methods
+    Text(
+        installHelp,
+        fontSize = 11.sp,
+        color = ThemeColors.textSecondary,
+        lineHeight = 16.sp,
+        modifier = Modifier.padding(bottom = ArcoSpacing.xs)
+    )
+
+    // "+ 从全局池安装" button
+    TextButton(
+        onClick = { showInstallDialog = true },
+        contentPadding = PaddingValues(horizontal = ArcoSpacing.sm, vertical = 2.dp)
+    ) {
+        Icon(Icons.Outlined.Add, null, Modifier.size(15.dp), tint = ThemeColors.brand)
+        Spacer(Modifier.width(4.dp))
+        Text(globalPoolLabel, fontSize = 13.sp, color = ThemeColors.brand)
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.sm))
+
+    // Show loaded items
+    if (loadedItems.isEmpty()) {
+        Text(
+            "暂未加载任何项 — 点击上方按钮从全局池安装",
+            fontSize = 12.sp,
+            color = ThemeColors.textSecondary,
+            modifier = Modifier.padding(bottom = ArcoSpacing.sm)
+        )
+    } else {
+        val order = listOf(ItemCategory.BUILTIN, ItemCategory.OFFICIAL, ItemCategory.CUSTOM)
+        val grouped = loadedItems.groupBy { it.category }
+        order.forEach { cat ->
+            val group = grouped[cat] ?: return@forEach
+            group.forEach { item ->
+                key(item.name) {
+                    var expanded by remember { mutableStateOf(false) }
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        shape = RoundedCornerShape(ArcoRadius.md),
+                        color = ThemeColors.bgCard,
+                        onClick = { expanded = !expanded }
+                    ) {
+                        Column(Modifier.padding(ArcoSpacing.md)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(icon, null, Modifier.size(16.dp), tint = cat.color)
+                                Spacer(Modifier.width(ArcoSpacing.sm))
+                                Column(Modifier.weight(1f)) {
+                                    Text(item.name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
+                                    if (item.summary.isNotBlank()) {
+                                        Text(item.summary, fontSize = 12.sp, color = ThemeColors.textSecondary, maxLines = 1)
+                                    }
+                                }
+                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = cat.color.copy(alpha = 0.1f)) {
+                                    Text(cat.label, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                        fontSize = 10.sp, color = cat.color)
+                                }
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                    null, Modifier.size(18.dp), tint = ThemeColors.textSecondary
+                                )
+                            }
+                            AnimatedVisibility(visible = expanded) {
+                                if (item.docMarkdown.isNotBlank()) {
+                                    MarkdownText(content = item.docMarkdown, modifier = Modifier.padding(top = ArcoSpacing.sm))
+                                } else {
+                                    Text("暂无文档", Modifier.padding(top = ArcoSpacing.sm),
+                                        fontSize = 12.sp, color = ThemeColors.textSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Install from global pool dialog ──
+    if (showInstallDialog) {
+        val availableItems = remember(globalPoolItems, loadedItems.size) {
+            globalPoolItems.filter { poolItem -> loadedItems.none { it.name == poolItem.name } }
+        }
+        val selected = remember { mutableStateListOf<FrameworkItem>() }
+
+        AlertDialog(
+            onDismissRequest = {
+                selected.clear()
+                showInstallDialog = false
+            },
+            title = {
+                Text(globalPoolLabel, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            },
+            text = {
+                if (availableItems.isEmpty()) {
+                    Text(
+                        "全局池中没有更多可安装的项。\n\n方法②和③：Agent 可自行搜索安装，或由用户提供路径后安装。",
+                        fontSize = 13.sp, color = ThemeColors.textSecondary, lineHeight = 20.sp
+                    )
+                } else {
+                    Column {
+                        Text(
+                            "选择要安装到当前智能体的项（已安装的不会重复出现）：",
+                            fontSize = 12.sp, color = ThemeColors.textSecondary,
+                            modifier = Modifier.padding(bottom = ArcoSpacing.sm)
+                        )
+                        availableItems.take(30).forEach { item ->
+                            val isChecked = selected.any { it.name == item.name }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (isChecked) selected.removeAll { it.name == item.name }
+                                        else selected.add(item)
+                                    }
+                                    .padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = isChecked,
+                                    onCheckedChange = { checked ->
+                                        if (checked) selected.add(item)
+                                        else selected.removeAll { it.name == item.name }
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(item.name, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                    if (item.summary.isNotBlank())
+                                        Text(item.summary, fontSize = 11.sp, color = ThemeColors.textSecondary, maxLines = 1)
+                                }
+                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = item.category.color.copy(alpha = 0.1f)) {
+                                    Text(item.category.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                        fontSize = 9.sp, color = item.category.color)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        loadedItems.addAll(selected.filter { item -> loadedItems.none { it.name == item.name } })
+                        selected.clear()
+                        showInstallDialog = false
+                    },
+                    enabled = selected.isNotEmpty()
+                ) {
+                    Text(if (selected.isEmpty()) "安装" else "安装 (${selected.size})")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    selected.clear()
+                    showInstallDialog = false
+                }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
     Spacer(Modifier.height(ArcoSpacing.sm))
 }
 

@@ -5,6 +5,8 @@ package com.mengpaw.kernel.cli
 
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.error.ErrorType
+import com.mengpaw.kernel.security.IntegrityProvider
+import com.mengpaw.kernel.security.NoOpIntegrityProvider
 import com.mengpaw.kernel.security.SecurityPolicy
 
 /**
@@ -18,6 +20,8 @@ class Pipeline(
     private val securityPolicy: SecurityPolicy = SecurityPolicy(),
     private val maxCommandsPerSecond: Int = 30
 ) {
+    /** Integrity provider for path-level protection; set after construction for Android. */
+    var integrityProvider: IntegrityProvider = NoOpIntegrityProvider
     /** Audit log of executed commands. */
     private val auditLog = mutableListOf<AuditEntry>()
 
@@ -54,7 +58,7 @@ class Pipeline(
             }
 
             // Integrity guard: block writes to protected paths
-            val integrityError = securityPolicy.validateIntegrity(parsed.command, parsed.args)
+            val integrityError = integrityProvider.validateCommand(parsed.command, parsed.args)
             if (integrityError != null) {
                 return failAudit(integrityError, ErrorCodes.ERR_PERMISSION_DENIED, trimmed, context, startTime)
             }

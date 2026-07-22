@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.9.0 (2026-07-22) — 安全强化 + MD 模板文件化 + 智能体专属工具/技能
+
+### 安全架构 (核心)
+- **三大保护强制启用**: 移除内核/插件/文件完整性开关，保护始终生效
+- **IntegrityGuard 接入 Pipeline**: 之前从未实例化（NoOp 空实现），现通过 AgentEngine → Pipeline 指令链真正执行路径保护
+- **SecurityPolicy 强制执行**: 删除 `globalEnabled` 旁路，15 条危险模式 + 黑名单始终生效
+- **PluginManager 清理**: 删除从未被读取的 `integrityCheckEnabled` 假开关
+
+### MD 模板文件化 (性能)
+- **模板从 Kotlin 拆除**: 删除 7 个硬编码 `xxxTemplate()` 函数（~270 行字符串），`DEFAULT_AGENTS_MD`/`DEFAULT_SOUL_MD`/`DEFAULT_MEMORY_MD` 常量（~80 行）
+- **assets 存放**: 7 个 .md 模板文件放入 `assets/agent-templates/zh/`，QwenPaw 中文版
+- **三路径模型**: APK assets → 只读模板路径 → Agent 工作区，文件复制替代字符串拼接
+- **自定义简便**: 直接编辑 assets 下的 .md 文件，重新编译即可更新模板
+
+### 智能体专属工具/技能
+- **智能体工具(Agent Tools)**: 替代 "MengPaw CLI"，支持三种安装方式
+- **智能体技能(Agent Skills)**: 替代 "Agent Skills"，支持三种安装方式
+- **全局池安装对话框**: 从全局工具池/技能池勾选安装到当前智能体
+- **三种安装方式**: ①从全局池安装 ②Agent 自行搜索下载 ③用户提供路径 Agent 安装
+
+### 设置页文案重构
+- 框架设置: `MengPaw CLI` → `全局工具(Tools)`, `全局 Skills` → `全局工具(Skills)`
+- 智能体设置: `MengPaw CLI` → `智能体工具(Agent Tools)`, `Agent Skills` → `智能体技能(Agent Skills)`
+- 三个安全开关 → 静态"已启用"指示器
+
+### 架构改进
+- `AgentTemplates.kt` 新增模板管理器 (mengpaw-core)
+- `AgentDocs.kt` 377 行 → 68 行，新增 `bootstrapper` 回调模式
+- `AgentDocManager.kt` 移除重复模板常量，统一走文件复制
+- `DataPaths.kt` 新增 `AGENT_TEMPLATES` 路径常量
+- `Pipeline.kt` 新增 `integrityProvider` 属性，直接调用 `validateCommand()`
+- `AgentEngine.kt` 新增 `integrityProvider` 属性，`buildPipeline()` 注入
+- `MengPawVersion` 自动生成自 `mengpaw.version` 属性
+
+### 发行
+- Shell: v0.8.4 → v0.9.0 (versionCode=900)
+- Kernel: CORE_VERSION 0.8.4 → 0.9.0
+- 8 新建文件, 10 修改文件, ~350 行 Kotlin 代码删除
+
 ## v0.8.4 (2026-07-22) — 会话管理增强 + 引擎可靠性修复 + UI 体验升级
 
 ### 会话管理 (核心)

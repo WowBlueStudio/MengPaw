@@ -38,6 +38,7 @@ object DataPaths {
     val SCREENSHOTS get() = "$BASE/截图存档"
     val PLUGIN_CACHE get() = "$BASE/插件仓库"
     val AGENTS get() = "$BASE/Agent文档"
+    val AGENT_TEMPLATES get() = "$BASE/agent-templates"
     val SOCKET get() = "$BASE/mengpaw.sock"
     val AGENT_INBOX get() = "$AGENTS/inbox"
     val TEAM get() = "$AGENTS/team"

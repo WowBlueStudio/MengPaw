@@ -224,6 +224,9 @@ class AgentEngine(
     /** Invalidate cached pipeline when plugins change. Call after plugin install/uninstall. */
     fun invalidatePipeline() { cachedPipeline = null }
 
+    /** Integrity provider for path-level file protection; set after construction for Android. */
+    var integrityProvider: com.mengpaw.kernel.security.IntegrityProvider = com.mengpaw.kernel.security.NoOpIntegrityProvider
+
     private fun buildPipeline(): Pipeline {
         cachedPipeline?.let { return it }
         val registry = CommandRegistry()
@@ -255,6 +258,7 @@ class AgentEngine(
 
         pluginManager.bindRegistry(registry)
         val pipeline = Pipeline(registry = registry)
+        pipeline.integrityProvider = integrityProvider
         cachedPipeline = pipeline
         return pipeline
     }

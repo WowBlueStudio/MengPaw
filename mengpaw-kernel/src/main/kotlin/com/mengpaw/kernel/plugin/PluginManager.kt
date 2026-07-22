@@ -23,9 +23,6 @@ class PluginManager(
         var globalInstance: PluginManager = PluginManager()
             private set
     }
-    /** When false, skips integrity verification during install (for UI toggle). */
-    var integrityCheckEnabled: Boolean = true
-
     /** All plugins known to the manager, keyed by plugin id. */
     private val plugins = mutableMapOf<String, Plugin>()
 
