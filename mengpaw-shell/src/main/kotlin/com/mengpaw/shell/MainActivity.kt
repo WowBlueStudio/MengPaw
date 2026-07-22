@@ -162,22 +162,25 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     val activeAgent by agentViewModel.activeAgent.collectAsState()
     val sessionHistory by agentViewModel.sessionHistory.collectAsState()
     val hideCompacted by agentViewModel.hideCompacted.collectAsState()
-    // ── Bind AgentRuntime to ViewModel (once at startup) ──
+    // ── Wire triggers once at startup ──
     LaunchedEffect(agentViewModel) {
-        com.mengpaw.shell.service.AgentRuntime.agentViewModel = agentViewModel
         com.mengpaw.shell.service.AgentRuntime.wireTriggers(agentViewModel)
     }
 
-    // Sync loop mode from settings to agent view model
+    // Sync loop mode from settings
     LaunchedEffect(settingsState.loopMode) { agentViewModel.loopMode = settingsState.loopMode }
 
-    // ── Delegate Agent initialization to AgentRuntime (IO thread) when exiting Settings ──
+    // ── Apply API config when exiting Settings (lightweight, no auto-start) ──
     LaunchedEffect(showSettings) {
         if (!showSettings) {
             val s = settingsState
-            com.mengpaw.shell.service.AgentRuntime.onSettingsSaved(
-                s.apiEndpoint, s.apiKey, s.modelName, s.effectiveAgentLanguage
-            )
+            if (s.apiKey.isNotBlank()) {
+                agentViewModel.applyConfiguration(
+                    s.apiEndpoint, s.apiKey, s.modelName,
+                    com.mengpaw.kernel.llm.AdaptiveLlmProvider(s.apiEndpoint, s.apiKey, s.modelName),
+                    s.effectiveAgentLanguage
+                )
+            }
         }
     }
     // Grouped session data for hierarchical history sidebar

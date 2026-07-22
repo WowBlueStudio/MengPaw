@@ -63,7 +63,6 @@ fun MainScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
-    val isInitializing by viewModel.isInitializing.collectAsState()
     val inputEnabled by viewModel.inputEnabled.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -79,8 +78,6 @@ fun MainScreen(
     val settingsState = settingsViewModel?.state?.collectAsState()
     val activeAgentState = agentViewModel?.activeAgent?.collectAsState()
     val displayAgentName = activeAgentState?.value ?: "MengPaw"
-    // Agent configuration is now triggered when user exits Settings (in MengPawApp),
-    // not on every keystroke. This prevents ANR when typing/pasting API key.
     // React to language-only changes without full reconfig
     LaunchedEffect(settingsState?.value?.agentLanguageMode, settingsState?.value?.useChinese) {
         settingsState?.value?.let { s ->
@@ -207,12 +204,6 @@ fun MainScreen(
                         state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
                         contentPadding = PaddingValues(vertical = ArcoSpacing.md)
                     ) {
-                        // Loading indicator while Agent initializes silently
-                        if (isInitializing) {
-                            item(key = "init_loading") {
-                                AgentInitializingCard()
-                            }
-                        }
                         items(displayedMessages, key = { it.stableId }) { message ->
                             BubbleWrapper(
                                 message = message,

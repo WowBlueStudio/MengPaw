@@ -159,8 +159,6 @@ class AgentViewModel : ViewModel() {
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
-    /** Delegated to AgentRuntime — true while initializing on background thread. */
-    val isInitializing: StateFlow<Boolean> get() = com.mengpaw.shell.service.AgentRuntime.isInitializing
 
     private val _inputEnabled = MutableStateFlow(true)
     val inputEnabled: StateFlow<Boolean> = _inputEnabled.asStateFlow()
