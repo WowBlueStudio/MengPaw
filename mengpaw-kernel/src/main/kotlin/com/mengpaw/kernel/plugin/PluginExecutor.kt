@@ -28,7 +28,7 @@ class PluginExecutor(
     private val marketplaceClient: PluginMarketplaceClient = PluginMarketplaceClient()
 ) {
     /** Plugins that should never be auto-suspended (core functionality). */
-    private val KEEP_AWAKE = setOf("self-plugin", "agent-plugin", "pad-plugin")
+    private val KEEP_AWAKE = setOf("self-plugin", "agent-plugin")
 
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         "marketplace" to ::marketplace,

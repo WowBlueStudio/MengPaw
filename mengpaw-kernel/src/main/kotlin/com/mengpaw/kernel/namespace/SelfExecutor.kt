@@ -371,17 +371,17 @@ object SelfExecutor {
 }
 
 data class AgentTheme(
-    val primary: Long = 0xFF165DFF,
+    val primary: Long = 0xFF0E4397,
     val surface: Long = 0xFFFFFFFF,
-    val darkPrimary: Long = 0xFF6AA1FF,
+    val darkPrimary: Long = 0xFF5B8BD1,
     val darkSurface: Long = 0xFF272E3B,
-    val containerLight: Long = 0xFFE8F3FF,
+    val containerLight: Long = 0xFFE7EEF8,
     val containerDark: Long = 0xFF4E5969
 ) {
     fun toMarkdown(): String = """
 # Agent 主题配色
 
-> Agent 可自由修改以下色值。填写十六进制颜色码（如 `#165DFF`）。
+> Agent 可自由修改以下色值。填写十六进制颜色码（如 `#0E4397`）。
 
 ## 浅色模式
 | 角色 | 色值 | 说明 |
@@ -418,9 +418,9 @@ self.theme primary=#FF6B35 surface=#FFF8F0
                 return m?.groupValues?.get(1)?.toLongOrNull(16)?.let { 0xFF000000 or it } ?: default
             }
             return AgentTheme(
-                primary = readHex("primary", 0xFF165DFF),
+                primary = readHex("primary", 0xFF0E4397),
                 surface = readHex("surface", 0xFFFFFFFF),
-                darkPrimary = readHex("darkPrimary", 0xFF6AA1FF),
+                darkPrimary = readHex("darkPrimary", 0xFF5B8BD1),
                 darkSurface = readHex("darkSurface", 0xFF272E3B),
                 containerLight = readHex("containerLight", 0xFFE8F3FF),
                 containerDark = readHex("containerDark", 0xFF4E5969),

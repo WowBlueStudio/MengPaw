@@ -1,3 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 哇蓝 MengPaw 应用图标 — 深蓝背景 + 居中白色哇字 + 粉色圆点 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
@@ -5,13 +7,13 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Blue gradient rounded rectangle background -->
+    <!-- 深蓝圆角背景 -->
     <path
         android:pathData="M18,0 L90,0 C99.94,0 108,8.06 108,18 L108,90 C108,99.94 99.94,108 90,108 L18,108 C8.06,108 0,99.94 0,90 L0,18 C0,8.06 8.06,0 18,0 Z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:startColor="#1D4ED8"
-                android:endColor="#3B82F6"
+                android:startColor="#0B3679"
+                android:endColor="#0E4397"
                 android:startX="0"
                 android:startY="108"
                 android:endX="108"
@@ -20,8 +22,31 @@
         </aapt:attr>
     </path>
 
-    <!-- White letter M -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M28,76 L28,32 L38,32 L54,58 L70,32 L80,32 L80,76 L72,76 L72,46 L58,70 L50,70 L36,46 L36,76 Z" />
+    <!-- 哇字 Logo — 原始 viewBox 83x88，放大到 82dp -->
+    <!-- scale = 82 / 88 ≈ 0.932, translateX = (108 - 83*0.932) / 2 ≈ 15.3, translateY = (108 - 88*0.932) / 2 ≈ 13 -->
+    <group
+        android:translateX="15"
+        android:translateY="13"
+        android:scaleX="0.932"
+        android:scaleY="0.932">
+
+        <!-- 哇字主体 — 白色 -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M0,87.57L0,0l33.13,7.85v8.79l-3.83,0v-5.77L3.82,4.84v77.89l25.48,-6.03v-4.87h3.83v7.89L0,87.57z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M8.85,63.58L7.71,21.5h7v1.79L27,21.5l-1.13,38H14.77v3.16zM14.77,53.36l5.26,-1V29h-5.26zM60.08,69.56L27.44,69.5l-1.19,-4.6l13.27,-1v-7.43H29.17L28,51.8l11.54,-0.89v-6.4l7.53,0.9l-0.24,4.9l11.3,-0.9v7.06H46.45L46,63.52l14,-1zM59.42,43.44H28.28l-1.2,-4.67l12.44,-0.89V31.06H30.07L28.88,26.4l10.64,-0.9V18.15l7.53,0.9l-0.3,5.86l10.4,-0.9v7H46.39L46,37.4l13.39,-1z" />
+
+        <!-- 粉色圆点 — 品牌点缀色 -->
+        <path
+            android:fillColor="#FC5185"
+            android:pathData="M78.07,68.54c-2.59,0,-4.76,-2.22,-5.02,-4.96c-0.26,-2.74,1.76,-5.02,4.5,-5.28c2.74,-0.26,5.02,1.76,5.28,4.5c0.26,2.74,-1.76,5.02,-4.5,5.28C78.2,68.54,78.14,68.54,78.07,68.54z" />
+
+        <!-- 白色竖条 — "i" 的竖笔 -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M81.12,54.44h-5.98l-1.55,-33.3h9.02L81.12,54.44z" />
+
+    </group>
 </vector>

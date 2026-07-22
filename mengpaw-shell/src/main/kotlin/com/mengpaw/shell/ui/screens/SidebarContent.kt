@@ -51,7 +51,9 @@ data class FrameworkContact(
     val address: String,
     val online: Boolean,
     val trusted: Boolean,
-    val agents: List<String>
+    val agents: List<String>,
+    val version: String = "",
+    val frameworkName: String = ""
 )
 
 /** Data class for new agent creation form. */
@@ -84,8 +86,9 @@ fun SidebarContent(
     var frameworkStatus by remember { mutableStateOf(FrameworkStatus.ONLINE) }
     var manualStatus by remember { mutableStateOf(false) }
 
-    // ── Agent Card dialog state ──
+    // ── Card dialog states ──
     var cardAgentName by remember { mutableStateOf<String?>(null) }
+    var cardFrameworkName by remember { mutableStateOf<String?>(null) }
 
     // ── New Agent dialog state ──
     var showNewAgentDialog by remember { mutableStateOf(false) }
@@ -214,7 +217,7 @@ fun SidebarContent(
         }
         Spacer(Modifier.height(ArcoSpacing.sm))
 
-        // Load saved framework contacts from ACP_TRUSTED directory
+        // Load saved framework contacts from ACP_TRUSTED + discovered peers
         val frameworks = remember {
             val contacts = mutableListOf<FrameworkContact>()
             val trustedDir = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
@@ -234,6 +237,32 @@ fun SidebarContent(
                         } catch (_: Exception) { /* skip corrupted files */ }
                     }
             }
+            // 合并 mDNS 发现的框架
+            val discovered = com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll()
+            discovered.forEach { peer ->
+                val existing = contacts.indexOfFirst { it.name == peer.name }
+                if (existing >= 0) {
+                    // 更新在线状态和 Agent 列表
+                    val old = contacts[existing]
+                    contacts[existing] = old.copy(
+                        online = peer.lastSeen > System.currentTimeMillis() - 120_000,
+                        address = "${peer.address}:${peer.port}",
+                        agents = peer.agents,
+                        version = peer.version,
+                        frameworkName = peer.frameworkName
+                    )
+                } else {
+                    contacts.add(FrameworkContact(
+                        name = peer.name,
+                        address = "${peer.address}:${peer.port}",
+                        online = peer.lastSeen > System.currentTimeMillis() - 120_000,
+                        trusted = peer.trusted,
+                        agents = peer.agents,
+                        version = peer.version,
+                        frameworkName = peer.frameworkName
+                    ))
+                }
+            }
             mutableStateListOf<FrameworkContact>().also { it.addAll(contacts) }
         }
 
@@ -248,7 +277,10 @@ fun SidebarContent(
 
                 Row(
                     Modifier.fillMaxWidth()
-                        .clickable { expanded = !expanded }
+                        .combinedClickable(
+                            onClick = { expanded = !expanded },
+                            onLongClick = { cardFrameworkName = framework.name }
+                        )
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -272,7 +304,11 @@ fun SidebarContent(
                                 }
                             }
                         }
-                        Text(framework.address, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                        val softLabel = if (framework.frameworkName.isNotBlank() && framework.version.isNotBlank())
+                            "${framework.frameworkName} v${framework.version}"
+                        else framework.address
+                        Text(softLabel, style = MaterialTheme.typography.labelSmall,
+                            color = ThemeColors.textSecondary, fontSize = 10.sp)
                     }
                     if (framework.online) {
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = frameworkStatus.indicatorColor.copy(alpha = 0.1f)) {
@@ -385,6 +421,13 @@ fun SidebarContent(
         )
     }
 
+    cardFrameworkName?.let { name ->
+        FrameworkCardDialog(
+            frameworkName = name,
+            onDismiss = { cardFrameworkName = null }
+        )
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     // New Agent Dialog
     // ═══════════════════════════════════════════════════════════════════
@@ -449,7 +492,7 @@ private fun AgentCardDialog(
         },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 400.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Avatar — large size 72dp
@@ -565,23 +608,17 @@ private fun AgentCardDialog(
                     Surface(
                         color = ThemeColors.bgCardHigh,
                         shape = RoundedCornerShape(ArcoRadius.sm),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 140.dp)
                     ) {
-                        Column(Modifier.padding(ArcoSpacing.sm)) {
-                            mdFiles.take(8).forEach { fname ->
+                        Column(
+                            Modifier.padding(ArcoSpacing.sm).verticalScroll(rememberScrollState())
+                        ) {
+                            mdFiles.forEach { fname ->
                                 Text(
                                     "📄 $fname",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = ThemeColors.textSecondary,
                                     fontSize = 11.sp
-                                )
-                            }
-                            if (mdFiles.size > 8) {
-                                Text(
-                                    "... 还有 ${mdFiles.size - 8} 个文件",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = ThemeColors.textSecondary.copy(alpha = 0.5f),
-                                    fontSize = 10.sp
                                 )
                             }
                         }
@@ -761,9 +798,9 @@ private fun AddFrameworkDialog(onDismiss: () -> Unit) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = {
                         isDiscovering = true
-                        // Simple LAN scan: check common ACP ports
-                        // In production this would use mDNS/NSD
-                        discovered = listOf()
+                        // 使用框架协议插件扫描局域网
+                        val peers = com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll()
+                        discovered = peers.map { it.name to "${it.address}:${it.port}" }
                         isDiscovering = false
                     }) {
                         if (isDiscovering) {
@@ -807,6 +844,143 @@ private fun AddFrameworkDialog(onDismiss: () -> Unit) {
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Framework Card Dialog
+// ═══════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun FrameworkCardDialog(
+    frameworkName: String,
+    onDismiss: () -> Unit
+) {
+    val peer = remember(frameworkName) {
+        com.mengpaw.plugin.framework.FrameworkPeerStore.findByName(frameworkName)
+    }
+    val acpFile = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "$frameworkName.json")
+    val acpJson = remember(frameworkName) {
+        if (acpFile.exists()) try { org.json.JSONObject(acpFile.readText()) } catch (_: Exception) { null }
+        else null
+    }
+
+    var editNote by remember { mutableStateOf(acpJson?.optString("notes", "") ?: "") }
+    var isEditing by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("框架名片", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = {
+                    if (isEditing && acpFile.exists()) {
+                        try {
+                            val updated = org.json.JSONObject(acpFile.readText())
+                            updated.put("notes", editNote)
+                            val tmp = java.io.File(acpFile.parentFile, "$frameworkName.tmp.json")
+                            tmp.writeText(updated.toString())
+                            tmp.renameTo(acpFile)
+                            if (tmp.exists()) tmp.delete()
+                        } catch (_: Exception) {}
+                    }
+                    isEditing = !isEditing
+                }) {
+                    Text(if (isEditing) "保存" else "编辑", color = ThemeColors.brand, fontSize = 13.sp)
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 400.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(shape = RoundedCornerShape(ArcoRadius.lg),
+                    color = ThemeColors.brandContainer, modifier = Modifier.size(72.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.Hub, null, Modifier.size(36.dp), tint = ThemeColors.brand)
+                    }
+                }
+                Spacer(Modifier.height(ArcoSpacing.md))
+                Text(frameworkName, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+                    color = ThemeColors.textPrimary)
+                Spacer(Modifier.height(ArcoSpacing.sm))
+
+                if (peer != null) {
+                    Row(Modifier.fillMaxWidth()
+                        .background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm))
+                        .padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Info, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
+                        Spacer(Modifier.width(6.dp))
+                        Text("版本: ${peer.version}", style = MaterialTheme.typography.labelSmall,
+                            color = ThemeColors.textSecondary, fontSize = 11.sp)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
+
+                val addr = peer?.address ?: acpJson?.optString("address", "") ?: ""
+                if (addr.isNotBlank()) {
+                    Row(Modifier.fillMaxWidth()
+                        .background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm))
+                        .padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Language, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
+                        Spacer(Modifier.width(6.dp))
+                        Text("${addr}:${peer?.port ?: 9876}", style = MaterialTheme.typography.labelSmall,
+                            color = ThemeColors.textSecondary, fontSize = 11.sp)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
+
+                if (peer != null) {
+                    val online = peer.lastSeen > System.currentTimeMillis() - 120_000
+                    Row(Modifier.fillMaxWidth()
+                        .background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm))
+                        .padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).background(
+                            if (online) ArcoColors.Green6 else ArcoColors.Gray5, CircleShape))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (online) "在线" else "离线", style = MaterialTheme.typography.labelSmall,
+                            color = if (online) ArcoColors.Green6 else ThemeColors.textSecondary, fontSize = 11.sp)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Row(Modifier.fillMaxWidth()
+                        .background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm))
+                        .padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Security, null, Modifier.size(14.dp),
+                            tint = if (peer.trusted) ArcoColors.Green6 else ArcoColors.Orange6)
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (peer.trusted) "已信任" else "未信任", style = MaterialTheme.typography.labelSmall,
+                            color = if (peer.trusted) ArcoColors.Green6 else ArcoColors.Orange6, fontSize = 11.sp)
+                    }
+                    Spacer(Modifier.height(ArcoSpacing.md))
+                }
+
+                Text("框架备注", style = MaterialTheme.typography.labelSmall,
+                    color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(4.dp))
+                if (isEditing) {
+                    OutlinedTextField(value = editNote, onValueChange = { editNote = it },
+                        minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(ArcoRadius.md))
+                } else {
+                    Text(editNote.ifBlank { "暂无备注" }, style = MaterialTheme.typography.bodySmall,
+                        color = if (editNote.isBlank()) ThemeColors.textSecondary.copy(alpha = 0.6f)
+                        else ThemeColors.textPrimary)
+                }
+            }
+        },
+        confirmButton = {
+            if (peer != null && !peer.trusted) {
+                TextButton(onClick = {
+                    com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = true))
+                    onDismiss()
+                }) { Text("信任此框架", color = ThemeColors.brand, fontSize = 13.sp) }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
         }
     )
 }

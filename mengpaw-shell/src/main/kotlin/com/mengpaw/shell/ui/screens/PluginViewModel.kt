@@ -42,7 +42,9 @@ enum class PluginAvailability {
     /** Available for download from the marketplace. */
     DOWNLOADABLE,
     /** Listed but not yet released. */
-    UNAVAILABLE
+    UNAVAILABLE,
+    /** 已嵌入引擎 — 内置功能，不可卸载 */
+    EMBEDDED
 }
 
 /**
@@ -121,6 +123,7 @@ class PluginViewModel : ViewModel() {
                     isActive = status == PluginStatus.ACTIVE,
                     installState = states[entry.id] ?: InstallState.Idle,
                     availability = when {
+                        entry.status == "embedded" -> PluginAvailability.EMBEDDED
                         entry.status == "deprecated" -> PluginAvailability.UNAVAILABLE
                         // Only pluginClassRegistry reflects actually compiled-in plugins
                         pluginClassRegistry.containsKey(entry.id) -> PluginAvailability.BUILTIN
@@ -363,11 +366,11 @@ class PluginViewModel : ViewModel() {
             "fs-plugin" to "com.mengpaw.plugin.fs.FsPlugin",
             "net-plugin" to "com.mengpaw.plugin.net.NetPlugin",
             "memory-plugin" to "com.mengpaw.plugin.memory.MemoryPlugin",
+            "framework-plugin" to "com.mengpaw.plugin.framework.FrameworkPlugin",
             "skill-plugin" to "com.mengpaw.plugin.skill.SkillPlugin",
             "self-plugin" to "com.mengpaw.plugin.self.SelfPlugin",
             "clipboard-plugin" to "com.mengpaw.plugin.clipboard.ClipboardPlugin",
             "notification-plugin" to "com.mengpaw.plugin.notification.NotificationPlugin",
-            "pad-plugin" to "com.mengpaw.plugin.pad.PadPlugin",
             "tavily-plugin" to "com.mengpaw.plugin.tavily.TavilyPlugin",
             "hermes-plugin" to "com.mengpaw.plugin.hermes.HermesPlugin",
             "workflow-plugin" to "com.mengpaw.plugin.workflow.WorkflowPlugin",

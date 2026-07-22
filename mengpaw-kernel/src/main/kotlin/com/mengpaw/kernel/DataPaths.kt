@@ -32,6 +32,7 @@ object DataPaths {
         BASE = basePath
     }
 
+    val CONFIG get() = "$BASE/配置"
     val MEMORIES get() = "$BASE/记忆数据"
     val SKILLS get() = "$BASE/技能剧本"
     val CHECKPOINTS get() = "$BASE/会话检查点"

@@ -1173,13 +1173,13 @@ object BrowserThemeConfig {
                 val themeFile = java.io.File(dir, "theme.md")
                 if (themeFile.exists()) {
                     val text = themeFile.readText()
-                    val primary = Regex("primary.*?#([0-9A-Fa-f]{6})").find(text)?.groupValues?.get(1)?.toLongOrNull(16)?.let { 0xFF000000 or it } ?: 0xFF165DFF
+                    val primary = Regex("primary.*?#([0-9A-Fa-f]{6})").find(text)?.groupValues?.get(1)?.toLongOrNull(16)?.let { 0xFF000000 or it } ?: 0xFF0E4397
                     val surface = Regex("surface.*?#([0-9A-Fa-f]{6})").find(text)?.groupValues?.get(1)?.toLongOrNull(16)?.let { 0xFF000000 or it } ?: 0xFFFFFFFF
                     return Config(primary, surface)
                 }
             }
         } catch (_: Exception) {}
-        return Config(0xFF165DFF, 0xFFFFFFFF)
+        return Config(0xFF0E4397, 0xFFFFFFFF)
     }
 }
 

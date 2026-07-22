@@ -91,6 +91,13 @@ enum class LoopMode(val label: String, val desc: String) {
     MISSION_PLUS("Mission+ 模式", "协调跨 Agent、跨框架、跨设备的多 Agent 协同处理复杂任务")
 }
 
+/** 主题模式 — 亮色 / 暗色 / 跟随系统。 */
+enum class ThemeMode(val label: String) {
+    LIGHT("亮色"),
+    DARK("暗色"),
+    SYSTEM("跟随系统")
+}
+
 data class SettingsState(
     val selectedProvider: LlmProviderPreset = LlmProviderPreset.OPENAI,
     val apiEndpoint: String = LlmProviderPreset.OPENAI.endpoint,
@@ -103,7 +110,7 @@ data class SettingsState(
     val timezone: String = java.util.TimeZone.getDefault().id,
     val contextStrategy: String = "default",
     val memoryBackend: String = "memory-plugin",
-    val darkTheme: Boolean = false,
+    val themeMode: ThemeMode = ThemeMode.LIGHT,
     val showApiKey: Boolean = false,
     val useChinese: Boolean = true,
     val agentLanguageMode: AgentLanguageMode = AgentLanguageMode.FOLLOW_UI,
@@ -317,8 +324,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _state.value = _state.value.copy(maxSteps = steps.coerceIn(1, 200))
     }
 
-    fun toggleDarkTheme() {
-        _state.value = _state.value.copy(darkTheme = !_state.value.darkTheme)
+    fun cycleThemeMode() {
+        val modes = ThemeMode.entries
+        val next = modes[(modes.indexOf(_state.value.themeMode) + 1) % modes.size]
+        _state.value = _state.value.copy(themeMode = next)
     }
 
     fun updateCommandTimeout(sec: Int) {

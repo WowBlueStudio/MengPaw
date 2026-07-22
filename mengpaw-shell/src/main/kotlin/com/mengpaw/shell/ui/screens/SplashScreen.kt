@@ -5,6 +5,7 @@ package com.mengpaw.shell.ui.screens
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -17,11 +18,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.design.tokens.ArcoColors
+import com.mengpaw.shell.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -29,24 +32,22 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * WowBlue splash screen with playful staggered animations.
+ * WowBlue splash screen with logo + staggered animations.
  *
- * "WOW" letters pop in one-by-one with spring physics,
- * "BLUE" slides up, particles orbit, then transitions out.
+ * Brand "哇" icon springs in with scale animation, "WowBlue" text fades up,
+ * orbiting particles surround, then transitions out.
  */
 @Composable
 fun WowBlueSplash(onFinished: () -> Unit) {
-    val bgBlue = ArcoColors.Blue6  // brand primary
+    val bgBlue = ArcoColors.Blue6  // #0E4397
 
     // ── Animation state machines ──
     var phase by remember { mutableIntStateOf(0) }  // 0=enter, 1=hold, 2=exit
 
-    // Per-letter scales for W·O·W (3 letters, staggered)
-    val w1Scale = remember { Animatable(0f) }
-    val oScale = remember { Animatable(0f) }
-    val w2Scale = remember { Animatable(0f) }
-    val blueAlpha = remember { Animatable(0f) }
-    val blueOffsetY = remember { Animatable(60f) }
+    // Logo scale + text animations
+    val logoScale = remember { Animatable(0f) }
+    val brandAlpha = remember { Animatable(0f) }
+    val brandOffsetY = remember { Animatable(40f) }
     val subtitleAlpha = remember { Animatable(0f) }
     val exitAlpha = remember { Animatable(1f) }
 
@@ -55,7 +56,6 @@ fun WowBlueSplash(onFinished: () -> Unit) {
     val orbitProgress = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
-        // Phase 0 — staggered entrance
         // Orbit starts spinning immediately
         launch {
             orbitProgress.animateTo(
@@ -67,23 +67,15 @@ fun WowBlueSplash(onFinished: () -> Unit) {
             )
         }
 
-        // W·O·W letters spring in with stagger
+        // Logo springs in
         launch {
-            w1Scale.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 400f))
-        }
-        delay(90)
-        launch {
-            oScale.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 400f))
-        }
-        delay(90)
-        launch {
-            w2Scale.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 400f))
+            logoScale.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 350f))
         }
 
-        // BLUE slides up + fades in
-        delay(80)
-        launch { blueAlpha.animateTo(1f, tween(500, easing = FastOutSlowInEasing)) }
-        launch { blueOffsetY.animateTo(0f, tween(500, easing = FastOutSlowInEasing)) }
+        // Brand text fades up
+        delay(150)
+        launch { brandAlpha.animateTo(1f, tween(500, easing = FastOutSlowInEasing)) }
+        launch { brandOffsetY.animateTo(0f, tween(500, easing = FastOutSlowInEasing)) }
 
         // Subtitle
         delay(200)
@@ -110,8 +102,8 @@ fun WowBlueSplash(onFinished: () -> Unit) {
         Canvas(Modifier.fillMaxSize()) {
             val cx = size.width / 2
             val cy = size.height / 2
-            val orbitRx = size.width * 0.28f
-            val orbitRy = size.height * 0.16f
+            val orbitRx = size.width * 0.35f
+            val orbitRy = size.height * 0.2f
 
             for (i in 0 until particleCount) {
                 val baseAngle = (2.0 * PI * i / particleCount).toFloat()
@@ -119,7 +111,6 @@ fun WowBlueSplash(onFinished: () -> Unit) {
                 val px = cx + orbitRx * cos(angle)
                 val py = cy + orbitRy * sin(angle) * 0.55f
 
-                // Dot size pulses with orbit position
                 val dotAlpha = 0.25f + 0.35f * ((cos(angle) + 1f) / 2f)
                 val dotR = 3f + 3f * ((sin(angle * 2) + 1f) / 2f)
 
@@ -134,7 +125,7 @@ fun WowBlueSplash(onFinished: () -> Unit) {
             for (i in 0 until 8) {
                 val baseAngle = (2.0 * PI * i / 8).toFloat()
                 val angle = baseAngle - orbitProgress.value * 1.7f * PI.toFloat()
-                val r = minOf(orbitRx, orbitRy) * 0.45f
+                val r = minOf(orbitRx, orbitRy) * 0.55f
                 val px = cx + r * cos(angle)
                 val py = cy + r * sin(angle) * 0.75f
                 drawCircle(
@@ -146,40 +137,40 @@ fun WowBlueSplash(onFinished: () -> Unit) {
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // ── W O W  (three letters, staggered spring) ──
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                LetterBox("W", scale = w1Scale.value, size = 56.sp)
-                Spacer(Modifier.width(4.dp))
-                LetterBox("O", scale = oScale.value, size = 56.sp)
-                Spacer(Modifier.width(4.dp))
-                LetterBox("W", scale = w2Scale.value, size = 56.sp)
-            }
+            // ── "哇" Logo icon — spring scale ──
+            Image(
+                painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_wowblue_icon),
+                contentDescription = "WowBlue",
+                modifier = Modifier
+                    .size(88.dp)
+                    .scale(logoScale.value)
+            )
 
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // ── B L U E  (slides up as a unit) ──
+            // ── "WowBlue" brand text ──
             Box(
                 Modifier
-                    .offset(y = blueOffsetY.value.dp)
-                    .alpha(blueAlpha.value)
+                    .offset(y = brandOffsetY.value.dp)
+                    .alpha(brandAlpha.value)
             ) {
                 Text(
-                    "BLUE",
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 40.sp,
+                    "WowBlue",
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 10.sp
+                    letterSpacing = 6.sp
                 )
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
 
             // ── Subtitle ──
             Box(Modifier.alpha(subtitleAlpha.value)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         "MengPaw",
-                        color = Color.White.copy(alpha = 0.9f),
+                        color = Color.White.copy(alpha = 0.85f),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
                         letterSpacing = 4.sp
@@ -187,7 +178,7 @@ fun WowBlueSplash(onFinished: () -> Unit) {
                     Spacer(Modifier.height(6.dp))
                     Text(
                         "深圳哇蓝文化",
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = Color.White.copy(alpha = 0.45f),
                         fontSize = 12.sp,
                         letterSpacing = 3.sp
                     )
@@ -197,23 +188,6 @@ fun WowBlueSplash(onFinished: () -> Unit) {
     }
 }
 
-/** A single letter with spring scale animation. */
+/** Legacy: empty, no longer needed. */
 @Composable
-private fun LetterBox(letter: String, scale: Float, size: androidx.compose.ui.unit.TextUnit) {
-    Box(
-        Modifier
-            .scale(scale)
-            .size(56.dp)
-            .clip(CircleShape)
-            .background(Color.White),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            letter,
-            color = ArcoColors.Blue6,
-            fontSize = size,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center
-        )
-    }
-}
+private fun LetterBox(letter: String, scale: Float, size: androidx.compose.ui.unit.TextUnit) {}

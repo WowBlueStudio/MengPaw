@@ -161,7 +161,7 @@ try {
   var badge=document.createElement('div');
   badge.textContent='📝';
   badge.title='$safeNote';
-  badge.style.cssText='position:absolute;top:-12px;right:-8px;background:#165DFF;color:#fff;font-size:12px;padding:2px 6px;border-radius:8px;z-index:999999;cursor:help';
+  badge.style.cssText='position:absolute;top:-12px;right:-8px;background:#0E4397;color:#fff;font-size:12px;padding:2px 6px;border-radius:8px;z-index:999999;cursor:help';
   badge.setAttribute('data-mp-annotation','true');
   el.style.position=el.style.position||'relative';
   el.appendChild(badge);
@@ -226,7 +226,7 @@ try {
   var css=document.createElement('style');
   css.id='__mp_inspector_css';
   css.textContent=`
-    .__mp_hover{outline:2px solid #165DFF!important;outline-offset:1px!important;background:rgba(22,93,255,0.05)!important;transition:outline 0.1s}
+    .__mp_hover{outline:2px solid #0E4397!important;outline-offset:1px!important;background:rgba(14,67,151,0.05)!important;transition:outline 0.1s}
     .__mp_selected{outline:3px solid #F53F3F!important;outline-offset:2px!important}
     #__mp_inspector_tooltip{position:fixed;background:#1D2129;color:#FFF;font:12px monospace;padding:6px 10px;border-radius:4px;z-index:9999999;pointer-events:none;max-width:400px;white-space:pre-wrap;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
     #__mp_inspector_tooltip .mp-tag{color:#F53F3F}

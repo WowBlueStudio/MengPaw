@@ -451,8 +451,8 @@ private fun SessionItem(
             }
         }
 
-        // Foreground row — opaque to hide action buttons underneath
-        Column(Modifier.background(ThemeColors.bgPrimary)) {
+        // Foreground row — inner Box background moves with swipe; Column must be transparent
+        Column {
             HorizontalDivider(color = ThemeColors.border, thickness = 0.5.dp)
             Box(
                 Modifier.fillMaxWidth()

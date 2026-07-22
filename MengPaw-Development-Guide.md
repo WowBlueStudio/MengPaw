@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.9.0 | **更新**: 2026-07-22 | **架构**: 微内核 + AgentRuntime (UI/运行时分离) + 23 插件 + QwenPaw 风格初始化 + 会话管理 + 智能体管理 + MD 模板文件化 + 安全保护强制启用
+> **版本**: 0.10.0 | **更新**: 2026-07-23 | **架构**: 微内核 + AgentRuntime (UI/运行时分离) + 24 插件 + 框架协议插件 + 品牌焕新 + 扩展功能重构 + 侧边栏交互 + 智能体/框架名片
 
 ---
 
@@ -64,7 +64,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 | mengpaw-kernel | JVM Library | 46 | 0.8.4 | 微内核：纯 Kotlin，零 Android 依赖 |
 | mengpaw-core | Android Library | 6 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 5 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
-| mengpaw-shell | APK | 24 | 0.8.4 (vc=31) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 |
+| mengpaw-shell | APK | 25 | 0.9.1 (vc=91) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
 | mengpaw-browser | APK | 5 | 0.4.0 (vc=6) | 独立浏览器 + BrowserBridge + 22 操控命令 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
@@ -202,6 +202,14 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 - **智能体管理**: 点击切换 / 长按名片 / 删除确认 / 添加框架
 - **输入优化**: Enter 发送 / Shift+Enter 换行 / 发送后聚焦
 
+**v0.9.1 核心变更**:
+- **品牌焕新**: 主题色 #165DFF→#0E4397 (深蓝)，辅助色 →#FC5185 (粉色)，ArcoColors 蓝色系/Pink 系列全面更新
+- **启动页**: 代码绘制 "WOW BLUE" 替换为品牌 "哇" 矢量图标 (ic_wowblue_icon.xml) + "WowBlue" 文字
+- **扩展功能重构**: 文件提交区 (图片/文档/文件/拍照，利用 Android 文件选择器) + 执行模式区 (/Mission /Research /Translate /Dream) + 插件工具区
+- **输入标签系统**: AssistChip 标签显示活跃模式，× 清除，持久保留
+- **@agent 自动补全**: 输入 @ 弹出已创建 Agent 列表，替换文本 + 添加标签
+- **气泡标注**: Agent 回答头部显示 · /Mission · N 步 或 · @agent 等标注
+
 **v0.8.4 核心变更**:
 - **会话管理增强**: 独立会话文件 (`sessions/{id}.json`) + `switchToSession()` 切换恢复 + `agent.sessions` 跨会话搜索 + 原子写入防损坏
 - **引擎可靠性**: 安全命令白名单 (19 个) 防循环误判 + 引擎状态重置防跨任务污染 + 异常时全面状态同步
@@ -289,8 +297,8 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | compileSdk | 35 | 35 | 35 | — |
 | minSdk | 26 | 26 | 26 | — |
 | targetSdk | 35 | 35 | — | — |
-| versionName | 0.8.4 | 0.4.0 | — | 0.8.4 |
-| versionCode | 31 | 6 | — | — |
+| versionName | 0.10.0 | 0.4.0 | — | 0.10.0 |
+| versionCode | 100 | 6 | — | — |
 | R8 | Release 启用 | Release 启用 | 关闭(库模块) | — |
 
 **Shell 权限** (17 项):
@@ -721,6 +729,8 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.10.0** | 2026-07-23 | **框架协议插件 + 侧边栏交互 + 主题系统** — 框架发现插件 (mDNS 局域网注册/扫描/指纹) + 侧边栏头像打开 + 全局滑动手势 + 智能体名片重排 (工作区滚动) + 框架名片 (名称/版本/备注/Agent列表) + 亮/暗/跟随系统三档主题 + GeoRouter 系统时区判断 + 插件管理页精简 + PAD 插件移除 + 启动页品牌 Logo 替换 |
+| **0.9.1** | 2026-07-22 | **品牌焕新 + 扩展功能重构** — 主题色更新 (#0E4397/#FC5185) + 启动页品牌 Logo 替换 + 扩展面板三区重构 (文件提交/执行模式/插件工具) + `/Mission` `/Research` `/Translate` `/Dream` 斜杠命令标签 + `@agent` 自动补全 + 气泡模式标注 + 面板图标自定义排序 |
 | **0.9.0** | 2026-07-22 | **安全强化 + 模板文件化** — 三大安全保护去除开关/强制启用 + IntegrityGuard 接入 Pipeline 指令链 (之前从未实例化) + MD 模板从 Kotlin 硬编码字符串改为 assets .md 文件 (7 个模板 ~350 行代码删除) + 智能体专属工具/技能 (全局池安装/Agent 自装/用户提供路径) + 设置页文案重构 (全局工具/智能体工具) + 废弃插件目录物理删除 |
 | **0.8.4** | 2026-07-22 | **会话管理增强** — 独立会话文件 + 切换恢复 (`switchToSession`) + 跨会话搜索 (`agent.sessions`) + 原子写入防损坏 + 引擎可靠性修复 (安全命令白名单/循环检测优化/状态重置) + UI 升级 (自适应宽度/自动定位/真实头像/Markdown Heading) + 构建统一版本号 (mengpaw.version) |
 | **0.8.0** | 2026-07-22 | **重大架构重构** — UI/运行时分离 (AgentRuntime) + QwenPaw 风格初始化 + 会话完整持久化 (30s 自动保存 + 思考链) + 智能体管理 (长按/删除/框架) + 输入优化 (Enter 发送/聚焦) + 20+ 崩溃/ANR 修复 + Android 13-17 全版本 + 5大国产 OEM 适配 + 系统提示词重构 |
@@ -751,4 +761,4 @@ ShellService.start(this)   // startForeground + WakeLock
 
 ---
 
-*文档结束 · 最后更新: 2026-07-22 (v0.8.4)*
+*文档结束 · 最后更新: 2026-07-23 (v0.10.0)*
