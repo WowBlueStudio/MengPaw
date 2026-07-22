@@ -59,20 +59,29 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // ── Global crash logger: write uncaught exceptions to crash.log for diagnosis ──
+        // ── Global crash logger ──
+        // Writes to both internal (for ADB on debug builds) and public Downloads
+        // (for release builds, where /data/data is not ADB-readable on Android 10+)
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            val ts = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())
+            val entry = "\n=== $ts ===\nThread: ${thread.name}\n" +
+                "Exception: ${throwable.javaClass.name}: ${throwable.message}\n" +
+                throwable.stackTraceToString() + "\n"
             try {
-                val logFile = java.io.File(filesDir, "crash.log")
-                logFile.parentFile?.mkdirs()
-                logFile.appendText(
-                    "\n=== ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())} ===\n" +
-                    "Thread: ${thread.name}\n" +
-                    "Exception: ${throwable.javaClass.name}: ${throwable.message}\n" +
-                    throwable.stackTraceToString() + "\n"
-                )
-            } catch (_: Exception) { /* last-resort logging */ }
-            // Pass to default handler (shows crash dialog, writes to logcat)
+                // Internal storage (ADB accessible on debug builds)
+                val internal = java.io.File(filesDir, "crash.log")
+                internal.parentFile?.mkdirs()
+                internal.appendText(entry)
+            } catch (_: Exception) {}
+            try {
+                // Public Downloads — accessible via file manager, no ADB needed
+                val pub = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS), "MengPaw_crash.log")
+                pub.parentFile?.mkdirs()
+                pub.appendText(entry)
+            } catch (_: Exception) {}
+            // Pass to system default handler (crash dialog + logcat)
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
