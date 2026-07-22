@@ -58,6 +58,24 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // ── Global crash logger: write uncaught exceptions to crash.log for diagnosis ──
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val logFile = java.io.File(filesDir, "crash.log")
+                logFile.parentFile?.mkdirs()
+                logFile.appendText(
+                    "\n=== ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())} ===\n" +
+                    "Thread: ${thread.name}\n" +
+                    "Exception: ${throwable.javaClass.name}: ${throwable.message}\n" +
+                    throwable.stackTraceToString() + "\n"
+                )
+            } catch (_: Exception) { /* last-resort logging */ }
+            // Pass to default handler (shows crash dialog, writes to logcat)
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
         DataPathsInitializer.initialize(this)
         com.mengpaw.core.namespace.SysExecutor.init(this)
         KernelLog.setLogger(AndroidLogger())

@@ -45,7 +45,13 @@ class EventReceiver : BroadcastReceiver() {
                 addAction(Intent.ACTION_PACKAGE_REMOVED)
                 addDataScheme("package")
             }
-            context.registerReceiver(receiver, filter)
+            // Android 14+ (API 34+) requires RECEIVER_NOT_EXPORTED flag for all dynamic receivers.
+            // Without it, registerReceiver() throws IllegalArgumentException on targetSdk>=34.
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                context.registerReceiver(receiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                context.registerReceiver(receiver, filter)
+            }
             registered = receiver
         }
 

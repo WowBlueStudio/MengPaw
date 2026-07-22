@@ -7,9 +7,15 @@
 
     <!-- 前台服务保活 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 14+: dataSync 前台服务类型需要显式声明此权限 (否则 SecurityException) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Android 13+: 通知运行时权限 (否则 startForeground 静默失败) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 13+: 忽略电池优化 (OEM 白名单前提) -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Android 14+: 精确闹钟权限 (TriggerEngine.setExact 回退到 set 不需要，但声明后 OEM 不惩罚) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- PAD 悬浮窗 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -41,7 +47,8 @@
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.MengPaw">
+        android:theme="@style/Theme.MengPaw"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"
@@ -64,7 +71,12 @@
 
         <service
             android:name=".service.ShellService"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="dataSync|specialUse"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="agent_keepalive_for_user_commands_and_trigger_response" />
+        </service>
 
         <receiver
             android:name=".service.WakeReceiver"
