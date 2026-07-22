@@ -4,6 +4,46 @@
 
 ---
 
+## 2026-07-22 — v0.7.2 Android 13-17 兼容性修复
+
+### 版本兼容
+
+15. **Android 14: `registerReceiver()` 必须带 `RECEIVER_EXPORTED`/`NOT_EXPORTED` 标志**
+    - 场景: `EventReceiver.register()` 和 `PowerConnectionReceiver.register()` 都直接调用 `context.registerReceiver(receiver, filter)`
+    - 后果: targetSdk≥34 在 Android 14+ 上抛 `IllegalArgumentException` → 启动即崩溃
+    - 改进: `if (Build.VERSION.SDK_INT >= UPSIDE_DOWN_CAKE) { registerReceiver(receiver, filter, RECEIVER_NOT_EXPORTED) }`
+    - 原则: **所有 `registerReceiver()` 必须检查 API 34 并加标志**
+
+16. **Android 14: 前台服务类型需要专属权限**
+    - 场景: ShellService 声明 `foregroundServiceType="dataSync"`，但 manifest 只有通用的 `FOREGROUND_SERVICE`
+    - 后果: `startForeground()` 抛 `SecurityException` (部分 OEM 延迟检测 → 运行一段时间后崩溃)
+    - 改进: 添加 `FOREGROUND_SERVICE_DATA_SYNC` 权限
+    - 原则: **每个 `foregroundServiceType` 都需要对应的 `FOREGROUND_SERVICE_<TYPE>` 权限**
+
+17. **Android 13: `startForegroundService()` 从广播接收器调用可能抛异常**
+    - 场景: `WakeReceiver.onReceive()` 调用 `ShellService.start()` 启动前台服务
+    - 后果: Android 13+ 后台启动限制 → `ForegroundServiceStartNotAllowedException` (RuntimeException)
+    - 改进: `ShellService.start()` 内部 try/catch
+    - 原则: **所有 `startForegroundService()` 调用点必须有 try/catch (RuntimeException)**
+
+18. **OEM 差异化: 通知重要性影响前台服务存活**
+    - 场景: `NotificationManager.IMPORTANCE_LOW` — 小米/OPPO/vivo 会隐藏或折叠此类通知
+    - 后果: 系统不认为这是"可见的"前台服务 → 进程被 LMK 优先回收
+    - 改进: 提升到 `IMPORTANCE_DEFAULT`
+    - 原则: **国产 ROM 至少用 IMPORTANCE_DEFAULT 保活，LOW 等于没通知**
+
+### OEM 速查
+
+| 厂商 | 关键特性 | 适配要点 |
+|------|---------|---------|
+| 小米 MIUI/HyperOS | 后台自启动管理 | 权限: `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`; 用户: 自启动须手动开启 |
+| 华为 HarmonyOS | 关联启动 + 电池优化 | `SCHEDULE_EXACT_ALARM` 声明; 用户: 手机管家→启动管理→手动管理 |
+| OPPO ColorOS | 应用速冻 | 前台服务通知必须可见级别; 用户: 设置→电池→应用速冻→关闭 |
+| vivo OriginOS | 后台高耗电 | `WAKE_LOCK` + `FOREGROUND_SERVICE_DATA_SYNC` 双保险 |
+| 荣耀 MagicOS | 类似华为, 更激进 | 所有华为建议 + `specialUse` 前台服务类型 |
+
+---
+
 ## 2026-07-22 — v0.7.1 闪退修复
 
 ### 根因: 非原子文件写入 + 崩溃后状态损坏

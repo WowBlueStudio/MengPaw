@@ -122,7 +122,12 @@ class PowerConnectionReceiver : android.content.BroadcastReceiver() {
     companion object {
         fun register(context: Context): android.content.BroadcastReceiver {
             val receiver = PowerConnectionReceiver()
-            context.registerReceiver(receiver, IntentFilter(Intent.ACTION_POWER_CONNECTED))
+            // Android 14+ requires RECEIVER_NOT_EXPORTED flag for dynamic receivers
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                context.registerReceiver(receiver, IntentFilter(Intent.ACTION_POWER_CONNECTED), android.content.Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                context.registerReceiver(receiver, IntentFilter(Intent.ACTION_POWER_CONNECTED))
+            }
             return receiver
         }
     }

@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.7.2 (2026-07-22) — Android 13-17 兼容性专项修复 + 国内 OEM 适配
+
+### Android 版本兼容 (P0)
+- **Android 14+**: 所有 `registerReceiver()` 添加 `RECEIVER_NOT_EXPORTED` 标志 (否则 `IllegalArgumentException`)
+- **Android 14+**: 新增 `FOREGROUND_SERVICE_DATA_SYNC` 权限声明 (否则 `SecurityException`)
+- **Android 14+**: 新增 `SCHEDULE_EXACT_ALARM` 权限声明 (减少 TriggerEngine OEM 惩罚)
+- **Android 13+**: `ShellService.start()` 添加 try/catch 处理 `ForegroundServiceStartNotAllowedException` (广播接收器后台启动限制)
+- **Android 15+**: ShellService 增加 `specialUse` 前台服务类型，缓解 6 小时超时 + OEM 白名单
+- **Android 9+**: 新增 `usesCleartextTraffic=true` 支持自建 HTTP 端点
+
+### OEM 兼容 (华为/小米/OPPO/vivo/荣耀)
+- ShellService 通知渠道从 `IMPORTANCE_LOW` 升至 `IMPORTANCE_DEFAULT` (国产 OEM 隐藏低优先级通知 → 前台服务被误杀)
+- 前台服务声明同时注册 `dataSync` + `specialUse` 双类型，覆盖不同 OEM 的权限检查策略
+
+### 诊断增强
+- `MainActivity.onCreate()` 增加全局 `UncaughtExceptionHandler`，崩溃栈写入 `filesDir/crash.log`
+
+### 文档
+- `LESSONS.md` 新增 4 条 Android 版本兼容教训
+- `docs/crash-prevention-guide.md` 新增 OEM 兼容性附录
+
 ## v0.7.1 (2026-07-22) — 闪退修复：原子写入 + 损坏恢复 + 协程保护
 
 ### 闪退修复 (P0 严重)

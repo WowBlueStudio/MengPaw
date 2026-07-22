@@ -32,7 +32,13 @@ class ShellService : Service() {
         private const val WAKELOCK_TIMEOUT_MS = 60 * 60 * 1000L // 1 hour max
 
         fun start(context: Context) {
-            context.startForegroundService(Intent(context, ShellService::class.java))
+            try {
+                context.startForegroundService(Intent(context, ShellService::class.java))
+            } catch (e: Exception) {
+                // Android 13+ (API 33): may throw ForegroundServiceStartNotAllowedException
+                // if called from background (e.g. WakeReceiver). Service will retry on next wake.
+                android.util.Log.w("ShellService", "Cannot start from background: ${e.message}")
+            }
         }
     }
 
@@ -117,6 +123,9 @@ class ShellService : Service() {
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "MengPaw is running in the background"
+                // Use DEFAULT importance for OEM compatibility: Xiaomi/OPPO/vivo hide LOW priority notifications,
+                // which may cause the system to treat the foreground service as background and kill it.
+                importance = NotificationManager.IMPORTANCE_DEFAULT
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
