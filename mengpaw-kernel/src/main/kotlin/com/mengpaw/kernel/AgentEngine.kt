@@ -114,8 +114,12 @@ class AgentEngine(
     /** Access the plugin manager for settings display. */
     fun getPluginManager(): PluginManager = pluginManager
 
+    /** Reset loop detection state — call before each new task. */
+    fun resetLoopDetection() = promptEngine.resetLoopDetection()
+
     companion object {
-        const val CORE_VERSION = "0.8.0"
+        /** Single source of truth: generated from gradle.properties mengpaw.version. */
+        val CORE_VERSION: String get() = MengPawVersion.FRAMEWORK
         private const val SOFT_COMPACT_RATIO = 0.50
         const val TOOL_SNIP_RATIO = 0.60
         const val COMPACT_RATIO = 0.80

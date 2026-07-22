@@ -9,6 +9,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import com.mengpaw.shell.ui.components.MissionMonitorOverlay
 import com.mengpaw.shell.ui.components.NotifyBannerHost
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -96,13 +97,43 @@ fun MainScreen(
     }
     var showLeftSidebar by remember { mutableStateOf(false) }
     var showRightSidebar by remember { mutableStateOf(false) }
-    // FIX U2: Scroll uses filtered list size, and only auto-scrolls when user is at bottom
+    // Track previous isRunning to detect thinking→done transition
+    var wasRunning by remember { mutableStateOf(false) }
+
+    /** Bounds-checked scroll helper — swallows out-of-range errors. */
+    suspend fun safeScrollTo(index: Int, animated: Boolean = true) {
+        val size = displayedMessages.size
+        if (size == 0 || index < 0 || index >= size) return
+        try {
+            if (animated) listState.animateScrollToItem(index)
+            else listState.scrollToItem(index)
+        } catch (_: Exception) { /* layout not ready, ignore */ }
+    }
+
+    // During streaming: auto-scroll to bottom when user is near the end
     LaunchedEffect(displayedMessages.size) {
         if (displayedMessages.isNotEmpty()) {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val nearBottom = lastVisible >= displayedMessages.size - 3
-            if (nearBottom) listState.animateScrollToItem(displayedMessages.size - 1)
+            if (nearBottom) safeScrollTo(displayedMessages.size - 1)
         }
+    }
+
+    // When thinking ends: scroll to top of output + auto-focus input
+    LaunchedEffect(isRunning) {
+        if (wasRunning && !isRunning && displayedMessages.isNotEmpty()) {
+            val targetIdx = displayedMessages.indexOfLast {
+                it is ChatMessageUi.Agent || it is ChatMessageUi.AgentWithTrace
+            }
+            if (targetIdx >= 0) {
+                kotlinx.coroutines.delay(80) // let layout settle first
+                safeScrollTo(targetIdx)
+            }
+            // Auto-focus input field for immediate next question
+            kotlinx.coroutines.delay(200)
+            try { inputFocus.requestFocus() } catch (_: Exception) {}
+        }
+        wasRunning = isRunning
     }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -124,8 +155,8 @@ fun MainScreen(
                     }
                     Spacer(Modifier.width(4.dp))
                     // Agent avatar — 44dp circle, matching send button
-                    val avatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "avatar.png")
-                    val avatarBitmap = remember { if (avatarFile.exists()) BitmapFactory.decodeFile(avatarFile.absolutePath) else null }
+                    val avatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$displayAgentName/avatar.png")
+                    val avatarBitmap = remember(displayAgentName) { if (avatarFile.exists()) BitmapFactory.decodeFile(avatarFile.absolutePath) else null }
                     if (avatarBitmap != null) {
                         Image(bitmap = avatarBitmap.asImageBitmap(), null, Modifier.size(44.dp).clip(CircleShape))
                     } else {
@@ -189,27 +220,22 @@ fun MainScreen(
                 Row(Modifier.fillMaxSize()) {
                     // Persistent left sidebar (tablet only)
                     if (isWide() && showLeftSidebar) {
-                        Surface(color = ThemeColors.bgSecondary) {
+                        Surface(
+                            color = ThemeColors.bgPrimary,
+                            shadowElevation = 8.dp
+                        ) {
                             leftSidebarContent { showLeftSidebar = false }
                         }
                     }
 
-                    // Agent-pushed banner notifications — click navigates to MengPaw agent
-                    NotifyBannerHost(
-                        onMessage = { text ->
-                            viewModel.notifyAgentMessage(text)
-                        },
-                        onBannerClick = {
-                            (agentViewModel ?: viewModel).switchAgent("MengPaw")
-                        }
-                    )
-
-                    // Messages
-                    LazyColumn(
-                        modifier = Modifier.weight(1f).fillMaxHeight().padding(horizontal = ArcoSpacing.lg),
-                        state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
-                        contentPadding = PaddingValues(vertical = ArcoSpacing.md)
-                    ) {
+                    // Messages — container centered, tablet 80% / phone 95%
+                    val msgWidth = if (isWide()) 0.8f else 0.95f
+                    Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth(msgWidth).fillMaxHeight(),
+                            state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
+                            contentPadding = PaddingValues(vertical = ArcoSpacing.md)
+                        ) {
                         items(displayedMessages, key = { it.stableId }) { message ->
                             BubbleWrapper(
                                 message = message,
@@ -221,8 +247,8 @@ fun MainScreen(
                             ) {
                                 when (message) {
                                     is ChatMessageUi.User -> UserBubble(message.content)
-                                    is ChatMessageUi.Agent -> AgentBubble(message.content)
-                                    is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message)
+                                    is ChatMessageUi.Agent -> AgentBubble(message.content, displayAgentName)
+                                    is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message, displayAgentName)
                                     is ChatMessageUi.Suggestion -> PluginSuggestionCard(message.suggestion,
                                         onInstall = { pluginViewModel.installPlugin(message.suggestion.pluginId) },
                                         onViewDetail = onNavigateToPlugins)
@@ -231,14 +257,28 @@ fun MainScreen(
                             }
                         }
                     }
+                    } // close Box wrapping LazyColumn
 
                     // Persistent right sidebar (tablet only)
                     if (isWide() && showRightSidebar) {
-                        Surface(color = ThemeColors.bgSecondary) {
+                        Surface(
+                            color = ThemeColors.bgPrimary,
+                            shadowElevation = 8.dp
+                        ) {
                             rightSidebarContent { showRightSidebar = false }
                         }
                     }
                 }
+
+                // Agent-pushed banner notifications — overlay at top of content area
+                NotifyBannerHost(
+                    onMessage = { text ->
+                        viewModel.notifyAgentMessage(text)
+                    },
+                    onBannerClick = {
+                        (agentViewModel ?: viewModel).switchAgent("MengPaw")
+                    }
+                )
 
                 // Overlays — outside Row to avoid scope conflict
                 if (!isWide()) {
@@ -270,37 +310,36 @@ fun MainScreen(
                     ) {
                         Icon(Icons.Outlined.Add, "扩展", tint = ThemeColors.textSecondary, modifier = Modifier.size(24.dp))
                     }
-                    // Input field — Enter sends, Ctrl+Enter inserts newline
+                    // Input field — soft keyboard Enter sends, Ctrl+Enter inserts newline
                     val keyMaxSteps = settingsState?.value?.maxSteps ?: 50
+                    fun doSend() {
+                        if (inputText.isNotBlank()) {
+                            val text = inputText; inputText = ""
+                            viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps)
+                            inputFocus.requestFocus()
+                        }
+                    }
                     OutlinedTextField(value = inputText, onValueChange = { inputText = it },
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
                             .focusRequester(inputFocus)
                             .onPreviewKeyEvent { event ->
-                            if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER) {
-                                if (event.nativeKeyEvent.isCtrlPressed || event.nativeKeyEvent.isShiftPressed) {
-                                    inputText += "\n"
-                                } else if (inputText.isNotBlank()) {
-                                    val text = inputText; inputText = ""
-                                    viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps)
-                                    inputFocus.requestFocus()
-                                }
-                                true
-                            } else false
-                        },
+                                if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER) {
+                                    if (event.nativeKeyEvent.isCtrlPressed || event.nativeKeyEvent.isShiftPressed) {
+                                        inputText += "\n"
+                                    } else {
+                                        doSend()
+                                    }
+                                    true
+                                } else false
+                            },
                         enabled = inputEnabled,
                         placeholder = { Text(strings.inputPlaceholder) },
                         shape = RoundedCornerShape(ArcoRadius.lg),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ThemeColors.brand, unfocusedBorderColor = ThemeColors.border),
                         minLines = 1, maxLines = 4,
                         keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Default),
-                        keyboardActions = KeyboardActions(onSend = {
-                            if (inputText.isNotBlank()) {
-                                val text = inputText; inputText = ""
-                                viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps)
-                            }
-                        }))
+                        keyboardActions = KeyboardActions(onSend = { doSend() }))
                     // Send button — circular 44dp, animated ↑ icon
-                    val maxSteps = settingsState?.value?.maxSteps ?: 50
                     val scope = rememberCoroutineScope()
                     val arrowOffsetY = remember { Animatable(0f) }
                     val arrowAlpha = remember { Animatable(1f) }
@@ -313,8 +352,9 @@ fun MainScreen(
                                 CircleShape
                             )
                             .clickable(enabled = inputEnabled) {
-                                if (inputText.isNotBlank()) {
-                                    val text = inputText; inputText = ""
+                                val text = inputText
+                                if (text.isNotBlank()) {
+                                    inputText = ""
                                     inputFocus.requestFocus()
                                     scope.launch {
                                         // ↑ flies upward and out
@@ -322,7 +362,7 @@ fun MainScreen(
                                         launch { arrowAlpha.animateTo(0f, tween(280)) }
                                         // snap below, then submit
                                         arrowOffsetY.snapTo(60f)
-                                        viewModel.submitTask(text, pluginViewModel, maxSteps = maxSteps)
+                                        viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps)
                                         // ↑ flies in from below
                                         launch { arrowOffsetY.animateTo(0f, tween(280)) }
                                         launch { arrowAlpha.animateTo(1f, tween(280)) }
@@ -344,6 +384,21 @@ fun MainScreen(
             }
         }
     }
+
+    // ── Mission Monitor overlay ──
+    // Auto-dismiss when mission ends externally
+    if (showMissionOverlay) {
+        LaunchedEffect(Unit) {
+            while (com.mengpaw.kernel.mission.MissionMonitor.missionActive) {
+                kotlinx.coroutines.delay(1000)
+            }
+            showMissionOverlay = false
+        }
+    }
+    MissionMonitorOverlay(
+        visible = showMissionOverlay,
+        onDismiss = { showMissionOverlay = false }
+    )
 
     // ── Expand bottom sheet (upload tools + plugins) ──
     if (showExpandSheet) {
@@ -427,9 +482,14 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
 }
 
 // ── Bubbles ──
+/** Right-aligned, auto-width capped at 400dp, tail at bottom-right. */
 @Composable private fun UserBubble(content: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        Surface(shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm), color = ThemeColors.brand) {
+        Surface(
+            shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm, ArcoRadius.lg),
+            color = ThemeColors.brand,
+            modifier = Modifier.widthIn(max = 400.dp)
+        ) {
             SelectionContainer {
                 MarkdownText(
                     content = content,
@@ -443,11 +503,16 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
     }
 }
 
-@Composable private fun AgentBubble(content: String) {
+/** Left-aligned, max 90% width, tail at bottom-left. */
+@Composable private fun AgentBubble(content: String, agentName: String = "MengPaw") {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-        Surface(shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm, ArcoRadius.lg), color = ThemeColors.bgCardHigh) {
+        Surface(
+            shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm),
+            color = ThemeColors.bgCardHigh,
+            modifier = Modifier.fillMaxWidth(0.9f)
+        ) {
             Column(Modifier.padding(ArcoSpacing.lg)) {
-                Text("MengPaw", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
+                Text(agentName, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
                 Spacer(Modifier.height(ArcoSpacing.xs))
                 SelectionContainer {
                     MarkdownText(
@@ -461,17 +526,18 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
 }
 
 // ── Agent Bubble with Trace (expandable thinking steps) ──
-@Composable private fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace) {
+@Composable private fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: String = "MengPaw") {
     var expanded by remember { mutableStateOf(false) }
     val traces = message.traces
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
         Surface(
-            shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm, ArcoRadius.lg),
-            color = ThemeColors.bgCardHigh
+            shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm),
+            color = ThemeColors.bgCardHigh,
+            modifier = Modifier.fillMaxWidth(0.9f)
         ) {
             Column(Modifier.padding(ArcoSpacing.lg)) {
-                Text("MengPaw", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
+                Text(agentName, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
                 Spacer(Modifier.height(ArcoSpacing.xs))
 
                 // Collapsible trace steps

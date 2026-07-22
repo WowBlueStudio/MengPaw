@@ -117,11 +117,8 @@ class AdaptiveLlmProviderTest {
     @Test
     fun `llm fallback exhausted exception message`() {
         val cause = RuntimeException("Connection refused")
-        val ex = LlmFallbackExhaustedException(
-            "All LLM providers exhausted (primary + 2 fallbacks)",
-            cause
-        )
-        assertEquals("All LLM providers exhausted (primary + 2 fallbacks)", ex.message)
+        val ex = LlmFallbackExhaustedException("LLM exhausted: Connection refused", cause)
+        assertTrue(ex.message!!.contains("Connection refused"))
         assertEquals(cause, ex.cause)
     }
 

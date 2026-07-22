@@ -78,8 +78,18 @@ class PromptEngineTest {
 
     @Test
     fun `detect command loop`() {
+        // 1st–4th: false (threshold is 5)
         assertFalse(engine.detectLoop("fs.cat /test"))
         assertFalse(engine.detectLoop("fs.cat /test"))
-        assertTrue(engine.detectLoop("fs.cat /test")) // 3rd time
+        assertFalse(engine.detectLoop("fs.cat /test"))
+        assertFalse(engine.detectLoop("fs.cat /test"))
+        assertTrue(engine.detectLoop("fs.cat /test")) // 5th triggers
+    }
+
+    @Test
+    fun `safe commands never trigger loop detection`() {
+        repeat(10) { assertFalse(engine.detectLoop("agent.docs")) }
+        repeat(10) { assertFalse(engine.detectLoop("agent.memory test")) }
+        repeat(10) { assertFalse(engine.detectLoop("self.version")) }
     }
 }

@@ -124,8 +124,14 @@ class AdaptiveLlmProvider(
             }
         }
 
+        val cause = lastError?.message?.take(120) ?: "未知网络错误"
+        val hint = if (fallbackProviders.isEmpty()) {
+            "（可配置备用 API 以提高可用性）"
+        } else ""
         throw LlmFallbackExhaustedException(
-            "All LLM providers exhausted (primary + ${fallbackProviders.size} fallbacks)",
+            "LLM 服务调用失败，已重试 ${config.maxRetries + 1} 次。" +
+            "错误原因：$cause。" +
+            "请检查网络连接和 API Key 配置。$hint",
             lastError
         )
     }

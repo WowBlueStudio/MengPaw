@@ -6,6 +6,7 @@ package com.mengpaw.kernel.agent
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.cli.ErrorCodes
+import kotlinx.serialization.json.*
 
 /**
  * Built-in agent.* CLI commands — Agent document management.
@@ -22,7 +23,8 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         "browser-tools" to ::browserTools,
         "dream" to ::dream,
         "cleanup" to ::cleanup,
-        "storage" to ::storageReport
+        "storage" to ::storageReport,
+        "sessions" to ::sessions
     )
 
     private suspend fun docs(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -104,6 +106,49 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     /** Browser plugin development capabilities. */
     private suspend fun browserTools(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         return ExecutionResult.ok(AgentDocManager.Companion.BROWSER_TOOLS_MD)
+    }
+
+    /** Cross-session index: search saved session history by keyword. */
+    private suspend fun sessions(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "session_history.json")
+        if (!file.exists()) return ExecutionResult.ok("(no saved sessions)")
+
+        val raw = try { file.readText() } catch (_: Exception) {
+            return ExecutionResult.fail("Cannot read session history", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+        if (raw.isBlank()) return ExecutionResult.ok("(no sessions)")
+
+        val keyword = args.firstOrNull()?.lowercase()
+        val limit = args.getOrNull(1)?.toIntOrNull() ?: 20
+        val results = mutableListOf<String>()
+
+        try {
+            val arr = Json.parseToJsonElement(raw).jsonArray
+            for (el in arr) {
+                val obj = el.jsonObject
+                val title = obj["title"]?.jsonPrimitive?.content ?: ""
+                val preview = obj["preview"]?.jsonPrimitive?.content ?: ""
+                val ts = obj["timestamp"]?.jsonPrimitive?.long ?: 0L
+                val count = obj["messageCount"]?.jsonPrimitive?.int ?: 0
+                val agent = obj["agentName"]?.jsonPrimitive?.content ?: ""
+                val compacted = obj["compacted"]?.jsonPrimitive?.boolean ?: false
+
+                if (keyword != null && !title.lowercase().contains(keyword) && !preview.lowercase().contains(keyword)) continue
+
+                val date = if (ts > 0) java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(ts)) else "?"
+                val tag = if (compacted) "[压]" else ""
+                results.add("$tag[$agent] $date · $title$tag · ${count}msgs")
+            }
+        } catch (_: Exception) {
+            return ExecutionResult.fail("Session history file is corrupted", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+
+        if (results.isEmpty()) return ExecutionResult.ok(
+            if (keyword != null) "(no sessions matching '$keyword')" else "(no sessions)"
+        )
+
+        val header = if (keyword != null) "会话索引 (匹配 '$keyword', ${results.size}):\n" else "会话索引 (${results.size}):\n"
+        return ExecutionResult.ok(header + results.take(limit).joinToString("\n") { "  • $it" })
     }
 
     /** View command audit trail (security feature). */

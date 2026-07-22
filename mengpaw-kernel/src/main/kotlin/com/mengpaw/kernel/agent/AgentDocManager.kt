@@ -29,7 +29,7 @@ class AgentDocManager(
     /** Plugin manager for CLI doc generation. Can be set after construction. */
     @Volatile var pluginManager: PluginManager? = null
 ) {
-    private val agentDir: File get() = File(baseDir, agentId).also { it.mkdirs() }
+    private val agentDir: File get() = File(baseDir, agentId)
 
     // Memory constraints
     private val maxMemories = 50

@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.mengpaw.kernel.plugin.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * Install progress state for UI rendering.
@@ -120,7 +121,9 @@ class PluginViewModel : ViewModel() {
                     isActive = status == PluginStatus.ACTIVE,
                     installState = states[entry.id] ?: InstallState.Idle,
                     availability = when {
-                        entry.isBuiltin -> PluginAvailability.BUILTIN
+                        entry.status == "deprecated" -> PluginAvailability.UNAVAILABLE
+                        // Only pluginClassRegistry reflects actually compiled-in plugins
+                        pluginClassRegistry.containsKey(entry.id) -> PluginAvailability.BUILTIN
                         entry.isDownloadable -> PluginAvailability.DOWNLOADABLE
                         else -> PluginAvailability.UNAVAILABLE
                     }
@@ -143,13 +146,37 @@ class PluginViewModel : ViewModel() {
 
     // ── Actions ───────────────────────────────────────────────────────
 
-    /** Fetch marketplace index. Auto-detects remote version changes; pass forceRefresh to skip ETag cache. */
+    /** Local cache file for offline/instant loading. */
+    private val cacheFile: File
+        get() = java.io.File(com.mengpaw.kernel.DataPaths.PLUGIN_CACHE, "marketplace_cache.json")
+
+    /** Load cached plugins from disk — instant display while fetching online. */
+    private fun loadCachedPlugins() {
+        try {
+            if (cacheFile.exists()) {
+                val pluginList = marketplace.parseIndex(cacheFile.readText())
+                _marketplacePlugins.value = pluginList.plugins
+                registerBuiltins(pluginList)
+            }
+        } catch (_: Exception) { }
+    }
+
+    private fun saveCachedPlugins(rawJson: String) {
+        try {
+            cacheFile.parentFile?.mkdirs()
+            cacheFile.writeText(rawJson)
+        } catch (_: Exception) { }
+    }
+
+    /** Fetch marketplace index. Shows cached list instantly, then refreshes in background. */
     fun refreshMarketplace(forceRefresh: Boolean = true) {
+        // Show cached data immediately on first open
+        if (_marketplacePlugins.value.isEmpty()) loadCachedPlugins()
         viewModelScope.launch {
             _isLoading.value = true
+            // fetchIndexRaw to also return raw JSON for caching
             marketplace.fetchIndex(forceRefresh).fold(
                 onSuccess = { index ->
-                    // Store timestamp so next auto-refresh can detect remote changes
                     lastRemoteUpdated = index.updated
                     _marketplacePlugins.value = index.plugins
                     registerBuiltins(index)
@@ -160,13 +187,17 @@ class PluginViewModel : ViewModel() {
         }
     }
 
-    /** Auto-register builtin plugins so they show as "已内置" and can be activated. */
+    /** Auto-register only plugins whose class is actually present in this APK build. */
     private fun registerBuiltins(index: MarketplaceIndex) {
-        index.plugins.filter { it.isBuiltin }.forEach { entry ->
-            val className = pluginClassRegistry[entry.id] ?: builtinPluginClass(entry.id)
-            if (className != null) {
+        index.plugins.forEach { entry ->
+            // Only register if the class was already registered at startup (MainActivity)
+            // OR if we can actually load the class via reflection
+            if (pluginClassRegistry.containsKey(entry.id)) return@forEach
+            val className = builtinPluginClass(entry.id) ?: return@forEach
+            try {
+                Class.forName(className)
                 PluginViewModel.registerPluginClass(entry.id, className)
-            }
+            } catch (_: ClassNotFoundException) { /* not in this build */ }
         }
     }
 
@@ -185,8 +216,9 @@ class PluginViewModel : ViewModel() {
                 return@launch
             }
 
-            // Builtin plugins: register and activate locally without downloading
-            if (entry.isBuiltin) {
+            // Builtin plugins: determined by local class registry, NOT remote JSON status
+            val isBuiltin = pluginClassRegistry.containsKey(id)
+            if (isBuiltin) {
                 updateInstallState(id, InstallState.Installing("正在激活 ${entry.name}..."))
                 val plugin = createPluginInstance(entry)
                 if (plugin == null) {

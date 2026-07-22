@@ -260,6 +260,7 @@ class PromptEngine {
             - self.tools [ns]     # 列出可用命令（按命名空间: self/agent/plugin/sys/fs/net...）
             - agent.docs          # 列出工作区文档 (Soul/Agents/Memory/Boost/Profile)
             - agent.memory <kw>   # 搜索长期记忆
+            - agent.sessions <kw> # 跨会话搜索历史
             - plugin.search <kw>  # 搜索可用插件
             - plugin.install <id> # 安装插件
             - plugin.list         # 查看已安装
@@ -290,6 +291,7 @@ class PromptEngine {
             - self.tools [ns]     # List available commands (by namespace)
             - agent.docs          # List workspace documents
             - agent.memory <kw>   # Search long-term memory
+            - agent.sessions <kw> # Cross-session search
             - plugin.search <kw>  # Search available plugins
             - plugin.install <id> # Install a plugin
             - plugin.list         # List installed plugins
@@ -390,13 +392,24 @@ class PromptEngine {
             ?: normalized.take(200)
     }
 
+    /** Safe-to-repeat commands — never trigger loop detection. */
+    private val safeCommands = setOf(
+        "agent.docs", "agent.cli", "agent.memory", "agent.profile",
+        "agent.soul", "agent.audit", "agent.storage", "agent.sessions",
+        "self.stats", "self.version", "self.time", "self.tools", "self.status",
+        "plugin.list", "plugin.info", "plugin.marketplace",
+        "sys.battery", "sys.network", "sys.cpu", "sys.memory", "sys.storage",
+    )
+
     /**
-     * Detect command loops (same command repeated 3+ times).
+     * Detect command loops (same command repeated 5+ times in recent window).
+     * Safe info/list commands are exempt.
      */
     fun detectLoop(command: String): Boolean {
+        if (safeCommands.any { command.startsWith(it) }) return false
         recentCommands.add(command)
-        if (recentCommands.size > 5) recentCommands.removeFirst()
-        return recentCommands.count { it == command } >= 3
+        if (recentCommands.size > 8) recentCommands.removeFirst()
+        return recentCommands.count { it == command } >= 5
     }
 
     /** Reset loop detection state (call on session/model switch). */

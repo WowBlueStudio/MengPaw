@@ -33,6 +33,51 @@ object TokenStatsCollector {
     )
 
     private var records = mutableListOf<DayRecord>()
+    private val csvFile: File
+        get() = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "token_stats.csv")
+
+    /** Load persisted records on startup. */
+    fun load() {
+        try {
+            if (!csvFile.exists()) return
+            records.clear()
+            csvFile.readLines().forEach { line ->
+                val parts = line.split(",")
+                if (parts.size >= 3) {
+                    val date = parts[0]
+                    val model = parts[1]
+                    val tokens = parts[2].toLongOrNull() ?: 0
+                    val cache = parts.getOrNull(3)?.toLongOrNull() ?: 0
+                    val existing = records.find { it.date == date }
+                    if (existing != null) {
+                        val updated = existing.modelTokens.toMutableMap()
+                        updated[model] = (updated[model] ?: 0) + tokens
+                        val idx = records.indexOf(existing)
+                        records[idx] = existing.copy(
+                            modelTokens = updated,
+                            cacheHitTokens = existing.cacheHitTokens + cache,
+                            totalTokens = existing.totalTokens + tokens
+                        )
+                    } else {
+                        records.add(DayRecord(date, mapOf(model to tokens), cacheHitTokens = cache, totalTokens = tokens))
+                    }
+                }
+            }
+        } catch (_: Exception) { }
+    }
+
+    private fun save() {
+        try {
+            csvFile.parentFile?.mkdirs()
+            val lines = records.flatMap { r ->
+                r.modelTokens.map { (model, tokens) ->
+                    val cache = if (r.modelTokens.size == 1) r.cacheHitTokens else (r.cacheHitTokens / r.modelTokens.size)
+                    "${r.date},$model,$tokens,$cache"
+                }
+            }
+            csvFile.writeText(lines.joinToString("\n"))
+        } catch (_: Exception) { }
+    }
 
     /** Record token usage for a single LLM call. */
     fun record(model: String, tokens: Int, cacheHit: Boolean, cacheHitTokens: Int = 0) {
@@ -52,8 +97,8 @@ object TokenStatsCollector {
                 cacheHitTokens = if (cacheHit) cacheHitTokens.toLong() else 0,
                 totalTokens = tokens.toLong()))
         }
-        // Keep last 90 days max
         if (records.size > 90) records.removeAt(0)
+        save()
     }
 
     /** Get daily records for the last N days. */

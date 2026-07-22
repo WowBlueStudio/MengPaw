@@ -3,8 +3,10 @@
 
 package com.mengpaw.shell.ui.screens
 
+import android.graphics.BitmapFactory
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -20,7 +22,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.design.theme.ThemeColors
+import java.io.File
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
@@ -59,7 +64,6 @@ fun HistorySidebar(
     onSelectSession: (AgentViewModel.SessionRecord) -> Unit,
     onDeleteSession: (String) -> Unit,
     onCompactSession: (String) -> Unit,
-    onRepairSession: (String) -> Unit,
     onNewSessionFor: (agentName: String, framework: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -67,7 +71,7 @@ fun HistorySidebar(
         modifier
             .fillMaxHeight()
             .width(300.dp)
-            .background(ThemeColors.bgPrimary.copy(alpha = 0.97f))
+            .background(ThemeColors.bgPrimary)
             .padding(top = ArcoSpacing.md)
     ) {
         // ── Header ──
@@ -95,7 +99,7 @@ fun HistorySidebar(
         }
 
         LazyColumn(
-            Modifier.weight(1f).fillMaxWidth().clipToBounds(),
+            Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(vertical = ArcoSpacing.sm)
         ) {
             // ── Section: 智能体 (local agents) ──
@@ -111,7 +115,6 @@ fun HistorySidebar(
                         onSelectSession = onSelectSession,
                         onDeleteSession = onDeleteSession,
                         onCompactSession = onCompactSession,
-                        onRepairSession = onRepairSession,
                         onNewSession = { onNewSessionFor(group.agentName, null) }
                     )
                 }
@@ -132,8 +135,7 @@ fun HistorySidebar(
                             onSelectSession = onSelectSession,
                             onDeleteSession = onDeleteSession,
                             onCompactSession = onCompactSession,
-                            onRepairSession = onRepairSession,
-                            onNewSession = onNewSessionFor
+                                onNewSession = onNewSessionFor
                         )
                     }
                 }
@@ -166,7 +168,6 @@ private fun AgentGroupItem(
     onSelectSession: (AgentViewModel.SessionRecord) -> Unit,
     onDeleteSession: (String) -> Unit,
     onCompactSession: (String) -> Unit,
-    onRepairSession: (String) -> Unit,
     onNewSession: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(true) }
@@ -214,19 +215,31 @@ private fun AgentGroupItem(
                 tint = ThemeColors.textSecondary
             )
             Spacer(Modifier.width(6.dp))
-            // Agent avatar initial
-            Surface(
-                shape = CircleShape,
-                color = ThemeColors.brandContainer,
-                modifier = Modifier.size(28.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        agentName.take(1),
-                        color = ThemeColors.brand,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
+            // Agent avatar — loads from disk, falls back to initial
+            val agentAvatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$agentName/avatar.png")
+            val agentAvatarBitmap = remember(agentName) {
+                if (agentAvatarFile.exists()) BitmapFactory.decodeFile(agentAvatarFile.absolutePath) else null
+            }
+            if (agentAvatarBitmap != null) {
+                Image(
+                    bitmap = agentAvatarBitmap.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp).clip(CircleShape)
+                )
+            } else {
+                Surface(
+                    shape = CircleShape,
+                    color = ThemeColors.brandContainer,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            agentName.take(1),
+                            color = ThemeColors.brand,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(ArcoSpacing.sm))
@@ -281,7 +294,6 @@ private fun AgentGroupItem(
                             onSelect = { onSelectSession(session) },
                             onDelete = { onDeleteSession(session.id) },
                             onCompact = { onCompactSession(session.id) },
-                            onRepair = { onRepairSession(session.id) },
                             multiSelectMode = multiSelect,
                             isSelected = session.id in selectedIds,
                             onToggleSelect = {
@@ -310,7 +322,6 @@ private fun FrameworkGroupItem(
     onSelectSession: (AgentViewModel.SessionRecord) -> Unit,
     onDeleteSession: (String) -> Unit,
     onCompactSession: (String) -> Unit,
-    onRepairSession: (String) -> Unit,
     onNewSession: (agentName: String, framework: String?) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -383,8 +394,7 @@ private fun FrameworkGroupItem(
                             onSelectSession = onSelectSession,
                             onDeleteSession = onDeleteSession,
                             onCompactSession = onCompactSession,
-                            onRepairSession = onRepairSession,
-                            onNewSession = { onNewSession(group.agentName, frameworkName) }
+                                onNewSession = { onNewSession(group.agentName, frameworkName) }
                         )
                     }
                 }
@@ -406,14 +416,15 @@ private fun SessionItem(
     onSelect: () -> Unit,
     onDelete: () -> Unit,
     onCompact: () -> Unit,
-    onRepair: () -> Unit,
     multiSelectMode: Boolean,
     isSelected: Boolean,
     onToggleSelect: () -> Unit,
     onLongPress: () -> Unit = {}
 ) {
     var swipeOffset by remember { mutableFloatStateOf(0f) }
-    val actionWidth = 180f  // total width for 3 action buttons
+    val actionWidth = 120f  // 2 buttons: compact + delete
+    // Reset swipe when multi-select mode changes
+    LaunchedEffect(multiSelectMode) { swipeOffset = 0f }
 
     Box(Modifier.fillMaxWidth().height(IntrinsicSize.Min).clipToBounds()) {
         // Action buttons revealed on swipe
@@ -422,13 +433,6 @@ private fun SessionItem(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Repair
-            Box(Modifier.fillMaxHeight().width(60.dp)
-                .background(ArcoColors.Blue6)
-                .clickable { onRepair(); swipeOffset = 0f },
-                contentAlignment = Alignment.Center) {
-                Text("修复", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
             // Compact (only if not already compacted)
             if (!session.compacted) {
                 Box(Modifier.fillMaxHeight().width(60.dp)
@@ -447,29 +451,35 @@ private fun SessionItem(
             }
         }
 
-        // Foreground row
-        Surface(
-            Modifier.fillMaxWidth()
-                .offset(x = swipeOffset.dp)
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = { swipeOffset = if (swipeOffset < -90f) -actionWidth else 0f },
-                        onHorizontalDrag = { _, dragAmount ->
-                            swipeOffset = (swipeOffset + dragAmount).coerceIn(-actionWidth, 0f)
-                        }
+        // Foreground row — opaque to hide action buttons underneath
+        Column(Modifier.background(ThemeColors.bgPrimary)) {
+            HorizontalDivider(color = ThemeColors.border, thickness = 0.5.dp)
+            Box(
+                Modifier.fillMaxWidth()
+                    .offset(x = swipeOffset.dp)
+                    .background(ThemeColors.bgPrimary)
+                    .pointerInput(multiSelectMode) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (!multiSelectMode) {
+                                    swipeOffset = if (swipeOffset < -90f) -actionWidth else 0f
+                                }
+                            },
+                            onHorizontalDrag = { _, dragAmount ->
+                                if (!multiSelectMode) {
+                                    swipeOffset = (swipeOffset + dragAmount).coerceIn(-actionWidth, 0f)
+                                }
+                            }
+                        )
+                    }
+                    .combinedClickable(
+                        onClick = {
+                            if (multiSelectMode) onToggleSelect()
+                            else onSelect()
+                        },
+                        onLongClick = onLongPress
                     )
-                }
-                .combinedClickable(
-                    onClick = {
-                        if (multiSelectMode) onToggleSelect()
-                        else onSelect()
-                    },
-                    onLongClick = onLongPress
-                ),
-            color = if (isSelected) ArcoColors.Blue6.copy(alpha = 0.08f)
-                    else if (session.compacted) ThemeColors.bgCard
-                    else ThemeColors.bgPrimary
-        ) {
+            ) {
             Row(
                 Modifier.padding(start = 56.dp, end = ArcoSpacing.lg).padding(vertical = ArcoSpacing.xs),
                 verticalAlignment = Alignment.CenterVertically
@@ -502,6 +512,7 @@ private fun SessionItem(
                     Text("← 左滑", fontSize = 9.sp, color = ArcoColors.Gray4)
                 }
             }
-        }
+            } // Box
+        } // Column
     }
 }
