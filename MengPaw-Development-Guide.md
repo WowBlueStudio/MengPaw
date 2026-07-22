@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.8.4 | **更新**: 2026-07-22 | **架构**: 微内核 + AgentRuntime (UI/运行时分离) + 23 插件 + QwenPaw 风格初始化 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理
+> **版本**: 0.9.0 | **更新**: 2026-07-22 | **架构**: 微内核 + AgentRuntime (UI/运行时分离) + 23 插件 + QwenPaw 风格初始化 + 会话管理 + 智能体管理 + MD 模板文件化 + 安全保护强制启用
 
 ---
 
@@ -39,9 +39,9 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 │  ├─ AgentViewModel ← 轻量状态持有                 │
 │  └─ Compose UI    ← 纯展示                       │
 ├──────────────────────────────────────────────────┤
-│  mengpaw-core (7 文件, Android 适配)              │  ← 平台桥接
+│  mengpaw-core (6 文件, Android 适配)              │  ← 平台桥接
 ├──────────────────────────────────────────────────┤
-│  mengpaw-kernel (47 文件, 纯 Kotlin/JVM)          │  ← 微内核
+│  mengpaw-kernel (46 文件, 纯 Kotlin/JVM)          │  ← 微内核
 │  CLI · LLM · Session · Plugin · Security          │
 │  AgentEngine · Goal/Mission · MCP · ACP           │
 │  NotifyBus · Error · Trigger · Namespace          │
@@ -61,8 +61,8 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 
 | 模块 | 类型 | 源文件 | 版本 | 说明 |
 |------|------|--------|------|------|
-| mengpaw-kernel | JVM Library | 47 | 0.8.4 | 微内核：纯 Kotlin，零 Android 依赖 |
-| mengpaw-core | Android Library | 7 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
+| mengpaw-kernel | JVM Library | 46 | 0.8.4 | 微内核：纯 Kotlin，零 Android 依赖 |
+| mengpaw-core | Android Library | 6 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 5 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
 | mengpaw-shell | APK | 24 | 0.8.4 (vc=31) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 |
 | mengpaw-browser | APK | 5 | 0.4.0 (vc=6) | 独立浏览器 + BrowserBridge + 22 操控命令 |
@@ -91,7 +91,7 @@ mengpaw-browser
   ├── mengpaw-core
   └── mengpaw-design-system
 
-plugins/ (25 模块)
+plugins/ (23 模块)
   └── mengpaw-kernel  ← 所有插件只依赖微内核（同级）
 ```
 
@@ -151,7 +151,7 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 
 ## 3. 模块详解
 
-### 3.1 mengpaw-kernel（微内核，44 文件）
+### 3.1 mengpaw-kernel（微内核，46 文件）
 
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|
@@ -159,7 +159,7 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | `llm/` | 6 | AdaptiveLlmProvider, LlmProvider, LlmRequestBuilder, PromptEngine, RemoteApi, TranslateMiddleware |
 | `session/` | 3 | SessionManager, History, Checkpoint |
 | `plugin/` | 4 | Plugin, PluginManager, PluginExecutor, PluginMarketplaceClient |
-| `agent/` | 8 | AgentDocManager, AgentDocs, AgentExecutor, AgentMiddleware, AgentProfile, DreamEngine, PromptBuilder, ScrollContext |
+| `agent/` | 9 | AgentDocManager, AgentDocs, AgentExecutor, AgentMiddleware, AgentProfile, DreamEngine, PromptBuilder, ScrollContext, GoalSession |
 | `security/` | 4 | Sanitizer, SecurityPolicy, PromptFirewall, IntegrityProvider |
 | `mcp/` | 2 | McpServer, McpClient |
 | `acp/` | 4 | AcpProtocol, AcpServer, AcpCrypto, AcpTransport |
@@ -168,7 +168,6 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | `extension/` | 1 | ManifestParser |
 | `trigger/` | 1 | TriggerEngine |
 | `namespace/` | 3 | SelfExecutor, ScreenshotManager, NotifyBus |
-| `agent/` | 9 | AgentDocManager, AgentDocs, AgentExecutor, AgentMiddleware, AgentProfile, DreamEngine, PromptBuilder, ScrollContext, GoalSession |
 | 根 | 3 | AgentEngine, DataPaths, KernelLog |
 
 > **v0.6.1 新增**: `GoalSession.kt` (GoalSession + RubricEvaluator + MissionSubtask), `NotifyBus.kt` (Agent→User 推送总线), SelfExecutor +5 命令
@@ -219,7 +218,7 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | `plugin/BrowserPlugin.kt` | 浏览器插件接口 |
 | `plugin/BrowserPluginRegistry.kt` | 插件注册表 |
 
-### 3.5 插件模块（25 个，plugins/ 目录）
+### 3.5 插件模块（23 个，plugins/ 目录）
 
 #### 基础功能 (8)
 
@@ -402,7 +401,7 @@ Agent 通过 memory 命令按需加载文档：
 
 **dev 插件扩展 (4)**：`create --type script|jar --name <name>` | `audit <id>` | `share <id> --to <target>` | `examples`
 
-#### sys — Android 系统 (38 命令，38 through Android 适配层注入)
+#### sys — Android 系统 (38 命令，通过 Android 适配层注入)
 
 **设备信息 (1)**: `device` (型号/厂商/SDK/架构)
 
@@ -517,9 +516,11 @@ Agent 通过 memory 命令按需加载文档：
 
 ## 6. 安全模型
 
-### 6.1 三层拦截
+### 6.1 三层拦截（始终强制执行，不可关闭）
 
-命令 → ① 白名单 → ② 黑名单（proc.exec 禁用）→ ③ 危险模式（rm -rf /, chmod 777 / 等）→ 执行
+命令 → ① SecurityPolicy.isAllowed()（白名单 + 黑名单 + 15 条危险模式）→ ② IntegrityGuard.validateCommand()（路径保护，接入 Pipeline 指令链）→ ③ 执行
+
+> v0.9.0: 移除所有 `globalEnabled`/`integrityEnabled`/`integrityCheckEnabled` 开关，保护始终生效。IntegrityGuard 之前从未实例化（NoOp 空实现），现已接入 AgentEngine → Pipeline。
 
 ### 6.2 Vault
 
@@ -573,7 +574,7 @@ interface Plugin {
 |------|--------|---------|
 | **SCRIPT** | 低 | JSON 声明即用，Agent 可自建 |
 | **JAR** | 中 | Kotlin 逻辑，有状态，需编译 |
-| **NATIVE** | 高 | 完整 Android 库，含资源/UI |
+| **AAR** | 高 | 完整 Android 库，含资源/UI |
 
 ### 7.3 市场发布
 
@@ -711,6 +712,7 @@ ShellService.start(this)   // startForeground + WakeLock
 | NotificationExecutor stub | 中 | 需 NotificationListenerService |
 | SelfPlugin 覆盖 kernel SelfExecutor | 低 | 4 个命令被插件版本覆盖，其余 10 个不受影响 |
 
+> v0.9.0: MD 模板文件化（~350 行硬编码字符串删除）；三大安全保护强制启用 + IntegrityGuard 接入 Pipeline；废弃插件目录物理删除；设置页文案重构
 > v0.6.1: 所有 6 项 settings-pending 已解决；Goal/Mission/Mission+ 模式已内置；4 个 QwenPaw Skills 已移植
 
 ---
@@ -719,8 +721,9 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.9.0** | 2026-07-22 | **安全强化 + 模板文件化** — 三大安全保护去除开关/强制启用 + IntegrityGuard 接入 Pipeline 指令链 (之前从未实例化) + MD 模板从 Kotlin 硬编码字符串改为 assets .md 文件 (7 个模板 ~350 行代码删除) + 智能体专属工具/技能 (全局池安装/Agent 自装/用户提供路径) + 设置页文案重构 (全局工具/智能体工具) + 废弃插件目录物理删除 |
 | **0.8.4** | 2026-07-22 | **会话管理增强** — 独立会话文件 + 切换恢复 (`switchToSession`) + 跨会话搜索 (`agent.sessions`) + 原子写入防损坏 + 引擎可靠性修复 (安全命令白名单/循环检测优化/状态重置) + UI 升级 (自适应宽度/自动定位/真实头像/Markdown Heading) + 构建统一版本号 (mengpaw.version) |
-| **0.8.0** | 2026-07-22 | **重大架构重构** — UI/运行时分离 (AgentRuntime) + QwenPaw 风格初始化 + 会话完整持久化 (30s 自动保存 + 思考链) + 智能体管理 (长按/删除/框架) + 输入优化 (Enter 发送/聚焦) + 20+ 崩溃/ANR 修复 + Android 13-17 全版本 + 5大国产 OEM 适配 + PadPlugin 移除 + 系统提示词重构 |
+| **0.8.0** | 2026-07-22 | **重大架构重构** — UI/运行时分离 (AgentRuntime) + QwenPaw 风格初始化 + 会话完整持久化 (30s 自动保存 + 思考链) + 智能体管理 (长按/删除/框架) + 输入优化 (Enter 发送/聚焦) + 20+ 崩溃/ANR 修复 + Android 13-17 全版本 + 5大国产 OEM 适配 + 系统提示词重构 |
 | **0.7.0** | 2026-07-22 | Android CLI 全功能 (11→38 命令) + 全类型 Skill 引擎 + CRON 触发器 + LIFETIME 心跳 + 会话持久化 + 智能体名片 + API 模型更新 + Boost 自动启动 |
 | **0.6.2** | 2026-07-21 | Agent 逻辑修复 — 14 Bug 修复: DreamEngine 参数混淆/大小写/单位错误/dreamLog 缺失; AgentDocManager 索引损坏/ID 解析/数据丢失; Goal 模式上下文丢失; snipStaleToolResults 不生效; Pipeline 缓存; DeepSeek-Chat 解析死循环; RubricGate 改进; API 模型更新 (8 Provider 至最新) |
 | **0.6.1** | 2026-07-21 | 内核功能补全 — Goal/Mission/Mission+ 内置模式 (RubricGate LLM 完成评估) + Agent→User 推送 (NotifyBus) + self 命名空间扩展 (+5 命令: tools/time/notify) + fs 扩展 (+grep/glob) + QwenPaw 4 Skills 移植 + API Key 持久化修复 + Provider 热更新 + Android 权限补全 (17 项) + Vault 安全加固 (绝不明文) + ProGuard Tink keep 规则 |

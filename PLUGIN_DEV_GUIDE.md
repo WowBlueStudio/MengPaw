@@ -78,7 +78,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":mengpaw-core"))
+    implementation(project(":mengpaw-kernel"))
 }
 ```
 
@@ -87,7 +87,7 @@ dependencies {
 ```kotlin
 package com.mengpaw.plugin.myplugin
 
-import com.mengpaw.core.plugin.*
+import com.mengpaw.kernel.plugin.*
 
 class MyPlugin : Plugin {
     override val metadata = PluginMeta(

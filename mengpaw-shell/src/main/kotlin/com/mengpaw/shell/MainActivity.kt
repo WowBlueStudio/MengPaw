@@ -88,6 +88,9 @@ class MainActivity : ComponentActivity() {
 
         DataPathsInitializer.initialize(this)
         com.mengpaw.core.namespace.SysExecutor.init(this)
+        com.mengpaw.core.security.IntegrityGuard.globalInstance.init(this)
+        com.mengpaw.core.AgentTemplates.init(this)
+        com.mengpaw.kernel.agent.AgentDocs.bootstrapper = { name -> com.mengpaw.core.AgentTemplates.bootstrapAgent(name) }
         KernelLog.setLogger(AndroidLogger())
         com.mengpaw.shell.ui.components.TokenStatsCollector.load()
         enableEdgeToEdge()

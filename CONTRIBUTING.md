@@ -30,6 +30,7 @@
 
 | 模块 | 职责 |
 |------|------|
-| mengpaw-core | 纯逻辑，不依赖 Android 框架（除安全存储） |
+| mengpaw-kernel | 纯 Kotlin/JVM 微内核，零 Android 依赖，JVM 可测试 |
+| mengpaw-core | Android 适配层：Vault 加密存储 / IntegrityGuard / SysExecutor |
 | mengpaw-shell | Compose UI + 前台服务 |
 | mengpaw-design-system | Arco 设计令牌 + 基础组件 |

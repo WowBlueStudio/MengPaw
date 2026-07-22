@@ -25,14 +25,15 @@ metadata:
 - MISSION_PLUS → plugin-agent-loop
 - GOAL → 始终 true (内置)
 
-## 3. 安全规则 Switch 接入 SecurityPolicy ✅
+## 3. 安全规则强制启用 ✅ (v0.8.4)
 
-**文件**: `SecurityPolicy.kt` + `PluginManager.kt` + `IntegrityGuard.kt` + `SettingsScreen.kt`
-**方案**: 为三个安全类添加 companion object global 开关，SettingsScreen switches 直接控制：
-- 内核完整性 → `SecurityPolicy.globalEnabled`
-- 插件完整性 → `PluginManager.globalInstance.integrityCheckEnabled`
-- 文件完整性 → `IntegrityGuard.globalEnabled`
-- SecurityPolicy.isAllowed() / IntegrityGuard.validateCommand() / IntegrityGuard.verify() 检查 global flag
+**文件**: `SecurityPolicy.kt` + `PluginManager.kt` + `IntegrityGuard.kt` + `SettingsScreen.kt` + `Pipeline.kt` + `AgentEngine.kt`
+**方案**: 
+- v0.6.1: 为三个安全类添加 companion object global 开关
+- v0.8.4: 移除所有开关，保护始终强制执行。IntegrityGuard 接入 Pipeline 指令执行链（之前未实例化，NoOp 空实现）。Settings UI 改为静态"已启用"指示器。
+- 内核完整性 → `SecurityPolicy.isAllowed()` 始终执行
+- 插件完整性 → `PluginManager` 始终执行版本兼容性检查
+- 文件完整性 → `IntegrityGuard.validateCommand()` 接入 Pipeline，保护核心目录
 
 ## 4. 工作区文件实时刷新 ✅
 

@@ -125,6 +125,8 @@ gh release create vX.Y.Z \
 
 ```bash
 # 一键发布（所有步骤通过后执行）
+# 注：此命令使用完整 CHANGELOG.md 作为 release notes，
+#     建议先用 head -65 提取当前版本内容到临时文件
 VERSION="0.3.0"
 ./gradlew clean :mengpaw-shell:assembleRelease :mengpaw-browser:assembleRelease && \
 git add -A && git commit -m "release: v$VERSION" && \

@@ -287,6 +287,7 @@ class AgentViewModel : ViewModel() {
             scrollContext = scroll,
             additionalNamespaces = mapOf("sys" to com.mengpaw.core.namespace.SysExecutor.commands)
         ).also {
+            it.integrityProvider = com.mengpaw.core.security.IntegrityGuard.globalInstance
             it.setAgentIdentity(name, framework, model)
             it.setAgentLanguage(globalAgentLang)
             it.configureCacheStrategy(globalEndpoint)

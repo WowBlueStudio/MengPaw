@@ -38,30 +38,20 @@ class AgentDocManager(
 
     // ── Initialization ────────────────────────────────────────────────
 
-    /** Create all default documents for a new agent. */
+    /** Create all default documents for a new agent using pre-built .md templates. */
     fun initAgentDocs(profile: AgentProfile) {
         agentDir.mkdirs()
 
-        // Agents.md — security rules (only create if not exists)
-        val agentsFile = file(AgentDocType.AGENTS)
-        if (!agentsFile.exists()) {
-            try { agentsFile.atomicWriteText(DEFAULT_AGENTS_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs"); return }
-            agentsFile.setReadOnly()
+        // Copy all .md templates from assets via AgentDocs bootstrapper
+        AgentDocs.bootstrap(profile.agentName)
+
+        // Profile.md — always overwrite with dynamic identity (template is generic)
+        val profileFile = file(AgentDocType.PROFILE)
+        try { profileFile.atomicWriteText(profile.toMarkdown()) } catch (e: Exception) {
+            ErrorCollector.report(e, "AgentDocManager.initAgentDocs")
         }
 
-        // Soul.md — execution style
-        val soulFile = file(AgentDocType.SOUL)
-        if (!soulFile.exists()) try { soulFile.atomicWriteText(DEFAULT_SOUL_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
-
-        // Profile.md — identity
-        val profileFile = file(AgentDocType.PROFILE)
-        if (!profileFile.exists()) try { profileFile.atomicWriteText(profile.toMarkdown()) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
-
-        // Memory.md — task records
-        val memoryFile = file(AgentDocType.MEMORY)
-        if (!memoryFile.exists()) try { memoryFile.atomicWriteText(DEFAULT_MEMORY_MD) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.initAgentDocs") }
-
-        // CLI.md — will be regenerated when plugins are active
+        // CLI.md — always regenerate from active plugin list
         regenerateCliDoc(pluginManager ?: PluginManager())
     }
 
@@ -84,7 +74,7 @@ class AgentDocManager(
      */
     fun updateMemory(entry: MemoryRecord) {
         val memFile = file(AgentDocType.MEMORY)
-        val content = if (memFile.exists()) try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.updateMemory"); "" } else DEFAULT_MEMORY_MD
+        val content = if (memFile.exists()) try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.updateMemory"); "" } else ""
 
         // Build new entry
         val entryMd = """
@@ -501,64 +491,6 @@ class AgentDocManager(
     // ── Default document templates ────────────────────────────────────
 
     companion object {
-        val DEFAULT_AGENTS_MD = """
-# Agent 安全行为规则
-
-## 禁止行为
-- 不得修改 /data/data/com.mengpaw/core/ 下的任何文件
-- 不得读取或修改 API Key 配置（Vault 保护）
-- 不得执行 proc.exec（沙箱禁用）
-- 不得删除其他 Agent 的文档
-- 不得修改自身的 Agents.md（系统只读）
-
-## 必须行为
-- 每次任务结束后在 Memory.md 中记录
-- 调用敏感命令前需确认（如 rm -rf）
-- 遇到未知命令时查询 CLI.md
-- 遵守 Soul.md 中定义的执行模式
-
-## 插件安全
-- 安装插件需用户确认（除非 Profile 中允许自动安装）
-- 检查插件的权限声明
-- 不安装来源不明的插件
-""".trimIndent()
-
-        val DEFAULT_SOUL_MD = """
-# Agent 灵魂设定
-
-## 执行模式
-- 类型: ReAct（思考→行动→观察→...→最终答案）
-- 最大步数: 50
-- 循环检测: 同一命令连续3次中止
-
-## 语言风格
-- 默认语言: 中文
-- 语气: 专业、简洁
-- 输出格式: Thought / Action / Action Input / Final Answer
-
-## 自主性
-- 插件安装: 询问用户确认
-- 文件删除: 询问用户确认
-- 网络请求: 自动执行
-- 信息搜索: 自动执行
-
-## 学习
-- 任务后自动记录到 Memory.md
-- 遇到新命令时查询 CLI.md
-- 需要新能力时浏览插件市场
-""".trimIndent()
-
-        val DEFAULT_MEMORY_MD = """
-# 记忆索引
-
-> 索引更新: -
-> 总条目: 0 | 总大小: 0KB | 上限: 50 条
-
----
-
-(暂无记录。任务执行后自动记录在此。)
-""".trimIndent()
-
         /** Built-in self.* commands for CLI.md generation. */
         val SELF_COMMANDS = listOf(
             Triple("status", "self status", "Agent 运行状态"),

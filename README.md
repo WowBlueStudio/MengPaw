@@ -47,14 +47,15 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS 双向桥)
 │   └── plugin/                 # 浏览器内置插件 (22 命令)
 │
-└── plugins/                    # 25 个功能插件 (同级，均只依赖 kernel)
-    ├── plugin-fs/              # 文件系统 (8 命令)
+└── plugins/                    # 23 个功能插件 (同级，均只依赖 kernel)
+    ├── plugin-fs/              # 文件系统 (10 命令)
     ├── plugin-net/             # HTTP 网络 (3 命令)
     ├── plugin-memory/          # 记忆系统 (6 命令) ⭐
     ├── plugin-skill/           # 技能系统 (4 命令) ⭐
+    ├── plugin-self/            # Agent 自省 (4 命令)
     ├── plugin-clipboard/       # 剪贴板 (3 命令)
     ├── plugin-notification/    # 通知管理 (3 命令)
-    ├── plugin-pad/             # 悬浮窗 ⭐
+    ├── plugin-pad/             # 悬浮窗 (2 命令) ⭐
     ├── plugin-dev/             # 插件开发工具 ⭐
     ├── plugin-tavily/          # AI 搜索
     ├── plugin-hermes/          # 多智能体协作
@@ -65,8 +66,6 @@ mengpaw/
     ├── plugin-translate/       # 翻译
     ├── plugin-error-report/    # 错误上报
     ├── plugin-update/          # 自动更新
-    ├── plugin-agent-loop/      # 受控迭代
-    ├── plugin-agent-mission/   # Worker+Verifier 协作
     ├── plugin-browser-push/    # 跨设备推送
     ├── plugin-browser-search/  # 搜索分析
     ├── plugin-browser-mcp/     # 浏览器 MCP
@@ -84,10 +83,10 @@ mengpaw/
 ├────────────────────────────────┤
 │  mengpaw-core (6 文件)         │  ← Android 适配
 ├────────────────────────────────┤
-│  mengpaw-kernel (44 文件)      │  ← 微内核 (纯 Kotlin/JVM)
+│  mengpaw-kernel (46 文件)      │  ← 微内核 (纯 Kotlin/JVM)
 │  零 Android 依赖 · 可 JVM 测试  │
 ├────────────────────────────────┤
-│  25 插件 (同级 · 只依赖 kernel)  │  ← 插件层
+│  23 插件 (同级 · 只依赖 kernel)  │  ← 插件层
 └────────────────────────────────┘
 ```
 

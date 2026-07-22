@@ -4,6 +4,52 @@
 
 ---
 
+## 2026-07-22 — v0.9.0 安全架构建模 + MD 模板文件化
+
+### 安全架构建模
+
+26. **假开关比没有开关更危险**
+    - 场景：设置页三个安全开关（内核完整性/插件完整性/文件完整性），看起来给了用户控制权
+    - 后果：插件完整性 `integrityCheckEnabled` 从未被任何代码读取——纯假开关；文件完整性 IntegrityGuard 从未实例化，NoOp 空实现——形同虚设
+    - 改进：移除所有开关，保护始终强制启用；IntegrityGuard 接入 AgentEngine → Pipeline 指令链
+    - 原则：**安全功能要么不做，要做就必须真正接入执行链。假开关制造虚假安全感。**
+
+27. **接口定义后必须验证实现类是否被实例化**
+    - 场景：`IntegrityProvider` 接口在 kernel 中定义，`IntegrityGuard` 在 core 中实现，`Pipeline` 调用 `securityPolicy.validateIntegrity()`
+    - 后果：SecurityPolicy 默认构造用 NoOpIntegrityProvider（永远返回 null），IntegrityGuard 从未被 new，所有路径保护是空操作
+    - 改进：grep 验证每个接口实现类的实例化位置，确保不是 dead code
+    - 原则：**写完接口→找实现→确认实例化→确认调用链。四步缺一不可。**
+
+### MD 模板文件化
+
+28. **提示词模板独立于源码，用 assets 存放**
+    - 场景：智能体 7 个 MD 文件的内容硬编码在 AgentDocs.kt 的 `"""...""".trimIndent()` 中（~270 行）
+    - 后果：改一个字要改 Kotlin 源码→重新编译；字符串拼接在每次新建智能体时执行→卡顿
+    - 改进：MD 文件放入 `assets/agent-templates/zh/`，首次启动复制到只读路径，新建智能体时直接文件复制（~1ms）
+    - 原则：**所有提示词/模板/文档内容放在 APK assets 中作为独立文件，源码只负责文件复制逻辑。**
+
+29. **MD 模板的三路径模型**
+    - `assets/agent-templates/` → APK 内（改模板需重建 APK）
+    - `{filesDir}/agent-templates/` → 只读运行时路径（Agent CLI 不可写）
+    - `{filesDir}/Agent文档/{name}/` → 工作区（Agent 可自由修改）
+    - 原则：**模板→只读→工作区，三层隔离，每层权限明确。**
+
+### 历史债务清理
+
+30. **CHANGELOG 声称移除不等于代码真移除**
+    - 场景：v0.8.0 CHANGELOG 写 "PadPlugin 移除"，但 plugin-pad 仍在 settings.gradle.kts 中注册且 bundle 在 Shell APK 中
+    - 后果：文档和代码不一致，开发者困惑
+    - 改进：声称移除某个模块后，必须验证 `settings.gradle.kts` 中的 `include()` 和 `build.gradle.kts` 中的 `implementation()` 都已删除
+    - 原则：**任何"移除"操作后，grep 验证引用是否清零。**
+
+31. **废弃代码目录应物理删除**
+    - 场景：plugin-agent-loop 和 plugin-agent-mission 自 v0.6.1 起已从 settings.gradle.kts 移除，但目录仍在磁盘上
+    - 后果：grep 搜索结果被废弃代码污染，新人困惑
+    - 改进：废弃模块从 settings.gradle.kts 移除时同步删除目录
+    - 原则：**从构建系统移除 = 从磁盘删除。不留僵尸代码。**
+
+---
+
 ## 2026-07-22 — v0.8.0 架构重构 + 启动崩溃根因
 
 ### 架构教训
