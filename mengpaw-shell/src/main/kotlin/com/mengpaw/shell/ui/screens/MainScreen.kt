@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -31,8 +33,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.design.tokens.ArcoColors
@@ -264,13 +268,26 @@ fun MainScreen(
                     ) {
                         Icon(Icons.Outlined.Add, "扩展", tint = ThemeColors.textSecondary, modifier = Modifier.size(24.dp))
                     }
-                    // Input field
+                    // Input field — Enter sends, Ctrl+Enter inserts newline
+                    val keyMaxSteps = settingsState?.value?.maxSteps ?: 50
                     OutlinedTextField(value = inputText, onValueChange = { inputText = it },
-                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp), enabled = inputEnabled,
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp).onPreviewKeyEvent { event ->
+                            if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER && event.nativeKeyEvent.isCtrlPressed) {
+                                inputText += "\n"; true
+                            } else false
+                        },
+                        enabled = inputEnabled,
                         placeholder = { Text(strings.inputPlaceholder) },
                         shape = RoundedCornerShape(ArcoRadius.lg),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ThemeColors.brand, unfocusedBorderColor = ThemeColors.border),
-                        minLines = 1, maxLines = 4)
+                        minLines = 1, maxLines = 4,
+                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Default),
+                        keyboardActions = KeyboardActions(onSend = {
+                            if (inputText.isNotBlank()) {
+                                val text = inputText; inputText = ""
+                                viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps)
+                            }
+                        }))
                     // Send button — circular 44dp, animated ↑ icon
                     val maxSteps = settingsState?.value?.maxSteps ?: 50
                     val scope = rememberCoroutineScope()
