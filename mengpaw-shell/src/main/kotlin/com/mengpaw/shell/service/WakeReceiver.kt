@@ -25,7 +25,6 @@ class WakeReceiver : BroadcastReceiver() {
         val reason = intent?.getStringExtra("wake_reason") ?: "check"
 
         context?.let { ctx ->
-            try { com.mengpaw.plugin.pad.FloatingDotService.start(ctx) } catch (_: Exception) {}
             try { ShellService.start(ctx) } catch (_: Exception) {}
         }
 

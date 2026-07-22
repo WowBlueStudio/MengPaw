@@ -5,6 +5,8 @@ package com.mengpaw.kernel.agent
 
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.error.ErrorCollector
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
@@ -13,16 +15,43 @@ import java.io.File
  */
 object AgentDocs {
 
-    /** Create all default doc files for a new agent. */
+    /** Create all default doc files for a new agent (synchronous, fast path). */
     fun bootstrap(agentName: String) {
         val dir = File(DataPaths.AGENTS, agentName)
         if (!dir.exists()) dir.mkdirs()
+        // Fast path: if soul.md already exists, all bootstrap files exist
+        if (File(dir, "soul.md").exists()) return
+        writeTemplates(dir, agentName)
+    }
 
-        // Fast path: if soul.md already exists, all bootstrap files exist —
-        // skip 7 filesystem checks to avoid unnecessary I/O on every launch
+    /**
+     * Create all default doc files in parallel using coroutines.
+     * 7 files written concurrently instead of sequentially — speeds up first launch.
+     */
+    suspend fun bootstrapAsync(agentName: String) {
+        val dir = File(DataPaths.AGENTS, agentName)
+        if (!dir.exists()) dir.mkdirs()
         if (File(dir, "soul.md").exists()) return
 
-        // FIX A7: Use lowercase filenames consistent with AgentDocManager
+        val files = listOf(
+            "soul.md" to soulTemplate(agentName),
+            "boost.md" to boostTemplate(agentName),
+            "trigger.md" to triggerTemplate(agentName),
+            "memory.md" to memoryTemplate(agentName),
+            "profile.md" to profileTemplate(agentName),
+            "agents.md" to agentsTemplate(agentName),
+            "HEARTBEAT.md" to heartbeatTemplate()
+        )
+        coroutineScope {
+            for (pair in files) {
+                launch {
+                    try { writeIfMissing(File(dir, pair.first), pair.second) } catch (_: Exception) {}
+                }
+            }
+        }
+    }
+
+    private fun writeTemplates(dir: File, agentName: String) {
         writeIfMissing(File(dir, "soul.md"), soulTemplate(agentName))
         writeIfMissing(File(dir, "boost.md"), boostTemplate(agentName))
         writeIfMissing(File(dir, "trigger.md"), triggerTemplate(agentName))
