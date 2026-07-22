@@ -236,7 +236,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val key = _state.value.apiKey
         if (ep.isBlank() || key.isBlank()) return
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val base = ep.substringBefore("/chat/completions")
                 .substringBefore("/v1/chat")
                 .substringBefore("/compatible-mode/v1")
