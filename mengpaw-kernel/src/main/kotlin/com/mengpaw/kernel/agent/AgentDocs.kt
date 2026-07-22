@@ -18,6 +18,10 @@ object AgentDocs {
         val dir = File(DataPaths.AGENTS, agentName)
         if (!dir.exists()) dir.mkdirs()
 
+        // Fast path: if soul.md already exists, all bootstrap files exist —
+        // skip 7 filesystem checks to avoid unnecessary I/O on every launch
+        if (File(dir, "soul.md").exists()) return
+
         // FIX A7: Use lowercase filenames consistent with AgentDocManager
         writeIfMissing(File(dir, "soul.md"), soulTemplate(agentName))
         writeIfMissing(File(dir, "boost.md"), boostTemplate(agentName))
