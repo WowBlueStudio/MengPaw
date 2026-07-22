@@ -106,9 +106,9 @@ dependencies {
     implementation(project(":mengpaw-design-system"))
 
     // Bundled plugins (pre-installed in base APK)
+    implementation(project(":plugin-framework"))
     implementation(project(":plugin-memory"))
     implementation(project(":plugin-skill"))
-    implementation(project(":plugin-pad"))
     implementation(project(":plugin-dev"))
 
     // Kotlin

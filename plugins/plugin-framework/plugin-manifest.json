@@ -1,0 +1,10 @@
+{
+  "id": "framework-plugin",
+  "name": "框架发现",
+  "version": "0.1.0",
+  "type": "native",
+  "author": "MengPaw",
+  "description": "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理",
+  "minCoreVersion": "0.9.1",
+  "commands": ["framework.discover", "framework.peers", "framework.trust", "framework.untrust", "framework.info", "framework.ping"]
+}

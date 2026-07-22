@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 哇蓝品牌 "哇" 字图标 — 白色版，用于启动页、顶栏 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="83dp"
+    android:height="88dp"
+    android:viewportWidth="83.09"
+    android:viewportHeight="87.57">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,87.57L0,0l33.13,7.85v8.79l-3.83,0v-5.77L3.82,4.84v77.89l25.48,-6.03v-4.87h3.83v7.89L0,87.57z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8.85,63.58L7.71,21.5h7v1.79L27,21.5l-1.13,38H14.77v3.16zM14.77,53.36l5.26,-1V29h-5.26zM60.08,69.56L27.44,69.5l-1.19,-4.6l13.27,-1v-7.43H29.17L28,51.8l11.54,-0.89v-6.4l7.53,0.9l-0.24,4.9l11.3,-0.9v7.06H46.45L46,63.52l14,-1zM59.42,43.44H28.28l-1.2,-4.67l12.44,-0.89V31.06H30.07L28.88,26.4l10.64,-0.9V18.15l7.53,0.9l-0.3,5.86l10.4,-0.9v7H46.39L46,37.4l13.39,-1z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M78.07,68.54c-2.59,0,-4.76,-2.22,-5.02,-4.96,-0.26,-2.74,1.76,-5.02,4.5,-5.28c2.74,-0.26,5.02,1.76,5.28,4.5c0.26,2.74,-1.76,5.02,-4.5,5.28C78.2,68.54,78.14,68.54,78.07,68.54z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M81.12,54.44h-5.98l-1.55,-33.3h9.02L81.12,54.44z" />
+</vector>

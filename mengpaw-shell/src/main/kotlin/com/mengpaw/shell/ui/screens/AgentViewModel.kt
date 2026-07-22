@@ -133,7 +133,11 @@ class AgentViewModel : ViewModel() {
             val obj = org.json.JSONObject()
             when (msg) {
                 is ChatMessageUi.User -> { obj.put("type", "user"); obj.put("text", msg.content) }
-                is ChatMessageUi.Agent -> { obj.put("type", "agent"); obj.put("text", msg.content) }
+                is ChatMessageUi.Agent -> {
+                    obj.put("type", "agent"); obj.put("text", msg.content)
+                    msg.executionMode?.let { obj.put("executionMode", it) }
+                    msg.agentRef?.let { obj.put("agentRef", it) }
+                }
                 is ChatMessageUi.AgentWithTrace -> {
                     obj.put("type", "agent_trace"); obj.put("text", msg.finalContent)
                     val traceArr = org.json.JSONArray()
@@ -144,6 +148,8 @@ class AgentViewModel : ViewModel() {
                         traceArr.put(tObj)
                     }
                     obj.put("traces", traceArr)
+                    msg.executionMode?.let { obj.put("executionMode", it) }
+                    msg.agentRef?.let { obj.put("agentRef", it) }
                 }
                 else -> return@forEach
             }
@@ -161,7 +167,9 @@ class AgentViewModel : ViewModel() {
             if (txt.isBlank()) continue
             when (type) {
                 "user" -> msgs.add(ChatMessageUi.User(txt))
-                "agent" -> msgs.add(ChatMessageUi.Agent(txt))
+                "agent" -> msgs.add(ChatMessageUi.Agent(txt,
+                    executionMode = obj.optString("executionMode", "").ifEmpty { null },
+                    agentRef = obj.optString("agentRef", "").ifEmpty { null }))
                 "agent_trace" -> {
                     val traces = mutableListOf<AgentTrace>()
                     val traceArr = obj.optJSONArray("traces")
@@ -171,7 +179,9 @@ class AgentViewModel : ViewModel() {
                             t.optString("action", "").ifEmpty { null },
                             t.optString("observation", "").ifEmpty { null }))
                     }
-                    msgs.add(ChatMessageUi.AgentWithTrace(txt, traces, isRunning = false))
+                    msgs.add(ChatMessageUi.AgentWithTrace(txt, traces, isRunning = false,
+                        executionMode = obj.optString("executionMode", "").ifEmpty { null },
+                        agentRef = obj.optString("agentRef", "").ifEmpty { null }))
                 }
             }
         }
@@ -510,11 +520,60 @@ class AgentViewModel : ViewModel() {
     /** Current loop mode — read by submitTask() to choose engine method. */
     var loopMode: LoopMode = LoopMode.GOAL
 
+    // ── Active input tags (slash commands + @mentions) ───────────────
+
+    private val _activeTags = MutableStateFlow<List<InputTag>>(emptyList())
+    val activeTags: StateFlow<List<InputTag>> = _activeTags.asStateFlow()
+
+    /** 添加标签，同类型替换旧值。 */
+    fun addTag(tag: InputTag) {
+        val current = _activeTags.value.toMutableList()
+        when (tag) {
+            is InputTag.Mode -> {
+                current.removeAll { it is InputTag.Mode }
+                when (tag.mode) {
+                    ExecutionMode.MISSION -> loopMode = LoopMode.MISSION
+                    else -> {} // RESEARCH/TRANSLATE/DREAM 不改变 loopMode
+                }
+            }
+            is InputTag.AgentRef -> {
+                current.removeAll { it is InputTag.AgentRef && it.agentName == tag.agentName }
+            }
+        }
+        current.add(tag)
+        _activeTags.value = current
+    }
+
+    /** 移除标签，模式标签移除时回退到 GOAL。 */
+    fun removeTag(tag: InputTag) {
+        _activeTags.value = _activeTags.value.filter { it != tag }
+        if (tag is InputTag.Mode && _activeTags.value.none { it is InputTag.Mode }) {
+            loopMode = LoopMode.GOAL
+        }
+    }
+
+    /** 清除所有标签。 */
+    fun clearTags() {
+        _activeTags.value = emptyList()
+        loopMode = LoopMode.GOAL
+    }
+
+    /** 获取可用于 @mention 的 Agent 列表（本地 + 框架）。 */
+    fun agentNamesForMention(): List<Pair<String, String?>> {
+        return sessions.keys.map { it to sessions[it]?.framework }
+    }
+
     /**
      * Submit a task to the currently active agent.
      * Uses the active [loopMode] to select engine execution strategy.
      */
-    fun submitTask(task: String, pluginViewModel: PluginViewModel? = null, maxSteps: Int = 50) {
+    fun submitTask(
+        task: String,
+        pluginViewModel: PluginViewModel? = null,
+        maxSteps: Int = 50,
+        executionMode: ExecutionMode? = null,
+        agentRef: String? = null
+    ) {
         if (task.isBlank() || _isRunning.value) return
         val session = activeSession()
         if (session.isRunning.value) return
@@ -522,11 +581,60 @@ class AgentViewModel : ViewModel() {
         session.messages.value = session.messages.value + ChatMessageUi.User(task)
 
         viewModelScope.launch {
+            // ── 执行模式分发变量（在 try 外，catch 中也需要）────
+            val savedLoopMode = loopMode
+            val modePrefix = executionMode?.prefix
             try {
+                // /Mission: 临时覆盖 loopMode
+                if (executionMode == ExecutionMode.MISSION) {
+                    loopMode = LoopMode.MISSION
+                }
+
+                // /Dream: 后台执行 — 直接 LLM 调用，不触发主引擎状态变化
+                if (executionMode == ExecutionMode.DREAM) {
+                    val dreamTask = task
+                    launch {
+                        try {
+                            val dreamPrompt = """
+[后台 Dream 任务 — 静默执行，完成后仅推送结果]
+
+任务：$dreamTask
+
+请用简洁的方式完成任务，并将结果整理为一段摘要。
+""".trimIndent()
+                            val dreamResult = session.provider.complete(dreamPrompt)
+                            session.messages.value = session.messages.value +
+                                ChatMessageUi.System("💤 Dream 完成:\n\n${dreamResult.take(500)}")
+                        } catch (e: Exception) {
+                            session.messages.value = session.messages.value +
+                                ChatMessageUi.System("💤 Dream 异常: ${e.message?.take(120) ?: "未知错误"}")
+                        }
+                    }
+                    // 不添加 AgentWithTrace，不锁定输入
+                    loopMode = savedLoopMode
+                    return@launch
+                }
+
                 // Auto-translate for English-optimized models (saves ~40% tokens)
                 val doTranslate = translator.shouldTranslate(session.modelName)
                 val translatedTask = if (doTranslate) translator.toEnglish(task) else task
-                val actualTask = if (doTranslate && translatedTask != task) translatedTask else task
+                var actualTask = if (doTranslate && translatedTask != task) translatedTask else task
+
+                // /Research /Translate: 包装提示词（在翻译之后）
+                actualTask = when (executionMode) {
+                    ExecutionMode.RESEARCH -> """
+深度研究模式 — 请执行以下研究任务：
+
+1. 多角度搜索相关信息（优先使用 Tavily / 网络搜索）
+2. 交叉验证每条信息的可靠性
+3. 给出结构化的综合结论，附信息来源
+
+研究课题：$actualTask
+""".trimIndent()
+                    ExecutionMode.TRANSLATE -> "翻译以下内容：\n\n$actualTask"
+                    else -> actualTask
+                }
+                // ── 模式分发结束 ─────────────────────────────────
 
                 // Build conversation history context (exclude system messages + current task)
                 val historyMsgs = session.messages.value.filter {
@@ -548,7 +656,9 @@ class AgentViewModel : ViewModel() {
                 session.messages.value = session.messages.value + ChatMessageUi.AgentWithTrace(
                     finalContent = "思考中...",
                     traces = emptyList(),
-                    isRunning = true
+                    isRunning = true,
+                    executionMode = modePrefix,
+                    agentRef = agentRef
                 )
 
                 // Shared step callback for trace collection + token stats + UI update
@@ -565,7 +675,8 @@ class AgentViewModel : ViewModel() {
                     val cur = session.messages.value.toMutableList()
                     val ri = cur.indexOfLast { it is ChatMessageUi.AgentWithTrace && it.isRunning }
                     if (ri >= 0) {
-                        cur[ri] = ChatMessageUi.AgentWithTrace("思考中...", traces.toList(), isRunning = true)
+                        cur[ri] = ChatMessageUi.AgentWithTrace("思考中...", traces.toList(),
+                            isRunning = true, executionMode = modePrefix, agentRef = agentRef)
                         session.messages.value = cur
                     }
                 }
@@ -592,10 +703,13 @@ class AgentViewModel : ViewModel() {
                     current[runningIndex] = ChatMessageUi.AgentWithTrace(
                         finalContent = displayResult,
                         traces = traces.toList(),
-                        isRunning = false
+                        isRunning = false,
+                        executionMode = modePrefix,
+                        agentRef = agentRef
                     )
                 } else {
-                    current.add(ChatMessageUi.Agent(displayResult))
+                    current.add(ChatMessageUi.Agent(displayResult,
+                        executionMode = modePrefix, agentRef = agentRef))
                 }
 
                 val suggestion = checkMissingPlugin(result)
@@ -605,6 +719,8 @@ class AgentViewModel : ViewModel() {
                 }
 
                 session.messages.value = current
+                // 恢复原始 loopMode
+                loopMode = savedLoopMode
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Normal coroutine cancellation — re-throw to maintain cancellation chain
                 throw e
@@ -627,12 +743,17 @@ class AgentViewModel : ViewModel() {
                     current[runningIndex] = ChatMessageUi.AgentWithTrace(
                         finalContent = errorMsg,
                         traces = emptyList(),
-                        isRunning = false
+                        isRunning = false,
+                        executionMode = modePrefix,
+                        agentRef = agentRef
                     )
                 } else {
-                    current.add(ChatMessageUi.Agent(errorMsg))
+                    current.add(ChatMessageUi.Agent(errorMsg,
+                        executionMode = modePrefix, agentRef = agentRef))
                 }
                 session.messages.value = current
+                // 恢复原始 loopMode
+                loopMode = savedLoopMode
                 // Fully sync all running/input state
                 session.isRunning.value = false
                 _isRunning.value = false
@@ -1007,23 +1128,19 @@ class AgentViewModel : ViewModel() {
                     is AgentState.Idle -> {
                         session.isRunning.value = false; _isRunning.value = false
                         session.inputEnabled.value = true; _inputEnabled.value = true
-                        com.mengpaw.plugin.pad.PadPlugin.updateState(com.mengpaw.plugin.pad.PadPlugin.DotState.IDLE)
                     }
                     is AgentState.Running -> {
                         session.isRunning.value = true; _isRunning.value = true
                         session.inputEnabled.value = false; _inputEnabled.value = false
-                        com.mengpaw.plugin.pad.PadPlugin.updateState(com.mengpaw.plugin.pad.PadPlugin.DotState.WORKING)
                     }
                     is AgentState.Finished -> {
                         session.isRunning.value = false; _isRunning.value = false
                         session.inputEnabled.value = true; _inputEnabled.value = true
-                        com.mengpaw.plugin.pad.PadPlugin.updateState(com.mengpaw.plugin.pad.PadPlugin.DotState.IDLE)
                     }
                     is AgentState.Error -> {
                         session.isRunning.value = false; _isRunning.value = false
                         session.inputEnabled.value = true; _inputEnabled.value = true
                         session.messages.value = session.messages.value + ChatMessageUi.Agent("⚠️ ${state.message}")
-                        com.mengpaw.plugin.pad.PadPlugin.updateState(com.mengpaw.plugin.pad.PadPlugin.DotState.ERROR)
                     }
                 }
             }
@@ -1105,20 +1222,45 @@ sealed class ChatMessageUi {
     data class User(val content: String) : ChatMessageUi() {
         override val stableId get() = "u_${content.hashCode()}"
     }
-    data class Agent(val content: String) : ChatMessageUi() {
-        override val stableId get() = "a_${content.hashCode()}"
+    data class Agent(
+        val content: String,
+        val executionMode: String? = null,
+        val agentRef: String? = null
+    ) : ChatMessageUi() {
+        override val stableId get() = "a_${content.hashCode()}_${executionMode ?: ""}_${agentRef ?: ""}"
     }
     data class AgentWithTrace(
         val finalContent: String,
         val traces: List<AgentTrace>,
-        val isRunning: Boolean = false
+        val isRunning: Boolean = false,
+        val executionMode: String? = null,
+        val agentRef: String? = null
     ) : ChatMessageUi() {
-        override val stableId get() = "t_${traces.size}_${finalContent.hashCode()}"
+        override val stableId get() = "t_${traces.size}_${finalContent.hashCode()}_${executionMode ?: ""}_${agentRef ?: ""}"
     }
     data class System(val content: String) : ChatMessageUi() {
         override val stableId get() = "s_${content.hashCode()}"
     }
     data class Suggestion(val suggestion: PluginSuggestion) : ChatMessageUi() {
         override val stableId get() = "sg_${suggestion.pluginId}"
+    }
+}
+
+/** 执行模式 — 用户通过 /命令 主动触发，非自动检测。 */
+enum class ExecutionMode(val label: String, val prefix: String) {
+    MISSION("Mission", "/Mission"),
+    RESEARCH("Research", "/Research"),
+    TRANSLATE("Translate", "/Translate"),
+    DREAM("Dream", "/Dream");
+}
+
+/** 输入框标签 — 斜杠命令或 @mention 的活跃状态。 */
+sealed class InputTag {
+    abstract val label: String
+    data class Mode(val mode: ExecutionMode) : InputTag() {
+        override val label get() = mode.prefix
+    }
+    data class AgentRef(val agentName: String) : InputTag() {
+        override val label get() = "@$agentName"
     }
 }

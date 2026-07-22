@@ -4,6 +4,9 @@
 package com.mengpaw.shell.ui.screens
 
 import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -36,6 +39,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -77,6 +82,10 @@ fun MainScreen(
     var showExpandSheet by remember { mutableStateOf(false) }
     var showMissionOverlay by remember { mutableStateOf(false) }
 
+    // ── @mention state ────────────────────────────────────────────
+    var showMentionDropdown by remember { mutableStateOf(false) }
+    var mentionQuery by remember { mutableStateOf("") }
+
     // FIX U17+U6: Derive filtered list once to avoid allocation per recomposition
     val displayedMessages by remember(messages) {
         derivedStateOf { messages.filter { it !is ChatMessageUi.System } }
@@ -99,6 +108,45 @@ fun MainScreen(
     var showRightSidebar by remember { mutableStateOf(false) }
     // Track previous isRunning to detect thinking→done transition
     var wasRunning by remember { mutableStateOf(false) }
+
+    // ── Active tags from ViewModel ──────────────────────────────────
+    val activeTags by viewModel.activeTags.collectAsState()
+
+    // ── Panel order state ──────────────────────────────────────────
+    var panelOrder by remember { mutableStateOf(com.mengpaw.shell.ui.components.PanelOrderStore.load()) }
+
+    // ── File picker launchers ──────────────────────────────────────
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var pendingUploadDir by remember { mutableStateOf("") }
+
+    val imagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> uri?.let { handleFilePicked(it, context, viewModel, pendingUploadDir) { p -> inputText = "$p$inputText" } } }
+
+    val docPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? -> uri?.let { handleFilePicked(it, context, viewModel, pendingUploadDir) { p -> inputText = "$p$inputText" } } }
+
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? -> uri?.let { handleFilePicked(it, context, viewModel, pendingUploadDir) { p -> inputText = "$p$inputText" } } }
+
+    val cameraUri = remember {
+        val file = java.io.File(com.mengpaw.kernel.DataPaths.SCREENSHOTS, "camera_${System.currentTimeMillis()}.jpg")
+        file.parentFile?.mkdirs()
+        androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && cameraUri != null) {
+            handleFilePicked(cameraUri, context, viewModel, pendingUploadDir) { p -> inputText = "$p$inputText" }
+        }
+    }
 
     /** Bounds-checked scroll helper — swallows out-of-range errors. */
     suspend fun safeScrollTo(index: Int, animated: Boolean = true) {
@@ -149,20 +197,17 @@ fun MainScreen(
                         .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Left sidebar toggle
-                    IconButton(onClick = { showLeftSidebar = !showLeftSidebar }, modifier = Modifier.size(44.dp)) {
-                        Icon(Icons.Outlined.Menu, "侧边栏", tint = ThemeColors.textSecondary)
-                    }
-                    Spacer(Modifier.width(4.dp))
-                    // Agent avatar — 44dp circle, matching send button
+                    // Agent avatar — 44dp circle, 点击打开左侧栏
                     val avatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$displayAgentName/avatar.png")
                     val avatarBitmap = remember(displayAgentName) { if (avatarFile.exists()) BitmapFactory.decodeFile(avatarFile.absolutePath) else null }
-                    if (avatarBitmap != null) {
-                        Image(bitmap = avatarBitmap.asImageBitmap(), null, Modifier.size(44.dp).clip(CircleShape))
-                    } else {
-                        Surface(shape = CircleShape, color = ThemeColors.brandContainer, modifier = Modifier.size(44.dp)) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(displayAgentName.take(1), color = ThemeColors.brand, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Box(modifier = Modifier.size(44.dp).clip(CircleShape).clickable { showLeftSidebar = !showLeftSidebar }) {
+                        if (avatarBitmap != null) {
+                            Image(bitmap = avatarBitmap.asImageBitmap(), null, Modifier.fillMaxSize())
+                        } else {
+                            Surface(shape = CircleShape, color = ThemeColors.brandContainer, modifier = Modifier.fillMaxSize()) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(displayAgentName.take(1), color = ThemeColors.brand, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                }
                             }
                         }
                     }
@@ -230,7 +275,23 @@ fun MainScreen(
 
                     // Messages — container centered, tablet 80% / phone 95%
                     val msgWidth = if (isWide()) 0.8f else 0.95f
-                    Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+                    Box(
+                        Modifier.weight(1f).fillMaxHeight()
+                            // 全局手势：右滑→左侧栏，左滑→右侧栏
+                            .pointerInput(Unit) {
+                                var totalDrag = 0f
+                                detectHorizontalDragGestures(
+                                    onDragEnd = {
+                                        if (totalDrag < -200f) showRightSidebar = true
+                                        else if (totalDrag > 200f) showLeftSidebar = true
+                                        totalDrag = 0f
+                                    }
+                                ) { _, dragAmount ->
+                                    totalDrag += dragAmount
+                                }
+                            },
+                        contentAlignment = Alignment.TopCenter
+                    ) {
                         LazyColumn(
                             modifier = Modifier.fillMaxWidth(msgWidth).fillMaxHeight(),
                             state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
@@ -247,7 +308,8 @@ fun MainScreen(
                             ) {
                                 when (message) {
                                     is ChatMessageUi.User -> UserBubble(message.content)
-                                    is ChatMessageUi.Agent -> AgentBubble(message.content, displayAgentName)
+                                    is ChatMessageUi.Agent -> AgentBubble(message.content, displayAgentName,
+                                        executionMode = message.executionMode, agentRef = message.agentRef)
                                     is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message, displayAgentName)
                                     is ChatMessageUi.Suggestion -> PluginSuggestionCard(message.suggestion,
                                         onInstall = { pluginViewModel.installPlugin(message.suggestion.pluginId) },
@@ -291,7 +353,37 @@ fun MainScreen(
                 }
             }
 
+            // ── Active tags row (above input) ──
+            if (activeTags.isNotEmpty()) {
+                Row(
+                    Modifier.fillMaxWidth()
+                        .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.xs),
+                    horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)
+                ) {
+                    activeTags.forEach { tag ->
+                        val chipLabel = when (tag) {
+                            is InputTag.Mode -> tag.mode.prefix
+                            is InputTag.AgentRef -> "@${tag.agentName}"
+                        }
+                        AssistChip(
+                            onClick = {},
+                            label = { Text(chipLabel, style = MaterialTheme.typography.labelSmall) },
+                            trailingIcon = {
+                                Icon(Icons.Filled.Close, strings.tagDismiss,
+                                    Modifier.size(14.dp).clickable { viewModel.removeTag(tag) })
+                            },
+                            shape = RoundedCornerShape(ArcoRadius.sm),
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = ThemeColors.brandContainer,
+                                labelColor = ThemeColors.brand
+                            )
+                        )
+                    }
+                }
+            }
+
             // ── Bottom input bar ──
+            Box {
             Surface(shadowElevation = 8.dp, color = ThemeColors.bgPrimary) {
                 Row(
                     Modifier.fillMaxWidth()
@@ -315,11 +407,34 @@ fun MainScreen(
                     fun doSend() {
                         if (inputText.isNotBlank()) {
                             val text = inputText; inputText = ""
-                            viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps)
+                            val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
+                            val agentTag = activeTags.filterIsInstance<InputTag.AgentRef>().firstOrNull()
+                            viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps,
+                                executionMode = modeTag?.mode, agentRef = agentTag?.agentName)
                             inputFocus.requestFocus()
                         }
                     }
-                    OutlinedTextField(value = inputText, onValueChange = { inputText = it },
+                    OutlinedTextField(value = inputText, onValueChange = { newVal ->
+                        inputText = newVal
+                        // @mention 检测 — 在空格/换行/行首后输入 @
+                        val atIdx = newVal.lastIndexOf('@')
+                        if (atIdx >= 0 && atIdx < newVal.length - 0) {
+                            val beforeAt = if (atIdx > 0) newVal[atIdx - 1] else ' '
+                            if (beforeAt == ' ' || beforeAt == '\n' || atIdx == 0) {
+                                val query = newVal.substring(atIdx + 1)
+                                if (!query.contains(' ') && !query.contains('\n')) {
+                                    mentionQuery = query
+                                    showMentionDropdown = true
+                                } else {
+                                    showMentionDropdown = false
+                                }
+                            } else {
+                                showMentionDropdown = false
+                            }
+                        } else {
+                            showMentionDropdown = false
+                        }
+                    },
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
                             .focusRequester(inputFocus)
                             .onPreviewKeyEvent { event ->
@@ -333,7 +448,17 @@ fun MainScreen(
                                 } else false
                             },
                         enabled = inputEnabled,
-                        placeholder = { Text(strings.inputPlaceholder) },
+                        placeholder = {
+                            val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
+                            val hint = when (modeTag?.mode) {
+                                ExecutionMode.MISSION -> strings.placeholderMission
+                                ExecutionMode.RESEARCH -> strings.placeholderResearch
+                                ExecutionMode.TRANSLATE -> strings.placeholderTranslate
+                                ExecutionMode.DREAM -> strings.placeholderDream
+                                else -> strings.inputPlaceholder
+                            }
+                            Text(hint)
+                        },
                         shape = RoundedCornerShape(ArcoRadius.lg),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ThemeColors.brand, unfocusedBorderColor = ThemeColors.border),
                         minLines = 1, maxLines = 4,
@@ -356,13 +481,16 @@ fun MainScreen(
                                 if (text.isNotBlank()) {
                                     inputText = ""
                                     inputFocus.requestFocus()
+                                    val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
+                                    val agentTag = activeTags.filterIsInstance<InputTag.AgentRef>().firstOrNull()
                                     scope.launch {
                                         // ↑ flies upward and out
                                         launch { arrowOffsetY.animateTo(-60f, tween(280)) }
                                         launch { arrowAlpha.animateTo(0f, tween(280)) }
                                         // snap below, then submit
                                         arrowOffsetY.snapTo(60f)
-                                        viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps)
+                                        viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps,
+                                            executionMode = modeTag?.mode, agentRef = agentTag?.agentName)
                                         // ↑ flies in from below
                                         launch { arrowOffsetY.animateTo(0f, tween(280)) }
                                         launch { arrowAlpha.animateTo(1f, tween(280)) }
@@ -381,9 +509,64 @@ fun MainScreen(
                         )
                     }
                 }
+            } // close Surface (input bar)
+
+            // ── @mention dropdown ──
+            val mentionAgents = remember(mentionQuery, viewModel.agentNamesForMention().size) {
+                viewModel.agentNamesForMention().filter { (name, _) ->
+                    mentionQuery.isBlank() || name.contains(mentionQuery, ignoreCase = true)
+                }
             }
-        }
-    }
+            if (showMentionDropdown) {
+                if (mentionAgents.isNotEmpty()) {
+                    DropdownMenu(
+                        expanded = true,
+                        onDismissRequest = { showMentionDropdown = false }
+                    ) {
+                        mentionAgents.take(6).forEach { (name, framework) ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("@$name", fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyMedium)
+                                        if (framework != null) {
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("· $framework",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = ThemeColors.textSecondary)
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    // 替换 @query 为 @agentName
+                                    val current = inputText
+                                    val atIdx = current.lastIndexOf('@')
+                                    if (atIdx >= 0) {
+                                        val beforeAt = current.substring(0, atIdx)
+                                        val afterQuery = current.substring(atIdx + 1 + mentionQuery.length)
+                                        inputText = "$beforeAt@$name $afterQuery"
+                                    }
+                                    showMentionDropdown = false
+                                    // 添加 mention 标签
+                                    viewModel.addTag(InputTag.AgentRef(name))
+                                    try { inputFocus.requestFocus() } catch (_: Exception) {}
+                                },
+                                leadingIcon = {
+                                    Surface(shape = CircleShape, color = ThemeColors.brandContainer,
+                                        modifier = Modifier.size(24.dp)) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(name.take(1), color = ThemeColors.brand,
+                                                fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        } // close mention anchor Box
+    } // close Column
 
     // ── Mission Monitor overlay ──
     // Auto-dismiss when mission ends externally
@@ -400,47 +583,91 @@ fun MainScreen(
         onDismiss = { showMissionOverlay = false }
     )
 
-    // ── Expand bottom sheet (upload tools + plugins) ──
+    // ── Expand bottom sheet (3-section layout) ──
     if (showExpandSheet) {
         ModalBottomSheet(onDismissRequest = { showExpandSheet = false }, sheetState = sheetState,
             containerColor = ThemeColors.bgPrimary) {
             Column(Modifier.padding(ArcoSpacing.lg).padding(bottom = 32.dp)) {
-                Text("扩展功能", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(ArcoSpacing.lg))
+                // ═══ Section 1: 文件提交 ═══
+                Text(strings.expandFileSection, fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(ArcoSpacing.md))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    ExpandItem(Icons.Outlined.Image, strings.filePickImage) {
+                        showExpandSheet = false
+                        pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
+                        imagePicker.launch("image/*")
+                    }
+                    ExpandItem(Icons.Outlined.Description, strings.filePickDocument) {
+                        showExpandSheet = false
+                        pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
+                        docPicker.launch(arrayOf(
+                            "application/pdf", "text/plain", "text/markdown",
+                            "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        ))
+                    }
+                    ExpandItem(Icons.Outlined.AttachFile, strings.filePickFile) {
+                        showExpandSheet = false
+                        pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
+                        filePicker.launch(arrayOf("*/*"))
+                    }
+                    ExpandItem(Icons.Outlined.PhotoCamera, strings.filePickCamera) {
+                        showExpandSheet = false
+                        pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
+                        cameraLauncher.launch(cameraUri)
+                    }
+                }
+                Spacer(Modifier.height(ArcoSpacing.xl))
 
+                // ═══ Section 2: 执行模式 ═══
+                Text(strings.expandModeSection, fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleSmall)
+                Text(strings.dragHint, style = MaterialTheme.typography.labelSmall,
+                    color = ThemeColors.textSecondary)
+                Spacer(Modifier.height(ArcoSpacing.sm))
+                val orderedModes = panelOrder.modes.mapNotNull { id ->
+                    ExecutionMode.entries.find { it.name.lowercase() == id }
+                }.ifEmpty { ExecutionMode.entries.toList() }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    orderedModes.take(4).forEach { mode ->
+                        val isActive = activeTags.any { it is InputTag.Mode && it.mode == mode }
+                        ModeItem(mode = mode, isActive = isActive, onClick = {
+                            showExpandSheet = false
+                            if (isActive) viewModel.removeTag(InputTag.Mode(mode))
+                            else {
+                                viewModel.addTag(InputTag.Mode(mode))
+                            }
+                        })
+                    }
+                }
+                Spacer(Modifier.height(ArcoSpacing.xl))
+
+                // ═══ Section 3: 插件工具 ═══
+                Text(strings.expandPluginSection, fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(ArcoSpacing.sm))
                 val sheetButtons = pluginViewModel.activeButtons[com.mengpaw.kernel.plugin.ButtonPlacement.BOTTOM_SHEET] ?: emptyList()
-                if (sheetButtons.isNotEmpty()) {
+                val orderedPlugins = panelOrder.plugins.mapNotNull { btnId ->
+                    sheetButtons.find { it.id == btnId }
+                } + sheetButtons.filter { btn -> btn.id !in panelOrder.plugins }
+                if (orderedPlugins.isNotEmpty()) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        sheetButtons.take(4).forEach { btn ->
+                        orderedPlugins.take(4).forEach { btn ->
                             ExpandItem(pluginIconForName(btn.iconName), btn.label) {
                                 showExpandSheet = false; inputText = btn.command
                             }
                         }
                     }
-                    Spacer(Modifier.height(24.dp))
-                }
-
-                Spacer(Modifier.height(24.dp))
-                Text("插件工具", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(ArcoSpacing.sm))
-
-                val installed = pluginViewModel.pluginItems.collectAsState().value.filter { it.isActive }
-                if (installed.isEmpty()) {
-                    Text("暂无已激活插件。在插件管理中安装并启用。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                 } else {
-                    installed.take(6).forEach { p ->
-                        Row(Modifier.fillMaxWidth().clickable { showExpandSheet = false; onNavigateToPlugins() }.padding(vertical = ArcoSpacing.sm)) {
-                            Icon(Icons.Outlined.Extension, null, Modifier.size(20.dp), tint = ThemeColors.brand)
-                            Spacer(Modifier.width(ArcoSpacing.sm))
-                            Text(p.name, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
+                    Text("暂无已激活插件。在插件管理中安装并启用。",
+                        style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                 }
                 Spacer(Modifier.height(ArcoSpacing.lg))
             }
         }
     }
-}
+} // close outermost Box
+} // close MainScreen composable
 
 @Composable
 private fun ExpandItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
@@ -453,6 +680,31 @@ private fun ExpandItem(icon: androidx.compose.ui.graphics.vector.ImageVector, la
         }
         Spacer(Modifier.height(4.dp))
         Text(label, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+    }
+}
+
+/** 执行模式按钮 — 带激活态高亮。 */
+@Composable
+private fun ModeItem(mode: ExecutionMode, isActive: Boolean, onClick: () -> Unit) {
+    val icon = when (mode) {
+        ExecutionMode.MISSION -> Icons.Outlined.AccountTree
+        ExecutionMode.RESEARCH -> Icons.Outlined.TravelExplore
+        ExecutionMode.TRANSLATE -> Icons.Outlined.Translate
+        ExecutionMode.DREAM -> Icons.Outlined.DarkMode
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Surface(onClick = onClick,
+            shape = RoundedCornerShape(ArcoRadius.lg),
+            color = if (isActive) ThemeColors.brand.copy(alpha = 0.15f) else ThemeColors.bgCardHigh,
+            modifier = Modifier.size(56.dp)) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, mode.label, Modifier.size(28.dp),
+                    tint = if (isActive) ThemeColors.brand else ThemeColors.textSecondary)
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(mode.prefix, style = MaterialTheme.typography.labelSmall,
+            color = if (isActive) ThemeColors.brand else ThemeColors.textSecondary)
     }
 }
 
@@ -504,7 +756,9 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
 }
 
 /** Left-aligned, max 90% width, tail at bottom-left. */
-@Composable private fun AgentBubble(content: String, agentName: String = "MengPaw") {
+@Composable private fun AgentBubble(content: String, agentName: String = "MengPaw",
+    executionMode: String? = null, agentRef: String? = null
+) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
         Surface(
             shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm),
@@ -512,7 +766,20 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
             modifier = Modifier.fillMaxWidth(0.9f)
         ) {
             Column(Modifier.padding(ArcoSpacing.lg)) {
-                Text(agentName, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(agentName, style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
+                    if (executionMode != null) {
+                        Text(" · $executionMode",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ThemeColors.brand)
+                    }
+                    if (agentRef != null) {
+                        Text(" · @$agentRef",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ArcoColors.Orange6)
+                    }
+                }
                 Spacer(Modifier.height(ArcoSpacing.xs))
                 SelectionContainer {
                     MarkdownText(
@@ -537,7 +804,26 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
             modifier = Modifier.fillMaxWidth(0.9f)
         ) {
             Column(Modifier.padding(ArcoSpacing.lg)) {
-                Text(agentName, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(agentName, style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
+                    if (message.executionMode != null) {
+                        Text(" · ${message.executionMode}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ThemeColors.brand)
+                        // Mission 模式显示步数
+                        if (message.executionMode == "/Mission") {
+                            Text(" · ${traces.size} 步",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ThemeColors.textSecondary)
+                        }
+                    }
+                    if (message.agentRef != null) {
+                        Text(" · @${message.agentRef}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ArcoColors.Orange6)
+                    }
+                }
                 Spacer(Modifier.height(ArcoSpacing.xs))
 
                 // Collapsible trace steps
@@ -782,6 +1068,47 @@ private fun SidebarOverlay(
             }
         }
     }
+}
+
+/** 将 content:// URI 拷贝到 Agent 工作区，返回文件路径通过回调插入输入框。 */
+private fun handleFilePicked(
+    uri: Uri,
+    context: android.content.Context,
+    viewModel: AgentViewModel,
+    uploadDir: String,
+    onPath: (String) -> Unit
+) {
+    try {
+        val dir = java.io.File(
+            if (uploadDir.isNotBlank()) uploadDir
+            else com.mengpaw.kernel.DataPaths.AGENTS + "/MengPaw/workspace"
+        )
+        dir.mkdirs()
+        val ext = context.contentResolver.getType(uri)?.let { mime ->
+            when {
+                mime.contains("png") -> ".png"
+                mime.contains("jpeg") || mime.contains("jpg") -> ".jpg"
+                mime.contains("pdf") -> ".pdf"
+                mime.contains("text/plain") -> ".txt"
+                mime.contains("text/html") -> ".html"
+                else -> ""
+            }
+        } ?: ""
+        val name = "upload_${System.currentTimeMillis()}$ext"
+        val target = java.io.File(dir, name)
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            target.outputStream().use { output -> input.copyTo(output, 4096) }
+        }
+        if (target.exists() && target.length() > 0) {
+            val MAX_SIZE = 50L * 1024 * 1024
+            if (target.length() > MAX_SIZE) {
+                target.delete()
+                onPath("⚠️ 文件超过 50MB 上限，已丢弃\n")
+            } else {
+                onPath("📎 ${target.absolutePath}\n")
+            }
+        }
+    } catch (_: Exception) { }
 }
 
 /**

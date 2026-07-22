@@ -55,34 +55,25 @@ data class MarketplaceIndex(
 /**
  * Smart geo-router for plugin downloads.
  *
- * Detects device location via IP and routes requests:
+ * Detects China vs. rest-of-world via system locale/timezone — instant, no network.
  *   China (CN) → Gitee primary, GitHub fallback
  *   Other       → GitHub primary, Gitee fallback
  */
 object GeoRouter {
-    /** Cached country code — null until first detection. */
-    @Volatile private var cachedCountry: String? = null
-
     /** Returns true if the device is likely in mainland China. */
-    suspend fun isChina(): Boolean {
-        cachedCountry?.let { return it == "CN" }
-        return try {
-            val client = HttpClient(OkHttp) { engine { config { connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS) } } }
-            val resp = client.get("https://ip-api.com/json?fields=countryCode")
-            val json = Json.parseToJsonElement(resp.bodyAsText()).jsonObject
-            val code = json["countryCode"]?.jsonPrimitive?.content ?: "XX"
-            client.close()
-            cachedCountry = code
-            code == "CN"
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "GeoRouter.isChina")
-            // If geo-detection fails, default to primary (GitHub) — safe for non-China users
-            false
-        }
-    }
+    fun isChina(): Boolean {
+        // 系统语言检测 — 简体中文
+        val lang = java.util.Locale.getDefault().language
+        val country = java.util.Locale.getDefault().country
+        if (lang == "zh" && (country.isBlank() || country == "CN")) return true
 
-    /** Force re-detect on next call (e.g., after network change). */
-    fun reset() { cachedCountry = null }
+        // 时区检测 — 中国标准时间
+        val tz = java.util.TimeZone.getDefault().id
+        if (tz == "Asia/Shanghai" || tz == "Asia/Chongqing" ||
+            tz == "Asia/Harbin" || tz == "Asia/Urumqi") return true
+
+        return false
+    }
 }
 
 /**
@@ -114,7 +105,7 @@ class PluginMarketplaceClient(
     }
 
     /** Resolve the best index URL based on geo-location. */
-    private suspend fun resolveIndexUrl(): String {
+    private fun resolveIndexUrl(): String {
         val useGitee = GeoRouter.isChina()
         return if (useGitee) GITEE_INDEX_URL else GITHUB_INDEX_URL
     }
@@ -273,7 +264,6 @@ class PluginMarketplaceClient(
         cachedIndex = null
         lastEtag = null
         lastFetchTime = 0L
-        GeoRouter.reset()
     }
 
     // ── Private helpers ───────────────────────────────────────────────

@@ -50,6 +50,30 @@ data class AppStrings(
     val agentLanguageChinese: String,
     val agentLanguageEnglish: String,
 
+    // Expand panel
+    val expandFileSection: String,
+    val expandModeSection: String,
+    val expandPluginSection: String,
+    val filePickImage: String,
+    val filePickDocument: String,
+    val filePickFile: String,
+    val filePickCamera: String,
+    val dragHint: String,
+
+    // Execution mode tags
+    val tagModeMission: String,
+    val tagModeResearch: String,
+    val tagModeTranslate: String,
+    val tagModeDream: String,
+    val tagDismiss: String,
+    val mentionHint: String,
+
+    // Mode-specific placeholders
+    val placeholderMission: String,
+    val placeholderResearch: String,
+    val placeholderTranslate: String,
+    val placeholderDream: String,
+
     // Settings - About
     val about: String,
     val version: String,
@@ -86,7 +110,7 @@ val EnglishStrings = AppStrings(
 
     appearance = "Appearance",
     darkTheme = "Dark Theme",
-    darkThemeDesc = "Switch between light and dark color scheme",
+    darkThemeDesc = "亮色 / 暗色 / 跟随系统",
     language = "Language",
     languageDesc = "Switch UI language",
     languageZh = "中文",
@@ -97,6 +121,27 @@ val EnglishStrings = AppStrings(
     agentLanguageFollowUi = "Follow UI",
     agentLanguageChinese = "中文",
     agentLanguageEnglish = "English",
+
+    expandFileSection = "File Upload",
+    expandModeSection = "Execution Mode",
+    expandPluginSection = "Plugin Tools",
+    filePickImage = "Image",
+    filePickDocument = "Document",
+    filePickFile = "File",
+    filePickCamera = "Camera",
+    dragHint = "Long-press to reorder",
+
+    tagModeMission = "/Mission",
+    tagModeResearch = "/Research",
+    tagModeTranslate = "/Translate",
+    tagModeDream = "/Dream",
+    tagDismiss = "Remove",
+    mentionHint = "@mention an agent...",
+
+    placeholderMission = "Describe a complex task for sub-agents to decompose...",
+    placeholderResearch = "Enter a topic for deep research with source verification...",
+    placeholderTranslate = "Enter text to translate...",
+    placeholderDream = "Describe a background task to run silently...",
 
     about = "About",
     version = "Version",
@@ -133,7 +178,7 @@ val ChineseStrings = AppStrings(
 
     appearance = "外观",
     darkTheme = "深色主题 (Dark Theme)",
-    darkThemeDesc = "切换浅色/深色配色方案",
+    darkThemeDesc = "亮色 / 暗色 / 跟随系统",
     language = "语言 (Language)",
     languageDesc = "切换界面语言",
     languageZh = "中文",
@@ -144,6 +189,27 @@ val ChineseStrings = AppStrings(
     agentLanguageFollowUi = "跟随界面",
     agentLanguageChinese = "中文",
     agentLanguageEnglish = "English",
+
+    expandFileSection = "文件提交",
+    expandModeSection = "执行模式",
+    expandPluginSection = "插件工具",
+    filePickImage = "图片",
+    filePickDocument = "文档",
+    filePickFile = "文件",
+    filePickCamera = "拍照",
+    dragHint = "长按拖拽排序",
+
+    tagModeMission = "/Mission",
+    tagModeResearch = "/Research",
+    tagModeTranslate = "/Translate",
+    tagModeDream = "/Dream",
+    tagDismiss = "移除",
+    mentionHint = "@智能体名称...",
+
+    placeholderMission = "输入一个需要子智能体进行拆解执行的复杂任务",
+    placeholderResearch = "输入需要深度调研的课题，将进行多轮搜索与交叉验证",
+    placeholderTranslate = "输入需要翻译的内容",
+    placeholderDream = "输入后台静默执行的任务，完成后推送结果",
 
     about = "关于",
     version = "版本",

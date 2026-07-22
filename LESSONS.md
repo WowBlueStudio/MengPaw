@@ -4,6 +4,91 @@
 
 ---
 
+## 2026-07-23 — v0.10.0 框架协议 + 侧边栏交互
+
+41. **mDNS 发现必须持续扫描，不能只扫一次**
+    - 场景：NsdManager.discoverServices() 是单次操作，扫描完就停
+    - 后果：首次发现后不再更新，2 分钟后 lastSeen 过期 → 所有框架显示离线
+    - 改进：GlobalScope 协程每 30s 循环 stopDiscovery()→startDiscovery()，保持 lastSeen 新鲜
+    - 原则：**任何"发现"功能必须有持续刷新机制，单次扫描只适合手动触发的场景**
+
+42. **NsdServiceInfo.setAttribute() 是 API 33+，低版本需静默回退**
+    - 场景：框架协议的版本/能力/Agent列表通过 mDNS TXT 记录广播
+    - 后果：API <33 设备调用 setAttribute 抛 NoSuchMethodError
+    - 改进：`if (Build.VERSION.SDK_INT >= 33)` 包裹所有 setAttribute 调用
+    - 原则：**使用 API 33+ 方法前必须 SDK_INT 判断，不能假设用户设备版本**
+
+43. **detectHorizontalDragGestures 的方向语义**
+    - 正值 = 手指从左往右滑（内容右移），应打开左侧栏
+    - 负值 = 手指从右往左滑（内容左移），应打开右侧栏
+    - 交互直觉："右滑打开左边，左滑打开右边"
+
+## 2026-07-22 — v0.9.1 品牌焕新 + 扩展功能重构
+
+### 品牌/主题
+
+32. **换主题色不是改一个 hex 就完事**
+    - 场景：`ArcoColors.Blue6 = #165DFF → #0E4397`，看似只改一行
+    - 后果：项目中有 5 处硬编码 `0xFF165DFF` + 2 处 CSS `#165DFF` + 多处文档注释，遗漏导致不一致
+    - 改进：`grep -r "165DFF" --include="*.kt" --include="*.md" --include="*.xml"` 全覆盖
+    - 原则：**改品牌色 = 改色板定义 + grep 全局替换所有硬编码 + 重新生成色板梯度 + 验证深色模式**
+    
+33. **色板梯度不能手动猜，需要算法生成**
+    - 场景：Blue1-Blue10 旧色板基于 #165DFF，改主色后手动估算了 5 个梯度
+    - 后果：Blue4 (`#5B8BD1`) 作为深色模式 primary，与主色 #0E4397 的对比关系变了
+    - 改进：保持 Arco Design 的 HSL 梯度算法（L 从 95→5 均匀分布，H/S 微调），用脚本生成而非手写
+    - 原则：**色板用工具/脚本生成，人工只确认视觉效果**
+
+34. **SVG 转 Android Vector Drawable 的坑**
+    - 场景：SVG `fill="#0e408d"` 设计稿存为近似色，与指定的 `#0E4397` 不一致
+    - 后果：品牌色偏差，设计师困惑
+    - 改进：转换前先检查 SVG 中的色值，与标注值不一致时用 sed 替换
+    - 注意：Android Vector Drawable 不支持某些 SVG 特性（filter, clip-path, mask），复杂渐变需拆分为多个 path
+
+### 扩展功能重构
+
+35. **Compose `ModalBottomSheet` 重写时注意闭包引用**
+    - 场景：面板内的模式按钮需要访问 `activeTags`（来自 ViewModel）和 `inputText`（Compose 状态）
+    - 后果：闭包捕获写法不当会导致状态过期或编译错误
+    - 改进：使用 `val text = inputText; inputText = ""` 模式在修改前快照，标签通过 ViewModel API 操作
+    - 原则：**Compose 状态修改在闭包中先快照再操作，避免 recomposition 过程中状态丢失**
+
+36. **`onValueChange` 中检测 `@` 的简化假设**
+    - 场景：用 `lastIndexOf('@')` 检测 @mention 触发
+    - 问题：假设光标始终在末尾，多个 `@` 时判断不准
+    - 接受：v1 简化实现，常用场景（末尾输入）覆盖良好
+    - 改进方向：v2 用 `TextFieldValue` 跟踪光标位置
+
+37. **DREAM 模式不能用主引擎执行**
+    - 场景：最初用 `session.engine.run()` 执行 DREAM 任务
+    - 后果：引擎 state flow 观察者触发 `isRunning=true`→UI 锁定输入 → 与 "不阻塞 UI" 的设计目标冲突
+    - 修复：改用独立协程 + `session.provider.complete()` 直接调用 LLM，不经过 AgentEngine
+    - 原则：**后台任务不能用共享引擎，要么独立引擎实例，要么直接 LLM 调用**
+
+38. **文件选择器：`content://` URI 不能直接传给 Agent**
+    - 场景：Android `ACTION_OPEN_DOCUMENT` 返回 `content://` URI
+    - 后果：Agent 的 `fs` 插件只认文件路径，不认识 content URI
+    - 修复：通过 `ContentResolver.openInputStream()` 拷贝到工作区，传绝对路径
+    - 注意：50MB 上限检查必须在路径插入前完成，否则路径残留
+
+### 状态管理
+
+40. **Android FileProvider：三步缺一不可**
+    - 场景：相机拍照需要 `FileProvider.getUriForFile()` 生成 content URI
+    - 崩溃：`IllegalArgumentException: Couldn't find meta-data for provider` — 缺少 Manifest `<provider>` 声明
+    - 根因：只写了 Kotlin 代码调用 `FileProvider.getUriForFile()`，没在 AndroidManifest.xml 注册 provider，也没创建 `res/xml/file_paths.xml`
+    - 必须三步：① `res/xml/file_paths.xml` 定义可访问目录 → ② AndroidManifest `<provider>` 注册 → ③ 代码中 `getUriForFile(context, authority, file)`
+    - **这不是第一次**：之前 `self.avatar`、`sys.camera` 等功能也因同样原因崩溃过。FileProvider 需要 Manifest 注册是 Android 基础，但 Compose 开发时容易忘记
+    - 原则：**任何用到 `FileProvider`/`ContentProvider` 的功能，第一件事就是检查 Manifest 是否有对应 `<provider>` 声明**
+
+39. **`try` 块中定义的变量在 `catch` 中不可见**
+    - 场景：`savedLoopMode` 和 `modePrefix` 在 `try { }` 内声明，`catch` 中引用
+    - 后果：编译错误 "Unresolved reference"
+    - 修复：移到 `try` 块之前声明
+    - 原则：**需要在 catch/finally 中使用的变量，声明在 try 前面**
+
+---
+
 ## 2026-07-22 — v0.9.0 安全架构建模 + MD 模板文件化
 
 ### 安全架构建模

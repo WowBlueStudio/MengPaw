@@ -94,7 +94,20 @@ class MainActivity : ComponentActivity() {
         KernelLog.setLogger(AndroidLogger())
         com.mengpaw.shell.ui.components.TokenStatsCollector.load()
         enableEdgeToEdge()
-        com.mengpaw.plugin.pad.PadPlugin.init(this)
+
+        // ── 框架发现插件：初始化 mDNS 服务 ──
+        com.mengpaw.plugin.framework.FrameworkDiscovery.instance =
+            com.mengpaw.plugin.framework.FrameworkDiscovery(this).apply {
+                frameworkName = "MengPaw"
+                frameworkVersion = "0.9.1"
+                // Agent 列表从文件系统读取
+                val agentsDir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS)
+                agentNames = agentsDir.listFiles()
+                    ?.filter { it.isDirectory && !it.name.startsWith(".") }
+                    ?.map { it.name } ?: listOf("MengPaw")
+            }
+        com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.register()
+        com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.startContinuousDiscovery()
 
         // ── Trigger engine init: load persisted triggers, set context, start loop ──
         com.mengpaw.kernel.trigger.TriggerEngine.setContext(this)
@@ -112,22 +125,35 @@ class MainActivity : ComponentActivity() {
         PluginViewModel.registerPluginClass("fs-plugin", "com.mengpaw.plugin.fs.FsPlugin")
         PluginViewModel.registerPluginClass("net-plugin", "com.mengpaw.plugin.net.NetPlugin")
         PluginViewModel.registerPluginClass("memory-plugin", "com.mengpaw.plugin.memory.MemoryPlugin")
+        PluginViewModel.registerPluginClass("framework-plugin", "com.mengpaw.plugin.framework.FrameworkPlugin")
         PluginViewModel.registerPluginClass("skill-plugin", "com.mengpaw.plugin.skill.SkillPlugin")
         PluginViewModel.registerPluginClass("self-plugin", "com.mengpaw.plugin.self.SelfPlugin")
         PluginViewModel.registerPluginClass("ui-plugin", "com.mengpaw.plugin.ui.UiPlugin")
         PluginViewModel.registerPluginClass("proc-plugin", "com.mengpaw.plugin.proc.ProcPlugin")
         PluginViewModel.registerPluginClass("clipboard-plugin", "com.mengpaw.plugin.clipboard.ClipboardPlugin")
         PluginViewModel.registerPluginClass("notification-plugin", "com.mengpaw.plugin.notification.NotificationPlugin")
-        PluginViewModel.registerPluginClass("pad-plugin", "com.mengpaw.plugin.pad.PadPlugin")
         PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
 
         // Handle URL sent from Browser APK (singleTask — onNewIntent)
         handleOpenUrl(intent)
 
+        // 启动阶段：深蓝背景 → 白色状态栏图标
+        val window = window
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            .isAppearanceLightStatusBars = false
+
         setContent {
             val settingsState by settingsViewModel.state.collectAsState()
             val strings: AppStrings = if (settingsState.useChinese) ChineseStrings else EnglishStrings
-            ArcoTheme(darkTheme = settingsState.darkTheme) {
+            val isDark = when (settingsState.themeMode) {
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM -> (resources.configuration.uiMode
+                    and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                    android.content.res.Configuration.UI_MODE_NIGHT_YES
+            }
+            ArcoTheme(darkTheme = isDark) {
                 Surface(modifier = Modifier.fillMaxSize()) { MengPawApp(strings, settingsViewModel) }
             }
         }
@@ -169,6 +195,23 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     if (showSplash) {
         WowBlueSplash(onFinished = { showSplash = false })
         return
+    }
+
+    // splash 结束后：根据亮/暗主题切换状态栏图标颜色
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val resolvedDark = when (settingsState.themeMode) {
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+        ThemeMode.SYSTEM -> (ctx.resources.configuration.uiMode
+            and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+    }
+    val view = androidx.compose.ui.platform.LocalView.current
+    DisposableEffect(resolvedDark) {
+        val w = (view.context as android.app.Activity).window
+        androidx.core.view.WindowCompat.getInsetsController(w, view)
+            .isAppearanceLightStatusBars = !resolvedDark
+        onDispose { }
     }
 
     val agentViewModel: AgentViewModel = viewModel()

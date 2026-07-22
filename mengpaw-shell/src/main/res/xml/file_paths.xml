@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 截图存档目录 — 相机拍照临时文件 -->
+    <files-path name="screenshots" path="截图存档/" />
+    <!-- Agent 工作区 — 文件上传目标 -->
+    <files-path name="agents" path="Agent文档/" />
+</paths>

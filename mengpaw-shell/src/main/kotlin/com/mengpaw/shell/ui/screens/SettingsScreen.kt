@@ -61,7 +61,7 @@ data class FrameworkItem(
  *
  * Sections:
  *  01. Agent 设置      — LLM provider, API key, max steps, agent language
- *  02. 框架设置         — plugins, memory, triggers, PAD
+ *  02. 框架设置         — plugins, memory, triggers
  *  03. 系统设置         — appearance, language, permissions, about
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -828,23 +828,6 @@ private fun FrameworkSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // PAD floating window
-    SectionHeader("界面增强")
-    val context = androidx.compose.ui.platform.LocalContext.current
-    var dotEnabled by remember { mutableStateOf(com.mengpaw.plugin.pad.PadPlugin.isVisible()) }
-    Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Outlined.AdsClick, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(ArcoSpacing.md))
-        Column(Modifier.weight(1f)) {
-            Text("PAD 悬浮窗", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text("呼吸灯小圆点显示 Agent 工作状态", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-        }
-        Switch(checked = dotEnabled, onCheckedChange = { checked ->
-            dotEnabled = checked
-            if (checked) com.mengpaw.plugin.pad.PadPlugin.show() else com.mengpaw.plugin.pad.PadPlugin.hide()
-        })
-    }
-
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
@@ -884,8 +867,26 @@ private fun SystemSettingsContent(
 ) {
     // Appearance
     SectionHeader(state.strings.appearance)
-    SettingsSwitch(Icons.Outlined.DarkMode, state.strings.darkTheme, state.strings.darkThemeDesc,
-        checked = state.darkTheme, onCheckedChange = { viewModel.toggleDarkTheme() })
+    // 主题：亮色 / 暗色 / 跟随系统 — 三段循环切换
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable { viewModel.cycleThemeMode() },
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCardHigh
+    ) {
+        Row(
+            Modifier.padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Outlined.DarkMode, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(ArcoSpacing.md))
+            Column(Modifier.weight(1f)) {
+                Text(state.strings.darkTheme, style = MaterialTheme.typography.bodyMedium)
+                Text(state.strings.darkThemeDesc, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+            }
+            Text(state.themeMode.label, style = MaterialTheme.typography.labelMedium,
+                color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
+        }
+    }
     Spacer(Modifier.height(ArcoSpacing.lg))
 
     // UI Language

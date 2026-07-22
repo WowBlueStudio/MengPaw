@@ -24,10 +24,10 @@ private val LightColorScheme = lightColorScheme(
     secondaryContainer = ArcoColors.Gray2,
     onSecondaryContainer = ArcoColors.Gray9,
 
-    tertiary = ArcoColors.Green6,
+    tertiary = ArcoColors.Pink5,
     onTertiary = ArcoColors.TextInverse,
-    tertiaryContainer = ArcoColors.Green1,
-    onTertiaryContainer = ArcoColors.Green9,
+    tertiaryContainer = ArcoColors.Pink1,
+    onTertiaryContainer = ArcoColors.Pink9,
 
     error = ArcoColors.Red6,
     onError = ArcoColors.TextInverse,
@@ -65,10 +65,10 @@ private val DarkColorScheme = darkColorScheme(
     secondaryContainer = ArcoColors.Gray8,
     onSecondaryContainer = ArcoColors.Gray2,
 
-    tertiary = ArcoColors.Green4,
+    tertiary = ArcoColors.Pink4,
     onTertiary = ArcoColors.Gray10,
-    tertiaryContainer = ArcoColors.Green8,
-    onTertiaryContainer = ArcoColors.Green2,
+    tertiaryContainer = ArcoColors.Pink8,
+    onTertiaryContainer = ArcoColors.Pink2,
 
     error = ArcoColors.Red4,
     onError = ArcoColors.Gray10,
@@ -143,7 +143,7 @@ private data class CustomTheme(
     val container: Color,
 )
 
-/** Read hex from markdown table. Format: `| primary | \`#165DFF\` | ...` */
+/** Read hex from markdown table. Format: `| primary | \`#0E4397\` | ...` */
 private fun readThemeHex(content: String, key: String, default: Color): Color {
     val m = Regex("""$key.*?#([0-9A-Fa-f]{6})""").find(content)
     return m?.groupValues?.get(1)?.toLongOrNull(16)?.let { Color(0xFF000000 or it) } ?: default

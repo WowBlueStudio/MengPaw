@@ -1,1 +1,0 @@
-{"id":"pad-plugin","name":"PAD 悬浮窗","version":"1.0.0","type":"native","author":"MengPaw","description":"PAD 模式悬浮窗 — 羽化边缘呼吸灯小圆点，直观显示 Agent 工作状态","minCoreVersion":"0.2.0","permissions":["SYSTEM_ALERT_WINDOW","FOREGROUND_SERVICE"],"commands":["pad.show","pad.hide"]}

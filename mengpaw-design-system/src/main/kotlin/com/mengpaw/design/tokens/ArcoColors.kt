@@ -19,17 +19,29 @@ import androidx.compose.ui.graphics.Color
  *   primary/primaryContainer, onSurface/onSurfaceVariant, outline
  */
 object ArcoColors {
-    // Primary - Brand blue
-    val Blue1 = Color(0xFFE8F3FF)
-    val Blue2 = Color(0xFFBEDAFF)
-    val Blue3 = Color(0xFF94BFFF)
-    val Blue4 = Color(0xFF6AA1FF)
-    val Blue5 = Color(0xFF4080FF)
-    val Blue6 = Color(0xFF165DFF)  // Primary
-    val Blue7 = Color(0xFF0E42D2)
-    val Blue8 = Color(0xFF072CA6)
-    val Blue9 = Color(0xFF031A79)
-    val Blue10 = Color(0xFF000D4D)
+    // Primary - Brand blue (#0E4397)
+    val Blue1 = Color(0xFFE7EEF8)
+    val Blue2 = Color(0xFFB8CDEB)
+    val Blue3 = Color(0xFF89ACDE)
+    val Blue4 = Color(0xFF5B8BD1)
+    val Blue5 = Color(0xFF2C6AC4)
+    val Blue6 = Color(0xFF0E4397)  // Primary
+    val Blue7 = Color(0xFF0B3679)
+    val Blue8 = Color(0xFF08295B)
+    val Blue9 = Color(0xFF051C3D)
+    val Blue10 = Color(0xFF020F1F)
+
+    // Accent - Pink (#FC5185)
+    val Pink1 = Color(0xFFFFEBF1)
+    val Pink2 = Color(0xFFFFC4D6)
+    val Pink3 = Color(0xFFFF9DBB)
+    val Pink4 = Color(0xFFFD77A0)
+    val Pink5 = Color(0xFFFC5185)
+    val Pink6 = Color(0xFFFC5185)  // Accent
+    val Pink7 = Color(0xFFCA416B)
+    val Pink8 = Color(0xFF983152)
+    val Pink9 = Color(0xFF662038)
+    val Pink10 = Color(0xFF33101E)
 
     // Success - Green
     val Green1 = Color(0xFFE8FFEA)
