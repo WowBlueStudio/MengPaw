@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -69,6 +70,7 @@ fun MainScreen(
     val isRunning by viewModel.isRunning.collectAsState()
     val inputEnabled by viewModel.inputEnabled.collectAsState()
     var inputText by remember { mutableStateOf("") }
+    val inputFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val listState = rememberLazyListState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showExpandSheet by remember { mutableStateOf(false) }
@@ -271,9 +273,18 @@ fun MainScreen(
                     // Input field — Enter sends, Ctrl+Enter inserts newline
                     val keyMaxSteps = settingsState?.value?.maxSteps ?: 50
                     OutlinedTextField(value = inputText, onValueChange = { inputText = it },
-                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp).onPreviewKeyEvent { event ->
-                            if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER && event.nativeKeyEvent.isCtrlPressed) {
-                                inputText += "\n"; true
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
+                            .focusRequester(inputFocus)
+                            .onPreviewKeyEvent { event ->
+                            if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER) {
+                                if (event.nativeKeyEvent.isCtrlPressed || event.nativeKeyEvent.isShiftPressed) {
+                                    inputText += "\n"
+                                } else if (inputText.isNotBlank()) {
+                                    val text = inputText; inputText = ""
+                                    viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps)
+                                    inputFocus.requestFocus()
+                                }
+                                true
                             } else false
                         },
                         enabled = inputEnabled,
@@ -304,6 +315,7 @@ fun MainScreen(
                             .clickable(enabled = inputEnabled) {
                                 if (inputText.isNotBlank()) {
                                     val text = inputText; inputText = ""
+                                    inputFocus.requestFocus()
                                     scope.launch {
                                         // ↑ flies upward and out
                                         launch { arrowOffsetY.animateTo(-60f, tween(280)) }

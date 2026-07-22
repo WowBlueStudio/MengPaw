@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- Android 14+: dataSync 前台服务类型需要显式声明此权限 (否则 SecurityException) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Android 14+: specialUse 前台服务类型需要显式声明此权限 (targetSDK=35 强制要求) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Android 13+: 通知运行时权限 (否则 startForeground 静默失败) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Android 13+: 忽略电池优化 (OEM 白名单前提) -->

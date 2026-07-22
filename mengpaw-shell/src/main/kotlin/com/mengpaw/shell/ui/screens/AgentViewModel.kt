@@ -96,7 +96,21 @@ class AgentViewModel : ViewModel() {
                 when (msg) {
                     is ChatMessageUi.User -> { obj.put("type", "user"); obj.put("text", msg.content) }
                     is ChatMessageUi.Agent -> { obj.put("type", "agent"); obj.put("text", msg.content) }
-                    is ChatMessageUi.AgentWithTrace -> { obj.put("type", "agent"); obj.put("text", msg.finalContent) }
+                    is ChatMessageUi.AgentWithTrace -> {
+                        obj.put("type", "agent_trace")
+                        obj.put("text", msg.finalContent)
+                        // Save thought chain
+                        val traceArr = org.json.JSONArray()
+                        msg.traces.forEach { t ->
+                            val tObj = org.json.JSONObject()
+                            tObj.put("step", t.step)
+                            tObj.put("thought", t.thought)
+                            tObj.put("action", t.action ?: "")
+                            tObj.put("observation", t.observation ?: "")
+                            traceArr.put(tObj)
+                        }
+                        obj.put("traces", traceArr)
+                    }
                     else -> return@forEach
                 }
                 arr.put(obj)
@@ -124,6 +138,22 @@ class AgentViewModel : ViewModel() {
                 when (type) {
                     "user" -> msgs.add(ChatMessageUi.User(txt))
                     "agent" -> msgs.add(ChatMessageUi.Agent(txt))
+                    "agent_trace" -> {
+                        val traces = mutableListOf<AgentTrace>()
+                        val traceArr = obj.optJSONArray("traces")
+                        if (traceArr != null) {
+                            for (j in 0 until traceArr.length()) {
+                                val t = traceArr.getJSONObject(j)
+                                traces.add(AgentTrace(
+                                    t.optInt("step", 0),
+                                    t.optString("thought", ""),
+                                    t.optString("action", "").ifEmpty { null },
+                                    t.optString("observation", "").ifEmpty { null }
+                                ))
+                            }
+                        }
+                        msgs.add(ChatMessageUi.AgentWithTrace(txt, traces, isRunning = false))
+                    }
                 }
             }
             if (msgs.isNotEmpty()) {
@@ -440,6 +470,21 @@ class AgentViewModel : ViewModel() {
                 val translatedTask = if (doTranslate) translator.toEnglish(task) else task
                 val actualTask = if (doTranslate && translatedTask != task) translatedTask else task
 
+                // Build conversation history context (exclude system messages + current task)
+                val historyMsgs = session.messages.value.filter {
+                    it !is ChatMessageUi.System && it !is ChatMessageUi.AgentWithTrace
+                }
+                val contextPrefix = if (historyMsgs.size > 1) {
+                    // Inject previous conversation so Agent sees context
+                    "## 先前对话\n" + historyMsgs.dropLast(1).joinToString("\n") { msg ->
+                        when (msg) {
+                            is ChatMessageUi.User -> "用户: ${msg.content.take(500)}"
+                            is ChatMessageUi.Agent -> "助手: ${msg.content.take(500)}"
+                            else -> ""
+                        }
+                    }.take(3000) + "\n\n---\n\n新任务: $actualTask"
+                } else actualTask
+
                 val traces = mutableListOf<AgentTrace>()
 
                 session.messages.value = session.messages.value + ChatMessageUi.AgentWithTrace(
@@ -469,9 +514,9 @@ class AgentViewModel : ViewModel() {
 
                 // Execute via the appropriate engine mode
                 val result = when (loopMode) {
-                    LoopMode.GOAL -> session.engine.run(task = actualTask, maxSteps = maxSteps, onStep = onStep)
-                    LoopMode.MISSION -> session.engine.runWithMission(task = actualTask, onStep = onStep)
-                    LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = actualTask, onStep = onStep)
+                    LoopMode.GOAL -> session.engine.run(task = contextPrefix, maxSteps = maxSteps, onStep = onStep)
+                    LoopMode.MISSION -> session.engine.runWithMission(task = contextPrefix, onStep = onStep)
+                    LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = contextPrefix, onStep = onStep)
                 }
 
                 val current = session.messages.value.toMutableList()
