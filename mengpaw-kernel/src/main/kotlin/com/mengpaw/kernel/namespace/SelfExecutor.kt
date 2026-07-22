@@ -73,7 +73,7 @@ object SelfExecutor {
     }
 
     private suspend fun version(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        return ExecutionResult.ok("檬爪 v0.6.0 (kernel: ${com.mengpaw.kernel.AgentEngine.CORE_VERSION})")
+        return ExecutionResult.ok("檬爪 v${com.mengpaw.kernel.AgentEngine.CORE_VERSION}")
     }
 
     // ── ACP subcommands ────────────────────────────────────────────

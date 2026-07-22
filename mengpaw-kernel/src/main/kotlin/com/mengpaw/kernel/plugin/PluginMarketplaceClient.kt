@@ -34,12 +34,12 @@ data class MarketplaceEntry(
     val permissions: List<String> = emptyList(),
     val commands: List<String> = emptyList(),
     /** "builtin" = compiled into APK, no download needed. "remote" = downloadable from marketplace. */
-    val status: String = "builtin"
+    val status: String = "remote"
 ) {
-    /** Whether this plugin can be downloaded from the marketplace. */
-    val isDownloadable: Boolean get() = status == "remote" && downloadUrl.isNotBlank()
-    /** Whether this plugin is already built into the app. */
-    val isBuiltin: Boolean get() = status == "builtin"
+    /** Whether this plugin can be downloaded from the marketplace. Download URL is the ground truth. */
+    val isDownloadable: Boolean get() = status != "deprecated" && downloadUrl.isNotBlank()
+    /** Whether this plugin is already built into the app. Only true if no download URL exists. */
+    val isBuiltin: Boolean get() = status != "deprecated" && downloadUrl.isBlank()
 }
 
 /**
@@ -278,7 +278,7 @@ class PluginMarketplaceClient(
 
     // ── Private helpers ───────────────────────────────────────────────
 
-    private fun parseIndex(json: String): MarketplaceIndex {
+    fun parseIndex(json: String): MarketplaceIndex {
         return try {
             val root = Json.parseToJsonElement(json).jsonObject
             MarketplaceIndex(
@@ -305,7 +305,7 @@ class PluginMarketplaceClient(
         dependencies = obj["dependencies"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
         permissions = obj["permissions"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
         commands = obj["commands"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
-        status = obj["status"]?.jsonPrimitive?.content ?: "builtin"
+        status = obj["status"]?.jsonPrimitive?.content ?: "remote"
     )
 
     private fun sha256(bytes: ByteArray): String {

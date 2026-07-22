@@ -95,17 +95,74 @@ private val DarkColorScheme = darkColorScheme(
 /**
  * Arco Design theme for MengPaw.
  * Apply at the root of the composable tree.
+ *
+ * Reads agent-customized colors from Agents/theme.md (set via self.theme CLI).
+ * Falls back to hardcoded ArcoColors defaults if no custom theme is found.
  */
 @Composable
 fun ArcoTheme(
     darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    // Load agent-customized theme colors from disk.
+    // File read is trivial (~200 bytes); re-evaluates on any recomposition.
+    val customTheme = try {
+        val themeFile = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "theme.md")
+        if (themeFile.exists()) parseThemeFile(themeFile.readText()) else null
+    } catch (_: Exception) { null }
+
+    val baseScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val colorScheme = if (customTheme != null) {
+        baseScheme.copy(
+            primary = customTheme.primary,
+            onPrimary = customTheme.onPrimary,
+            primaryContainer = customTheme.primaryContainer,
+            onPrimaryContainer = customTheme.onPrimaryContainer,
+            surface = customTheme.surface,
+            background = customTheme.surface,
+            surfaceVariant = customTheme.surfaceVariant,
+            surfaceContainer = customTheme.container,
+            surfaceContainerHigh = customTheme.container,
+        )
+    } else baseScheme
 
     MaterialTheme(
         colorScheme = colorScheme,
         content = content
+    )
+}
+
+/** Parsed custom theme from theme.md. Null fields → use defaults. */
+private data class CustomTheme(
+    val primary: Color,
+    val onPrimary: Color,
+    val primaryContainer: Color,
+    val onPrimaryContainer: Color,
+    val surface: Color,
+    val surfaceVariant: Color,
+    val container: Color,
+)
+
+/** Read hex from markdown table. Format: `| primary | \`#165DFF\` | ...` */
+private fun readThemeHex(content: String, key: String, default: Color): Color {
+    val m = Regex("""$key.*?#([0-9A-Fa-f]{6})""").find(content)
+    return m?.groupValues?.get(1)?.toLongOrNull(16)?.let { Color(0xFF000000 or it) } ?: default
+}
+
+private fun parseThemeFile(content: String): CustomTheme? {
+    val p = readThemeHex(content, "primary", LightColorScheme.primary)
+    val s = readThemeHex(content, "surface", LightColorScheme.surface)
+    val c = readThemeHex(content, "containerLight", LightColorScheme.surfaceContainer)
+    // If primary == default and surface == default → no custom theme set
+    if (p == LightColorScheme.primary && s == LightColorScheme.surface) return null
+    return CustomTheme(
+        primary = p,
+        onPrimary = Color.White,
+        primaryContainer = p.copy(alpha = 0.12f),
+        onPrimaryContainer = p,
+        surface = s,
+        surfaceVariant = s.copy(red = s.red * 0.94f, green = s.green * 0.94f, blue = s.blue * 0.94f),
+        container = c,
     )
 }
 

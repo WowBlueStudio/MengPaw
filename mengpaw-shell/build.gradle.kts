@@ -7,6 +7,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val mengpawVersion: String = project.findProperty("mengpaw.version") as? String ?: "0.0.0"
+
 android {
     namespace = "com.mengpaw.shell"
     compileSdk = 35
@@ -15,8 +17,8 @@ android {
         applicationId = "com.mengpaw.shell"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "0.8.0"
+        versionCode = (mengpawVersion.replace(".", "").take(3) + "0").toInt()
+        versionName = mengpawVersion
     }
 
     compileOptions {

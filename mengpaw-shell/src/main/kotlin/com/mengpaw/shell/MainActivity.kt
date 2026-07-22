@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
 import com.mengpaw.core.AndroidLogger
 import com.mengpaw.core.DataPathsInitializer
 import com.mengpaw.design.theme.ArcoTheme
@@ -88,6 +89,7 @@ class MainActivity : ComponentActivity() {
         DataPathsInitializer.initialize(this)
         com.mengpaw.core.namespace.SysExecutor.init(this)
         KernelLog.setLogger(AndroidLogger())
+        com.mengpaw.shell.ui.components.TokenStatsCollector.load()
         enableEdgeToEdge()
         com.mengpaw.plugin.pad.PadPlugin.init(this)
 
@@ -139,7 +141,15 @@ class MainActivity : ComponentActivity() {
             val url = intent.getStringExtra("url")
             if (url != null) {
                 // Store URL so Agent can access it via browser.open or as context
-                intent.putExtra("url", url)
+                try {
+                    val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
+                    inbox.mkdirs()
+                    val tmp = java.io.File(inbox, "browser_url_${System.currentTimeMillis()}.txt.tmp")
+                    tmp.writeText(url)
+                    val dest = java.io.File(inbox, "browser_url_${System.currentTimeMillis()}.txt")
+                    tmp.renameTo(dest)
+                    if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+                } catch (_: Exception) { /* silently ignore — non-critical feature */ }
             }
         }
     }
@@ -227,12 +237,11 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                     hideCompacted = hideCompacted,
                     onToggleHideCompacted = { agentViewModel.toggleHideCompacted() },
                     onSelectSession = { record ->
-                        agentViewModel.switchAgent(record.agentName)
+                        agentViewModel.switchToSession(record)
                         close()
                     },
                     onDeleteSession = { agentViewModel.deleteSession(it) },
                     onCompactSession = { agentViewModel.compactSession(it) },
-                    onRepairSession = { agentViewModel.repairSession(it) },
                     onNewSessionFor = { agentName, framework ->
                         agentViewModel.newSessionFor(agentName, framework)
                         close()
@@ -240,6 +249,123 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                 )
             }
         )
+    }
+
+    // ── Pre-computed settings data (outside if-block so it survives close/reopen) ──
+    val agentFramework = remember(activeAgent) { agentViewModel.frameworkFor(activeAgent) }
+    val (agentEp, agentModel) = remember(activeAgent) { agentViewModel.agentConfig(activeAgent) }
+    var workspaceVersion by remember { mutableIntStateOf(0) }
+
+    // Plugins: computed once, stored in mutable state for reactive updates
+    var pluginItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
+    LaunchedEffect(Dispatchers.IO) {
+        val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+        val installed = pm.listAll().map { (plugin, status) ->
+            FrameworkItem(name = plugin.metadata.name,
+                category = if (plugin.metadata.id in BUILTIN_PLUGIN_IDS) ItemCategory.BUILTIN else ItemCategory.OFFICIAL,
+                summary = plugin.metadata.description,
+                docMarkdown = "## ${plugin.metadata.name}\n\n${plugin.metadata.description}\n\nID: ${plugin.metadata.id}\n版本: ${plugin.metadata.version}\n状态: ${status.name}\n命令数: ${plugin.commands.size}")
+        }
+        val builtins = listOf(
+            FrameworkItem("self (内置)", ItemCategory.BUILTIN, "Agent 自省 — 状态/配置/统计/版本/头像/主题/通知/时间", ""),
+            FrameworkItem("agent (内置)", ItemCategory.BUILTIN, "文档管理 — 记忆/CLI/档案/审计/梦境/存储", ""),
+            FrameworkItem("plugin (内置)", ItemCategory.BUILTIN, "插件管理 — 市场/搜索/安装/卸载/启停/升级", ""),
+            FrameworkItem("sys (内置)", ItemCategory.BUILTIN, "系统信息 — 电量/网络/CPU/存储/定位/剪贴板", ""),
+        )
+        pluginItems = if (installed.isEmpty()) builtins else installed + builtins
+    }
+
+    // ── MengPaw CLI: static built-in command reference
+    val toolItems = remember(activeAgent) {
+        val engine = agentViewModel.activeEngine()
+        val selfTools = listOf(
+            FrameworkItem("self.status", ItemCategory.BUILTIN, "Agent 运行状态查询", ""),
+            FrameworkItem("self.config [key=value]", ItemCategory.BUILTIN, "查看或修改 Agent 配置", ""),
+            FrameworkItem("self.stats", ItemCategory.BUILTIN, "内存/CPU/线程统计信息", ""),
+            FrameworkItem("self.version", ItemCategory.BUILTIN, "MengPaw 版本号", ""),
+            FrameworkItem("self.time [format]", ItemCategory.BUILTIN, "当前时间", ""),
+            FrameworkItem("self.tools [namespace]", ItemCategory.BUILTIN, "列出所有可用命令", ""),
+            FrameworkItem("self.notify.message <text>", ItemCategory.BUILTIN, "Agent 推送消息到聊天", ""),
+            FrameworkItem("self.notify.banner <text> [--level]", ItemCategory.BUILTIN, "Agent 推送通知横幅", ""),
+            FrameworkItem("self.avatar <path>", ItemCategory.BUILTIN, "设置 Agent 头像", ""),
+            FrameworkItem("self.theme primary=#xxx surface=#xxx", ItemCategory.BUILTIN, "修改主题色", ""),
+            FrameworkItem("self.trigger add|list|remove|topics", ItemCategory.BUILTIN, "CRON/LIFETIME 触发器", ""),
+        )
+        val agentTools = listOf(
+            FrameworkItem("agent.cli", ItemCategory.BUILTIN, "查阅完整 CLI.md 命令参考", ""),
+            FrameworkItem("agent.docs", ItemCategory.BUILTIN, "列出所有 Agent 文档", ""),
+            FrameworkItem("agent.memory [query]", ItemCategory.BUILTIN, "记忆索引/搜索", ""),
+            FrameworkItem("agent.memory.record <content>", ItemCategory.BUILTIN, "手动记录一条记忆", ""),
+            FrameworkItem("agent.profile", ItemCategory.BUILTIN, "查看 Agent 身份档案", ""),
+            FrameworkItem("agent.soul", ItemCategory.BUILTIN, "查看 Agent 灵魂设定", ""),
+            FrameworkItem("agent.audit [N]", ItemCategory.BUILTIN, "查看最近 N 条命令审计日志", ""),
+            FrameworkItem("agent.browser-tools", ItemCategory.BUILTIN, "MP浏览器插件开发能力参考", ""),
+            FrameworkItem("agent.dream", ItemCategory.BUILTIN, "触发梦境整理", ""),
+            FrameworkItem("agent.cleanup", ItemCategory.BUILTIN, "清理过期文件和归档记忆", ""),
+            FrameworkItem("agent.storage", ItemCategory.BUILTIN, "工作区存储空间报告", ""),
+        )
+        val pluginTools = listOf(
+            FrameworkItem("plugin.marketplace [--refresh]", ItemCategory.BUILTIN, "浏览插件市场", ""),
+            FrameworkItem("plugin.search <query>", ItemCategory.BUILTIN, "搜索可用插件", ""),
+            FrameworkItem("plugin.install <id>", ItemCategory.BUILTIN, "下载+验证+安装+激活插件", ""),
+            FrameworkItem("plugin.uninstall <id>", ItemCategory.BUILTIN, "卸载插件", ""),
+            FrameworkItem("plugin.list", ItemCategory.BUILTIN, "列出已安装插件", ""),
+            FrameworkItem("plugin.info <id>", ItemCategory.BUILTIN, "查看插件详情", ""),
+            FrameworkItem("plugin.enable <id>", ItemCategory.BUILTIN, "启用插件", ""),
+            FrameworkItem("plugin.disable <id>", ItemCategory.BUILTIN, "停用插件", ""),
+            FrameworkItem("plugin.update <id>", ItemCategory.BUILTIN, "检查插件更新", ""),
+            FrameworkItem("plugin.upgrade --all", ItemCategory.BUILTIN, "升级全部插件", ""),
+        )
+        val sysTools = listOf(
+            FrameworkItem("sys.battery", ItemCategory.BUILTIN, "电量/充电状态/温度", ""),
+            FrameworkItem("sys.network", ItemCategory.BUILTIN, "网络类型/信号强度", ""),
+            FrameworkItem("sys.cpu", ItemCategory.BUILTIN, "CPU 使用率/核心数", ""),
+            FrameworkItem("sys.memory", ItemCategory.BUILTIN, "内存使用量", ""),
+            FrameworkItem("sys.storage", ItemCategory.BUILTIN, "存储空间使用情况", ""),
+            FrameworkItem("sys.display", ItemCategory.BUILTIN, "屏幕参数", ""),
+            FrameworkItem("sys.sensors", ItemCategory.BUILTIN, "传感器列表", ""),
+            FrameworkItem("sys.clipboard", ItemCategory.BUILTIN, "剪贴板内容", ""),
+            FrameworkItem("sys.location", ItemCategory.BUILTIN, "GPS 定位", ""),
+            FrameworkItem("sys.camera", ItemCategory.BUILTIN, "相机信息", ""),
+            FrameworkItem("sys.apps", ItemCategory.BUILTIN, "已安装应用列表", ""),
+        )
+        val mcpTools = if (engine != null) try {
+            com.mengpaw.kernel.mcp.McpServer(engine.getPluginManager())
+                .listTools().map { FrameworkItem(it.name, ItemCategory.OFFICIAL, it.description, "") }
+        } catch (_: Exception) { emptyList() } else emptyList()
+        selfTools + agentTools + pluginTools + sysTools + mcpTools
+    }
+
+    var skillItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
+    LaunchedEffect(Dispatchers.IO) {
+        val skillsDir = java.io.File(com.mengpaw.kernel.DataPaths.SKILLS)
+        val skillFiles = if (skillsDir.exists()) {
+            skillsDir.listFiles()?.filter { it.extension == "md" }
+                ?.map { FrameworkItem(it.nameWithoutExtension, ItemCategory.BUILTIN,
+                    try { it.readText().lines().firstOrNull()?.removePrefix("#")?.trim() ?: "" } catch (_: Exception) { "" }, "") }
+                ?: emptyList()
+        } else emptyList()
+        val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+        val skillPlugin = pm.get("skill-plugin")
+        val skillMgmt = if (skillPlugin != null && pm.status("skill-plugin") == com.mengpaw.kernel.plugin.PluginStatus.ACTIVE) {
+            skillPlugin.commands.keys.map { name -> FrameworkItem("⚙ skill.$name", ItemCategory.BUILTIN, "技能管理命令", "") }
+        } else emptyList()
+        skillItems = if (skillFiles.isEmpty() && skillMgmt.isEmpty())
+            listOf(FrameworkItem("skill.ls", ItemCategory.BUILTIN, "列出可用技能的索引", ""))
+        else skillFiles + skillMgmt
+    }
+
+    var workspaceItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
+    LaunchedEffect(activeAgent, workspaceVersion) {
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            val dir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, activeAgent)
+            val items = dir.listFiles()?.filter { it.extension == "md" }?.sortedBy { it.name }
+                ?.map { file ->
+                    val content = try { file.readText() } catch (_: Exception) { "" }
+                    FrameworkItem(name = file.name, category = ItemCategory.BUILTIN, summary = extractSummary(content), docMarkdown = content)
+                } ?: emptyList()
+            kotlinx.coroutines.withContext(Dispatchers.Main) { workspaceItems = items }
+        }
     }
 
     // ── Full-screen overlays for Plugins/Settings ──
@@ -250,121 +376,6 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
         )
     }
     if (showSettings) {
-        val agentFramework = remember(activeAgent) { agentViewModel.frameworkFor(activeAgent) }
-        val (agentEp, agentModel) = remember(activeAgent) { agentViewModel.agentConfig(activeAgent) }
-
-        // ── Workspace refresh trigger ──
-        var workspaceVersion by remember { mutableIntStateOf(0) }
-
-        // ── Dynamic framework item lists ──
-        // Plugins: installed plugins from PluginManager + kernel built-in namespaces
-        val pluginItems = remember {
-            val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
-            val installed = pm.listAll().map { (plugin, status) ->
-                FrameworkItem(
-                    name = plugin.metadata.name,
-                    category = if (plugin.metadata.id in BUILTIN_PLUGIN_IDS) ItemCategory.BUILTIN else ItemCategory.OFFICIAL,
-                    summary = plugin.metadata.description,
-                    docMarkdown = "## ${plugin.metadata.name}\n\n${plugin.metadata.description}\n\nID: ${plugin.metadata.id}\n版本: ${plugin.metadata.version}\n状态: ${status.name}\n命令数: ${plugin.commands.size}"
-                )
-            }
-            // Always show kernel built-in namespaces as "内置插件"
-            val builtins = listOf(
-                FrameworkItem("self (内置)", ItemCategory.BUILTIN, "Agent 自省 — 状态/配置/统计/版本/头像/主题/通知/时间", ""),
-                FrameworkItem("agent (内置)", ItemCategory.BUILTIN, "文档管理 — 记忆/CLI/档案/审计/梦境/存储", ""),
-                FrameworkItem("plugin (内置)", ItemCategory.BUILTIN, "插件管理 — 市场/搜索/安装/卸载/启停/升级", ""),
-                FrameworkItem("sys (内置)", ItemCategory.BUILTIN, "系统信息 — 电量/网络/CPU/存储/定位/剪贴板", ""),
-            )
-            if (installed.isEmpty()) builtins else installed + builtins
-        }
-        // ── MengPaw CLI: all built-in commands by namespace + MCP tools ──
-        val toolItems = remember(activeAgent) {
-            val engine = agentViewModel.activeEngine()
-            // Core CLI commands organized by namespace
-            val selfTools = listOf(
-                FrameworkItem("self.status", ItemCategory.BUILTIN, "Agent 运行状态查询", "## self.status\n\n查询 Agent 当前运行状态（Idle/Running/Finished/Error）。"),
-                FrameworkItem("self.config [key=value]", ItemCategory.BUILTIN, "查看或修改 Agent 配置", ""),
-                FrameworkItem("self.stats", ItemCategory.BUILTIN, "内存/CPU/线程统计信息", ""),
-                FrameworkItem("self.version", ItemCategory.BUILTIN, "MengPaw 版本号", ""),
-                FrameworkItem("self.time [format]", ItemCategory.BUILTIN, "当前时间 (iso/date/time/timestamp)", ""),
-                FrameworkItem("self.tools [namespace]", ItemCategory.BUILTIN, "按命名空间列出所有可用命令", ""),
-                FrameworkItem("self.notify.message <text>", ItemCategory.BUILTIN, "Agent 推送消息到聊天", ""),
-                FrameworkItem("self.notify.banner <text> [--level]", ItemCategory.BUILTIN, "Agent 推送通知横幅 (info/success/warn/error)", ""),
-                FrameworkItem("self.avatar <path>", ItemCategory.BUILTIN, "设置 Agent 头像", ""),
-                FrameworkItem("self.theme primary=#xxx surface=#xxx", ItemCategory.BUILTIN, "修改主题色", ""),
-                FrameworkItem("self.trigger add|list|remove|topics", ItemCategory.BUILTIN, "CRON/LIFETIME 触发器管理", ""),
-            )
-            val agentTools = listOf(
-                FrameworkItem("agent.cli", ItemCategory.BUILTIN, "查阅完整 CLI.md 命令参考", ""),
-                FrameworkItem("agent.docs", ItemCategory.BUILTIN, "列出所有 Agent 文档", ""),
-                FrameworkItem("agent.memory [query]", ItemCategory.BUILTIN, "记忆索引/搜索", ""),
-                FrameworkItem("agent.memory.record <content>", ItemCategory.BUILTIN, "手动记录一条记忆", ""),
-                FrameworkItem("agent.profile", ItemCategory.BUILTIN, "查看 Agent 身份档案", ""),
-                FrameworkItem("agent.soul", ItemCategory.BUILTIN, "查看 Agent 灵魂设定", ""),
-                FrameworkItem("agent.audit [N]", ItemCategory.BUILTIN, "查看最近 N 条命令审计日志", ""),
-                FrameworkItem("agent.browser-tools", ItemCategory.BUILTIN, "MP浏览器插件开发能力参考", ""),
-                FrameworkItem("agent.dream", ItemCategory.BUILTIN, "触发梦境整理（记忆归档/压缩）", ""),
-                FrameworkItem("agent.cleanup", ItemCategory.BUILTIN, "清理过期文件和归档记忆", ""),
-                FrameworkItem("agent.storage", ItemCategory.BUILTIN, "工作区存储空间报告", ""),
-            )
-            val pluginTools = listOf(
-                FrameworkItem("plugin.marketplace [--refresh]", ItemCategory.BUILTIN, "浏览插件市场", ""),
-                FrameworkItem("plugin.search <query>", ItemCategory.BUILTIN, "搜索可用插件", ""),
-                FrameworkItem("plugin.install <id>", ItemCategory.BUILTIN, "下载+验证+安装+激活插件", ""),
-                FrameworkItem("plugin.uninstall <id>", ItemCategory.BUILTIN, "卸载插件", ""),
-                FrameworkItem("plugin.list", ItemCategory.BUILTIN, "列出已安装插件", ""),
-                FrameworkItem("plugin.info <id>", ItemCategory.BUILTIN, "查看插件详情", ""),
-                FrameworkItem("plugin.enable <id>", ItemCategory.BUILTIN, "启用插件", ""),
-                FrameworkItem("plugin.disable <id>", ItemCategory.BUILTIN, "停用插件", ""),
-                FrameworkItem("plugin.update <id>", ItemCategory.BUILTIN, "检查插件更新", ""),
-                FrameworkItem("plugin.upgrade --all", ItemCategory.BUILTIN, "升级全部插件", ""),
-            )
-            val sysTools = listOf(
-                FrameworkItem("sys.battery", ItemCategory.BUILTIN, "电量/充电状态/温度", ""),
-                FrameworkItem("sys.network", ItemCategory.BUILTIN, "网络类型/信号强度", ""),
-                FrameworkItem("sys.cpu", ItemCategory.BUILTIN, "CPU 使用率/核心数", ""),
-                FrameworkItem("sys.memory", ItemCategory.BUILTIN, "内存使用量", ""),
-                FrameworkItem("sys.storage", ItemCategory.BUILTIN, "存储空间使用情况", ""),
-                FrameworkItem("sys.display", ItemCategory.BUILTIN, "屏幕参数", ""),
-                FrameworkItem("sys.sensors", ItemCategory.BUILTIN, "传感器列表", ""),
-                FrameworkItem("sys.clipboard", ItemCategory.BUILTIN, "剪贴板内容", ""),
-                FrameworkItem("sys.location", ItemCategory.BUILTIN, "GPS 定位 (需位置权限)", ""),
-                FrameworkItem("sys.camera", ItemCategory.BUILTIN, "相机信息 (需相机权限)", ""),
-                FrameworkItem("sys.apps", ItemCategory.BUILTIN, "已安装应用列表 (需应用列表权限)", ""),
-            )
-            // MCP tools if available
-            val mcpTools = if (engine != null) try {
-                com.mengpaw.kernel.mcp.McpServer(engine.getPluginManager())
-                    .listTools().map { FrameworkItem(it.name, ItemCategory.OFFICIAL, it.description, "") }
-            } catch (_: Exception) { emptyList() } else emptyList()
-            selfTools + agentTools + pluginTools + sysTools + mcpTools
-        }
-        // Skills: actual skill files from disk + skill plugin commands
-        val skillItems = remember {
-            val skillsDir = java.io.File(com.mengpaw.kernel.DataPaths.SKILLS)
-            val skillFiles = if (skillsDir.exists()) {
-                skillsDir.listFiles()
-                    ?.filter { it.extension == "md" }
-                    ?.map { FrameworkItem(it.nameWithoutExtension, ItemCategory.BUILTIN,
-                        try { it.readText().lines().firstOrNull()?.removePrefix("#")?.trim() ?: "" }
-                        catch (_: Exception) { "" }, "") }
-                    ?: emptyList()
-            } else emptyList()
-
-            // Add skill plugin management commands
-            val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
-            val skillPlugin = pm.get("skill-plugin")
-            val skillMgmt = if (skillPlugin != null && pm.status("skill-plugin") == com.mengpaw.kernel.plugin.PluginStatus.ACTIVE) {
-                skillPlugin.commands.keys.map { name ->
-                    FrameworkItem("⚙ skill.$name", ItemCategory.BUILTIN, "技能管理命令", "")
-                }
-            } else emptyList()
-
-            if (skillFiles.isEmpty() && skillMgmt.isEmpty()) {
-                listOf(FrameworkItem("skill.ls", ItemCategory.BUILTIN, "列出可用技能的索引 → Agent 按需加载具体 Skill", ""))
-            } else skillFiles + skillMgmt
-        }
-
         SettingsScreen(
             onNavigateBack = { showSettings = false },
             onNavigateToPluginMarket = { showPlugins = true; showSettings = false },
@@ -373,30 +384,14 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             agentFramework = agentFramework,
             activeAgentEndpoint = agentEp,
             activeAgentModel = agentModel,
-            onAgentSelectProvider = { saved ->
-                // Runtime init is handled by AgentRuntime when user exits settings
-            },
+            onAgentSelectProvider = { },
             pluginItems = pluginItems,
             toolItems = toolItems,
             skillItems = skillItems,
             agentPluginItems = pluginItems,
             agentToolItems = toolItems,
             agentSkillItems = skillItems,
-            workspaceItems = remember(activeAgent, workspaceVersion) {
-                val dir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, activeAgent)
-                dir.listFiles()
-                    ?.filter { it.extension == "md" }
-                    ?.sortedBy { it.name }
-                    ?.map { file ->
-                        val content = try { file.readText() } catch (_: Exception) { "" }
-                        FrameworkItem(
-                            name = file.name,
-                            category = ItemCategory.BUILTIN,
-                            summary = extractSummary(content),
-                            docMarkdown = content
-                        )
-                    } ?: emptyList()
-            },
+            workspaceItems = workspaceItems,
             onRefreshWorkspace = { workspaceVersion++ }
         )
     }

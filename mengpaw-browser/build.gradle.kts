@@ -7,6 +7,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val mengpawVersion: String = project.findProperty("mengpaw.version") as? String ?: "0.0.0"
+
 android {
     namespace = "com.mengpaw.browser"
     compileSdk = 35

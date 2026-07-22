@@ -212,30 +212,24 @@ private fun PluginCard(
             when (val state = item.installState) {
                 is InstallState.Idle -> {
                     if (item.isInstalled) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            IconButton(onClick = onToggle) {
-                                Icon(
-                                    if (item.isActive) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    if (item.isActive) "禁用" else "启用",
-                                    tint = ArcoColors.Gray6
-                                )
+                        // Installed: checkbox for enable/disable + delete
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = item.isActive,
+                                onCheckedChange = { onToggle() },
+                                colors = CheckboxDefaults.colors(checkedColor = com.mengpaw.design.theme.ThemeColors.brand)
+                            )
+                            IconButton(onClick = onUninstall, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Delete, "卸载", tint = com.mengpaw.design.theme.ThemeColors.error, modifier = Modifier.size(18.dp))
                             }
-                            IconButton(onClick = onUninstall) {
-                                Icon(Icons.Default.Delete, "卸载", tint = com.mengpaw.design.theme.ThemeColors.error, modifier = Modifier.size(20.dp))
-                            }
                         }
-                    } else if (item.availability == PluginAvailability.BUILTIN) {
-                        Button(onClick = onInstall, shape = RoundedCornerShape(ArcoRadius.md),
-                            contentPadding = PaddingValues(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.xs),
-                            colors = ButtonDefaults.buttonColors(containerColor = ArcoColors.Blue6)) {
-                            Text("激活 Activate", color = androidx.compose.ui.graphics.Color.White)
-                        }
-                    } else if (item.availability == PluginAvailability.DOWNLOADABLE) {
-                        Button(onClick = onInstall, shape = RoundedCornerShape(ArcoRadius.md),
-                            contentPadding = PaddingValues(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.xs),
-                            colors = ButtonDefaults.buttonColors(containerColor = com.mengpaw.design.theme.ThemeColors.brand)) {
-                            Text("安装 Install", color = androidx.compose.ui.graphics.Color.White)
-                        }
+                    } else if (item.availability == PluginAvailability.BUILTIN || item.availability == PluginAvailability.DOWNLOADABLE) {
+                        // Not installed: checkbox → install+activate on check
+                        Checkbox(
+                            checked = false,
+                            onCheckedChange = { if (it) onInstall() },
+                            colors = CheckboxDefaults.colors(checkedColor = com.mengpaw.design.theme.ThemeColors.brand)
+                        )
                     } else {
                         // UNAVAILABLE — no action button
                     }

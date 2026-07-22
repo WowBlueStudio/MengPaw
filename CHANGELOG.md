@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.8.4 (2026-07-22) — 会话管理增强 + 引擎可靠性修复 + UI 体验升级
+
+### 会话管理 (核心)
+- **跨会话历史搜索**: 新增 `agent.sessions <keyword>` CLI 命令，搜索 `session_history.json` 中所有已保存会话
+- **会话切换恢复**: 新增 `switchToSession()` — 点击历史记录自动切换 Agent 并恢复完整消息
+- **独立会话文件**: 每个会话独立保存到 `sessions/{id}.json`，切换 Agent 不再丢失当前会话
+- **原子写入**: 所有会话 JSON 先写 `.tmp` 再 rename，防止进程崩溃导致文件损坏
+- **损坏自动恢复**: 错误状态的会话文件不再恢复（如崩溃结尾），损坏文件自动删除
+- **自动编号标题**: 新会话标题从首条消息改为 `会话 #N`，按 Agent 独立计数
+
+### 引擎可靠性
+- **安全命令白名单**: 19 个只读/列表命令（`agent.docs`/`agent.sessions`/`self.stats` 等）不触发循环检测
+- **循环检测优化**: 阈值 3→5 次，窗口 5→8 条，减少误判
+- **引擎状态重置**: 每次提交任务前强制 `resetLoopDetection()` + `stop()` 旧引擎，防止跨任务状态污染
+- **全面状态同步**: 异常捕获时同步重置 `isRunning`/`inputEnabled`，杜绝 UI 卡死
+
+### UI 体验
+- **消息区自适应宽度**: 平板 80%、手机 95%，内容居中显示
+- **思考完成自动定位**: Agent 输出结束时自动滚动到输出顶部 + 聚焦输入框
+- **滚动安全防护**: `safeScrollTo()` 边界检查，消除 `animateScrollToItem` 越界崩溃
+- **侧边栏智能体头像**: 从 `avatar.png` 加载真实头像，回退首字母圆形
+- **框架通讯录**: 从 `ACP_TRUSTED` 目录加载真实框架联系人
+- **智能体显示名称**: 侧栏读取 `profile.md` 中 `name` 字段，非目录名
+- **历史侧栏简化**: 移除修复按钮，滑动操作精简为压缩+删除
+- **Markdown 渲染增强**: 新增 Heading 块支持（`##` 标题语法）
+
+### 插件市场
+- **plugins.json 重构**: 数据结构优化，支持更细粒度的插件元信息
+- **市场 UI 更新**: PluginMarketScreen 和 PluginViewModel 联动改进
+
+### 浏览器
+- **版本号统一**: mengpaw-browser 使用 `gradle.properties` 统一版本号
+- **扩展清单更新**: `maxCoreVersion` 升至 0.8.1
+
+### 设计系统
+- **MengPawVersion**: 新增版本信息工具类，`CORE_VERSION` 统一使用 `MengPawVersion.FRAMEWORK`
+- **ArcoTheme**: 色值 Token 增强
+- **MarkdownText**: 支持 Heading 块 + 代码块改进
+
+### 构建
+- **统一版本源**: `gradle.properties` 中的 `mengpaw.version=0.8.4` 为所有模块版本号唯一来源
+- **mengpaw-design-system**: 新增 `mengpaw-kernel` 依赖
+- **mengpaw-kernel**: 新增 `kotlinx-serialization-json` 依赖
+
+### 测试
+- AdaptiveLlmProviderTest / PromptEngineTest: 适配安全命令白名单和循环检测新阈值
+
+### 发行
+- Shell: v0.8.0 → v0.8.4 (versionCode=30→31)
+- Kernel: CORE_VERSION 0.8.0 → 0.8.4
+- 27 文件修改, +1198 / -622 行
+
 ## v0.7.2 (2026-07-22) — Android 13-17 兼容性专项修复 + 国内 OEM 适配
 
 ### Android 版本兼容 (P0)

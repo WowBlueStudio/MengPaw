@@ -84,41 +84,106 @@ class AgentViewModel : ViewModel() {
         }
     }
 
+    /** Track current session ID for per-session save. */
+    private var currentSessionId: String = ""
+
     /** Persist active session messages so they survive process death. */
     private fun saveCurrentSession() {
         try {
             val session = sessions[_activeAgentName] ?: return
             val msgs = session.messages.value.filter { it !is ChatMessageUi.System }
             if (msgs.isEmpty()) return
-            val arr = org.json.JSONArray()
-            msgs.forEach { msg ->
-                val obj = org.json.JSONObject()
-                when (msg) {
-                    is ChatMessageUi.User -> { obj.put("type", "user"); obj.put("text", msg.content) }
-                    is ChatMessageUi.Agent -> { obj.put("type", "agent"); obj.put("text", msg.content) }
-                    is ChatMessageUi.AgentWithTrace -> {
-                        obj.put("type", "agent_trace")
-                        obj.put("text", msg.finalContent)
-                        // Save thought chain
-                        val traceArr = org.json.JSONArray()
-                        msg.traces.forEach { t ->
-                            val tObj = org.json.JSONObject()
-                            tObj.put("step", t.step)
-                            tObj.put("thought", t.thought)
-                            tObj.put("action", t.action ?: "")
-                            tObj.put("observation", t.observation ?: "")
-                            traceArr.put(tObj)
-                        }
-                        obj.put("traces", traceArr)
-                    }
-                    else -> return@forEach
-                }
-                arr.put(obj)
-            }
+            val arr = messagesToJson(msgs)
             val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
-            file.parentFile?.mkdirs()
-            file.writeText(arr.toString(2))
+            atomicWriteJson(file, arr)
+            // Also save to per-session file if we have an active session ID
+            if (currentSessionId.isNotBlank()) {
+                saveSessionById(currentSessionId, msgs)
+            }
         } catch (_: Exception) {}
+    }
+
+    /** Save a specific session's messages to a per-session file. */
+    private fun saveSessionById(sessionId: String, msgs: List<ChatMessageUi>) {
+        try {
+            val nonSystem = msgs.filter { it !is ChatMessageUi.System }
+            if (nonSystem.isEmpty()) return
+            val dir = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "sessions")
+            dir.mkdirs()
+            val file = java.io.File(dir, "$sessionId.json")
+            val arr = messagesToJson(nonSystem)
+            atomicWriteJson(file, arr)
+        } catch (_: Exception) {}
+    }
+
+    /** Load a session's messages from its per-session file. */
+    private fun loadSessionMessages(sessionId: String): List<ChatMessageUi> {
+        try {
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "sessions/$sessionId.json")
+            if (!file.exists()) return emptyList()
+            val text = file.readText()
+            if (text.isBlank()) return emptyList()
+            return jsonToMessages(org.json.JSONArray(text))
+        } catch (_: Exception) { return emptyList() }
+    }
+
+    private fun messagesToJson(msgs: List<ChatMessageUi>): org.json.JSONArray {
+        val arr = org.json.JSONArray()
+        msgs.forEach { msg ->
+            val obj = org.json.JSONObject()
+            when (msg) {
+                is ChatMessageUi.User -> { obj.put("type", "user"); obj.put("text", msg.content) }
+                is ChatMessageUi.Agent -> { obj.put("type", "agent"); obj.put("text", msg.content) }
+                is ChatMessageUi.AgentWithTrace -> {
+                    obj.put("type", "agent_trace"); obj.put("text", msg.finalContent)
+                    val traceArr = org.json.JSONArray()
+                    msg.traces.forEach { t ->
+                        val tObj = org.json.JSONObject()
+                        tObj.put("step", t.step); tObj.put("thought", t.thought)
+                        tObj.put("action", t.action ?: ""); tObj.put("observation", t.observation ?: "")
+                        traceArr.put(tObj)
+                    }
+                    obj.put("traces", traceArr)
+                }
+                else -> return@forEach
+            }
+            arr.put(obj)
+        }
+        return arr
+    }
+
+    private fun jsonToMessages(arr: org.json.JSONArray): List<ChatMessageUi> {
+        val msgs = mutableListOf<ChatMessageUi>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            val type = obj.optString("type", "")
+            val txt = obj.optString("text", "")
+            if (txt.isBlank()) continue
+            when (type) {
+                "user" -> msgs.add(ChatMessageUi.User(txt))
+                "agent" -> msgs.add(ChatMessageUi.Agent(txt))
+                "agent_trace" -> {
+                    val traces = mutableListOf<AgentTrace>()
+                    val traceArr = obj.optJSONArray("traces")
+                    if (traceArr != null) for (j in 0 until traceArr.length()) {
+                        val t = traceArr.getJSONObject(j)
+                        traces.add(AgentTrace(t.optInt("step", 0), t.optString("thought", ""),
+                            t.optString("action", "").ifEmpty { null },
+                            t.optString("observation", "").ifEmpty { null }))
+                    }
+                    msgs.add(ChatMessageUi.AgentWithTrace(txt, traces, isRunning = false))
+                }
+            }
+        }
+        return msgs
+    }
+
+    private fun atomicWriteJson(file: java.io.File, arr: org.json.JSONArray) {
+        file.parentFile?.mkdirs()
+        val tmp = java.io.File(file.parentFile, "${file.name}.tmp")
+        tmp.writeText(arr.toString(2))
+        tmp.renameTo(file)
+        if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
     }
 
     /** Restore last session messages from disk. Returns true if restored. */
@@ -129,34 +194,15 @@ class AgentViewModel : ViewModel() {
             val text = file.readText()
             if (text.isBlank()) return false
             val arr = org.json.JSONArray(text)
-            val msgs = mutableListOf<ChatMessageUi>()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                val type = obj.optString("type", "")
-                val txt = obj.optString("text", "")
-                if (txt.isBlank()) continue
-                when (type) {
-                    "user" -> msgs.add(ChatMessageUi.User(txt))
-                    "agent" -> msgs.add(ChatMessageUi.Agent(txt))
-                    "agent_trace" -> {
-                        val traces = mutableListOf<AgentTrace>()
-                        val traceArr = obj.optJSONArray("traces")
-                        if (traceArr != null) {
-                            for (j in 0 until traceArr.length()) {
-                                val t = traceArr.getJSONObject(j)
-                                traces.add(AgentTrace(
-                                    t.optInt("step", 0),
-                                    t.optString("thought", ""),
-                                    t.optString("action", "").ifEmpty { null },
-                                    t.optString("observation", "").ifEmpty { null }
-                                ))
-                            }
-                        }
-                        msgs.add(ChatMessageUi.AgentWithTrace(txt, traces, isRunning = false))
-                    }
-                }
-            }
+            val msgs = jsonToMessages(arr)
             if (msgs.isNotEmpty()) {
+                // Skip restoration if session ended with an error (corrupted state)
+                val lastMsg = msgs.lastOrNull()
+                val endsWithError = lastMsg is ChatMessageUi.Agent && lastMsg.content.startsWith("⚠️ 执行出错")
+                if (endsWithError) {
+                    try { file.delete() } catch (_: Exception) {}
+                    return false
+                }
                 activeSession().messages.value = msgs
                 // Also add to sidebar history
                 val preview = msgs.firstOrNull()?.let {
@@ -175,7 +221,11 @@ class AgentViewModel : ViewModel() {
                 saveSessionHistory()
             }
             msgs.isNotEmpty()
-        } catch (_: Exception) { false }
+        } catch (_: Exception) {
+            // Delete corrupted file so next save starts fresh
+            try { java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json").delete() } catch (_: Exception) {}
+            false
+        }
     }
 
     // ── Global LLM config (shared across new agents as default) ──
@@ -350,10 +400,17 @@ class AgentViewModel : ViewModel() {
     /** Switch to a different agent. Stops old agent engine to prevent orphaned execution. */
     fun switchAgent(name: String) {
         if (name == _activeAgentName) return
+        // Verify agent exists (directory on disk or existing session) before switching
+        val agentDir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, name)
+        if (!agentDir.exists() && !sessions.containsKey(name)) return
         stopAgent() // Stop old agent engine before switching
         // Reset old session state
         val old = sessions[_activeAgentName]
         old?.isRunning?.value = false
+        // Create session if directory exists but session doesn't (e.g., agent created externally)
+        if (!sessions.containsKey(name) && agentDir.exists() && agentDir.isDirectory) {
+            sessions[name] = createSession(name, null)
+        }
         _activeAgentName = name
         bindActiveSession()
     }
@@ -512,6 +569,10 @@ class AgentViewModel : ViewModel() {
                     }
                 }
 
+                // Reset stale state from previous runs before starting
+                session.engine.resetLoopDetection()
+                try { session.engine.stop() } catch (_: Exception) {}
+
                 // Execute via the appropriate engine mode
                 val result = when (loopMode) {
                     LoopMode.GOAL -> session.engine.run(task = contextPrefix, maxSteps = maxSteps, onStep = onStep)
@@ -550,6 +611,8 @@ class AgentViewModel : ViewModel() {
                 // Safety net: catch OOM, unexpected runtime errors, etc.
                 // Prevents process crash — degrades gracefully to error message
                 com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Task execution failed: ${e.message}")
+                // Stop engine to prevent stale state on retry
+                try { session.engine.stop() } catch (_: Exception) {}
                 val current = session.messages.value.toMutableList()
                 val runningIndex = current.indexOfLast {
                     it is ChatMessageUi.AgentWithTrace && it.isRunning
@@ -569,7 +632,11 @@ class AgentViewModel : ViewModel() {
                     current.add(ChatMessageUi.Agent(errorMsg))
                 }
                 session.messages.value = current
+                // Fully sync all running/input state
                 session.isRunning.value = false
+                _isRunning.value = false
+                session.inputEnabled.value = true
+                _inputEnabled.value = true
             }
         }
     }
@@ -758,8 +825,9 @@ class AgentViewModel : ViewModel() {
         stopAgent() // Stop running agent before clearing messages
         val msgs = activeSession().messages.value.filter { it !is ChatMessageUi.System }
         if (msgs.isNotEmpty()) {
-            val firstUser = msgs.firstOrNull { it is ChatMessageUi.User }
-            val title = (firstUser as? ChatMessageUi.User)?.content?.take(40) ?: "新会话"
+            // Auto-indexed title: 会话 #N per agent
+            val existingCount = _sessionHistory.value.count { it.agentName == _activeAgentName }
+            val title = "会话 #${existingCount + 1}"
             val preview = msgs.last().let {
                 when (it) {
                     is ChatMessageUi.Agent -> it.content.take(60)
@@ -768,8 +836,12 @@ class AgentViewModel : ViewModel() {
                 }
             }
             val currentAgent = _activeAgent.value
+            val sessId = "sess_${System.currentTimeMillis()}"
+            // Save messages to per-session file so switching works
+            saveSessionById(sessId, msgs)
+            currentSessionId = sessId
             val record = SessionRecord(
-                id = "sess_${System.currentTimeMillis()}",
+                id = sessId,
                 title = title, preview = preview,
                 timestamp = System.currentTimeMillis(),
                 messageCount = msgs.size,
@@ -780,6 +852,31 @@ class AgentViewModel : ViewModel() {
             saveSessionHistory()
         }
         activeSession().messages.value = listOf(ChatMessageUi.Agent("新会话已创建。"))
+    }
+
+    /** Switch to a saved session, restoring its messages. */
+    fun switchToSession(record: SessionRecord) {
+        // Save current session first
+        val currentMsgs = activeSession().messages.value.filter { it !is ChatMessageUi.System }
+        if (currentMsgs.isNotEmpty()) {
+            saveSessionById("sess_current_${_activeAgentName}", currentMsgs)
+        }
+        // Switch agent if needed
+        if (record.agentName.isNotBlank() && record.agentName != _activeAgentName) {
+            val target = if (record.framework != null) "${record.framework}/${record.agentName}" else record.agentName
+            switchAgent(target)
+        }
+        // Load saved messages
+        val loaded = loadSessionMessages(record.id)
+        if (loaded.isNotEmpty()) {
+            currentSessionId = record.id
+            activeSession().messages.value = loaded
+        } else {
+            currentSessionId = ""
+            activeSession().messages.value = listOf(
+                ChatMessageUi.Agent("已切换到「${record.title}」，但该会话暂无已保存的消息记录。")
+            )
+        }
     }
 
     /** Compact a session — keep summary, mark as read-only. */

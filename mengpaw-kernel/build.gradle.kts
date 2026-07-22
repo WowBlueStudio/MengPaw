@@ -9,6 +9,33 @@ plugins {
 group = "com.mengpaw"
 version = "0.1.0"
 
+// ── Generate MengPawVersion.kt from gradle.properties ──
+val mengpawVersion: String = project.findProperty("mengpaw.version") as? String ?: "0.0.0"
+val generatedDir = layout.buildDirectory.dir("generated/version")
+
+sourceSets["main"].kotlin.srcDir(generatedDir)
+
+tasks.register("generateVersion") {
+    val outputDir = layout.buildDirectory.dir("generated/version/com/mengpaw/kernel")
+    // Declare inputs so Gradle detects when version changes
+    inputs.property("mengpawVersion", mengpawVersion)
+    outputs.dir(outputDir)
+    doLast {
+        val dir = outputDir.get().asFile
+        dir.mkdirs()
+        File(dir, "MengPawVersion.kt").writeText("""
+            // AUTO-GENERATED from gradle.properties — do not edit
+            package com.mengpaw.kernel
+
+            object MengPawVersion {
+                const val FRAMEWORK: String = "$mengpawVersion"
+            }
+        """.trimIndent())
+    }
+}
+
+tasks.named("compileKotlin") { dependsOn("generateVersion") }
+
 dependencies {
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))

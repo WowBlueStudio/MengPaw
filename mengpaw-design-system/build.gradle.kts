@@ -30,6 +30,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":mengpaw-kernel"))
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
 

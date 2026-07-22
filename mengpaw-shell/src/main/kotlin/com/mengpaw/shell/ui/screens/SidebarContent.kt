@@ -4,7 +4,11 @@
 package com.mengpaw.shell.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -20,11 +24,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mengpaw.design.components.MarkdownText
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
@@ -83,32 +89,44 @@ fun SidebarContent(
 
     // ── New Agent dialog state ──
     var showNewAgentDialog by remember { mutableStateOf(false) }
+    var showAddFramework by remember { mutableStateOf(false) }
 
-    // Discover agents from disk
-    val agentsDir = remember { File(com.mengpaw.kernel.DataPaths.AGENTS) }
-    val discoveredAgents = remember {
-        val dirs = agentsDir.listFiles()?.filter { it.isDirectory }?.map { it.name }?.sorted() ?: listOf("MengPaw")
-        if (dirs.isEmpty()) listOf("MengPaw") else dirs
-    }
+    // Discover agents from disk — no remember() so list stays fresh when agents are created/deleted
+    val agentsDir = File(com.mengpaw.kernel.DataPaths.AGENTS)
+    // Exclude system dirs (inbox, team, acp, incubator) from agent list
+    val systemDirs = setOf("inbox", "team", "acp", "incubator", "agent-001")
+    val discoveredAgents = agentsDir.listFiles()
+        ?.filter { it.isDirectory && it.name !in systemDirs && !it.name.startsWith(".") }
+        ?.map { it.name }?.sorted()
+        ?.ifEmpty { listOf("MengPaw") } ?: listOf("MengPaw")
 
     Column(Modifier.fillMaxHeight().width(280.dp).padding(ArcoSpacing.lg).verticalScroll(rememberScrollState())) {
         // ── Agents ──
-        Text("智能体", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("智能体", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            IconButton(onClick = { showNewAgentDialog = true }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Outlined.Add, "新建智能体", tint = ThemeColors.brand, modifier = Modifier.size(20.dp))
+            }
+        }
         Spacer(Modifier.height(ArcoSpacing.sm))
 
-        discoveredAgents.forEach { name ->
+        discoveredAgents.forEach { dirName ->
+            // Load display name from profile, fall back to directory name
+            val profile = remember(dirName) { AgentProfile.load(dirName) }
+            val displayName = profile.name.ifBlank { dirName }
+
             Row(
                 Modifier.fillMaxWidth()
                     .combinedClickable(
-                        onClick = { if (name != activeAgent) { onSwitchAgent(name); onClose() } },
-                        onLongClick = { cardAgentName = name }
+                        onClick = { if (dirName != activeAgent) { onSwitchAgent(dirName); onClose() } },
+                        onLongClick = { cardAgentName = dirName }
                     )
                     .padding(vertical = ArcoSpacing.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Avatar — loads from agent dir, falls back to initial
-                val agentAvatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$name/avatar.png")
-                val agentAvatarBitmap = remember(name) {
+                val agentAvatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$dirName/avatar.png")
+                val agentAvatarBitmap = remember(dirName) {
                     if (agentAvatarFile.exists()) android.graphics.BitmapFactory.decodeFile(agentAvatarFile.absolutePath) else null
                 }
                 if (agentAvatarBitmap != null) {
@@ -119,21 +137,21 @@ fun SidebarContent(
                     )
                 } else {
                     Surface(shape = CircleShape, modifier = Modifier.size(36.dp),
-                        color = if (name == activeAgent) ThemeColors.brand else ThemeColors.bgCardHigh) {
+                        color = if (dirName == activeAgent) ThemeColors.brand else ThemeColors.bgCardHigh) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text(name.take(1), color = if (name == activeAgent) Color.White else ThemeColors.textSecondary,
+                            Text(displayName.take(1), color = if (dirName == activeAgent) Color.White else ThemeColors.textSecondary,
                                 fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
                 Spacer(Modifier.width(ArcoSpacing.sm))
 
-                // Agent name + workspace path
+                // Display name + workspace folder path
                 Column(Modifier.weight(1f)) {
-                    Text(name, fontWeight = if (name == activeAgent) FontWeight.SemiBold else FontWeight.Normal,
+                    Text(displayName, fontWeight = if (dirName == activeAgent) FontWeight.SemiBold else FontWeight.Normal,
                         style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "${com.mengpaw.kernel.DataPaths.AGENTS}/$name",
+                        "Agent文档/$dirName",
                         style = MaterialTheme.typography.labelSmall,
                         color = ThemeColors.textSecondary,
                         maxLines = 1,
@@ -141,24 +159,13 @@ fun SidebarContent(
                     )
                 }
 
-                if (name == activeAgent) {
+                if (dirName == activeAgent) {
                     Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.15f)) {
                         Text("当前", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
                     }
                 }
             }
-        }
-
-        // ── "+ New Agent" button ──
-        OutlinedButton(
-            onClick = { showNewAgentDialog = true },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(ArcoRadius.md)
-        ) {
-            Icon(Icons.Outlined.Add, null, Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text("新建智能体", style = MaterialTheme.typography.labelSmall)
         }
 
         Spacer(Modifier.height(ArcoSpacing.md))
@@ -199,10 +206,36 @@ fun SidebarContent(
         HorizontalDivider(Modifier.padding(vertical = ArcoSpacing.lg))
 
         // ── Framework Directory ──
-        Text("框架通讯录", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("框架通讯录", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            IconButton(onClick = { showAddFramework = true }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Outlined.PersonAdd, "添加框架", tint = ThemeColors.brand, modifier = Modifier.size(20.dp))
+            }
+        }
         Spacer(Modifier.height(ArcoSpacing.sm))
 
-        val frameworks = remember { mutableStateListOf<FrameworkContact>() }
+        // Load saved framework contacts from ACP_TRUSTED directory
+        val frameworks = remember {
+            val contacts = mutableListOf<FrameworkContact>()
+            val trustedDir = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
+            if (trustedDir.exists()) {
+                trustedDir.listFiles()
+                    ?.filter { it.extension == "json" && !it.name.endsWith(".tmp.json") }
+                    ?.forEach { file ->
+                        try {
+                            val json = org.json.JSONObject(file.readText())
+                            contacts.add(FrameworkContact(
+                                name = json.optString("name", file.nameWithoutExtension),
+                                address = json.optString("address", ""),
+                                online = false,
+                                trusted = true,
+                                agents = emptyList()
+                            ))
+                        } catch (_: Exception) { /* skip corrupted files */ }
+                    }
+            }
+            mutableStateListOf<FrameworkContact>().also { it.addAll(contacts) }
+        }
 
         if (frameworks.isEmpty()) {
             Text("你的智能体还没有朋友", style = MaterialTheme.typography.bodySmall,
@@ -210,89 +243,80 @@ fun SidebarContent(
         }
 
         frameworks.forEach { framework ->
-            var expanded by remember { mutableStateOf(false) }
+            key(framework.name) {
+                var expanded by remember { mutableStateOf(false) }
 
-            Row(
-                Modifier.fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val fwStatusColor = if (!framework.online) FrameworkStatus.OFFLINE.indicatorColor
-                    else frameworkStatus.indicatorColor
-                Box(Modifier.size(8.dp).background(fwStatusColor, CircleShape))
-                Spacer(Modifier.width(ArcoSpacing.sm))
-                Icon(
-                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                    null, Modifier.size(16.dp), tint = ThemeColors.textSecondary
-                )
-                Spacer(Modifier.width(4.dp))
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(framework.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                        if (framework.trusted) {
-                            Spacer(Modifier.width(4.dp))
-                            Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green6.copy(alpha = 0.12f)) {
-                                Text("已信任", Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                    style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6, fontSize = 9.sp)
-                            }
-                        }
-                    }
-                    Text(framework.address, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-                }
-                if (framework.online) {
-                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = frameworkStatus.indicatorColor.copy(alpha = 0.1f)) {
-                        Text(frameworkStatus.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                            style = MaterialTheme.typography.labelSmall, color = frameworkStatus.indicatorColor, fontSize = 10.sp)
-                    }
-                } else {
-                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = FrameworkStatus.OFFLINE.indicatorColor.copy(alpha = 0.1f)) {
-                        Text(FrameworkStatus.OFFLINE.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                            style = MaterialTheme.typography.labelSmall, color = FrameworkStatus.OFFLINE.indicatorColor, fontSize = 10.sp)
-                    }
-                }
-            }
-
-            AnimatedVisibility(visible = expanded) {
-                Column(Modifier.padding(start = 28.dp, bottom = 4.dp)) {
-                    framework.agents.forEach { agentName ->
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .clickable { onSwitchAgent(agentName) }
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(shape = CircleShape, modifier = Modifier.size(22.dp),
-                                color = if (agentName == activeAgent) ThemeColors.brand else ThemeColors.bgCardHigh) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(agentName.take(1), color = if (agentName == activeAgent) Color.White else ThemeColors.textSecondary,
-                                        fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            Spacer(Modifier.width(6.dp))
-                            Text(agentName, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textPrimary)
-                            Spacer(Modifier.weight(1f))
-                            if (agentName == activeAgent) {
-                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.15f)) {
-                                    Text("当前", Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                        style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand, fontSize = 9.sp)
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clickable { expanded = !expanded }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val fwStatusColor = if (!framework.online) FrameworkStatus.OFFLINE.indicatorColor
+                        else frameworkStatus.indicatorColor
+                    Box(Modifier.size(8.dp).background(fwStatusColor, CircleShape))
+                    Spacer(Modifier.width(ArcoSpacing.sm))
+                    Icon(
+                        if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        null, Modifier.size(16.dp), tint = ThemeColors.textSecondary
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(framework.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                            if (framework.trusted) {
+                                Spacer(Modifier.width(4.dp))
+                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green6.copy(alpha = 0.12f)) {
+                                    Text("已信任", Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                        style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6, fontSize = 9.sp)
                                 }
                             }
                         }
+                        Text(framework.address, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                    }
+                    if (framework.online) {
+                        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = frameworkStatus.indicatorColor.copy(alpha = 0.1f)) {
+                            Text(frameworkStatus.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                style = MaterialTheme.typography.labelSmall, color = frameworkStatus.indicatorColor, fontSize = 10.sp)
+                        }
+                    } else {
+                        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = FrameworkStatus.OFFLINE.indicatorColor.copy(alpha = 0.1f)) {
+                            Text(FrameworkStatus.OFFLINE.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                style = MaterialTheme.typography.labelSmall, color = FrameworkStatus.OFFLINE.indicatorColor, fontSize = 10.sp)
+                        }
+                    }
+                }
+
+                AnimatedVisibility(visible = expanded) {
+                    Column(Modifier.padding(start = 28.dp, bottom = 4.dp)) {
+                        framework.agents.forEach { agentName ->
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable { onSwitchAgent(agentName) }
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(shape = CircleShape, modifier = Modifier.size(22.dp),
+                                    color = if (agentName == activeAgent) ThemeColors.brand else ThemeColors.bgCardHigh) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(agentName.take(1), color = if (agentName == activeAgent) Color.White else ThemeColors.textSecondary,
+                                            fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Spacer(Modifier.width(6.dp))
+                                Text(agentName, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textPrimary)
+                                Spacer(Modifier.weight(1f))
+                                if (agentName == activeAgent) {
+                                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.15f)) {
+                                        Text("当前", Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand, fontSize = 9.sp)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
-
-        var showAddFramework by remember { mutableStateOf(false) }
-        OutlinedButton(
-            onClick = { showAddFramework = true },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(ArcoRadius.md)
-        ) {
-            Icon(Icons.Outlined.PersonAdd, null, Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text("添加框架", style = MaterialTheme.typography.labelSmall)
         }
 
         if (showAddFramework) {
@@ -304,11 +328,47 @@ fun SidebarContent(
         // ── Quick Nav ──
         Text("功能", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(ArcoSpacing.sm))
-        SidebarNavItem(Icons.Outlined.Extension, "插件管理", onClick = onNavigateToPlugins)
-        SidebarNavItem(Icons.Outlined.Settings, "设置", onClick = onNavigateToSettings)
-        SidebarNavItem(Icons.Outlined.Terminal, "CLI 参考", onClick = { /* FIX B7: Open CLI.md reference in doc viewer */ })
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
+            val pluginsInteraction = remember { MutableInteractionSource() }
+            val pluginsPressed = pluginsInteraction.collectIsPressedAsState()
+            val pluginsScale by animateFloatAsState(if (pluginsPressed.value) 0.94f else 1f, tween(120))
 
-        Spacer(Modifier.weight(1f))
+            val settingsInteraction = remember { MutableInteractionSource() }
+            val settingsPressed = settingsInteraction.collectIsPressedAsState()
+            val settingsScale by animateFloatAsState(if (settingsPressed.value) 0.94f else 1f, tween(120))
+
+            Surface(
+                onClick = onNavigateToPlugins,
+                shape = RoundedCornerShape(ArcoRadius.md),
+                color = if (pluginsPressed.value) ThemeColors.brand.copy(alpha = 0.12f) else ThemeColors.bgCardHigh,
+                modifier = Modifier.weight(1f).scale(pluginsScale),
+                interactionSource = pluginsInteraction
+            ) {
+                Row(Modifier.padding(horizontal = ArcoSpacing.md, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Extension, null, Modifier.size(18.dp), tint = ThemeColors.brand)
+                    Spacer(Modifier.width(6.dp))
+                    Text("插件", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textPrimary)
+                }
+            }
+            Surface(
+                onClick = onNavigateToSettings,
+                shape = RoundedCornerShape(ArcoRadius.md),
+                color = if (settingsPressed.value) ThemeColors.brand.copy(alpha = 0.12f) else ThemeColors.bgCardHigh,
+                modifier = Modifier.weight(1f).scale(settingsScale),
+                interactionSource = settingsInteraction
+            ) {
+                Row(Modifier.padding(horizontal = ArcoSpacing.md, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Settings, null, Modifier.size(18.dp), tint = ThemeColors.brand)
+                    Spacer(Modifier.width(6.dp))
+                    Text("设置", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textPrimary)
+                }
+            }
+        }
+
+        // Bottom safe area for nav bar
+        Spacer(Modifier.height(ArcoSpacing.lg))
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -562,13 +622,6 @@ private fun AgentCardDialog(
                         )
                     }
                 }
-                Button(
-                    onClick = onSwitchTo,
-                    colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
-                    shape = RoundedCornerShape(ArcoRadius.md)
-                ) {
-                    Text("切换到此智能体", color = Color.White)
-                }
             }
         },
         dismissButton = {
@@ -668,22 +721,6 @@ private fun NewAgentDialog(
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════
 
-@Composable
-private fun SidebarNavItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit
-) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = ArcoSpacing.sm),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
-        Spacer(Modifier.width(ArcoSpacing.sm))
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // Add Framework Dialog
 // ═══════════════════════════════════════════════════════════════════════
@@ -755,7 +792,11 @@ private fun AddFrameworkDialog(onDismiss: () -> Unit) {
                         val trustedDir = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
                         trustedDir.mkdirs()
                         val fwFile = java.io.File(trustedDir, "$name.json")
-                        fwFile.writeText("""{"name":"$name","address":"$address","addedAt":${System.currentTimeMillis()}}""")
+                        // Atomic write — tmp then rename, avoids corruption on crash
+                        val tmp = java.io.File(trustedDir, "$name.tmp.json")
+                        tmp.writeText("""{"name":"$name","address":"$address","addedAt":${System.currentTimeMillis()}}""")
+                        tmp.renameTo(fwFile)
+                        if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
                         onDismiss()
                     }
                 },

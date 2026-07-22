@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.8.0 | **更新**: 2026-07-22 | **架构**: 微内核 + AgentRuntime (UI/运行时分离) + 23 插件 + QwenPaw 风格初始化 + 会话持久化 + 智能体管理
+> **版本**: 0.8.4 | **更新**: 2026-07-22 | **架构**: 微内核 + AgentRuntime (UI/运行时分离) + 23 插件 + QwenPaw 风格初始化 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理
 
 ---
 
@@ -61,10 +61,10 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 
 | 模块 | 类型 | 源文件 | 版本 | 说明 |
 |------|------|--------|------|------|
-| mengpaw-kernel | JVM Library | 47 | 0.8.0 | 微内核：纯 Kotlin，零 Android 依赖 |
+| mengpaw-kernel | JVM Library | 47 | 0.8.4 | 微内核：纯 Kotlin，零 Android 依赖 |
 | mengpaw-core | Android Library | 7 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 5 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
-| mengpaw-shell | APK | 24 | 0.8.0 (vc=30) | 主应用：AgentRuntime + Chat UI + 设置 + 会话持久化 + 智能体管理 |
+| mengpaw-shell | APK | 24 | 0.8.4 (vc=31) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 |
 | mengpaw-browser | APK | 5 | 0.4.0 (vc=6) | 独立浏览器 + BrowserBridge + 22 操控命令 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
@@ -72,7 +72,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 | 命名空间 | 源文件 | 命令数 | 职责 |
 |---------|--------|--------|------|
 | `self` | SelfExecutor.kt | 14 | Agent 自省 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/time/notify.message/notify.banner) |
-| `agent` | AgentExecutor.kt | 11 | 文档管理 (docs/memory/memory.record/cli/profile/soul/audit/browser-tools/dream/cleanup/storage) |
+| `agent` | AgentExecutor.kt | 12 | 文档管理 (docs/memory/memory.record/cli/profile/soul/audit/browser-tools/dream/cleanup/storage/sessions) |
 | `plugin` | PluginExecutor + DevPlugin | 10 + 4 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade + create/audit/share/examples) |
 
 > `sys` 命名空间 (11 命令) 在 `mengpaw-core` 中实现，通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。
@@ -184,7 +184,7 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)` |
 | `AndroidLogger.kt` | 桥接：`KernelLog.setLogger(AndroidLogger())` |
 
-### 3.3 mengpaw-shell（主应用，24 文件，v0.8.0）
+### 3.3 mengpaw-shell（主应用，24 文件，v0.8.4）
 
 | 文件 | 职责 |
 |------|------|
@@ -202,6 +202,12 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 - **会话持久化**: 30s 自动保存 + 退出保存 + 启动恢复, 思考链完整存储
 - **智能体管理**: 点击切换 / 长按名片 / 删除确认 / 添加框架
 - **输入优化**: Enter 发送 / Shift+Enter 换行 / 发送后聚焦
+
+**v0.8.4 核心变更**:
+- **会话管理增强**: 独立会话文件 (`sessions/{id}.json`) + `switchToSession()` 切换恢复 + `agent.sessions` 跨会话搜索 + 原子写入防损坏
+- **引擎可靠性**: 安全命令白名单 (19 个) 防循环误判 + 引擎状态重置防跨任务污染 + 异常时全面状态同步
+- **UI 升级**: 消息区自适应宽度 (平板 80%/手机 95%) + 思考完成自动定位 + 侧栏真实头像 + 框架通讯录持久化
+- **Markdown 增强**: 新增 Heading 块 + Agent 消息非等宽字体
 
 ### 3.4 mengpaw-browser（独立浏览器，5 文件）
 
@@ -284,8 +290,8 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | compileSdk | 35 | 35 | 35 | — |
 | minSdk | 26 | 26 | 26 | — |
 | targetSdk | 35 | 35 | — | — |
-| versionName | 0.6.0 | 0.4.0 | — | 0.1.0 |
-| versionCode | 11 | 6 | — | — |
+| versionName | 0.8.4 | 0.4.0 | — | 0.8.4 |
+| versionCode | 31 | 6 | — | — |
 | R8 | Release 启用 | Release 启用 | 关闭(库模块) | — |
 
 **Shell 权限** (17 项):
@@ -387,7 +393,9 @@ Agent 通过 memory 命令按需加载文档：
 > **v0.6.1 新增**: `tools` — 按命名空间列出所有可用命令；`time` — 获取当前时间 (支持 iso/date/time/timestamp)；`notify.message` — Agent 推送消息到聊天；`notify.banner` — Agent 推送横幅 (支持 info/success/warn/error)
 
 #### agent — 文档管理 (11)
-`docs` | `memory [query]` | `memory.record <content>` | `cli` | `profile` | `soul` | `audit` | `browser-tools` | `dream` | `cleanup` | `storage`
+`docs` | `memory [query]` | `memory.record <content>` | `cli` | `profile` | `soul` | `audit` | `browser-tools` | `dream` | `cleanup` | `storage` | `sessions [keyword] [limit]`
+
+> **v0.8.4 新增**: `sessions` — 跨会话搜索历史记录，支持关键词过滤和条数限制
 
 #### plugin — 插件管理 (10 + 4)
 **内核 (10)**：`marketplace [--refresh]` | `search <query>` | `install <id>` | `uninstall <id>` | `list` | `info <id>` | `enable <id>` | `disable <id>` | `update <id>` | `upgrade --all`
@@ -711,6 +719,7 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.8.4** | 2026-07-22 | **会话管理增强** — 独立会话文件 + 切换恢复 (`switchToSession`) + 跨会话搜索 (`agent.sessions`) + 原子写入防损坏 + 引擎可靠性修复 (安全命令白名单/循环检测优化/状态重置) + UI 升级 (自适应宽度/自动定位/真实头像/Markdown Heading) + 构建统一版本号 (mengpaw.version) |
 | **0.8.0** | 2026-07-22 | **重大架构重构** — UI/运行时分离 (AgentRuntime) + QwenPaw 风格初始化 + 会话完整持久化 (30s 自动保存 + 思考链) + 智能体管理 (长按/删除/框架) + 输入优化 (Enter 发送/聚焦) + 20+ 崩溃/ANR 修复 + Android 13-17 全版本 + 5大国产 OEM 适配 + PadPlugin 移除 + 系统提示词重构 |
 | **0.7.0** | 2026-07-22 | Android CLI 全功能 (11→38 命令) + 全类型 Skill 引擎 + CRON 触发器 + LIFETIME 心跳 + 会话持久化 + 智能体名片 + API 模型更新 + Boost 自动启动 |
 | **0.6.2** | 2026-07-21 | Agent 逻辑修复 — 14 Bug 修复: DreamEngine 参数混淆/大小写/单位错误/dreamLog 缺失; AgentDocManager 索引损坏/ID 解析/数据丢失; Goal 模式上下文丢失; snipStaleToolResults 不生效; Pipeline 缓存; DeepSeek-Chat 解析死循环; RubricGate 改进; API 模型更新 (8 Provider 至最新) |
@@ -739,4 +748,4 @@ ShellService.start(this)   // startForeground + WakeLock
 
 ---
 
-*文档结束 · 最后更新: 2026-07-21 (v0.6.1)*
+*文档结束 · 最后更新: 2026-07-22 (v0.8.4)*

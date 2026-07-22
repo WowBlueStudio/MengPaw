@@ -950,7 +950,7 @@ private fun SystemSettingsContent(
     }
 
     val collector = TokenStatsCollector
-    val models = remember { collector.allModels() }
+    val models = collector.allModels()
     val chartData = remember(statRange) {
         when (statRange) {
             0 -> collector.dailyRecords().map { it.date.substring(5) to it }
@@ -1005,7 +1005,7 @@ private fun SystemSettingsContent(
 
     // About
     SectionHeader(state.strings.about)
-    InfoRow(state.strings.version, "0.8.0")
+    InfoRow(state.strings.version, com.mengpaw.kernel.AgentEngine.CORE_VERSION)
     InfoRow(state.strings.core, "mengpaw-kernel + mengpaw-core")
     InfoRow(state.strings.design, "Arco Design · Compose Material 3")
 
@@ -1036,7 +1036,7 @@ private fun SystemSettingsContent(
         Spacer(Modifier.width(ArcoSpacing.md))
         Column(Modifier.weight(1f)) {
             Text("联系我们", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text("support@wowblue.cn", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+            Text("1138018324@qq.com", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
     }
     Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
@@ -1271,7 +1271,8 @@ private fun FrameworkItemSection(
     order.forEach { cat ->
         val group = grouped[cat] ?: return@forEach
         group.forEach { item ->
-            var expanded by remember { mutableStateOf(false) }
+            key(item.name) {
+                var expanded by remember { mutableStateOf(false) }
             Surface(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                 shape = RoundedCornerShape(ArcoRadius.md),
@@ -1312,6 +1313,7 @@ private fun FrameworkItemSection(
                     }
                 }
             }
+            } // key(item.name)
         }
     }
     Spacer(Modifier.height(ArcoSpacing.sm))

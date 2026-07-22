@@ -40,9 +40,13 @@ data class MdSegment(
 
 /** A block-level Markdown element. */
 sealed class MdBlock {
+    data class Heading(val level: Int, val text: String) : MdBlock() // ## text
     data class Paragraph(val segments: List<MdSegment>) : MdBlock()
     data class CodeBlock(val code: String, val languageHint: String = "") : MdBlock()
     data class Table(val header: List<String>, val rows: List<List<String>>) : MdBlock()
+    data class BulletList(val items: List<String>) : MdBlock()          // - item
+    data class BlockQuote(val text: String) : MdBlock()                // > quote
+    object HorizontalRule : MdBlock()                                  // ---
 }
 
 // ── Parser ──
@@ -53,12 +57,16 @@ sealed class MdBlock {
  */
 fun parseMarkdown(raw: String): List<MdBlock> {
     if (raw.isBlank()) return emptyList()
+    // Cap input to prevent OOM from runaway Agent output
+    val safe = if (raw.length > 100_000) raw.take(100_000) + "\n\n...(truncated)" else raw
 
     val blocks = mutableListOf<MdBlock>()
 
     // Split by ``` fences — alternate between text and code
-    val parts = raw.split("```")
+    val parts = safe.split("```")
+    var blockCount = 0
     parts.forEachIndexed { index, part ->
+        if (blockCount++ > 500) return@forEachIndexed // safety cap
         if (index % 2 == 0) {
             // Text block — parse tables, then inline paragraphs
             val trimmed = part.trim()
@@ -112,48 +120,90 @@ private fun parseTextWithTables(text: String): List<MdBlock> {
     }
 
     fun parseTable(startIdx: Int): Int {
-        // Collect table lines
         val tableLines = mutableListOf<String>()
         var i = startIdx
         while (i < lines.size && isTableRow(lines[i])) {
             tableLines.add(lines[i])
             i++
         }
-        if (tableLines.size < 2) return startIdx // need at least header + separator
+        if (tableLines.size < 2) return startIdx
 
-        // First should be header, second should be separator
         val headerLine = tableLines[0]
         val sepLine = tableLines[1]
-
-        if (!isTableSeparator(sepLine)) {
-            // Not a proper table with separator
-            buffer.addAll(tableLines)
-            return i
-        }
+        if (!isTableSeparator(sepLine)) { buffer.addAll(tableLines); return i }
 
         val header = headerLine.trim().split('|').map { it.trim() }.filter { it.isNotEmpty() }
         val dataRows = tableLines.drop(2).map { line ->
             line.trim().split('|').map { it.trim() }.filter { it.isNotEmpty() }
         }
-
-        if (header.isNotEmpty()) {
-            blocks.add(MdBlock.Table(header, dataRows))
-        }
+        if (header.isNotEmpty()) blocks.add(MdBlock.Table(header, dataRows))
         return i
+    }
+
+    // Parse bullet list items as a group
+    fun flushBulletList(items: List<String>) {
+        if (items.isNotEmpty()) {
+            blocks.add(MdBlock.BulletList(items.map { it.removePrefix("- ").removePrefix("* ").trim() }))
+        }
+    }
+
+    val bulletBuffer = mutableListOf<String>()
+    fun flushBuffers() {
+        flushBulletList(bulletBuffer); bulletBuffer.clear()
+        flushBuffer()
     }
 
     var idx = 0
     while (idx < lines.size) {
-        val line = lines[idx]
-        if (isTableRow(line) && idx + 1 < lines.size && isTableSeparator(lines[idx + 1])) {
-            flushBuffer()
-            idx = parseTable(idx)
-        } else {
-            buffer.add(line)
-            idx++
+        val raw = lines[idx]
+        val trimmed = raw.trim()
+
+        when {
+            // Heading: ## text or ### text
+            trimmed.startsWith("### ") || trimmed.startsWith("## ") || trimmed.startsWith("# ") -> {
+                flushBuffers()
+                val level = trimmed.takeWhile { it == '#' }.length
+                blocks.add(MdBlock.Heading(level, trimmed.removePrefix("#").trimStart()))
+                idx++
+            }
+            // Horizontal rule: --- or *** or ___
+            trimmed.matches(Regex("^[-*_]{3,}$")) -> {
+                flushBuffers()
+                blocks.add(MdBlock.HorizontalRule)
+                idx++
+            }
+            // Blockquote: > text
+            trimmed.startsWith("> ") -> {
+                flushBuffers()
+                val quoteLines = mutableListOf<String>()
+                while (idx < lines.size && lines[idx].trimStart().startsWith("> ")) {
+                    quoteLines.add(lines[idx].trimStart().removePrefix("> ").trim())
+                    idx++
+                }
+                blocks.add(MdBlock.BlockQuote(quoteLines.joinToString("\n")))
+            }
+            // Bullet list: - item or * item
+            trimmed.startsWith("- ") || trimmed.startsWith("* ") -> {
+                flushBuffer() // flush paragraph, keep bullets
+                bulletBuffer.add(trimmed)
+                // Check next line; if not bullet, flush
+                if (idx + 1 >= lines.size || !lines[idx + 1].trim().let { it.startsWith("- ") || it.startsWith("* ") }) {
+                    flushBulletList(bulletBuffer); bulletBuffer.clear()
+                }
+                idx++
+            }
+            // Table
+            isTableRow(lines[idx]) && idx + 1 < lines.size && isTableSeparator(lines[idx + 1]) -> {
+                flushBuffers()
+                idx = parseTable(idx)
+            }
+            else -> {
+                buffer.add(raw)
+                idx++
+            }
         }
     }
-    flushBuffer()
+    flushBuffers()
 
     return blocks
 }
@@ -283,21 +333,71 @@ fun MarkdownText(
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)) {
         blocks.forEach { block ->
             when (block) {
-                is MdBlock.Paragraph -> ParagraphBlock(
-                    block, textStyle, inlineCodeColor, linkColor
-                )
-                is MdBlock.CodeBlock -> CodeBlockView(
-                    block, textStyle, codeBackgroundColor
-                )
-                is MdBlock.Table -> TableView(
-                    block, textStyle, codeBackgroundColor
-                )
+                is MdBlock.Heading -> HeadingView(block, textStyle)
+                is MdBlock.Paragraph -> ParagraphBlock(block, textStyle, inlineCodeColor, linkColor)
+                is MdBlock.CodeBlock -> CodeBlockView(block, textStyle, codeBackgroundColor)
+                is MdBlock.Table -> TableView(block, textStyle, codeBackgroundColor)
+                is MdBlock.BulletList -> BulletListView(block, textStyle, inlineCodeColor, linkColor)
+                is MdBlock.BlockQuote -> BlockQuoteView(block, textStyle)
+                is MdBlock.HorizontalRule -> HorizontalDivider(color = ThemeColors.border, thickness = 0.5.dp)
             }
         }
     }
 }
 
 // ── Block composables ──
+
+@Composable
+private fun HeadingView(heading: MdBlock.Heading, baseStyle: TextStyle) {
+    val scale = when (heading.level) { 1 -> 1.35f; 2 -> 1.2f; else -> 1.1f }
+    Text(
+        text = heading.text,
+        style = baseStyle.copy(
+            fontWeight = FontWeight.Bold,
+            fontSize = (baseStyle.fontSize.value * scale).sp
+        ),
+        color = ThemeColors.textPrimary,
+        modifier = Modifier.padding(top = if (heading.level <= 2) 6.dp else 2.dp)
+    )
+}
+
+@Composable
+private fun BulletListView(
+    list: MdBlock.BulletList,
+    baseStyle: TextStyle,
+    codeColor: Color,
+    linkColor: Color
+) {
+    Column(Modifier.padding(start = 8.dp)) {
+        list.items.forEach { item ->
+            Row(Modifier.padding(vertical = 1.dp)) {
+                Text("•  ", style = baseStyle, color = ThemeColors.textSecondary)
+                // Parse inline formatting within list item
+                val segments = parseInline(item)
+                if (segments.isNotEmpty()) {
+                    ParagraphBlock(MdBlock.Paragraph(segments), baseStyle, codeColor, linkColor)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BlockQuoteView(quote: MdBlock.BlockQuote, baseStyle: TextStyle) {
+    Row(Modifier.fillMaxWidth()) {
+        Box(
+            Modifier.width(3.dp).fillMaxHeight()
+                .background(ThemeColors.brand.copy(alpha = 0.4f))
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = quote.text,
+            style = baseStyle.copy(fontStyle = FontStyle.Italic),
+            color = ThemeColors.textSecondary,
+            modifier = Modifier.weight(1f).padding(vertical = 4.dp)
+        )
+    }
+}
 
 @Composable
 private fun ParagraphBlock(
