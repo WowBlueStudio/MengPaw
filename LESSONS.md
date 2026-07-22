@@ -4,6 +4,54 @@
 
 ---
 
+## 2026-07-22 — v0.8.0 架构重构 + 启动崩溃根因
+
+### 架构教训
+
+19. **UI 和运行时必须完全分离 (AgentRuntime 模式)**
+    - 场景: UI 层 LaunchedEffect 直接调用 configureLlm → startAgent → LLM 调用 → 主线程阻塞
+    - 后果: 多次重构 (IO/Main 线程切换) 均失败, withContext(Main) 导致死锁
+    - 改进: 创建独立的 AgentRuntime 单例, 所有 IO/网络/文件操作在此, UI 只观察 StateFlow
+    - 原则: **Compose UI 层 = 纯展示 + 事件分派; 运行时层 = 所有副作用。中间用 StateFlow 通信**
+
+20. **Agent 初始化必须是用户驱动的 (QwenPaw 模型)**
+    - 场景: 自动在"退出设置"或"粘贴 API Key"时启动 Agent, 导致 ANR 和崩溃
+    - 后果: 尝试过: 粘贴即启动 → ANR; 退出设置即启动 → ANR; IO 线程启动 → 死锁
+    - 改进: 安装→配置→用户发消息 三阶段。Agent 永远不会自动启动
+    - 原则: **用户发第一条消息 = Agent 唯一启动时机。所有自动启动方案都是错的**
+
+21. **`startForeground()` 失败必须 `stopSelf()` — 否则 5 秒后系统杀进程**
+    - 场景: Android 14+ `FOREGROUND_SERVICE_SPECIAL_USE` 权限缺失 → `startForeground()` 抛异常 → try/catch 静默吞掉
+    - 后果: 5 秒后系统抛 `ForegroundServiceDidNotStartInTimeException` → 进程崩溃。这解释了"运行 10 分钟后崩溃"的模式 (WakeReceiver 每 10 分钟重启服务)
+    - 修复: `if (!startForeground(...)) { stopSelf(); return }` — 立即自杀, 不给系统 5 秒后杀进程的机会
+    - 原则: **`startForeground()` 的 try/catch 不能只打日志, 必须 `stopSelf()`**
+
+22. **每个 `foregroundServiceType` 都需要对应的权限声明**
+    - `dataSync` → `FOREGROUND_SERVICE_DATA_SYNC`
+    - `specialUse` → `FOREGROUND_SERVICE_SPECIAL_USE`
+    - Android 14+ targetSDK=35 强制执行, 且不同 OEM 在不同时机检查 (荣耀延迟检查)
+    - 原则: **添加任何 foregroundServiceType 时, 同时添加对应权限, 不可遗漏**
+
+23. **Compose TextField 发送后必须重新请求焦点**
+    - 场景: Enter 发送消息 → `inputText = ""` → TextField 内容为空 → 焦点丢失
+    - 后果: 用户需要手动点击输入框才能继续输入, 严重影响体验
+    - 修复: `inputFocus.requestFocus()` 在清空文本后立即调用
+    - 原则: **任何清空输入框的操作后必须 `requestFocus()`**
+
+24. **会话恢复不只恢复 UI, 还要恢复 Agent 上下文**
+    - 场景: 保存会话消息到 JSON → 重启后 UI 显示消息 → 但 Agent 引擎内部 session 是空的
+    - 后果: Agent 把新消息当成第一条, 看不到上文 → 用户困惑
+    - 修复: `submitTask` 时检测历史消息 → 构建"先前对话"上下文 → 注入到 prompt 中
+    - 原则: **保存/恢复必须同时覆盖 1)UI 状态 2)引擎状态 3)文件系统 三个层面**
+
+25. **系统提示词必须反映当前文件结构**
+    - 场景: 提示词仍引用 CLI.md (早已迁移到 Tools 系统), Agent 执行无意义的 `agent.cli` 调用
+    - 后果: Agent 浪费步数查阅不存在的文件
+    - 修复: 系统提示词更新为 `self.tools [ns]` + `agent.docs` 为主要入口
+    - 原则: **每次重构文件结构后, 必须同步更新所有 Agent 可见的提示词和文档模板**
+
+---
+
 ## 2026-07-22 — v0.7.2 Android 13-17 兼容性修复
 
 ### 版本兼容
