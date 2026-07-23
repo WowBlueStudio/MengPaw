@@ -1361,8 +1361,8 @@ private fun FrameworkItemSection(
                         if (item.docMarkdown.isNotBlank()) {
                             MarkdownText(
                                 content = item.docMarkdown,
-                                modifier = Modifier.padding(top = ArcoSpacing.sm).heightIn(max = 400.dp)
-                                    .verticalScroll(rememberScrollState())
+                                modifier = Modifier.padding(top = ArcoSpacing.sm)
+                                    .heightIn(max = 400.dp)
                             )
                         } else {
                             Text("暂无文档", Modifier.padding(top = ArcoSpacing.sm),
