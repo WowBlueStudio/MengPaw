@@ -350,7 +350,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                                             CoroutineScope(Dispatchers.IO).launch {
                                                 startAcpForTwin(ctx, name)
                                             }
-                                            android.widget.Toast.makeText(ctx, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
+                                            android.widget.Toast.makeText(ctx, "💾 自动备份已激活", android.widget.Toast.LENGTH_SHORT).show()
                                         },
                                         onFailure = { e ->
                                             android.util.Log.e("MengPawTwin", "激活失败: ${e.message}", e)
@@ -366,7 +366,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                                             CoroutineScope(Dispatchers.IO).launch {
                                                 startAcpForTwin(ctx, name)
                                             }
-                                            android.widget.Toast.makeText(ctx, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
+                                            android.widget.Toast.makeText(ctx, "💾 自动备份已激活", android.widget.Toast.LENGTH_SHORT).show()
                                         },
                                         onFailure = { e2 ->
                                             android.util.Log.e("MengPawTwin", "二次激活失败: ${e2.message}", e2)

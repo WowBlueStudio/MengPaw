@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.12.12 (2026-07-24) — 记忆孪生配对 + 自动恢复
+
+### 新功能: 记忆孪生 (plugin-memory-twin)
+- **5连击激活**: 侧边栏 MengPaw 图标连续点击5次 → 安全确认弹窗 → 激活孪生
+- **发起配对**: FrameworkCardDialog 中 "发起孪生配对" 按钮 → 直接 HTTP POST 到对方 ACP
+- **接收方弹窗**: 配对请求写入 inbox 文件 → UI 轮询 → 安全确认弹窗 "请确认是个人设备请求"
+- **自动同步**: 配对后自动启动 60s 周期账本同步
+- **重启自动恢复**: `twin_activated` 标记, 下次启动自动恢复 ACP + 同步
+
+### 内核改动
+- `AcpMessageType` 新增 6 个孪生消息类型 (LEDGER_HEAD/PULL/BATCH/ACK, CAPABILITY_ANNOUNCE, TWIN_DELEGATE)
+- `CAPABILITY_ANNOUNCE` / `TWIN_DELEGATE` 绕过 PromptFirewall (配对即建立信任)
+- `PluginManager.initializeGlobalInstance()` 注入真实核心版本
+- `DataPaths` 新增 TWIN_LEDGER/TWIN_PEERS/TWIN_AUDIT/TWIN_DREAMS 路径
+
+### BUG 修复
+- `AcpHttpTransport.startListener()` 显式启动 ServerSocket
+- JSON payload 正确转义 (JSONObject.quote)
+- inbox 文件轮询替代 StateFlow 跨层传递
+- 孪生服务重启自动恢复
+
+### 经验教训
+- `docs/lessons-memory-twin.md`
+
 ## v0.12.1 (2026-07-24) — 表格渲染修复 + 系统提示优化 + 会话恢复 + 经验总结
 
 ### UI
