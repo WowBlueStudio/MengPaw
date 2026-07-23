@@ -357,40 +357,36 @@ private fun TableTextView(block: MdBlock.Table, baseStyle: TextStyle, background
     if (block.header.isEmpty() && block.rows.isEmpty()) return
 
     // 计算每列最大宽度（中文算 2，英文/数字算 1）
-    fun colWidth(s: String): Int = s.map { if (it.code > 127) 2 else 1 }.sum()
+    // GFM 原生表格格式 — 所有字符均在基本字体中，无渲染问题
     val colWidths = mutableListOf<Int>()
     val allRows = listOf(block.header) + block.rows
     allRows.forEach { row ->
         row.forEachIndexed { i, cell ->
-            val w = colWidth(cell)
+            val w = cell.length
             while (colWidths.size <= i) colWidths.add(0)
             if (w > colWidths[i]) colWidths[i] = w
         }
     }
-    // 最小列宽 4
-    colWidths.replaceAll { maxOf(it, 4) }
+    colWidths.replaceAll { maxOf(it, 3) }
+
+    fun padCell(cell: String, width: Int): String {
+        val pad = maxOf(0, width - cell.length)
+        return " $cell${" ".repeat(pad)} "
+    }
 
     val tableText = buildString {
-        fun renderRow(cells: List<String>) {
-            append("│")
-            cells.forEachIndexed { i, cell ->
-                val w = colWidths.getOrElse(i) { 4 }
-                val pad = maxOf(0, w - colWidth(cell))
-                append(" $cell${" ".repeat(pad)} │")
-            }
+        // Header
+        append("|"); block.header.forEachIndexed { i, c -> append(padCell(c, colWidths.getOrElse(i) { 3 })); append("|") }
+        append("\n")
+        // Separator
+        append("|"); colWidths.forEachIndexed { i, w -> append("-".repeat(w + 2)); append("|") }
+        append("\n")
+        // Data rows
+        block.rows.forEach { row ->
+            append("|")
+            row.forEachIndexed { i, c -> append(padCell(c, colWidths.getOrElse(i) { 3 })); append("|") }
             append("\n")
         }
-
-        // 顶部分隔
-        append("┌"); colWidths.forEachIndexed { i, w -> append("${"─".repeat(w + 2)}${if (i < colWidths.lastIndex) "┬" else "┐"}") }
-        append("\n")
-        renderRow(block.header)
-        // 头分隔
-        append("├"); colWidths.forEachIndexed { i, w -> append("${"─".repeat(w + 2)}${if (i < colWidths.lastIndex) "┼" else "┤"}") }
-        append("\n")
-        block.rows.forEach { renderRow(it) }
-        // 底部分隔
-        append("└"); colWidths.forEachIndexed { i, w -> append("${"─".repeat(w + 2)}${if (i < colWidths.lastIndex) "┴" else "┘"}") }
     }
 
     Surface(shape = RoundedCornerShape(ArcoRadius.md), color = background, modifier = Modifier.fillMaxWidth()) {
