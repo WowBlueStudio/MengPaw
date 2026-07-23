@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.10.0 | **更新**: 2026-07-23 | **架构**: 微内核 + AgentRuntime (UI/运行时分离) + 23 插件 + 框架协议插件 + 品牌焕新 + 扩展功能重构 + 侧边栏交互 + 智能体/框架名片
+> **版本**: 0.11.3 | **更新**: 2026-07-23 | **架构**: 微内核 + AgentRuntime + 23 插件 + 框架协议 + 品牌焕新 + 扩展功能重构 + 侧边栏交互 + 智能体/框架名片 + commonmark AST 引擎
 
 ---
 
@@ -203,6 +203,27 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 - **智能体管理**: 点击切换 / 长按名片 / 删除确认 / 添加框架
 - **输入优化**: Enter 发送 / Shift+Enter 换行 / 发送后聚焦
 
+**v0.10.0 核心变更**:
+- **框架协议插件**: mDNS 局域网注册/发现, framework.* 6 命令, 持续扫描, 指纹/Agent列表广播
+- **框架名片**: 长按查看名称/版本/地址/Agent列表/备注/信任, 可编辑
+- **亮/暗/跟随系统**: 三档主题切换, 跟随系统暗色模式
+- **扩展功能重构**: 文件提交区 (图片/文档/文件/拍照) + 执行模式区 (/Mission /Research /Translate /Dream) + 插件工具区
+- **输入标签系统**: AssistChip 标签显示活跃模式, @agent 自动补全
+- **侧边栏交互**: 顶栏头像替代菜单图标, 全局右滑/左滑
+- **PAD悬浮窗移除**: 物理删除 plugin-pad 目录及所有引用
+- **Gemini 路由**: ip-api.com → 系统时区/语言判断, 默认走 Gitee
+
+**v0.11.0 核心变更**:
+- **Markdown 引擎重构**: commonmark-java AST 替代手写 ~300 行正则解析器, GFM 表格/删除线/嵌套列表
+- **线程优化**: MarkdownText Column+verticalScroll, AgentDocs→Dispatchers.IO
+- **视觉表格渲染**: cells<80→Compose 行列布局, ≥80→等宽文本
+
+**v0.11.3 核心变更**:
+- **嵌套滚动根除**: MarkdownText 新增 nestedScroll 参数, License/Attribution 不再闪退
+- **ShellService 崩溃修复**: deleteNotificationChannel SecurityException
+- **许可证/致谢独立页面**: 全文 res/raw 嵌入, Markdown 渲染
+- **ATTRIBUTIONS 更新**: 添加 commonmark-java 和 MarkLeaf 致谢
+
 **v0.9.1 核心变更**:
 - **品牌焕新**: 主题色 #165DFF→#0E4397 (深蓝)，辅助色 →#FC5185 (粉色)，ArcoColors 蓝色系/Pink 系列全面更新
 - **启动页**: 代码绘制 "WOW BLUE" 替换为品牌 "哇" 矢量图标 (ic_wowblue_icon.xml) + "WowBlue" 文字
@@ -297,8 +318,8 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | compileSdk | 35 | 35 | 35 | — |
 | minSdk | 26 | 26 | 26 | — |
 | targetSdk | 35 | 35 | — | — |
-| versionName | 0.10.0 | 0.4.0 | — | 0.10.0 |
-| versionCode | 1000 | 6 | — | — |
+| versionName | 0.11.3 | 0.4.0 | — | 0.11.3 |
+| versionCode | 1130 | 6 | — | — |
 | R8 | Release 启用 | Release 启用 | 关闭(库模块) | — |
 
 **Shell 权限** (17 项):
@@ -726,6 +747,8 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.11.3** | 2026-07-23 | **嵌套滚动根除 + 视觉表格 + commonmark 引擎全覆盖** — MarkdownText nestedScroll 参数 + 表格 widthIn(min) 列宽 + Image/HtmlBlock/嵌套列表/TableBody AST 全量转换 + ShellService deleteChannel SecurityException |
+| **0.11.0** | 2026-07-23 | **线程架构优化 + commonmark AST 引擎** — P0: Column+verticalScroll 替代 LazyColumn, P1: AgentDocs→Dispatchers.IO, commonmark-java 替代手写解析器, 视觉表格渲染 |
 | **0.10.0** | 2026-07-23 | **框架协议插件 + 侧边栏交互 + 主题系统** — 框架发现插件 (mDNS 局域网注册/扫描/指纹) + 侧边栏头像打开 + 全局滑动手势 + 智能体名片重排 (工作区滚动) + 框架名片 (名称/版本/备注/Agent列表) + 亮/暗/跟随系统三档主题 + GeoRouter 系统时区判断 + 插件管理页精简 + PAD 插件移除 + 启动页品牌 Logo 替换 |
 | **0.9.1** | 2026-07-22 | **品牌焕新 + 扩展功能重构** — 主题色更新 (#0E4397/#FC5185) + 启动页品牌 Logo 替换 + 扩展面板三区重构 (文件提交/执行模式/插件工具) + `/Mission` `/Research` `/Translate` `/Dream` 斜杠命令标签 + `@agent` 自动补全 + 气泡模式标注 + 面板图标自定义排序 |
 | **0.9.0** | 2026-07-22 | **安全强化 + 模板文件化** — 三大安全保护去除开关/强制启用 + IntegrityGuard 接入 Pipeline 指令链 (之前从未实例化) + MD 模板从 Kotlin 硬编码字符串改为 assets .md 文件 (7 个模板 ~350 行代码删除) + 智能体专属工具/技能 (全局池安装/Agent 自装/用户提供路径) + 设置页文案重构 (全局工具/智能体工具) + 废弃插件目录物理删除 |
@@ -758,4 +781,4 @@ ShellService.start(this)   // startForeground + WakeLock
 
 ---
 
-*文档结束 · 最后更新: 2026-07-23 (v0.10.0)*
+*文档结束 · 最后更新: 2026-07-23 (v0.11.3)*
