@@ -11,8 +11,8 @@ data class WorkerMonitor(
 
 /** Verifier sub-Agent status. */
 data class VerifierMonitor(
-    var totalWorkers: Int = 0, var verified: Int = 0,
-    var failed: Int = 0, var currentCheck: String = ""
+    val totalWorkers: Int = 0, val verified: Int = 0,
+    val failed: Int = 0, val currentCheck: String = ""
 ) {
     val summary: String get() = when {
         totalWorkers == 0 -> "等待 Worker..."
@@ -23,31 +23,68 @@ data class VerifierMonitor(
     }
 }
 
-/** Shared mission monitoring state — used by plugins and UI. */
+typealias MissionListener = (MissionSnapshot) -> Unit
+
+data class MissionSnapshot(
+    val active: Boolean,
+    val goal: String,
+    val workers: List<WorkerMonitor>,
+    val verifier: VerifierMonitor
+)
+
+/**
+ * Shared mission monitoring state — used by plugins and UI.
+ *
+ * Plugins call [start], [updateWorker], [stop] during Mission execution.
+ * UI observes changes via [addListener] / [removeListener].
+ * The shell layer wraps this with Compose-observable state for reactive UI.
+ */
 object MissionMonitor {
     val workers = mutableListOf<WorkerMonitor>()
-    val verifier = VerifierMonitor()
+    var verifier = VerifierMonitor()
+        private set
     var missionActive = false
+        private set
     var missionGoal = ""
+        private set
+
+    private val listeners = mutableListOf<MissionListener>()
+
+    fun addListener(l: MissionListener) { listeners.add(l) }
+    fun removeListener(l: MissionListener) { listeners.remove(l) }
+
+    private fun emit() {
+        val snapshot = MissionSnapshot(missionActive, missionGoal, workers.toList(), verifier)
+        listeners.toList().forEach { it(snapshot) }
+    }
 
     fun reset() {
-        workers.clear(); verifier.totalWorkers = 0
-        verifier.verified = 0; verifier.failed = 0
+        workers.clear(); verifier = VerifierMonitor()
         missionActive = false; missionGoal = ""
+        emit()
     }
 
     fun start(goal: String, workerCount: Int) {
         reset(); missionActive = true; missionGoal = goal
-        verifier.totalWorkers = workerCount
+        verifier = verifier.copy(totalWorkers = workerCount)
+        emit()
     }
 
     fun updateWorker(id: String, task: String, status: String, progress: Int = 0, output: String = "") {
         val existing = workers.indexOfFirst { it.id == id }
+        val oldStatus = if (existing >= 0) workers[existing].status else ""
         val w = WorkerMonitor(id, task, status, progress, output)
         if (existing >= 0) workers[existing] = w else workers.add(w)
-        if (status == "verified") verifier.verified++
-        if (status == "failed") verifier.failed++
+        // Only count terminal transitions once (avoid double-counting on re-updates)
+        val v = verifier
+        val newVerified = v.verified + (if (status == "verified" && oldStatus != "verified") 1 else 0)
+        val newFailed = v.failed + (if (status == "failed" && oldStatus != "failed") 1 else 0)
+        verifier = v.copy(verified = newVerified, failed = newFailed)
+        emit()
     }
 
-    fun stop() { missionActive = false }
+    fun stop() {
+        missionActive = false
+        emit()
+    }
 }

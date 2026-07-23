@@ -93,7 +93,7 @@ object AgentTemplates {
         val workspaceDir = File(DataPaths.AGENTS, agentName)
         if (!workspaceDir.exists()) workspaceDir.mkdirs()
 
-        val templateFiles = templateDir.listFiles()?.filter { it.extension == "md" } ?: emptyList()
+        val templateFiles = try { templateDir.listFiles()?.filter { it.extension == "md" } ?: emptyList() } catch (_: Exception) { emptyList() }
         for (template in templateFiles) {
             val targetFile = File(workspaceDir, template.name)
             if (targetFile.exists()) continue // Preserve agent's existing file
@@ -119,6 +119,6 @@ object AgentTemplates {
      */
     fun isReady(): Boolean {
         val dir = File(DataPaths.AGENT_TEMPLATES)
-        return dir.exists() && dir.isDirectory && (dir.listFiles()?.isNotEmpty() == true)
+        return dir.exists() && dir.isDirectory && (try { dir.listFiles()?.isNotEmpty() == true } catch (_: Exception) { false })
     }
 }

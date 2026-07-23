@@ -3,6 +3,7 @@
 
 package com.mengpaw.shell.ui.screens
 
+import com.mengpaw.kernel.error.ErrorCollector
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -53,7 +54,9 @@ data class FrameworkContact(
     val trusted: Boolean,
     val agents: List<String>,
     val version: String = "",
-    val frameworkName: String = ""
+    val frameworkName: String = "",
+    val remark: String = "",
+    val frameworkType: String = "mengpaw"
 )
 
 /** Data class for new agent creation form. */
@@ -98,10 +101,10 @@ fun SidebarContent(
     val agentsDir = File(com.mengpaw.kernel.DataPaths.AGENTS)
     // Exclude system dirs (inbox, team, acp, incubator) from agent list
     val systemDirs = setOf("inbox", "team", "acp", "incubator", "agent-001")
-    val discoveredAgents = agentsDir.listFiles()
+    val discoveredAgents = try { agentsDir.listFiles()
         ?.filter { it.isDirectory && it.name !in systemDirs && !it.name.startsWith(".") }
         ?.map { it.name }?.sorted()
-        ?.ifEmpty { listOf("MengPaw") } ?: listOf("MengPaw")
+        ?.ifEmpty { listOf("MengPaw") } ?: listOf("MengPaw") } catch (_: Exception) { listOf("MengPaw") }
 
     Column(Modifier.fillMaxHeight().width(280.dp).padding(ArcoSpacing.lg).verticalScroll(rememberScrollState())) {
         // ── Agents ──
@@ -232,7 +235,9 @@ fun SidebarContent(
                                 address = json.optString("address", ""),
                                 online = false,
                                 trusted = true,
-                                agents = emptyList()
+                                agents = emptyList(),
+                                remark = json.optString("remark", ""),
+                                frameworkType = json.optString("frameworkType", "mengpaw")
                             ))
                         } catch (_: Exception) { /* skip corrupted files */ }
                     }
@@ -242,14 +247,16 @@ fun SidebarContent(
             discovered.forEach { peer ->
                 val existing = contacts.indexOfFirst { it.name == peer.name }
                 if (existing >= 0) {
-                    // 更新在线状态和 Agent 列表
+                    // 更新在线状态和 Agent 列表, 保留已有的 remark 和 frameworkType
                     val old = contacts[existing]
                     contacts[existing] = old.copy(
                         online = peer.lastSeen > System.currentTimeMillis() - 120_000,
                         address = "${peer.address}:${peer.port}",
                         agents = peer.agents,
                         version = peer.version,
-                        frameworkName = peer.frameworkName
+                        frameworkName = peer.frameworkName,
+                        remark = peer.remark.ifBlank { old.remark },
+                        frameworkType = peer.frameworkType.let { if (it != "mengpaw") it else old.frameworkType }
                     )
                 } else {
                     contacts.add(FrameworkContact(
@@ -259,7 +266,9 @@ fun SidebarContent(
                         trusted = peer.trusted,
                         agents = peer.agents,
                         version = peer.version,
-                        frameworkName = peer.frameworkName
+                        frameworkName = peer.frameworkName,
+                        remark = peer.remark,
+                        frameworkType = peer.frameworkType
                     ))
                 }
             }
@@ -292,10 +301,21 @@ fun SidebarContent(
                         if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
                         null, Modifier.size(16.dp), tint = ThemeColors.textSecondary
                     )
+                    Spacer(Modifier.width(2.dp))
+                    // 框架类型图标
+                    val typeIcon = frameworkTypeIcon(framework.frameworkType)
+                    Icon(typeIcon, framework.frameworkType, Modifier.size(14.dp),
+                        tint = ThemeColors.textSecondary.copy(alpha = 0.7f))
                     Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f)) {
+                        val displayName = framework.remark.ifBlank { framework.name }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(framework.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                            Text(displayName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                            if (framework.remark.isNotBlank()) {
+                                Spacer(Modifier.width(4.dp))
+                                Text(framework.name, style = MaterialTheme.typography.labelSmall,
+                                    color = ThemeColors.textSecondary, fontSize = 9.sp)
+                            }
                             if (framework.trusted) {
                                 Spacer(Modifier.width(4.dp))
                                 Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green6.copy(alpha = 0.12f)) {
@@ -304,21 +324,38 @@ fun SidebarContent(
                                 }
                             }
                         }
-                        val softLabel = if (framework.frameworkName.isNotBlank() && framework.version.isNotBlank())
-                            "${framework.frameworkName} v${framework.version}"
-                        else framework.address
+                        // 协议标签 (ACP / MCP / REST)
+                        val proto = com.mengpaw.plugin.framework.FrameworkPeerStore.PROTOCOL_LABELS[framework.frameworkType]
+                        val protoLabel = proto?.first  // ACP | MCP | REST
+                        val softLabel = buildString {
+                            if (framework.frameworkName.isNotBlank() && framework.version.isNotBlank()) {
+                                append("${framework.frameworkName} v${framework.version}")
+                            } else {
+                                append(framework.address)
+                            }
+                        }
                         Text(softLabel, style = MaterialTheme.typography.labelSmall,
                             color = ThemeColors.textSecondary, fontSize = 10.sp)
                     }
+                    // 协议徽章 — 纯文本，无颜色区分
+                    val proto = com.mengpaw.plugin.framework.FrameworkPeerStore.PROTOCOL_LABELS[framework.frameworkType]
+                    val protoLabel = proto?.first ?: "?"
+                    Spacer(Modifier.width(4.dp))
+                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh) {
+                        Text(protoLabel, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 9.sp)
+                    }
                     if (framework.online) {
+                        Spacer(Modifier.width(4.dp))
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = frameworkStatus.indicatorColor.copy(alpha = 0.1f)) {
                             Text(frameworkStatus.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                style = MaterialTheme.typography.labelSmall, color = frameworkStatus.indicatorColor, fontSize = 10.sp)
+                                style = MaterialTheme.typography.labelSmall, color = frameworkStatus.indicatorColor, fontSize = 9.sp)
                         }
                     } else {
+                        Spacer(Modifier.width(4.dp))
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = FrameworkStatus.OFFLINE.indicatorColor.copy(alpha = 0.1f)) {
                             Text(FrameworkStatus.OFFLINE.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                style = MaterialTheme.typography.labelSmall, color = FrameworkStatus.OFFLINE.indicatorColor, fontSize = 10.sp)
+                                style = MaterialTheme.typography.labelSmall, color = FrameworkStatus.OFFLINE.indicatorColor, fontSize = 9.sp)
                         }
                     }
                 }
@@ -591,11 +628,11 @@ private fun AgentCardDialog(
 
                 // Workspace files summary
                 val mdFiles = remember(agentName) {
-                    agentDir.listFiles()
+                    try { agentDir.listFiles()
                         ?.filter { it.extension == "md" }
                         ?.map { it.name }
                         ?.sorted()
-                        ?: emptyList()
+                        ?: emptyList() } catch (_: Exception) { emptyList() }
                 }
                 if (mdFiles.isNotEmpty()) {
                     Text(
@@ -762,21 +799,95 @@ private fun NewAgentDialog(
 // Add Framework Dialog
 // ═══════════════════════════════════════════════════════════════════════
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddFrameworkDialog(onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
+    var frameworkType by remember { mutableStateOf("mengpaw") }
+    var typeExpanded by remember { mutableStateOf(false) }
     var isDiscovering by remember { mutableStateOf(false) }
     var discovered by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+
+    val typeOptions = listOf(
+        "mengpaw" to "MengPaw (ACP)",
+        "claude-code" to "Claude Code (MCP)",
+        "trea-ide" to "Trea IDE (MCP)",
+        "trea-work" to "Trea Work (MCP)",
+        "cursor" to "Cursor (MCP)",
+        "opencode" to "OpenCode (MCP)",
+        "reasonix" to "Reasonix (MCP)",
+        "workbuddy" to "Workbuddy (MCP)",
+        "openclaw" to "OpenClaw (WS)",
+        "qclaw" to "Qclaw (WS)",
+        "hermes" to "Hermes (WS)",
+        "codex" to "Codex (WS)",
+        "qwenpaw" to "QwenPaw (REST)",
+        "coze" to "Coze (REST)",
+        "collab-cli" to "collab-cli (FILE)",
+        "kimi-desktop" to "Kimi Desktop (?)",
+        "custom" to "自定义协议"
+    )
+    val typeLabels = mapOf(
+        "mengpaw" to "MengPaw · ACP · 端口 9876 · mDNS 自动发现 · 双向实时",
+        "claude-code" to "Claude Code · MCP · JSON-RPC · 手动配置 · 单向实时",
+        "trea-ide" to "Trea IDE · MCP · JSON-RPC · 手动配置 · 单向实时",
+        "trea-work" to "Trea Work · MCP · JSON-RPC · 云端执行 · 单向实时",
+        "cursor" to "Cursor · MCP · JSON-RPC · IDE 扩展 · 单向实时",
+        "opencode" to "OpenCode · MCP · JSON-RPC · 手动配置 · 单向实时",
+        "reasonix" to "Reasonix · MCP · JSON-RPC · MCP 插件 · 单向实时",
+        "workbuddy" to "Workbuddy · MCP · JSON-RPC · MCP 连接器 · 单向实时",
+        "openclaw" to "OpenClaw · WebSocket · 端口 18789 · 手动配置 · 单向实时",
+        "qclaw" to "Qclaw · WebSocket · 端口 18789 · OpenClaw 衍生 · 单向实时",
+        "hermes" to "Hermes · WebSocket · Gateway 模式 · 单向实时",
+        "codex" to "Codex · Unix Socket · 本地进程 · 单向实时",
+        "qwenpaw" to "QwenPaw · REST · FastAPI HTTP · 手动配置 · 单向轮询",
+        "coze" to "Coze · REST · 云端 API · 单向轮询",
+        "collab-cli" to "collab-cli · FILE · 文件系统共享 · UDP 广播 :9528 · 双向 · MIT 开源",
+        "kimi-desktop" to "Kimi Desktop · 协议待验证 · Electron 桌面应用",
+        "custom" to "自定义框架 · 手动配置协议和端口"
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("添加框架", fontWeight = FontWeight.Bold) },
         text = {
             Column {
-                Text("通过 ACP 协议连接到其他 MengPaw 设备或兼容框架。",
+                Text(typeLabels[frameworkType] ?: "",
                     style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                 Spacer(Modifier.height(ArcoSpacing.md))
+
+                // 框架类型选择
+                Text("框架类型", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                Spacer(Modifier.height(4.dp))
+                ExposedDropdownMenuBox(expanded = typeExpanded, onExpandedChange = { typeExpanded = it }) {
+                    OutlinedTextField(
+                        value = typeOptions.first { it.first == frameworkType }.second,
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
+                        shape = RoundedCornerShape(ArcoRadius.md)
+                    )
+                    ExposedDropdownMenu(expanded = typeExpanded, onDismissRequest = { typeExpanded = false }) {
+                        typeOptions.forEach { (type, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label, fontSize = 14.sp) },
+                                onClick = {
+                                    frameworkType = type
+                                    typeExpanded = false
+                                    // 自动设置默认端口
+                                    val defaultPort = com.mengpaw.plugin.framework.FrameworkPeerStore.FRAMEWORK_TYPES[type] ?: 0
+                                    if (defaultPort > 0 && address.isBlank()) {
+                                        address = ":$defaultPort"
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(ArcoSpacing.sm))
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -790,7 +901,11 @@ private fun AddFrameworkDialog(onDismiss: () -> Unit) {
                     value = address,
                     onValueChange = { address = it },
                     label = { Text("地址 (可选)") },
-                    placeholder = { Text("如: 192.168.1.100:9876") },
+                    placeholder = {
+                        val defaultPort = com.mengpaw.plugin.framework.FrameworkPeerStore.FRAMEWORK_TYPES[frameworkType] ?: 0
+                        if (defaultPort > 0) Text("如: 192.168.1.100:$defaultPort")
+                        else Text("如: localhost:8080 或 /path/to/socket")
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -798,7 +913,6 @@ private fun AddFrameworkDialog(onDismiss: () -> Unit) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = {
                         isDiscovering = true
-                        // 使用框架协议插件扫描局域网
                         val peers = com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll()
                         discovered = peers.map { it.name to "${it.address}:${it.port}" }
                         isDiscovering = false
@@ -825,16 +939,17 @@ private fun AddFrameworkDialog(onDismiss: () -> Unit) {
             Button(
                 onClick = {
                     if (name.isNotBlank()) {
-                        // Save framework to ACP trusted list
                         val trustedDir = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
                         trustedDir.mkdirs()
                         val fwFile = java.io.File(trustedDir, "$name.json")
-                        // Atomic write — tmp then rename, avoids corruption on crash
                         val tmp = java.io.File(trustedDir, "$name.tmp.json")
-                        tmp.writeText("""{"name":"$name","address":"$address","addedAt":${System.currentTimeMillis()}}""")
-                        tmp.renameTo(fwFile)
-                        if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
-                        onDismiss()
+                        val json = org.json.JSONObject().apply {
+                            put("name", name)
+                            put("address", address)
+                            put("frameworkType", frameworkType)
+                            put("addedAt", System.currentTimeMillis())
+                        }
+                        try { tmp.writeText(json.toString()); tmp.renameTo(fwFile); if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }; onDismiss() } catch (e: Exception) { ErrorCollector.report(e, "SidebarContent.saveFramework") }
                     }
                 },
                 enabled = name.isNotBlank(),
@@ -866,7 +981,19 @@ private fun FrameworkCardDialog(
         else null
     }
 
-    var editNote by remember { mutableStateOf(acpJson?.optString("notes", "") ?: "") }
+    // 框架类型: 从 peer 或 ACP JSON 读取
+    val fwType = remember(frameworkName, peer) {
+        peer?.frameworkType?.ifBlank { acpJson?.optString("frameworkType", "mengpaw") } ?: "mengpaw"
+    }
+    val proto = com.mengpaw.plugin.framework.FrameworkPeerStore.PROTOCOL_LABELS[fwType]
+    val protoLabel = proto?.first ?: "?"
+    val protoMode = proto?.second ?: ""
+
+    // 备注名称: 优先从 FrameworkPeerStore 读取，其次从 ACP JSON 的 remark/notes 字段
+    val savedRemark = remember(frameworkName, peer) {
+        peer?.remark?.ifBlank { acpJson?.optString("remark", "")?.ifBlank { acpJson?.optString("notes", "") ?: "" } } ?: ""
+    }
+    var editRemark by remember { mutableStateOf(savedRemark) }
     var isEditing by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -876,15 +1003,24 @@ private fun FrameworkCardDialog(
                 Text("框架名片", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = {
-                    if (isEditing && acpFile.exists()) {
-                        try {
-                            val updated = org.json.JSONObject(acpFile.readText())
-                            updated.put("notes", editNote)
-                            val tmp = java.io.File(acpFile.parentFile, "$frameworkName.tmp.json")
-                            tmp.writeText(updated.toString())
-                            tmp.renameTo(acpFile)
-                            if (tmp.exists()) tmp.delete()
-                        } catch (_: Exception) {}
+                    if (isEditing) {
+                        // 保存备注名称到 FrameworkPeerStore
+                        if (peer != null) {
+                            com.mengpaw.plugin.framework.FrameworkPeerStore.save(
+                                peer.copy(remark = editRemark.trim())
+                            )
+                        }
+                        // 同时保存到 ACP JSON 文件中
+                        if (acpFile.exists()) {
+                            try {
+                                val updated = org.json.JSONObject(acpFile.readText())
+                                updated.put("remark", editRemark.trim())
+                                val tmp = java.io.File(acpFile.parentFile, "$frameworkName.tmp.json")
+                                tmp.writeText(updated.toString())
+                                tmp.renameTo(acpFile)
+                                if (tmp.exists()) tmp.delete()
+                            } catch (_: Exception) {}
+                        }
                     }
                     isEditing = !isEditing
                 }) {
@@ -900,12 +1036,38 @@ private fun FrameworkCardDialog(
                 Surface(shape = RoundedCornerShape(ArcoRadius.lg),
                     color = ThemeColors.brandContainer, modifier = Modifier.size(72.dp)) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.Hub, null, Modifier.size(36.dp), tint = ThemeColors.brand)
+                        Icon(frameworkTypeIcon(fwType), fwType, Modifier.size(36.dp), tint = ThemeColors.brand)
                     }
                 }
-                Spacer(Modifier.height(ArcoSpacing.md))
-                Text(frameworkName, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
-                    color = ThemeColors.textPrimary)
+                Spacer(Modifier.height(4.dp))
+                // 协议标签 — 纯文本，无颜色
+                Surface(shape = RoundedCornerShape(ArcoRadius.sm),
+                    color = ThemeColors.bgCardHigh) {
+                    Text("$protoLabel · $protoMode",
+                        Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = ThemeColors.textSecondary, fontSize = 10.sp)
+                }
+                Spacer(Modifier.height(ArcoSpacing.sm))
+
+                // 备注名称 — 可编辑，编辑时显示输入框
+                if (isEditing) {
+                    Text("备注名称", style = MaterialTheme.typography.labelSmall,
+                        color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(value = editRemark, onValueChange = { editRemark = it },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text(frameworkName, fontSize = 14.sp) },
+                        shape = RoundedCornerShape(ArcoRadius.md))
+                } else {
+                    val displayRemark = savedRemark.ifBlank { frameworkName }
+                    Text(displayRemark, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+                        color = ThemeColors.textPrimary)
+                    if (savedRemark.isNotBlank()) {
+                        Text(frameworkName, style = MaterialTheme.typography.labelSmall,
+                            color = ThemeColors.textSecondary, fontSize = 11.sp)
+                    }
+                }
                 Spacer(Modifier.height(ArcoSpacing.sm))
 
                 if (peer != null) {
@@ -954,20 +1116,29 @@ private fun FrameworkCardDialog(
                         Text(if (peer.trusted) "已信任" else "未信任", style = MaterialTheme.typography.labelSmall,
                             color = if (peer.trusted) ArcoColors.Green6 else ArcoColors.Orange6, fontSize = 11.sp)
                     }
-                    Spacer(Modifier.height(ArcoSpacing.md))
+                    Spacer(Modifier.height(4.dp))
                 }
 
-                Text("框架备注", style = MaterialTheme.typography.labelSmall,
-                    color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(4.dp))
-                if (isEditing) {
-                    OutlinedTextField(value = editNote, onValueChange = { editNote = it },
-                        minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(ArcoRadius.md))
-                } else {
-                    Text(editNote.ifBlank { "暂无备注" }, style = MaterialTheme.typography.bodySmall,
-                        color = if (editNote.isBlank()) ThemeColors.textSecondary.copy(alpha = 0.6f)
-                        else ThemeColors.textPrimary)
+                // Agent 列表
+                val agentList = peer?.agents ?: emptyList()
+                if (agentList.isNotEmpty()) {
+                    Text("托管智能体 (${agentList.size})", style = MaterialTheme.typography.labelSmall,
+                        color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(4.dp))
+                    agentList.forEach { agent ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Surface(shape = CircleShape, modifier = Modifier.size(20.dp),
+                                color = ThemeColors.bgCardHigh) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(agent.take(1), fontSize = 9.sp, color = ThemeColors.textSecondary)
+                                }
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            Text(agent, style = MaterialTheme.typography.bodySmall,
+                                color = ThemeColors.textPrimary, fontSize = 12.sp)
+                        }
+                    }
                 }
             }
         },
@@ -983,4 +1154,17 @@ private fun FrameworkCardDialog(
             TextButton(onClick = onDismiss) { Text("关闭") }
         }
     )
+}
+
+/** 根据框架类型返回对应图标。 */
+@Composable
+private fun frameworkTypeIcon(frameworkType: String): androidx.compose.ui.graphics.vector.ImageVector = when (frameworkType) {
+    "claude-code", "trea-ide", "trea-work", "cursor", "opencode",
+    "reasonix", "workbuddy" -> Icons.Outlined.Terminal  // MCP
+    "openclaw", "qclaw", "hermes", "codex" -> Icons.Outlined.Dns  // WebSocket
+    "qwenpaw", "coze" -> Icons.Outlined.Language  // REST
+    "collab-cli" -> Icons.Outlined.Folder  // File
+    "kimi-desktop" -> Icons.Outlined.DesktopWindows  // 未知
+    "custom" -> Icons.Outlined.MoreHoriz
+    else -> Icons.Outlined.Hub  // mengpaw
 }

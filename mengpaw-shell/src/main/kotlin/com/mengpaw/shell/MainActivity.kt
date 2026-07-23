@@ -28,7 +28,10 @@ import com.mengpaw.shell.ui.localization.EnglishStrings
 import com.mengpaw.shell.ui.screens.*
 
 /** Plugin IDs that are bundled with the shell APK (显示为"内置"分类). */
-private val BUILTIN_PLUGIN_IDS = setOf("memory-plugin", "skill-plugin", "pad-plugin", "dev-plugin")
+private val BUILTIN_PLUGIN_IDS = setOf(
+    "memory-plugin", "skill-plugin", "framework-plugin", "dev-plugin",
+    "fs-plugin", "net-plugin", "self-plugin", "clipboard-plugin", "notification-plugin"
+)
 
 /**
  * Extract a human-readable summary from a markdown file.
@@ -88,6 +91,7 @@ class MainActivity : ComponentActivity() {
 
         DataPathsInitializer.initialize(this)
         com.mengpaw.core.namespace.SysExecutor.init(this)
+        com.mengpaw.core.namespace.SysExecutor.setActivity(this)
         com.mengpaw.core.security.IntegrityGuard.globalInstance.init(this)
         com.mengpaw.core.AgentTemplates.init(this)
         com.mengpaw.kernel.agent.AgentDocs.bootstrapper = { name -> com.mengpaw.core.AgentTemplates.bootstrapAgent(name) }
@@ -99,7 +103,7 @@ class MainActivity : ComponentActivity() {
         com.mengpaw.plugin.framework.FrameworkDiscovery.instance =
             com.mengpaw.plugin.framework.FrameworkDiscovery(this).apply {
                 frameworkName = "MengPaw"
-                frameworkVersion = "0.9.1"
+                frameworkVersion = com.mengpaw.kernel.AgentEngine.CORE_VERSION
                 // Agent 列表从文件系统读取
                 val agentsDir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS)
                 agentNames = agentsDir.listFiles()
@@ -161,6 +165,18 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleOpenUrl(intent)
+    }
+
+    /** Keep the Activity reference fresh for runtime permission dialogs. */
+    override fun onResume() {
+        super.onResume()
+        com.mengpaw.core.namespace.SysExecutor.setActivity(this)
+    }
+
+    /** Clear Activity reference to prevent leaks. */
+    override fun onDestroy() {
+        super.onDestroy()
+        com.mengpaw.core.namespace.SysExecutor.setActivity(null)
     }
 
     private fun handleOpenUrl(intent: Intent?) {
@@ -243,7 +259,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     }
 
     // ── Wire triggers once at startup ──
-    LaunchedEffect(agentViewModel) {
+    LaunchedEffect(Unit) {
         com.mengpaw.shell.service.AgentRuntime.wireTriggers(agentViewModel)
     }
 

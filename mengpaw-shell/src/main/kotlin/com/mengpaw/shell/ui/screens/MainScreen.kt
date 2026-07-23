@@ -83,6 +83,14 @@ fun MainScreen(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showExpandSheet by remember { mutableStateOf(false) }
     var showMissionOverlay by remember { mutableStateOf(false) }
+    // Reactive Mission state synced from kernel via listener
+    var missionActiveState by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) {
+        val listener: com.mengpaw.kernel.mission.MissionListener = { missionActiveState = it.active }
+        com.mengpaw.kernel.mission.MissionMonitor.addListener(listener)
+        missionActiveState = com.mengpaw.kernel.mission.MissionMonitor.missionActive
+        onDispose { com.mengpaw.kernel.mission.MissionMonitor.removeListener(listener) }
+    }
 
     // ── @mention state ────────────────────────────────────────────
     var showMentionDropdown by remember { mutableStateOf(false) }
@@ -236,13 +244,13 @@ fun MainScreen(
                         Icon(Icons.Outlined.Add, "新建会话", tint = ThemeColors.textSecondary)
                     }
                     // Mission monitor toggle (visible when mission is active)
-                    if (com.mengpaw.kernel.mission.MissionMonitor.missionActive) {
+                    if (missionActiveState) {
                         IconButton(onClick = { showMissionOverlay = !showMissionOverlay }, modifier = Modifier.size(44.dp)) {
                             Icon(Icons.Outlined.Monitor, "Mission", tint = ThemeColors.brand)
                         }
                     }
                     // FIX: Dynamic plugin buttons from HEADER_BAR placement
-                    val headerButtons = remember { pluginViewModel.activeButtons[com.mengpaw.kernel.plugin.ButtonPlacement.HEADER_BAR] ?: emptyList() }
+                    val headerButtons = remember(pluginViewModel.activeButtons) { pluginViewModel.activeButtons[com.mengpaw.kernel.plugin.ButtonPlacement.HEADER_BAR] ?: emptyList() }
                     if (headerButtons.isNotEmpty()) {
                         headerButtons.take(2).forEach { btn ->
                             IconButton(
@@ -295,7 +303,7 @@ fun MainScreen(
                         contentAlignment = Alignment.TopCenter
                     ) {
                         LazyColumn(
-                            modifier = Modifier.fillMaxWidth(msgWidth).fillMaxHeight(),
+                            modifier = Modifier.fillMaxWidth(msgWidth).heightIn(max = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp),
                             state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
                             contentPadding = PaddingValues(vertical = ArcoSpacing.md)
                         ) {
@@ -420,7 +428,7 @@ fun MainScreen(
                         inputText = newVal
                         // @mention 检测 — 在空格/换行/行首后输入 @
                         val atIdx = newVal.lastIndexOf('@')
-                        if (atIdx >= 0 && atIdx < newVal.length - 0) {
+                        if (atIdx >= 0) {
                             val beforeAt = if (atIdx > 0) newVal[atIdx - 1] else ' '
                             if (beforeAt == ' ' || beforeAt == '\n' || atIdx == 0) {
                                 val query = newVal.substring(atIdx + 1)
@@ -571,14 +579,9 @@ fun MainScreen(
     } // close Column
 
     // ── Mission Monitor overlay ──
-    // Auto-dismiss when mission ends externally
-    if (showMissionOverlay) {
-        LaunchedEffect(Unit) {
-            while (com.mengpaw.kernel.mission.MissionMonitor.missionActive) {
-                kotlinx.coroutines.delay(1000)
-            }
-            showMissionOverlay = false
-        }
+    // Auto-dismiss when mission ends (reactive via missionActiveState)
+    LaunchedEffect(missionActiveState) {
+        if (!missionActiveState) showMissionOverlay = false
     }
     MissionMonitorOverlay(
         visible = showMissionOverlay,
@@ -750,7 +753,8 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
                     modifier = Modifier.padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
                     inlineCodeColor = Color.White.copy(alpha = 0.9f),
-                    linkColor = Color.White
+                    linkColor = Color.White,
+                    nestedScroll = true
                 )
             }
         }
@@ -786,7 +790,8 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
                 SelectionContainer {
                     MarkdownText(
                         content = content,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary)
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary),
+                        nestedScroll = true
                     )
                 }
             }
@@ -882,7 +887,8 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
                 SelectionContainer {
                     MarkdownText(
                         content = message.finalContent,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary)
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary),
+                        nestedScroll = true
                     )
                 }
             }
@@ -981,7 +987,7 @@ private fun BubbleWrapper(
     Box {
         Box(
             Modifier.combinedClickable(
-                onClick = {},
+                onClick = { showMenu = false },
                 onLongClick = { showMenu = true }
             )
         ) { content() }

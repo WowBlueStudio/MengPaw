@@ -22,10 +22,11 @@ class ClipboardPlugin : Plugin {
         id = "clipboard-plugin", name = "剪贴板", version = "0.1.1",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "剪贴板操作：copy, paste, clear（按会话隔离）", minCoreVersion = "0.2.0",
-        commands = listOf("clipboard.copy", "clipboard.paste", "clipboard.clear"),
-            uiButtons = listOf(
-                com.mengpaw.kernel.plugin.PluginUiButton("paste", "粘贴", "ContentPaste", com.mengpaw.kernel.plugin.ButtonPlacement.BOTTOM_SHEET, "clipboard.paste")
-            )
+        commands = listOf("clipboard.copy", "clipboard.paste", "clipboard.clear")
+    )
+
+    override val uiButtons = listOf(
+        com.mengpaw.kernel.plugin.PluginUiButton("paste", "粘贴", "ContentPaste", com.mengpaw.kernel.plugin.ButtonPlacement.BOTTOM_SHEET, "clipboard.paste")
     )
 
     override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(

@@ -46,11 +46,12 @@ fun AttributionScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
         ) {
             Spacer(Modifier.height(ArcoSpacing.md))
-            if (text != null) com.mengpaw.design.components.MarkdownText(
-                content = text!!,
-                nestedScroll = true
-            )
-            else {
+            if (text != null) {
+                com.mengpaw.design.components.MarkdownText(
+                    content = text ?: "",
+                    nestedScroll = true
+                )
+            } else {
                 CircularProgressIndicator(Modifier.size(24.dp).padding(top = 32.dp))
             }
             Spacer(Modifier.height(32.dp))

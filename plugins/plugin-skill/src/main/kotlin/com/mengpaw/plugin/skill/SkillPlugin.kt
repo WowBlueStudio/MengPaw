@@ -37,7 +37,7 @@ class SkillPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "skill-plugin",
         name = "技能系统",
-        version = "0.2.0",
+        version = "0.3.0",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "全类型 Skill 引擎 — Markdown 剧本 + 参数化 + 分类过滤 + 搜索 + 管理",
@@ -83,15 +83,15 @@ class SkillPlugin : Plugin {
 
     private val dir: File get() = File(storageDir).also { it.mkdirs() }
 
-    /** Create default skills on first run if the skills directory is empty. */
+    /** Seed missing default skills — only creates those not already present. */
     fun seedDefaults() {
         val d = dir
-        val existing = d.listFiles { f -> f.extension == "md" }
-        if (existing != null && existing.isNotEmpty()) return
-
+        val existing = d.listFiles { f -> f.extension == "md" }?.map { it.nameWithoutExtension }?.toSet() ?: emptySet()
         DEFAULT_SKILLS.forEach { (name, content) ->
-            try { File(d, "$name.md").writeText(content) }
-            catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.seedDefaults") }
+            if (name !in existing) {
+                try { File(d, "$name.md").writeText(content) }
+                catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.seedDefaults") }
+            }
         }
     }
 
@@ -636,5 +636,128 @@ category: system
 - 可清理: Y 个
 - 风险项: Z 个
 ```
+""",
+
+    // ── Plugin reference manuals (concise, Agent-readable via skill.run <name>) ──
+
+    "plugin-index" to """---
+name: plugin-index
+description: 插件命令总索引。先读这个找需要的插件说明书
+enabled: true
+category: system
+---
+# 插件命令索引
+
+| 命名空间 | 用途 | 说明书 |
+|---------|------|--------|
+| self | Agent自省 | skill.run self |
+| agent | 文档记忆 | skill.run agent-system |
+| plugin | 插件管理 | skill.run plugin-system |
+| sys | Android系统 | skill.run android-system |
+| framework | 框架发现 | skill.run framework |
+| fs | 文件系统 | skill.run filesystem |
+| net | 网络请求 | skill.run network |
+| tavily | AI搜索 | skill.run tavily |
+| translate | 翻译 | skill.run translate |
+| hermes | 多智能体 | skill.run hermes |
+| render | 图像生成 | skill.run render |
+| comfy | ComfyUI | skill.run comfy |
+| browser | 浏览器操控 | skill.run browser-tools |
+| update | 自更新 | skill.run self-update |
+| workflow | 工作流 | skill.run workflow |
+| incubator | 孵化器 | skill.run incubator |
+""",
+
+    "tavily" to """---
+name: tavily
+description: Tavily AI搜索 — 结构化搜索+网页提取
+enabled: true
+category: general
+---
+# Tavily AI搜索
+
+## 需要TAVILY_API_KEY（免费1000次/月，tavily.com获取）
+
+## 命令
+`tavily.search <query> [--max=N]` → AI摘要+结构化结果(标题/URL/片段)
+`tavily.extract <url>` → 提取网页全文(最多8000字符)
+
+先search找页面，再extract读内容。中文用中文搜更准。
+""",
+
+    "filesystem" to """---
+name: filesystem
+description: 文件系统操作 — 读写文件、目录管理、搜索内容
+enabled: true
+category: system
+---
+# fs — 文件系统 (10命令)
+
+`ls [path]` `cat <path>` `write <path> <content>` `rm <path>` `mkdir <path>`
+`cp <src> <dst>` `mv <src> <dst>` `stat <path>`
+`grep <pattern> [--regex] [-i]` `glob <pattern>`
+
+常用: `fs.glob **/*.md` 找文件, `fs.grep 关键词 --regex` 搜索内容
+⚠ rm不可恢复
+""",
+
+    "self" to """---
+name: self
+description: Agent自省 — 查看状态/配置/工具/推送消息
+enabled: true
+category: system
+---
+# self — Agent自省 (13命令)
+
+黄金法则: 新任务先 `self.tools` 看能做什么；完成长任务 `self.notify.message` 通知用户
+
+`tools [ns]` `status` `config [k=v]` `version` `time [fmt]` `stats`
+`notify.message <text>` `notify.banner <text> [--level]`
+`avatar` `theme` `mcp` `trigger` `acp`
+""",
+
+    "plugin-system" to """---
+name: plugin-system
+description: 插件管理 — 发现/安装/启用插件扩展能力
+enabled: true
+category: system
+---
+# plugin — 插件管理 (11命令)
+
+marketplace → search → install → list 是标准安装流程
+
+`marketplace [--refresh]` `search <q>` `install <id>` `uninstall <id>` `list`
+`info <id>` `enable <id>` `disable <id>` `update <id>` `upgrade --all`
+`auto <wake|sleep|status|sleep-idle>`
+
+安装后: `self.tools <新命名空间>` 看新命令
+""",
+
+    "hermes" to """---
+name: hermes
+description: 多智能体协作 — 发现/委派/团队共享
+enabled: true
+category: general
+---
+# hermes — 多智能体 (6命令)
+
+`discover` `team` `delegate <agent> <task>` `ask <agent> <q>`
+`memo <content>` `role <agent> <role>`
+
+流程: discover → delegate → memo(共享发现) → team(看进度)
+""",
+
+    "self-update" to """---
+name: self-update
+description: MengPaw自更新 — 检查/下载/安装新版本
+enabled: true
+category: system
+---
+# update — 自更新 (4命令)
+
+`update.check` → 检查新版本
+`update.download` → 下载APK
+`update.install` → 安装
+`update.auto` → 自动(WiFi下每小时一次)
 """
 )

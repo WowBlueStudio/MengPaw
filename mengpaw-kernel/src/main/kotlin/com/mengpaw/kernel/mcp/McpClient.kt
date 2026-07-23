@@ -3,6 +3,8 @@
 
 package com.mengpaw.kernel.mcp
 
+import com.mengpaw.kernel.error.ErrorCollector
+
 import kotlinx.serialization.json.*
 
 /**
@@ -133,7 +135,7 @@ class McpConnection(val id: String, val config: McpConnectionConfig) {
             putJsonObject("params") { put("name", tool); putJsonObject("arguments") { args.forEach { (k, v) -> put(k, v) } } }
         }
         conn.outputStream.write(req.toString().toByteArray())
-        val result = conn.inputStream.bufferedReader().readText().take(5000)
+        val result = try { conn.inputStream.bufferedReader().readText().take(5000) } catch (e: Exception) { ErrorCollector.report(e, "McpClient.callHttp"); "" }
         conn.disconnect()
         return result
     }
@@ -146,6 +148,6 @@ class McpConnection(val id: String, val config: McpConnectionConfig) {
             putJsonObject("params") { put("name", tool); putJsonObject("arguments") { args.forEach { (k, v) -> put(k, v) } } }
         }
         proc.outputStream.write("${req}\n".toByteArray()); proc.outputStream.flush()
-        return proc.inputStream.bufferedReader().readText().take(5000)
+        return try { proc.inputStream.bufferedReader().readText().take(5000) } catch (e: Exception) { ErrorCollector.report(e, "McpClient.callStdio"); "" }
     }
 }

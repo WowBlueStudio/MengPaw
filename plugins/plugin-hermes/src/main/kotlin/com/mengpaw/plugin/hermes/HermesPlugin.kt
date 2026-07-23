@@ -79,7 +79,7 @@ class HermesPlugin : Plugin {
 
     private suspend fun discover(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val agentsDir = File(DataPaths.AGENTS)
-        val dirs = agentsDir.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name } ?: emptyList()
+        val dirs = try { agentsDir.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name } ?: emptyList() } catch (_: Exception) { emptyList() }
         val discovered = dirs.filter { it.name != "team" }.map { dir ->
             val profile = File(dir, "Profile.md").let { if (it.exists()) try { it.readText() } catch (e: Exception) { ErrorCollector.report(e, "HermesPlugin.discover"); "(读取失败)" } else "(无档案)" }
             val name = Regex("名称:\\s*(.+)").find(profile)?.groupValues?.get(1)?.trim() ?: dir.name
@@ -153,8 +153,8 @@ $task
 
     private suspend fun memo(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) {
-            val memos = File(DataPaths.TEAM_MEMOS).also { it.mkdirs() }
-                .listFiles()?.filter { it.extension == "md" }?.sortedByDescending { it.lastModified() } ?: emptyList()
+            val memos = try { File(DataPaths.TEAM_MEMOS).also { it.mkdirs() }
+                .listFiles()?.filter { it.extension == "md" }?.sortedByDescending { it.lastModified() } ?: emptyList() } catch (_: Exception) { emptyList() }
             if (memos.isEmpty()) return ExecutionResult.ok("(无团队共享记忆)")
             return ExecutionResult.ok(memos.take(10).joinToString("\n---\n") { try { it.readText().take(300) } catch (e: Exception) { ErrorCollector.report(e, "HermesPlugin.memo"); "(read error)" } })
         }
@@ -196,7 +196,7 @@ $task
     data class TeamMember(val id: String, val name: String, val role: String, val status: String, val skills: String)
 
     private fun discoverTeamMembers(): List<TeamMember> {
-        return teamDir.listFiles()?.filter { it.extension == "md" }?.map { file ->
+        return try { teamDir.listFiles()?.filter { it.extension == "md" }?.map { file ->
             val text = try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "HermesPlugin.discoverTeamMembers"); "" }
             TeamMember(
                 id = file.nameWithoutExtension,
@@ -205,6 +205,6 @@ $task
                 status = Regex("status:\\s*(.+)").find(text)?.groupValues?.get(1)?.trim() ?: "active",
                 skills = Regex("skills:\\s*(.+)").find(text)?.groupValues?.get(1)?.trim() ?: "通用"
             )
-        }?.sortedBy { it.name } ?: emptyList()
+        }?.sortedBy { it.name } ?: emptyList() } catch (_: Exception) { emptyList() }
     }
 }

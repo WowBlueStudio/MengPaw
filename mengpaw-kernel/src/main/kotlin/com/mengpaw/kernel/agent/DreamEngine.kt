@@ -118,17 +118,17 @@ object DreamEngine {
         val ss = File(DataPaths.SCREENSHOTS)
         if (ss.exists()) {
             var n = 0
-            ss.listFiles()?.forEach { f ->
+            try { ss.listFiles()?.forEach { f ->
                 if (f.lastModified() < cutoff3d && f.length() > 50 * 1024 && !f.name.contains("thumb", true)) {
                     freed += f.length(); f.delete(); deleted++; n++
                 }
-            }
+            } } catch (_: Exception) { /* best-effort cleanup */ }
             if (n > 0) cleaned.add("截图原图(${n}张)")
         }
 
         listOf(File(agentsDir, "inbox"), File(agentsDir, "team/inbox")).forEach { dir ->
             if (dir.exists()) {
-                val n = dir.listFiles()?.count { it.lastModified() < cutoff30d && run { freed += it.length(); it.delete(); true } } ?: 0
+                val n = try { dir.listFiles()?.count { it.lastModified() < cutoff30d && run { freed += it.length(); it.delete(); true } } ?: 0 } catch (_: Exception) { 0 }
                 if (n > 0) cleaned.add("${dir.name}(${n})")
                 deleted += n
             }
@@ -204,7 +204,7 @@ object DreamEngine {
 
     fun dreamStats(): String {
         if (!dreamLog.exists()) return "总计: 0 次"
-        val lines = dreamLog.readLines()
+        val lines = try { dreamLog.readLines() } catch (_: Exception) { return "总计: 0 次" }
         return "梦境: ${lines.size} 次"
     }
 
@@ -233,7 +233,7 @@ object DreamEngine {
     private fun dirSize(dir: File): Long {
         if (!dir.exists()) return 0
         var s = 0L
-        dir.listFiles()?.forEach { s += if (it.isDirectory) dirSize(it) else it.length() }
+        try { dir.listFiles()?.forEach { s += if (it.isDirectory) dirSize(it) else it.length() } } catch (_: Exception) { /* best-effort */ }
         return s
     }
 

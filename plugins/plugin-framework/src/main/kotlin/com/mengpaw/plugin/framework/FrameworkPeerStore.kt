@@ -15,6 +15,38 @@ object FrameworkPeerStore {
 
     private val file: File get() = File(DataPaths.CONFIG, FILE_NAME)
 
+    /** 支持的框架类型、协议分类及默认端口（基于 GitHub 源码分析）。 */
+    val FRAMEWORK_TYPES = mapOf(
+        "mengpaw" to 9876,
+        "claude-code" to 0, "trea-ide" to 0, "trea-work" to 0, "cursor" to 0, "opencode" to 0,
+        "reasonix" to 0, "workbuddy" to 0,
+        "openclaw" to 18789, "qclaw" to 18789, "hermes" to 0, "codex" to 0,
+        "qwenpaw" to 8080, "coze" to 8080,
+        "collab-cli" to 9528,
+        "kimi-desktop" to 0, "custom" to 0
+    )
+
+    /** 协议分类 — 框架类型 → (协议标签, 通信方式)。 */
+    val PROTOCOL_LABELS: Map<String, Pair<String, String>> = mapOf(
+        "mengpaw" to ("ACP" to "HTTP :9876 · 双向实时 · mDNS 发现"),
+        "claude-code" to ("MCP" to "JSON-RPC · 单向实时 · 手动配置"),
+        "trea-ide" to ("MCP" to "JSON-RPC · 单向实时 · 手动配置"),
+        "trea-work" to ("MCP" to "JSON-RPC · 单向实时 · 云端执行"),
+        "cursor" to ("MCP" to "JSON-RPC · 单向实时 · IDE 扩展"),
+        "opencode" to ("MCP" to "JSON-RPC · 单向实时 · 手动配置"),
+        "reasonix" to ("MCP" to "JSON-RPC · 单向实时 · MCP 插件"),
+        "workbuddy" to ("MCP" to "JSON-RPC · 单向实时 · MCP 连接器"),
+        "openclaw" to ("WS" to "WebSocket :18789 · 单向实时 · 手动配置"),
+        "qclaw" to ("WS" to "WebSocket :18789 · 单向实时 · 手动配置"),
+        "hermes" to ("WS" to "WebSocket · 单向实时 · Gateway 模式"),
+        "codex" to ("WS" to "Unix Socket · 单向实时 · 本地进程"),
+        "qwenpaw" to ("REST" to "HTTP API · 单向轮询 · 手动配置"),
+        "coze" to ("REST" to "HTTP API · 单向轮询 · 云端 API"),
+        "collab-cli" to ("FILE" to "文件共享 · 双向 · UDP 广播 :9528"),
+        "kimi-desktop" to ("?" to "协议待验证 · Electron 桌面应用"),
+        "custom" to ("—" to "自定义 · 手动配置")
+    )
+
     data class FrameworkPeer(
         val fingerprint: String,
         val name: String,
@@ -25,7 +57,9 @@ object FrameworkPeerStore {
         val capabilities: List<String> = emptyList(),
         val agents: List<String> = emptyList(),
         val lastSeen: Long = System.currentTimeMillis(),
-        val trusted: Boolean = false
+        val trusted: Boolean = false,
+        val remark: String = "",
+        val frameworkType: String = "mengpaw"
     ) {
         fun toJson(): JSONObject = JSONObject().apply {
             put("fingerprint", fingerprint)
@@ -38,6 +72,8 @@ object FrameworkPeerStore {
             put("agents", JSONArray(agents))
             put("lastSeen", lastSeen)
             put("trusted", trusted)
+            put("remark", remark)
+            put("frameworkType", frameworkType)
         }
 
         companion object {
@@ -55,7 +91,9 @@ object FrameworkPeerStore {
                     (0 until arr.length()).map { arr.getString(it) }
                 } ?: emptyList(),
                 lastSeen = obj.optLong("lastSeen", 0L),
-                trusted = obj.optBoolean("trusted", false)
+                trusted = obj.optBoolean("trusted", false),
+                remark = obj.optString("remark", ""),
+                frameworkType = obj.optString("frameworkType", "mengpaw")
             )
         }
     }

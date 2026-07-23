@@ -110,6 +110,11 @@ dependencies {
     implementation(project(":plugin-memory"))
     implementation(project(":plugin-skill"))
     implementation(project(":plugin-dev"))
+    implementation(project(":plugin-fs"))
+    implementation(project(":plugin-net"))
+    implementation(project(":plugin-self"))
+    implementation(project(":plugin-clipboard"))
+    implementation(project(":plugin-notification"))
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))

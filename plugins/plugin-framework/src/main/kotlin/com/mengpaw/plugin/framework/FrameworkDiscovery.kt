@@ -36,7 +36,7 @@ class FrameworkDiscovery(private val context: Context) {
     /** 框架名称（软件名） */
     var frameworkName: String = "MengPaw"
     /** 框架版本 */
-    var frameworkVersion: String = "0.9.1"
+    var frameworkVersion: String = com.mengpaw.kernel.AgentEngine.CORE_VERSION
     /** 能力列表 */
     var capabilities: List<String> = listOf("goal", "mission", "research")
     /** Agent 列表 */

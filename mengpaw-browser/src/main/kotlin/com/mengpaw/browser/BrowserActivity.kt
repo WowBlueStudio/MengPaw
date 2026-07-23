@@ -232,7 +232,7 @@ object GoogleTranslate {
             conn.connectTimeout = 10000
             conn.readTimeout = 15000
             conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-            val raw = conn.inputStream.bufferedReader().readText()
+            val raw = try { conn.inputStream.bufferedReader().readText() } catch (e: Exception) { conn.disconnect(); "" }
             conn.disconnect()
             parseResult(raw)
         }

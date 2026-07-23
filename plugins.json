@@ -93,18 +93,6 @@
       "commands": ["notification.send", "notification.list", "notification.dismiss"]
     },
     {
-      "id": "pad-plugin",
-      "name": "PAD 悬浮窗",
-      "version": "0.1.1",
-      "type": "native",
-      "author": "MengPaw",
-      "description": "可拖动悬浮窗界面，支持自定义 Web 内容",
-      "status": "builtin",
-      "permissions": ["SYSTEM_ALERT_WINDOW", "FOREGROUND_SERVICE"],
-      "minCoreVersion": "0.2.0",
-      "commands": ["pad.show", "pad.hide", "pad.load"]
-    },
-    {
       "id": "dev-plugin",
       "name": "插件开发工具",
       "version": "0.1.1",

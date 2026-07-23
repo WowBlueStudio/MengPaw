@@ -26,6 +26,7 @@ import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.mission.MissionMonitor
+import com.mengpaw.kernel.mission.MissionSnapshot
 import com.mengpaw.kernel.mission.WorkerMonitor
 
 /**
@@ -34,6 +35,7 @@ import com.mengpaw.kernel.mission.WorkerMonitor
  * 2. Verifier Monitor — right side, shows verification progress
  *
  * Toggled from the main chat screen when Mission is active.
+ * Uses [MissionMonitor.addListener] to stay reactive to worker/verifier updates.
  */
 @Composable
 fun MissionMonitorOverlay(
@@ -45,6 +47,17 @@ fun MissionMonitorOverlay(
     var showWorkers by remember { mutableStateOf(true) }
     var showVerifier by remember { mutableStateOf(true) }
     var minimized by remember { mutableStateOf(false) }
+
+    // Compose-observable snapshot synced from kernel MissionMonitor via listener
+    var snapshot by remember { mutableStateOf(MissionSnapshot(false, "", emptyList(), com.mengpaw.kernel.mission.VerifierMonitor())) }
+
+    DisposableEffect(Unit) {
+        val listener: com.mengpaw.kernel.mission.MissionListener = { snapshot = it }
+        MissionMonitor.addListener(listener)
+        // Initial sync
+        snapshot = MissionSnapshot(MissionMonitor.missionActive, MissionMonitor.missionGoal, MissionMonitor.workers.toList(), MissionMonitor.verifier)
+        onDispose { MissionMonitor.removeListener(listener) }
+    }
 
     if (minimized) {
         // Minimized floating button
@@ -84,9 +97,9 @@ fun MissionMonitorOverlay(
         }
 
         // Mission goal
-        if (MissionMonitor.missionGoal.isNotEmpty()) {
+        if (snapshot.goal.isNotEmpty()) {
             Surface(shape = RoundedCornerShape(ArcoRadius.md), color = Color.White.copy(alpha = 0.19f)) {
-                Text(MissionMonitor.missionGoal, Modifier.padding(12.dp), fontSize = 13.sp, color = ArcoColors.Gray4, maxLines = 2)
+                Text(snapshot.goal, Modifier.padding(12.dp), fontSize = 13.sp, color = ArcoColors.Gray4, maxLines = 2)
             }
         }
 
@@ -100,13 +113,13 @@ fun MissionMonitorOverlay(
                     color = ArcoColors.Gray10.copy(alpha = 0.88f)
                 ) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("👷 Workers (${MissionMonitor.workers.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("👷 Workers (${snapshot.workers.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(Modifier.height(8.dp))
-                        if (MissionMonitor.workers.isEmpty()) {
+                        if (snapshot.workers.isEmpty()) {
                             Text("等待 Worker 启动...", fontSize = 12.sp, color = ArcoColors.Gray6, modifier = Modifier.padding(8.dp))
                         }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            items(MissionMonitor.workers) { w -> WorkerCard(w) }
+                            items(snapshot.workers) { w -> WorkerCard(w) }
                         }
                     }
                 }
@@ -122,7 +135,7 @@ fun MissionMonitorOverlay(
                     Column(Modifier.padding(12.dp)) {
                         Text("🔍 Verifier", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(Modifier.height(8.dp))
-                        val v = MissionMonitor.verifier
+                        val v = snapshot.verifier
                         Text(v.summary, fontSize = 13.sp, color = when {
                             v.failed > 0 -> ArcoColors.Orange6
                             v.verified + v.failed >= v.totalWorkers && v.failed == 0 -> ArcoColors.Green6
