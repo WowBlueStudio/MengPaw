@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-07-23 — v0.11.3 收尾 + 开发文档重构
+
+58. **版本号公式的边界条件不可忽视**
+    - 场景：0.9.1→0.10.0, versionCode 由 `replace(".","").take(3)+"0"` 计算
+    - 后果：0.10.0→"0100"→100, 小于 0.9.1 的 910 → 安装被拒绝 downgrade
+    - 改进：`split(".").let { major*1000 + minor*100 + patch*10 }` → 0.10.0=1000 > 0.9.1=910
+    - 原则：**任何基于字符串截取的版本号公式都不可靠。数学分解才是唯一正确答案。**
+
+59. **Release 只靠 Tag 不会出现在 GitHub/Gitee 页面上**
+    - 场景：git tag 推了，仓库里看不到 Release
+    - 后果：用户找不到下载链接，CHANGELOG 不可见
+    - 改进：`gh release create <tag> --title "..." --notes "..."` 显式创建
+    - 原则：**Tag = 版本标记, Release = 用户可见的发布页面。两步缺一不可。**
+
+60. **嵌套滚动的黄金法则：一个方向一个 scroll**
+    - 经历链条：AnimatedVisibility 闪退 → 加 heightIn → 还是闪退 → 去外层 scroll → 还是闪退 → 去 LazyColumn → 终于稳定
+    - 最终方案：`nestedScroll` 参数让 MarkdownText 感知环境
+    - 原则：**排查嵌套滚动崩溃时，逆序排查——从最内层开始逐层去掉 scroll，直到找到冲突层。**
+
 ## 2026-07-23 — v0.11.2 嵌套滚动崩溃 + commonmark AST 转换
 
 53. **LazyColumn 在嵌套滚动环境中是毒药，不是优化**
