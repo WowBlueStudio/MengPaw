@@ -48,7 +48,8 @@ fun LicenseScreen(onBack: () -> Unit) {
         ) {
             Spacer(Modifier.height(ArcoSpacing.md))
             if (text != null) com.mengpaw.design.components.MarkdownText(
-                content = text!!
+                content = text!!,
+                nestedScroll = true
             )
             else {
                 CircularProgressIndicator(Modifier.size(24.dp).padding(top = 32.dp))

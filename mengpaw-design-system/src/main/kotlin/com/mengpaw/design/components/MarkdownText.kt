@@ -302,15 +302,16 @@ fun MarkdownText(
     textStyle: TextStyle = MaterialTheme.typography.bodyMedium,
     codeBackgroundColor: Color = ThemeColors.bgCardHigh,
     inlineCodeColor: Color = ThemeColors.brand,
-    linkColor: Color = ThemeColors.brand
+    linkColor: Color = ThemeColors.brand,
+    nestedScroll: Boolean = false  // true = 外部已有 scroll，内部不重复加
 ) {
     if (content.isBlank()) return
 
     val blocks = remember(content) { parseMarkdown(content) }
 
-    // 一律用 Column + verticalScroll — LazyColumn 在嵌套滚动/AnimatedVisibility 中崩溃
+    val colModifier = if (nestedScroll) modifier else modifier.verticalScroll(rememberScrollState())
     Column(
-        modifier = modifier.verticalScroll(rememberScrollState()),
+        modifier = colModifier,
         verticalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)
     ) {
         blocks.forEach { block ->
