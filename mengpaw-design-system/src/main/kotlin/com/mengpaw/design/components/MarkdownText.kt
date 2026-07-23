@@ -36,6 +36,9 @@ import org.commonmark.node.Emphasis
 import org.commonmark.node.FencedCodeBlock
 import org.commonmark.node.HardLineBreak
 import org.commonmark.node.Heading
+import org.commonmark.node.HtmlBlock
+import org.commonmark.node.HtmlInline
+import org.commonmark.node.Image
 import org.commonmark.node.IndentedCodeBlock
 import org.commonmark.node.Link
 import org.commonmark.node.ListItem
@@ -111,13 +114,19 @@ private fun convertNode(node: Node): MdBlock? {
         is org.commonmark.ext.gfm.tables.TableBlock -> convertTable(node)
         is BulletList -> {
             val items = mutableListOf<String>()
-            var c = node.firstChild; while (c != null) { if (c is ListItem) items.add(collectText(c).trim()); c = c.next }
+            var c = node.firstChild; while (c != null) {
+                if (c is ListItem) items.add(collectListItemText(c, "-"))
+                c = c.next
+            }
             if (items.isEmpty()) null else MdBlock.BulletList(items)
         }
         is OrderedList -> {
             val items = mutableListOf<String>()
             var i = 0; var c = node.firstChild
-            while (c != null) { if (c is ListItem) items.add("${++i}. ${collectText(c).trim()}"); c = c.next }
+            while (c != null) {
+                if (c is ListItem) items.add(collectListItemText(c, "${++i}."))
+                c = c.next
+            }
             if (items.isEmpty()) null else MdBlock.BulletList(items)
         }
         is BlockQuote -> {
@@ -126,6 +135,7 @@ private fun convertNode(node: Node): MdBlock? {
             MdBlock.BlockQuote(sb.toString().trim())
         }
         is ThematicBreak -> MdBlock.HorizontalRule
+        is HtmlBlock -> MdBlock.CodeBlock(node.literal.trimEnd(), "html")
         else -> {
             val text = collectText(node).trim()
             if (text.isNotBlank()) MdBlock.Paragraph(listOf(MdSegment(text))) else null
@@ -171,6 +181,36 @@ private fun convertTable(tableBlock: org.commonmark.ext.gfm.tables.TableBlock): 
 
     walkRows(tableBlock, false)
     return MdBlock.Table(header, data)
+}
+
+/** 提取列表项文本，嵌套子列表追加到末尾。 */
+private fun collectListItemText(item: ListItem, marker: String): String {
+    val main = StringBuilder()
+    val subs = mutableListOf<String>()
+    var c = item.firstChild
+    while (c != null) {
+        when (c) {
+            is Paragraph -> main.append(collectText(c))
+            is BulletList -> {
+                var sub = c.firstChild
+                while (sub != null) {
+                    if (sub is ListItem) subs.add("  - ${collectText(sub).trim()}")
+                    sub = sub.next
+                }
+            }
+            is OrderedList -> {
+                var sub = c.firstChild; var j = 0
+                while (sub != null) {
+                    if (sub is ListItem) subs.add("  ${++j}. ${collectText(sub).trim()}")
+                    sub = sub.next
+                }
+            }
+            else -> main.append(collectText(c))
+        }
+        c = c.next
+    }
+    val result = main.toString().trim()
+    return if (subs.isEmpty()) result else "$result\n${subs.joinToString("\n")}"
 }
 
 /** Recursively collect plain text from a node and its children. */
@@ -230,6 +270,12 @@ private fun walkInline(node: Node, segments: MutableList<MdSegment>, styles: Set
             is org.commonmark.ext.gfm.strikethrough.Strikethrough -> {
                 walkInline(child, segments, styles + setOf("strike"))
             }
+            is Image -> {
+                val alt = collectText(child).ifBlank { "图片" }
+                val url = child.destination ?: ""
+                segments.add(MdSegment(if (url.isNotBlank()) "$alt ($url)" else alt))
+            }
+            is HtmlInline -> segments.add(MdSegment(child.literal))
             else -> walkInline(child, segments, styles)
         }
         child = child.next
@@ -354,48 +400,44 @@ private fun RenderBlock(
     }
 }
 
-/** 表格渲染为单个等宽对齐 Text — 避免嵌套 Composable 导致的性能问题。 */
+/** 表格渲染 — 视觉行列布局，小表格用 Compose 布局，大表格降级为等宽文本。 */
 @Composable
 private fun TableTextView(block: MdBlock.Table, baseStyle: TextStyle, background: Color) {
     if (block.header.isEmpty() && block.rows.isEmpty()) return
-
-    // 计算每列最大宽度（中文算 2，英文/数字算 1）
-    // GFM 原生表格格式 — 所有字符均在基本字体中，无渲染问题
-    val colWidths = mutableListOf<Int>()
-    val allRows = listOf(block.header) + block.rows
-    allRows.forEach { row ->
-        row.forEachIndexed { i, cell ->
-            val w = cell.length
-            while (colWidths.size <= i) colWidths.add(0)
-            if (w > colWidths[i]) colWidths[i] = w
-        }
-    }
-    colWidths.replaceAll { maxOf(it, 3) }
-
-    fun padCell(cell: String, width: Int): String {
-        val pad = maxOf(0, width - cell.length)
-        return " $cell${" ".repeat(pad)} "
-    }
-
-    val tableText = buildString {
-        // Header
-        append("|"); block.header.forEachIndexed { i, c -> append(padCell(c, colWidths.getOrElse(i) { 3 })); append("|") }
-        append("\n")
-        // Separator
-        append("|"); colWidths.forEachIndexed { i, w -> append("-".repeat(w + 2)); append("|") }
-        append("\n")
-        // Data rows
-        block.rows.forEach { row ->
-            append("|")
-            row.forEachIndexed { i, c -> append(padCell(c, colWidths.getOrElse(i) { 3 })); append("|") }
-            append("\n")
-        }
-    }
+    val totalCells = block.header.size + block.rows.sumOf { it.size }
 
     Surface(shape = RoundedCornerShape(ArcoRadius.md), color = background, modifier = Modifier.fillMaxWidth()) {
-        Box(Modifier.horizontalScroll(rememberScrollState()).padding(ArcoSpacing.md)) {
-            Text(tableText, style = baseStyle.copy(fontFamily = FontFamily.Monospace,
-                fontSize = (baseStyle.fontSize.value * 0.85f).sp), color = ThemeColors.textPrimary)
+        if (totalCells < 80) {
+            Column(Modifier.horizontalScroll(rememberScrollState()).padding(ArcoSpacing.md)) {
+                // Header row
+                Row(Modifier.fillMaxWidth()) {
+                    block.header.forEach { cell ->
+                        Text(cell, modifier = Modifier.weight(1f).padding(horizontal = ArcoSpacing.sm, vertical = 4.dp),
+                            style = baseStyle.copy(fontWeight = FontWeight.Bold), color = ThemeColors.textPrimary)
+                    }
+                }
+                HorizontalDivider(color = ThemeColors.border, thickness = 1.dp)
+                // Data rows
+                block.rows.forEach { row ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                        val padded = if (row.size < block.header.size) row + List(block.header.size - row.size) { "" } else row
+                        padded.take(block.header.size).forEach { cell ->
+                            Text(cell, modifier = Modifier.weight(1f).padding(horizontal = ArcoSpacing.sm, vertical = 2.dp),
+                                style = baseStyle.copy(fontSize = (baseStyle.fontSize.value * 0.9f).sp), color = ThemeColors.textPrimary)
+                        }
+                    }
+                }
+            }
+        } else {
+            Box(Modifier.horizontalScroll(rememberScrollState()).padding(ArcoSpacing.md)) {
+                val text = buildString {
+                    append("| ${block.header.joinToString(" | ")} |\n")
+                    append("|${block.header.map { "---" }.joinToString("|")}|\n")
+                    block.rows.forEach { row -> append("| ${row.joinToString(" | ")} |\n") }
+                }
+                Text(text, style = baseStyle.copy(fontFamily = FontFamily.Monospace,
+                    fontSize = (baseStyle.fontSize.value * 0.85f).sp), color = ThemeColors.textPrimary)
+            }
         }
     }
 }
