@@ -98,6 +98,13 @@ enum class ThemeMode(val label: String) {
     SYSTEM("跟随系统")
 }
 
+/** 后台运行策略。 */
+enum class BackgroundMode(val label: String, val desc: String) {
+    NOTIFICATION("通知栏常驻", "状态栏显示图标，保活最强，推荐"),
+    SILENT("静默运行", "隐藏通知图标，前台服务仍在后台"),
+    FOREGROUND_ONLY("仅前台使用", "退出时释放服务，最省电")
+}
+
 data class SettingsState(
     val selectedProvider: LlmProviderPreset = LlmProviderPreset.OPENAI,
     val apiEndpoint: String = LlmProviderPreset.OPENAI.endpoint,
@@ -112,6 +119,7 @@ data class SettingsState(
     val memoryBackend: String = "memory-plugin",
     val themeMode: ThemeMode = ThemeMode.LIGHT,
     val showApiKey: Boolean = false,
+    val backgroundMode: BackgroundMode = BackgroundMode.NOTIFICATION,
     val useChinese: Boolean = true,
     val agentLanguageMode: AgentLanguageMode = AgentLanguageMode.FOLLOW_UI,
     val loopMode: LoopMode = LoopMode.GOAL,
@@ -328,6 +336,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val modes = ThemeMode.entries
         val next = modes[(modes.indexOf(_state.value.themeMode) + 1) % modes.size]
         _state.value = _state.value.copy(themeMode = next)
+    }
+
+    fun cycleBackgroundMode() {
+        val modes = BackgroundMode.entries
+        val next = modes[(modes.indexOf(_state.value.backgroundMode) + 1) % modes.size]
+        _state.value = _state.value.copy(backgroundMode = next)
+        // 写入文件让 ShellService 读取
+        try {
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "background_mode")
+            file.parentFile?.mkdirs()
+            file.writeText(next.name)
+        } catch (_: Exception) {}
     }
 
     fun updateCommandTimeout(sec: Int) {

@@ -35,10 +35,18 @@ class ShellService : Service() {
             try {
                 context.startForegroundService(Intent(context, ShellService::class.java))
             } catch (e: Exception) {
-                // Android 13+ (API 33): may throw ForegroundServiceStartNotAllowedException
-                // if called from background (e.g. WakeReceiver). Service will retry on next wake.
                 android.util.Log.w("ShellService", "Cannot start from background: ${e.message}")
             }
+        }
+
+        /** 通知可见性变更后重启服务以生效 */
+        fun refreshNotification(context: Context) {
+            try {
+                context.stopService(Intent(context, ShellService::class.java))
+                android.os.Handler(context.mainLooper).postDelayed({
+                    start(context)
+                }, 500)
+            } catch (_: Exception) {}
         }
     }
 
@@ -129,15 +137,26 @@ class ShellService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private fun readBackgroundMode(): String {
+        return try {
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "background_mode")
+            if (file.exists()) file.readText().trim() else "NOTIFICATION"
+        } catch (_: Exception) { "NOTIFICATION" }
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
-            // 删除旧渠道 — 通知渠道设置是粘性的，改代码不会自动更新已有渠道
             manager.deleteNotificationChannel(CHANNEL_ID)
+            val mode = readBackgroundMode()
+            val importance = when (mode) {
+                "SILENT" -> NotificationManager.IMPORTANCE_MIN
+                else -> NotificationManager.IMPORTANCE_DEFAULT
+            }
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "MengPaw 后台运行",
-                NotificationManager.IMPORTANCE_DEFAULT
+                importance
             ).apply {
                 description = "MengPaw is running in the background"
                 setShowBadge(false)

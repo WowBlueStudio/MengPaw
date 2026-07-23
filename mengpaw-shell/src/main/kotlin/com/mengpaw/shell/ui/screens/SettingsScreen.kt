@@ -889,6 +889,32 @@ private fun SystemSettingsContent(
     }
     Spacer(Modifier.height(ArcoSpacing.lg))
 
+    // 后台运行策略 — 三段循环切换
+    val notifyContext = androidx.compose.ui.platform.LocalContext.current
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable {
+            viewModel.cycleBackgroundMode()
+            com.mengpaw.shell.service.ShellService.refreshNotification(notifyContext)
+        },
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCardHigh
+    ) {
+        Row(
+            Modifier.padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Outlined.Notifications, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(ArcoSpacing.md))
+            Column(Modifier.weight(1f)) {
+                Text("后台运行策略", style = MaterialTheme.typography.bodyMedium)
+                Text(state.backgroundMode.desc, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+            }
+            Text(state.backgroundMode.label, style = MaterialTheme.typography.labelMedium,
+                color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
+        }
+    }
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
     // UI Language
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Icon(Icons.Outlined.Translate, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
@@ -934,14 +960,41 @@ private fun SystemSettingsContent(
         Switch(checked = powerSaverEnabled, onCheckedChange = { powerSaverEnabled = it })
     }
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    OutlinedButton(onClick = {
-        try {
-            val intent = android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-            intent.data = android.net.Uri.parse("package:com.mengpaw.shell")
-            ctx.startActivity(intent)
-        } catch (_: Exception) {}
-    }, modifier = Modifier.fillMaxWidth().padding(top = ArcoSpacing.sm), shape = RoundedCornerShape(ArcoRadius.md)) {
-        Text("忽略电池优化（推荐开启）", style = MaterialTheme.typography.labelSmall)
+    // 检查是否已忽略电池优化
+    val pm = remember { ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager }
+    val isIgnoring = remember { pm?.isIgnoringBatteryOptimizations("com.mengpaw.shell") == true }
+
+    Column(Modifier.fillMaxWidth().padding(top = ArcoSpacing.sm)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (isIgnoring) Icons.Outlined.CheckCircle else Icons.Outlined.BatteryAlert,
+                null, Modifier.size(16.dp), tint = if (isIgnoring) ArcoColors.Green6 else ArcoColors.Orange6)
+            Spacer(Modifier.width(6.dp))
+            Text(if (isIgnoring) "已忽略电池优化" else "电池优化未忽略",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isIgnoring) ArcoColors.Green6 else ThemeColors.textSecondary)
+        }
+        Text("关闭后可防止系统在息屏时限制后台运行。点击跳转系统设置。",
+            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary.copy(alpha = 0.6f),
+            modifier = Modifier.padding(start = 22.dp))
+        OutlinedButton(onClick = {
+            try {
+                val intent = android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = android.net.Uri.parse("package:com.mengpaw.shell")
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                // 先检查是否有 Activity 能处理这个 Intent
+                if (intent.resolveActivity(ctx.packageManager) != null) {
+                    ctx.startActivity(intent)
+                } else {
+                    // 回退到通用电池设置页
+                    val fallback = android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    if (fallback.resolveActivity(ctx.packageManager) != null)
+                        ctx.startActivity(fallback)
+                }
+            } catch (_: Exception) {}
+        }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp), shape = RoundedCornerShape(ArcoRadius.md)) {
+            Text("前往系统电池设置 →", style = MaterialTheme.typography.labelSmall)
+        }
     }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
@@ -1023,31 +1076,90 @@ private fun SystemSettingsContent(
     // About
     SectionHeader(state.strings.about)
     InfoRow(state.strings.version, com.mengpaw.kernel.AgentEngine.CORE_VERSION)
-    InfoRow(state.strings.core, "mengpaw-kernel + mengpaw-core")
-    InfoRow(state.strings.design, "Arco Design · Compose Material 3")
+    InfoRow(state.strings.core, "mengpaw-core")
 
     Spacer(Modifier.height(ArcoSpacing.md))
 
     // Legal & contact
     SectionHeader("法律与联系")
-    Row(Modifier.fillMaxWidth().clickable { /* open license page */ }.padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Outlined.Description, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
-        Spacer(Modifier.width(ArcoSpacing.md))
-        Column(Modifier.weight(1f)) {
-            Text("许可证", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text("AGPL-3.0", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+
+    // 许可证 — 可展开查看 AGPL-3.0 原文
+    var showLicense by remember { mutableStateOf(false) }
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable { showLicense = !showLicense },
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCardHigh
+    ) {
+        Column(Modifier.padding(ArcoSpacing.md)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Description, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
+                Spacer(Modifier.width(ArcoSpacing.md))
+                Column(Modifier.weight(1f)) {
+                    Text("许可证", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                    Text("AGPL-3.0 · GNU Affero General Public License v3.0",
+                        style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                }
+                Icon(if (showLicense) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    null, Modifier.size(16.dp), tint = ArcoColors.Gray5)
+            }
+            if (showLicense) {
+                Spacer(Modifier.height(ArcoSpacing.sm))
+                Text(
+                    "GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3, 19 November 2007\n\n" +
+                    "Copyright (C) 2007 Free Software Foundation, Inc.\n\n" +
+                    "本软件以 AGPL-3.0 授权发布。该许可证要求：\n" +
+                    "任何使用者若修改本软件并作为网络服务运行，\n" +
+                    "必须公开其修改版本的完整源代码。\n\n" +
+                    "完整许可证原文见项目 LICENSE 文件。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ThemeColors.textSecondary,
+                    lineHeight = 18.sp
+                )
+            }
         }
-        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(16.dp), tint = ArcoColors.Gray5)
     }
-    Row(Modifier.fillMaxWidth().clickable { /* open open-source attributions */ }.padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Outlined.MenuBook, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
-        Spacer(Modifier.width(ArcoSpacing.md))
-        Column(Modifier.weight(1f)) {
-            Text("开源声明", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text("第三方库与许可", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+    Spacer(Modifier.height(4.dp))
+
+    // 开源声明
+    var showAttribution by remember { mutableStateOf(false) }
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable { showAttribution = !showAttribution },
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCardHigh
+    ) {
+        Column(Modifier.padding(ArcoSpacing.md)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.MenuBook, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
+                Spacer(Modifier.width(ArcoSpacing.md))
+                Column(Modifier.weight(1f)) {
+                    Text("开源声明与致谢", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                    Text("代码参考、灵感来源与许可合规", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                }
+                Icon(if (showAttribution) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    null, Modifier.size(16.dp), tint = ArcoColors.Gray5)
+            }
+            if (showAttribution) {
+                Spacer(Modifier.height(ArcoSpacing.sm))
+                Text(
+                    "代码参考（Code References）\n\n" +
+                    "· Reasonix (MIT) — 上下文折叠阈值、陈旧工具裁剪、卡死检测\n" +
+                    "· QwenPaw (Apache 2.0) — Agent 文档模板体系（六文件结构）\n" +
+                    "· ReAct / Google (Apache 2.0) — Thought→Action→Observation 循环\n\n" +
+                    "灵感来源（Inspiration）\n\n" +
+                    "· Claude Code — MCP 协议、Sub-agent 委托\n" +
+                    "· Arco Design — 色彩/间距/排版令牌\n" +
+                    "· Material Design 3 — WindowSizeClass 响应式布局\n\n" +
+                    "详见项目 ATTRIBUTIONS.md",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ThemeColors.textSecondary,
+                    lineHeight = 18.sp
+                )
+            }
         }
-        Icon(Icons.Outlined.ChevronRight, null, Modifier.size(16.dp), tint = ArcoColors.Gray5)
     }
+    Spacer(Modifier.height(4.dp))
+
+    // 联系我们
     Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Outlined.Email, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
         Spacer(Modifier.width(ArcoSpacing.md))
@@ -1067,20 +1179,6 @@ private fun SystemSettingsContent(
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
-    Spacer(Modifier.height(ArcoSpacing.lg))
-
-    // Reset
-    SectionHeader("数据管理")
-    OutlinedButton(
-        onClick = { viewModel.resetToDefaults() },
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(ArcoRadius.lg),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = ArcoColors.Red6)
-    ) {
-        Icon(Icons.Outlined.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(ArcoSpacing.sm))
-        Text(state.strings.resetDefaults)
-    }
 }
 
 // ─── Security Rules Section ──────────────────────────────────────────
