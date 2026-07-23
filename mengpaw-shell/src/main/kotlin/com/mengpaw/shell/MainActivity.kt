@@ -99,6 +99,9 @@ class MainActivity : ComponentActivity() {
         com.mengpaw.core.security.IntegrityGuard.globalInstance.init(this)
         com.mengpaw.core.AgentTemplates.init(this)
         com.mengpaw.kernel.agent.AgentDocs.bootstrapper = { name -> com.mengpaw.core.AgentTemplates.bootstrapAgent(name) }
+
+        // 自动恢复孪生服务 (已配对的设备不需要每次5连击)
+        autoRestoreTwinIfNeeded()
         KernelLog.setLogger(AndroidLogger())
         com.mengpaw.shell.ui.components.TokenStatsCollector.load()
         enableEdgeToEdge()
@@ -188,7 +191,6 @@ class MainActivity : ComponentActivity() {
         if (intent?.action == "com.mengpaw.action.OPEN_URL") {
             val url = intent.getStringExtra("url")
             if (url != null) {
-                // Store URL so Agent can access it via browser.open or as context
                 try {
                     val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
                     inbox.mkdirs()
@@ -197,7 +199,28 @@ class MainActivity : ComponentActivity() {
                     val dest = java.io.File(inbox, "browser_url_${System.currentTimeMillis()}.txt")
                     tmp.renameTo(dest)
                     if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
-                } catch (_: Exception) { /* silently ignore — non-critical feature */ }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    /** 如果之前激活过孪生, 自动恢复 ACP + 同步 (无需5连击) */
+    private fun autoRestoreTwinIfNeeded() {
+        val marker = java.io.File(filesDir, "twin_activated")
+        if (!marker.exists()) return
+        val agentName = try { marker.readText().trim() } catch (_: Exception) { "MengPaw" }
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val plugin = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin()
+                com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext = this@MainActivity
+                com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.agentName = agentName
+                val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+                pm.install(plugin)
+                pm.activate(plugin.metadata.id)
+                startAcpForTwin(this@MainActivity, agentName)
+                android.util.Log.i("MengPawTwin", "孪生服务已自动恢复")
+            } catch (e: Exception) {
+                android.util.Log.w("MengPawTwin", "自动恢复失败: ${e.message}")
             }
         }
     }
@@ -564,12 +587,15 @@ private suspend fun startAcpForTwin(ctx: android.content.Context, agentName: Str
         })
         android.util.Log.i("MengPawTwin", "已注册 + 自动同步 + ${frameworkPeers.size} 个节点")
 
-        transport.startListener()  // 关键: 启动 ServerSocket 监听 :9876
+        transport.startListener()
         com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpServer = server
         com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpTransport = transport
         com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.twinProfile = profile
-        android.util.Log.i("MengPawTwin", "ACP 端口 ${9876} 已开启, 等待配对")
+        // 标记已激活, 下次启动自动恢复
+        java.io.File(ctx.filesDir, "twin_activated").writeText(agentName)
+        android.util.Log.i("MengPawTwin", "孪生服务已启动 (${frameworkPeers.size} 个节点)")
     } catch (e: Exception) {
-        android.util.Log.e("MengPawTwin", "ACP 启动失败: ${e.message}", e)
+        android.util.Log.e("MengPawTwin", "启动失败: ${e.message}", e)
     }
 }
+
