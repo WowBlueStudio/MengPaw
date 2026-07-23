@@ -131,17 +131,17 @@ class ShellService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            // 删除旧渠道 — 通知渠道设置是粘性的，改代码不会自动更新已有渠道
+            manager.deleteNotificationChannel(CHANNEL_ID)
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "MengPaw Agent",
-                NotificationManager.IMPORTANCE_LOW
+                "MengPaw 后台运行",
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "MengPaw is running in the background"
-                // Use DEFAULT importance for OEM compatibility: Xiaomi/OPPO/vivo hide LOW priority notifications,
-                // which may cause the system to treat the foreground service as background and kill it.
-                importance = NotificationManager.IMPORTANCE_DEFAULT
+                setShowBadge(false)
             }
-            val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }
     }
@@ -150,8 +150,8 @@ class ShellService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("MengPaw 智能助手")
             .setContentText("后台运行中，智能体随时响应")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSmallIcon(com.mengpaw.shell.R.drawable.ic_wowblue_icon)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setOngoing(true)
             .setShowWhen(false)
             .build()
