@@ -128,8 +128,6 @@ class MainActivity : ComponentActivity() {
         PluginViewModel.registerPluginClass("framework-plugin", "com.mengpaw.plugin.framework.FrameworkPlugin")
         PluginViewModel.registerPluginClass("skill-plugin", "com.mengpaw.plugin.skill.SkillPlugin")
         PluginViewModel.registerPluginClass("self-plugin", "com.mengpaw.plugin.self.SelfPlugin")
-        PluginViewModel.registerPluginClass("ui-plugin", "com.mengpaw.plugin.ui.UiPlugin")
-        PluginViewModel.registerPluginClass("proc-plugin", "com.mengpaw.plugin.proc.ProcPlugin")
         PluginViewModel.registerPluginClass("clipboard-plugin", "com.mengpaw.plugin.clipboard.ClipboardPlugin")
         PluginViewModel.registerPluginClass("notification-plugin", "com.mengpaw.plugin.notification.NotificationPlugin")
         PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
@@ -195,6 +193,16 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     if (showSplash) {
         WowBlueSplash(onFinished = { showSplash = false })
         return
+    }
+
+    // ── 全局返回手势：逐层回退，主页再退到后台 ──
+    // 优先级：Settings > Plugins（如果同时显示，先关 Settings）
+    androidx.activity.compose.BackHandler(enabled = showSettings || showPlugins) {
+        when {
+            showSettings && showPlugins -> showSettings = false  // Settings 盖在 Plugins 上，先关 Settings
+            showSettings -> showSettings = false
+            showPlugins -> showPlugins = false
+        }
     }
 
     // splash 结束后：根据亮/暗主题切换状态栏图标颜色
@@ -414,17 +422,11 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
         }
     }
 
-    // ── Full-screen overlays for Plugins/Settings ──
-    if (showPlugins) {
-        PluginMarketScreen(
-            onNavigateBack = { showPlugins = false },
-            onNavigateToDetail = {}
-        )
-    }
+    // ── Full-screen overlays — 后渲染的在上面 ──
     if (showSettings) {
         SettingsScreen(
             onNavigateBack = { showSettings = false },
-            onNavigateToPluginMarket = { showPlugins = true; showSettings = false },
+            onNavigateToPluginMarket = { showPlugins = true },
             viewModel = settingsViewModel,
             activeAgentName = activeAgent,
             agentFramework = agentFramework,
@@ -439,6 +441,12 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             agentSkillItems = skillItems,
             workspaceItems = workspaceItems,
             onRefreshWorkspace = { workspaceVersion++ }
+        )
+    }
+    if (showPlugins) {
+        PluginMarketScreen(
+            onNavigateBack = { showPlugins = false },
+            onNavigateToDetail = {}
         )
     }
 }

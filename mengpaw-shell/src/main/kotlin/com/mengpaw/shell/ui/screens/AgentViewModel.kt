@@ -270,11 +270,11 @@ class AgentViewModel : ViewModel() {
         // Scroll context manager — eviction index + recall per agent
         val scroll = ScrollContextManager(name)
 
-        // Memory middleware: inject agent docs into system prompt
+        // Memory middleware: inject essential agent docs only (soul + agents)
         val memoryMw = AgentMiddleware { prompt, agentName ->
-            val memoryDoc = com.mengpaw.kernel.agent.AgentDocs.readMemoryDoc(agentName)
-            if (memoryDoc.isNotBlank() && memoryDoc !in prompt) {
-                "$prompt\n\n## 长期记忆\n\n$memoryDoc"
+            val soul = com.mengpaw.kernel.agent.AgentDocs.readSoulDoc(agentName)
+            if (soul.isNotBlank() && soul !in prompt) {
+                "$prompt\n\n## 智能体身份\n\n$soul"
             } else prompt
         }
 
@@ -636,6 +636,16 @@ class AgentViewModel : ViewModel() {
                 }
                 // ── 模式分发结束 ─────────────────────────────────
 
+                // ── 跨会话召回：匹配相关记忆 ──
+                val keywords = actualTask.split(Regex("[\\s，。！？,.!?：:()（）]+"))
+                    .map { it.trim() }.filter { it.length >= 2 }
+                    .filterNot { it in setOf("的", "是", "我", "你", "他", "她", "the", "a", "an", "is", "are", "to", "of", "in", "请", "帮", "一个", "这个", "那个") }
+                    .take(5)
+                val recalledMemory = com.mengpaw.kernel.agent.AgentDocs.recallMemory(
+                    _activeAgentName, keywords
+                )
+                val recallPrefix = if (recalledMemory.isNotBlank()) "$recalledMemory\n\n---\n\n" else ""
+
                 // Build conversation history context (exclude system messages + current task)
                 val historyMsgs = session.messages.value.filter {
                     it !is ChatMessageUi.System && it !is ChatMessageUi.AgentWithTrace
@@ -686,10 +696,11 @@ class AgentViewModel : ViewModel() {
                 try { session.engine.stop() } catch (_: Exception) {}
 
                 // Execute via the appropriate engine mode
+                val finalTask = recallPrefix + contextPrefix
                 val result = when (loopMode) {
-                    LoopMode.GOAL -> session.engine.run(task = contextPrefix, maxSteps = maxSteps, onStep = onStep)
-                    LoopMode.MISSION -> session.engine.runWithMission(task = contextPrefix, onStep = onStep)
-                    LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = contextPrefix, onStep = onStep)
+                    LoopMode.GOAL -> session.engine.run(task = finalTask, maxSteps = maxSteps, onStep = onStep)
+                    LoopMode.MISSION -> session.engine.runWithMission(task = finalTask, onStep = onStep)
+                    LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = finalTask, onStep = onStep)
                 }
 
                 val current = session.messages.value.toMutableList()
@@ -719,8 +730,26 @@ class AgentViewModel : ViewModel() {
                 }
 
                 session.messages.value = current
-                // 恢复原始 loopMode
                 loopMode = savedLoopMode
+
+                // ── 自动摘要：对话结束后提取关键信息存入 memory ──
+                launch {
+                    try {
+                        val summaryPrompt = """
+提取以下对话中用户提到的关键信息（偏好、需求、决策、技术环境），
+用 1-2 句中文摘要，只提取值得长期记住的事实。
+
+用户消息: ${task.take(300)}
+助手结果: ${displayResult.take(300)}
+
+摘要：""".trimIndent()
+                        val summary = session.provider.complete(summaryPrompt).take(200)
+                        if (summary.isNotBlank() && summary.length > 10) {
+                            com.mengpaw.kernel.agent.AgentDocs.appendMemory(_activeAgentName, summary)
+                        }
+                    } catch (_: Exception) {}
+                }
+                // ── 自动摘要结束 ──
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Normal coroutine cancellation — re-throw to maintain cancellation chain
                 throw e

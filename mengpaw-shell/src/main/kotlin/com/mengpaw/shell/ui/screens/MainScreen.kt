@@ -9,6 +9,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -1047,22 +1049,29 @@ private fun SidebarOverlay(
     onDismiss: () -> Unit,
     content: @Composable () -> Unit
 ) {
+    // 遮罩透明度动画 — 渐深渐浅，不生硬
+    val dimAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(300, easing = FastOutSlowInEasing),
+        label = "sidebarDim"
+    )
+
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(animationSpec = tween(200)) +
-                slideInHorizontally(animationSpec = tween(280)) { if (fromLeft) -it else it },
+                slideInHorizontally(animationSpec = tween(300)) { if (fromLeft) -it else it },
         exit = fadeOut(animationSpec = tween(200)) +
-              slideOutHorizontally(animationSpec = tween(280)) { if (fromLeft) -it else it }
+              slideOutHorizontally(animationSpec = tween(300)) { if (fromLeft) -it else it }
     ) {
         Row(Modifier.fillMaxSize()) {
             if (fromLeft) {
                 content()
                 Box(Modifier.fillMaxHeight().weight(1f)
-                    .background(Color.Black.copy(alpha = 0.35f))
+                    .background(Color.Black.copy(alpha = 0.18f * dimAlpha))
                     .clickable { onDismiss() })
             } else {
                 Box(Modifier.fillMaxHeight().weight(1f)
-                    .background(Color.Black.copy(alpha = 0.35f))
+                    .background(Color.Black.copy(alpha = 0.18f * dimAlpha))
                     .clickable { onDismiss() })
                 content()
             }
