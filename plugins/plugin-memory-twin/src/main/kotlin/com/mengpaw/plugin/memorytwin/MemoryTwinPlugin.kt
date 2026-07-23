@@ -36,11 +36,11 @@ class MemoryTwinPlugin : Plugin {
 
     override val metadata = PluginMetadata(
         id = "memory-twin-plugin",
-        name = "自动备份",
+        name = "记忆孪生",
         version = "0.1.0-dev",
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "自动备份 — 局域网内设备间自动同步 Agent 记忆",
+        description = "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 能力感知路由",
         minCoreVersion = "0.12.0",
         commands = listOf(
             "twin.start", "twin.stop", "twin.status",

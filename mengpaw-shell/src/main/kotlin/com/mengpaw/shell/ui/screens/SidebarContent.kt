@@ -525,10 +525,10 @@ fun SidebarContent(
             AlertDialog(
                 onDismissRequest = { pairFile.delete() },
                 icon = { Icon(Icons.Outlined.Warning, null, tint = ArcoColors.Orange6) },
-                title = { Text("自动备份配对请求", fontWeight = FontWeight.Bold) },
+                title = { Text("记忆孪生配对请求", fontWeight = FontWeight.Bold) },
                 text = {
                     Column {
-                        Text("⚠️ 请确认是个人设备请求，请勿与他人设备自动备份")
+                        Text("⚠️ 请确认是个人设备请求，请勿与他人设备记忆孪生")
                         Spacer(Modifier.height(12.dp))
                         Text("请求设备: $peerName", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                         if (peerModel.isNotBlank()) {
@@ -566,10 +566,10 @@ fun SidebarContent(
         AlertDialog(
             onDismissRequest = { showTwinConfirmDialog = false },
             icon = { Icon(Icons.Outlined.Hub, null, tint = ThemeColors.brand) },
-            title = { Text("自动备份", fontWeight = FontWeight.Bold) },
+            title = { Text("记忆孪生", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    Text("⚠️ 注意你正在发起自动备份功能，请确认是个人设备")
+                    Text("⚠️ 注意你正在发起记忆孪生功能，请确认是个人设备")
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "激活后，本设备的 Agent 记忆将与其他已配对的设备同步。请勿在他人的设备上激活此功能。",
@@ -1304,7 +1304,7 @@ private fun FrameworkCardDialog(
                         }
                         onDismiss()
                     }) {
-                        Text("发起自动备份", color = ThemeColors.brand, fontSize = 13.sp)
+                        Text("发起孪生配对", color = ThemeColors.brand, fontSize = 13.sp)
                     }
                 }
                 if (peer != null && !peer.trusted) {

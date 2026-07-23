@@ -49,11 +49,11 @@
     },
     {
       "id": "memory-twin-plugin",
-      "name": "自动备份",
+      "name": "记忆孪生",
       "version": "0.1.0-dev",
       "type": "native",
       "author": "MengPaw",
-      "description": "自动备份 — 局域网内设备间自动同步 Agent 记忆",
+      "description": "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + NSD 发现 + 能力感知任务路由",
       "status": "builtin",
       "minCoreVersion": "0.12.0",
       "commands": ["twin.start", "twin.stop", "twin.status", "twin.peers", "twin.peer.info", "twin.pair", "twin.unpair", "twin.sync", "twin.sync.auto", "twin.sync.qos", "twin.capabilities", "twin.delegate", "twin.route", "twin.ledger.show", "twin.ledger.verify", "twin.ledger.diff", "twin.ledger.stats", "twin.identity.push", "twin.identity.pull", "twin.identity.diff", "twin.identity.merge", "twin.dream.sync", "twin.dream.history"]
