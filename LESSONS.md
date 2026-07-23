@@ -4,6 +4,37 @@
 
 ---
 
+## 2026-07-23 — v0.11.2 嵌套滚动崩溃 + commonmark AST 转换
+
+53. **LazyColumn 在嵌套滚动环境中是毒药，不是优化**
+    - 场景：`MarkdownText` 用 `LazyColumn` 优化长文档，License/Attribution/Workspace 等多处调用
+    - 崩溃：`AnimatedVisibility` 内 LazyColumn → 高度动画过渡中无固定高度 → Compose 测量死锁 → 白屏/闪退
+    - 修复：统一回退 `Column + verticalScroll`。5000 字符以内的文档用 Column 完全流畅，LazyColumn 只适合根级别独立滚动
+    - 原则：**LazyColumn ≠ 无脑优化。凡是有嵌套滚动（AnimatedVisibility、另一个 ScrollState、LazyColumn item 内）一律用 Column。**
+
+54. **`weight(1f)` 在 `horizontalScroll` 内列宽为零**
+    - 场景：`TableView` 用 `Modifier.weight(1f)` 等分列宽
+    - 后果：`horizontalScroll` 提供了无限水平空间 → `weight` 无法计算 → 所有列为 0 宽 → 灰色空块
+    - 修复：`widthIn(min = 字符数 × 7.dp)` 替代 `weight(1f)`，按内容计算最小列宽
+    - 原则：**`weight` 依赖固定父容器宽度，`horizontalScroll` 打破了这一点。滚动容器内用 `widthIn(min)`。**
+
+55. **commonmark AST 遍历：必须递归扁平所有后代，不能浅层 while**
+    - 场景：`convertTable` 用 `while (row = row.next)` 浅层遍历 `TableBlock` 的直接子节点
+    - 后果：`TableBlock → TableHead → TableBody → TableRow` 结构，`TableBody` 被跳过 → 数据行全部丢失 → 空表格
+    - 修复：`walkRows` 递归遍历所有后代，匹配 `TableHead/TableBody/TableRow/TableCell` 四种节点
+    - 原则：**AST 树不是列表。`firstChild/next` 只给一级兄弟。深层节点必须递归进 `firstChild`。**
+
+56. **通知渠道 `deleteNotificationChannel` 在前台服务运行时被系统拒绝**
+    - 场景：`ShellService.onCreate()` → `deleteNotificationChannel()` → `SecurityException`
+    - 后果：服务重启时崩，用户看到闪退
+    - 修复：先 `getNotificationChannel` 检查是否已存在 + `try/catch SecurityException` 吞异常
+    - 原则：**前台服务跑起来后，通知渠道是锁死的。要改渠道参数必须等下次冷启动。**
+
+57. **`AnimatedVisibility` + `verticalScroll` + `MarkdownText(verticalScroll)` = 三层嵌套滚动**
+    - 场景：Workspace 文件展开，外层 `verticalScroll`（AnimatedVisibility 内容），内层 `MarkdownText` 自带 `verticalScroll`
+    - 修复链条：先加 `heightIn(max)` 限高 → 去掉外层 `verticalScroll` → 最终去掉 `MarkdownText` 的 `LazyColumn` 统一用 `Column`
+    - 原则：**嵌套滚动容器是 Compose 第一杀手。一个方向只允许一个 `verticalScroll`。**
+
 ## 2026-07-23 — v0.11.0 线程架构优化 + Markdown 引擎重构
 
 49. **手写 Markdown 解析器是个坑，越挖越深**
