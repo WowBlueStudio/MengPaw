@@ -6,8 +6,7 @@ package com.mengpaw.design.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -309,16 +308,13 @@ fun MarkdownText(
 
     val blocks = remember(content) { parseMarkdown(content) }
 
-    // 长文档用 LazyColumn 按需组合，短文档用 Column 减少布局开销
-    if (blocks.size < 30) {
-        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)) {
-            blocks.forEach { block -> RenderBlock(block, textStyle, inlineCodeColor, linkColor, codeBackgroundColor) }
-        }
-    } else {
-        LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)) {
-            items(blocks, key = { System.identityHashCode(it) }) { block ->
-                RenderBlock(block, textStyle, inlineCodeColor, linkColor, codeBackgroundColor)
-            }
+    // 一律用 Column + verticalScroll — LazyColumn 在嵌套滚动/AnimatedVisibility 中崩溃
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)
+    ) {
+        blocks.forEach { block ->
+            RenderBlock(block, textStyle, inlineCodeColor, linkColor, codeBackgroundColor)
         }
     }
 }
@@ -400,43 +396,44 @@ private fun RenderBlock(
     }
 }
 
-/** 表格渲染 — 视觉行列布局，小表格用 Compose 布局，大表格降级为等宽文本。 */
+/** 表格渲染 — 列宽自适应视觉表格。 */
 @Composable
 private fun TableTextView(block: MdBlock.Table, baseStyle: TextStyle, background: Color) {
     if (block.header.isEmpty() && block.rows.isEmpty()) return
-    val totalCells = block.header.size + block.rows.sumOf { it.size }
+
+    // 计算每列最小宽度
+    val minWidths = mutableListOf<Int>()
+    val allRows = listOf(block.header) + block.rows
+    allRows.forEach { row ->
+        row.forEachIndexed { i, cell ->
+            val w = maxOf(cell.length, 3)
+            while (minWidths.size <= i) minWidths.add(0)
+            if (w > minWidths[i]) minWidths[i] = w
+        }
+    }
 
     Surface(shape = RoundedCornerShape(ArcoRadius.md), color = background, modifier = Modifier.fillMaxWidth()) {
-        if (totalCells < 80) {
-            Column(Modifier.horizontalScroll(rememberScrollState()).padding(ArcoSpacing.md)) {
-                // Header row
-                Row(Modifier.fillMaxWidth()) {
-                    block.header.forEach { cell ->
-                        Text(cell, modifier = Modifier.weight(1f).padding(horizontal = ArcoSpacing.sm, vertical = 4.dp),
-                            style = baseStyle.copy(fontWeight = FontWeight.Bold), color = ThemeColors.textPrimary)
-                    }
-                }
-                HorizontalDivider(color = ThemeColors.border, thickness = 1.dp)
-                // Data rows
-                block.rows.forEach { row ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                        val padded = if (row.size < block.header.size) row + List(block.header.size - row.size) { "" } else row
-                        padded.take(block.header.size).forEach { cell ->
-                            Text(cell, modifier = Modifier.weight(1f).padding(horizontal = ArcoSpacing.sm, vertical = 2.dp),
-                                style = baseStyle.copy(fontSize = (baseStyle.fontSize.value * 0.9f).sp), color = ThemeColors.textPrimary)
-                        }
-                    }
+        Column(Modifier.horizontalScroll(rememberScrollState()).padding(ArcoSpacing.md)) {
+            // Header
+            Row {
+                block.header.forEachIndexed { i, cell ->
+                    Text(cell,
+                        modifier = Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 4.dp)
+                            .widthIn(min = (minWidths.getOrElse(i) { 4 } * 7).dp),
+                        style = baseStyle.copy(fontWeight = FontWeight.Bold),
+                        color = ThemeColors.textPrimary, maxLines = 1)
                 }
             }
-        } else {
-            Box(Modifier.horizontalScroll(rememberScrollState()).padding(ArcoSpacing.md)) {
-                val text = buildString {
-                    append("| ${block.header.joinToString(" | ")} |\n")
-                    append("|${block.header.map { "---" }.joinToString("|")}|\n")
-                    block.rows.forEach { row -> append("| ${row.joinToString(" | ")} |\n") }
-                }
-                Text(text, style = baseStyle.copy(fontFamily = FontFamily.Monospace,
-                    fontSize = (baseStyle.fontSize.value * 0.85f).sp), color = ThemeColors.textPrimary)
+            HorizontalDivider(color = ThemeColors.border, thickness = 1.dp)
+            // Data
+            block.rows.forEach { row ->
+                Row { row.forEachIndexed { i, cell ->
+                    Text(cell,
+                        modifier = Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 2.dp)
+                            .widthIn(min = (minWidths.getOrElse(i) { 4 } * 7).dp),
+                        style = baseStyle.copy(fontSize = (baseStyle.fontSize.value * 0.9f).sp),
+                        color = ThemeColors.textPrimary, maxLines = 1)
+                } }
             }
         }
     }
