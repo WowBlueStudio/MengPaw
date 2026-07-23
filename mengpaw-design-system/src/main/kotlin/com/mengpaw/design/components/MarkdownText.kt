@@ -136,37 +136,40 @@ private fun convertNode(node: Node): MdBlock? {
 private fun convertTable(tableBlock: org.commonmark.ext.gfm.tables.TableBlock): MdBlock.Table {
     val header = mutableListOf<String>()
     val data = mutableListOf<List<String>>()
-    var row = tableBlock.firstChild
-    var isFirstRow = true
     var hasHead = false
-    while (row != null) {
-        // 检查是否有 TableHead（分隔行之前的第一行是表头）
-        if (row is org.commonmark.ext.gfm.tables.TableHead) {
-            hasHead = true
-            // 提取表头行内容
-            var headRow = row.firstChild
-            while (headRow != null) {
-                if (headRow is org.commonmark.ext.gfm.tables.TableRow) {
-                    var cell = headRow.firstChild
-                    while (cell != null) {
-                        if (cell is org.commonmark.ext.gfm.tables.TableCell) header.add(collectText(cell).trim())
-                        cell = cell.next
-                    }
-                }
-                headRow = headRow.next
-            }
-        } else if (row is org.commonmark.ext.gfm.tables.TableRow) {
-            val cells = mutableListOf<String>()
-            var cell = row.firstChild
-            while (cell != null) {
-                if (cell is org.commonmark.ext.gfm.tables.TableCell) cells.add(collectText(cell).trim())
-                cell = cell.next
-            }
-            if (isFirstRow && !hasHead) header.addAll(cells)
-            else data.add(cells)
+
+    fun extractCells(row: org.commonmark.ext.gfm.tables.TableRow): List<String> {
+        val cells = mutableListOf<String>()
+        var cell = row.firstChild
+        while (cell != null) {
+            if (cell is org.commonmark.ext.gfm.tables.TableCell) cells.add(collectText(cell).trim())
+            cell = cell.next
         }
-        isFirstRow = false; row = row.next
+        return cells
     }
+
+    // 扁平遍历所有后代行
+    fun walkRows(parent: Node, isHeader: Boolean) {
+        var child = parent.firstChild
+        while (child != null) {
+            when (child) {
+                is org.commonmark.ext.gfm.tables.TableHead -> {
+                    hasHead = true
+                    walkRows(child, true)
+                }
+                is org.commonmark.ext.gfm.tables.TableBody -> walkRows(child, false)
+                is org.commonmark.ext.gfm.tables.TableRow -> {
+                    val cells = extractCells(child)
+                    if (isHeader || (!hasHead && data.isEmpty() && header.isEmpty())) header.addAll(cells)
+                    else data.add(cells)
+                }
+                else -> walkRows(child, false)
+            }
+            child = child.next
+        }
+    }
+
+    walkRows(tableBlock, false)
     return MdBlock.Table(header, data)
 }
 
