@@ -39,6 +39,10 @@ import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.agent.AgentProfile
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 
 /** Agent online / presence status for external frameworks. */
@@ -498,71 +502,61 @@ fun SidebarContent(
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 记忆孪生配对请求 (接收方)
+    // 记忆孪生配对请求 (接收方) — 检查 inbox 中的 twin_pair_*.json
     // ═══════════════════════════════════════════════════════════════════
-    var pendingTwinRequests by remember {
-        mutableStateOf<List<com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.TwinPairRequest>>(emptyList())
-    }
-    // Observe pending requests from the twin plugin
+    // 轮询 inbox 中的孪生配对请求 (文件写入不会自动触发 Compose 重组)
+    var twinPairFiles by remember { mutableStateOf<List<java.io.File>>(emptyList()) }
     LaunchedEffect(Unit) {
-        com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.pendingPairRequests.collect { requests ->
-            pendingTwinRequests = requests
+        while (true) {
+            val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
+            val files = if (inbox.exists())
+                inbox.listFiles()?.filter { it.name.startsWith("twin_pair_") && it.name.endsWith(".json") }?.toList() ?: emptyList()
+            else emptyList()
+            twinPairFiles = files
+            kotlinx.coroutines.delay(2000) // 每2秒检查一次
         }
     }
-    pendingTwinRequests.firstOrNull()?.let { request ->
-        val deviceLabel = request.deviceName.ifBlank { request.deviceId.take(16) }
-        AlertDialog(
-            onDismissRequest = {
-                com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.rejectPairRequest(request.id)
-            },
-            icon = { Icon(Icons.Outlined.Warning, null, tint = ArcoColors.Orange6) },
-            title = { Text("记忆孪生配对请求", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text("⚠️ 请确认是个人设备请求，请勿与他人设备记忆孪生")
-                    Spacer(Modifier.height(12.dp))
-                    Text("请求设备: $deviceLabel", style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium)
-                    if (request.peerAddress.isNotBlank()) {
-                        Text("地址: ${request.peerAddress}", style = MaterialTheme.typography.bodySmall,
-                            color = ThemeColors.textSecondary)
-                    }
-                    request.capabilityCard?.let { card ->
+    twinPairFiles.firstOrNull()?.let { pairFile ->
+        val json = try { org.json.JSONObject(pairFile.readText()) } catch (_: Exception) { null }
+        if (json != null) {
+            val peerName = json.optString("deviceName", json.optString("peerId", "未知").take(16))
+            val peerModel = json.optString("deviceModel", "")
+            val peerId = json.optString("peerId", "")
+            AlertDialog(
+                onDismissRequest = { pairFile.delete() },
+                icon = { Icon(Icons.Outlined.Warning, null, tint = ArcoColors.Orange6) },
+                title = { Text("记忆孪生配对请求", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text("⚠️ 请确认是个人设备请求，请勿与他人设备记忆孪生")
+                        Spacer(Modifier.height(12.dp))
+                        Text("请求设备: $peerName", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                        if (peerModel.isNotBlank()) {
+                            Text("型号: $peerModel", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                        }
                         Spacer(Modifier.height(8.dp))
-                        Text("设备型号: ${card.deviceModel}", style = MaterialTheme.typography.bodySmall,
-                            color = ThemeColors.textSecondary)
-                        Text("Agent: ${card.deviceName}", style = MaterialTheme.typography.bodySmall,
-                            color = ThemeColors.textSecondary)
+                        Text("同意后，双方 Agent 的记忆将开始同步。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "同意后，双方 Agent 的记忆将开始同步。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ThemeColors.textSecondary
-                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val trustedDir = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
+                        trustedDir.mkdirs()
+                        java.io.File(trustedDir, "$peerId.trusted").writeText(
+                            """{"deviceId":"$peerId","deviceName":"$peerName","pairedAt":${System.currentTimeMillis()}}"""
+                        )
+                        pairFile.delete()
+                    }) {
+                        Text("同意", color = ThemeColors.brand)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pairFile.delete() }) {
+                        Text("不同意")
+                    }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acceptPairRequest(request.id)
-                    // Trigger actual pairing: write trust file, sync
-                    val trustedDir = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
-                    trustedDir.mkdirs()
-                    java.io.File(trustedDir, "${request.deviceId}.trusted").writeText(
-                        """{"deviceId":"${request.deviceId}","deviceName":"${request.deviceName}","pairedAt":${System.currentTimeMillis()}}"""
-                    )
-                }) {
-                    Text("同意", color = ThemeColors.brand)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.rejectPairRequest(request.id)
-                }) {
-                    Text("不同意")
-                }
-            }
-        )
+            )
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1278,11 +1272,47 @@ private fun FrameworkCardDialog(
             }
         },
         confirmButton = {
-            if (peer != null && !peer.trusted) {
-                TextButton(onClick = {
-                    com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = true))
-                    onDismiss()
-                }) { Text("信任此框架", color = ThemeColors.brand, fontSize = 13.sp) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 孪生配对按钮: 本地已激活 + 对方是 MengPaw → 可发起配对
+                val twinReady = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.isActivated
+                if (twinReady && fwType == "mengpaw") {
+                    TextButton(onClick = {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            try {
+                                val profile = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.twinProfile ?: return@launch
+                                val deviceId = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() } catch (_: Exception) { "" }
+                                val ctx = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext ?: return@launch
+                                val collector = com.mengpaw.plugin.memorytwin.TwinCapabilityCollector(ctx, deviceId, android.os.Build.MODEL ?: "")
+                                val card = collector.collect(null, emptyList())
+                                val msg = com.mengpaw.kernel.acp.AcpMessage.capabilityAnnounce(profile.agentId, frameworkName, card.toJson())
+                                val escapedPayload = org.json.JSONObject.quote(msg.payload)
+                                val json = """{"from":"${msg.from}","to":"${msg.to}","type":"${msg.type}","payload":$escapedPayload,"ttl":${msg.ttl}}"""
+                                // 直接 HTTP POST 到对方 ACP 端口 (peer 地址来自 mDNS)
+                                val addr = peer?.address?.split(":")?.firstOrNull() ?: return@launch
+                                val port = peer?.port ?: 9876
+                                val url = java.net.URL("http://$addr:$port/acp")
+                                val conn = url.openConnection() as java.net.HttpURLConnection
+                                conn.requestMethod = "POST"
+                                conn.setRequestProperty("Content-Type", "application/json")
+                                conn.doOutput = true; conn.connectTimeout = 3000; conn.readTimeout = 3000
+                                conn.outputStream.write(json.toByteArray())
+                                val code = conn.responseCode; conn.disconnect()
+                                android.util.Log.i("MengPawTwin", "配对请求 → $frameworkName @ $addr:$port → HTTP $code")
+                            } catch (e: Exception) {
+                                android.util.Log.e("MengPawTwin", "发送失败: ${e.message}", e)
+                            }
+                        }
+                        onDismiss()
+                    }) {
+                        Text("发起孪生配对", color = ThemeColors.brand, fontSize = 13.sp)
+                    }
+                }
+                if (peer != null && !peer.trusted) {
+                    TextButton(onClick = {
+                        com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = true))
+                        onDismiss()
+                    }) { Text("信任此框架", color = ThemeColors.brand, fontSize = 13.sp) }
+                }
             }
         },
         dismissButton = {

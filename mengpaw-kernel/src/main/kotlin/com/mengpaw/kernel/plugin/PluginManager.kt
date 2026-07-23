@@ -22,6 +22,11 @@ class PluginManager(
         @Volatile
         var globalInstance: PluginManager = PluginManager()
             private set
+
+        /** Initialize the global instance with the real core version. Must be called at app startup. */
+        fun initializeGlobalInstance(coreVersion: String) {
+            globalInstance = PluginManager(coreVersion)
+        }
     }
     /** All plugins known to the manager, keyed by plugin id. */
     private val plugins = mutableMapOf<String, Plugin>()

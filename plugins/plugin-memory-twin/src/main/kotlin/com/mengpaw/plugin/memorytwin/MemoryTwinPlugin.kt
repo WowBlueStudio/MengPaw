@@ -78,6 +78,12 @@ class MemoryTwinPlugin : Plugin {
         /** ACP transport instance. */
         @Volatile var acpTransport: AcpTransport? = null
 
+        /** Agent profile for twin identification. Set at activation time. */
+        @Volatile var twinProfile: com.mengpaw.kernel.agent.AgentProfile? = null
+
+        /** Whether twin is activated on this device. */
+        val isActivated: Boolean get() = acpServer != null
+
         /** Pending twin pairing requests from remote devices. UI observes this. */
         val pendingPairRequests = kotlinx.coroutines.flow.MutableStateFlow<List<TwinPairRequest>>(emptyList())
 

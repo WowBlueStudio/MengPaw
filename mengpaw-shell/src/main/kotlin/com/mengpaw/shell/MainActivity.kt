@@ -18,6 +18,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import com.mengpaw.core.AndroidLogger
 import com.mengpaw.core.DataPathsInitializer
 import com.mengpaw.design.theme.ArcoTheme
@@ -90,6 +92,8 @@ class MainActivity : ComponentActivity() {
         }
 
         DataPathsInitializer.initialize(this)
+        com.mengpaw.kernel.plugin.PluginManager.initializeGlobalInstance(
+            com.mengpaw.kernel.AgentEngine.CORE_VERSION)
         com.mengpaw.core.namespace.SysExecutor.init(this)
         com.mengpaw.core.namespace.SysExecutor.setActivity(this)
         com.mengpaw.core.security.IntegrityGuard.globalInstance.init(this)
@@ -304,30 +308,54 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                     },
                     onActivateMemoryTwin = {
                         val name = agentViewModel.activeAgent.value
-                        val act = (ctx as? android.app.Activity) ?: return@SidebarContent
                         try {
-                            val pluginCls = Class.forName("com.mengpaw.plugin.memorytwin.MemoryTwinPlugin")
-                            val plugin = pluginCls.getDeclaredConstructor().newInstance() as com.mengpaw.kernel.plugin.Plugin
-                            try { pluginCls.getDeclaredField("appContext").apply { isAccessible = true }.set(null, act) } catch (_: Exception) {}
-                            try { pluginCls.getDeclaredField("agentName").apply { isAccessible = true }.set(null, name) } catch (_: Exception) {}
+                            android.util.Log.i("MengPawTwin", "激活开始: agent=$name")
+                            val plugin = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin()
+                            android.util.Log.i("MengPawTwin", "插件实例已创建")
+                            com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext = ctx
+                            com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.agentName = name
+                            android.util.Log.i("MengPawTwin", "依赖已注入")
                             val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
-                            pm.install(plugin).fold(
+                            android.util.Log.i("MengPawTwin", "PluginManager: $pm")
+                            val installResult = pm.install(plugin)
+                            android.util.Log.i("MengPawTwin", "install结果: ${installResult.isSuccess}")
+                            installResult.fold(
                                 onSuccess = {
                                     pm.activate(plugin.metadata.id).fold(
-                                        onSuccess = { android.widget.Toast.makeText(act, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show() },
-                                        onFailure = { e -> android.widget.Toast.makeText(act, "激活失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show() }
+                                        onSuccess = {
+                                            android.util.Log.i("MengPawTwin", "插件激活成功")
+                                            CoroutineScope(Dispatchers.IO).launch {
+                                                startAcpForTwin(ctx, name)
+                                            }
+                                            android.widget.Toast.makeText(ctx, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
+                                        },
+                                        onFailure = { e ->
+                                            android.util.Log.e("MengPawTwin", "激活失败: ${e.message}", e)
+                                            android.widget.Toast.makeText(ctx, "激活失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
                                     )
                                 },
                                 onFailure = { e ->
+                                    android.util.Log.e("MengPawTwin", "安装失败: ${e.message}", e)
                                     pm.activate(plugin.metadata.id).fold(
-                                        onSuccess = { android.widget.Toast.makeText(act, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show() },
-                                        onFailure = { e2 -> android.widget.Toast.makeText(act, "激活失败: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show() }
+                                        onSuccess = {
+                                            android.util.Log.i("MengPawTwin", "二次激活成功")
+                                            CoroutineScope(Dispatchers.IO).launch {
+                                                startAcpForTwin(ctx, name)
+                                            }
+                                            android.widget.Toast.makeText(ctx, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
+                                        },
+                                        onFailure = { e2 ->
+                                            android.util.Log.e("MengPawTwin", "二次激活失败: ${e2.message}", e2)
+                                            android.widget.Toast.makeText(ctx, "激活失败: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
                                     )
                                 }
                             )
                         } catch (e: Exception) {
+                            android.util.Log.e("MengPawTwin", "异常: ${e.message}", e)
                             com.mengpaw.kernel.error.ErrorCollector.report(e, "activateMemoryTwin")
-                            android.widget.Toast.makeText(act, "未就绪: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(ctx, "异常: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                         }
                         close()
                     }
@@ -506,5 +534,42 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     }
     if (showAttribution) {
         AttributionScreen(onBack = { showAttribution = false })
+    }
+}
+
+/** 启动 ACP 服务 + 注册 TwinAcpHandler (接收配对请求) */
+private suspend fun startAcpForTwin(ctx: android.content.Context, agentName: String) {
+    try {
+        val profile = com.mengpaw.kernel.agent.AgentProfile.load(agentName)
+        val server = com.mengpaw.kernel.acp.AcpServer(profile, 9876)
+        val transport = com.mengpaw.kernel.acp.AcpHttpTransport(server, 9876)
+        server.registerTransport(transport)
+
+        // 注册 TwinAcpHandler — 处理 CAPABILITY_ANNOUNCE 等孪生消息
+        val deviceId = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() } catch (_: Exception) { "device-${System.currentTimeMillis()}" }
+        val syncEngine = com.mengpaw.plugin.memorytwin.TwinSyncEngine(
+            serverSupplier = { server }, transportSupplier = { transport },
+            agentName = agentName, deviceId = deviceId,
+            deviceName = android.os.Build.MODEL ?: "Android")
+        val handler = com.mengpaw.plugin.memorytwin.TwinAcpHandler(syncEngine)
+        server.registerHandler(handler)
+        syncEngine.startAutoSync()  // 启动自动同步 (每60秒)
+        // 加载 mDNS 发现的框架节点作为同步目标
+        val frameworkPeers = com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll()
+        syncEngine.updatePeers(frameworkPeers.map { fp ->
+            com.mengpaw.plugin.memorytwin.TwinPeerInfo(
+                peerId = fp.name, agentName = fp.name,
+                address = fp.address.split(":").firstOrNull() ?: fp.address,
+                port = fp.port)
+        })
+        android.util.Log.i("MengPawTwin", "已注册 + 自动同步 + ${frameworkPeers.size} 个节点")
+
+        transport.startListener()  // 关键: 启动 ServerSocket 监听 :9876
+        com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpServer = server
+        com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpTransport = transport
+        com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.twinProfile = profile
+        android.util.Log.i("MengPawTwin", "ACP 端口 ${9876} 已开启, 等待配对")
+    } catch (e: Exception) {
+        android.util.Log.e("MengPawTwin", "ACP 启动失败: ${e.message}", e)
     }
 }

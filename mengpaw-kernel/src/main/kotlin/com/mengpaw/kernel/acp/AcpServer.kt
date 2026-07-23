@@ -109,10 +109,9 @@ class AcpServer(
             }
             AcpMessageType.DELEGATE, AcpMessageType.SHARE_MEMORY, AcpMessageType.SHARE_SKILL,
             AcpMessageType.BROWSER_PUSH,
-            // Memory Twin message types — delegated to AcpHandler
+            // Memory Twin ledger sync types — delegated to AcpHandler (firewalled)
             AcpMessageType.LEDGER_HEAD, AcpMessageType.LEDGER_PULL,
-            AcpMessageType.LEDGER_BATCH, AcpMessageType.LEDGER_ACK,
-            AcpMessageType.CAPABILITY_ANNOUNCE, AcpMessageType.TWIN_DELEGATE -> {
+            AcpMessageType.LEDGER_BATCH, AcpMessageType.LEDGER_ACK -> {
                 if (type == AcpMessageType.BROWSER_PUSH) {
                     if (!PromptFirewall.isTrusted(msg.from)) {
                         writePushToInbox(msg.from, msg.payload)
@@ -123,6 +122,17 @@ class AcpServer(
                 if (fwCheck != null && !PromptFirewall.isTrusted(msg.from)) {
                     return AcpResult(false, "Firewall blocked: $fwCheck")
                 }
+                var customResult: AcpResult? = null
+                for (handler in handlers) {
+                    if (type in handler.supportedTypes) {
+                        val result = handler.handle(msg, this)
+                        if (result != null) { customResult = result; break }
+                    }
+                }
+                customResult ?: AcpResult(true, "ack", msg.type)
+            }
+            // Memory Twin pairing types — NO firewall (their purpose IS establishing trust)
+            AcpMessageType.CAPABILITY_ANNOUNCE, AcpMessageType.TWIN_DELEGATE -> {
                 var customResult: AcpResult? = null
                 for (handler in handlers) {
                     if (type in handler.supportedTypes) {

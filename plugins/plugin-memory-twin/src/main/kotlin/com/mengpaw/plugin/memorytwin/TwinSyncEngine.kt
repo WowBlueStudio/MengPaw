@@ -208,21 +208,25 @@ class TwinSyncEngine(
             it.capabilityCard = cardJson
             it.lastSeen = System.currentTimeMillis()
         }
-        // If peer is unknown or untrusted, queue a pairing request for the user
-        if (!isPeerTrusted(peerId)) {
-            val card = try { CapabilityCard.fromJson(cardJson) } catch (_: Exception) { null }
-            val request = MemoryTwinPlugin.TwinPairRequest(
-                id = "req-${System.currentTimeMillis()}-${peerId.take(8)}",
-                deviceId = peerId,
-                deviceName = card?.deviceName ?: peerId.take(12),
-                peerAddress = peers[peerId]?.address ?: "",
-                capabilityCard = card
-            )
-            val current = MemoryTwinPlugin.pendingPairRequests.value.toMutableList()
-            // Dedup: remove existing request from same device
-            current.removeAll { it.deviceId == peerId }
-            current.add(request)
-            MemoryTwinPlugin.pendingPairRequests.value = current
+        // Write pairing request to inbox file — UI polls this
+        val card = try { CapabilityCard.fromJson(cardJson) } catch (_: Exception) { null }
+        try {
+            val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
+            inbox.mkdirs()
+            val file = java.io.File(inbox, "twin_pair_${peerId.take(16)}.json")
+            val json = org.json.JSONObject().apply {
+                put("peerId", peerId)
+                put("deviceName", card?.deviceName ?: peerId.take(12))
+                put("deviceModel", card?.deviceModel ?: "")
+                put("agentName", card?.deviceName ?: "")
+                put("receivedAt", System.currentTimeMillis())
+                put("capabilityCard", cardJson)
+            }
+            val tmp = java.io.File(inbox, "twin_pair_${peerId.take(16)}.tmp")
+            tmp.writeText(json.toString())
+            tmp.renameTo(file)
+        } catch (e: Exception) {
+            com.mengpaw.kernel.error.ErrorCollector.report(e, "TwinSyncEngine.onCapability")
         }
         persistPeerInfo()
     }
