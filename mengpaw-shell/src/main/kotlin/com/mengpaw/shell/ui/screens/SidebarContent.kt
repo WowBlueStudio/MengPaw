@@ -13,6 +13,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -84,7 +86,8 @@ fun SidebarContent(
     onSwitchAgent: (String) -> Unit = {},
     onCreateAgent: (String) -> Unit = {},
     // Extended create — passes name, workspace folder name, and intro
-    onCreateAgentWithDetails: (name: String, workspaceFolder: String, intro: String) -> Unit = { name, _, _ -> onCreateAgent(name) }
+    onCreateAgentWithDetails: (name: String, workspaceFolder: String, intro: String) -> Unit = { name, _, _ -> onCreateAgent(name) },
+    onActivateMemoryTwin: () -> Unit = {}
 ) {
     var frameworkStatus by remember { mutableStateOf(FrameworkStatus.ONLINE) }
     var manualStatus by remember { mutableStateOf(false) }
@@ -96,6 +99,7 @@ fun SidebarContent(
     // ── New Agent dialog state ──
     var showNewAgentDialog by remember { mutableStateOf(false) }
     var showAddFramework by remember { mutableStateOf(false) }
+    var showTwinConfirmDialog by remember { mutableStateOf(false) }
 
     // Discover agents from disk — no remember() so list stays fresh when agents are created/deleted
     val agentsDir = File(com.mengpaw.kernel.DataPaths.AGENTS)
@@ -302,10 +306,38 @@ fun SidebarContent(
                         null, Modifier.size(16.dp), tint = ThemeColors.textSecondary
                     )
                     Spacer(Modifier.width(2.dp))
-                    // 框架类型图标
+                    // 框架类型图标 — MengPaw 连续点击5次激活记忆孪生
                     val typeIcon = frameworkTypeIcon(framework.frameworkType)
-                    Icon(typeIcon, framework.frameworkType, Modifier.size(14.dp),
-                        tint = ThemeColors.textSecondary.copy(alpha = 0.7f))
+                    var twinTapCount by remember { mutableIntStateOf(0) }
+                    var twinTapLast by remember { mutableLongStateOf(0L) }
+                    val isMengPaw = framework.frameworkType == "mengpaw" || framework.frameworkName.contains("MengPaw", ignoreCase = true)
+                    Icon(
+                        typeIcon, framework.frameworkType,
+                        Modifier.size(if (isMengPaw) 20.dp else 14.dp)
+                            .then(
+                                if (isMengPaw) Modifier.pointerInput(Unit) {
+                                    detectTapGestures {
+                                        val now = System.currentTimeMillis()
+                                        if (now - twinTapLast > 3000) { twinTapCount = 0 }
+                                        twinTapLast = now
+                                        twinTapCount++
+                                        if (twinTapCount >= 5) {
+                                            twinTapCount = 0
+                                            showTwinConfirmDialog = true
+                                        }
+                                    }
+                                } else Modifier
+                            ),
+                        tint = if (isMengPaw && twinTapCount > 0)
+                            ThemeColors.brand.copy(alpha = 0.4f + twinTapCount * 0.12f)
+                        else ThemeColors.textSecondary.copy(alpha = 0.7f)
+                    )
+                    // 点击计数提示
+                    if (isMengPaw && twinTapCount > 0) {
+                        Spacer(Modifier.width(2.dp))
+                        Text("${5 - twinTapCount}", fontSize = 8.sp,
+                            color = ThemeColors.brand.copy(alpha = 0.6f))
+                    }
                     Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f)) {
                         val displayName = framework.remark.ifBlank { framework.name }
@@ -462,6 +494,41 @@ fun SidebarContent(
         FrameworkCardDialog(
             frameworkName = name,
             onDismiss = { cardFrameworkName = null }
+        )
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 记忆孪生激活确认 (发起方)
+    // ═══════════════════════════════════════════════════════════════════
+    if (showTwinConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showTwinConfirmDialog = false },
+            icon = { Icon(Icons.Outlined.Hub, null, tint = ThemeColors.brand) },
+            title = { Text("记忆孪生", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("⚠️ 注意你正在发起记忆孪生功能，请确认是个人设备")
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "激活后，本设备的 Agent 记忆将与其他已配对的设备同步。请勿在他人的设备上激活此功能。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ThemeColors.textSecondary
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTwinConfirmDialog = false
+                    onActivateMemoryTwin()
+                }) {
+                    Text("已确认，激活", color = ThemeColors.brand)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTwinConfirmDialog = false }) {
+                    Text("取消")
+                }
+            }
         )
     }
 
