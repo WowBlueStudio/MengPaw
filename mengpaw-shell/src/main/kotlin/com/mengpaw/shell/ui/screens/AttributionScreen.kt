@@ -15,7 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.mengpaw.design.components.MarkdownText
+import androidx.compose.ui.unit.sp
 import com.mengpaw.design.tokens.ArcoSpacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -46,7 +46,12 @@ fun AttributionScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
         ) {
             Spacer(Modifier.height(ArcoSpacing.md))
-            if (text != null) MarkdownText(content = text!!)
+            if (text != null) Text(
+                text = text!!,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                lineHeight = 18.sp
+            )
             else {
                 CircularProgressIndicator(Modifier.size(24.dp).padding(top = 32.dp))
             }

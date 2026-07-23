@@ -6,6 +6,8 @@ package com.mengpaw.design.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -26,297 +28,225 @@ import androidx.compose.ui.unit.sp
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import org.commonmark.node.AbstractVisitor
+import org.commonmark.node.BlockQuote
+import org.commonmark.node.BulletList
+import org.commonmark.node.Code
+import org.commonmark.node.Emphasis
+import org.commonmark.node.FencedCodeBlock
+import org.commonmark.node.HardLineBreak
+import org.commonmark.node.Heading
+import org.commonmark.node.IndentedCodeBlock
+import org.commonmark.node.Link
+import org.commonmark.node.ListItem
+import org.commonmark.node.Node
+import org.commonmark.node.OrderedList
+import org.commonmark.node.Paragraph
+import org.commonmark.node.SoftLineBreak
+import org.commonmark.node.StrongEmphasis
+import org.commonmark.node.ThematicBreak
+import org.commonmark.parser.Parser
+import org.commonmark.ext.gfm.tables.TableBlock
+import org.commonmark.ext.gfm.tables.TableCell
+import org.commonmark.ext.gfm.tables.TableHead
+import org.commonmark.ext.gfm.tables.TableRow
+import org.commonmark.ext.gfm.tables.TablesExtension
+import org.commonmark.ext.gfm.strikethrough.Strikethrough
+import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
 
-// ── Data types ──
+// ── Data types (stable public API) ──
 
-/** A segment of inline text with optional styling. */
 data class MdSegment(
     val text: String,
     val bold: Boolean = false,
     val italic: Boolean = false,
     val code: Boolean = false,
-    val link: String? = null
+    val link: String? = null,
+    val strikethrough: Boolean = false
 )
 
-/** A block-level Markdown element. */
 sealed class MdBlock {
-    data class Heading(val level: Int, val text: String) : MdBlock() // ## text
+    data class Heading(val level: Int, val text: String) : MdBlock()
     data class Paragraph(val segments: List<MdSegment>) : MdBlock()
     data class CodeBlock(val code: String, val languageHint: String = "") : MdBlock()
     data class Table(val header: List<String>, val rows: List<List<String>>) : MdBlock()
-    data class BulletList(val items: List<String>) : MdBlock()          // - item
-    data class BlockQuote(val text: String) : MdBlock()                // > quote
-    object HorizontalRule : MdBlock()                                  // ---
+    data class BulletList(val items: List<String>) : MdBlock()
+    data class BlockQuote(val text: String) : MdBlock()
+    object HorizontalRule : MdBlock()
 }
 
-// ── Parser ──
+// ── Parser — commonmark-java AST → MdBlock ──
 
-/**
- * Parse a raw Markdown string into [MdBlock] elements.
- * Handles code fences (```) at block level and inline formatting within paragraphs.
- */
+private val mdParser: Parser = Parser.builder()
+    .extensions(listOf(TablesExtension.create(), StrikethroughExtension.create()))
+    .build()
+
 fun parseMarkdown(raw: String): List<MdBlock> {
     if (raw.isBlank()) return emptyList()
-    // Cap input to prevent OOM from runaway Agent output
     val safe = if (raw.length > 100_000) raw.take(100_000) + "\n\n...(truncated)" else raw
-
+    val document = mdParser.parse(safe)
     val blocks = mutableListOf<MdBlock>()
-
-    // Split by ``` fences — alternate between text and code
-    val parts = safe.split("```")
-    var blockCount = 0
-    parts.forEachIndexed { index, part ->
-        if (blockCount++ > 500) return@forEachIndexed // safety cap
-        if (index % 2 == 0) {
-            // Text block — parse tables, then inline paragraphs
-            val trimmed = part.trim()
-            if (trimmed.isNotEmpty()) {
-                val tableBlocks = parseTextWithTables(trimmed)
-                blocks.addAll(tableBlocks)
-            }
-        } else {
-            // Code block — drop optional language hint on first line
-            val lines = part.lines()
-            val langHint = lines.firstOrNull()?.trim()?.takeIf {
-                it.isNotEmpty() && !it.contains(' ')
-            } ?: ""
-            val code = if (langHint.isNotEmpty()) lines.drop(1).joinToString("\n")
-            else part.trim()
-            if (code.isNotBlank()) {
-                blocks.add(MdBlock.CodeBlock(code.trimEnd(), langHint))
-            }
-        }
+    var count = 0
+    var child = document.firstChild
+    while (child != null && count++ < 500) {
+        val block = convertNode(child)
+        if (block != null) blocks.add(block)
+        child = child.next
     }
-
     return blocks
 }
 
-/**
- * Parse a text block that may contain tables mixed with paragraphs.
- * A table is: consecutive lines starting/ending with '|', with a separator row.
- */
-private fun parseTextWithTables(text: String): List<MdBlock> {
-    val lines = text.lines()
-    val blocks = mutableListOf<MdBlock>()
-    val buffer = mutableListOf<String>()
-
-    fun flushBuffer() {
-        val paragraph = buffer.joinToString("\n").trim()
-        if (paragraph.isNotEmpty()) {
-            blocks.add(MdBlock.Paragraph(parseInline(paragraph)))
+private fun convertNode(node: Node): MdBlock? {
+    return when (node) {
+        is Heading -> MdBlock.Heading(node.level, collectText(node))
+        is Paragraph -> {
+            val segs = collectInline(node)
+            if (segs.isEmpty()) null else MdBlock.Paragraph(segs)
         }
-        buffer.clear()
-    }
-
-    fun isTableSeparator(line: String): Boolean {
-        val trimmed = line.trim()
-        return trimmed.startsWith('|') && trimmed.endsWith('|') &&
-            trimmed.all { it in setOf('|', '-', ':', ' ') }
-    }
-
-    fun isTableRow(line: String): Boolean {
-        val trimmed = line.trim()
-        return trimmed.startsWith('|') && trimmed.endsWith('|') && !isTableSeparator(line)
-    }
-
-    fun parseTable(startIdx: Int): Int {
-        val tableLines = mutableListOf<String>()
-        var i = startIdx
-        while (i < lines.size && isTableRow(lines[i])) {
-            tableLines.add(lines[i])
-            i++
+        is FencedCodeBlock -> MdBlock.CodeBlock(
+            node.literal.trimEnd(),
+            node.info?.trim() ?: ""
+        )
+        is IndentedCodeBlock -> MdBlock.CodeBlock(node.literal.trimEnd())
+        is org.commonmark.ext.gfm.tables.TableBlock -> convertTable(node)
+        is BulletList -> {
+            val items = mutableListOf<String>()
+            var c = node.firstChild; while (c != null) { if (c is ListItem) items.add(collectText(c).trim()); c = c.next }
+            if (items.isEmpty()) null else MdBlock.BulletList(items)
         }
-        if (tableLines.size < 2) return startIdx
-
-        val headerLine = tableLines[0]
-        val sepLine = tableLines[1]
-        if (!isTableSeparator(sepLine)) { buffer.addAll(tableLines); return i }
-
-        val header = headerLine.trim().split('|').map { it.trim() }.filter { it.isNotEmpty() }
-        val dataRows = tableLines.drop(2).map { line ->
-            line.trim().split('|').map { it.trim() }.filter { it.isNotEmpty() }
+        is OrderedList -> {
+            val items = mutableListOf<String>()
+            var i = 0; var c = node.firstChild
+            while (c != null) { if (c is ListItem) items.add("${++i}. ${collectText(c).trim()}"); c = c.next }
+            if (items.isEmpty()) null else MdBlock.BulletList(items)
         }
-        if (header.isNotEmpty()) blocks.add(MdBlock.Table(header, dataRows))
-        return i
-    }
-
-    // Parse bullet list items as a group
-    fun flushBulletList(items: List<String>) {
-        if (items.isNotEmpty()) {
-            blocks.add(MdBlock.BulletList(items.map { it.removePrefix("- ").removePrefix("* ").trim() }))
+        is BlockQuote -> {
+            val sb = StringBuilder()
+            var c = node.firstChild; while (c != null) { sb.appendLine(collectText(c).trim()); c = c.next }
+            MdBlock.BlockQuote(sb.toString().trim())
+        }
+        is ThematicBreak -> MdBlock.HorizontalRule
+        else -> {
+            val text = collectText(node).trim()
+            if (text.isNotBlank()) MdBlock.Paragraph(listOf(MdSegment(text))) else null
         }
     }
-
-    val bulletBuffer = mutableListOf<String>()
-    fun flushBuffers() {
-        flushBulletList(bulletBuffer); bulletBuffer.clear()
-        flushBuffer()
-    }
-
-    var idx = 0
-    while (idx < lines.size) {
-        val raw = lines[idx]
-        val trimmed = raw.trim()
-
-        when {
-            // Heading: ## text or ### text
-            trimmed.startsWith("### ") || trimmed.startsWith("## ") || trimmed.startsWith("# ") -> {
-                flushBuffers()
-                val level = trimmed.takeWhile { it == '#' }.length
-                blocks.add(MdBlock.Heading(level, trimmed.removePrefix("#").trimStart()))
-                idx++
-            }
-            // Horizontal rule: --- or *** or ___
-            trimmed.matches(Regex("^[-*_]{3,}$")) -> {
-                flushBuffers()
-                blocks.add(MdBlock.HorizontalRule)
-                idx++
-            }
-            // Blockquote: > text
-            trimmed.startsWith("> ") -> {
-                flushBuffers()
-                val quoteLines = mutableListOf<String>()
-                while (idx < lines.size && lines[idx].trimStart().startsWith("> ")) {
-                    quoteLines.add(lines[idx].trimStart().removePrefix("> ").trim())
-                    idx++
-                }
-                blocks.add(MdBlock.BlockQuote(quoteLines.joinToString("\n")))
-            }
-            // Bullet list: - item or * item
-            trimmed.startsWith("- ") || trimmed.startsWith("* ") -> {
-                flushBuffer() // flush paragraph, keep bullets
-                bulletBuffer.add(trimmed)
-                // Check next line; if not bullet, flush
-                if (idx + 1 >= lines.size || !lines[idx + 1].trim().let { it.startsWith("- ") || it.startsWith("* ") }) {
-                    flushBulletList(bulletBuffer); bulletBuffer.clear()
-                }
-                idx++
-            }
-            // Table
-            isTableRow(lines[idx]) && idx + 1 < lines.size && isTableSeparator(lines[idx + 1]) -> {
-                flushBuffers()
-                idx = parseTable(idx)
-            }
-            else -> {
-                buffer.add(raw)
-                idx++
-            }
-        }
-    }
-    flushBuffers()
-
-    return blocks
 }
 
-/**
- * Parse inline Markdown: **bold**, *italic*, `code`, [text](url).
- * Priority: code > bold > italic > link > plain.
- */
-fun parseInline(text: String): List<MdSegment> {
-    if (text.isEmpty()) return emptyList()
+private fun convertTable(tableBlock: org.commonmark.ext.gfm.tables.TableBlock): MdBlock.Table {
+    val header = mutableListOf<String>()
+    val data = mutableListOf<List<String>>()
+    var row = tableBlock.firstChild
+    var isFirstRow = true
+    var hasHead = false
+    while (row != null) {
+        // 检查是否有 TableHead（分隔行之前的第一行是表头）
+        if (row is org.commonmark.ext.gfm.tables.TableHead) {
+            hasHead = true
+            // 提取表头行内容
+            var headRow = row.firstChild
+            while (headRow != null) {
+                if (headRow is org.commonmark.ext.gfm.tables.TableRow) {
+                    var cell = headRow.firstChild
+                    while (cell != null) {
+                        if (cell is org.commonmark.ext.gfm.tables.TableCell) header.add(collectText(cell).trim())
+                        cell = cell.next
+                    }
+                }
+                headRow = headRow.next
+            }
+        } else if (row is org.commonmark.ext.gfm.tables.TableRow) {
+            val cells = mutableListOf<String>()
+            var cell = row.firstChild
+            while (cell != null) {
+                if (cell is org.commonmark.ext.gfm.tables.TableCell) cells.add(collectText(cell).trim())
+                cell = cell.next
+            }
+            if (isFirstRow && !hasHead) header.addAll(cells)
+            else data.add(cells)
+        }
+        isFirstRow = false; row = row.next
+    }
+    return MdBlock.Table(header, data)
+}
 
+/** Recursively collect plain text from a node and its children. */
+private fun collectText(node: Node): String {
+    val sb = StringBuilder()
+    node.accept(object : AbstractVisitor() {
+        override fun visit(node: org.commonmark.node.Text) { sb.append(node.literal) }
+        override fun visit(node: Code) { sb.append("`${node.literal}`") }
+        override fun visit(node: SoftLineBreak) { sb.append(' ') }
+        override fun visit(node: HardLineBreak) { sb.append('\n') }
+        override fun visit(node: Link) { visitChildren(node) }
+        override fun visit(node: Emphasis) { visitChildren(node) }
+        override fun visit(node: StrongEmphasis) { visitChildren(node) }
+    })
+    return sb.toString()
+}
+
+/** Collect inline segments with formatting from a paragraph node. */
+private fun collectInline(paragraph: Paragraph): List<MdSegment> {
     val segments = mutableListOf<MdSegment>()
-    var remaining = text
-
-    while (remaining.isNotEmpty()) {
-        when {
-            // Inline code: `...`
-            remaining.startsWith('`') -> {
-                val end = remaining.indexOf('`', startIndex = 1)
-                if (end > 0) {
-                    val code = remaining.substring(1, end)
-                    if (code.isNotEmpty()) segments.add(MdSegment(code, code = true))
-                    remaining = remaining.substring(end + 1)
-                } else {
-                    // unclosed backtick — treat remaining as plain
-                    segments.add(MdSegment(remaining))
-                    remaining = ""
-                }
-            }
-            // Bold: **...**
-            remaining.startsWith("**") -> {
-                val end = remaining.indexOf("**", startIndex = 2)
-                if (end > 2) {
-                    val boldText = remaining.substring(2, end)
-                    if (boldText.isNotEmpty()) segments.add(MdSegment(boldText, bold = true))
-                    remaining = remaining.substring(end + 2)
-                } else {
-                    segments.add(MdSegment("**"))
-                    remaining = remaining.substring(2)
-                }
-            }
-            // Italic: *...*
-            remaining.startsWith('*') -> {
-                val end = remaining.indexOf('*', startIndex = 1)
-                if (end > 1) {
-                    val italicText = remaining.substring(1, end)
-                    if (italicText.isNotEmpty()) segments.add(MdSegment(italicText, italic = true))
-                    remaining = remaining.substring(end + 1)
-                } else {
-                    segments.add(MdSegment("*"))
-                    remaining = remaining.substring(1)
-                }
-            }
-            // Link: [text](url)
-            remaining.startsWith('[') -> {
-                val closeBracket = remaining.indexOf(']')
-                val openParen = if (closeBracket > 0) remaining.indexOf('(', startIndex = closeBracket) else -1
-                if (closeBracket > 1 && openParen == closeBracket + 1) {
-                    val end = remaining.indexOf(')', startIndex = openParen)
-                    if (end > openParen) {
-                        val linkText = remaining.substring(1, closeBracket)
-                        val url = remaining.substring(openParen + 1, end)
-                        if (linkText.isNotEmpty()) segments.add(MdSegment(linkText, link = url))
-                        remaining = remaining.substring(end + 1)
-                    } else {
-                        segments.add(MdSegment("["))
-                        remaining = remaining.substring(1)
-                    }
-                } else {
-                    segments.add(MdSegment("["))
-                    remaining = remaining.substring(1)
-                }
-            }
-            // Plain text — accumulate until next special char
-            else -> {
-                val nextSpecial = remaining.indexOfAny(charArrayOf('`', '*', '['))
-                if (nextSpecial == -1) {
-                    segments.add(MdSegment(remaining))
-                    remaining = ""
-                } else {
-                    if (nextSpecial > 0) {
-                        segments.add(MdSegment(remaining.substring(0, nextSpecial)))
-                    }
-                    remaining = remaining.substring(nextSpecial)
-                }
-            }
-        }
-    }
-
+    walkInline(paragraph, segments, setOf())
     return mergeAdjacentPlain(segments)
 }
 
-/** Combine consecutive plain-text segments to reduce AnnotatedString calls. */
+private fun walkInline(node: Node, segments: MutableList<MdSegment>, styles: Set<String>) {
+    var child = node.firstChild
+    while (child != null) {
+        when (child) {
+            is org.commonmark.node.Text -> {
+                if (child.literal.isNotBlank() || child.literal == " ") {
+                    segments.add(MdSegment(
+                        text = child.literal,
+                        bold = "bold" in styles,
+                        italic = "italic" in styles,
+                        code = "code" in styles,
+                        strikethrough = "strike" in styles
+                    ))
+                }
+            }
+            is Code -> segments.add(MdSegment(child.literal, code = true))
+            is Emphasis -> {
+                walkInline(child, segments, styles + setOf("italic"))
+            }
+            is StrongEmphasis -> {
+                walkInline(child, segments, styles + setOf("bold"))
+            }
+            is Link -> {
+                val url = child.destination ?: ""
+                val idx = segments.size
+                walkInline(child, segments, styles)
+                // 将链接 URL 写入最近添加的纯文本段
+                for (i in idx until segments.size) {
+                    val seg = segments[i]
+                    if (seg.link == null) segments[i] = seg.copy(link = url)
+                }
+            }
+            is org.commonmark.ext.gfm.strikethrough.Strikethrough -> {
+                walkInline(child, segments, styles + setOf("strike"))
+            }
+            else -> walkInline(child, segments, styles)
+        }
+        child = child.next
+    }
+}
+
 private fun mergeAdjacentPlain(segments: List<MdSegment>): List<MdSegment> {
     val merged = mutableListOf<MdSegment>()
     for (seg in segments) {
         val last = merged.lastOrNull()
-        if (last != null && !last.bold && !last.italic && !last.code && last.link == null
-            && !seg.bold && !seg.italic && !seg.code && seg.link == null) {
-            merged[merged.lastIndex] = last.copy(text = last.text + seg.text)
-        } else {
-            merged.add(seg)
-        }
+        val bothPlain = last != null && !last.bold && !last.italic && !last.code && last.link == null && !last.strikethrough
+                && !seg.bold && !seg.italic && !seg.code && seg.link == null && !seg.strikethrough
+        if (bothPlain) merged[merged.lastIndex] = last!!.copy(text = last.text + seg.text)
+        else merged.add(seg)
     }
     return merged
 }
 
 // ── Renderer ──
 
-/**
- * Render Markdown text with full inline formatting and code block support.
- * Uses [buildAnnotatedString] for inline styles and Material3 theming.
- */
 @Composable
 fun MarkdownText(
     content: String,
@@ -330,193 +260,155 @@ fun MarkdownText(
 
     val blocks = remember(content) { parseMarkdown(content) }
 
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)) {
-        blocks.forEach { block ->
-            when (block) {
-                is MdBlock.Heading -> HeadingView(block, textStyle)
-                is MdBlock.Paragraph -> ParagraphBlock(block, textStyle, inlineCodeColor, linkColor)
-                is MdBlock.CodeBlock -> CodeBlockView(block, textStyle, codeBackgroundColor)
-                is MdBlock.Table -> TableView(block, textStyle, codeBackgroundColor)
-                is MdBlock.BulletList -> BulletListView(block, textStyle, inlineCodeColor, linkColor)
-                is MdBlock.BlockQuote -> BlockQuoteView(block, textStyle)
-                is MdBlock.HorizontalRule -> HorizontalDivider(color = ThemeColors.border, thickness = 0.5.dp)
+    // 长文档用 LazyColumn 按需组合，短文档用 Column 减少布局开销
+    if (blocks.size < 30) {
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)) {
+            blocks.forEach { block -> RenderBlock(block, textStyle, inlineCodeColor, linkColor, codeBackgroundColor) }
+        }
+    } else {
+        LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)) {
+            items(blocks, key = { System.identityHashCode(it) }) { block ->
+                RenderBlock(block, textStyle, inlineCodeColor, linkColor, codeBackgroundColor)
             }
         }
     }
+}
+
+@Composable
+private fun RenderBlock(
+    block: MdBlock, baseStyle: TextStyle, inlineCodeColor: Color, linkColor: Color, codeBg: Color
+) {
+    when (block) {
+                is MdBlock.Heading -> HeadingView(block, baseStyle)
+                is MdBlock.Paragraph -> ParagraphBlock(block, baseStyle, inlineCodeColor, linkColor)
+                is MdBlock.CodeBlock -> CodeBlockView(block, baseStyle, codeBg)
+                is MdBlock.Table -> TableTextView(block, baseStyle, codeBg)
+                is MdBlock.BulletList -> BulletListView(block, baseStyle, inlineCodeColor, linkColor)
+                is MdBlock.BlockQuote -> BlockQuoteView(block, baseStyle)
+                is MdBlock.HorizontalRule -> HorizontalDivider(color = ThemeColors.border, thickness = 0.5.dp)
+            }
 }
 
 // ── Block composables ──
 
-@Composable
-private fun HeadingView(heading: MdBlock.Heading, baseStyle: TextStyle) {
+@Composable private fun HeadingView(heading: MdBlock.Heading, baseStyle: TextStyle) {
     val scale = when (heading.level) { 1 -> 1.35f; 2 -> 1.2f; else -> 1.1f }
-    Text(
-        text = heading.text,
-        style = baseStyle.copy(
-            fontWeight = FontWeight.Bold,
-            fontSize = (baseStyle.fontSize.value * scale).sp
-        ),
+    Text(heading.text, style = baseStyle.copy(fontWeight = FontWeight.Bold,
+        fontSize = (baseStyle.fontSize.value * scale).sp),
         color = ThemeColors.textPrimary,
-        modifier = Modifier.padding(top = if (heading.level <= 2) 6.dp else 2.dp)
-    )
+        modifier = Modifier.padding(top = if (heading.level <= 2) 6.dp else 2.dp))
 }
 
-@Composable
-private fun BulletListView(
-    list: MdBlock.BulletList,
-    baseStyle: TextStyle,
-    codeColor: Color,
-    linkColor: Color
-) {
+@Composable private fun BulletListView(list: MdBlock.BulletList, baseStyle: TextStyle, codeColor: Color, linkColor: Color) {
     Column(Modifier.padding(start = 8.dp)) {
         list.items.forEach { item ->
             Row(Modifier.padding(vertical = 1.dp)) {
                 Text("•  ", style = baseStyle, color = ThemeColors.textSecondary)
-                // Parse inline formatting within list item
-                val segments = parseInline(item)
-                if (segments.isNotEmpty()) {
-                    ParagraphBlock(MdBlock.Paragraph(segments), baseStyle, codeColor, linkColor)
-                }
+                ParagraphBlock(MdBlock.Paragraph(parseInlineFallback(item)), baseStyle, codeColor, linkColor)
             }
         }
     }
 }
 
-@Composable
-private fun BlockQuoteView(quote: MdBlock.BlockQuote, baseStyle: TextStyle) {
+@Composable private fun BlockQuoteView(quote: MdBlock.BlockQuote, baseStyle: TextStyle) {
     Row(Modifier.fillMaxWidth()) {
-        Box(
-            Modifier.width(3.dp).fillMaxHeight()
-                .background(ThemeColors.brand.copy(alpha = 0.4f))
-        )
+        Box(Modifier.width(3.dp).fillMaxHeight().background(ThemeColors.brand.copy(alpha = 0.4f)))
         Spacer(Modifier.width(8.dp))
-        Text(
-            text = quote.text,
-            style = baseStyle.copy(fontStyle = FontStyle.Italic),
-            color = ThemeColors.textSecondary,
-            modifier = Modifier.weight(1f).padding(vertical = 4.dp)
-        )
+        Text(quote.text, style = baseStyle.copy(fontStyle = FontStyle.Italic),
+            color = ThemeColors.textSecondary, modifier = Modifier.weight(1f).padding(vertical = 4.dp))
     }
 }
 
-@Composable
-private fun ParagraphBlock(
-    paragraph: MdBlock.Paragraph,
-    baseStyle: TextStyle,
-    codeColor: Color,
-    linkColor: Color
-) {
+@Composable private fun ParagraphBlock(paragraph: MdBlock.Paragraph, baseStyle: TextStyle, codeColor: Color, linkColor: Color) {
     val annotated = remember(paragraph) {
         buildAnnotatedString {
             paragraph.segments.forEach { seg ->
                 val style = when {
-                    // Single style — use SpanStyle directly
+                    seg.code -> SpanStyle(fontFamily = FontFamily.Monospace,
+                        fontSize = (baseStyle.fontSize.value * 0.9f).sp,
+                        background = codeColor.copy(alpha = 0.12f), color = codeColor)
                     seg.bold && seg.italic -> SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)
+                    seg.strikethrough -> SpanStyle(textDecoration = TextDecoration.LineThrough)
                     seg.bold -> SpanStyle(fontWeight = FontWeight.Bold)
                     seg.italic -> SpanStyle(fontStyle = FontStyle.Italic)
-                    seg.code -> SpanStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = (baseStyle.fontSize.value * 0.9f).sp,
-                        background = codeColor.copy(alpha = 0.12f),
-                        color = codeColor
-                    )
-                    seg.link != null -> SpanStyle(
-                        color = linkColor,
-                        textDecoration = TextDecoration.Underline
-                    )
+                    seg.link != null -> SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)
                     else -> SpanStyle()
                 }
-
-                val start = length
-                append(seg.text)
-                addStyle(style, start, length)
-
-                if (seg.link != null) {
-                    addLink(LinkAnnotation.Url(seg.link), start, length)
-                }
+                val start = length; append(seg.text); addStyle(style, start, length)
+                if (seg.link != null) addLink(LinkAnnotation.Url(seg.link), start, length)
             }
         }
     }
-
     Text(text = annotated, style = baseStyle)
 }
 
-@Composable
-private fun CodeBlockView(
-    block: MdBlock.CodeBlock,
-    baseStyle: TextStyle,
-    background: Color
-) {
-    Surface(
-        shape = RoundedCornerShape(ArcoRadius.md),
-        color = background,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Box(
-            Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(ArcoSpacing.md)
-        ) {
-            Text(
-                text = block.code,
-                style = baseStyle.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = (baseStyle.fontSize.value * 0.85f).sp
-                ),
-                color = ThemeColors.textPrimary
-            )
+@Composable private fun CodeBlockView(block: MdBlock.CodeBlock, baseStyle: TextStyle, background: Color) {
+    Surface(shape = RoundedCornerShape(ArcoRadius.md), color = background, modifier = Modifier.fillMaxWidth()) {
+        Box(Modifier.horizontalScroll(rememberScrollState()).padding(ArcoSpacing.md)) {
+            Text(block.code, style = baseStyle.copy(fontFamily = FontFamily.Monospace,
+                fontSize = (baseStyle.fontSize.value * 0.85f).sp), color = ThemeColors.textPrimary)
         }
     }
 }
 
+/** 表格渲染为单个等宽对齐 Text — 避免嵌套 Composable 导致的性能问题。 */
 @Composable
-private fun TableView(
-    block: MdBlock.Table,
-    baseStyle: TextStyle,
-    background: Color
-) {
-    Surface(
-        shape = RoundedCornerShape(ArcoRadius.md),
-        color = background,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(ArcoSpacing.md)
-        ) {
-            // Header row
-            Row(Modifier.fillMaxWidth()) {
-                block.header.forEach { cell ->
-                    Text(
-                        text = cell,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = ArcoSpacing.sm, vertical = 4.dp),
-                        style = baseStyle.copy(fontWeight = FontWeight.Bold),
-                        color = ThemeColors.textPrimary
-                    )
-                }
-            }
-            HorizontalDivider(color = ThemeColors.border, thickness = 1.dp)
-            // Data rows
-            block.rows.forEach { row ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                    val padded = if (row.size < block.header.size) {
-                        row + List(block.header.size - row.size) { "" }
-                    } else row
-                    padded.take(block.header.size).forEach { cell ->
-                        Text(
-                            text = cell,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = ArcoSpacing.sm, vertical = 2.dp),
-                            style = baseStyle.copy(fontSize = (baseStyle.fontSize.value * 0.9f).sp),
-                            color = ThemeColors.textPrimary
-                        )
-                    }
-                }
-            }
+private fun TableTextView(block: MdBlock.Table, baseStyle: TextStyle, background: Color) {
+    if (block.header.isEmpty() && block.rows.isEmpty()) return
+
+    // 计算每列最大宽度（中文算 2，英文/数字算 1）
+    fun colWidth(s: String): Int = s.map { if (it.code > 127) 2 else 1 }.sum()
+    val colWidths = mutableListOf<Int>()
+    val allRows = listOf(block.header) + block.rows
+    allRows.forEach { row ->
+        row.forEachIndexed { i, cell ->
+            val w = colWidth(cell)
+            while (colWidths.size <= i) colWidths.add(0)
+            if (w > colWidths[i]) colWidths[i] = w
         }
     }
+    // 最小列宽 4
+    colWidths.replaceAll { maxOf(it, 4) }
+
+    val tableText = buildString {
+        fun renderRow(cells: List<String>) {
+            append("│")
+            cells.forEachIndexed { i, cell ->
+                val w = colWidths.getOrElse(i) { 4 }
+                val pad = maxOf(0, w - colWidth(cell))
+                append(" $cell${" ".repeat(pad)} │")
+            }
+            append("\n")
+        }
+
+        // 顶部分隔
+        append("┌"); colWidths.forEachIndexed { i, w -> append("${"─".repeat(w + 2)}${if (i < colWidths.lastIndex) "┬" else "┐"}") }
+        append("\n")
+        renderRow(block.header)
+        // 头分隔
+        append("├"); colWidths.forEachIndexed { i, w -> append("${"─".repeat(w + 2)}${if (i < colWidths.lastIndex) "┼" else "┤"}") }
+        append("\n")
+        block.rows.forEach { renderRow(it) }
+        // 底部分隔
+        append("└"); colWidths.forEachIndexed { i, w -> append("${"─".repeat(w + 2)}${if (i < colWidths.lastIndex) "┴" else "┘"}") }
+    }
+
+    Surface(shape = RoundedCornerShape(ArcoRadius.md), color = background, modifier = Modifier.fillMaxWidth()) {
+        Box(Modifier.horizontalScroll(rememberScrollState()).padding(ArcoSpacing.md)) {
+            Text(tableText, style = baseStyle.copy(fontFamily = FontFamily.Monospace,
+                fontSize = (baseStyle.fontSize.value * 0.85f).sp), color = ThemeColors.textPrimary)
+        }
+    }
+}
+
+/** 轻量级内联解析 — 用于没有 commonmark 上下文时（如 BulletList 子项）。 */
+private fun parseInlineFallback(text: String): List<MdSegment> {
+    val doc = mdParser.parse(text)
+    val segs = mutableListOf<MdSegment>()
+    var node = doc.firstChild
+    while (node != null) {
+        if (node is Paragraph) walkInline(node, segs, setOf())
+        node = node.next
+    }
+    return mergeAdjacentPlain(segs)
 }

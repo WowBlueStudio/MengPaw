@@ -17,9 +17,11 @@ import com.mengpaw.kernel.llm.PromptEngine
 import com.mengpaw.kernel.llm.ProviderInfo
 import com.mengpaw.kernel.llm.ProviderType
 import com.mengpaw.kernel.llm.TokenUsage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -641,9 +643,11 @@ class AgentViewModel : ViewModel() {
                     .map { it.trim() }.filter { it.length >= 2 }
                     .filterNot { it in setOf("的", "是", "我", "你", "他", "她", "the", "a", "an", "is", "are", "to", "of", "in", "请", "帮", "一个", "这个", "那个") }
                     .take(5)
-                val recalledMemory = com.mengpaw.kernel.agent.AgentDocs.recallMemory(
-                    _activeAgentName, keywords
-                )
+                val recalledMemory = withContext(Dispatchers.IO) {
+                    com.mengpaw.kernel.agent.AgentDocs.recallMemory(
+                        _activeAgentName, keywords
+                    )
+                }
                 val recallPrefix = if (recalledMemory.isNotBlank()) "$recalledMemory\n\n---\n\n" else ""
 
                 // Build conversation history context (exclude system messages + current task)
@@ -745,7 +749,9 @@ class AgentViewModel : ViewModel() {
 摘要：""".trimIndent()
                         val summary = session.provider.complete(summaryPrompt).take(200)
                         if (summary.isNotBlank() && summary.length > 10) {
-                            com.mengpaw.kernel.agent.AgentDocs.appendMemory(_activeAgentName, summary)
+                            withContext(Dispatchers.IO) {
+                                com.mengpaw.kernel.agent.AgentDocs.appendMemory(_activeAgentName, summary)
+                            }
                         }
                     } catch (_: Exception) {}
                 }

@@ -5,6 +5,8 @@ package com.mengpaw.kernel.agent
 
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.error.ErrorCollector
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -60,7 +62,13 @@ object AgentDocs {
         } else ""
     }
 
-    /** Read memory.md content. */
+    /** Read memory.md content — suspend 版本，在 IO 线程执行。 */
+    suspend fun readMemoryDocAsync(agentName: String): String = withContext(Dispatchers.IO) {
+        val file = File(DataPaths.AGENTS, "$agentName/memory.md")
+        if (file.exists()) try { file.readText() } catch (e: Exception) { "" } else ""
+    }
+
+    /** Read memory.md content (同步，仅限已确认在后台线程的调用). */
     fun readMemoryDoc(agentName: String): String {
         val file = File(DataPaths.AGENTS, "$agentName/memory.md")
         return if (file.exists()) try { file.readText() } catch (e: Exception) {
@@ -70,7 +78,6 @@ object AgentDocs {
 
     /**
      * 跨会话召回 — 按关键词搜索 memory，只返回匹配的条目。
-     * 将 memory 按 "## " 分割为独立条目，对每个条目做关键词匹配。
      * @param keywords 从用户消息中提取的关键词列表
      * @return 匹配的条目文本，若无匹配则返回空字符串
      */
