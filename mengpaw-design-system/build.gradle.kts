@@ -32,6 +32,12 @@ android {
 dependencies {
     implementation(project(":mengpaw-kernel"))
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))
+
+    // CommonMark parser (BSD-2-clause)
+    val commonmarkVersion = "0.24.0"
+    implementation("org.commonmark:commonmark:$commonmarkVersion")
+    implementation("org.commonmark:commonmark-ext-gfm-tables:$commonmarkVersion")
+    implementation("org.commonmark:commonmark-ext-gfm-strikethrough:$commonmarkVersion")
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
 
     // Compose BOM
