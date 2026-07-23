@@ -298,7 +298,7 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | minSdk | 26 | 26 | 26 | — |
 | targetSdk | 35 | 35 | — | — |
 | versionName | 0.10.0 | 0.4.0 | — | 0.10.0 |
-| versionCode | 100 | 6 | — | — |
+| versionCode | 1000 | 6 | — | — |
 | R8 | Release 启用 | Release 启用 | 关闭(库模块) | — |
 
 **Shell 权限** (17 项):
