@@ -188,6 +188,8 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     var showSplash by remember { mutableStateOf(true) }
     var showPlugins by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showLicense by remember { mutableStateOf(false) }
+    var showAttribution by remember { mutableStateOf(false) }
     val settingsState by settingsViewModel.state.collectAsState()
 
     if (showSplash) {
@@ -196,10 +198,12 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     }
 
     // ── 全局返回手势：逐层回退，主页再退到后台 ──
-    // 优先级：Settings > Plugins（如果同时显示，先关 Settings）
-    androidx.activity.compose.BackHandler(enabled = showSettings || showPlugins) {
+    val overlayActive = showSettings || showPlugins || showLicense || showAttribution
+    androidx.activity.compose.BackHandler(enabled = overlayActive) {
         when {
-            showSettings && showPlugins -> showSettings = false  // Settings 盖在 Plugins 上，先关 Settings
+            showLicense -> showLicense = false
+            showAttribution -> showAttribution = false
+            showSettings && showPlugins -> showSettings = false
             showSettings -> showSettings = false
             showPlugins -> showPlugins = false
         }
@@ -427,6 +431,8 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
         SettingsScreen(
             onNavigateBack = { showSettings = false },
             onNavigateToPluginMarket = { showPlugins = true },
+            onNavigateToLicense = { showLicense = true },
+            onNavigateToAttribution = { showAttribution = true },
             viewModel = settingsViewModel,
             activeAgentName = activeAgent,
             agentFramework = agentFramework,
@@ -448,5 +454,11 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             onNavigateBack = { showPlugins = false },
             onNavigateToDetail = {}
         )
+    }
+    if (showLicense) {
+        LicenseScreen(onBack = { showLicense = false })
+    }
+    if (showAttribution) {
+        AttributionScreen(onBack = { showAttribution = false })
     }
 }

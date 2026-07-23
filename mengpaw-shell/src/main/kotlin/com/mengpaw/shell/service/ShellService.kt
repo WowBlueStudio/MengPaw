@@ -26,7 +26,7 @@ import androidx.core.app.NotificationCompat
 class ShellService : Service() {
 
     companion object {
-        private const val CHANNEL_ID = "mengpaw_agent"
+        private const val CHANNEL_ID = "mengpaw_bg_v2"
         private const val NOTIFICATION_ID = 1001
         private const val WAKELOCK_TAG = "mengpaw:shell-service"
         private const val WAKELOCK_TIMEOUT_MS = 60 * 60 * 1000L // 1 hour max
