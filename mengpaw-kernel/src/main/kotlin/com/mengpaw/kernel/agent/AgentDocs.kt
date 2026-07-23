@@ -67,4 +67,43 @@ object AgentDocs {
             ErrorCollector.report(e, "AgentDocs.readMemoryDoc"); ""
         } else ""
     }
+
+    /**
+     * 跨会话召回 — 按关键词搜索 memory，只返回匹配的条目。
+     * 将 memory 按 "## " 分割为独立条目，对每个条目做关键词匹配。
+     * @param keywords 从用户消息中提取的关键词列表
+     * @return 匹配的条目文本，若无匹配则返回空字符串
+     */
+    fun recallMemory(agentName: String, keywords: List<String>): String {
+        val file = File(DataPaths.AGENTS, "$agentName/memory.md")
+        if (!file.exists() || keywords.isEmpty()) return ""
+        val content = try { file.readText() } catch (_: Exception) { return "" }
+        if (content.isBlank()) return ""
+
+        // 按 ## 标题分割为独立记忆条目
+        val entries = content.split(Regex("(?=## )")).filter { it.isNotBlank() }
+        val matched = entries.filter { entry ->
+            keywords.any { kw -> entry.contains(kw, ignoreCase = true) }
+        }
+        return if (matched.isEmpty()) ""
+        else "## 相关记忆\n\n${matched.joinToString("\n").trim()}"
+    }
+
+    /** 自动摘要 — 对话结束后追加一条记忆到 memory.md。 */
+    fun appendMemory(agentName: String, entry: String) {
+        try {
+            val file = File(DataPaths.AGENTS, "$agentName/memory.md")
+            file.parentFile?.mkdirs()
+            val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",
+                java.util.Locale.getDefault()).format(java.util.Date())
+            // 原子追加
+            val line = "\n## $timestamp\n\n$entry\n"
+            // 先读后写，确保不破坏已有内容
+            val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
+            val tmp = File(file.parentFile, "${file.name}.tmp")
+            tmp.writeText(existing + line)
+            tmp.renameTo(file)
+            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+        } catch (_: Exception) {}
+    }
 }

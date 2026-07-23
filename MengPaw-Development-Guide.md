@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.10.0 | **更新**: 2026-07-23 | **架构**: 微内核 + AgentRuntime (UI/运行时分离) + 24 插件 + 框架协议插件 + 品牌焕新 + 扩展功能重构 + 侧边栏交互 + 智能体/框架名片
+> **版本**: 0.10.0 | **更新**: 2026-07-23 | **架构**: 微内核 + AgentRuntime (UI/运行时分离) + 23 插件 + 框架协议插件 + 品牌焕新 + 扩展功能重构 + 侧边栏交互 + 智能体/框架名片
 
 ---
 
@@ -74,6 +74,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 | `self` | SelfExecutor.kt | 14 | Agent 自省 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/time/notify.message/notify.banner) |
 | `agent` | AgentExecutor.kt | 12 | 文档管理 (docs/memory/memory.record/cli/profile/soul/audit/browser-tools/dream/cleanup/storage/sessions) |
 | `plugin` | PluginExecutor + DevPlugin | 10 + 4 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade + create/audit/share/examples) |
+`framework` | FrameworkPlugin | 6 | 框架发现 (discover/peers/trust/untrust/info/ping) |
 
 > `sys` 命名空间 (11 命令) 在 `mengpaw-core` 中实现，通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。
 
@@ -84,7 +85,7 @@ mengpaw-shell
   ├── mengpaw-kernel (微内核)
   ├── mengpaw-core (Android 适配)
   ├── mengpaw-design-system (主题)
-  └── 4 捆绑插件: memory / skill / pad / dev
+  └── 4 捆绑插件: memory / skill / framework / dev
 
 mengpaw-browser
   ├── mengpaw-kernel
@@ -239,7 +240,7 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | plugin-clipboard | clipboard | copy, paste, clear (3) | |
 | plugin-notification | notification | send, list, dismiss (3) | |
 | plugin-self | self | status, config, stats, version (4) | |
-| plugin-pad | pad | show, hide (2) | ⭐ |
+| plugin-framework | framework | discover, peers, trust, untrust, info, ping (6) | ⭐ |
 
 #### AI / 搜索 (4)
 
@@ -261,7 +262,6 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 #### Agent 运行模式 (内置)
 
 > Goal / Mission / Mission+ 三种 Loop 模式已内置在 AgentEngine 中，不再作为独立插件。
-> 原 `plugin-agent-loop` 和 `plugin-agent-mission` 已标记为 deprecated。
 
 | 模式 | 引擎方法 | 核心机制 |
 |------|---------|---------|
@@ -464,9 +464,6 @@ Agent 通过 memory 命令按需加载文档：
 
 #### notification — 通知 (3)
 `send --title "T" --content "C"` | `list` | `dismiss <id|--all>`
-
-#### pad — 悬浮窗 (2)
-`show` | `hide`
 
 #### tavily — AI 搜索 (2)
 `search <query>` | `extract <url>`
