@@ -24,7 +24,14 @@ enum class AcpMessageType {
     SHARE_SKILL,    // 共享技能定义
     HEARTBEAT,      // 存活检测
     BROWSER_PUSH,           // 推送网页到对端
-    BROWSER_PUSH_RESPONSE   // 推送响应（接受/拒绝）
+    BROWSER_PUSH_RESPONSE,  // 推送响应（接受/拒绝）
+    // ── Memory Twin (记忆孪生) ──
+    LEDGER_HEAD,            // 交换账本头部（最新哈希 + 条目数）
+    LEDGER_PULL,            // 请求 since-hash 之后的条目
+    LEDGER_BATCH,           // 批量传输账本条目
+    LEDGER_ACK,             // 确认接收并验证通过
+    CAPABILITY_ANNOUNCE,    // 宣告设备能力卡
+    TWIN_DELEGATE           // 孪生任务委派（带能力需求）
 }
 
 /** ACP 消息。 */
@@ -49,6 +56,31 @@ data class AcpMessage(
         fun browserPushResponse(from: String, to: String, accepted: Boolean, reason: String = "") =
             AcpMessage(from, to, AcpMessageType.BROWSER_PUSH_RESPONSE.name,
                 """{"accepted":$accepted,"reason":"$reason"}""")
+
+        // ── Memory Twin factory methods ──────────────────────────────
+
+        fun ledgerHead(from: String, to: String, latestHash: String, entryCount: Int) =
+            AcpMessage(from, to, AcpMessageType.LEDGER_HEAD.name,
+                """{"latestHash":"$latestHash","entryCount":$entryCount}""")
+
+        fun ledgerPull(from: String, to: String, sinceHash: String, maxCount: Int = 100) =
+            AcpMessage(from, to, AcpMessageType.LEDGER_PULL.name,
+                """{"sinceHash":"$sinceHash","maxCount":$maxCount}""")
+
+        fun ledgerBatch(from: String, to: String, entries: String, rangeStart: String, rangeEnd: String) =
+            AcpMessage(from, to, AcpMessageType.LEDGER_BATCH.name,
+                """{"entries":$entries,"rangeStart":"$rangeStart","rangeEnd":"$rangeEnd"}""")
+
+        fun ledgerAck(from: String, to: String, receivedHash: String, verified: Boolean = true) =
+            AcpMessage(from, to, AcpMessageType.LEDGER_ACK.name,
+                """{"receivedHash":"$receivedHash","verified":$verified}""")
+
+        fun capabilityAnnounce(from: String, to: String, capabilityCard: String) =
+            AcpMessage(from, to, AcpMessageType.CAPABILITY_ANNOUNCE.name, capabilityCard)
+
+        fun twinDelegate(from: String, to: String, task: String, requirements: String = "[]") =
+            AcpMessage(from, to, AcpMessageType.TWIN_DELEGATE.name,
+                """{"task":"${task.replace("\"", "\\\"")}","requirements":$requirements,"sessionId":"$from"}""")
     }
 }
 

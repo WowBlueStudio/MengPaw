@@ -55,6 +55,12 @@ object DataPaths {
     val ERROR_LOG get() = "$BASE/错误报告"
     val ERROR_QUEUE get() = "$ERROR_LOG/queue"
 
+    // ── Memory Twin ────────────────────────────────────────────────
+    val TWIN_LEDGER get() = "$AGENTS/twin/ledger"
+    val TWIN_PEERS get() = "$AGENTS/twin/peers"
+    val TWIN_AUDIT get() = "$AGENTS/twin/audit.log"
+    val TWIN_DREAMS get() = "$AGENTS/twin/dreams"
+
     // ── Plugin-specific storage ───────────────────────────────────
 
     fun pluginDir(pluginId: String): String = "${PLUGIN_CACHE}/${pluginFolderName(pluginId)}"

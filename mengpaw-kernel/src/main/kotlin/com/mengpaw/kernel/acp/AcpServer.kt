@@ -108,7 +108,11 @@ class AcpServer(
                 AcpResult(true, msg.payload, msg.from)
             }
             AcpMessageType.DELEGATE, AcpMessageType.SHARE_MEMORY, AcpMessageType.SHARE_SKILL,
-            AcpMessageType.BROWSER_PUSH -> {
+            AcpMessageType.BROWSER_PUSH,
+            // Memory Twin message types — delegated to AcpHandler
+            AcpMessageType.LEDGER_HEAD, AcpMessageType.LEDGER_PULL,
+            AcpMessageType.LEDGER_BATCH, AcpMessageType.LEDGER_ACK,
+            AcpMessageType.CAPABILITY_ANNOUNCE, AcpMessageType.TWIN_DELEGATE -> {
                 if (type == AcpMessageType.BROWSER_PUSH) {
                     if (!PromptFirewall.isTrusted(msg.from)) {
                         writePushToInbox(msg.from, msg.payload)
