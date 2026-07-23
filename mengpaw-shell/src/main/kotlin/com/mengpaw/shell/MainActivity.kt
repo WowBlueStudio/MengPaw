@@ -301,6 +301,35 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                     onCreateAgentWithDetails = { name, wsFolder, intro ->
                         agentViewModel.createAgentWithDetails(name, wsFolder, intro)
                         close()
+                    },
+                    onActivateMemoryTwin = {
+                        val name = agentViewModel.activeAgent.value
+                        val act = (ctx as? android.app.Activity) ?: return@SidebarContent
+                        try {
+                            val pluginCls = Class.forName("com.mengpaw.plugin.memorytwin.MemoryTwinPlugin")
+                            val plugin = pluginCls.getDeclaredConstructor().newInstance() as com.mengpaw.kernel.plugin.Plugin
+                            try { pluginCls.getDeclaredField("appContext").apply { isAccessible = true }.set(null, act) } catch (_: Exception) {}
+                            try { pluginCls.getDeclaredField("agentName").apply { isAccessible = true }.set(null, name) } catch (_: Exception) {}
+                            val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+                            pm.install(plugin).fold(
+                                onSuccess = {
+                                    pm.activate(plugin.metadata.id).fold(
+                                        onSuccess = { android.widget.Toast.makeText(act, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show() },
+                                        onFailure = { e -> android.widget.Toast.makeText(act, "激活失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show() }
+                                    )
+                                },
+                                onFailure = { e ->
+                                    pm.activate(plugin.metadata.id).fold(
+                                        onSuccess = { android.widget.Toast.makeText(act, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show() },
+                                        onFailure = { e2 -> android.widget.Toast.makeText(act, "激活失败: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show() }
+                                    )
+                                }
+                            )
+                        } catch (e: Exception) {
+                            com.mengpaw.kernel.error.ErrorCollector.report(e, "activateMemoryTwin")
+                            android.widget.Toast.makeText(act, "未就绪: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                        close()
                     }
                 )
             },
