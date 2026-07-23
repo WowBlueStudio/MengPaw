@@ -77,7 +77,31 @@ class MemoryTwinPlugin : Plugin {
 
         /** ACP transport instance. */
         @Volatile var acpTransport: AcpTransport? = null
+
+        /** Pending twin pairing requests from remote devices. UI observes this. */
+        val pendingPairRequests = kotlinx.coroutines.flow.MutableStateFlow<List<TwinPairRequest>>(emptyList())
+
+        /** Accept a pending pairing request. */
+        fun acceptPairRequest(requestId: String) {
+            pendingPairRequests.value = pendingPairRequests.value.filter { it.id != requestId }
+            // The TwinSyncEngine will process the acceptance
+        }
+
+        /** Reject a pending pairing request. */
+        fun rejectPairRequest(requestId: String) {
+            pendingPairRequests.value = pendingPairRequests.value.filter { it.id != requestId }
+        }
     }
+
+    /** A pairing request from a remote device. */
+    data class TwinPairRequest(
+        val id: String,
+        val deviceId: String,
+        val deviceName: String,
+        val peerAddress: String,
+        val capabilityCard: CapabilityCard?,
+        val receivedAt: Long = System.currentTimeMillis()
+    )
 
     // ── Internal state ────────────────────────────────────────────
 

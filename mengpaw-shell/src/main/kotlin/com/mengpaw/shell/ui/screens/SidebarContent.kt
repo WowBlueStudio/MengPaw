@@ -498,6 +498,74 @@ fun SidebarContent(
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // 记忆孪生配对请求 (接收方)
+    // ═══════════════════════════════════════════════════════════════════
+    var pendingTwinRequests by remember {
+        mutableStateOf<List<com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.TwinPairRequest>>(emptyList())
+    }
+    // Observe pending requests from the twin plugin
+    LaunchedEffect(Unit) {
+        com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.pendingPairRequests.collect { requests ->
+            pendingTwinRequests = requests
+        }
+    }
+    pendingTwinRequests.firstOrNull()?.let { request ->
+        val deviceLabel = request.deviceName.ifBlank { request.deviceId.take(16) }
+        AlertDialog(
+            onDismissRequest = {
+                com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.rejectPairRequest(request.id)
+            },
+            icon = { Icon(Icons.Outlined.Warning, null, tint = ArcoColors.Orange6) },
+            title = { Text("记忆孪生配对请求", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("⚠️ 请确认是个人设备请求，请勿与他人设备记忆孪生")
+                    Spacer(Modifier.height(12.dp))
+                    Text("请求设备: $deviceLabel", style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium)
+                    if (request.peerAddress.isNotBlank()) {
+                        Text("地址: ${request.peerAddress}", style = MaterialTheme.typography.bodySmall,
+                            color = ThemeColors.textSecondary)
+                    }
+                    request.capabilityCard?.let { card ->
+                        Spacer(Modifier.height(8.dp))
+                        Text("设备型号: ${card.deviceModel}", style = MaterialTheme.typography.bodySmall,
+                            color = ThemeColors.textSecondary)
+                        Text("Agent: ${card.deviceName}", style = MaterialTheme.typography.bodySmall,
+                            color = ThemeColors.textSecondary)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "同意后，双方 Agent 的记忆将开始同步。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ThemeColors.textSecondary
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acceptPairRequest(request.id)
+                    // Trigger actual pairing: write trust file, sync
+                    val trustedDir = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
+                    trustedDir.mkdirs()
+                    java.io.File(trustedDir, "${request.deviceId}.trusted").writeText(
+                        """{"deviceId":"${request.deviceId}","deviceName":"${request.deviceName}","pairedAt":${System.currentTimeMillis()}}"""
+                    )
+                }) {
+                    Text("同意", color = ThemeColors.brand)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.rejectPairRequest(request.id)
+                }) {
+                    Text("不同意")
+                }
+            }
+        )
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // 记忆孪生激活确认 (发起方)
     // ═══════════════════════════════════════════════════════════════════
     if (showTwinConfirmDialog) {
