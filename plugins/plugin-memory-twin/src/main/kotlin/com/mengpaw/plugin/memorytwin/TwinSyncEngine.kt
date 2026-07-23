@@ -208,8 +208,28 @@ class TwinSyncEngine(
             it.capabilityCard = cardJson
             it.lastSeen = System.currentTimeMillis()
         }
-        // Persist capability cards
+        // If peer is unknown or untrusted, queue a pairing request for the user
+        if (!isPeerTrusted(peerId)) {
+            val card = try { CapabilityCard.fromJson(cardJson) } catch (_: Exception) { null }
+            val request = MemoryTwinPlugin.TwinPairRequest(
+                id = "req-${System.currentTimeMillis()}-${peerId.take(8)}",
+                deviceId = peerId,
+                deviceName = card?.deviceName ?: peerId.take(12),
+                peerAddress = peers[peerId]?.address ?: "",
+                capabilityCard = card
+            )
+            val current = MemoryTwinPlugin.pendingPairRequests.value.toMutableList()
+            // Dedup: remove existing request from same device
+            current.removeAll { it.deviceId == peerId }
+            current.add(request)
+            MemoryTwinPlugin.pendingPairRequests.value = current
+        }
         persistPeerInfo()
+    }
+
+    /** Check if a peer is already trusted (has a .trusted file). */
+    private fun isPeerTrusted(peerId: String): Boolean {
+        return java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "$peerId.trusted").exists()
     }
 
     /** Called when a peer delegates a task. */
