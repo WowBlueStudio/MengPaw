@@ -3,6 +3,7 @@
 
 package com.mengpaw.design.theme
 
+import androidx.compose.runtime.remember
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -104,12 +105,13 @@ fun ArcoTheme(
     darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    // Load agent-customized theme colors from disk.
-    // File read is trivial (~200 bytes); re-evaluates on any recomposition.
-    val customTheme = try {
-        val themeFile = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "theme.md")
-        if (themeFile.exists()) parseThemeFile(themeFile.readText()) else null
-    } catch (_: Exception) { null }
+    // Load agent-customized theme colors from disk (cached on first read).
+    val customTheme = remember {
+        try {
+            val themeFile = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "theme.md")
+            if (themeFile.exists()) parseThemeFile(themeFile.readText()) else null
+        } catch (_: Exception) { null }
+    }
 
     val baseScheme = if (darkTheme) DarkColorScheme else LightColorScheme
     val colorScheme = if (customTheme != null) {

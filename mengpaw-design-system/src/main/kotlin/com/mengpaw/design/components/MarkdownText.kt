@@ -223,6 +223,8 @@ private fun collectText(node: Node): String {
         override fun visit(node: Link) { visitChildren(node) }
         override fun visit(node: Emphasis) { visitChildren(node) }
         override fun visit(node: StrongEmphasis) { visitChildren(node) }
+        override fun visit(node: Image) { visitChildren(node) }
+        override fun visit(node: HtmlInline) { sb.append(node.literal) }
     })
     return sb.toString()
 }
@@ -287,7 +289,7 @@ private fun mergeAdjacentPlain(segments: List<MdSegment>): List<MdSegment> {
         val last = merged.lastOrNull()
         val bothPlain = last != null && !last.bold && !last.italic && !last.code && last.link == null && !last.strikethrough
                 && !seg.bold && !seg.italic && !seg.code && seg.link == null && !seg.strikethrough
-        if (bothPlain) merged[merged.lastIndex] = last!!.copy(text = last.text + seg.text)
+        if (bothPlain) { val l = last ?: continue; merged[merged.lastIndex] = l.copy(text = l.text + seg.text) }
         else merged.add(seg)
     }
     return merged

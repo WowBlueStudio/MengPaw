@@ -6,6 +6,7 @@ package com.mengpaw.core.namespace
 import android.Manifest
 import android.app.Activity
 import android.app.AlarmManager
+import androidx.core.app.ActivityCompat
 import android.app.PendingIntent
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -40,6 +41,7 @@ import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.cli.ErrorCodes
 import java.io.File
+import java.lang.ref.WeakReference
 import java.net.NetworkInterface
 
 /**
@@ -96,6 +98,13 @@ object SysExecutor {
         appContext = context.applicationContext
     }
 
+    /** Set the current Activity reference for runtime permission dialogs. Uses WeakReference to prevent leaks. */
+    fun setActivity(activity: Activity?) {
+        currentActivity = activity?.let { WeakReference(it) }
+    }
+
+    private var currentActivity: WeakReference<Activity>? = null
+
     /** Shorthand for the Android app context (not to be confused with ExecutionContext params). */
     private inline val app: Context get() = appContext
         ?: throw IllegalStateException("SysExecutor not initialized — call SysExecutor.init(context) at app startup")
@@ -143,6 +152,7 @@ object SysExecutor {
         "notification.cancel" to ::notificationCancel,
         // ── Permissions ──
         "permission.list" to ::permissionList,
+        "permission.check" to ::permissionCheck,
         "permission.request" to ::permissionRequest,
         // ── Misc ──
         "vibrate" to ::vibrate,
@@ -719,6 +729,16 @@ object SysExecutor {
         val text = parts.drop(1).joinToString(" ")
         val channelId = "mengpaw_agent"
 
+        // Android 13+: proactively check POST_NOTIFICATIONS before attempting
+        if (Build.VERSION.SDK_INT >= 33 && !checkSelf(Manifest.permission.POST_NOTIFICATIONS)) {
+            return ExecutionResult.fail(
+                "⛔ 需要 POST_NOTIFICATIONS 权限（Android 13+ 通知权限）\n" +
+                "当前状态: 未授予\n" +
+                "操作: sys.permission.request POST_NOTIFICATIONS\n" +
+                "说明: 将弹出系统权限对话框，请用户在弹窗中选择'允许'",
+                errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        }
+
         try {
             // Create channel if needed
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -777,34 +797,108 @@ object SysExecutor {
             appendLine("| 权限 | 说明 | 状态 |")
             appendLine("|------|------|------|")
             perms.forEach { (perm, desc) ->
-                val status = if (Build.VERSION.SDK_INT >= 23 && perm in listOf(
-                        Manifest.permission.SYSTEM_ALERT_WINDOW,
-                        Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        Manifest.permission.WRITE_SETTINGS
-                    )) {
-                    "需单独申请"
-                } else if (Build.VERSION.SDK_INT < 23) {
-                    "已授予 (API<23)"
-                } else {
-                    if (checkSelf(perm)) "✅ 已授予" else "⛔ 未授予"
+                val status = when {
+                    perm in SETTINGS_PERMISSIONS -> "需单独申请"
+                    Build.VERSION.SDK_INT < 23 -> "已授予 (API<23)"
+                    perm == Manifest.permission.POST_NOTIFICATIONS && Build.VERSION.SDK_INT < 33 -> "无需 (API<33)"
+                    checkSelf(perm) -> "✅ 已授予"
+                    else -> "⛔ 未授予"
                 }
                 appendLine("| $perm | $desc | $status |")
+            }
+            appendLine()
+            if (Build.VERSION.SDK_INT >= 33 && !checkSelf(Manifest.permission.POST_NOTIFICATIONS)) {
+                appendLine("💡 通知权限未授予。Agent 发送通知前请先执行: sys.permission.request POST_NOTIFICATIONS")
             }
         })
     }
 
+    private suspend fun permissionCheck(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        val perm = args.firstOrNull() ?: return ExecutionResult.fail(
+            "Usage: sys.permission.check <permission_name>\n示例: sys.permission.check POST_NOTIFICATIONS",
+            errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        // Find the human-readable description
+        val desc = PERMISSION_LABELS[perm] ?: perm
+        val status = when {
+            perm in SETTINGS_PERMISSIONS -> "需单独申请（系统设置）"
+            Build.VERSION.SDK_INT < 23 -> "已授予 (API<23, 安装时授权)"
+            perm == Manifest.permission.POST_NOTIFICATIONS && Build.VERSION.SDK_INT < 33 -> "无需 (Android 12-, 安装时授权)"
+            checkSelf(perm) -> "✅ 已授予"
+            else -> "⛔ 未授予"
+        }
+        val guide = PERMISSION_GUIDE[perm]
+        val guideText = if (guide != null) "\n说明: $guide" else ""
+        val actionText = if (!checkSelf(perm) && perm in DIALOG_PERMISSIONS) {
+            "\n操作: sys.permission.request $perm"
+        } else if (!checkSelf(perm) && perm in SETTINGS_PERMISSIONS) {
+            "\n操作: sys.permission.request $perm (将打开系统设置页)"
+        } else ""
+        return ExecutionResult.ok("$desc ($perm): $status$guideText$actionText")
+    }
+
     private suspend fun permissionRequest(args: List<String>, ec: ExecutionContext): ExecutionResult {
-        val perm = args.firstOrNull() ?: return ExecutionResult.fail("Usage: sys.permission.request <permission_name>")
-        // Open app settings for the user to grant the permission
+        val perm = args.firstOrNull() ?: return ExecutionResult.fail(
+            "Usage: sys.permission.request <permission_name>\n" +
+            "常用权限: POST_NOTIFICATIONS (通知), CAMERA (相机), ACCESS_FINE_LOCATION (定位)",
+            errorCode = ErrorCodes.ERR_INVALID_INPUT)
+
+        // Already granted?
+        if (perm !in SETTINGS_PERMISSIONS && Build.VERSION.SDK_INT >= 23 && checkSelf(perm)) {
+            val desc = PERMISSION_LABELS[perm] ?: perm
+            return ExecutionResult.ok("$desc ($perm): ✅ 已授予，无需再次申请")
+        }
+
+        // POST_NOTIFICATIONS on Android 12- : auto-granted
+        if (perm == Manifest.permission.POST_NOTIFICATIONS && Build.VERSION.SDK_INT < 33) {
+            return ExecutionResult.ok("通知权限: Android 12- 安装时自动授予，无需申请")
+        }
+
+        // Dialog-based runtime permissions → show system dialog
+        if (perm in DIALOG_PERMISSIONS) {
+            val activity = currentActivity?.get()
+            if (activity == null) {
+                // Fallback: open app settings
+                return try {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:${app.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    app.startActivity(intent)
+                    ExecutionResult.ok("已打开应用设置页。请在权限列表中手动授予 '$perm' 权限。")
+                } catch (e: Exception) {
+                    ExecutionResult.fail("无法打开设置页: ${e.message}")
+                }
+            }
+            return try {
+                ActivityCompat.requestPermissions(activity, arrayOf(perm), PERM_REQUEST_CODE)
+                val desc = PERMISSION_LABELS[perm] ?: perm
+                ExecutionResult.ok("已弹出系统权限对话框: $desc\n请在弹窗中选择'允许'。授权后可用 sys.permission.check $perm 确认。")
+            } catch (e: Exception) {
+                // Fallback: open app settings
+                try {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:${app.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    app.startActivity(intent)
+                    ExecutionResult.ok("无法弹出权限对话框 (${e.message})。已打开应用设置页，请手动授予 '$perm' 权限。")
+                } catch (e2: Exception) {
+                    ExecutionResult.fail("权限请求失败: ${e2.message}")
+                }
+            }
+        }
+
+        // Special permissions → open app settings
         return try {
             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                 data = Uri.parse("package:${app.packageName}")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             app.startActivity(intent)
-            ExecutionResult.ok("Opened app settings. Grant '$perm' permission manually.")
+            val desc = PERMISSION_LABELS[perm] ?: perm
+            ExecutionResult.ok("已打开应用设置页。请手动授予 '$desc' ($perm) 权限。")
         } catch (e: Exception) {
-            ExecutionResult.fail("Cannot open settings: ${e.message}")
+            ExecutionResult.fail("无法打开设置页: ${e.message}")
         }
     }
 
@@ -873,10 +967,68 @@ object SysExecutor {
     // Permission map for sys commands (used by UI / settings)
     // ═══════════════════════════════════════════════════════════════════
 
+    /** Request code for ActivityCompat.requestPermissions. */
+    private const val PERM_REQUEST_CODE = 9001
+
+    /** Permissions that can be requested via system dialog (ActivityCompat.requestPermissions). */
+    private val DIALOG_PERMISSIONS = setOf(
+        Manifest.permission.POST_NOTIFICATIONS,
+        Manifest.permission.CAMERA,
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.RECORD_AUDIO,
+        Manifest.permission.READ_PHONE_STATE,
+        Manifest.permission.SEND_SMS,
+        Manifest.permission.READ_CONTACTS,
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        Manifest.permission.READ_MEDIA_IMAGES,
+    )
+
+    /** Permissions that require opening system settings (cannot use standard dialog). */
+    private val SETTINGS_PERMISSIONS = setOf(
+        Manifest.permission.SYSTEM_ALERT_WINDOW,
+        Manifest.permission.WRITE_SETTINGS,
+        Manifest.permission.REQUEST_INSTALL_PACKAGES,
+        Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+    )
+
+    /** Human-readable labels for permissions. */
+    private val PERMISSION_LABELS = mapOf(
+        Manifest.permission.ACCESS_FINE_LOCATION to "GPS 定位",
+        Manifest.permission.ACCESS_COARSE_LOCATION to "粗略定位",
+        Manifest.permission.CAMERA to "相机",
+        Manifest.permission.RECORD_AUDIO to "录音",
+        Manifest.permission.READ_EXTERNAL_STORAGE to "读取存储",
+        Manifest.permission.WRITE_EXTERNAL_STORAGE to "写入存储",
+        Manifest.permission.READ_MEDIA_IMAGES to "读取图片",
+        Manifest.permission.SYSTEM_ALERT_WINDOW to "悬浮窗",
+        Manifest.permission.POST_NOTIFICATIONS to "通知",
+        Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS to "忽略电池优化",
+        Manifest.permission.QUERY_ALL_PACKAGES to "查询应用列表",
+        Manifest.permission.READ_PHONE_STATE to "读取手机状态",
+        Manifest.permission.SEND_SMS to "发送短信",
+        Manifest.permission.READ_CONTACTS to "读取联系人",
+        Manifest.permission.WRITE_SETTINGS to "修改系统设置",
+        Manifest.permission.REQUEST_INSTALL_PACKAGES to "安装应用",
+    )
+
+    /** Actionable guidance for each permission — shown to Agent on check/deny. */
+    private val PERMISSION_GUIDE = mapOf(
+        Manifest.permission.POST_NOTIFICATIONS to "Android 13+ 通知权限。安装后默认禁止，必须手动授权。" +
+            "使用 sys.permission.request POST_NOTIFICATIONS 弹出授权对话框。",
+        Manifest.permission.CAMERA to "相机权限。使用 sys.permission.request CAMERA 申请。",
+        Manifest.permission.ACCESS_FINE_LOCATION to "GPS 精确定位。使用 sys.permission.request ACCESS_FINE_LOCATION 申请。",
+        Manifest.permission.RECORD_AUDIO to "录音权限。使用 sys.permission.request RECORD_AUDIO 申请。",
+        Manifest.permission.READ_PHONE_STATE to "读取手机状态（IMEI/运营商）。使用 sys.permission.request READ_PHONE_STATE 申请。",
+    )
+
     val PERMISSION_MAP = mapOf(
         "sys.location" to Manifest.permission.ACCESS_FINE_LOCATION,
         "sys.camera" to Manifest.permission.CAMERA,
         "sys.apps" to Manifest.permission.QUERY_ALL_PACKAGES,
         "sys.telephony" to Manifest.permission.READ_PHONE_STATE,
+        "sys.notification.send" to Manifest.permission.POST_NOTIFICATIONS,
+        "sys.notification.id" to Manifest.permission.POST_NOTIFICATIONS,
     )
 }

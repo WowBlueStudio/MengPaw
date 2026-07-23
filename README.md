@@ -55,7 +55,7 @@ mengpaw/
     ├── plugin-self/            # Agent 自省 (4 命令)
     ├── plugin-clipboard/       # 剪贴板 (3 命令)
     ├── plugin-notification/    # 通知管理 (3 命令)
-    ├── plugin-pad/             # 悬浮窗 (2 命令) ⭐
+
     ├── plugin-dev/             # 插件开发工具 ⭐
     ├── plugin-tavily/          # AI 搜索
     ├── plugin-hermes/          # 多智能体协作

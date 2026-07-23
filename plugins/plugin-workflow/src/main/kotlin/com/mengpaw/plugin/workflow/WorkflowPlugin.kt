@@ -108,7 +108,7 @@ nodes:
     // ── workflow.list / workflow.status ──────────────────────────
 
     private suspend fun list(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val files = dir.listFiles()?.filter { it.extension == "md" }?.sortedBy { it.name } ?: emptyList()
+        val files = try { dir.listFiles()?.filter { it.extension == "md" }?.sortedBy { it.name } ?: emptyList() } catch (_: Exception) { emptyList() }
         if (files.isEmpty()) return ExecutionResult.ok("(No workflows)\n\nCreate: workflow.define <name> <description>")
         return ExecutionResult.ok(files.joinToString("\n") { "• ${it.nameWithoutExtension} — ${try { it.readText().lines().firstOrNull { l -> l.contains("description:") }?.trim() } catch (e: Exception) { ErrorCollector.report(e, "WorkflowPlugin.list"); null } ?: ""}" })
     }

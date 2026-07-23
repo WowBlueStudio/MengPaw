@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeout
 
 sealed class AgentState {
     data object Idle : AgentState()
@@ -266,7 +267,9 @@ class AgentEngine(
     data class TraceStep(val step: Int, val thought: String, val action: String?, val observation: String?)
 
     suspend fun run(task: String, maxSteps: Int = 50, onStep: ((TraceStep) -> Unit)? = null): String {
-        return runReActLoop(task = task, maxSteps = maxSteps, onStep = onStep)
+        val guardedTask = if (com.mengpaw.kernel.security.PromptFirewall.checkUserPrompt(task) != null)
+            com.mengpaw.kernel.security.PromptFirewall.wrapWithDefense(task) else task
+        return runReActLoop(task = guardedTask, maxSteps = maxSteps, onStep = onStep)
     }
 
     // ── Goal Mode (ported from QwenPaw GoalMode) ─────────────────────
@@ -281,8 +284,10 @@ class AgentEngine(
         task: String, maxTurns: Int = 20, maxTokensBudget: Int = 300_000,
         onStep: ((TraceStep) -> Unit)? = null
     ): String {
+        val guardedTask = if (com.mengpaw.kernel.security.PromptFirewall.checkUserPrompt(task) != null)
+            com.mengpaw.kernel.security.PromptFirewall.wrapWithDefense(task) else task
         val session = com.mengpaw.kernel.agent.GoalSession(
-            goal = task, maxIterations = maxTurns, maxTokens = maxTokensBudget
+            goal = guardedTask, maxIterations = maxTurns, maxTokens = maxTokensBudget
         )
         val evaluator = com.mengpaw.kernel.agent.RubricEvaluator()
         val turnResults = mutableListOf<String>()
@@ -306,7 +311,7 @@ class AgentEngine(
             // FIX: Run ReAct loop inline instead of calling run() which creates a fresh session.
             // This preserves context across goal turns.
             val result = runReActLoop(
-                task = "$goalPrompt\n\n$task",
+                task = "$goalPrompt\n\n$guardedTask",
                 maxSteps = 50,
                 contextPrefix = previousContext,
                 onStep = onStep
@@ -424,7 +429,11 @@ class AgentEngine(
                         return errorMsg
                     }
 
-                    val result = buildPipeline().execute(commandLine, context)
+                    val result = try {
+                        kotlinx.coroutines.withTimeout(60_000L) { buildPipeline().execute(commandLine, context) }
+                    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                        ExecutionResult.fail("命令超时 (60s): $commandLine。请检查网络连接或尝试其他方式。", errorCode = ErrorCodes.ERR_INTERNAL)
+                    }
                     if (!result.success) {
                         ErrorCollector.report(ErrorType.TOOL_CALL_FAILED, "AgentEngine",
                             "$commandLine → ${result.error}", sessionId = session.id, agentName = agentName,
@@ -464,12 +473,14 @@ class AgentEngine(
         task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 10,
         onStep: ((TraceStep) -> Unit)? = null
     ): String {
+        val guardedTask = if (com.mengpaw.kernel.security.PromptFirewall.checkUserPrompt(task) != null)
+            com.mengpaw.kernel.security.PromptFirewall.wrapWithDefense(task) else task
         // Step 1: Decompose task into subtasks
         val decomposePrompt = """
 将以下复杂任务分解为 $maxSubtasks 个以内可独立执行的子任务。
 每个子任务应该是一个完整、可验证的工作单元。
 
-复杂任务: $task
+复杂任务: $guardedTask
 
 请按以下格式输出（每行一个子任务）：
 - [子任务描述] | 预期结果

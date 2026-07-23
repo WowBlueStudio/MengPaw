@@ -27,20 +27,15 @@ import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 
-/** Color palette for chart lines — distinct hues per model. */
-// Chart line palette — uses ArcoColors where available, custom for distinctiveness
-private val chartPurple = Color(0xFF722ED1)
-private val chartTeal = Color(0xFF13C2C2)
-private val chartPink = Color(0xFFEB2F96)
-
+/** Color palette for chart lines — distinct hues per model line. */
 private val chartColors = listOf(
     ArcoColors.Blue6,
     ArcoColors.Green6,
     ArcoColors.Orange6,
     ArcoColors.Red6,
-    chartPurple,
-    chartTeal,
-    chartPink,
+    ArcoColors.ChartPurple,
+    ArcoColors.ChartCyan,
+    ArcoColors.ChartPink,
 )
 private val cacheColor = ArcoColors.Gray6
 
@@ -103,7 +98,7 @@ fun TokenLineChart(
 
             // Y-axis labels (3 ticks)
             val textPaint = android.graphics.Paint().apply {
-                color = 0xFF86909C.toInt() // ArcoColors.Gray6 — Canvas Paint requires Int
+                color = 0xFF86909C.toInt() // ArcoColors.Gray6
                 textSize = 24f
                 isAntiAlias = true
             }

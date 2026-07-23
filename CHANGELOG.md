@@ -1,5 +1,69 @@
 # Changelog
 
+## v0.12.0 (2026-07-23) — 安全防火墙 + 插件生态 + Agent说明书 + 全量审校修复
+
+### 安全
+- **PromptFirewall 接入 LLM 调用链**: run/runWithGoal/runWithMission 入口点检测注入攻击（指令覆盖/越狱/策略绕过/隐藏），自动添加防御前缀
+- **ProGuard/R8 规则全面更新**: 3 个 proguard-rules.pro 更正为 `com.mengpaw.kernel.**`（自 v0.5.0 微内核拆分后首次修正）
+- **CONNECTIVITY_CHANGE→NetworkCallback**: Android 14+ 广播失效修复
+- **MissionMonitor**: 线程安全 + 状态转换去重 + Compose 反应式监听模式
+
+### 插件生态
+- **插件下载超时保护**: Ktor HTTP 10s/30s/60s 超时 + AgentEngine 命令 60s 超时
+- **Skill 插件 v0.3.0**: 7 个插件说明书（tavily/filesystem/self/plugin-system/hermes/self-update/plugin-index），增量播种
+- **PAD 悬浮窗彻底清除**: `BUILTIN_PLUGIN_IDS`/`plugins.json`/`README.md` 三处残留清零
+- **plugin.auto 命令**: 插件电源管理（wake/sleep/status/sleep-idle）
+
+### UI
+- **嵌套滚动崩溃修复**: 3 处 MarkdownText 添加 `nestedScroll=true`
+- **ArcoTheme**: 自定义主题文件从重组读取改为 `remember` 缓存
+- **TokenChart**: 硬编码颜色迁移至 `ArcoColors.Chart*` 设计令牌
+- **MainScreen**: derivedStateOf 键修正 / header 按钮响应式 / LaunchedEffect 键简化
+
+### 代码质量
+- **!! 强制解包清零**: 7 处 → 0（生产代码）
+- **文件 IO try/catch 补全**: 16 处（McpClient/DreamEngine/SidebarContent/AgentTemplates/BrowserActivity/插件）
+- **协程 try/catch 补全**: 7 处 viewModelScope.launch
+- **会话管理**: deleteSession 磁盘清理 / repairSession 正确 session 定位 / switchToSession 临时文件清理
+- **Markdown AST**: collectText 新增 Image/HtmlInline 节点支持
+
+### Android 合规
+- 权限声明 17→21 项（+FOREGROUND_SERVICE_DATA_SYNC/SPECIAL_USE/SCHEDULE_EXACT_ALARM/CHANGE_WIFI_MULTICAST_STATE）
+- 已弃用 API 审计（CONNECTIVITY_CHANGE/getLastKnownLocation/getExternalStorageDirectory 等 5 项）
+
+### 文档
+- 命令计数修正（self 14→13, agent 11→12, sys 39, plugin 10→11, skill 4→7, inspector 4→6）
+- DevPlugin 命名空间说明 / 权限清单更新 / 审校记录补充
+
+## v0.11.4 (2026-07-23) — 安全防火墙 + Android合规 + UI性能
+
+### 安全
+- **PromptFirewall 接入 LLM 调用链**: `run()`/`runWithGoal()`/`runWithMission()` 入口点检测注入攻击（指令覆盖/越狱/策略绕过），自动添加防御前缀
+- **MissionMonitor 威胁检测去重**: `updateWorker` 仅统计状态转换，避免重复计数
+
+### Android 合规
+- **CONNECTIVITY_CHANGE 广播替换**: Android 14+ 不再投递，改为 `ConnectivityManager.NetworkCallback`
+- **ProGuard/R8 规则更新**: 3 个 proguard-rules.pro 文件更正为 `com.mengpaw.kernel.**` 包路径（自 v0.5.0 微内核拆分后首次更新）
+- **pad-plugin 残留引用清理**: `BUILTIN_PLUGIN_IDS` 替换为 `framework-plugin`
+
+### UI 性能
+- **ArcoTheme**: 自定义主题文件从每次重组读取改为 `remember` 缓存
+- **MainScreen**: `derivedStateOf` 键修正 / header 按钮 observable / `LaunchedEffect` 键简化
+- **SidebarContent**: 编译错误修复 (`return@IconToggleButton`→正确标签)
+- **TokenChart**: 硬编码颜色迁移至 `ArcoColors.Chart*` 设计令牌
+
+### 代码质量
+- `!!` 强制解包清零（7 处 → 0，仅剩 DevPlugin 审计检查字符串）
+- 文件 IO `try/catch` 补全 16 处 + 协程 `try/catch` 补全 7 处
+- 会话管理: `deleteSession` 同步删除磁盘文件 / `repairSession` 正确 session 定位 / `switchToSession` 临时文件清理
+- Markdown AST: `collectText` 新增 `Image`/`HtmlInline`/`Strikethrough` 节点支持
+
+### 文档
+- 命令计数修正（self 14→13, agent 11→12, sys 39, plugin 10→11, skill 4→7, inspector 4→6）
+- `permission.check` / `plugin.auto` 等未记录命令补充
+- DevPlugin 命名空间说明（`plugin.*`→实际注册为 `dev.plugin.*`）
+- 审校记录更新
+
 ## v0.9.0 (2026-07-22) — 安全强化 + MD 模板文件化 + 智能体专属工具/技能
 
 ### 安全架构 (核心)

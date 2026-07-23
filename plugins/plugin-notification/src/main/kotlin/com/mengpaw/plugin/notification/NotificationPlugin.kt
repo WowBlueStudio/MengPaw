@@ -45,13 +45,11 @@ class NotificationPlugin : Plugin {
         val timestamp: Long = System.currentTimeMillis()
     )
 
-    @Synchronized
     private val records = mutableListOf<Record>()
 
     /** Max stored records. */
     private val maxRecords = 20
 
-    @Synchronized
     private suspend fun send(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val title = parseArg(args, "--title")?.take(maxFieldLen) ?: ""
         val content = parseArg(args, "--content")?.take(maxFieldLen) ?: ""
@@ -63,8 +61,7 @@ class NotificationPlugin : Plugin {
         return ExecutionResult.ok("Notification sent: id=$id title=\"$title\"")
     }
 
-    @Synchronized
-    private suspend fun list(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        private suspend fun list(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (records.isEmpty()) return ExecutionResult.ok("(No recent notifications)")
         // Show session's own + all (but mark ownership)
         return ExecutionResult.ok(records.joinToString("\n") { r ->
@@ -73,8 +70,7 @@ class NotificationPlugin : Plugin {
         })
     }
 
-    @Synchronized
-    private suspend fun dismiss(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        private suspend fun dismiss(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail(
             "Usage: notification dismiss [--all|<id>]", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         return when (args[0]) {

@@ -94,7 +94,8 @@ class UpdatePlugin : Plugin {
 
         // Cache: skip if checked within last hour (unless forced)
         if (!force && System.currentTimeMillis() - lastCheckTime < 3_600_000 && latestRelease != null) {
-            return formatCheckResult(currentVersion, latestRelease!!)
+            val release = latestRelease ?: return ExecutionResult.fail("缓存失效", errorCode = ErrorCodes.ERR_INTERNAL)
+            return formatCheckResult(currentVersion, release)
         }
 
         return try {
@@ -122,9 +123,10 @@ class UpdatePlugin : Plugin {
                 }
             }
 
-            latestRelease = ReleaseInfo(tag, name, body, shellUrl, shellSize, browserUrl, browserSize)
+            val release = ReleaseInfo(tag, name, body, shellUrl, shellSize, browserUrl, browserSize)
+            latestRelease = release
             lastCheckTime = System.currentTimeMillis()
-            formatCheckResult(currentVersion, latestRelease!!)
+            formatCheckResult(currentVersion, release)
         } catch (e: Exception) {
             ErrorCollector.report(e, "UpdatePlugin.check")
             ExecutionResult.fail("检查更新失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
@@ -259,9 +261,10 @@ class UpdatePlugin : Plugin {
                 delay(3_600_000) // Check every hour
                 if (isWifiConnected()) {
                     try { check(emptyList(), ExecutionContext("auto")) } catch (_: Exception) { }
-                    if (autoDownloadEnabled && latestRelease != null) {
+                    val release = latestRelease
+                    if (autoDownloadEnabled && release != null) {
                         val current = getCurrentVersion()
-                        if (current != null && compareVersions(latestRelease!!.tag.removePrefix("v"), current) > 0) {
+                        if (current != null && compareVersions(release.tag.removePrefix("v"), current) > 0) {
                             try { download(listOf("shell"), ExecutionContext("auto")) } catch (_: Exception) { }
                         }
                     }

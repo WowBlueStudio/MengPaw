@@ -91,7 +91,16 @@ object GeoRouter {
 class PluginMarketplaceClient(
     private val cacheDir: File = File(com.mengpaw.kernel.DataPaths.PLUGIN_CACHE)
 ) {
-    private val client = HttpClient(OkHttp)
+    private val client = HttpClient(OkHttp) {
+        engine {
+            config {
+                connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                callTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            }
+        }
+    }
     private var cachedIndex: MarketplaceIndex? = null
     private var lastEtag: String? = null
     private var lastFetchTime = 0L

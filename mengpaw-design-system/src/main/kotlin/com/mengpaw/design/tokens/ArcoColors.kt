@@ -105,4 +105,9 @@ object ArcoColors {
     // Border
     val BorderDefault = Gray3
     val BorderHover = Gray4
+
+    // Data visualization — chart palette (complements Blue/Green/Orange/Red)
+    val ChartPurple = Color(0xFF722ED1)
+    val ChartCyan   = Color(0xFF13C2C2)
+    val ChartPink   = Color(0xFFEB2F96)
 }

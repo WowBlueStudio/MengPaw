@@ -30,6 +30,11 @@ class EventReceiver : BroadcastReceiver() {
         @Volatile
         private var registered: EventReceiver? = null
 
+        // Android 14+ (targetSdk=35) no longer delivers CONNECTIVITY_CHANGE broadcast.
+        // We use NetworkCallback instead — registered from ShellService.
+        @Volatile
+        var connectivityCallback: android.net.ConnectivityManager.NetworkCallback? = null
+
         /** Register for all supported system events. Call once at app startup. */
         fun register(context: Context) {
             if (registered != null) return
@@ -39,25 +44,59 @@ class EventReceiver : BroadcastReceiver() {
                 addAction(Intent.ACTION_POWER_DISCONNECTED)
                 addAction(Intent.ACTION_BATTERY_OKAY)
                 addAction(Intent.ACTION_BATTERY_LOW)
-                addAction("android.net.conn.CONNECTIVITY_CHANGE")
+                // CONNECTIVITY_CHANGE is no longer delivered on Android 14+ with targetSdk>=34.
+                // Replaced with ConnectivityManager.NetworkCallback below.
                 addAction(Intent.ACTION_DEVICE_STORAGE_LOW)
                 addAction(Intent.ACTION_PACKAGE_ADDED)
                 addAction(Intent.ACTION_PACKAGE_REMOVED)
                 addDataScheme("package")
             }
-            // Android 14+ (API 34+) requires RECEIVER_NOT_EXPORTED flag for all dynamic receivers.
-            // Without it, registerReceiver() throws IllegalArgumentException on targetSdk>=34.
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 context.registerReceiver(receiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
             } else {
                 context.registerReceiver(receiver, filter)
             }
             registered = receiver
+
+            // Register NetworkCallback for WiFi connectivity (replaces dead CONNECTIVITY_CHANGE broadcast)
+            registerConnectivityCallback(context)
+        }
+
+        private fun registerConnectivityCallback(context: Context) {
+            try {
+                val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return
+                val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: android.net.Network) {
+                        android.util.Log.d("EventReceiver", "Network available via callback")
+                        TriggerEngine.onSystemWake()
+                    }
+                    override fun onLost(network: android.net.Network) {
+                        android.util.Log.d("EventReceiver", "Network lost via callback")
+                    }
+                    override fun onCapabilitiesChanged(network: android.net.Network, caps: android.net.NetworkCapabilities) {
+                        val isWifi = caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+                        if (isWifi) {
+                            EventReceiver().scheduleAgentTask(context, "wifi_connected",
+                                "WiFi 已连接。同步 ACP 消息 / 检查更新。")
+                        }
+                    }
+                }
+                cm.registerDefaultNetworkCallback(cb)
+                connectivityCallback = cb
+            } catch (_: Exception) {}
         }
 
         fun unregister(context: Context) {
             registered?.let { try { context.unregisterReceiver(it) } catch (_: Exception) {} }
             registered = null
+            // Unregister NetworkCallback
+            connectivityCallback?.let {
+                try {
+                    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+                    cm?.unregisterNetworkCallback(it)
+                } catch (_: Exception) {}
+                connectivityCallback = null
+            }
         }
     }
 
@@ -100,12 +139,7 @@ class EventReceiver : BroadcastReceiver() {
                     "电量过低！立即休眠所有非核心插件，降低唤醒频率。")
             }
 
-            // ── WiFi 连接 → 同步 ACP ──
-            "android.net.conn.CONNECTIVITY_CHANGE" -> {
-                TriggerEngine.onSystemWake()
-                scheduleAgentTask(ctx, "wifi_connected",
-                    "WiFi 已连接。检查 ACP 收件箱是否有待处理任务。")
-            }
+            // ── WiFi 连接 → 同步 ACP (now handled by NetworkCallback in register()) ──
 
             // ── 存储不足 ──
             Intent.ACTION_DEVICE_STORAGE_LOW -> {

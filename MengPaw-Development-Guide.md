@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.11.3 | **更新**: 2026-07-23 | **架构**: 微内核 + AgentRuntime + 23 插件 + 框架协议 + 品牌焕新 + 扩展功能重构 + 侧边栏交互 + 智能体/框架名片 + commonmark AST 引擎
+> **版本**: 0.12.0 | **更新**: 2026-07-23 | **架构**: 微内核 + AgentRuntime + 23 插件 + 框架协议 + 品牌焕新 + 扩展功能重构 + 侧边栏交互 + 智能体/框架名片 + 提示词防火墙 + commonmark AST 引擎
 
 ---
 
@@ -71,12 +71,12 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 
 | 命名空间 | 源文件 | 命令数 | 职责 |
 |---------|--------|--------|------|
-| `self` | SelfExecutor.kt | 14 | Agent 自省 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/time/notify.message/notify.banner) |
+| `self` | SelfExecutor.kt | 13 | Agent 自省 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/time/notify.message/notify.banner) |
 | `agent` | AgentExecutor.kt | 12 | 文档管理 (docs/memory/memory.record/cli/profile/soul/audit/browser-tools/dream/cleanup/storage/sessions) |
-| `plugin` | PluginExecutor + DevPlugin | 10 + 4 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade + create/audit/share/examples) |
+| `plugin` | PluginExecutor + DevPlugin | 11 + 4 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade/auto + create/audit/share/examples) |
 `framework` | FrameworkPlugin | 6 | 框架发现 (discover/peers/trust/untrust/info/ping) |
 
-> `sys` 命名空间 (11 命令) 在 `mengpaw-core` 中实现，通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。
+> `sys` 命名空间 (39 命令) 在 `mengpaw-core` 中实现，通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。
 
 ### 2.4 依赖关系
 
@@ -180,7 +180,7 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | `security/Vault.kt` | API Key 加密存储 (EncryptedSharedPreferences + Android Keystore) |
 | `security/IntegrityGuard.kt` | APK 签名校验，实现 `IntegrityProvider` 接口 |
 | `security/StorageMonitor.kt` | 磁盘空间监控 (android.os.StatFs) |
-| `namespace/SysExecutor.kt` | 系统信息命令 (11 个，反射 Android API) |
+| `namespace/SysExecutor.kt` | 系统信息命令 (39 个，反射 Android API) |
 | `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)` |
 | `AndroidLogger.kt` | 桥接：`KernelLog.setLogger(AndroidLogger())` |
 
@@ -415,22 +415,23 @@ Agent 通过 memory 命令按需加载文档：
 
 ### 5.1 内置命名空间（kernel）
 
-#### self — Agent 自省 (14)
+#### self — Agent 自省 (13)
 `status` | `config [key=value]` | `stats` | `version` | `avatar` | `theme` | `mcp` | `trigger` | `acp` | `tools [namespace]` | `time [format]` | `notify.message <text>` | `notify.banner <text> [--level]`
 
 > **v0.6.1 新增**: `tools` — 按命名空间列出所有可用命令；`time` — 获取当前时间 (支持 iso/date/time/timestamp)；`notify.message` — Agent 推送消息到聊天；`notify.banner` — Agent 推送横幅 (支持 info/success/warn/error)
 
-#### agent — 文档管理 (11)
+#### agent — 文档管理 (12)
 `docs` | `memory [query]` | `memory.record <content>` | `cli` | `profile` | `soul` | `audit` | `browser-tools` | `dream` | `cleanup` | `storage` | `sessions [keyword] [limit]`
 
 > **v0.8.4 新增**: `sessions` — 跨会话搜索历史记录，支持关键词过滤和条数限制
 
-#### plugin — 插件管理 (10 + 4)
-**内核 (10)**：`marketplace [--refresh]` | `search <query>` | `install <id>` | `uninstall <id>` | `list` | `info <id>` | `enable <id>` | `disable <id>` | `update <id>` | `upgrade --all`
+#### plugin — 插件管理 (11 + 4)
+**内核 (11)**：`marketplace [--refresh]` | `search <query>` | `install <id>` | `uninstall <id>` | `list` | `info <id>` | `enable <id>` | `disable <id>` | `update <id>` | `upgrade --all` | `auto <wake\|sleep\|status\|sleep-idle>`
 
 **dev 插件扩展 (4)**：`create --type script|jar --name <name>` | `audit <id>` | `share <id> --to <target>` | `examples`
+> dev 插件的命令实际注册为 `dev.plugin.create` / `dev.plugin.audit` / `dev.plugin.share` / `dev.plugin.examples`，因为 PluginManager 根据插件 ID (`dev-plugin`) 自动派生命名空间 `dev`。
 
-#### sys — Android 系统 (38 命令，通过 Android 适配层注入)
+#### sys — Android 系统 (39 命令，通过 Android 适配层注入)
 
 **设备信息 (1)**: `device` (型号/厂商/SDK/架构)
 
@@ -456,7 +457,7 @@ Agent 通过 memory 命令按需加载文档：
 
 **通知 (3)**: `notification.id` | `notification.send <title> <text>` | `notification.cancel <id>`
 
-**权限 (2)**: `permission.list` | `permission.request <name>`
+**权限 (3)**: `permission.list` | `permission.request <name>` | `permission.check <name>`
 
 **其他 (4)**: `telephony` | `vibrate [ms]` | `ringtone.play` | `alarm.set <seconds> <msg>`
 
@@ -475,8 +476,8 @@ Agent 通过 memory 命令按需加载文档：
 #### memory — 记忆 (6)
 `ls` | `read <id>` | `write <id> <content>` | `rm <id>` | `search <query>` | `stats`
 
-#### skill — 技能 (4)
-`ls` | `run <name>` | `enable <name>` | `disable <name>`
+#### skill — 技能 (7)
+`ls` | `run <name>` | `enable <name>` | `disable <name>` | `info <name>` | `search <query>` | `create <name> <content>`
 
 > v0.6.1: 内置 4 个默认 Skills (make-skill / make-plan / guidance / source-index)，参考 QwenPaw 移植。首次运行自动播种，已有 skill 时跳过。
 
@@ -525,8 +526,9 @@ Agent 通过 memory 命令按需加载文档：
 #### cdp — Chrome DevTools (2)
 `enable` | `status`
 
-#### inspector — 元素检查器 (4)
-`start` | `stop` | `select <selector>` | `inspect`
+#### inspector — 元素检查器 (6)
+`start` | `stop` | `select <selector>` | `annotate <selector> <text>` | `list` | `export`
+> `inspect` 命令 (旧文档) 已重命名为 `annotate`。
 
 ### 5.3 浏览器内置命令 (browser.*, 22)
 
@@ -778,7 +780,8 @@ ShellService.start(this)   // startForeground + WakeLock
 | 2026-07-20 | 模型切换审查 | 15 stale state bug, 9 修复 |
 | 2026-07-20 | 闪退根因审查 | 13 问题全修复 |
 | 2026-07-19 | Crash 漏洞四审四校 | DataPaths/IO/EventReceiver/HttpClient/状态串扰/!! 全部修复 |
+| 2026-07-23 | v0.11.3 全量审校 | ProGuard 规则修正 (kernel 包路径) + !! 清零 + 文件 IO/协程 try/catch 补全 + 文档命令计数修正 (self 14→13, agent 11→12, sys 39, plugin 10→11+auto, skill 4→7, inspector 4→6) + 僵尸目录清理 (agent-loop/agent-mission) |
 
 ---
 
-*文档结束 · 最后更新: 2026-07-23 (v0.11.3)*
+*文档结束 · 最后更新: 2026-07-23 (v0.12.0)*

@@ -1047,8 +1047,9 @@ class AgentViewModel : ViewModel() {
 
     /** Repair a session — fixes truncated markdown / unclosed syntax caused by abnormal interruption. */
     fun repairSession(id: String) {
-        val session = sessions.values.firstOrNull()
-        if (session == null) return
+        val record = _sessionHistory.value.find { it.id == id } ?: return
+        val sessionKey = if (record.framework != null) "${record.framework}/${record.agentName}" else record.agentName
+        val session = sessions[sessionKey] ?: return
         val msgs = session.messages.value.toMutableList()
         var changed = false
         for (i in msgs.indices) {
@@ -1090,6 +1091,10 @@ class AgentViewModel : ViewModel() {
     fun deleteSession(id: String) {
         _sessionHistory.value = _sessionHistory.value.filter { it.id != id }
         saveSessionHistory()
+        try {
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "sessions/$id.json")
+            if (file.exists()) file.delete()
+        } catch (_: Exception) {}
     }
 
     /** Toggle visibility of compacted sessions. */

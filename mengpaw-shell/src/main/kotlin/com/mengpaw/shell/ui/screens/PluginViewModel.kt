@@ -277,14 +277,18 @@ class PluginViewModel : ViewModel() {
     /** Enable a disabled plugin. */
     fun enablePlugin(id: String) {
         viewModelScope.launch {
-            pluginManager.activate(id)
+            try { pluginManager.activate(id) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Throwable) { com.mengpaw.kernel.error.ErrorCollector.report(e, "PluginViewModel.enablePlugin") }
         }
     }
 
     /** Disable a plugin (keep installed but deactivate commands). */
     fun disablePlugin(id: String) {
         viewModelScope.launch {
-            pluginManager.deactivate(id)
+            try { pluginManager.deactivate(id) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Throwable) { com.mengpaw.kernel.error.ErrorCollector.report(e, "PluginViewModel.disablePlugin") }
         }
     }
 
