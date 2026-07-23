@@ -46,11 +46,8 @@ fun AttributionScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
         ) {
             Spacer(Modifier.height(ArcoSpacing.md))
-            if (text != null) Text(
-                text = text!!,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                lineHeight = 18.sp
+            if (text != null) com.mengpaw.design.components.MarkdownText(
+                content = text!!
             )
             else {
                 CircularProgressIndicator(Modifier.size(24.dp).padding(top = 32.dp))
