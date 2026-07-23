@@ -464,7 +464,7 @@ fun MainScreen(
                                 ExecutionMode.MISSION -> strings.placeholderMission
                                 ExecutionMode.RESEARCH -> strings.placeholderResearch
                                 ExecutionMode.TRANSLATE -> strings.placeholderTranslate
-                                ExecutionMode.DREAM -> strings.placeholderDream
+                                ExecutionMode.SILENT -> strings.placeholderSilent
                                 else -> strings.inputPlaceholder
                             }
                             Text(hint)
@@ -627,8 +627,6 @@ fun MainScreen(
                 // ═══ Section 2: 执行模式 ═══
                 Text(strings.expandModeSection, fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleSmall)
-                Text(strings.dragHint, style = MaterialTheme.typography.labelSmall,
-                    color = ThemeColors.textSecondary)
                 Spacer(Modifier.height(ArcoSpacing.sm))
                 val orderedModes = panelOrder.modes.mapNotNull { id ->
                     ExecutionMode.entries.find { it.name.lowercase() == id }
@@ -695,7 +693,7 @@ private fun ModeItem(mode: ExecutionMode, isActive: Boolean, onClick: () -> Unit
         ExecutionMode.MISSION -> Icons.Outlined.AccountTree
         ExecutionMode.RESEARCH -> Icons.Outlined.TravelExplore
         ExecutionMode.TRANSLATE -> Icons.Outlined.Translate
-        ExecutionMode.DREAM -> Icons.Outlined.DarkMode
+        ExecutionMode.SILENT -> Icons.Outlined.NotificationsOff
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Surface(onClick = onClick,

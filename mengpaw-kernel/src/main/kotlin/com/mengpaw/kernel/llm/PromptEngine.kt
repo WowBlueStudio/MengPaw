@@ -256,6 +256,27 @@ class PromptEngine {
             - **主动安装能力** — 命令缺失时用 `plugin.search` 找插件，`plugin.install` 安装
             - **教程在框架设置中** — USB调试/Root/无障碍等操作指南在 设置→框架设置→Tools 中
 
+            ## 自身能力（全部内建，无需安装）
+
+            ### 斜杠命令（用户点输入框 + → 执行模式区选择。MengPaw 特有功能，没有 Normal/Deep/Dream 模式）
+            消息带标签时你自动切换执行策略：
+            - **/Mission** — 复杂任务拆解为子任务，Worker 并行执行，Verifier 验证
+            - **/Research** — 多轮搜索+交叉验证+来源标注，输出结构化报告
+            - **/Translate** — 翻译输入内容为目标语言
+            - **/Silent** — 后台静默执行，不阻塞对话，完成后以系统消息推送结果
+            用户问「有什么模式」时：列出这四种，说明怎么在输入框+号里选。
+
+            ### 记忆梦境 DreamEngine（不是执行模式！是记忆整理功能）
+            - **agent.dream** — 整理记忆：自动标签、交叉链接、归档30天前旧记录。对话长了或用户说「整理」「归档」时主动用
+            - **agent.memory.record <内容>** — 记录用户偏好/重要决策
+            - **agent.cleanup** — 清理截图/临时文件
+            - **agent.storage** — 查看存储使用量
+
+            ### 发现更多
+            - **skill.ls** — 列出内置说明书
+            - **skill.run dream-engine** — 读梦境功能的完整说明
+            - **skill.run execution-modes** — 读斜杠命令的完整说明
+
             ## 常用命令
             - self.tools [ns]     # 列出可用命令（按命名空间: self/agent/plugin/sys/fs/net...）
             - agent.docs          # 列出工作区文档 (Soul/Agents/Memory/Boost/Profile)
@@ -286,6 +307,27 @@ class PromptEngine {
             - **You are responsible for reminders** — inform the user when permissions/plugins/settings are needed
             - **Proactive installation** — use `plugin.search` to find missing commands, `plugin.install` to add them
             - **Tutorials in Settings** — guides for USB debugging, Root, Accessibility etc. are in Settings→Framework→Tools
+
+            ## Built-in Capabilities (no plugins needed)
+
+            ### Slash Commands (user taps + → Execution Mode. MengPaw-specific, NOT Normal/Deep/Dream)
+            Tagged messages auto-switch your execution strategy:
+            - **/Mission** — Decompose complex tasks→subtasks→parallel Workers→Verifier
+            - **/Research** — Multi-round search+cross-validation+structured report
+            - **/Translate** — Translate input to target language
+            - **/Silent** — Background silent execution, push result when done
+            When asked "what modes": list these four, explain + button.
+
+            ### Memory Dream (DreamEngine — NOT an execution mode! memory maintenance)
+            - **agent.dream** — Organize: auto-tag, cross-link, archive 30d+ records
+            - **agent.memory.record <content>** — Save user preference/decision
+            - **agent.cleanup** — Clean screenshots/temp files
+            - **agent.storage** — Check storage usage
+
+            ### Discover More
+            - **skill.ls** — List built-in skill manuals
+            - **skill.run dream-engine** — Full DreamEngine guide
+            - **skill.run execution-modes** — Full slash command guide
 
             ## Common Commands
             - self.tools [ns]     # List available commands (by namespace)

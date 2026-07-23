@@ -4,6 +4,39 @@
 
 ---
 
+## 2026-07-24 — v0.12.0 全量审校 + v0.12.1 收尾
+
+61. **LLM 预训练知识会覆盖系统提示词**
+    - 场景：系统提示写「执行模式有 /Mission /Research /Translate /Silent」，用户问「有什么执行模式」→ Agent 回答「Normal、Deep、Dream」
+    - 后果：Agent 对自身功能认知完全错误，用户困惑
+    - 改进：① 换用 LLM 训练数据中没有的术语（「斜杠命令」而非「执行模式」）② 加否定语句「没有 Normal/Deep/Dream 模式」③ 加明确行为指令「用户问模式时列出这四种」
+    - 原则：**系统提示中功能名称要和通用 AI 术语区分开，否则 LLM 会用预训练知识覆盖。**
+
+62. **会话切换丢失消息的根本原因**
+    - 场景：用户跳出对话→切换回旧会话→提示「暂无已保存的消息记录」
+    - 根因链：`currentSessionId` 初始为空（第一条消息前不分配 ID）→ 自动保存检查 `isNotBlank()` 跳过 → 消息只在内存中 → `switchToSession` 存到临时文件而非会话记录文件 → 切换回时加载失败
+    - 改进：① `ensureSessionId()` 首次保存时自动分配 ID ② `switchToSession` 保存到 `currentSessionId` 而非临时文件 ③ `saveCurrentSession` 自动创建 SessionRecord
+    - 原则：**任何涉及持久化的 ID 必须在数据产生前分配，不能等"第一次显式保存"。**
+
+63. **重命名枚举值必须 grep 所有引用（包括字符串常量）**
+    - 场景：`ExecutionMode.DREAM` → `SILENT`，代码引用全部更新，但 `PanelOrderStore` 默认值是字符串 `"dream"` → `mapNotNull` 匹配不到 `"silent"` → `/Silent` 从面板消失
+    - 改进：grep 时搜索枚举值名称的小写形式（字符串常量、JSON、文件名）
+    - 原则：**枚举值可能以字符串形式出现在配置/持久化/JSON 中，grep 只搜代码引用是不够的。**
+
+64. **Compose `widthIn(min)` 在 Row 中不保证列对齐**
+    - 场景：`TableTextView` 用 `widthIn(min = chars * 7.dp)` 设列宽 → 实际渲染宽度取决于 Row 分配 → 表头和数据行列不对齐
+    - 改进：固定列宽用 `Modifier.width()`，不用 `widthIn(min)`
+    - 原则：**Row 中需要列对齐的场景，必须用 `width()` 指定精确宽度。**
+
+65. **系统提示里写死的技能列表需要和实际播種的技能一一对应**
+    - 场景：新增 `execution-modes` / `dream-engine` 等 skill，但 Agent 不知道它们存在 → 用户问功能，Agent 说不知道
+    - 改进：系统提示中增加「发现更多能力」区块，列出 `skill.ls` 和 `skill.run <name>` 作为自发现入口
+    - 原则：**被动文档（skills/assets）必须有主动发现机制（系统提示/引导命令），否则等于不存在。**
+
+66. **视图数据持久化时要注意旧版本升级兼容**
+    - 场景：`panel_order.json` 存了 `["dream"]`，代码已改为 `["silent"]` → 旧用户升级后面板少一项
+    - 改进：load 时过滤掉不在当前枚举中的无效值，或默认值兜底
+
 ## 2026-07-23 — v0.11.3 收尾 + 开发文档重构
 
 58. **版本号公式的边界条件不可忽视**

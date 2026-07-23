@@ -86,8 +86,13 @@ class AgentViewModel : ViewModel() {
         }
     }
 
-    /** Track current session ID for per-session save. */
+    /** Track current session ID for per-session save. Auto-assigned on first message. */
     private var currentSessionId: String = ""
+    private fun ensureSessionId() {
+        if (currentSessionId.isBlank()) {
+            currentSessionId = "sess_${System.currentTimeMillis()}"
+        }
+    }
 
     /** Persist active session messages so they survive process death. */
     private fun saveCurrentSession() {
@@ -98,9 +103,27 @@ class AgentViewModel : ViewModel() {
             val arr = messagesToJson(msgs)
             val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
             atomicWriteJson(file, arr)
-            // Also save to per-session file if we have an active session ID
-            if (currentSessionId.isNotBlank()) {
-                saveSessionById(currentSessionId, msgs)
+            // Auto-assign session ID and create record on first save
+            ensureSessionId()
+            saveSessionById(currentSessionId, msgs)
+            // Auto-create session record if missing (first conversation)
+            if (_sessionHistory.value.none { it.id == currentSessionId }) {
+                val title = msgs.firstOrNull()?.let {
+                    when (it) { is ChatMessageUi.User -> it.content.take(40); else -> "" }
+                } ?: "会话"
+                val record = SessionRecord(
+                    id = currentSessionId,
+                    title = if (title.isNotBlank()) title else "会话",
+                    preview = msgs.lastOrNull()?.let {
+                        when (it) { is ChatMessageUi.Agent -> it.content.take(60); is ChatMessageUi.User -> it.content.take(60); else -> "" }
+                    } ?: "",
+                    timestamp = System.currentTimeMillis(),
+                    messageCount = msgs.size,
+                    agentName = _activeAgentName,
+                    framework = session.framework
+                )
+                _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
+                saveSessionHistory()
             }
         } catch (_: Exception) {}
     }
@@ -215,7 +238,24 @@ class AgentViewModel : ViewModel() {
                     try { file.delete() } catch (_: Exception) {}
                     return false
                 }
-                activeSession().messages.value = msgs
+                // Detect stuck thinking state from killed session, convert to recovery message
+                val recovered = msgs.toMutableList()
+                var wasStuck = false
+                for (i in recovered.indices) {
+                    val m = recovered[i]
+                    if (m is ChatMessageUi.AgentWithTrace && m.isRunning) {
+                        recovered[i] = ChatMessageUi.Agent(
+                            "⚠️ 智能体生成被打断，请回复指令以继续。",
+                            executionMode = m.executionMode,
+                            agentRef = m.agentRef
+                        )
+                        wasStuck = true
+                    }
+                }
+                if (wasStuck) {
+                    recovered.add(ChatMessageUi.System("⚠️ 上次会话异常中断，已自动恢复。"))
+                }
+                activeSession().messages.value = recovered
                 // Also add to sidebar history
                 val preview = msgs.firstOrNull()?.let {
                     when (it) {
@@ -535,7 +575,7 @@ class AgentViewModel : ViewModel() {
                 current.removeAll { it is InputTag.Mode }
                 when (tag.mode) {
                     ExecutionMode.MISSION -> loopMode = LoopMode.MISSION
-                    else -> {} // RESEARCH/TRANSLATE/DREAM 不改变 loopMode
+                    else -> {} // RESEARCH/TRANSLATE/SILENT 不改变 loopMode
                 }
             }
             is InputTag.AgentRef -> {
@@ -593,7 +633,7 @@ class AgentViewModel : ViewModel() {
                 }
 
                 // /Dream: 后台执行 — 直接 LLM 调用，不触发主引擎状态变化
-                if (executionMode == ExecutionMode.DREAM) {
+                if (executionMode == ExecutionMode.SILENT) {
                     val dreamTask = task
                     launch {
                         try {
@@ -1013,10 +1053,11 @@ class AgentViewModel : ViewModel() {
 
     /** Switch to a saved session, restoring its messages. */
     fun switchToSession(record: SessionRecord) {
-        // Save current session first
+        // Save current session back to its per-session file
+        ensureSessionId()
         val currentMsgs = activeSession().messages.value.filter { it !is ChatMessageUi.System }
         if (currentMsgs.isNotEmpty()) {
-            saveSessionById("sess_current_${_activeAgentName}", currentMsgs)
+            saveSessionById(currentSessionId, currentMsgs)
         }
         // Switch agent if needed
         if (record.agentName.isNotBlank() && record.agentName != _activeAgentName) {
@@ -1291,7 +1332,7 @@ enum class ExecutionMode(val label: String, val prefix: String) {
     MISSION("Mission", "/Mission"),
     RESEARCH("Research", "/Research"),
     TRANSLATE("Translate", "/Translate"),
-    DREAM("Dream", "/Dream");
+    SILENT("Silent", "/Silent");
 }
 
 /** 输入框标签 — 斜杠命令或 @mention 的活跃状态。 */

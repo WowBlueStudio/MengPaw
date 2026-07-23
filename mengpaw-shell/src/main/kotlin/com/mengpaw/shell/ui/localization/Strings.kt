@@ -64,7 +64,7 @@ data class AppStrings(
     val tagModeMission: String,
     val tagModeResearch: String,
     val tagModeTranslate: String,
-    val tagModeDream: String,
+    val tagModeSilent: String,
     val tagDismiss: String,
     val mentionHint: String,
 
@@ -72,7 +72,7 @@ data class AppStrings(
     val placeholderMission: String,
     val placeholderResearch: String,
     val placeholderTranslate: String,
-    val placeholderDream: String,
+    val placeholderSilent: String,
 
     // Settings - About
     val about: String,
@@ -134,14 +134,14 @@ val EnglishStrings = AppStrings(
     tagModeMission = "/Mission",
     tagModeResearch = "/Research",
     tagModeTranslate = "/Translate",
-    tagModeDream = "/Dream",
+    tagModeSilent = "/Silent",
     tagDismiss = "Remove",
     mentionHint = "@mention an agent...",
 
     placeholderMission = "Describe a complex task for sub-agents to decompose...",
     placeholderResearch = "Enter a topic for deep research with source verification...",
     placeholderTranslate = "Enter text to translate...",
-    placeholderDream = "Describe a background task to run silently...",
+    placeholderSilent = "Describe a background task to run silently...",
 
     about = "About",
     version = "Version",
@@ -202,14 +202,14 @@ val ChineseStrings = AppStrings(
     tagModeMission = "/Mission",
     tagModeResearch = "/Research",
     tagModeTranslate = "/Translate",
-    tagModeDream = "/Dream",
+    tagModeSilent = "/Silent",
     tagDismiss = "移除",
     mentionHint = "@智能体名称...",
 
     placeholderMission = "输入一个需要子智能体进行拆解执行的复杂任务",
     placeholderResearch = "输入需要深度调研的课题，将进行多轮搜索与交叉验证",
     placeholderTranslate = "输入需要翻译的内容",
-    placeholderDream = "输入后台静默执行的任务，完成后推送结果",
+    placeholderSilent = "输入后台静默执行的任务，完成后推送结果",
 
     about = "关于",
     version = "版本",

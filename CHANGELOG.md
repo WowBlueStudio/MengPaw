@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.12.1 (2026-07-24) — 表格渲染修复 + 系统提示优化 + 会话恢复 + 经验总结
+
+### UI
+- **表格渲染重构**: 固定列宽+网格边框+斑马条纹+品牌色表头
+- **`/Silent` 模式恢复**: PanelOrderStore 默认值 `dream`→`silent`
+- **执行模式面板**: 移除无效的「长按拖拽顺序」提示
+
+### Agent 认知
+- **斜杠命令重命名**: 从「执行模式」改为「斜杠命令」，增加否定语句防止 LLM 预训练覆盖
+- **系统提示增加自发现**: DreamEngine / 斜杠命令 / skill.ls / skill.run 引导
+- **新增 2 个 skill**: execution-modes、dream-engine
+
+### 会话管理
+- **`currentSessionId` 自动分配**: 首次保存时自动生成 ID
+- **`switchToSession` 修复**: 保存到会话记录文件而非临时文件
+- **`saveCurrentSession` 增强**: 自动创建 SessionRecord
+- **打断恢复**: 检测卡住的 `AgentWithTrace(isRunning=true)` 自动修复
+
+### 经验
+- 6 条新教训记录（LESSONS #61-66）
+
 ## v0.12.0 (2026-07-23) — 安全防火墙 + 插件生态 + Agent说明书 + 全量审校修复
 
 ### 安全

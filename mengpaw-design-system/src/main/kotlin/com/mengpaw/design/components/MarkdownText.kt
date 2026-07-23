@@ -4,6 +4,7 @@
 package com.mengpaw.design.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
@@ -399,44 +400,59 @@ private fun RenderBlock(
     }
 }
 
-/** 表格渲染 — 列宽自适应视觉表格。 */
+/** 表格渲染 — 固定列宽 + 网格边框。 */
 @Composable
 private fun TableTextView(block: MdBlock.Table, baseStyle: TextStyle, background: Color) {
     if (block.header.isEmpty() && block.rows.isEmpty()) return
 
-    // 计算每列最小宽度
-    val minWidths = mutableListOf<Int>()
+    // 计算每列固定宽度（取最宽单元格 + 2）
+    val colWidths = mutableListOf<Int>()
     val allRows = listOf(block.header) + block.rows
     allRows.forEach { row ->
         row.forEachIndexed { i, cell ->
-            val w = maxOf(cell.length, 3)
-            while (minWidths.size <= i) minWidths.add(0)
-            if (w > minWidths[i]) minWidths[i] = w
+            val w = maxOf(cell.length + 2, 4)
+            while (colWidths.size <= i) colWidths.add(0)
+            if (w > colWidths[i]) colWidths[i] = w
         }
     }
+    val borderColor = ThemeColors.border
+    val cellMod = { i: Int -> Modifier.width((colWidths.getOrElse(i) { 6 } * 7).dp).padding(horizontal = 6.dp, vertical = 4.dp) }
+    val cellStyle = baseStyle.copy(fontSize = (baseStyle.fontSize.value * 0.9f).sp)
 
-    Surface(shape = RoundedCornerShape(ArcoRadius.md), color = background, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.horizontalScroll(rememberScrollState()).padding(ArcoSpacing.md)) {
-            // Header
-            Row {
+    Surface(
+        shape = RoundedCornerShape(ArcoRadius.sm),
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+    ) {
+        Column {
+            // Header row
+            Row(
+                Modifier.background(ThemeColors.brandContainer)
+                    .border(0.5.dp, borderColor, RoundedCornerShape(topStart = ArcoRadius.sm, topEnd = ArcoRadius.sm))
+            ) {
                 block.header.forEachIndexed { i, cell ->
-                    Text(cell,
-                        modifier = Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 4.dp)
-                            .widthIn(min = (minWidths.getOrElse(i) { 4 } * 7).dp),
-                        style = baseStyle.copy(fontWeight = FontWeight.Bold),
-                        color = ThemeColors.textPrimary, maxLines = 1)
+                    Text(cell, modifier = cellMod(i),
+                        style = baseStyle.copy(fontWeight = FontWeight.Bold, fontSize = (baseStyle.fontSize.value * 0.95f).sp),
+                        color = ThemeColors.textPrimary, maxLines = 2)
                 }
             }
-            HorizontalDivider(color = ThemeColors.border, thickness = 1.dp)
-            // Data
-            block.rows.forEach { row ->
-                Row { row.forEachIndexed { i, cell ->
-                    Text(cell,
-                        modifier = Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 2.dp)
-                            .widthIn(min = (minWidths.getOrElse(i) { 4 } * 7).dp),
-                        style = baseStyle.copy(fontSize = (baseStyle.fontSize.value * 0.9f).sp),
-                        color = ThemeColors.textPrimary, maxLines = 1)
-                } }
+            // Data rows
+            block.rows.forEachIndexed { rowIdx, row ->
+                val isLast = rowIdx == block.rows.lastIndex
+                Row(
+                    Modifier.background(
+                        if (rowIdx % 2 == 0) ThemeColors.bgCard else Color.Transparent
+                    ).border(
+                        width = 0.5.dp, color = borderColor,
+                        shape = if (isLast) RoundedCornerShape(bottomStart = ArcoRadius.sm, bottomEnd = ArcoRadius.sm)
+                        else RoundedCornerShape(0.dp)
+                    )
+                ) {
+                    row.forEachIndexed { i, cell ->
+                        Text(cell, modifier = cellMod(i), style = cellStyle,
+                            color = ThemeColors.textPrimary, maxLines = 2)
+                    }
+                }
             }
         }
     }

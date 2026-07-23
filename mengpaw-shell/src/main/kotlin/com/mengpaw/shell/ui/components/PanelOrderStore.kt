@@ -15,7 +15,7 @@ object PanelOrderStore {
     private val file: File get() = File(DataPaths.CONFIG, FILE_NAME)
 
     data class PanelOrder(
-        val modes: List<String> = listOf("mission", "research", "translate", "dream"),
+        val modes: List<String> = listOf("mission", "research", "translate", "silent"),
         val plugins: List<String> = emptyList()
     )
 
@@ -28,7 +28,7 @@ object PanelOrderStore {
             PanelOrder(
                 modes = obj.optJSONArray("modes")?.let { arr ->
                     (0 until arr.length()).map { i -> arr.getString(i) }
-                } ?: listOf("mission", "research", "translate", "dream"),
+                } ?: listOf("mission", "research", "translate", "silent"),
                 plugins = obj.optJSONArray("plugins")?.let { arr ->
                     (0 until arr.length()).map { i -> arr.getString(i) }
                 } ?: emptyList()

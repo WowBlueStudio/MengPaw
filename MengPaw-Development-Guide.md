@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.12.0 | **更新**: 2026-07-23 | **架构**: 微内核 + AgentRuntime + 23 插件 + 框架协议 + 品牌焕新 + 扩展功能重构 + 侧边栏交互 + 智能体/框架名片 + 提示词防火墙 + commonmark AST 引擎
+> **版本**: 0.12.1 | **更新**: 2026-07-24 | **架构**: 微内核 + AgentRuntime + 23 插件 + 框架协议 + 品牌焕新 + 扩展功能重构 + 侧边栏交互 + 智能体/框架名片 + 提示词防火墙 + commonmark AST 引擎
 
 ---
 
@@ -784,4 +784,4 @@ ShellService.start(this)   // startForeground + WakeLock
 
 ---
 
-*文档结束 · 最后更新: 2026-07-23 (v0.12.0)*
+*文档结束 · 最后更新: 2026-07-24 (v0.12.1)*
