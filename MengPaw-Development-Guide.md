@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.12.1 | **更新**: 2026-07-24 | **架构**: 微内核 + AgentRuntime + 23 插件 + 框架协议 + 品牌焕新 + 扩展功能重构 + 侧边栏交互 + 智能体/框架名片 + 提示词防火墙 + commonmark AST 引擎
+> **版本**: 0.12.12 | **更新**: 2026-07-24 | **架构**: 微内核 + AgentRuntime + 24 插件(含记忆孪生) + 框架协议 + 侧边栏交互 + 智能体/框架名片 + 提示词防火墙 + commonmark AST 引擎
 
 ---
 
@@ -20,6 +20,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 | 独立浏览器 | `mengpaw-browser` (v0.4.0)，Intent 互通，22 条浏览器操控命令 |
 | 多模型 | 12 LLM Provider — OpenAI / DeepSeek / Kimi / GLM / Qwen / Grok / 火山引擎 / OpenModel / Self-Hosted / 自定义 |
 | 插件市场 | GitHub Pages 托管 `plugins.json`，ETag 缓存，SHA256 校验 |
+| 记忆孪生 | v0.12.12 新增 — 跨设备 Agent 记忆自动同步 (plugin-memory-twin) |
 | Agent 自我升级 | `plugin.marketplace` → `plugin.search` → `plugin.install` → 命令即可用 |
 | 内置 Loop 模式 | Goal / Mission / Mission+ 三种模式直接内置在 AgentEngine，含 RubricGate 自动完成评估 |
 | Agent 推送 | `notify.message` / `notify.banner` — Agent 主动向用户推送消息和横幅 |
@@ -781,7 +782,29 @@ ShellService.start(this)   // startForeground + WakeLock
 | 2026-07-20 | 闪退根因审查 | 13 问题全修复 |
 | 2026-07-19 | Crash 漏洞四审四校 | DataPaths/IO/EventReceiver/HttpClient/状态串扰/!! 全部修复 |
 | 2026-07-23 | v0.11.3 全量审校 | ProGuard 规则修正 (kernel 包路径) + !! 清零 + 文件 IO/协程 try/catch 补全 + 文档命令计数修正 (self 14→13, agent 11→12, sys 39, plugin 10→11+auto, skill 4→7, inspector 4→6) + 僵尸目录清理 (agent-loop/agent-mission) |
+| 2026-07-24 | v0.12.12 记忆孪生 | 6 BUG 修复 (PluginManager版本/startListener/JSON转义/防火墙/inbox轮询/自动恢复) + 5连击激活 + ACP P2P 配对 + 账本自动同步 · 详见 `docs/lessons-memory-twin.md` |
 
 ---
 
-*文档结束 · 最后更新: 2026-07-24 (v0.12.1)*
+## 15. v0.12.12 核心经验
+
+### 分布式调试
+- 每轮调试: 改代码 → 构建 → 2台设备安装 → 双方激活 → 配对 → 查日志
+- `adb logcat -s MengPawTwin` 集中所有孪生日志, 一个 tag 看全链路
+- 先验证端口 (`curl`), 再验证消息, 最后验证 UI
+
+### 关键 BUG 模式
+1. **构造不完全**: `AcpHttpTransport()` 不监听, `startListener()` 必须显式调用
+2. **默认值 != 真实值**: `PluginManager("0.2.0")` 需注入 `CORE_VERSION`
+3. **手写 JSON 必出错**: 用 `org.json.JSONObject` 或序列化库
+4. **Compose 不感知文件系统**: inbox 文件需轮询检查
+5. **防火墙拦截自己的协议**: 信任建立类消息需绕过安全策略
+
+### 记忆孪生架构
+- `plugin-memory-twin` (10 文件, ~2100 行) — 首个 `AcpHandler` 实现
+- 哈希链账本 (SHA-256) + ACP P2P + inbox 文件式触发
+- 5连击隐藏手势 → 发起方弹窗 → 接收方弹窗 = 三重安全门槛
+
+---
+
+*文档结束 · 最后更新: 2026-07-24 (v0.12.12)*
