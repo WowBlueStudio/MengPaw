@@ -13,6 +13,8 @@ MengPaw 的开发受益于以下项目和框架。此处严格区分「代码参
 | **Reasonix** | MIT | 上下文折叠阈值体系（50%/60%/80%/90% 四级）；陈旧工具结果裁剪；tokPerChar 动态校准；折叠经济性检查；卡死检测 | `AgentEngine.kt`, `LlmRequestBuilder.kt` | 参考 `internal/agent/compact.go` 和 `internal/agent/cache_shape.go`，移植为 Kotlin 实现。Copyright (c) 2026 Reasonix Contributors |
 | **QwenPaw** | Apache 2.0 | Agent 文档模板体系（SOUL / BOOTSTRAP / MEMORY / PROFILE / AGENTS / HEARTBEAT 六文件结构） | `AgentDocs.kt` | 文件结构和引导流程参考 QwenPaw Desktop 的 `agents/md_files/zh/` 目录，内容已完全改写为 MengPaw 专属。Copyright 2025 The QwenPaw Authors |
 | **ReAct** (Google) | Apache 2.0 | Thought → Action → Observation 循环推理模式 | `PromptEngine.kt`, `AgentEngine.kt` | 论文《ReAct: Synergizing Reasoning and Acting in Language Models》提出的范式 |
+| **commonmark-java** | BSD-2-Clause | Markdown AST 解析引擎（GFM 表格/删除线扩展） | `MarkdownText.kt` | 替代手写正则解析器, 提供完整 GFM 语法支持。Copyright (c) 2015-2024 Atlassian and others |
+| **MarkLeaf** (jeiel85) | Apache 2.0 | Compose Markdown 渲染策略参考 | `MarkdownText.kt` | commonmark-java + Compose 渲染的架构参考，特别是表格行列布局方案 |
 
 ---
 
