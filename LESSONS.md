@@ -4,6 +4,32 @@
 
 ---
 
+## 2026-07-23 — v0.11.0 线程架构优化 + Markdown 引擎重构
+
+49. **手写 Markdown 解析器是个坑，越挖越深**
+    - 场景：`parseMarkdown()` 手写了 300 行正则/逐行扫描，支持标题/段落/代码块/引用/列表/表格
+    - 后果：每加一种语法（删除线、脚注、嵌套列表）就要加一套解析逻辑；表格渲染创建数十个嵌套 Composable → ANR
+    - 改进：`commonmark-java` 单次 AST 解析替代所有手写代码，表格改为单 `Text` 等宽对齐渲染
+    - 原则：**文本解析用成熟库（commonmark/markwon），不要手写。手写解析器 = 永远少一种语法 + 永远有性能坑**
+
+50. **Column 在长文档下是性能杀手，LazyColumn 才是正确答案**
+    - 场景：`MarkdownText` 用 `Column { blocks.forEach { ... } }` 渲染所有块
+    - 后果：ATTRIBUTIONS 63 行 = ~200 Composable 同时进组合树 = 主线程卡死
+    - 改进：`blocks.size >= 30` 切换 `LazyColumn` + stable key，只组合可见块
+    - 原则：**超过 30 个 item 的静态列表必须考虑 LazyColumn。Column 不是"简单就安全"，是"少才安全"**
+
+51. **文件 IO 在 Compose 组合线程是隐式炸弹**
+    - 场景：`AgentDocs.recallMemory()` 和 `appendMemory()` 在 `viewModelScope.launch`（默认 Main 线程）中被调用
+    - 后果：用户发消息 → 读 memory.md → 主线程阻塞 → ANR
+    - 改进：所有 AgentDocs 调用点包裹 `withContext(Dispatchers.IO)`
+    - 原则：**ViewModel 的 `launch` 默认在主线程。任何文件 IO 必须显式切换到 Dispatchers.IO**
+
+52. **第三方 Java 库的 Kotlin 互操作陷阱（commonmark 特供）**
+    - `node.children` 在 Kotlin 中不可用 — commonmark 用 `getFirstChild()`/`getNext()` 而非 `Iterable`
+    - `sumOf` 在 commonmark 的 `Node` 类型推导中有歧义 — 需用 `.map{}.sum()` 替代
+    - `FencedCodeBlock.info` / `TableBlock.header` 等属性在不同版本签名不同 — 需显式导入精确类型
+    - 原则：**引入 Java 库后，先在 Kotlin 文件里写 5 行测试，确认属性/方法名的 Kotlin 映射正确**
+
 ## 2026-07-23 — v0.10.0 框架协议 + 侧边栏交互
 
 44. **versionCode 公式必须覆盖多位数版本号**
