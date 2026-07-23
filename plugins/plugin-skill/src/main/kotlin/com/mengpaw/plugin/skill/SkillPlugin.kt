@@ -666,6 +666,19 @@ category: system
 | update | 自更新 | skill.run self-update |
 | workflow | 工作流 | skill.run workflow |
 | incubator | 孵化器 | skill.run incubator |
+
+## 执行模式（输入框 + 号选择）
+| 模式 | 用途 | 说明书 |
+|------|------|--------|
+| /Mission | 多智能体拆解 | skill.run execution-modes |
+| /Research | 深度调研 | skill.run execution-modes |
+| /Translate | 翻译 | skill.run execution-modes |
+| /Silent | 后台静默 | skill.run execution-modes |
+
+## 系统功能
+| 功能 | 用途 | 说明书 |
+|------|------|--------|
+| DreamEngine | 记忆整理归档 | skill.run dream-engine |
 """,
 
     "tavily" to """---
@@ -759,5 +772,87 @@ category: system
 `update.download` → 下载APK
 `update.install` → 安装
 `update.auto` → 自动(WiFi下每小时一次)
+""",
+
+    "execution-modes" to """---
+name: execution-modes
+description: MengPaw 四种执行模式详解 — /Mission /Research /Translate /Silent。触发词：「执行模式」「怎么用斜杠命令」
+enabled: true
+category: system
+---
+# MengPaw 执行模式
+
+用户可在输入框点 + 号，在「执行模式」区选择。Agent 收到带模式标签的任务后自动切换执行策略。
+
+## /Mission — 多智能体拆解执行
+**用途**: 复杂任务自动拆解为子任务，Worker 并行执行，Verifier 验证结果。
+**何时推荐给用户**:
+- 任务涉及多个独立步骤（如「调研A、B、C三个方向并对比」）
+- 用户说「帮我全面分析」「系统性地研究」
+**Agent 行为**: runWithMission() → LLM拆解 → 每个子任务独立ReAct → Verifier验证
+
+## /Research — 深度调研
+**用途**: 多轮搜索 + 交叉验证 + 结构化报告（需 Tavily 插件）。
+**何时推荐给用户**:
+- 「帮我深入研究」「写一份调研报告」
+- 需要多源验证的事实性问题
+**Agent 行为**: 提示词包装为深度研究指令 → 标准ReAct执行
+
+## /Translate — 翻译
+**用途**: 将输入内容翻译为中文（或目标语言）。
+**何时推荐给用户**:
+- 用户粘贴外文内容
+- 「翻译这段」
+**Agent 行为**: 提示词包装为翻译指令 → 标准ReAct执行
+
+## /Silent — 后台静默执行
+**用途**: 不阻塞对话的后台任务，完成后推送结果。
+**何时推荐给用户**:
+- 「帮我后台查一下」「静默整理」
+- 用户想继续对话但需要后台处理的事情
+**Agent 行为**: 独立协程直接调LLM → 不触发引擎状态 → 完成推System消息
+
+## Agent 主动推荐策略
+1. 用户描述复杂多步骤任务 → 建议 "/Mission 模式"
+2. 用户要求深入调研 → 建议 "/Research 模式"
+3. 用户粘贴外文 → 建议 "/Translate 或直接用 translate.auto"
+4. 用户想同时做两件事 → 建议 "/Silent 后台执行第二件事"
+""",
+
+    "dream-engine" to """---
+name: dream-engine
+description: DreamEngine 梦境模式 — 记忆自动整理/归档/标签/摘要。触发词：「梦境」「整理记忆」「归档」
+enabled: true
+category: system
+---
+# DreamEngine — 记忆梦境整理
+
+DreamEngine 是 QwenPaw 梦境模式的 MengPaw 实现。在设备空闲/充电时自动触发，也可手动调用。
+
+## 功能
+- **自动标签**: 解析 memory.md 中的记忆，自动添加关键词标签
+- **交叉链接**: 发现相关记忆，建立 `[[引用]]` 链接
+- **归档**: 30天前的记忆自动移至 Memory.archive.md
+- **摘要**: 大量记忆自动压缩为摘要
+- **清理**: 删除3天前的旧截图，30天前的收件箱文件
+
+## 手动触发
+`agent.dream` → 执行梦境整理 → 返回统计
+`agent.cleanup` → 清理工作区（截图/临时文件）
+`agent.storage` → 查看存储使用量
+
+## 自动触发
+- 接通电源时（EventReceiver → DreamEngine.dream()）
+- ShellService 后台定期触发
+
+## Agent 何时建议用户使用
+- 用户说「整理一下记忆」「清理工作区」
+- 对话很长，Agent 可以主动: `agent.dream` 整理本轮对话的要点
+- 存储空间不足时建议: `agent.cleanup`
+
+## Agent 自己如何使用
+- 对话结束前: `agent.memory.record <关键信息>` 记录要点
+- 定期: `agent.dream` 整理归档
+- 需要回顾经验: `agent.memory <关键词>` 搜索记忆
 """
 )
