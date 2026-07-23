@@ -10,20 +10,27 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.mengpaw.design.components.MarkdownText
 import com.mengpaw.design.tokens.ArcoSpacing
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AttributionScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
-    val text = remember {
-        try { ctx.resources.openRawResource(com.mengpaw.shell.R.raw.attributions)
-            .bufferedReader().readText() } catch (_: Exception) { "" }
+    var text by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        text = withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try { ctx.resources.openRawResource(com.mengpaw.shell.R.raw.attributions)
+                .bufferedReader().readText() } catch (_: Exception) { "" }
+        }
     }
 
     Scaffold(topBar = {
@@ -39,7 +46,10 @@ fun AttributionScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
         ) {
             Spacer(Modifier.height(ArcoSpacing.md))
-            Text(text, style = MaterialTheme.typography.bodyMedium, lineHeight = 22.sp)
+            if (text != null) MarkdownText(content = text!!)
+            else {
+                CircularProgressIndicator(Modifier.size(24.dp).padding(top = 32.dp))
+            }
             Spacer(Modifier.height(32.dp))
         }
     }
