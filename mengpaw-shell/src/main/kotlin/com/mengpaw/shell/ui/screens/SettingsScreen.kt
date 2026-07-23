@@ -1360,9 +1360,9 @@ private fun FrameworkItemSection(
                     AnimatedVisibility(visible = expanded) {
                         if (item.docMarkdown.isNotBlank()) {
                             MarkdownText(
-                                content = item.docMarkdown,
+                                content = item.docMarkdown.take(5000),
                                 modifier = Modifier.padding(top = ArcoSpacing.sm)
-                                    .heightIn(max = 400.dp)
+                                    .heightIn(max = 300.dp)
                             )
                         } else {
                             Text("暂无文档", Modifier.padding(top = ArcoSpacing.sm),
