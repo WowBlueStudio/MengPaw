@@ -6,6 +6,36 @@
 
 ## 2026-07-23 — v0.10.0 框架协议 + 侧边栏交互
 
+44. **versionCode 公式必须覆盖多位数版本号**
+    - 场景：`mengpaw.version = "0.10.0"`，旧公式 `replace(".","").take(3)+"0"` 得 `"010"+"0"=100`
+    - 后果：versionCode 100 < 旧版 0.9.1 的 910 → `INSTALL_FAILED_VERSION_DOWNGRADE`
+    - 改进：`split(".").let { major*1000 + minor*100 + patch*10 }` → 0.10.0 = 1000 > 910
+    - 原则：**版本号公式必须考虑跨位边界，不能依赖固定位数截取**
+
+45. **无线调试端口每次重开会变，需要 mDNS 自动发现**
+    - 场景：平板无线调试端口从 43381 变到 45053，手动重连失败
+    - 后果：每次设备重启或超时就要用户手动提供新端口
+    - 改进：`adb mdns services` 自动扫描局域网设备，无需用户手动查端口
+    - 原则：**ADB 连接信息记到 memory 文件，优先用 mDNS 发现而非用户手动输入**
+
+46. **Swipe 手势的物理直觉 = 手指移动方向，非内容移动方向**
+    - `detectHorizontalDragGestures` 的正值方向 = 手指从左往右（内容往右移）
+    - 但用户直觉是"往右滑 = 打开右边的东西" → 需求是右滑打开右侧栏
+    - 最终设计：右滑(drag>0)→左侧栏，左滑(drag<0)→右侧栏（手指从哪边来，打开哪边的抽屉）
+    - 原则：**手势交互先做原型让用户试，方向感不是代码问题，是设计问题**
+
+47. **卸载插件必须物理删除目录 + grep 清零引用**
+    - 场景：PAD 插件从 settings.gradle.kts 移除，但引用散落在 5 个文件中
+    - 后果：编译失败、运行时崩溃、grep 结果被废弃代码污染
+    - 改进：`grep -r "PadPlugin\|plugin-pad\|pad-plugin" --include="*.kt" --include="*.kts"` → 逐文件清理 → `rm -rf plugins/plugin-pad`
+    - 原则：**删除 = settings.gradle 移除 + 所有引用 grep 清零 + 物理删除目录，三步缺一不可**
+
+48. **`remember` 不能放在 `if` / `when` 条件分支内**
+    - 场景：`if (showMentionDropdown) { val agents = remember(mentionQuery) { ... } }`
+    - 后果：条件变化时 `remember` 被移除重组 → 状态丢失 → 列表闪烁
+    - 改进：`remember` 提到条件外，用 key 控制刷新
+    - 原则：**`remember` / `LaunchedEffect` / `DisposableEffect` 必须在顶层组合，不能在条件/循环内**
+
 41. **mDNS 发现必须持续扫描，不能只扫一次**
     - 场景：NsdManager.discoverServices() 是单次操作，扫描完就停
     - 后果：首次发现后不再更新，2 分钟后 lastSeen 过期 → 所有框架显示离线
