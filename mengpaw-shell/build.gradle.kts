@@ -17,7 +17,7 @@ android {
         applicationId = "com.mengpaw.shell"
         minSdk = 26
         targetSdk = 35
-        versionCode = (mengpawVersion.replace(".", "").take(3) + "0").toInt()
+        versionCode = mengpawVersion.split(".").let { it[0].toInt() * 1000 + it[1].toInt() * 100 + it[2].toInt() * 10 }
         versionName = mengpawVersion
     }
 
