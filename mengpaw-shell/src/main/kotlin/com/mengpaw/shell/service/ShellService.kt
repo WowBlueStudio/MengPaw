@@ -147,21 +147,24 @@ class ShellService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
-            manager.deleteNotificationChannel(CHANNEL_ID)
             val mode = readBackgroundMode()
             val importance = when (mode) {
                 "SILENT" -> NotificationManager.IMPORTANCE_MIN
                 else -> NotificationManager.IMPORTANCE_DEFAULT
             }
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "MengPaw 后台运行",
-                importance
-            ).apply {
-                description = "MengPaw is running in the background"
-                setShowBadge(false)
+            val existing = manager.getNotificationChannel(CHANNEL_ID)
+            // 渠道不匹配才重建；前台服务运行时 deleteChannel 会抛 SecurityException
+            if (existing == null || existing.importance != importance) {
+                try { manager.deleteNotificationChannel(CHANNEL_ID) }
+                catch (_: SecurityException) { return } // 前台服务运行中，保留旧渠道
+                val channel = NotificationChannel(
+                    CHANNEL_ID, "MengPaw 后台运行", importance
+                ).apply {
+                    description = "MengPaw is running in the background"
+                    setShowBadge(false)
+                }
+                manager.createNotificationChannel(channel)
             }
-            manager.createNotificationChannel(channel)
         }
     }
 
