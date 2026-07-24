@@ -24,7 +24,9 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         "dream" to ::dream,
         "cleanup" to ::cleanup,
         "storage" to ::storageReport,
-        "sessions" to ::sessions
+        "sessions" to ::sessions,
+        "read" to ::readFile,
+        "write" to ::writeFile
     )
 
     private suspend fun docs(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -159,5 +161,74 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         return ExecutionResult.ok(entries.joinToString("\n") { e ->
             "${if (e.success) "OK" else "FAIL"} [${e.sessionId}] ${e.command}: ${e.output.take(80)}"
         })
+    }
+
+    // ── File I/O (built-in, no plugin needed) ──────────────────────
+
+    /**
+     * Paths the Agent may NEVER write to — protects APK core files, system binaries.
+     * Reading from these paths is allowed (Agent needs to inspect its own config/docs).
+     *
+     * Strategy: deny-list, NOT allow-list. Agent can access everything except:
+     * - Non-data system partitions (/system, /vendor)
+     * - App private binaries outside its workspace
+     */
+    private val WRITE_BLOCKED_PREFIXES = listOf(
+        "/system/", "/vendor/", "/product/", "/odm/",
+        "/data/app/", // installed APKs
+        "/data/dalvik-cache/"
+    )
+
+    /** Resolve path with traversal protection (canonical path resolves ../ and symlinks). */
+    private fun resolvePath(raw: String): java.io.File? {
+        val file = if (java.io.File(raw).isAbsolute) java.io.File(raw)
+                   else java.io.File(com.mengpaw.kernel.DataPaths.BASE, raw)
+        return try { file.canonicalFile } catch (_: Exception) { null }
+    }
+
+    /** agent.read <path> — read any file (no restrictions beyond filesystem). */
+    private suspend fun readFile(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("用法: agent.read <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val path = args.joinToString(" ")
+        val file = resolvePath(path)
+            ?: return ExecutionResult.fail("路径无效: $path", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        if (!file.exists()) return ExecutionResult.fail("文件不存在: $path", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        if (file.isDirectory) {
+            val listing = file.listFiles()?.take(50)?.joinToString("\n") { f ->
+                "${if (f.isDirectory) "📁" else "📄"} ${f.name} (${if (f.isFile) "${f.length()}B" else "-"})"
+            } ?: "(空目录)"
+            return ExecutionResult.ok("$path:\n$listing")
+        }
+        return try {
+            val content = file.readText().take(100_000)
+            ExecutionResult.ok(content)
+        } catch (e: Exception) {
+            ExecutionResult.fail("读取失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+    }
+
+    /** agent.write <path> <content> — write file. Blocked on system/app paths only. */
+    private suspend fun writeFile(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.size < 2) return ExecutionResult.fail("用法: agent.write <path> <content>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val path = args.first()
+        val content = args.drop(1).joinToString(" ")
+        val file = resolvePath(path)
+            ?: return ExecutionResult.fail("路径无效: $path", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        // Deny-list check: block writes to system/app partitions
+        val canonical = file.path
+        if (WRITE_BLOCKED_PREFIXES.any { canonical.startsWith(it) }) {
+            return ExecutionResult.fail("禁止写入系统/应用目录: $path", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        }
+        return try {
+            file.parentFile?.mkdirs()
+            // Atomic write via tmp+rename
+            val tmp = java.io.File(file.parentFile, "${file.name}.tmp")
+            tmp.writeText(content)
+            if (file.exists()) file.delete()
+            tmp.renameTo(file)
+            ExecutionResult.ok("已写入: $path (${content.length} 字符)")
+        } catch (e: Exception) {
+            ExecutionResult.fail("写入失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
     }
 }

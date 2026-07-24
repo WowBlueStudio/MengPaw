@@ -87,15 +87,26 @@ class MemoryTwinPlugin : Plugin {
         /** Pending twin pairing requests from remote devices. UI observes this. */
         val pendingPairRequests = kotlinx.coroutines.flow.MutableStateFlow<List<TwinPairRequest>>(emptyList())
 
-        /** Accept a pending pairing request. */
+        /** Accept a pending pairing request and proceed with the pairing protocol. */
         fun acceptPairRequest(requestId: String) {
+            val request = pendingPairRequests.value.find { it.id == requestId } ?: return
             pendingPairRequests.value = pendingPairRequests.value.filter { it.id != requestId }
-            // The TwinSyncEngine will process the acceptance
+            // Check if TwinPairingEngine already has a session (new protocol)
+            val existingSession = TwinPairingEngine.getSessionForPeer(request.deviceId)
+            if (existingSession == null) {
+                // Legacy fallback: write trust directly
+                com.mengpaw.kernel.security.PromptFirewall.trust(request.deviceId, request.deviceName)
+            }
+            // If session exists, verification code dialog will handle it
         }
 
         /** Reject a pending pairing request. */
         fun rejectPairRequest(requestId: String) {
+            val request = pendingPairRequests.value.find { it.id == requestId }
             pendingPairRequests.value = pendingPairRequests.value.filter { it.id != requestId }
+            if (request != null) {
+                TwinPairingEngine.rejectPairing(request.deviceId)
+            }
         }
     }
 
@@ -390,10 +401,19 @@ class MemoryTwinPlugin : Plugin {
         val peer = peers.find { it.peerId == peerId || it.peerId.startsWith(peerId) }
             ?: return ExecutionResult.fail("未找到节点: $peerId")
 
-        // Send TWIN_DELEGATE via ACP
+        // Check trust before delegating
+        if (!com.mengpaw.kernel.security.PromptFirewall.isTrusted(peerId)) {
+            return ExecutionResult.fail("未配对设备: $peerId。请先完成孪生配对。")
+        }
+
+        // Send TWIN_DELEGATE via ACP (fire-and-forget — use twin.status to check result)
         val msg = com.mengpaw.kernel.acp.AcpMessage.twinDelegate(deviceId, peerId, task)
-        acpTransport?.send(msg)
-        return ExecutionResult.ok("任务已委派到 ${peer.agentName} ($peerId)")
+        val sent = acpTransport?.send(msg) ?: false
+        return if (sent) {
+            ExecutionResult.ok("任务已委派到 ${peer.agentName} ($peerId) — 使用 twin.status 查看结果")
+        } else {
+            ExecutionResult.fail("发送失败: 对端不可达")
+        }
     }
 
     private suspend fun cmdRoute(args: List<String>, ctx: ExecutionContext): ExecutionResult {

@@ -155,7 +155,11 @@ class AcpHttpTransport(
             val result = server.handleMessage(bodyStr)
 
             // Encrypt response if peer supports it
-            val respPlain = """{"result":"${result.message}","success":${result.success}}"""
+            val dataJson = if (result.data.isNotBlank()) {
+                val escaped = result.data.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
+                ""","data":"$escaped""""
+            } else ""
+            val respPlain = """{"result":"${result.message}","success":${result.success}$dataJson}"""
             val resp = if (isEncrypted && peerId.isNotBlank()) {
                 AcpCrypto.encrypt(peerId, respPlain)
             } else respPlain

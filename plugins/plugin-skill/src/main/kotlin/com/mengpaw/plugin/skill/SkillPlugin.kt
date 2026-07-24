@@ -374,7 +374,7 @@ class SkillPlugin : Plugin {
         val sectionHints = when (category) {
             "dev" -> """
 ## 执行步骤
-1. 分析代码结构（使用 `fs.ls` 和 `fs.cat` 查看相关文件）
+1. 分析代码结构（使用 `agent.read` 查看相关文件）
 2. 执行开发任务
 3. 验证结果（编译/测试）
 4. 汇报完成情况
@@ -386,7 +386,7 @@ class SkillPlugin : Plugin {
             "office" -> """
 ## 执行步骤
 1. 确认需求（文档类型、格式要求）
-2. 使用 `fs.write` 或相关工具生成文档
+2. 使用 `agent.write` 生成文档
 3. 检查输出质量
 4. 交付给用户确认
 
@@ -418,7 +418,7 @@ class SkillPlugin : Plugin {
 ## 执行步骤
 1. 分析当前会话或目标
 2. 制定 Skill 结构
-3. 使用 `skill.create` 或 `fs.write` 写入技能文件
+3. 使用 `skill.create` 或 `agent.write` 写入技能文件
 4. 使用 `skill.info` 验证
 
 ## Skill 设计原则
@@ -484,7 +484,7 @@ category: meta
 
 ### Phase B：执行创建
 1. 使用 `skill.create <name> --category <cat> --description <desc>` 创建技能模板
-2. 使用 `fs.write` 补充完整技能内容（路径为 skill.info 显示的路径）
+2. 使用 `agent.write` 补充完整技能内容（路径为 skill.info 显示的路径）
 3. 使用 `skill.ls` 验证技能已创建
 """,
 
@@ -568,9 +568,9 @@ category: system
 | Skills | `技能剧本/` 目录 |
 
 ## 约定
-- 先读文档（`agent.memory`），再读源码（`fs.cat`）
+- 先读文档（`agent.memory`），再读源码（`agent.read`）
 - `agent.cli` 返回完整 CLI 参考
-- 不确定时先 `fs.ls` 看目录结构
+- 不确定时先 `agent.read` 查看目录/文件
 """,
 
     "daily-summary" to """---
@@ -710,7 +710,7 @@ category: system
 `cp <src> <dst>` `mv <src> <dst>` `stat <path>`
 `grep <pattern> [--regex] [-i]` `glob <pattern>`
 
-常用: `fs.glob **/*.md` 找文件, `fs.grep 关键词 --regex` 搜索内容
+常用: `agent.read <路径>` 读文件, `fs.grep 关键词 --regex` 搜索内容（需安装 fs 插件）
 ⚠ rm不可恢复
 """,
 

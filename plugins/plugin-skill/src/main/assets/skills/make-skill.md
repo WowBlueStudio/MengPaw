@@ -18,7 +18,7 @@ category: meta
 ### Phase B：执行创建
 用户确认后：
 1. 使用 `plugin.create --type script --name "<技能名>"` 创建骨架
-2. 使用 `fs.write` 将技能内容写入 `{DataPaths.SKILLS}/<技能名>.md`
+2. 使用 `agent.write`（内置）将技能内容写入 `{DataPaths.SKILLS}/<技能名>.md`
 3. 技能文件格式参考本文件的 YAML frontmatter + Markdown 正文
 4. 使用 `skill.ls` 验证技能已创建
 

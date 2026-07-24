@@ -24,7 +24,9 @@ class TwinAcpHandler(
         AcpMessageType.LEDGER_BATCH,
         AcpMessageType.LEDGER_ACK,
         AcpMessageType.CAPABILITY_ANNOUNCE,
-        AcpMessageType.TWIN_DELEGATE
+        AcpMessageType.TWIN_DELEGATE,
+        AcpMessageType.PAIR_CHALLENGE,
+        AcpMessageType.PAIR_CONFIRM
     )
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -46,6 +48,8 @@ class TwinAcpHandler(
                 AcpMessageType.LEDGER_ACK -> handleLedgerAck(message)
                 AcpMessageType.CAPABILITY_ANNOUNCE -> handleCapabilityAnnounce(message)
                 AcpMessageType.TWIN_DELEGATE -> handleTwinDelegate(message)
+                AcpMessageType.PAIR_CHALLENGE -> handlePairChallenge(message)
+                AcpMessageType.PAIR_CONFIRM -> handlePairConfirm(message)
                 else -> null
             }
         } catch (e: Exception) {
@@ -163,7 +167,7 @@ class TwinAcpHandler(
 
         if (entries.isEmpty()) return AcpResult(false, "no_valid_entries")
 
-        // Verify chain integrity of received entries
+        // Verify chain integrity of received entries (internal)
         for (i in 1 until entries.size) {
             val expectedHash = LedgerEntry.sha256(entries[i].preimage())
             if (entries[i].hash != expectedHash) {
@@ -171,6 +175,16 @@ class TwinAcpHandler(
             }
             if (entries[i].prevHash != entries[i - 1].hash) {
                 return AcpResult(false, "entry_${i}_chain_break")
+            }
+        }
+
+        // P0 FIX: Verify cross-chain continuity — first entry must link to our local chain
+        val localLatest = TwinLedgerStore.latest()
+        if (localLatest != null) {
+            val firstPrevHash = entries[0].prevHash
+            if (firstPrevHash != null && firstPrevHash != localLatest.hash) {
+                return AcpResult(false, "chain_fork",
+                    "Cross-chain discontinuity: batch starts at $firstPrevHash but local head is ${localLatest.hash}")
             }
         }
 
@@ -191,7 +205,27 @@ class TwinAcpHandler(
     }
 
     private suspend fun handleCapabilityAnnounce(msg: AcpMessage): AcpResult {
-        syncEngine.onCapabilityReceived(msg.from, msg.payload)
+        // Parse payload to extract nonce and capability card
+        val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }
+        val capabilityCard = payload?.get("capabilityCard")?.jsonPrimitive?.content ?: msg.payload
+        val nonce = payload?.get("nonce")?.jsonPrimitive?.content ?: ""
+
+        // If this is a pairing request (has nonce), use pairing engine
+        if (nonce.isNotBlank()) {
+            val transport = syncEngine.getTransport()
+            val deviceId = MemoryTwinPlugin.appContext?.let {
+                try { AcpCrypto.myFingerprint() } catch (_: Exception) { "device-${System.currentTimeMillis()}" }
+            } ?: "device-unknown"
+            val myFingerprint = try { AcpCrypto.myFingerprint() } catch (_: Exception) { deviceId }
+
+            if (transport != null) {
+                TwinPairingEngine.handleAnnounce(msg.from, nonce, deviceId, myFingerprint, transport)
+                return AcpResult(true, "pairing_challenge_sent")
+            }
+        }
+
+        // Legacy: still write to inbox for backward compatibility
+        syncEngine.onCapabilityReceived(msg.from, capabilityCard)
         return AcpResult(true, "capability_stored")
     }
 
@@ -199,7 +233,44 @@ class TwinAcpHandler(
         val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }
         val task = payload?.get("task")?.jsonPrimitive?.content ?: ""
         val requirementsStr = payload?.get("requirements")?.jsonPrimitive?.content ?: "[]"
+        // SECURITY: Only accept delegate tasks from trusted peers
+        if (!com.mengpaw.kernel.security.PromptFirewall.isTrusted(msg.from)) {
+            return AcpResult(false, "untrusted_delegate",
+                "Task delegation requires paired trust. Complete twin pairing first.")
+        }
         syncEngine.onTwinDelegateReceived(msg.from, task, requirementsStr)
         return AcpResult(true, "delegate_queued")
+    }
+
+    // ── Pairing protocol handlers ───────────────────────────────────
+
+    private suspend fun handlePairChallenge(msg: AcpMessage): AcpResult {
+        val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }
+        val deviceId = payload?.get("deviceId")?.jsonPrimitive?.content ?: return AcpResult(false, "no_device_id")
+        val nonceB = payload?.get("nonceB")?.jsonPrimitive?.content ?: return AcpResult(false, "no_nonce")
+        val peerFingerprint = payload?.get("fingerprint")?.jsonPrimitive?.content ?: ""
+
+        // Forward to pairing engine (initiator side)
+        val result = TwinPairingEngine.handleChallenge(deviceId, nonceB, peerFingerprint)
+        if (result.error.isNotBlank()) {
+            return AcpResult(false, "pair_challenge_failed", result.error)
+        }
+        return AcpResult(true, "challenge_received", result.verificationCode)
+    }
+
+    private suspend fun handlePairConfirm(msg: AcpMessage): AcpResult {
+        val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }
+        val deviceId = payload?.get("deviceId")?.jsonPrimitive?.content ?: return AcpResult(false, "no_device_id")
+        val verificationCode = payload?.get("verificationCode")?.jsonPrimitive?.content ?: ""
+        val signature = payload?.get("signature")?.jsonPrimitive?.content ?: ""
+
+        // Forward to pairing engine (responder side)
+        val result = TwinPairingEngine.handleConfirm(deviceId, verificationCode, signature)
+        if (result.error.isNotBlank()) {
+            return AcpResult(false, "pair_confirm_failed", result.error)
+        }
+        // After successful pairing, update sync engine with new peer
+        syncEngine.onPairingEstablished(deviceId)
+        return AcpResult(true, "pairing_established")
     }
 }

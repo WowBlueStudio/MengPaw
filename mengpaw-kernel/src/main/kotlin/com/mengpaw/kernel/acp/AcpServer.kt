@@ -12,7 +12,9 @@ import kotlinx.serialization.json.jsonPrimitive
 class AcpServer(
     private val profile: AgentProfile,
     private val port: Int = 9876,
-    private val sharedSecret: String = ""
+    /** Shared secret for peer authentication. Must be set to enable secure pairing.
+     *  Use AcpCrypto.deriveKey() to generate this from paired device fingerprints. */
+    private val sharedSecret: String
 ) {
     init {
         if (sharedSecret.isEmpty()) {
@@ -25,6 +27,23 @@ class AcpServer(
     private val handlers = mutableListOf<AcpHandler>()
     private val transports = mutableListOf<AcpTransport>()
     private val json = Json { ignoreUnknownKeys = true }
+
+    /** Kernel-level handlers registered automatically — no plugin dependency needed. */
+    val delegateHandler = DelegateHandler()
+    val shareHandler = ShareMemoryHandler()
+    private var mcpBridge: McpOverAcpBridge? = null
+
+    /** Enable MCP-over-ACP bridge. Must be called after McpServer is initialized. */
+    fun enableMcpBridge(mcpServer: com.mengpaw.kernel.mcp.McpServer) {
+        mcpBridge = McpOverAcpBridge(mcpServer)
+        handlers.add(mcpBridge!!)
+    }
+
+    init {
+        // Auto-register kernel handlers so core ACP messages are always processed
+        handlers.add(delegateHandler)
+        handlers.add(shareHandler)
+    }
 
     fun registerHandler(handler: AcpHandler) {
         handlers.add(handler)
@@ -46,6 +65,11 @@ class AcpServer(
         }
         peers[from.agentId] = from
         return true
+    }
+
+    /** Directly register a peer without auth (for internal use by sync engines). */
+    fun registerPeer(peer: PeerAgent) {
+        peers[peer.agentId] = peer
     }
 
     suspend fun delegate(peerId: String, task: String): AcpResult {
@@ -108,10 +132,7 @@ class AcpServer(
                 AcpResult(true, msg.payload, msg.from)
             }
             AcpMessageType.DELEGATE, AcpMessageType.SHARE_MEMORY, AcpMessageType.SHARE_SKILL,
-            AcpMessageType.BROWSER_PUSH,
-            // Memory Twin ledger sync types — delegated to AcpHandler (firewalled)
-            AcpMessageType.LEDGER_HEAD, AcpMessageType.LEDGER_PULL,
-            AcpMessageType.LEDGER_BATCH, AcpMessageType.LEDGER_ACK -> {
+            AcpMessageType.BROWSER_PUSH -> {
                 if (type == AcpMessageType.BROWSER_PUSH) {
                     if (!PromptFirewall.isTrusted(msg.from)) {
                         writePushToInbox(msg.from, msg.payload)
@@ -131,8 +152,38 @@ class AcpServer(
                 }
                 customResult ?: AcpResult(true, "ack", msg.type)
             }
+            // Memory Twin ledger sync — requires trusted peer (P0 fix: auth check)
+            AcpMessageType.LEDGER_HEAD, AcpMessageType.LEDGER_PULL,
+            AcpMessageType.LEDGER_BATCH, AcpMessageType.LEDGER_ACK -> {
+                // SECURITY: Only trusted (paired) devices can access ledger data
+                if (!PromptFirewall.isTrusted(msg.from)) {
+                    return AcpResult(false, "auth_required",
+                        "Ledger sync requires paired trust. Complete twin pairing first.")
+                }
+                var customResult: AcpResult? = null
+                for (handler in handlers) {
+                    if (type in handler.supportedTypes) {
+                        val result = handler.handle(msg, this)
+                        if (result != null) { customResult = result; break }
+                    }
+                }
+                customResult ?: AcpResult(true, "ack", msg.type)
+            }
+            // MCP-over-ACP bridge — route to MCP handler
+            AcpMessageType.MCP_REQUEST -> {
+                var mcpResult: AcpResult? = null
+                for (handler in handlers) {
+                    if (AcpMessageType.MCP_REQUEST in handler.supportedTypes) {
+                        val r = handler.handle(msg, this)
+                        if (r != null) { mcpResult = r; break }
+                    }
+                }
+                mcpResult ?: AcpResult(false, "no_mcp_handler", "MCP bridge not enabled. Call server.enableMcpBridge(mcpServer).")
+            }
+            AcpMessageType.MCP_RESPONSE -> AcpResult(true, "mcp_response", msg.payload)
             // Memory Twin pairing types — NO firewall (their purpose IS establishing trust)
-            AcpMessageType.CAPABILITY_ANNOUNCE, AcpMessageType.TWIN_DELEGATE -> {
+            AcpMessageType.CAPABILITY_ANNOUNCE, AcpMessageType.TWIN_DELEGATE,
+            AcpMessageType.PAIR_CHALLENGE, AcpMessageType.PAIR_CONFIRM -> {
                 var customResult: AcpResult? = null
                 for (handler in handlers) {
                     if (type in handler.supportedTypes) {
@@ -149,6 +200,27 @@ class AcpServer(
         .filter { System.currentTimeMillis() - it.lastSeen < 60_000 }
 
     fun peerCount(): Int = getPeers().size
+
+    /** Write a Claude Code bridge task to the Agent's inbox. */
+    private fun writeBridgeTaskToInbox(from: String, payload: String) {
+        try {
+            val data = try { json.parseToJsonElement(payload).jsonObject } catch (_: Exception) { null }
+            val task = data?.get("task")?.jsonPrimitive?.content ?: payload
+            val replyTo = data?.get("replyTo")?.jsonPrimitive?.content ?: ""
+            val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX).also { it.mkdirs() }
+            val taskFile = java.io.File(inbox, "claude_task_${System.currentTimeMillis()}.md")
+            taskFile.writeText("""# Claude Code 任务
+> 来自: $from
+> 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}
+> 回复: $replyTo
+
+$task
+
+---
+完成后将结果写入工作区，并用 `agent.write` 回复。
+""".trimIndent())
+        } catch (_: Exception) { }
+    }
 
     private fun writePushToInbox(from: String, payload: String) {
         try {

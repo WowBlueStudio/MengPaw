@@ -142,8 +142,8 @@ class PromptEngine {
 
             Observation: 已安装插件：fs-plugin, net-plugin, memory-plugin
 
-            Thought: fs-plugin 已安装。使用 fs.ls 列出目录内容。
-            Action: fs.ls
+            Thought: 使用 agent.read 读取文件。
+            Action: agent.read
             Action Input: {"path":"/sdcard/Download"}
 
             Observation: [文件] report.pdf (2.3MB)\n[文件] photo.jpg (1.1MB)\n[目录] temp/
@@ -210,9 +210,9 @@ class PromptEngine {
 
             Observation: Installed plugins: fs-plugin, net-plugin, memory-plugin
 
-            Thought: fs-plugin is available. Using fs.ls to list the directory.
-            Action: fs.ls
-            Action Input: {"path":"/sdcard/Download"}
+            Thought: Using agent.read to read the file.
+            Action: agent.read
+            Action Input: /sdcard/Download/task.md
 
             Observation: [file] report.pdf (2.3MB)\n[file] photo.jpg (1.1MB)\n[dir] temp/
 
@@ -281,10 +281,15 @@ class PromptEngine {
             - self.tools [ns]     # 列出可用命令（按命名空间: self/agent/plugin/sys/fs/net...）
             - agent.docs          # 列出工作区文档 (Soul/Agents/Memory/Boost/Profile)
             - agent.memory <kw>   # 搜索长期记忆
+            - agent.read <path>   # 读取文件（工作区 + /sdcard/Download/）
+            - agent.write <path> <内容>  # 写入文件
             - agent.sessions <kw> # 跨会话搜索历史
+            - plugin.marketplace  # 浏览插件市场
             - plugin.search <kw>  # 搜索可用插件
             - plugin.install <id> # 安装插件
             - plugin.list         # 查看已安装
+            - sys.permission.list              # 查看权限状态
+            - sys.permission.request <name>    # 申请权限（弹出系统对话框）
 
             ## 响应格式（必须遵守）
             Thought: （思考）
@@ -333,7 +338,10 @@ class PromptEngine {
             - self.tools [ns]     # List available commands (by namespace)
             - agent.docs          # List workspace documents
             - agent.memory <kw>   # Search long-term memory
+            - agent.read <path>          # Read file (workspace + /sdcard/Download/)
+            - agent.write <path> <content> # Write file
             - agent.sessions <kw> # Cross-session search
+            - plugin.marketplace  # Browse plugin market
             - plugin.search <kw>  # Search available plugins
             - plugin.install <id> # Install a plugin
             - plugin.list         # List installed plugins
@@ -438,6 +446,7 @@ class PromptEngine {
     private val safeCommands = setOf(
         "agent.docs", "agent.cli", "agent.memory", "agent.profile",
         "agent.soul", "agent.audit", "agent.storage", "agent.sessions",
+        "agent.read", // read-only, safe to repeat
         "self.stats", "self.version", "self.time", "self.tools", "self.status",
         "plugin.list", "plugin.info", "plugin.marketplace",
         "sys.battery", "sys.network", "sys.cpu", "sys.memory", "sys.storage",
@@ -454,6 +463,19 @@ class PromptEngine {
         return recentCommands.count { it == command } >= 5
     }
 
+    private var consecutiveFailures = 0
+
+    /**
+     * Track command result for failure-loop detection.
+     * Call after each command execution. If 5+ consecutive commands fail,
+     * the agent is likely stuck in a failure loop and should stop.
+     */
+    fun trackResult(success: Boolean): Boolean {
+        if (success) { consecutiveFailures = 0; return false }
+        consecutiveFailures++
+        return consecutiveFailures >= 5
+    }
+
     /** Reset loop detection state (call on session/model switch). */
-    fun resetLoopDetection() { recentCommands.clear() }
+    fun resetLoopDetection() { recentCommands.clear(); consecutiveFailures = 0 }
 }

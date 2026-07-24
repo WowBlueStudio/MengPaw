@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -210,7 +211,8 @@ fun MainScreen(
                     // Agent avatar — 44dp circle, 点击打开左侧栏
                     val avatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$displayAgentName/avatar.png")
                     val avatarBitmap = remember(displayAgentName) { if (avatarFile.exists()) BitmapFactory.decodeFile(avatarFile.absolutePath) else null }
-                    Box(modifier = Modifier.size(44.dp).clip(CircleShape).clickable { showLeftSidebar = !showLeftSidebar }) {
+                    Box(modifier = Modifier.size(44.dp).clip(CircleShape)
+                        .pointerInput(Unit) { detectTapGestures { showLeftSidebar = !showLeftSidebar } }) {
                         if (avatarBitmap != null) {
                             Image(bitmap = avatarBitmap.asImageBitmap(), null, Modifier.fillMaxSize())
                         } else {
@@ -448,7 +450,8 @@ fun MainScreen(
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
                             .focusRequester(inputFocus)
                             .onPreviewKeyEvent { event ->
-                                if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER) {
+                                if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+                                    && event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
                                     if (event.nativeKeyEvent.isCtrlPressed || event.nativeKeyEvent.isShiftPressed) {
                                         inputText += "\n"
                                     } else {
@@ -895,40 +898,83 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
 }
 
 @Composable private fun TraceStepItem(trace: AgentTrace) {
+    var thoughtExpanded by remember { mutableStateOf(false) }
+    var actionExpanded by remember { mutableStateOf(false) }
+    var observationExpanded by remember { mutableStateOf(false) }
+    val thoughtLong = trace.thought.length > 150
+    val actionLong = (trace.action?.length ?: 0) > 80 || (trace.action?.contains("\n") == true)
+    val observationLong = (trace.observation?.length ?: 0) > 200 || (trace.observation?.contains("\n") == true)
+
     Surface(
         shape = RoundedCornerShape(ArcoRadius.sm),
         color = ThemeColors.bgCard,
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
     ) {
         Column(Modifier.padding(ArcoSpacing.sm)) {
+            // ── Thought ──
             Row(verticalAlignment = Alignment.Top) {
                 Text("Step ${trace.step}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = ThemeColors.brand)
                 Spacer(Modifier.width(ArcoSpacing.xs))
-                Text(
-                    "🤔 ${trace.thought.take(150)}${if (trace.thought.length > 150) "..." else ""}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = ThemeColors.textSecondary,
-                    maxLines = 3
-                )
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "🤔 ${if (thoughtExpanded || !thoughtLong) trace.thought else trace.thought.take(150) + "..."}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ThemeColors.textSecondary,
+                        maxLines = if (thoughtExpanded) Int.MAX_VALUE else 3
+                    )
+                    if (thoughtLong) {
+                        TextButton(onClick = { thoughtExpanded = !thoughtExpanded },
+                            contentPadding = PaddingValues(0.dp), modifier = Modifier.height(24.dp)) {
+                            Text(if (thoughtExpanded) "▲ 收起" else "▼ 展开全部 (${trace.thought.length} 字)",
+                                fontSize = 10.sp, color = ThemeColors.brand)
+                        }
+                    }
+                }
             }
+
+            // ── Action (command) ──
             if (trace.action != null) {
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    "🔧 ${trace.action}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = ThemeColors.brand,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1
-                )
+                Column {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            "🔧 ${if (actionExpanded || !actionLong) trace.action else trace.action.take(80) + "..."}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ThemeColors.brand,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = if (actionExpanded) Int.MAX_VALUE else 1,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (actionLong) {
+                        TextButton(onClick = { actionExpanded = !actionExpanded },
+                            contentPadding = PaddingValues(0.dp), modifier = Modifier.height(24.dp)) {
+                            Text(if (actionExpanded) "▲ 收起" else "▼ 展开命令",
+                                fontSize = 10.sp, color = ThemeColors.brand)
+                        }
+                    }
+                }
             }
+
+            // ── Observation (tool output) ──
             if (trace.observation != null) {
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    "📊 ${trace.observation.take(120)}${if (trace.observation.length > 120) "..." else ""}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = ThemeColors.textSecondary,
-                    maxLines = 2
-                )
+                Column {
+                    Text(
+                        "📊 ${if (observationExpanded || !observationLong) trace.observation else trace.observation.take(200) + "..."}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = ThemeColors.textSecondary,
+                        maxLines = if (observationExpanded) Int.MAX_VALUE else 10,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    if (observationLong) {
+                        TextButton(onClick = { observationExpanded = !observationExpanded },
+                            contentPadding = PaddingValues(0.dp), modifier = Modifier.height(24.dp)) {
+                            Text(if (observationExpanded) "▲ 收起" else "▼ 展开完整输出 (${trace.observation.length} 字)",
+                                fontSize = 10.sp, color = ThemeColors.brand)
+                        }
+                    }
+                }
             }
         }
     }
@@ -1053,31 +1099,38 @@ private fun SidebarOverlay(
     onDismiss: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    // 遮罩透明度动画 — 渐深渐浅，不生硬
+    // 遮罩透明度动画 — 固定全屏，只有渐变，不跟随侧边栏滑动
     val dimAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = tween(300, easing = FastOutSlowInEasing),
         label = "sidebarDim"
     )
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(animationSpec = tween(200)) +
-                slideInHorizontally(animationSpec = tween(300)) { if (fromLeft) -it else it },
-        exit = fadeOut(animationSpec = tween(200)) +
-              slideOutHorizontally(animationSpec = tween(300)) { if (fromLeft) -it else it }
-    ) {
-        Row(Modifier.fillMaxSize()) {
-            if (fromLeft) {
-                content()
-                Box(Modifier.fillMaxHeight().weight(1f)
+    // 只在动画进行中时渲染（visible 为 true 或退出动画未结束）
+    if (visible || dimAlpha > 0f) {
+        Box(Modifier.fillMaxSize()) {
+            // 遮罩层 — 固定全屏，只渐变透明度，不跟随侧边栏滑动
+            Box(
+                Modifier.fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.18f * dimAlpha))
-                    .clickable { onDismiss() })
-            } else {
-                Box(Modifier.fillMaxHeight().weight(1f)
-                    .background(Color.Black.copy(alpha = 0.18f * dimAlpha))
-                    .clickable { onDismiss() })
-                content()
+                    .clickable(enabled = visible) { onDismiss() }
+            )
+
+            // 侧边栏内容 — 在遮罩上方滑入/滑出
+            AnimatedVisibility(
+                visible = visible,
+                enter = slideInHorizontally(animationSpec = tween(300)) { if (fromLeft) -it else it },
+                exit = slideOutHorizontally(animationSpec = tween(300)) { if (fromLeft) -it else it }
+            ) {
+                Row(Modifier.fillMaxSize()) {
+                    if (fromLeft) {
+                        content()
+                        Spacer(Modifier.weight(1f))
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                        content()
+                    }
+                }
             }
         }
     }

@@ -271,7 +271,7 @@ class TwinCapabilityCollector(
         grantedPermissions: List<String>
     ): SoftwareProfile {
         return SoftwareProfile(
-            mengpawVersion = "0.12.1",
+            mengpawVersion = "0.12.12",
             installedPlugins = pluginNames,
             optionalCapabilities = buildList {
                 if (pluginNames.any { it.contains("browser") }) add("browser")

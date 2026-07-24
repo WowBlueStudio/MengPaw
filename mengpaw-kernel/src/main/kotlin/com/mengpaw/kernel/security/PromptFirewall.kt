@@ -96,6 +96,38 @@ object PromptFirewall {
         try { File(trustedDir, "$peerId.trusted").writeText(fingerprint) } catch (e: Exception) { ErrorCollector.report(e, "PromptFirewall.trust") }
     }
 
+    /**
+     * Trust a peer AND store the encryption key material (fingerprint).
+     * Called after successful pairing when the shared AES key has been derived.
+     * This is the preferred method for twin pairing — it also triggers
+     * [com.mengpaw.kernel.acp.AcpCrypto.deriveKey] to enable encrypted channels.
+     */
+    fun trustWithKey(peerId: String, fingerprint: String) {
+        trust(peerId, fingerprint)
+        // Also store the fingerprint hash for key derivation verification
+        val keyFile = File(trustedDir, "$peerId.key")
+        try {
+            keyFile.writeText(fingerprint)
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "PromptFirewall.trustWithKey")
+        }
+    }
+
+    /**
+     * Check if encryption is ready for a peer — both trusted AND has a shared key.
+     * Unlike [isTrusted], this ensures the AES key has been derived via AcpCrypto.deriveKey().
+     */
+    fun isEncryptionReady(peerId: String): Boolean {
+        if (!isTrusted(peerId)) return false
+        return File(trustedDir, "$peerId.key").exists()
+    }
+
+    /** Get the stored key fingerprint for a trusted peer, or null. */
+    fun getTrustedFingerprint(peerId: String): String? {
+        val keyFile = File(trustedDir, "$peerId.key")
+        return if (keyFile.exists()) try { keyFile.readText() } catch (_: Exception) { null } else null
+    }
+
     fun untrust(peerId: String) {
         File(trustedDir, "$peerId.trusted").delete()
     }

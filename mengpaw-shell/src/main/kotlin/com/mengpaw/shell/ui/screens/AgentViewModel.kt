@@ -271,6 +271,7 @@ class AgentViewModel : ViewModel() {
                 )
                 _sessionHistory.value = (_sessionHistory.value.filter { it.id != "sess_restored" } + record).takeLast(100)
                 saveSessionHistory()
+                currentSessionId = "sess_restored"  // 防止 auto-save 生成新 ID 导致重复
             }
             msgs.isNotEmpty()
         } catch (_: Exception) {
@@ -1300,15 +1301,17 @@ data class AgentTrace(
 sealed class ChatMessageUi {
     /** Stable unique ID for LazyColumn key — prevents animation/state bugs during streaming. */
     abstract val stableId: String
+    /** Monotonic creation timestamp for true uniqueness (prevents hashCode collisions). */
+    internal val createdAt: Long = java.lang.System.nanoTime()
     data class User(val content: String) : ChatMessageUi() {
-        override val stableId get() = "u_${content.hashCode()}"
+        override val stableId get() = "u_${createdAt}_${content.hashCode()}"
     }
     data class Agent(
         val content: String,
         val executionMode: String? = null,
         val agentRef: String? = null
     ) : ChatMessageUi() {
-        override val stableId get() = "a_${content.hashCode()}_${executionMode ?: ""}_${agentRef ?: ""}"
+        override val stableId get() = "a_${createdAt}_${content.hashCode()}_${executionMode ?: ""}_${agentRef ?: ""}"
     }
     data class AgentWithTrace(
         val finalContent: String,
@@ -1317,13 +1320,13 @@ sealed class ChatMessageUi {
         val executionMode: String? = null,
         val agentRef: String? = null
     ) : ChatMessageUi() {
-        override val stableId get() = "t_${traces.size}_${finalContent.hashCode()}_${executionMode ?: ""}_${agentRef ?: ""}"
+        override val stableId get() = "t_${createdAt}_${traces.size}_${finalContent.hashCode()}_${executionMode ?: ""}_${agentRef ?: ""}"
     }
     data class System(val content: String) : ChatMessageUi() {
-        override val stableId get() = "s_${content.hashCode()}"
+        override val stableId get() = "s_${createdAt}_${content.hashCode()}"
     }
     data class Suggestion(val suggestion: PluginSuggestion) : ChatMessageUi() {
-        override val stableId get() = "sg_${suggestion.pluginId}"
+        override val stableId get() = "sg_${createdAt}_${suggestion.pluginId}"
     }
 }
 

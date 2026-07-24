@@ -103,7 +103,15 @@ object TwinLedgerStore {
     fun containsHash(hash: String): Boolean {
         if (!ledgerFile.exists()) return false
         return try {
-            ledgerFile.readLines().any { it.contains("\"hash\":\"$hash\"") }
+            // SECURITY: Parse JSON instead of string matching to avoid false positives
+            ledgerFile.readLines()
+                .filter { it.isNotBlank() }
+                .any { line ->
+                    try {
+                        val entry = json.decodeFromString<LedgerEntry>(line)
+                        entry.hash == hash
+                    } catch (_: Exception) { false }
+                }
         } catch (e: Exception) {
             ErrorCollector.report(e, "TwinLedgerStore.containsHash")
             false
@@ -116,6 +124,7 @@ object TwinLedgerStore {
      * Append a single entry to the ledger file.
      * Uses atomic tmp+rename to prevent corruption on crash.
      */
+    @Synchronized
     fun append(entry: LedgerEntry): Boolean {
         ensureDir()
         // Content dedup: skip if hash already exists
@@ -146,6 +155,7 @@ object TwinLedgerStore {
      * Entries that already exist (by hash) are skipped.
      * Returns the count of actually appended entries.
      */
+    @Synchronized
     fun appendBatch(entries: List<LedgerEntry>): Int {
         ensureDir()
         var appended = 0

@@ -12,7 +12,7 @@ category: system
 
 1. 从用户问题中提取关键词（对照下表）
 2. 用 `agent.memory [query]` 查阅对应文档
-3. 仍不足时，用 `fs.cat` 或 `fs.ls` 读对应源码
+3. 仍不足时，用 `agent.read <路径>` 读对应源码（内置，不需插件）
 
 ## 关键词 → 文档与源码
 
@@ -46,7 +46,8 @@ category: system
 
 ## 约定
 
-- 先读文档（`agent.memory`），再读源码（`fs.cat`）
+- 先读文档（`agent.memory`），再读源码（`agent.read`，内置）
 - `agent.cli` 返回完整 CLI 参考
 - `agent.memory search <关键词>` 全文搜索所有记忆文档
-- 不确定时先 `fs.ls` 看目录结构，不要盲目猜测路径
+- 不确定时先 `agent.read` 看看当前有什么，不要盲目猜测路径
+- 文件 I/O 用 `agent.read`/`agent.write`，如果装了 fs 插件也可以用 `fs.*` 命令
