@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.14.1 (2026-07-24) — 验证反馈修复
+
+### 修复
+- **底部栏**: 所有操作按钮 `IconButton`→`pointerInput+detectTapGestures`，根除键盘焦点泄漏
+- **插件页**: `registerBuiltins` 时序修复，内置插件正确显示"已内置"
+- **UI下载**: `loadPluginJar` 多类名尝试，DexClassLoader 失败优雅降级
+- **空会话**: 启动时自动清理 `messageCount≤0` 的空会话
+
+---
+
 ## v0.14.0 (2026-07-24) — 全链路审计修复
 
 ### 修复 (6 项)

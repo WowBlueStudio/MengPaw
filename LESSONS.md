@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-07-24 — v0.14.1 验证反馈修复
+
+67. **IconButton 是键盘焦点泄漏的元凶**
+    - 场景：v0.14.0 修复了头像的 clickable，但底部栏 `+` 新建会话按钮仍是 `IconButton`。Enter 后焦点漂移到它 → 每次 Enter 都创建新会话。
+    - 修复：底部栏所有操作按钮统一 `Box + pointerInput + detectTapGestures`，彻底消除键盘可聚焦性。
+    - 教训：项目中应禁用 `IconButton` 用于输入区域附近的按钮，全部改用 pointerInput。
+
+66. **数据源的赋值顺序就是 UI 的渲染顺序**
+    - 场景：`PluginViewModel.refreshMarketplace()` 先设 `_marketplacePlugins.value` 再调 `registerBuiltins()`。StateFlow combine 在赋值瞬间触发 → 此时 pluginClassRegistry 还没更新 → 内置插件显示为"可下载"。
+    - 修复：`registerBuiltins()` 移到赋值之前。
+    - 教训：StateFlow 赋值前确保所有依赖数据已就绪。
+
+65. **DexClassLoader 类名不能靠猜**
+    - 场景：`loadPluginJar()` 硬编码 `PluginMain` 类名，但实际类名是 `TavilyPlugin`、`HermesPlugin` 等 PascalCase 模式。
+    - 修复：尝试多候选项 `{Ns}Plugin` → `PluginMain`，DexClassLoader 失败时注册元数据降级。
+    - 教训：动态加载的类名必须有注册表，不能靠字符串拼接猜测。
+
+64. **空会话是无声垃圾**
+    - 场景：用户点新建会话但没发消息就切换 → `sessions/{id}.json` 为空 → `session_history.json` 有 record → 永远残留。
+    - 修复：`cleanupOrphanSessions()` 加 `messageCount ≤ 0` 自动清理。
+    - 教训：任何创建操作都必须考虑"创建了但没用"的清理路径。
+
+---
+
 ## 2026-07-24 — v0.14.0 全链路审计修复
 
 63. **功能闭环必须用方法论检验，不能靠直觉**
