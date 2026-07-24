@@ -291,6 +291,21 @@ class PromptEngine {
             - sys.permission.list              # 查看权限状态
             - sys.permission.request <name>    # 申请权限（弹出系统对话框）
 
+            ## 插件管理
+            - **下载源**: GitHub (海外) / Gitee (国内)，GeoRouter 根据系统语言和时区自动选择，无需手动切换
+            - **存储位置**: 插件下载到 `插件仓库/` 目录，文件名为 `{id}-{version}.jar`
+            - **网络问题**: GitHub 在中国大陆可能不可达，Gitee 镜像会自动启用。两者都失败时建议用户使用 VPN。也可以用 `net.proxy <url>` 获取 ghproxy.com 代理地址
+            - **安装后流程**: 先 `plugin.info <id>` 看命令 → 再 `self.tools <ns>` 验证注册 → `skill.run plugin-index` 找插件手册
+            - **内置插件** (memory/skill/framework/dev/fs/net/self/clipboard/notification/memory-twin): 已编译在 APK 中，不可卸载，只可用 `plugin.disable` 临时禁用
+
+            ## 会话管理
+            - **存储位置**: `会话检查点/` 目录 — `session_history.json` (索引) + `sessions/{id}.json` (消息文件)
+            - **查看历史**: `agent.sessions [关键词]` — 搜索历史会话
+            - **当前状态**: `agent.session.current` — 查看当前会话 ID 和消息数
+            - **删除会话**: `agent.session.delete <id>` — 永久删除 (不可恢复)
+            - **归档会话**: `agent.session.archive <id>` — 归档隐藏; `--unarchive` 恢复显示
+            - **存储报告**: `agent.storage` — 查看会话文件数量和总大小
+
             ## 响应格式（必须遵守）
             Thought: （思考）
             Action: （命令名称）
@@ -345,6 +360,21 @@ class PromptEngine {
             - plugin.search <kw>  # Search available plugins
             - plugin.install <id> # Install a plugin
             - plugin.list         # List installed plugins
+
+            ## Plugin Management
+            - **Download sources**: GitHub (global) / Gitee (China), auto-routed by GeoRouter based on system locale & timezone. No manual switching needed.
+            - **Storage**: Plugins downloaded to `插件仓库/` directory, named `{id}-{version}.jar`
+            - **Network**: GitHub may be unreachable in China — Gitee mirror auto-activates. If both fail, suggest VPN, or use `net.proxy <url>` for ghproxy.com proxy
+            - **Post-install flow**: `plugin.info <id>` → `self.tools <ns>` → `skill.run plugin-index`
+            - **Built-in plugins** (memory/skill/framework/dev/fs/net/self/clipboard/notification/memory-twin): compiled into APK, cannot be uninstalled — use `plugin.disable` to temporarily deactivate
+
+            ## Session Management
+            - **Storage**: `会话检查点/` directory — `session_history.json` (index) + `sessions/{id}.json` (message files)
+            - **View history**: `agent.sessions [keyword]` — search past sessions
+            - **Current state**: `agent.session.current` — show current session ID and message count
+            - **Delete session**: `agent.session.delete <id>` — permanently delete (irreversible)
+            - **Archive session**: `agent.session.archive <id>` — hide from default view; `--unarchive` to restore
+            - **Storage report**: `agent.storage` — view session file count and total size
 
             ## Response Format (must follow)
             Thought: (your reasoning)

@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.14.0 (2026-07-24) — 全链路审计修复
+
+### 修复 (6 项)
+
+- **Plugin**: 捆绑插件改用直接实例化替代 `Class.forName()`，R8 混淆安全，10/10 全部安装
+- **Plugin**: `PluginManager` 所有方法加 `synchronized` 线程安全
+- **GitHub**: 全部网络链路三级回退 (主源 → Gitee → ghproxy.com) — marketplace/download/update/check
+- **会话**: 修复重复 Bug — `current_session.json` 嵌 sessionId，启动孤儿清理 + dedup
+- **硬键盘**: Enter 事件全消费 (DOWN+UP)，`doSend` 加 300ms 防抖
+- **LLM**: `maxRetries 19→5`，参照 QwenPaw 区分可重试/永久错误 {400,401,403}
+
+### 新增
+
+- **Plugin**: `net.proxy <url>` — 为 GitHub 资源生成 ghproxy.com 代理地址
+- **Plugin**: `plugin.verify <id>/--all` — 文件系统校验 JAR/Odex
+- **Session**: `agent.session.delete/archive/current` — Agent 会话管理命令
+- **Session**: 归档粒度 + 删除/压缩确认弹窗 + `session_history.json.bak` 自动备份
+- **Prompt**: 中英文系统提示词新增"插件管理"和"会话管理" section
+- **Docs**: `docs/audit-methodology.md` — 三层十二问审计方法论
+
+### 优化
+
+- `plugin.marketplace` 返回 description
+- `plugin.install` 成功返回命令摘要 + skill 提示
+- `plugin.info` 显示 Size
+- `plugin.update` 显示 changelog
+- `agent.storage` 含会话统计
+- 错误消息含 VPN/Gitee/ghproxy 建议
+- 内置插件卸载保护
+- 卸载清理 JAR + odex
+
+### 测试
+
+- 5 个预存失败全部修复 (Sanitizer ×4 + AgentEngine ×1)
+- Kernel 测试 88/88 全部通过
+
+---
+
 ## v0.12.12 (2026-07-24) — 记忆孪生配对 + 自动恢复
 
 ### 新功能: 记忆孪生 (plugin-memory-twin)

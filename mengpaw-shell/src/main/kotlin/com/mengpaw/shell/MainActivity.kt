@@ -24,6 +24,16 @@ import com.mengpaw.core.AndroidLogger
 import com.mengpaw.core.DataPathsInitializer
 import com.mengpaw.design.theme.ArcoTheme
 import com.mengpaw.kernel.KernelLog
+import com.mengpaw.plugin.clipboard.ClipboardPlugin
+import com.mengpaw.plugin.dev.DevPlugin
+import com.mengpaw.plugin.framework.FrameworkPlugin
+import com.mengpaw.plugin.fs.FsPlugin
+import com.mengpaw.plugin.memory.MemoryPlugin
+import com.mengpaw.plugin.memorytwin.MemoryTwinPlugin
+import com.mengpaw.plugin.net.NetPlugin
+import com.mengpaw.plugin.notification.NotificationPlugin
+import com.mengpaw.plugin.self.SelfPlugin
+import com.mengpaw.plugin.skill.SkillPlugin
 import com.mengpaw.shell.ui.localization.AppStrings
 import com.mengpaw.shell.ui.localization.ChineseStrings
 import com.mengpaw.shell.ui.localization.EnglishStrings
@@ -144,34 +154,44 @@ class MainActivity : ComponentActivity() {
         PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
         PluginViewModel.registerPluginClass("memory-twin-plugin", "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin")
 
-        // Auto-install bundled plugins (always available, no marketplace download needed)
+        // Auto-install bundled plugins — direct instantiation (no reflection),
+        // immune to R8 obfuscation since all plugins are compile-time dependencies.
         CoroutineScope(Dispatchers.IO).launch {
-            val bundled = listOf(
-                "framework-plugin" to "com.mengpaw.plugin.framework.FrameworkPlugin",
-                "memory-plugin" to "com.mengpaw.plugin.memory.MemoryPlugin",
-                "skill-plugin" to "com.mengpaw.plugin.skill.SkillPlugin",
-                "dev-plugin" to "com.mengpaw.plugin.dev.DevPlugin",
-                "fs-plugin" to "com.mengpaw.plugin.fs.FsPlugin",
-                "net-plugin" to "com.mengpaw.plugin.net.NetPlugin",
-                "self-plugin" to "com.mengpaw.plugin.self.SelfPlugin",
-                "clipboard-plugin" to "com.mengpaw.plugin.clipboard.ClipboardPlugin",
-                "notification-plugin" to "com.mengpaw.plugin.notification.NotificationPlugin",
-                "memory-twin-plugin" to "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin",
-            )
             val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
-            for ((id, className) in bundled) {
+            val bundled: List<Pair<String, com.mengpaw.kernel.plugin.Plugin>> = listOf(
+                "framework-plugin" to FrameworkPlugin(),
+                "memory-plugin" to MemoryPlugin(),
+                "skill-plugin" to SkillPlugin(),
+                "dev-plugin" to DevPlugin(),
+                "fs-plugin" to FsPlugin(),
+                "net-plugin" to NetPlugin(),
+                "self-plugin" to SelfPlugin(),
+                "clipboard-plugin" to ClipboardPlugin(),
+                "notification-plugin" to NotificationPlugin(),
+                "memory-twin-plugin" to MemoryTwinPlugin(),
+            )
+            for ((id, plugin) in bundled) {
                 try {
                     if (pm.get(id) == null) {
-                        val plugin = Class.forName(className).getDeclaredConstructor().newInstance() as com.mengpaw.kernel.plugin.Plugin
                         pm.install(plugin).fold(
-                            onSuccess = { pm.activate(id) },
-                            onFailure = { android.util.Log.w("MengPaw", "Bundled plugin $id: ${it.message}") }
+                            onSuccess = {
+                                pm.activate(id).fold(
+                                    onSuccess = { android.util.Log.i("MengPaw", "Bundled plugin $id installed + activated") },
+                                    onFailure = { android.util.Log.w("MengPaw", "Bundled plugin $id installed but activate failed: ${it.message}", it) }
+                                )
+                            },
+                            onFailure = { android.util.Log.w("MengPaw", "Bundled plugin $id install failed: ${it.message}", it) }
                         )
+                    } else {
+                        android.util.Log.d("MengPaw", "Bundled plugin $id already installed, skipping")
                     }
                 } catch (e: Exception) {
-                    android.util.Log.w("MengPaw", "Auto-install $id failed: ${e.message}")
+                    android.util.Log.w("MengPaw", "Auto-install $id panicked: ${e.message}", e)
                 }
             }
+            val total = pm.count()
+            val active = pm.activeCount()
+            android.util.Log.i("MengPaw", "Bundled auto-install done: $total installed, $active active")
         }
 
         // Handle URL sent from Browser APK (singleTask — onNewIntent)
@@ -304,6 +324,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     val activeAgent by agentViewModel.activeAgent.collectAsState()
     val sessionHistory by agentViewModel.sessionHistory.collectAsState()
     val hideCompacted by agentViewModel.hideCompacted.collectAsState()
+    val hideArchived by agentViewModel.hideArchived.collectAsState()
     // ── Auto-restore saved API config on startup ──
     LaunchedEffect(Unit) {
         val saved = settingsViewModel.firstSavedProvider()
@@ -421,6 +442,8 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                     frameworkGroups = frameworkGroups,
                     hideCompacted = hideCompacted,
                     onToggleHideCompacted = { agentViewModel.toggleHideCompacted() },
+                    hideArchived = hideArchived,
+                    onToggleHideArchived = { agentViewModel.toggleHideArchived() },
                     onSelectSession = { record ->
                         agentViewModel.switchToSession(record)
                         close()

@@ -34,7 +34,9 @@ data class MarketplaceEntry(
     val permissions: List<String> = emptyList(),
     val commands: List<String> = emptyList(),
     /** "builtin" = compiled into APK, no download needed. "remote" = downloadable from marketplace. */
-    val status: String = "remote"
+    val status: String = "remote",
+    /** Release notes for the current version (markdown). */
+    val changelog: String = ""
 ) {
     /** Whether this plugin can be downloaded from the marketplace. Download URL is the ground truth. */
     val isDownloadable: Boolean get() = status != "deprecated" && downloadUrl.isNotBlank()
@@ -82,11 +84,12 @@ object GeoRouter {
  * Architecture:
  *   China (CN) → fetches index from Gitee, downloads from Gitee first
  *   Other       → fetches index from GitHub, downloads from GitHub first
- *   On failure  → automatically retries with the alternate source
+ *   On failure  → retries with alternate source, then ghproxy.com proxy
  *
  * Free public endpoints used:
  *   GitHub: raw.githubusercontent.com  (global CDN)
  *   Gitee:  gitee.com/raw/              (China CDN, no VPN needed)
+ *   ghproxy: ghproxy.com                (GitHub proxy, last-resort fallback)
  */
 class PluginMarketplaceClient(
     private val cacheDir: File = File(com.mengpaw.kernel.DataPaths.PLUGIN_CACHE)
@@ -124,6 +127,12 @@ class PluginMarketplaceClient(
         return if (primary == GITEE_INDEX_URL) GITHUB_INDEX_URL else GITEE_INDEX_URL
     }
 
+    /** Build a ghproxy.com proxy URL for GitHub-hosted resources (last-resort fallback). */
+    private fun ghproxyUrl(original: String): String? {
+        if ("github" !in original.lowercase()) return null
+        return "https://ghproxy.com/$original"
+    }
+
     /**
      * Fetch the marketplace index with geo-routing and automatic fallback.
      */
@@ -138,9 +147,16 @@ class PluginMarketplaceClient(
         val result = tryFetch(primary)
         if (result.isSuccess) return result
 
-        // Fallback: try the alternate source
+        // Fallback 1: try the alternate source (Gitee ↔ GitHub)
         val fallback = fallbackIndexUrl(primary)
-        return tryFetch(fallback)
+        val fbResult = tryFetch(fallback)
+        if (fbResult.isSuccess) return fbResult
+
+        // Fallback 2: ghproxy.com proxy (for GitHub URLs when both direct sources fail)
+        val ghproxy = ghproxyUrl(primary)
+        if (ghproxy != null) return tryFetch(ghproxy)
+
+        return fbResult
     }
 
     private suspend fun tryFetch(url: String): Result<MarketplaceIndex> {
@@ -197,10 +213,12 @@ class PluginMarketplaceClient(
     }
 
     /**
-     * Download a plugin with geo-routing.
-     * Tries the best regional source first, falls back to the alternate.
+     * Download a plugin with geo-routing + progress callback.
+     * Tries best regional source → alternate → ghproxy.com proxy.
+     *
+     * @param onProgress optional callback receiving (bytesReceived, totalBytes) or (0, -1) when unknown.
      */
-    suspend fun download(entry: MarketplaceEntry, destDir: File): Result<File> {
+    suspend fun download(entry: MarketplaceEntry, destDir: File, onProgress: ((Long, Long) -> Unit)? = null): Result<File> {
         if (!entry.isDownloadable) {
             return Result.failure(RuntimeException("${entry.name} 已内置在 APK 中，无需下载"))
         }
@@ -208,17 +226,25 @@ class PluginMarketplaceClient(
             entry.mirrorUrl else entry.downloadUrl
         val fallback = if (primary == entry.mirrorUrl) entry.downloadUrl else entry.mirrorUrl
 
-        val result = tryDownload(primary, entry, destDir)
+        val result = tryDownload(primary, entry, destDir, onProgress)
         if (result.isSuccess) return result
 
-        // Try alternate source
+        // Fallback 1: alternate source (Gitee ↔ GitHub)
         if (fallback.isNotBlank() && fallback != primary) {
-            return tryDownload(fallback, entry, destDir)
+            val fbResult = tryDownload(fallback, entry, destDir, onProgress)
+            if (fbResult.isSuccess) return fbResult
         }
+
+        // Fallback 2: ghproxy.com proxy
+        val ghproxy = ghproxyUrl(primary)
+        if (ghproxy != null) {
+            return tryDownload(ghproxy, entry, destDir, onProgress)
+        }
+
         return result
     }
 
-    private suspend fun tryDownload(url: String, entry: MarketplaceEntry, destDir: File): Result<File> {
+    private suspend fun tryDownload(url: String, entry: MarketplaceEntry, destDir: File, onProgress: ((Long, Long) -> Unit)? = null): Result<File> {
         return try {
             if (!url.startsWith("https://")) {
                 return Result.failure(SecurityException("Plugin download requires HTTPS: $url"))
@@ -229,12 +255,20 @@ class PluginMarketplaceClient(
             destDir.mkdirs()
             val ext = if (url.endsWith(".aar")) "aar" else "jar"
             val destFile = File(destDir, "${entry.id}-${entry.version}.$ext")
-            val response = client.get(url)
-            if (!response.status.isSuccess()) {
-                return Result.failure(RuntimeException("Download HTTP ${response.status.value}"))
+
+            // Download with progress tracking (best-effort byte progress)
+            val bytes = client.prepareGet(url).execute { response ->
+                if (!response.status.isSuccess()) {
+                    throw RuntimeException("Download HTTP ${response.status.value}")
+                }
+                val total = response.contentLength() ?: -1L
+                onProgress?.invoke(0, total)
+                val data = response.bodyAsBytes()
+                onProgress?.invoke(data.size.toLong(), total)
+                data
             }
-            val bytes = response.bodyAsBytes()
             destFile.writeBytes(bytes)
+
             if (entry.checksum.isNotBlank()) {
                 val actual = sha256(bytes)
                 val expected = entry.checksum.removePrefix("sha256:")
@@ -304,7 +338,8 @@ class PluginMarketplaceClient(
         dependencies = obj["dependencies"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
         permissions = obj["permissions"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
         commands = obj["commands"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
-        status = obj["status"]?.jsonPrimitive?.content ?: "remote"
+        status = obj["status"]?.jsonPrimitive?.content ?: "remote",
+        changelog = obj["changelog"]?.jsonPrimitive?.content ?: ""
     )
 
     private fun sha256(bytes: ByteArray): String {

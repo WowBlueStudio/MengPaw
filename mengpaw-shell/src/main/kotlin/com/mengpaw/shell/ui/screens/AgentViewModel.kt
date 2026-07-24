@@ -100,11 +100,14 @@ class AgentViewModel : ViewModel() {
             val session = sessions[_activeAgentName] ?: return
             val msgs = session.messages.value.filter { it !is ChatMessageUi.System }
             if (msgs.isEmpty()) return
-            val arr = messagesToJson(msgs)
-            val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
-            atomicWriteJson(file, arr)
-            // Auto-assign session ID and create record on first save
+            // Auto-assign session ID on first save
             ensureSessionId()
+            // Write current_session.json with sessionId embedded
+            val wrapper = org.json.JSONObject()
+            wrapper.put("sessionId", currentSessionId)
+            wrapper.put("messages", messagesToJson(msgs))
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
+            atomicWriteJson(file, wrapper)
             saveSessionById(currentSessionId, msgs)
             // Auto-create session record if missing (first conversation)
             if (_sessionHistory.value.none { it.id == currentSessionId }) {
@@ -213,10 +216,10 @@ class AgentViewModel : ViewModel() {
         return msgs
     }
 
-    private fun atomicWriteJson(file: java.io.File, arr: org.json.JSONArray) {
+    private fun atomicWriteJson(file: java.io.File, json: Any) {
         file.parentFile?.mkdirs()
         val tmp = java.io.File(file.parentFile, "${file.name}.tmp")
-        tmp.writeText(arr.toString(2))
+        tmp.writeText(when (json) { is org.json.JSONArray -> json.toString(2); is org.json.JSONObject -> json.toString(2); else -> json.toString() })
         tmp.renameTo(file)
         if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
     }
@@ -228,7 +231,17 @@ class AgentViewModel : ViewModel() {
             if (!file.exists()) return false
             val text = file.readText()
             if (text.isBlank()) return false
-            val arr = org.json.JSONArray(text)
+
+            // Parse: new format {"sessionId":"...","messages":[...]} or old format [...]
+            var restoredId: String? = null
+            val arr: org.json.JSONArray = try {
+                val wrapper = org.json.JSONObject(text)
+                restoredId = wrapper.optString("sessionId", null)?.takeIf { it.isNotBlank() && it != "null" }
+                wrapper.getJSONArray("messages")
+            } catch (_: org.json.JSONException) {
+                org.json.JSONArray(text) // old format fallback
+            }
+
             val msgs = jsonToMessages(arr)
             if (msgs.isNotEmpty()) {
                 // Skip restoration if session ended with an error (corrupted state)
@@ -256,7 +269,8 @@ class AgentViewModel : ViewModel() {
                     recovered.add(ChatMessageUi.System("⚠️ 上次会话异常中断，已自动恢复。"))
                 }
                 activeSession().messages.value = recovered
-                // Also add to sidebar history
+
+                // Build sidebar record — reuse original ID if available, fallback to "sess_restored"
                 val preview = msgs.firstOrNull()?.let {
                     when (it) {
                         is ChatMessageUi.User -> it.content.take(40)
@@ -264,14 +278,28 @@ class AgentViewModel : ViewModel() {
                         else -> ""
                     }
                 } ?: ""
+                val sessionId = restoredId ?: "sess_restored"
+
+                // Check if this ID already exists in history → update instead of duplicate
+                val existingIndex = _sessionHistory.value.indexOfFirst { it.id == sessionId }
                 val record = SessionRecord(
-                    id = "sess_restored", title = preview, preview = preview,
+                    id = sessionId, title = preview.ifBlank { "会话" }, preview = preview,
                     timestamp = file.lastModified(), messageCount = msgs.size,
                     agentName = _activeAgentName
                 )
-                _sessionHistory.value = (_sessionHistory.value.filter { it.id != "sess_restored" } + record).takeLast(100)
+
+                if (existingIndex >= 0) {
+                    // Update existing record in-place
+                    val mutable = _sessionHistory.value.toMutableList()
+                    mutable[existingIndex] = record
+                    _sessionHistory.value = mutable
+                } else {
+                    // Clean up orphan: if we're using "sess_restored" fallback, remove old "sess_restored"
+                    // If we have a real ID, just add
+                    _sessionHistory.value = (_sessionHistory.value.filter { it.id != sessionId } + record).takeLast(100)
+                }
                 saveSessionHistory()
-                currentSessionId = "sess_restored"  // 防止 auto-save 生成新 ID 导致重复
+                currentSessionId = sessionId
             }
             msgs.isNotEmpty()
         } catch (_: Exception) {
@@ -934,7 +962,8 @@ class AgentViewModel : ViewModel() {
         val compacted: Boolean = false,
         val compactedSummary: String = "",
         val agentName: String = "",
-        val framework: String? = null     // null = local agent, non-null = remote framework name
+        val framework: String? = null,     // null = local agent, non-null = remote framework name
+        val archived: Boolean = false      // true = hidden from default view, can be toggled back
     ) {
         fun toJson(): JSONObject = JSONObject().apply {
             put("id", id)
@@ -945,6 +974,7 @@ class AgentViewModel : ViewModel() {
             put("compacted", compacted)
             put("compactedSummary", compactedSummary)
             put("agentName", agentName)
+            put("archived", archived)
             if (framework != null) put("framework", framework)
         }
 
@@ -958,7 +988,8 @@ class AgentViewModel : ViewModel() {
                 compacted = obj.optBoolean("compacted", false),
                 compactedSummary = obj.optString("compactedSummary", ""),
                 agentName = obj.optString("agentName", ""),
-                framework = if (obj.has("framework")) obj.getString("framework") else null
+                framework = if (obj.has("framework")) obj.getString("framework") else null,
+                archived = obj.optBoolean("archived", false)
             )
         }
     }
@@ -989,10 +1020,15 @@ class AgentViewModel : ViewModel() {
         }
     }
 
-    /** Persist session history to disk. Uses atomic write to prevent corruption on crash. */
+    /** Persist session history to disk. Uses atomic write + backup to prevent corruption on crash. */
     private fun saveSessionHistory() {
         try {
             val file = sessionHistoryFile
+            // Backup old version before overwriting
+            if (file.exists() && file.length() > 0) {
+                val bak = java.io.File(file.parentFile, "${file.name}.bak")
+                try { file.copyTo(bak, overwrite = true) } catch (_: Exception) {}
+            }
             val arr = JSONArray()
             _sessionHistory.value.forEach { arr.put(it.toJson()) }
             // Atomic write: tmp file then rename — avoids partial writes on crash
@@ -1004,6 +1040,54 @@ class AgentViewModel : ViewModel() {
         } catch (e: Exception) {
             com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Failed to save session history: ${e.message}")
         }
+    }
+
+    /** Remove records whose per-session file no longer exists on disk. */
+    private fun cleanupOrphanSessions() {
+        try {
+            val sessionsDir = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "sessions")
+            val before = _sessionHistory.value.size
+            _sessionHistory.value = _sessionHistory.value.filter { record ->
+                val sessionFile = java.io.File(sessionsDir, "${record.id}.json")
+                sessionFile.exists() || record.id == currentSessionId
+            }
+            val removed = before - _sessionHistory.value.size
+            if (removed > 0) {
+                saveSessionHistory()
+                com.mengpaw.kernel.KernelLog.i("AgentViewModel", "Cleaned $removed orphan session records")
+            }
+        } catch (_: Exception) {}
+    }
+
+    /** Merge duplicate session records (same agent + same title + overlapping timestamps). */
+    private fun dedupSessionHistory() {
+        try {
+            val records = _sessionHistory.value.toMutableList()
+            var changed = false
+            val seen = mutableMapOf<String, SessionRecord>() // key = agentName|title
+            val toRemove = mutableSetOf<String>()
+            for (record in records.sortedByDescending { it.timestamp }) {
+                val key = "${record.agentName}|${record.title}"
+                val existing = seen[key]
+                if (existing != null) {
+                    // Duplicate found — keep the newer one (higher timestamp), remove older
+                    if (record.timestamp >= existing.timestamp) {
+                        toRemove.add(existing.id)
+                        seen[key] = record
+                    } else {
+                        toRemove.add(record.id)
+                    }
+                } else {
+                    seen[key] = record
+                }
+            }
+            if (toRemove.isNotEmpty()) {
+                _sessionHistory.value = records.filter { it.id !in toRemove }
+                saveSessionHistory()
+                changed = true
+                com.mengpaw.kernel.KernelLog.i("AgentViewModel", "Deduped ${toRemove.size} duplicate session records")
+            }
+        } catch (_: Exception) {}
     }
 
     /** Start a new session for a specific agent (switches to it if needed). */
@@ -1144,10 +1228,20 @@ class AgentViewModel : ViewModel() {
     val hideCompacted: StateFlow<Boolean> = _hideCompacted.asStateFlow()
     fun toggleHideCompacted() { _hideCompacted.value = !_hideCompacted.value }
 
-    /** Get sessions for the current agent (excluding compacted if hidden). */
+    private val _hideArchived = MutableStateFlow(true) // default: hide archived
+    val hideArchived: StateFlow<Boolean> = _hideArchived.asStateFlow()
+    fun toggleHideArchived() { _hideArchived.value = !_hideArchived.value }
+
+    /** Get sessions for the current agent (excluding compacted/archived if hidden). */
     fun getSessions(): List<SessionRecord> {
         val all = _sessionHistory.value.sortedByDescending { it.timestamp }
-        return if (_hideCompacted.value) all.filter { !it.compacted } else all
+        return all.filter { showSession(it) }
+    }
+
+    private fun showSession(r: SessionRecord): Boolean {
+        if (_hideCompacted.value && r.compacted) return false
+        if (_hideArchived.value && r.archived) return false
+        return true
     }
 
     /** Sessions grouped by agent name (local + framework). */
@@ -1160,7 +1254,7 @@ class AgentViewModel : ViewModel() {
     /** Sessions grouped by local agents (framework == null), sorted by most recent. */
     fun getLocalAgentGroups(): List<AgentSessionGroup> {
         val all = _sessionHistory.value
-            .filter { !_hideCompacted.value || !it.compacted }
+            .filter { showSession(it) }
         return all
             .filter { it.framework == null }
             .groupBy { it.agentName.ifBlank { "MengPaw" } }
@@ -1171,7 +1265,7 @@ class AgentViewModel : ViewModel() {
     /** Sessions grouped by framework → agent, for the frameworks section. */
     fun getFrameworkGroups(): List<Pair<String, List<AgentSessionGroup>>> {
         val all = _sessionHistory.value
-            .filter { !_hideCompacted.value || !it.compacted }
+            .filter { showSession(it) }
         return all
             .filter { it.framework != null }
             .groupBy { it.framework!! }
@@ -1234,6 +1328,10 @@ class AgentViewModel : ViewModel() {
         bindActiveSession()
         // Restore persisted session history
         _sessionHistory.value = loadSessionHistory()
+        // ── Orphan cleanup: remove records whose session file no longer exists ──
+        cleanupOrphanSessions()
+        // ── Dedup: merge records with same title+agent that are likely duplicates ──
+        dedupSessionHistory()
         // Restore last active session messages
         if (!restoreCurrentSession()) {
             // Only show welcome if no saved session

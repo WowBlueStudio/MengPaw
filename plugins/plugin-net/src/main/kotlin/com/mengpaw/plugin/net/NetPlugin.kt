@@ -34,16 +34,17 @@ class NetPlugin : Plugin {
         version = "0.1.1",
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "HTTP 网络请求：curl, get, post",
+        description = "HTTP 网络请求：curl, get, post。中国大陆访问 GitHub 失败时用 net.proxy 获取代理 URL",
         permissions = listOf("INTERNET"),
         minCoreVersion = "0.2.0",
-        commands = listOf("net.curl", "net.get", "net.post")
+        commands = listOf("net.curl", "net.get", "net.post", "net.proxy")
     )
 
     override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "curl" to ::curl,
         "get" to ::curl,    // alias
-        "post" to ::post
+        "post" to ::post,
+        "proxy" to ::proxy
     )
 
     private val client = HttpClient(OkHttp) {
@@ -121,7 +122,9 @@ class NetPlugin : Plugin {
                 ExecutionResult.ok(body)
             }
         } catch (e: Exception) {
-            ExecutionResult.fail("HTTP error: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+            val hint = if (url.contains("github", ignoreCase = true) || url.contains("raw.githubusercontent", ignoreCase = true))
+                "\n💡 GitHub 资源在中国大陆可能不可达。尝试 net.proxy <url> 获取代理地址，或使用 Gitee 镜像。" else ""
+            ExecutionResult.fail("HTTP error: ${e.message}$hint", errorCode = ErrorCodes.ERR_INTERNAL)
         }
     }
 
@@ -144,7 +147,24 @@ class NetPlugin : Plugin {
                 ExecutionResult.ok(response.bodyAsText().take(10000))
             }
         } catch (e: Exception) {
-            ExecutionResult.fail("HTTP error: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+            val hint = if (url.contains("github", ignoreCase = true) || url.contains("raw.githubusercontent", ignoreCase = true))
+                "\n💡 GitHub 资源在中国大陆可能不可达。尝试 net.proxy <url> 获取代理地址。" else ""
+            ExecutionResult.fail("HTTP error: ${e.message}$hint", errorCode = ErrorCodes.ERR_INTERNAL)
         }
+    }
+
+    /** net.proxy <url> — return the ghproxy.com proxy URL for GitHub resources. */
+    private suspend fun proxy(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail(
+            "Usage: net.proxy <url>\n为 GitHub 资源生成 ghproxy.com 代理地址，用于绕过网络限制。",
+            errorCode = ErrorCodes.ERR_INVALID_INPUT
+        )
+        val url = args[0]
+        val lower = url.lowercase()
+        if ("github" !in lower && "raw.githubusercontent" !in lower) {
+            return ExecutionResult.ok("$url 不是 GitHub 资源，无需代理。可直接访问。")
+        }
+        val proxyUrl = "https://ghproxy.com/$url"
+        return ExecutionResult.ok("代理地址: $proxyUrl\n使用 net.curl $proxyUrl 或 net.get $proxyUrl 通过代理访问。")
     }
 }

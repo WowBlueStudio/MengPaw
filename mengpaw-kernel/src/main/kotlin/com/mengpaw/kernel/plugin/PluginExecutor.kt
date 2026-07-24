@@ -25,10 +25,19 @@ import java.io.File
  */
 class PluginExecutor(
     private val pluginManager: PluginManager,
-    private val marketplaceClient: PluginMarketplaceClient = PluginMarketplaceClient()
+    private val marketplaceClient: PluginMarketplaceClient = PluginMarketplaceClient(),
+    /** Optional callback for download progress: (received, total). Only used by UI path. */
+    var onDownloadProgress: ((Long, Long) -> Unit)? = null
 ) {
     /** Plugins that should never be auto-suspended (core functionality). */
     private val KEEP_AWAKE = setOf("self-plugin", "agent-plugin")
+
+    /** Plugins compiled into the APK — may not be uninstalled at runtime. */
+    private val UNINSTALLABLE = setOf(
+        "memory-plugin", "skill-plugin", "framework-plugin", "dev-plugin",
+        "fs-plugin", "net-plugin", "self-plugin", "clipboard-plugin",
+        "notification-plugin", "memory-twin-plugin"
+    )
 
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         "marketplace" to ::marketplace,
@@ -41,7 +50,8 @@ class PluginExecutor(
         "disable" to ::disable,
         "update" to ::update,
         "upgrade" to ::upgrade,
-        "auto" to ::autoCmd
+        "auto" to ::autoCmd,
+        "verify" to ::verify
     )
 
     // ── Commands ──────────────────────────────────────────────────────
@@ -63,12 +73,21 @@ class PluginExecutor(
                         if (v == p.version) "[已安装 v$v]"
                         else "[已安装 v$v, 可升级到 v${p.version}]"
                     } else "[未安装]"
-                    lines.add("• ${p.id} v${p.version} $status — ${p.name}")
+                    val desc = if (p.description.isNotBlank()) " — ${p.description}" else ""
+                    lines.add("• ${p.id} v${p.version} $status — ${p.name}$desc")
                 }
                 ExecutionResult.ok(lines.joinToString("\n"))
             },
             onFailure = { e ->
-                ExecutionResult.fail("Marketplace unavailable: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+                ExecutionResult.fail(
+                    "Marketplace unavailable: ${e.message}\n" +
+                    "💡 建议:\n" +
+                    "  • 使用 self.tools 查看已有命令\n" +
+                    "  • 使用 plugin.list 查看已安装插件\n" +
+                    "  • 检查网络连接 — 国内用户可能需要 VPN 访问 GitHub\n" +
+                    "  • Gitee 镜像会自动启用，稍后重试",
+                    errorCode = ErrorCodes.ERR_INTERNAL
+                )
             }
         )
     }
@@ -83,7 +102,11 @@ class PluginExecutor(
                 if (results.isEmpty()) ExecutionResult.ok("No plugins found for: $query")
                 else ExecutionResult.ok(results.joinToString("\n") { "• ${it.id} v${it.version} — ${it.name}: ${it.description}" })
             },
-            onFailure = { ExecutionResult.fail("Search failed: ${it.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+            onFailure = { ExecutionResult.fail(
+                "Search failed: ${it.message}\n" +
+                "💡 使用 plugin.marketplace 浏览全部插件，或 self.tools 查看已有命令",
+                errorCode = ErrorCodes.ERR_INTERNAL
+            ) }
         )
     }
 
@@ -114,14 +137,22 @@ class PluginExecutor(
 
         // Download
         val destDir = File(ctx.workDir, "plugins")
-        val downloaded = marketplaceClient.download(entry, destDir).getOrElse {
+        val downloaded = marketplaceClient.download(entry, destDir, onDownloadProgress).getOrElse {
             return ExecutionResult.fail("Download failed: ${it.message}", errorCode = ErrorCodes.ERR_INTERNAL)
         }
 
         // Attempt runtime loading via DexClassLoader
         val loadResult = loadPluginJar(downloaded, entry)
         return if (loadResult != null) {
-            ExecutionResult.ok(loadResult)
+            val ns = entry.id.removeSuffix("-plugin").removeSuffix("-ext")
+            val cmdList = entry.commands.joinToString(", ") { it.removePrefix("$ns.") }
+            ExecutionResult.ok(
+                "✅ ${entry.name} v${entry.version} 安装成功\n" +
+                "命令: $cmdList\n" +
+                "💡 skill.run plugin-index 查看插件手册索引\n" +
+                "💡 self.tools $ns 验证命令已注册\n" +
+                "💡 plugin.info ${entry.id} 查看完整文档"
+            )
         } else {
             ExecutionResult.fail(
                 "Downloaded ${entry.id} v${entry.version} but runtime activation failed.\n" +
@@ -181,6 +212,12 @@ class PluginExecutor(
             "Usage: plugin.uninstall <id>", errorCode = ErrorCodes.ERR_INVALID_INPUT
         )
         val id = args[0]
+        if (id in UNINSTALLABLE) {
+            return ExecutionResult.fail(
+                "$id 是内置插件，已编译在 APK 中，不可卸载。使用 plugin.disable 可临时禁用。",
+                errorCode = ErrorCodes.ERR_PERMISSION_DENIED
+            )
+        }
         return pluginManager.uninstall(id).fold(
             onSuccess = { ExecutionResult.ok("Uninstalled: $id") },
             onFailure = { ExecutionResult.fail("Uninstall failed: ${it.message}", errorCode = ErrorCodes.ERR_NOT_FOUND) }
@@ -213,6 +250,14 @@ class PluginExecutor(
             appendLine("Dependencies: ${plugin.metadata.dependencies.ifEmpty { listOf("(none)") }}")
             appendLine("Permissions: ${plugin.metadata.permissions.ifEmpty { listOf("(none)") }}")
             appendLine("Commands: ${plugin.metadata.commands.ifEmpty { listOf("(none)") }}")
+            // Also check marketplace entry for sizeBytes (not in PluginMetadata)
+            try {
+                val entry = marketplaceClient.getPlugin(plugin.metadata.id).getOrNull()
+                if (entry != null && entry.sizeBytes > 0) {
+                    val size = when { entry.sizeBytes >= 1_048_576 -> "%.1f MB".format(entry.sizeBytes / 1_048_576.0); else -> "%.1f KB".format(entry.sizeBytes / 1024.0) }
+                    appendLine("Size: $size")
+                }
+            } catch (_: Exception) {}
         })
     }
 
@@ -250,7 +295,8 @@ class PluginExecutor(
 
         val update = pluginManager.checkUpdate(id, entry.version)
         return if (update != null) {
-            ExecutionResult.ok("Update available: $id v${installed.metadata.version} → v$update\nUse plugin.install to download the latest version.")
+            val cl = if (entry.changelog.isNotBlank()) "\n\nChangelog (v$update):\n${entry.changelog}" else ""
+            ExecutionResult.ok("Update available: $id v${installed.metadata.version} → v$update\nUse plugin.install to download the latest version.$cl")
         } else {
             ExecutionResult.ok("$id v${installed.metadata.version} is up to date.")
         }
@@ -318,6 +364,59 @@ class PluginExecutor(
             }
         }
         return ExecutionResult.fail("Usage: plugin.auto wake|sleep|status|sleep-idle", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+    }
+
+    /** plugin.verify <id> — check JAR/Odex filesystem state. plugin.verify --all for batch check. */
+    private suspend fun verify(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        // --all: check all installed plugins
+        if (args.contains("--all")) {
+            val all = pluginManager.listAll()
+            if (all.isEmpty()) return ExecutionResult.ok("(No plugins installed)")
+            val results = all.map { (plugin, _) -> verifyOne(plugin.metadata.id, plugin.metadata.version) }
+            val ok = results.count { it.second }
+            return ExecutionResult.ok(
+                "Verified ${results.size} plugins: $ok OK, ${results.size - ok} missing\n" +
+                results.joinToString("\n") { (msg, _) -> msg }
+            )
+        }
+
+        if (args.isEmpty()) return ExecutionResult.fail(
+            "Usage: plugin.verify <id> | plugin.verify --all", errorCode = ErrorCodes.ERR_INVALID_INPUT
+        )
+        val id = args[0]
+        val plugin = pluginManager.get(id)
+            ?: return ExecutionResult.fail("Plugin not found: $id", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        val (msg, ok) = verifyOne(id, plugin.metadata.version)
+        return if (ok) ExecutionResult.ok(msg) else ExecutionResult.fail(msg, errorCode = ErrorCodes.ERR_NOT_FOUND)
+    }
+
+    /** Check one plugin's files on disk. Returns (message, isOk). */
+    private fun verifyOne(id: String, version: String): Pair<String, Boolean> {
+        val cacheDir = java.io.File(com.mengpaw.kernel.DataPaths.PLUGIN_CACHE)
+        val jarFile = java.io.File(cacheDir, "$id-$version.jar")
+        val aarFile = java.io.File(cacheDir, "$id-$version.aar")
+        val odexDir = java.io.File(cacheDir, "odex-$id")
+
+        val file = when {
+            jarFile.exists() -> jarFile
+            aarFile.exists() -> aarFile
+            else -> null
+        }
+
+        val odexExists = odexDir.exists() && odexDir.isDirectory
+        val odexCount = if (odexExists) odexDir.listFiles()?.size ?: 0 else 0
+
+        return if (file != null) {
+            val sizeMb = "%.1f".format(file.length() / 1_048_576.0)
+            val sha = try {
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                digest.digest(file.readBytes()).joinToString("") { "%02x".format(it) }.take(16) + "..."
+            } catch (_: Exception) { "n/a" }
+            val odexInfo = if (odexExists) ", odex: ${odexCount} files" else ", odex: missing"
+            "✅ $id v$version: ${file.name} (${sizeMb}MB, sha256=$sha$odexInfo)" to true
+        } else {
+            "❌ $id v$version: no JAR/AAR found in ${cacheDir.absolutePath}" to false
+        }
     }
 
     private fun statusIcon(status: PluginStatus): String = when (status) {
