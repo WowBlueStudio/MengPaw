@@ -416,8 +416,12 @@ fun MainScreen(
                     }
                     // Input field — soft keyboard Enter sends, Ctrl+Enter inserts newline
                     val keyMaxSteps = settingsState?.value?.maxSteps ?: 50
+                    var lastSendTime by remember { mutableLongStateOf(0L) }
                     fun doSend() {
                         if (inputText.isNotBlank()) {
+                            val now = System.currentTimeMillis()
+                            if (now - lastSendTime < 300) return  // debounce: prevent double-fire from onPreviewKeyEvent + IME
+                            lastSendTime = now
                             val text = inputText; inputText = ""
                             val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
                             val agentTag = activeTags.filterIsInstance<InputTag.AgentRef>().firstOrNull()
@@ -450,14 +454,15 @@ fun MainScreen(
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
                             .focusRequester(inputFocus)
                             .onPreviewKeyEvent { event ->
-                                if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER
-                                    && event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
-                                    if (event.nativeKeyEvent.isCtrlPressed || event.nativeKeyEvent.isShiftPressed) {
-                                        inputText += "\n"
-                                    } else {
-                                        doSend()
+                                if (event.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER) {
+                                    if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                                        if (event.nativeKeyEvent.isCtrlPressed || event.nativeKeyEvent.isShiftPressed) {
+                                            inputText += "\n"
+                                        } else {
+                                            doSend()
+                                        }
                                     }
-                                    true
+                                    true  // consume ALL Enter events (DOWN + UP) — prevents focus-leak to sidebar
                                 } else false
                             },
                         enabled = inputEnabled,

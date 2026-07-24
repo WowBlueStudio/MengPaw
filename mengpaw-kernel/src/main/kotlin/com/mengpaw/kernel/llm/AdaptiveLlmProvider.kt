@@ -47,11 +47,16 @@ class AdaptiveLlmProvider(
     private val config: AdaptiveConfig = AdaptiveConfig()
 ) : LlmProvider {
 
+    companion object {
+        /** HTTP status codes that should NOT be retried (permanent failures). Ref: QwenPaw retry_chat_model.py */
+        private val NON_RETRYABLE_STATUSES = setOf(400, 401, 403)
+    }
+
     data class AdaptiveConfig(
         val maxTokens: Int = 4096,
         val temperature: Double = 0.7,
         val timeoutMs: Long = 60_000,
-        val maxRetries: Int = 19,  // 20 total attempts (0..19)
+        val maxRetries: Int = 5,   // 6 total attempts (0..5), ~15.5s total backoff
         val retryDelayMs: Long = 500,
         val fallbacks: List<FallbackEntry> = emptyList()
     )
@@ -156,6 +161,8 @@ class AdaptiveLlmProvider(
                     provider.completeWithMessages(messages)
                 }
             } catch (e: Exception) {
+                // Permanent errors — fail immediately, don't retry (ref: QwenPaw retry_chat_model.py)
+                if (e is LlmApiException && e.httpStatus in NON_RETRYABLE_STATUSES) throw e
                 lastError = e
                 if (attempt < config.maxRetries) {
                     val delayMs = (config.retryDelayMs * (1L shl attempt)).coerceAtMost(30_000L) // exp backoff capped at 30s

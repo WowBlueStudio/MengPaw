@@ -247,14 +247,19 @@ class PluginViewModel : ViewModel() {
             }
 
             updateInstallState(id, InstallState.Downloading(0f))
-            updateInstallState(id, InstallState.Verifying)
 
             // Delegate to PluginExecutor which handles download + SHA256 verify + DexClassLoader activate
-            val executor = PluginExecutor(pluginManager, marketplace)
+            val executor = PluginExecutor(pluginManager, marketplace).apply {
+                onDownloadProgress = { received, total ->
+                    val progress = if (total > 0) received.toFloat() / total.toFloat() else 0f
+                    updateInstallState(id, InstallState.Downloading(progress.coerceIn(0f, 0.99f)))
+                }
+            }
             val ctx = com.mengpaw.kernel.cli.ExecutionContext(
                 sessionId = "ui-install", agentName = "MengPaw",
                 workDir = com.mengpaw.kernel.DataPaths.PLUGIN_CACHE
             )
+            updateInstallState(id, InstallState.Verifying)
             val result = executor.commands["install"]?.invoke(listOf(id), ctx)
             if (result != null && result.success) {
                 updateInstallState(id, InstallState.Done(id))

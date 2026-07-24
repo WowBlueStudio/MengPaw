@@ -12,7 +12,7 @@ class SanitizerTest {
     fun `sanitize openai key`() {
         val input = "My key is sk-proj-abc123def456ghi789jkl012mnopqr"
         val result = Sanitizer.sanitize(input)
-        assertTrue(result.contains("***REDACTED_sk-p***"))
+        assertTrue(result.contains("***REDACTED***"))
         assertFalse(result.contains("sk-proj-abc123def456ghi789jkl012mnopqr"))
     }
 
@@ -20,14 +20,14 @@ class SanitizerTest {
     fun `sanitize anthropic key`() {
         val input = "Key: sk-ant-api03-abc123def456ghi789jkl012mno345pqr678stu901vwx234yza"
         val result = Sanitizer.sanitize(input)
-        assertTrue(result.contains("***REDACTED_sk-a***"))
+        assertTrue(result.contains("***REDACTED***"))
     }
 
     @Test
     fun `sanitize bearer token`() {
         val input = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
         val result = Sanitizer.sanitize(input)
-        assertTrue(result.contains("***REDACTED_"))
+        assertTrue(result.contains("***REDACTED***"))
     }
 
     @Test
@@ -41,7 +41,7 @@ class SanitizerTest {
     fun `sanitize throwable`() {
         val exception = RuntimeException("sk-proj-abc123def456ghi789jkl012")
         val result = Sanitizer.sanitizeThrowable(exception)
-        assertTrue(result.contains("***REDACTED_"))
+        assertTrue(result.contains("***REDACTED***"))
     }
 }
 

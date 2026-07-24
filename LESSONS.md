@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-07-24 — v0.14.0 全链路审计修复
+
+63. **功能闭环必须用方法论检验，不能靠直觉**
+    - 场景：插件系统表面"能用"，但 12 问审计暴露了 Agent 不知道下载源、安装后无指引、内置插件可卸载、错误无建议等 8 个缺口
+    - 教训：任何子系统上线前用 `docs/audit-methodology.md` 三层十二问过一遍，P0 不过不发布
+    - 产出：方法论文档 + 插件/会话/GitHub/键盘 四个系统全部闭环
+
+62. **会话 ID 不能只存在内存里**
+    - 场景：`current_session.json` 只存消息数组不存 sessionId，重启后 restore 被迫造新 ID `"sess_restored"`，原 ID 变成孤儿 → 重复
+    - 修复：`current_session.json` 改为 `{"sessionId":"...","messages":[...]}` 格式，ID 跨重启保持
+    - 教训：任何需要跨进程/跨重启保持的 ID 都必须持久化，不能依赖内存
+
+61. **`Class.forName()` 在 Android R8 Release 下不可靠**
+    - 场景：10 个捆绑插件用反射加载，`Class.forName("com.mengpaw.plugin.xxx.XxxPlugin")` 在 R8 混淆后类名可能变化 → 只安装成功 2-3 个
+    - 修复：所有插件是编译时依赖，直接 `FrameworkPlugin()` 实例化，零反射
+    - 教训：编译时已知的类绝不用 `Class.forName()` — 直接 new
+
+60. **重试次数需要区分错误类型，参照成熟项目**
+    - 场景：`maxRetries=19` 导致 API 失败时等待 ~27 分钟，401 认证错误也被重试 20 次
+    - 修复：参照 QwenPaw `retry_chat_model.py` — `maxRetries=5`，永久错误 {400,401,403} 立即失败
+    - 教训：重试策略三要素 — 次数上限、错误分类、退避上限。缺一不可
+
+59. **双源不够，要三级回退**
+    - 场景：GitHub → Gitee 双源在两者都挂时仍无解（校园网/企业网可能同时封 GitHub 和 Gitee）
+    - 修复：`PluginMarketplaceClient` + `UpdatePlugin` 都加了 ghproxy.com 第三级回退
+    - 教训：关键外部依赖至少三级回退，`net.proxy` 命令给 Agent 自主解决能力
+
+58. **方法论要写成文档，否则每次从零开始**
+    - 场景：#1 插件审计花了 3 个 Agent 探索，#2 GitHub 又重来一遍类似的套路
+    - 修复：提炼出 `docs/audit-methodology.md` 三层十二问，#4 会话系统审计复用，效率显著提升
+    - 教训：重复两次以上的工作流就值得文档化
+
+---
+
 ## 2026-07-24 — v0.12.0 全量审校 + v0.12.1 收尾
 
 61. **LLM 预训练知识会覆盖系统提示词**

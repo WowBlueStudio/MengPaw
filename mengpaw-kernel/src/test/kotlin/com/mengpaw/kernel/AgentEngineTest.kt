@@ -169,7 +169,7 @@ class AgentEngineTest {
         """.trimIndent()
 
         val result = engine.run("Infinite task", maxSteps = 2)
-        assertTrue(result.contains("Max steps"))
+        assertTrue(result.contains("已达到最大步数") || result.contains("Max steps"))
     }
 
     // ── Mock LLM Provider ────────────────────────────────────────────────

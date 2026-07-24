@@ -61,6 +61,8 @@ fun HistorySidebar(
     frameworkGroups: List<Pair<String, List<AgentViewModel.AgentSessionGroup>>>,
     hideCompacted: Boolean,
     onToggleHideCompacted: () -> Unit,
+    hideArchived: Boolean = true,
+    onToggleHideArchived: () -> Unit = {},
     onSelectSession: (AgentViewModel.SessionRecord) -> Unit,
     onDeleteSession: (String) -> Unit,
     onCompactSession: (String) -> Unit,
@@ -81,13 +83,23 @@ fun HistorySidebar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("历史会话", fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = ThemeColors.textPrimary)
-            IconButton(onClick = onToggleHideCompacted, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    if (hideCompacted) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                    if (hideCompacted) "显示已压缩" else "隐藏已压缩",
-                    tint = if (hideCompacted) ThemeColors.textSecondary else ThemeColors.brand,
-                    modifier = Modifier.size(20.dp)
-                )
+            Row {
+                IconButton(onClick = onToggleHideArchived, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        if (hideArchived) Icons.Outlined.Archive else Icons.Outlined.Unarchive,
+                        if (hideArchived) "显示已归档" else "隐藏已归档",
+                        tint = if (hideArchived) ThemeColors.textSecondary else ThemeColors.brand,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                IconButton(onClick = onToggleHideCompacted, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        if (hideCompacted) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                        if (hideCompacted) "显示已压缩" else "隐藏已压缩",
+                        tint = if (hideCompacted) ThemeColors.textSecondary else ThemeColors.brand,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
         HorizontalDivider(color = ThemeColors.border, thickness = 0.5.dp)
@@ -288,12 +300,16 @@ private fun AgentGroupItem(
                         color = ThemeColors.textSecondary
                     )
                 } else {
+                    // Confirmation dialog state
+                    var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+                    var pendingCompactId by remember { mutableStateOf<String?>(null) }
+
                     sessions.forEach { session ->
                         SessionItem(
                             session = session,
                             onSelect = { onSelectSession(session) },
-                            onDelete = { onDeleteSession(session.id) },
-                            onCompact = { onCompactSession(session.id) },
+                            onDelete = { pendingDeleteId = session.id },
+                            onCompact = { pendingCompactId = session.id },
                             multiSelectMode = multiSelect,
                             isSelected = session.id in selectedIds,
                             onToggleSelect = {
@@ -303,6 +319,40 @@ private fun AgentGroupItem(
                             onLongPress = {
                                 multiSelect = true
                                 selectedIds.add(session.id)
+                            }
+                        )
+                    }
+
+                    // Delete confirmation dialog
+                    pendingDeleteId?.let { id ->
+                        AlertDialog(
+                            onDismissRequest = { pendingDeleteId = null },
+                            title = { Text("确认删除") },
+                            text = { Text("删除后将无法恢复此会话。确定要删除吗？") },
+                            confirmButton = {
+                                TextButton(onClick = { onDeleteSession(id); pendingDeleteId = null }) {
+                                    Text("删除", color = ArcoColors.Red6)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { pendingDeleteId = null }) { Text("取消") }
+                            }
+                        )
+                    }
+
+                    // Compact confirmation dialog
+                    pendingCompactId?.let { id ->
+                        AlertDialog(
+                            onDismissRequest = { pendingCompactId = null },
+                            title = { Text("确认压缩") },
+                            text = { Text("压缩后将保留摘要，原始消息不可恢复。确定要压缩吗？") },
+                            confirmButton = {
+                                TextButton(onClick = { onCompactSession(id); pendingCompactId = null }) {
+                                    Text("压缩", color = ArcoColors.Orange6)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { pendingCompactId = null }) { Text("取消") }
                             }
                         )
                     }

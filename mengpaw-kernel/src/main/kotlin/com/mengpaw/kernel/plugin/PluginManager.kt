@@ -3,7 +3,9 @@
 
 package com.mengpaw.kernel.plugin
 
+import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.cli.CommandRegistry
+import java.io.File
 
 /**
  * Central plugin manager — handles plugin lifecycle and bridges plugins to CLI.
@@ -57,7 +59,7 @@ class PluginManager(
      *
      * @return Result with the plugin id on success, or an error message.
      */
-    fun install(plugin: Plugin): Result<String> {
+    fun install(plugin: Plugin): Result<String> = synchronized(this) {
         val id = plugin.metadata.id
 
         // Check version compatibility
@@ -95,7 +97,7 @@ class PluginManager(
     /**
      * Activate an installed plugin: register its commands into the CLI registry.
      */
-    fun activate(id: String): Result<Unit> {
+    fun activate(id: String): Result<Unit> = synchronized(this) {
         val plugin = plugins[id]
             ?: return Result.failure(NoSuchElementException("Plugin not found: $id"))
         val status = statuses[id]
@@ -111,7 +113,7 @@ class PluginManager(
     /**
      * Deactivate a plugin: unregister its commands but keep it installed.
      */
-    fun deactivate(id: String): Result<Unit> {
+    fun deactivate(id: String): Result<Unit> = synchronized(this) {
         val plugin = plugins[id]
             ?: return Result.failure(NoSuchElementException("Plugin not found: $id"))
         if (statuses[id] != PluginStatus.ACTIVE) {
@@ -126,7 +128,7 @@ class PluginManager(
     /**
      * Uninstall a plugin completely: deactivate if active, then remove.
      */
-    fun uninstall(id: String): Result<Unit> {
+    fun uninstall(id: String): Result<Unit> = synchronized(this) {
         val plugin = plugins[id]
             ?: return Result.failure(NoSuchElementException("Plugin not found: $id"))
 
@@ -136,6 +138,19 @@ class PluginManager(
 
         // FIX A14: Call uninstall lifecycle callback
         try { /* onUninstall() requires coroutine scope; called at plugin unload time */ } catch (_: Exception) {}
+
+        // Clean up downloaded JAR/AAR and odex files from disk
+        try {
+            val cacheDir = File(DataPaths.PLUGIN_CACHE)
+            val version = plugin.metadata.version
+            listOf("jar", "aar").forEach { ext ->
+                val jarFile = File(cacheDir, "$id-$version.$ext")
+                if (jarFile.exists()) { jarFile.delete() }
+            }
+            val odexDir = File(cacheDir, "odex-$id")
+            if (odexDir.exists()) { odexDir.deleteRecursively() }
+        } catch (_: Exception) { /* best-effort cleanup */ }
+
         plugins.remove(id)
         statuses.remove(id)
         return Result.success(Unit)
@@ -153,27 +168,29 @@ class PluginManager(
     }
 
     /** Get an installed plugin by id. */
-    fun get(id: String): Plugin? = plugins[id]
+    fun get(id: String): Plugin? = synchronized(this) { plugins[id] }
 
     /** Get the status of a plugin. */
-    fun status(id: String): PluginStatus? = statuses[id]
+    fun status(id: String): PluginStatus? = synchronized(this) { statuses[id] }
 
     /** List all installed plugin ids. */
-    fun listIds(): List<String> = plugins.keys.toList()
+    fun listIds(): List<String> = synchronized(this) { plugins.keys.toList() }
 
     /** List all active plugins. */
-    fun getActivePlugins(): List<Plugin> =
+    fun getActivePlugins(): List<Plugin> = synchronized(this) {
         plugins.filter { statuses[it.key] == PluginStatus.ACTIVE }.values.toList()
+    }
 
     /** List all installed plugins with their status. */
-    fun listAll(): List<Pair<Plugin, PluginStatus>> =
+    fun listAll(): List<Pair<Plugin, PluginStatus>> = synchronized(this) {
         plugins.map { it.value to (statuses[it.key] ?: PluginStatus.ERROR) }
+    }
 
     /** Count of installed plugins. */
-    fun count(): Int = plugins.size
+    fun count(): Int = synchronized(this) { plugins.size }
 
     /** Count of active plugins. */
-    fun activeCount(): Int = statuses.count { it.value == PluginStatus.ACTIVE }
+    fun activeCount(): Int = synchronized(this) { statuses.count { it.value == PluginStatus.ACTIVE } }
 
     /**
      * Get all UI buttons from active plugins, optionally filtered by [placement].

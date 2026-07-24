@@ -98,14 +98,33 @@ class UpdatePlugin : Plugin {
             return formatCheckResult(currentVersion, release)
         }
 
-        return try {
-            val response = client.get(GITHUB_API_URL) {
-                header("Accept", "application/vnd.github.v3+json")
+        // Try GitHub → Gitee → ghproxy
+        val urls = listOf(GITHUB_API_URL, GITEE_API_URL, GHPROXY_API_URL)
+        var lastError: String? = null
+        for ((i, url) in urls.withIndex()) {
+            val result = tryFetchRelease(url)
+            if (result != null) {
+                latestRelease = result
+                lastCheckTime = System.currentTimeMillis()
+                return formatCheckResult(currentVersion, result)
             }
-            if (!response.status.isSuccess()) return ExecutionResult.fail("GitHub API error: ${response.status.value}", errorCode = ErrorCodes.ERR_INTERNAL)
+            lastError = if (i == urls.lastIndex) "所有更新源均不可达。💡 建议检查网络连接，或使用 VPN 访问 GitHub。" else null
+        }
+
+        return ExecutionResult.fail(lastError ?: "检查更新失败", errorCode = ErrorCodes.ERR_INTERNAL)
+    }
+
+    /** Try to fetch release info from a single URL. Returns null on failure. */
+    private suspend fun tryFetchRelease(url: String): ReleaseInfo? {
+        return try {
+            val response = client.get(url) {
+                if ("gitee" in url) header("Accept", "application/json")
+                else header("Accept", "application/vnd.github.v3+json")
+            }
+            if (!response.status.isSuccess()) return null
 
             val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-            val tag = json["tag_name"]?.jsonPrimitive?.content ?: "unknown"
+            val tag = json["tag_name"]?.jsonPrimitive?.content ?: return null
             val name = json["name"]?.jsonPrimitive?.content ?: tag
             val body = json["body"]?.jsonPrimitive?.content?.take(500) ?: ""
 
@@ -122,14 +141,10 @@ class UpdatePlugin : Plugin {
                     dUrl.contains("mengpaw-browser") -> { browserUrl = dUrl; browserSize = dSize }
                 }
             }
-
-            val release = ReleaseInfo(tag, name, body, shellUrl, shellSize, browserUrl, browserSize)
-            latestRelease = release
-            lastCheckTime = System.currentTimeMillis()
-            formatCheckResult(currentVersion, release)
+            ReleaseInfo(tag, name, body, shellUrl, shellSize, browserUrl, browserSize)
         } catch (e: Exception) {
-            ErrorCollector.report(e, "UpdatePlugin.check")
-            ExecutionResult.fail("检查更新失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+            ErrorCollector.report(e, "UpdatePlugin.tryFetch")
+            null
         }
     }
 
@@ -173,10 +188,23 @@ class UpdatePlugin : Plugin {
             val downloadDir = File(DataPaths.PLUGIN_CACHE, "updates").also { it.mkdirs() }
             val apkFile = File(downloadDir, "mengpaw-$target-${release.tag}.apk")
 
-            val response = client.get(url)
-            if (!response.status.isSuccess()) return ExecutionResult.fail("下载失败 HTTP ${response.status.value}", errorCode = ErrorCodes.ERR_INTERNAL)
+            // Try primary URL → Gitee mirror → ghproxy
+            val downloadUrls = listOf(url, giteeDownload(url), ghproxyDownload(url))
+            var downloadBytes: ByteArray? = null
+            for (dUrl in downloadUrls) {
+                try {
+                    val response = client.get(dUrl)
+                    if (response.status.isSuccess()) {
+                        downloadBytes = response.bodyAsBytes()
+                        break
+                    }
+                } catch (_: Exception) { /* try next */ }
+            }
+            if (downloadBytes == null) {
+                return ExecutionResult.fail("下载失败 — 所有下载源均不可达。💡 建议检查网络或使用 VPN。", errorCode = ErrorCodes.ERR_INTERNAL)
+            }
 
-            apkFile.writeBytes(response.bodyAsBytes())
+            apkFile.writeBytes(downloadBytes)
             downloadedApk = apkFile
 
             ExecutionResult.ok("""
@@ -390,5 +418,12 @@ class UpdatePlugin : Plugin {
 
     companion object {
         private const val GITHUB_API_URL = "https://api.github.com/repos/WowBlueStudio/MengPaw/releases/latest"
+        private const val GITEE_API_URL = "https://gitee.com/api/v5/repos/WowBlueStudio/MengPaw/releases/latest"
+        private const val GHPROXY_API_URL = "https://ghproxy.com/$GITHUB_API_URL"
+        /** Build a ghproxy URL for any GitHub-hosted download. */
+        private fun ghproxyDownload(githubUrl: String): String = "https://ghproxy.com/$githubUrl"
+        /** Build a Gitee download mirror URL from a GitHub download URL. */
+        private fun giteeDownload(githubUrl: String): String =
+            githubUrl.replace("github.com", "gitee.com")
     }
 }
