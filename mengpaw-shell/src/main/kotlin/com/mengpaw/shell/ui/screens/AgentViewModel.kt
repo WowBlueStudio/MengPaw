@@ -1048,8 +1048,12 @@ class AgentViewModel : ViewModel() {
             val sessionsDir = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "sessions")
             val before = _sessionHistory.value.size
             _sessionHistory.value = _sessionHistory.value.filter { record ->
+                // Remove records with no file on disk
                 val sessionFile = java.io.File(sessionsDir, "${record.id}.json")
-                sessionFile.exists() || record.id == currentSessionId
+                if (!sessionFile.exists() && record.id != currentSessionId) return@filter false
+                // Remove empty sessions (no messages, never used)
+                if (record.messageCount <= 0 && record.id != currentSessionId) return@filter false
+                true
             }
             val removed = before - _sessionHistory.value.size
             if (removed > 0) {
