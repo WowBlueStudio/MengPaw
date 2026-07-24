@@ -154,12 +154,30 @@ class PluginExecutor(
                 "💡 plugin.info ${entry.id} 查看完整文档"
             )
         } else {
-            ExecutionResult.fail(
-                "Downloaded ${entry.id} v${entry.version} but runtime activation failed.\n" +
-                "This plugin requires pre-compilation as a Gradle module. " +
-                "Add to plugins/ directory and rebuild, or contact the plugin author for a DEX-packaged release.",
-                errorCode = ErrorCodes.ERR_INTERNAL
-            )
+            // File downloaded but DexClassLoader can't activate — register metadata anyway
+            try {
+                val dummyPlugin = object : com.mengpaw.kernel.plugin.Plugin {
+                    override val metadata = com.mengpaw.kernel.plugin.PluginMetadata(
+                        id = entry.id, name = entry.name, version = entry.version,
+                        type = entry.type, author = entry.author, description = entry.description,
+                        permissions = entry.permissions, dependencies = entry.dependencies,
+                        commands = entry.commands
+                    )
+                    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = emptyMap()
+                }
+                pluginManager.install(dummyPlugin).getOrThrow()
+                ExecutionResult.ok(
+                    "✅ ${entry.name} v${entry.version} 下载完成\n" +
+                    "⚠️ 运行时激活暂不支持，重启 APP 后生效。\n" +
+                    "💡 plugin.info ${entry.id} 查看详情"
+                )
+            } catch (metaErr: Exception) {
+                ExecutionResult.fail(
+                    "Downloaded ${entry.id} v${entry.version} but activation failed.\n" +
+                    "This plugin requires a DEX-packaged release or pre-compilation.",
+                    errorCode = ErrorCodes.ERR_INTERNAL
+                )
+            }
         }
     }
 
@@ -175,23 +193,37 @@ class PluginExecutor(
             val optimizedDir = File(jarFile.parentFile, "odex-${entry.id}")
             optimizedDir.mkdirs()
 
-            val className = "com.mengpaw.plugin.${entry.id.replace("-", ".")}.PluginMain"
+            // Try multiple class name patterns: PascalCase by convention, then PluginMain fallback
+            val ns = entry.id.removeSuffix("-plugin").removeSuffix("-ext")
+            val pascalNs = ns.replaceFirstChar { it.uppercase() }
+            val candidateNames = listOf(
+                "com.mengpaw.plugin.$ns.${pascalNs}Plugin",  // e.g. TavilyPlugin
+                "com.mengpaw.plugin.$ns.PluginMain",          // legacy
+            )
 
             // Use DexClassLoader via reflection (Android-only; safe fallback on JVM)
-            val pluginInstance = try {
+            var pluginInstance: Any? = null
+            var loadedClass: String? = null
+            try {
                 val dexLoaderClass = Class.forName("dalvik.system.DexClassLoader")
                 val dexLoader = dexLoaderClass.getConstructor(
                     String::class.java, String::class.java, String::class.java, ClassLoader::class.java
                 ).newInstance(jarFile.absolutePath, optimizedDir.absolutePath, null, Plugin::class.java.classLoader)
-                val pluginClass = dexLoaderClass.getMethod("loadClass", String::class.java).invoke(dexLoader, className) as Class<*>
-                pluginClass.getDeclaredConstructor().newInstance()
+                for (name in candidateNames) {
+                    try {
+                        val pluginClass = dexLoaderClass.getMethod("loadClass", String::class.java).invoke(dexLoader, name) as Class<*>
+                        pluginInstance = pluginClass.getDeclaredConstructor().newInstance()
+                        loadedClass = name
+                        break
+                    } catch (_: ClassNotFoundException) { /* try next */ }
+                }
             } catch (_: ClassNotFoundException) {
                 null // dalvik not available (JVM/desktop) — JAR loading not supported
             }
 
             if (pluginInstance == null) return null
             if (pluginInstance !is Plugin) {
-                return "Plugin class $className does not implement Plugin interface"
+                return "Plugin class $loadedClass does not implement Plugin interface"
             }
 
             pluginManager.install(pluginInstance).getOrThrow()

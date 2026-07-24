@@ -158,8 +158,8 @@ class PluginViewModel : ViewModel() {
         try {
             if (cacheFile.exists()) {
                 val pluginList = marketplace.parseIndex(cacheFile.readText())
+                registerBuiltins(pluginList)                         // register BEFORE setting value
                 _marketplacePlugins.value = pluginList.plugins
-                registerBuiltins(pluginList)
             }
         } catch (_: Exception) { }
     }
@@ -181,8 +181,8 @@ class PluginViewModel : ViewModel() {
             marketplace.fetchIndex(forceRefresh).fold(
                 onSuccess = { index ->
                     lastRemoteUpdated = index.updated
+                    registerBuiltins(index)                       // register BEFORE setting value
                     _marketplacePlugins.value = index.plugins
-                    registerBuiltins(index)
                 },
                 onFailure = { /* keep cached data */ }
             )

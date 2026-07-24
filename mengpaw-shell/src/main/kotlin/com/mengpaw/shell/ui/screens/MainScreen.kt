@@ -242,12 +242,14 @@ fun MainScreen(
                         LinearProgressIndicator(Modifier.width(60.dp).height(4.dp), color = ThemeColors.brand)
                         Spacer(Modifier.width(ArcoSpacing.sm))
                     }
-                    IconButton(onClick = { viewModel.newSession() }, modifier = Modifier.size(44.dp)) {
+                    Box(modifier = Modifier.size(44.dp).pointerInput(Unit) { detectTapGestures { viewModel.newSession() } },
+                        contentAlignment = Alignment.Center) {
                         Icon(Icons.Outlined.Add, "新建会话", tint = ThemeColors.textSecondary)
                     }
                     // Mission monitor toggle (visible when mission is active)
                     if (missionActiveState) {
-                        IconButton(onClick = { showMissionOverlay = !showMissionOverlay }, modifier = Modifier.size(44.dp)) {
+                        Box(modifier = Modifier.size(44.dp).pointerInput(Unit) { detectTapGestures { showMissionOverlay = !showMissionOverlay } },
+                            contentAlignment = Alignment.Center) {
                             Icon(Icons.Outlined.Monitor, "Mission", tint = ThemeColors.brand)
                         }
                     }
@@ -255,17 +257,16 @@ fun MainScreen(
                     val headerButtons = remember(pluginViewModel.activeButtons) { pluginViewModel.activeButtons[com.mengpaw.kernel.plugin.ButtonPlacement.HEADER_BAR] ?: emptyList() }
                     if (headerButtons.isNotEmpty()) {
                         headerButtons.take(2).forEach { btn ->
-                            IconButton(
-                                onClick = {
-                                    if (btn.command.isNotBlank()) inputText = btn.command
+                            Box(modifier = Modifier.size(44.dp).pointerInput(btn.command) {
+                                    detectTapGestures { if (btn.command.isNotBlank()) inputText = btn.command }
                                 },
-                                modifier = Modifier.size(44.dp)
-                            ) {
+                                contentAlignment = Alignment.Center) {
                                 Icon(pluginIconForName(btn.iconName), btn.label, tint = ThemeColors.brand)
                             }
                         }
                     }
-                    IconButton(onClick = { showRightSidebar = !showRightSidebar }, modifier = Modifier.size(44.dp)) {
+                    Box(modifier = Modifier.size(44.dp).pointerInput(Unit) { detectTapGestures { showRightSidebar = !showRightSidebar } },
+                        contentAlignment = Alignment.Center) {
                         Icon(Icons.Outlined.History, "历史", tint = ThemeColors.textSecondary)
                     }
                 }
