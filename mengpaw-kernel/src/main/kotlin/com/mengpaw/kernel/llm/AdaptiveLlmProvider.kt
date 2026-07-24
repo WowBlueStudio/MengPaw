@@ -51,7 +51,7 @@ class AdaptiveLlmProvider(
         val maxTokens: Int = 4096,
         val temperature: Double = 0.7,
         val timeoutMs: Long = 60_000,
-        val maxRetries: Int = 2,
+        val maxRetries: Int = 19,  // 20 total attempts (0..19)
         val retryDelayMs: Long = 500,
         val fallbacks: List<FallbackEntry> = emptyList()
     )
@@ -158,7 +158,7 @@ class AdaptiveLlmProvider(
             } catch (e: Exception) {
                 lastError = e
                 if (attempt < config.maxRetries) {
-                    val delayMs = config.retryDelayMs * (1L shl attempt) // exponential backoff
+                    val delayMs = (config.retryDelayMs * (1L shl attempt)).coerceAtMost(30_000L) // exp backoff capped at 30s
                     delay(delayMs)
                 }
             }

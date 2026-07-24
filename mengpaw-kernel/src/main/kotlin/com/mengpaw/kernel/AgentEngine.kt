@@ -439,6 +439,14 @@ class AgentEngine(
                             "$commandLine → ${result.error}", sessionId = session.id, agentName = agentName,
                             metadata = mapOf("errorCode" to (result.errorCode ?: ""), "command" to commandLine))
                     }
+                    // Detect failure loop: 5+ consecutive failures → agent is stuck
+                    if (promptEngine.trackResult(result.success)) {
+                        val errorMsg = localizedError("consecutive_failures", "5")
+                        sessionManager.addMessage(session.id, Message("assistant", errorMsg))
+                        _state.value = AgentState.Error(errorMsg)
+                        onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, errorMsg))
+                        return errorMsg
+                    }
                     val observation = if (result.success) result.output else "Error: ${result.error}"
                     onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, observation))
 
@@ -569,6 +577,7 @@ class AgentEngine(
     private fun localizedError(key: String, detail: String): String = when (agentLanguage) {
         PromptEngine.AgentLanguage.CHINESE -> when (key) {
             "loop_detected" -> "错误：检测到命令循环 — '$detail' 已重复 3+ 次"
+            "consecutive_failures" -> "错误：连续 $detail 次命令执行失败，Agent 可能陷入困境。请检查网络、权限或换个方式提问。"
             "max_steps" -> "已达到最大步数 ($detail)，未获得最终答案"
             "agent_error" -> "Agent 错误：$detail"
             "no_plan" -> "无法为任务生成计划：$detail"
@@ -576,6 +585,7 @@ class AgentEngine(
         }
         PromptEngine.AgentLanguage.ENGLISH -> when (key) {
             "loop_detected" -> "Error: Detected command loop — '$detail' repeated 3+ times"
+            "consecutive_failures" -> "Error: $detail consecutive command failures. Agent may be stuck. Check network, permissions, or rephrase."
             "max_steps" -> "Max steps ($detail) reached without final answer"
             "agent_error" -> "Agent error: $detail"
             "no_plan" -> "Could not generate a plan for: $detail"

@@ -2,8 +2,36 @@
 
 > v0.12.1 → v0.12.12, 2026-07-24
 > 6 次部署 · 6 个 BUG · 1 次架构重构 · 2 台真机调试
+> **v0.12.12+**: 安全审计 + 短码配对协议重构 (13 问题修复)
 
-## BUG 清单
+## 安全审计 (2026-07-24)
+
+审计发现 13 个问题 (P0×2, P1×3, P2×5, P3×3), 核心重构:
+
+1. **短码配对协议**: 替代原有"发送 CAPABILITY_ANNOUNCE → 直接信任"的流程。新协议: Nonce 交换 → 6位验证码比对 → 指纹密钥交换 → AES-256 加密通道
+2. **AcpServer 鉴权**: sharedSecret 从默认空字符串改为必需参数, LEDGER 类消息需已配对信任
+3. **跨链验证**: `handleLedgerBatch` 追加前检查 `entries[0].prevHash == localLatest.hash`
+4. **JSON 注入修复**: 所有 ACP 消息用 `buildJsonObject` 替代手写字符串拼接
+5. **并发安全**: `TwinLedgerStore.append/appendBatch` 加 `@Synchronized`
+6. **频率限制**: CAPABILITY_ANNOUNCE 同 peerId 30 秒窗口内去重
+
+### 新增文件
+- `TwinPairingEngine.kt` — 短码验证 + 指纹密钥交换引擎 (~300 行)
+
+### 修改文件 (11)
+- `AcpProtocol.kt`: +2 消息类型 (PAIR_CHALLENGE/PAIR_CONFIRM), 修复 JSON 注入
+- `AcpServer.kt`: sharedSecret 必需, LEDGER 消息鉴权, 新消息类型分组
+- `PromptFirewall.kt`: +isEncryptionReady, +trustWithKey, +getTrustedFingerprint
+- `TwinAcpHandler.kt`: 跨链验证, 新消息处理, 委派鉴权
+- `TwinSyncEngine.kt`: getTransport, onPairingEstablished, 注入修复, 频率限制, JSONObject
+- `TwinLedgerStore.kt`: @Synchronized, containsHash JSON 解析
+- `MemoryTwinPlugin.kt`: acceptPairRequest 实现, cmdDelegate 鉴权
+- `TwinCapabilityCollector.kt`: 版本号修正 0.12.1→0.12.12
+- `TwinIdentity.kt`: 异常报告补全
+- `MainActivity.kt`: sharedSecret 派生, 传递给 AcpServer
+- `SidebarContent.kt`: 6位验证码弹窗, 新配对按钮, 收件箱同意按钮更新
+
+## BUG 清单 (历史)
 
 | # | 现象 | 根因 | 修复 | 教训 |
 |---|------|------|------|------|

@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.12.12 | **更新**: 2026-07-24 | **架构**: 微内核 + AgentRuntime + 24 插件(含记忆孪生) + 框架协议 + 侧边栏交互 + 智能体/框架名片 + 提示词防火墙 + commonmark AST 引擎
+> **版本**: 0.13.0 | **更新**: 2026-07-24 | **架构**: 微内核 + AgentRuntime + 24 插件(含记忆孪生) + 框架协议 + 侧边栏交互 + 智能体/框架名片 + 提示词防火墙 + 短码配对 + commonmark AST 引擎
 
 ---
 
@@ -580,6 +580,16 @@ Fail-secure 完整性守护：启动时校验 APK 签名，检测篡改→安全
 - **文件沙箱**：canonicalFile + workDir 限制 + 符号链接检测 + 50MB 读上限
 - **`plugin.audit`**：发布前 7 类安全检查
 
+### 6.7 记忆孪生安全 (v0.12.12+)
+
+- **短码配对协议**: 类似蓝牙配对, 双方独立计算 6 位验证码 (SHA-256(nonceA|nonceB) → 6 digits), 用户肉眼比对防 MITM
+- **AES-256 加密通道**: 配对后通过 `AcpCrypto.deriveKey(fpA, fpB)` 派生共享密钥, 后续所有 ACP 消息加密传输
+- **信任持久化**: `PromptFirewall.trustWithKey()` → `.trusted` + `.key` 文件, 重启自动恢复
+- **账本防盗**: 未配对设备无法访问 `LEDGER_HEAD/PULL/BATCH/ACK` (AcpServer 鉴权)
+- **跨链验证**: 接收账本条目前检查 `entries[0].prevHash == localLatest.hash`
+- **频率限制**: CAPABILITY_ANNOUNCE 同 peerId 30 秒内最多 1 次弹窗
+- **委派鉴权**: `TWIN_DELEGATE` 需已配对信任才执行
+
 ---
 
 ## 7. 插件开发
@@ -750,6 +760,8 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.13.0** | 2026-07-24 | **捆绑插件补齐 + 循环检测增强 + 会话去重 + 工具输出完整展示 + Claude Bridge 移除** — 10 插件捆绑启动 (net/fs/self/clipboard/notification/memory-twin 补齐) + 连续失败 5 次自动终止 + `restoreCurrentSession` 修复重复会话 + TraceStepItem 可展开完整输出 + 左侧栏手机模式背景修复 + `plugin.marketplace` 加入系统提示词 + hardkey Enter 双触发修复 + versionCode 公式修正 |
+| **0.12.12** | 2026-07-24 | 记忆孪生 (6 BUG 修复 + 5连击激活 + ACP P2P 配对 + 账本自动同步) + 开发文档重构 · 详见 `docs/lessons-memory-twin.md` |
 | **0.11.3** | 2026-07-23 | **嵌套滚动根除 + 视觉表格 + commonmark 引擎全覆盖** — MarkdownText nestedScroll 参数 + 表格 widthIn(min) 列宽 + Image/HtmlBlock/嵌套列表/TableBody AST 全量转换 + ShellService deleteChannel SecurityException |
 | **0.11.0** | 2026-07-23 | **线程架构优化 + commonmark AST 引擎** — P0: Column+verticalScroll 替代 LazyColumn, P1: AgentDocs→Dispatchers.IO, commonmark-java 替代手写解析器, 视觉表格渲染 |
 | **0.10.0** | 2026-07-23 | **框架协议插件 + 侧边栏交互 + 主题系统** — 框架发现插件 (mDNS 局域网注册/扫描/指纹) + 侧边栏头像打开 + 全局滑动手势 + 智能体名片重排 (工作区滚动) + 框架名片 (名称/版本/备注/Agent列表) + 亮/暗/跟随系统三档主题 + GeoRouter 系统时区判断 + 插件管理页精简 + PAD 插件移除 + 启动页品牌 Logo 替换 |
@@ -783,6 +795,7 @@ ShellService.start(this)   // startForeground + WakeLock
 | 2026-07-19 | Crash 漏洞四审四校 | DataPaths/IO/EventReceiver/HttpClient/状态串扰/!! 全部修复 |
 | 2026-07-23 | v0.11.3 全量审校 | ProGuard 规则修正 (kernel 包路径) + !! 清零 + 文件 IO/协程 try/catch 补全 + 文档命令计数修正 (self 14→13, agent 11→12, sys 39, plugin 10→11+auto, skill 4→7, inspector 4→6) + 僵尸目录清理 (agent-loop/agent-mission) |
 | 2026-07-24 | v0.12.12 记忆孪生 | 6 BUG 修复 (PluginManager版本/startListener/JSON转义/防火墙/inbox轮询/自动恢复) + 5连击激活 + ACP P2P 配对 + 账本自动同步 · 详见 `docs/lessons-memory-twin.md` |
+| 2026-07-24 | v0.13.0 全量审校 | 10 插件捆绑补齐 + 循环检测增强 (连续失败) + 会话去重 + 工具输出完整展示 + Claude Bridge 移除 + hardkey Enter 修复 + versionCode 公式修正 · 遗留问题详见 `docs/remaining-issues.md` |
 
 ---
 

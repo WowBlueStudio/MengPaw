@@ -144,6 +144,36 @@ class MainActivity : ComponentActivity() {
         PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
         PluginViewModel.registerPluginClass("memory-twin-plugin", "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin")
 
+        // Auto-install bundled plugins (always available, no marketplace download needed)
+        CoroutineScope(Dispatchers.IO).launch {
+            val bundled = listOf(
+                "framework-plugin" to "com.mengpaw.plugin.framework.FrameworkPlugin",
+                "memory-plugin" to "com.mengpaw.plugin.memory.MemoryPlugin",
+                "skill-plugin" to "com.mengpaw.plugin.skill.SkillPlugin",
+                "dev-plugin" to "com.mengpaw.plugin.dev.DevPlugin",
+                "fs-plugin" to "com.mengpaw.plugin.fs.FsPlugin",
+                "net-plugin" to "com.mengpaw.plugin.net.NetPlugin",
+                "self-plugin" to "com.mengpaw.plugin.self.SelfPlugin",
+                "clipboard-plugin" to "com.mengpaw.plugin.clipboard.ClipboardPlugin",
+                "notification-plugin" to "com.mengpaw.plugin.notification.NotificationPlugin",
+                "memory-twin-plugin" to "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin",
+            )
+            val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+            for ((id, className) in bundled) {
+                try {
+                    if (pm.get(id) == null) {
+                        val plugin = Class.forName(className).getDeclaredConstructor().newInstance() as com.mengpaw.kernel.plugin.Plugin
+                        pm.install(plugin).fold(
+                            onSuccess = { pm.activate(id) },
+                            onFailure = { android.util.Log.w("MengPaw", "Bundled plugin $id: ${it.message}") }
+                        )
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("MengPaw", "Auto-install $id failed: ${e.message}")
+                }
+            }
+        }
+
         // Handle URL sent from Browser APK (singleTask — onNewIntent)
         handleOpenUrl(intent)
 
@@ -564,15 +594,19 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
 private suspend fun startAcpForTwin(ctx: android.content.Context, agentName: String) {
     try {
         val profile = com.mengpaw.kernel.agent.AgentProfile.load(agentName)
-        val server = com.mengpaw.kernel.acp.AcpServer(profile, 9876)
+        // SECURITY: Derive shared secret from device fingerprint for baseline auth
+        val deviceFingerprint = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() } catch (_: Exception) { "device-${System.currentTimeMillis()}" }
+        val sharedSecret = java.security.MessageDigest.getInstance("SHA-256")
+            .digest("twin:$deviceFingerprint:$agentName".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        val server = com.mengpaw.kernel.acp.AcpServer(profile, 9876, sharedSecret)
         val transport = com.mengpaw.kernel.acp.AcpHttpTransport(server, 9876)
         server.registerTransport(transport)
 
         // 注册 TwinAcpHandler — 处理 CAPABILITY_ANNOUNCE 等孪生消息
-        val deviceId = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() } catch (_: Exception) { "device-${System.currentTimeMillis()}" }
         val syncEngine = com.mengpaw.plugin.memorytwin.TwinSyncEngine(
             serverSupplier = { server }, transportSupplier = { transport },
-            agentName = agentName, deviceId = deviceId,
+            agentName = agentName, deviceId = deviceFingerprint,
             deviceName = android.os.Build.MODEL ?: "Android")
         val handler = com.mengpaw.plugin.memorytwin.TwinAcpHandler(syncEngine)
         server.registerHandler(handler)

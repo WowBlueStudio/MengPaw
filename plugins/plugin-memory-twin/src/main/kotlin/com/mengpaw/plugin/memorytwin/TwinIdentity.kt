@@ -37,12 +37,16 @@ object TwinIdentity {
         listOf("soul.md", "profile.md").forEach { docName ->
             val file = File(DataPaths.AGENTS, "$agentName/$docName")
             if (file.exists()) {
-                val content = try { file.readText() } catch (_: Exception) { return@forEach }
-                snapshots[docName] = DocSnapshot(
-                    path = file.absolutePath,
-                    hash = sha256(content),
-                    lastModified = file.lastModified()
-                )
+                try {
+                    val content = file.readText()
+                    snapshots[docName] = DocSnapshot(
+                        path = file.absolutePath,
+                        hash = sha256(content),
+                        lastModified = file.lastModified()
+                    )
+                } catch (e: Exception) {
+                    ErrorCollector.report(e, "TwinIdentity.snapshot($docName)")
+                }
             }
         }
     }

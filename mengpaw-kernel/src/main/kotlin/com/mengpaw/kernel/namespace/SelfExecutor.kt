@@ -15,7 +15,13 @@ import com.mengpaw.kernel.error.ErrorCollector
 
 /** Shared ACP server instance — accessible from CLI and AgentEngine. */
 object AcpHolder {
-    val server = com.mengpaw.kernel.acp.AcpServer(com.mengpaw.kernel.agent.AgentProfile())
+    // SECURITY: sharedSecret is derived from a baseline key; callers should override
+    // via AcpServer(profile, port, derivedSecret) for production use with twin pairing.
+    val server = com.mengpaw.kernel.acp.AcpServer(
+        com.mengpaw.kernel.agent.AgentProfile(),
+        port = 9876,
+        sharedSecret = "acp-default-require-derive-key-for-production"
+    )
     var transport: com.mengpaw.kernel.acp.AcpHttpTransport? = null
 }
 

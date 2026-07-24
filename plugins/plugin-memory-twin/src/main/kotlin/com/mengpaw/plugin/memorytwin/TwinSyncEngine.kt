@@ -82,6 +82,21 @@ class TwinSyncEngine(
     /** Get known peers. */
     fun getPeers(): List<TwinPeerInfo> = peers.values.toList()
 
+    /** Get the ACP transport (for use by pairing engine). */
+    fun getTransport(): AcpTransport? = transportSupplier()
+
+    /**
+     * Called after pairing is established with a peer.
+     * Adds them to the peer list for sync.
+     */
+    fun onPairingEstablished(peerId: String) {
+        peers[peerId]?.let {
+            it.lastSeen = System.currentTimeMillis()
+            it.lastSyncAt = System.currentTimeMillis()
+        }
+        persistPeerInfo()
+    }
+
     /**
      * Execute a full sync cycle with a specific peer.
      * Returns the number of new entries received.
@@ -100,8 +115,8 @@ class TwinSyncEngine(
                 port = peer.port,
                 capabilities = listOf("memory-twin/0.1")
             )
-            // Register via discovery response mechanism
-            server.onDiscoverResponse(peerAgent)
+            // Register peer in ACP server so transport can reach it
+            server.registerPeer(peerAgent)
 
             // Step 1: Exchange ledger heads
             val localLatest = TwinLedgerStore.latest()
@@ -202,12 +217,23 @@ class TwinSyncEngine(
         }
     }
 
+    // ── Rate limiting for capability announces ──────────────────────
+    private val lastCapabilityAnnounce = mutableMapOf<String, Long>()
+
     /** Called when a peer announces its capabilities. */
     fun onCapabilityReceived(peerId: String, cardJson: String) {
         peers[peerId]?.let {
             it.capabilityCard = cardJson
             it.lastSeen = System.currentTimeMillis()
         }
+
+        // Rate limit: max 1 inbox entry per peer per 30 seconds
+        val lastTime = lastCapabilityAnnounce[peerId] ?: 0L
+        if (System.currentTimeMillis() - lastTime < 30_000) {
+            return // Silently drop repeated announces within 30s window
+        }
+        lastCapabilityAnnounce[peerId] = System.currentTimeMillis()
+
         // Write pairing request to inbox file — UI polls this
         val card = try { CapabilityCard.fromJson(cardJson) } catch (_: Exception) { null }
         try {
@@ -231,13 +257,13 @@ class TwinSyncEngine(
         persistPeerInfo()
     }
 
-    /** Check if a peer is already trusted (has a .trusted file). */
-    private fun isPeerTrusted(peerId: String): Boolean {
-        return java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "$peerId.trusted").exists()
-    }
-
     /** Called when a peer delegates a task. */
     fun onTwinDelegateReceived(fromPeerId: String, task: String, requirements: String) {
+        // SECURITY: Only execute tasks from trusted peers
+        if (!com.mengpaw.kernel.security.PromptFirewall.isTrusted(fromPeerId)) {
+            android.util.Log.w("MengPawTwin", "拒绝未配对设备的委派任务: $fromPeerId")
+            return
+        }
         // Write to inbox for the agent to pick up
         scope.launch {
             val inboxDir = File(DataPaths.AGENTS, "$agentName/inbox")
@@ -279,9 +305,14 @@ class TwinSyncEngine(
                 entries.forEach { entry ->
                     val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
                         .format(java.util.Date(entry.timestamp))
-                    val title = entry.content.take(60).replace("\n", " ")
-                    val tags = entry.tags.joinToString(", ")
-                    appendLine("| ${entry.id} | $date | ${entry.deviceName} | $title | $tags |")
+                    // SECURITY: Escape markdown table characters to prevent injection
+                    val title = entry.content.take(60)
+                        .replace("\n", " ")
+                        .replace("|", "\\|")
+                        .replace("\r", "")
+                    val tags = entry.tags.joinToString(", ") { it.replace("|", "\\|") }
+                    val safeDeviceName = entry.deviceName.replace("|", "\\|")
+                    appendLine("| ${entry.id} | $date | $safeDeviceName | $title | $tags |")
                 }
                 appendLine()
                 appendLine("---")
@@ -366,29 +397,27 @@ class TwinSyncEngine(
         }
     }
 
-    /** Persist peer info to disk. */
+    /** Persist peer info to disk using proper JSON serialization (prevents injection). */
     private fun persistPeerInfo() {
         try {
             val dir = File(DataPaths.TWIN_PEERS)
             if (!dir.exists()) dir.mkdirs()
             val file = File(dir, "peers.json")
-            val json = buildString {
-                appendLine("[")
-                peers.values.forEachIndexed { i, peer ->
-                    appendLine("  {")
-                    appendLine("    \"peerId\": \"${peer.peerId}\",")
-                    appendLine("    \"agentName\": \"${peer.agentName}\",")
-                    appendLine("    \"address\": \"${peer.address}\",")
-                    appendLine("    \"port\": ${peer.port},")
-                    appendLine("    \"lastAckedHash\": \"${peer.lastAckedHash ?: ""}\",")
-                    appendLine("    \"lastSeen\": ${peer.lastSeen},")
-                    appendLine("    \"lastSyncAt\": ${peer.lastSyncAt}")
-                    appendLine("  }${if (i < peers.size - 1) "," else ""}")
+            val jsonArray = org.json.JSONArray()
+            peers.values.forEach { peer ->
+                val obj = org.json.JSONObject().apply {
+                    put("peerId", peer.peerId)
+                    put("agentName", peer.agentName)
+                    put("address", peer.address)
+                    put("port", peer.port)
+                    put("lastAckedHash", peer.lastAckedHash ?: "")
+                    put("lastSeen", peer.lastSeen)
+                    put("lastSyncAt", peer.lastSyncAt)
                 }
-                appendLine("]")
+                jsonArray.put(obj)
             }
             val tmp = File(dir, "peers.tmp")
-            tmp.writeText(json)
+            tmp.writeText(jsonArray.toString(2))
             if (file.exists()) file.delete()
             tmp.renameTo(file)
         } catch (e: Exception) {

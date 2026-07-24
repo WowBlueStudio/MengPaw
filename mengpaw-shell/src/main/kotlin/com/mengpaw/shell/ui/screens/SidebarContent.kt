@@ -114,7 +114,7 @@ fun SidebarContent(
         ?.map { it.name }?.sorted()
         ?.ifEmpty { listOf("MengPaw") } ?: listOf("MengPaw") } catch (_: Exception) { listOf("MengPaw") }
 
-    Column(Modifier.fillMaxHeight().width(280.dp).padding(ArcoSpacing.lg).verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxHeight().width(280.dp).background(ThemeColors.bgPrimary).padding(ArcoSpacing.lg).verticalScroll(rememberScrollState())) {
         // ── Agents ──
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("智能体", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
@@ -540,11 +540,19 @@ fun SidebarContent(
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        val trustedDir = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
-                        trustedDir.mkdirs()
-                        java.io.File(trustedDir, "$peerId.trusted").writeText(
-                            """{"deviceId":"$peerId","deviceName":"$peerName","pairedAt":${System.currentTimeMillis()}}"""
-                        )
+                        // Check if pairing engine already has a session (new protocol)
+                        val pairingSession = com.mengpaw.plugin.memorytwin.TwinPairingEngine.getSessionForPeer(peerId)
+                        if (pairingSession != null && pairingSession.phase == com.mengpaw.plugin.memorytwin.TwinPairingEngine.PairingPhase.AWAITING_CONFIRM) {
+                            // New protocol: pairing engine will handle through verification code dialog
+                            android.util.Log.i("MengPawTwin", "使用新配对协议, 等待验证码确认")
+                        } else {
+                            // Legacy: write trust directly (will be upgraded to new protocol on next sync)
+                            val trustedDir = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
+                            trustedDir.mkdirs()
+                            java.io.File(trustedDir, "$peerId.trusted").writeText(
+                                """{"deviceId":"$peerId","deviceName":"$peerName","pairedAt":${System.currentTimeMillis()}}"""
+                            )
+                        }
                         pairFile.delete()
                     }) {
                         Text("同意", color = ThemeColors.brand)
@@ -557,6 +565,90 @@ fun SidebarContent(
                 }
             )
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // 记忆孪生 6位验证码弹窗 (双方) — 观察 TwinPairingEngine StateFlow
+    // ═══════════════════════════════════════════════════════════════════
+    val twinPairingState by com.mengpaw.plugin.memorytwin.TwinPairingEngine.pairingUiState.collectAsState()
+    var showTwinVerifyDialog by remember { mutableStateOf(false) }
+    var verifySessionId by remember { mutableStateOf("") }
+    var verifyPeerId by remember { mutableStateOf("") }
+    var verifyCode by remember { mutableStateOf("") }
+
+    // 当配对引擎状态变为 AWAITING_CONFIRM 时自动弹出验证码对话框
+    LaunchedEffect(twinPairingState) {
+        if (twinPairingState.phase == com.mengpaw.plugin.memorytwin.TwinPairingEngine.PairingPhase.AWAITING_CONFIRM &&
+            twinPairingState.verificationCode.isNotBlank() && !showTwinVerifyDialog) {
+            verifySessionId = twinPairingState.sessionId
+            verifyPeerId = twinPairingState.peerId
+            verifyCode = twinPairingState.verificationCode
+            showTwinVerifyDialog = true
+        }
+        if (twinPairingState.phase == com.mengpaw.plugin.memorytwin.TwinPairingEngine.PairingPhase.ESTABLISHED) {
+            showTwinVerifyDialog = false
+            com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext?.let { ctx ->
+                android.widget.Toast.makeText(ctx, "🧠 记忆孪生配对成功！", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    if (showTwinVerifyDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showTwinVerifyDialog = false
+                com.mengpaw.plugin.memorytwin.TwinPairingEngine.cancelPairing(verifySessionId)
+            },
+            icon = { Icon(Icons.Outlined.Security, null, tint = ThemeColors.brand) },
+            title = { Text("验证配对码", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "请确认两台设备显示相同的 6 位验证码",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ThemeColors.textSecondary
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        verifyCode,
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        color = ThemeColors.brand,
+                        letterSpacing = 8.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "配对设备: ${verifyPeerId.take(16)}...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ThemeColors.textSecondary
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "⚠️ 如验证码不一致，说明存在中间人攻击，请立即取消",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ArcoColors.Red6,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTwinVerifyDialog = false
+                    com.mengpaw.plugin.memorytwin.TwinPairingEngine.confirmPairing(verifySessionId)
+                }) {
+                    Text("一致，确认配对", color = ThemeColors.brand)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showTwinVerifyDialog = false
+                    com.mengpaw.plugin.memorytwin.TwinPairingEngine.cancelPairing(verifySessionId)
+                }) {
+                    Text("取消", color = ArcoColors.Red6)
+                }
+            }
+        )
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1279,27 +1371,23 @@ private fun FrameworkCardDialog(
                     TextButton(onClick = {
                         CoroutineScope(Dispatchers.IO).launch {
                             try {
-                                val profile = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.twinProfile ?: return@launch
-                                val deviceId = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() } catch (_: Exception) { "" }
                                 val ctx = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext ?: return@launch
+                                val transport = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpTransport ?: return@launch
+                                val deviceId = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() } catch (_: Exception) { "device-${System.currentTimeMillis()}" }
+                                val myFingerprint = deviceId
                                 val collector = com.mengpaw.plugin.memorytwin.TwinCapabilityCollector(ctx, deviceId, android.os.Build.MODEL ?: "")
                                 val card = collector.collect(null, emptyList())
-                                val msg = com.mengpaw.kernel.acp.AcpMessage.capabilityAnnounce(profile.agentId, frameworkName, card.toJson())
-                                val escapedPayload = org.json.JSONObject.quote(msg.payload)
-                                val json = """{"from":"${msg.from}","to":"${msg.to}","type":"${msg.type}","payload":$escapedPayload,"ttl":${msg.ttl}}"""
-                                // 直接 HTTP POST 到对方 ACP 端口 (peer 地址来自 mDNS)
-                                val addr = peer?.address?.split(":")?.firstOrNull() ?: return@launch
-                                val port = peer?.port ?: 9876
-                                val url = java.net.URL("http://$addr:$port/acp")
-                                val conn = url.openConnection() as java.net.HttpURLConnection
-                                conn.requestMethod = "POST"
-                                conn.setRequestProperty("Content-Type", "application/json")
-                                conn.doOutput = true; conn.connectTimeout = 3000; conn.readTimeout = 3000
-                                conn.outputStream.write(json.toByteArray())
-                                val code = conn.responseCode; conn.disconnect()
-                                android.util.Log.i("MengPawTwin", "配对请求 → $frameworkName @ $addr:$port → HTTP $code")
+                                // Use the new pairing engine — sends CAPABILITY_ANNOUNCE with nonce
+                                val result = com.mengpaw.plugin.memorytwin.TwinPairingEngine.initiatePairing(
+                                    peerId = frameworkName,
+                                    myDeviceId = deviceId,
+                                    myFingerprint = myFingerprint,
+                                    capabilityCard = card.toJson(),
+                                    transport = transport
+                                )
+                                android.util.Log.i("MengPawTwin", "配对发起: session=${result.sessionId}")
                             } catch (e: Exception) {
-                                android.util.Log.e("MengPawTwin", "发送失败: ${e.message}", e)
+                                android.util.Log.e("MengPawTwin", "配对失败: ${e.message}", e)
                             }
                         }
                         onDismiss()
