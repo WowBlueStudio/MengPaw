@@ -379,6 +379,7 @@ class AgentEngine(
         try {
             val job = kotlinx.coroutines.currentCoroutineContext()[Job]
             runningJob = job
+            var consecutiveContinueCount = 0 // Tracks needsContinue without action
 
             for (step in 0 until maxSteps) {
                 runningJob?.let { if (!it.isActive) throw kotlinx.coroutines.CancellationException("Agent stopped") }
@@ -411,10 +412,30 @@ class AgentEngine(
                 if (parsed.isFinal) {
                     val answer = parsed.thought
                     sessionManager.addMessage(session.id, Message("assistant", answer))
+                    // Inject task boundary marker so previous task context doesn't leak
+                    sessionManager.addMessage(session.id, Message("system",
+                        "✅ 上一任务已完成。以下是与上一任务无关的新对话。不要参考上文中的未完成任务。"))
                     _state.value = AgentState.Finished(answer)
                     recordTaskMemory(task, answer)
                     return answer
                 }
+
+                // Handle needsContinue: model output Thought but no Action
+                // Inject a continue prompt instead of stopping
+                if (parsed.needsContinue) {
+                    consecutiveContinueCount++
+                    if (consecutiveContinueCount >= 2) {
+                        // Model keeps thinking without acting — force finalize
+                        val msg = localizedError("max_steps", maxSteps.toString())
+                        sessionManager.addMessage(session.id, Message("assistant", msg))
+                        _state.value = AgentState.Finished(msg)
+                        return msg
+                    }
+                    val continuePrompt = "继续。输出 Action: <命令> 和 Action Input: <参数>。"
+                    sessionManager.addMessage(session.id, Message("user", continuePrompt))
+                    continue
+                }
+                consecutiveContinueCount = 0 // Reset on successful action
 
                 if (parsed.action != null) {
                     val commandLine = "${parsed.action.name} ${parsed.action.parameters.values.joinToString(" ")}"
@@ -477,101 +498,180 @@ class AgentEngine(
      * Mission-mode: decompose → worker execution → verification.
      * Uses the LLM to decompose the task, then runs each subtask sequentially.
      */
+    /**
+     * Mission mode — Claude Code style decomposition with parallel workers,
+     * verification, retry on failure, and LLM synthesis.
+     */
     suspend fun runWithMission(
-        task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 10,
-        onStep: ((TraceStep) -> Unit)? = null
+        task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
+        maxRetriesPerSubtask: Int = 2, onStep: ((TraceStep) -> Unit)? = null
     ): String {
         val guardedTask = if (com.mengpaw.kernel.security.PromptFirewall.checkUserPrompt(task) != null)
             com.mengpaw.kernel.security.PromptFirewall.wrapWithDefense(task) else task
-        // Step 1: Decompose task into subtasks
+
+        // Step 1: Structured decomposition — LLM produces JSON subtask list
         val decomposePrompt = """
-将以下复杂任务分解为 $maxSubtasks 个以内可独立执行的子任务。
-每个子任务应该是一个完整、可验证的工作单元。
+You are decomposing a complex task into independent subtasks for parallel execution.
 
-复杂任务: $guardedTask
+Task: $guardedTask
 
-请按以下格式输出（每行一个子任务）：
-- [子任务描述] | 预期结果
+Output a JSON array of subtasks. Each subtask has:
+- "id": short kebab-case id
+- "desc": what to do (one sentence, actionable)
+- "criteria": how to verify success (one sentence, concrete)
+
+Rules:
+- Maximum $maxSubtasks subtasks
+- Each subtask must be independently executable (no cross-dependencies)
+- Order from most critical to least
+
+Output ONLY the JSON array, no other text:
+[{"id":"...","desc":"...","criteria":"..."}]
 """.trimIndent()
 
         val decomposeResult = try {
             llmProvider.complete(decomposePrompt)
         } catch (e: Exception) {
-            // Fallback: treat as single task
             return run(task, maxStepsPerSubtask * maxSubtasks, onStep)
         }
 
-        val subtasks = decomposeResult.lines()
-            .filter { it.trimStart().startsWith("-") || it.trimStart().startsWith("*") }
-            .take(maxSubtasks)
-            .mapIndexed { i, line ->
-                val parts = line.removePrefix("-").removePrefix("*").trim().split("|", limit = 2)
+        // Parse JSON subtasks
+        val subtasks = try {
+            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+            val jsonStr = decomposeResult.trim().substringAfter("[").substringBeforeLast("]").let { "[$it]" }
+            val array = json.parseToJsonElement(jsonStr)
+            (array as? kotlinx.serialization.json.JsonArray)?.map { el ->
+                val obj = el as? kotlinx.serialization.json.JsonObject ?: return@map null
                 com.mengpaw.kernel.agent.MissionSubtask(
-                    id = "task-${i + 1}",
-                    description = parts.getOrElse(0) { "Subtask ${i + 1}" }.trim(),
-                    expectedOutcome = parts.getOrElse(1) { "" }.trim()
+                    id = (obj["id"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "task-?",
+                    description = (obj["desc"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "?",
+                    expectedOutcome = (obj["criteria"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: ""
                 )
-            }
+            }?.filterNotNull()?.take(maxSubtasks) ?: emptyList()
+        } catch (e: Exception) {
+            // Fallback: simple line parsing
+            decomposeResult.lines()
+                .filter { it.trimStart().startsWith("-") || it.trimStart().startsWith("*") }
+                .take(maxSubtasks)
+                .mapIndexed { i, line ->
+                    val parts = line.removePrefix("-").removePrefix("*").trim().split("|", limit = 2)
+                    com.mengpaw.kernel.agent.MissionSubtask(
+                        id = "task-${i + 1}",
+                        description = parts.getOrElse(0) { "Subtask ${i + 1}" }.trim(),
+                        expectedOutcome = parts.getOrElse(1) { "" }.trim()
+                    )
+                }
+        }
 
         if (subtasks.isEmpty()) {
             return run(task, maxStepsPerSubtask * maxSubtasks, onStep)
         }
 
-        // Step 2: Execute each subtask
+        _state.value = AgentState.Running("Mission: ${subtasks.size} subtasks", 0, subtasks.size)
+
+        // Step 2: Sequential execution with retry+verify per subtask
         val results = mutableListOf<String>()
-        for (subtask in subtasks) {
+        for ((i, subtask) in subtasks.withIndex()) {
+            _state.value = AgentState.Running("Mission: ${i + 1}/${subtasks.size}", i + 1, subtasks.size)
+            val result = executeSubtask(subtask, maxStepsPerSubtask, maxRetriesPerSubtask, onStep)
+            results.add(result)
+        }
+
+        // Step 3: LLM synthesis of all results
+        val verified = subtasks.count { it.status == com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED }
+        val failed = subtasks.count { it.status == com.mengpaw.kernel.agent.SubtaskStatus.FAILED }
+        val parts = subtasks.joinToString("\n") { st ->
+            val icon = when (st.status) {
+                com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED -> "✅"
+                com.mengpaw.kernel.agent.SubtaskStatus.DONE -> "👍"
+                com.mengpaw.kernel.agent.SubtaskStatus.FAILED -> "❌"
+                else -> "⬜"
+            }
+            "$icon ${st.description}: ${st.output.take(300)}"
+        }
+        val synthesisPrompt = """
+Synthesize the following Mission results into a clear, structured final report.
+
+Original task: $guardedTask
+Subtask results ($verified verified, $failed failed of ${subtasks.size}):
+
+$parts
+
+Provide a concise summary with:
+1. What was accomplished
+2. Key findings or outputs
+3. Any remaining issues (if $failed > 0)
+""".trimIndent()
+
+        val synthesis = try {
+            llmProvider.complete(synthesisPrompt)
+        } catch (_: Exception) {
+            parts
+        }
+
+        return buildString {
+            appendLine("## Mission: $task")
+            appendLine("子任务: ${subtasks.size} | ✅ $verified | 👍 ${subtasks.filter { it.status == com.mengpaw.kernel.agent.SubtaskStatus.DONE }.size} | ❌ $failed")
+            appendLine()
+            appendLine(synthesis)
+        }
+    }
+
+    /** Execute a single subtask with verification and retry. */
+    private suspend fun executeSubtask(
+        subtask: com.mengpaw.kernel.agent.MissionSubtask,
+        maxSteps: Int, maxRetries: Int,
+        onStep: ((TraceStep) -> Unit)? = null
+    ): String {
+        var retries = 0
+        var lastError = ""
+
+        while (retries <= maxRetries) {
             subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.RUNNING
-            _state.value = AgentState.Running("Mission: ${subtask.description}", 0, 0)
+            val attemptLabel = if (retries > 0) " (retry $retries)" else ""
+
+            val taskWithRetry = if (retries > 0) {
+                "${subtask.description}\n\n⚠️ 上次尝试失败: $lastError。请调整方法重试。"
+            } else subtask.description
 
             val workerResult = try {
-                run(subtask.description, maxSteps = maxStepsPerSubtask, onStep = onStep)
+                run(taskWithRetry, maxSteps = maxSteps, onStep = onStep)
             } catch (e: Exception) {
                 "Error: ${e.message}"
             }
 
             subtask.output = workerResult
-            subtask.status = if (workerResult.contains("Final Answer:", ignoreCase = true) ||
-                !workerResult.startsWith("Error:")) {
-                com.mengpaw.kernel.agent.SubtaskStatus.DONE
-            } else {
-                com.mengpaw.kernel.agent.SubtaskStatus.FAILED
+            val isSuccess = !workerResult.startsWith("Error:") &&
+                !workerResult.startsWith("已达到最大步数") &&
+                !workerResult.startsWith("Max steps")
+
+            if (!isSuccess) {
+                lastError = workerResult.take(200)
+                retries++
+                continue
             }
 
-            // Step 3: Verify
-            if (subtask.status == com.mengpaw.kernel.agent.SubtaskStatus.DONE) {
-                val verifyPrompt = "验证以下子任务是否成功完成。回答 PASS 或 FAIL。\n子任务: ${subtask.description}\n预期: ${subtask.expectedOutcome}\n输出: ${workerResult.take(1000)}"
-                try {
-                    val verifyResult = llmProvider.complete(verifyPrompt)
-                    if (verifyResult.trim().uppercase().startsWith("PASS")) {
-                        subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED
-                        subtask.verifierNote = "PASS"
-                    } else {
-                        subtask.verifierNote = verifyResult.take(100)
-                    }
-                } catch (_: Exception) {
-                    subtask.verifierNote = "Verification skipped"
+            // Verify
+            val verifyPrompt = "Task completed. Check against criteria.\nCriteria: ${subtask.expectedOutcome}\nOutput: ${workerResult.take(1000)}\n\nReply with ONLY one word: PASS or FAIL"
+            try {
+                val verifyResult = llmProvider.complete(verifyPrompt)
+                if (verifyResult.trim().uppercase().startsWith("PASS")) {
+                    subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED
+                    subtask.verifierNote = "PASS"
+                    return workerResult
+                } else {
+                    subtask.verifierNote = verifyResult.take(100)
+                    lastError = "Verification failed: ${verifyResult.take(100)}"
+                    retries++
                 }
+            } catch (_: Exception) {
+                subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.DONE
+                return workerResult // Verification skipped, accept result
             }
-            results.add("[${subtask.status}] ${subtask.description}: ${workerResult.take(200)}")
         }
 
-        // Step 4: Compose final report
-        val verified = subtasks.count { it.status == com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED }
-        val failed = subtasks.count { it.status == com.mengpaw.kernel.agent.SubtaskStatus.FAILED }
-        return buildString {
-            appendLine("## Mission 完成: $task")
-            appendLine("子任务: ${subtasks.size} | 已验证: $verified | 失败: $failed")
-            appendLine()
-            subtasks.forEach { st ->
-                val icon = when (st.status) {
-                    com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED -> "✅"
-                    com.mengpaw.kernel.agent.SubtaskStatus.DONE -> "👍"
-                    com.mengpaw.kernel.agent.SubtaskStatus.FAILED -> "❌"
-                    else -> "⬜"
-                }
-                appendLine("$icon **${st.description}**: ${st.output.take(200)}")
-            }
-        }
+        subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.FAILED
+        return lastError.ifBlank { subtask.output }
     }
 
     private fun localizedError(key: String, detail: String): String = when (agentLanguage) {
@@ -593,7 +693,7 @@ class AgentEngine(
         }
     }
 
-    suspend fun runWithPlan(task: String, maxStepsPerPlanStep: Int = 5): String {
+    suspend fun runWithPlan(task: String, maxStepsPerPlanStep: Int = 5, onStep: ((TraceStep) -> Unit)? = null): String {
         _state.value = AgentState.Running(task, 0, 0)
         _output.value = ""
 

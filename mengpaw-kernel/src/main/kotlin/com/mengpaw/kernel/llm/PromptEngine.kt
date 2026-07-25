@@ -12,7 +12,9 @@ import kotlinx.serialization.json.*
 data class ReActResponse(
     val thought: String,
     val action: ToolCall?,
-    val isFinal: Boolean
+    val isFinal: Boolean,
+    /** Model output Thought but no Action — loop should inject a continue prompt. */
+    val needsContinue: Boolean = false
 )
 
 data class ToolCall(
@@ -286,11 +288,13 @@ class PromptEngine {
 
             ### 斜杠命令（用户点输入框 + → 执行模式区选择。MengPaw 特有功能，没有 Normal/Deep/Dream 模式）
             消息带标签时你自动切换执行策略：
-            - **/Mission** — 复杂任务拆解为子任务，Worker 并行执行，Verifier 验证
-            - **/Research** — 多轮搜索+交叉验证+来源标注，输出结构化报告
-            - **/Translate** — 翻译输入内容为目标语言
+            - **/Mission** — 复杂任务→LLM拆解→Worker并行执行→Verifier验证→失败重试→LLM综合报告
+            - **/Goal** — 单目标驱动→RubricGate自动评估「目标完成了吗?」→YES结束/NO继续
+            - **/Plan** — LLM先分解3-7步计划→每步独立mini ReAct执行→逐步标记完成→汇总
+            - **/Research** — 多轮搜索(tavily/web)→交叉验证每条信息→来源标注→结构化综合报告
+            - **/Translate** — 调用翻译中间件，直接完成翻译（不经过ReAct循环）
             - **/Silent** — 后台静默执行，不阻塞对话，完成后以系统消息推送结果
-            用户问「有什么模式」时：列出这四种，说明怎么在输入框+号里选。
+            用户问「有什么模式」时：列出全部，说明怎么在输入框+号里选。
 
             ### 记忆系统 (三轨制)
             三层记忆，防止上下文膨胀导致你降智。每层都有完整的增删改查。
@@ -398,7 +402,7 @@ class PromptEngine {
 
             使用中文思考和输出。
 
-            **注意**：每次任务有步数限制，请在接近限制时主动给出当前最佳答案，避免因步数耗尽而中断。
+            **关键**：每一步必须输出完整的 Thought → Action → Action Input 序列。不要只输出 Thought 就停止。只有在任务真正完成时才输出 Final Answer。
         """.trimIndent()
 
         val ENGLISH_PROMPT = """
@@ -428,11 +432,13 @@ class PromptEngine {
 
             ### Slash Commands (user taps + → Execution Mode. MengPaw-specific, NOT Normal/Deep/Dream)
             Tagged messages auto-switch your execution strategy:
-            - **/Mission** — Decompose complex tasks→subtasks→parallel Workers→Verifier
-            - **/Research** — Multi-round search+cross-validation+structured report
-            - **/Translate** — Translate input to target language
+            - **/Mission** — Complex task→LLM decompose→parallel Workers→Verifier→retry on fail→LLM synthesis
+            - **/Goal** — Single goal→RubricGate auto-evaluates "goal completed?"→YES stop/NO continue
+            - **/Plan** — LLM plans 3-7 steps first→execute each as mini ReAct→mark done→synthesize
+            - **/Research** — Multi-round search (tavily/web)→cross-validate→source annotations→structured report
+            - **/Translate** — Uses translate middleware, direct completion (skips ReAct loop)
             - **/Silent** — Background silent execution, push result when done
-            When asked "what modes": list these four, explain + button.
+            When asked "what modes": list all of them, explain + button.
 
             ### Memory System (three-tier)
             Three tiers to prevent context bloat. Each tier has full CRUD.
@@ -540,7 +546,7 @@ class PromptEngine {
 
             Think and respond in English.
 
-            **Note**: You have a limited number of steps per task. Provide your best answer proactively when approaching the limit to avoid interruption.
+            **Critical**: Every step MUST output the complete Thought → Action → Action Input sequence. Never stop after just a Thought. Only output Final Answer when the task is truly complete.
         """.trimIndent()
     }
 
@@ -597,19 +603,18 @@ class PromptEngine {
         }
 
         // ── Rule 3: No "Action:" and no "Final Answer:" → natural language response ──
-        // This happens with non-reasoning models (e.g. DeepSeek-Chat) that don't follow
-        // the ReAct format strictly. Treat the entire response as a final answer.
-        // Only extract thought if explicitly marked with "Thought:".
+        // Key distinction:
+        //   Explicit "Thought:" without "Action:" → model mid-reasoning → needsContinue
+        //   Pure natural language (no markers at all) → model giving answer → isFinal
         if (finalLocs.isEmpty()) {
             val thought = extractThought(normalized)
-            // If there's an explicit Thought but no Action/Final, the model might be mid-reasoning.
-            // Check if the thought marker was explicitly provided.
             val hasExplicitThought = Regex("(?i)thought[:：]").containsMatchIn(normalized)
             if (hasExplicitThought && thought.length > normalized.length / 2) {
-                // Model is thinking but didn't produce an action — treat thought as partial answer
-                return ReActResponse(thought, null, isFinal = true)
+                // Model output explicit Thought but no Action — ask it to continue
+                return ReActResponse(thought, null, isFinal = false, needsContinue = true)
             }
-            // Natural language response without ReAct markers → final answer
+            // Natural language without any ReAct markers — this IS the final answer
+            // (Regardless of length. Models often give detailed answers without Final Answer: prefix)
             return ReActResponse(normalized, null, isFinal = true)
         }
 
