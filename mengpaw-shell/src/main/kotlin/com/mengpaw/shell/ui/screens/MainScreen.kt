@@ -475,6 +475,8 @@ fun MainScreen(
                             val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
                             val hint = when (modeTag?.mode) {
                                 ExecutionMode.MISSION -> strings.placeholderMission
+                                ExecutionMode.GOAL -> "描述目标，Agent 自动评估完成度..."
+                                ExecutionMode.PLAN -> "描述任务，Agent 先分解计划再逐步执行..."
                                 ExecutionMode.RESEARCH -> strings.placeholderResearch
                                 ExecutionMode.TRANSLATE -> strings.placeholderTranslate
                                 ExecutionMode.SILENT -> strings.placeholderSilent
@@ -645,7 +647,7 @@ fun MainScreen(
                     ExecutionMode.entries.find { it.name.lowercase() == id }
                 }.ifEmpty { ExecutionMode.entries.toList() }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    orderedModes.take(4).forEach { mode ->
+                    orderedModes.take(6).forEach { mode ->
                         val isActive = activeTags.any { it is InputTag.Mode && it.mode == mode }
                         ModeItem(mode = mode, isActive = isActive, onClick = {
                             showExpandSheet = false
@@ -704,6 +706,8 @@ private fun ExpandItem(icon: androidx.compose.ui.graphics.vector.ImageVector, la
 private fun ModeItem(mode: ExecutionMode, isActive: Boolean, onClick: () -> Unit) {
     val icon = when (mode) {
         ExecutionMode.MISSION -> Icons.Outlined.AccountTree
+        ExecutionMode.GOAL -> Icons.Outlined.FlagCircle
+        ExecutionMode.PLAN -> Icons.Outlined.Checklist
         ExecutionMode.RESEARCH -> Icons.Outlined.TravelExplore
         ExecutionMode.TRANSLATE -> Icons.Outlined.Translate
         ExecutionMode.SILENT -> Icons.Outlined.NotificationsOff

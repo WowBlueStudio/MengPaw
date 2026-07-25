@@ -604,6 +604,8 @@ class AgentViewModel : ViewModel() {
                 current.removeAll { it is InputTag.Mode }
                 when (tag.mode) {
                     ExecutionMode.MISSION -> loopMode = LoopMode.MISSION
+                    ExecutionMode.GOAL -> loopMode = LoopMode.GOAL
+                    ExecutionMode.PLAN -> {} // Plan uses explicit dispatch, doesn't change loopMode
                     else -> {} // RESEARCH/TRANSLATE/SILENT 不改变 loopMode
                 }
             }
@@ -658,9 +660,11 @@ class AgentViewModel : ViewModel() {
             var runningMsgIndex = -1     // fast‑path index; verified against ref before use
             var runningMsgRef: ChatMessageUi.AgentWithTrace? = null // identity guard for concurrent insertions
             try {
-                // /Mission: 临时覆盖 loopMode
+                // /Mission /Goal: 临时覆盖 loopMode
                 if (executionMode == ExecutionMode.MISSION) {
                     loopMode = LoopMode.MISSION
+                } else if (executionMode == ExecutionMode.GOAL) {
+                    loopMode = LoopMode.GOAL
                 }
 
                 // /Dream: 后台执行 — 直接 LLM 调用，不触发主引擎状态变化
@@ -721,19 +725,20 @@ class AgentViewModel : ViewModel() {
                 }
                 val recallPrefix = if (recalledMemory.isNotBlank()) "$recalledMemory\n\n---\n\n" else ""
 
-                // Build conversation history context (exclude system messages + current task)
+                // Build conversation history context — summarize, don't replay commands
                 val historyMsgs = session.messages.value.filter {
                     it !is ChatMessageUi.System && it !is ChatMessageUi.AgentWithTrace
                 }
                 val contextPrefix = if (historyMsgs.size > 1) {
-                    // Inject previous conversation so Agent sees context
-                    "## 先前对话\n" + historyMsgs.dropLast(1).joinToString("\n") { msg ->
-                        when (msg) {
-                            is ChatMessageUi.User -> "用户: ${msg.content.take(500)}"
-                            is ChatMessageUi.Agent -> "助手: ${msg.content.take(500)}"
-                            else -> ""
-                        }
-                    }.take(3000) + "\n\n---\n\n新任务: $actualTask"
+                    // Summarize previous tasks as topics only — NOT raw command transcripts
+                    // This prevents LLM from re-executing old commands when processing new tasks
+                    val prevTopics = historyMsgs.dropLast(1)
+                        .filterIsInstance<ChatMessageUi.User>()
+                        .map { it.content.take(60) }
+                        .joinToString(" → ")
+                    "## 先前已完成的任务: $prevTopics\n" +
+                    "⚠️ 以上任务已完成。旧任务的命令和结果仅供参考，不要重复执行。只处理下面的新任务。\n\n" +
+                    "---\n\n新任务: $actualTask"
                 } else actualTask
 
                 val traces = mutableListOf<AgentTrace>()
@@ -780,10 +785,12 @@ class AgentViewModel : ViewModel() {
 
                 // Execute via the appropriate engine mode
                 val finalTask = recallPrefix + contextPrefix
-                val result = when (loopMode) {
-                    LoopMode.GOAL -> session.engine.run(task = finalTask, maxSteps = maxSteps, onStep = onStep)
-                    LoopMode.MISSION -> session.engine.runWithMission(task = finalTask, onStep = onStep)
-                    LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = finalTask, onStep = onStep)
+                // Mode dispatch: map slash command + loopMode to the correct engine method
+                val result = when {
+                    executionMode == ExecutionMode.PLAN -> session.engine.runWithPlan(task = finalTask, onStep = onStep)
+                    loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
+                    loopMode == LoopMode.MISSION || loopMode == LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = finalTask, onStep = onStep)
+                    else -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
                 }
 
                 // Translate result back to Chinese for US models
@@ -1467,6 +1474,8 @@ sealed class ChatMessageUi {
 /** 执行模式 — 用户通过 /命令 主动触发，非自动检测。 */
 enum class ExecutionMode(val label: String, val prefix: String) {
     MISSION("Mission", "/Mission"),
+    GOAL("Goal", "/Goal"),
+    PLAN("Plan", "/Plan"),
     RESEARCH("Research", "/Research"),
     TRANSLATE("Translate", "/Translate"),
     SILENT("Silent", "/Silent");

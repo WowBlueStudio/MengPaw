@@ -57,13 +57,14 @@ class PromptEngineTest {
     }
 
     @Test
-    fun `no action returns null action treated as final`() {
-        // FIX: Non-ReAct natural language responses (e.g. from DeepSeek-Chat)
-        // are now treated as final answers instead of causing the loop to spin.
+    fun `thought without action triggers needsContinue not final`() {
+        // v0.15.0: Thought-only no longer treated as final answer.
+        // Instead triggers needsContinue → AgentEngine injects continue prompt.
         val input = "Thought: just thinking"
         val result = engine.parse(input)
         assertNull(result.action)
-        assertTrue(result.isFinal) // No Action + No Final Answer → treated as final
+        assertFalse("Thought-only must NOT be final", result.isFinal)
+        assertTrue("Thought-only must trigger continue prompt", result.needsContinue)
     }
 
     @Test
