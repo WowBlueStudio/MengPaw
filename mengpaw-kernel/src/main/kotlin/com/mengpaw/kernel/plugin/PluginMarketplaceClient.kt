@@ -97,10 +97,17 @@ class PluginMarketplaceClient(
     private val client = HttpClient(OkHttp) {
         engine {
             config {
-                connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                // Gitee in China can be slow — 20s connect, generous read/write
+                connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
                 writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                callTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                callTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+                // Connection pooling: reuse TLS sessions, reduce handshake overhead
+                connectionPool(
+                    okhttp3.ConnectionPool(5, 5, java.util.concurrent.TimeUnit.MINUTES)
+                )
+                // Retry on connection failures (OkHttp default: 0 for connection, we want 1 retry)
+                retryOnConnectionFailure(true)
             }
         }
     }
