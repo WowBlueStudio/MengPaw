@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.13.0 | **更新**: 2026-07-24 | **架构**: 微内核 + AgentRuntime + 24 插件(含记忆孪生) + 框架协议 + 侧边栏交互 + 智能体/框架名片 + 提示词防火墙 + 短码配对 + commonmark AST 引擎
+> **版本**: 0.15.0 | **更新**: 2026-07-25 | **架构**: 微内核 + AgentRuntime + 25 插件(含 Root/记忆孪生 v0.2) + 三轨记忆 + 悬浮窗/日历 + Termux 桥接 + Android Skill + 完整文件管理 + 提示词安全/行为/工作三层 + self.tools 统一入口
 
 ---
 
@@ -20,7 +20,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 | 独立浏览器 | `mengpaw-browser` (v0.4.0)，Intent 互通，22 条浏览器操控命令 |
 | 多模型 | 12 LLM Provider — OpenAI / DeepSeek / Kimi / GLM / Qwen / Grok / 火山引擎 / OpenModel / Self-Hosted / 自定义 |
 | 插件市场 | GitHub Pages 托管 `plugins.json`，ETag 缓存，SHA256 校验 |
-| 记忆孪生 | v0.12.12 新增 — 跨设备 Agent 记忆自动同步 (plugin-memory-twin) |
+| 记忆孪生 | v0.12.12 新增, v0.15.0 重构 — 跨设备 Agent 记忆同步 + 心跳保活 + QoS 自适应 + 手动 IP 发现 (plugin-memory-twin v0.2) |
 | Agent 自我升级 | `plugin.marketplace` → `plugin.search` → `plugin.install` → 命令即可用 |
 | 内置 Loop 模式 | Goal / Mission / Mission+ 三种模式直接内置在 AgentEngine，含 RubricGate 自动完成评估 |
 | Agent 推送 | `notify.message` / `notify.banner` — Agent 主动向用户推送消息和横幅 |
@@ -311,6 +311,97 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 
 > ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载
 
+### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.2)
+
+11 文件, ~3000 行。基于 ACP 协议 + 哈希链账本 + 短码配对 + 心跳保活 + QoS 自适应。
+
+#### 组件
+
+| 文件 | 职责 |
+|------|------|
+| `MemoryTwinPlugin.kt` | 插件入口, 24 条 `twin.*` CLI 命令注册 |
+| `TwinLedger.kt` / `TwinLedgerStore.kt` | SHA-256 哈希链账本数据模型和持久化 (JSON Lines) |
+| `TwinSyncEngine.kt` | 同步状态机 (HEAD→PULL→BATCH→ACK) + 心跳保活 + QoS 自适应 |
+| `TwinAcpHandler.kt` | `AcpHandler` 实现 — 处理 9 种孪生 ACP 消息类型 |
+| `TwinDiscovery.kt` | Android NSD (mDNS) 局域网自动发现 |
+| `TwinPairingEngine.kt` | 短码验证配对协议 (4 步: ANNOUNCE→CHALLENGE→VERIFY→CONFIRM) |
+| `TwinCapability.kt` | `CapabilityCard` + `TwinCapabilityCollector` — 设备能力采集与协议版本协商 |
+| `TwinRouter.kt` | 能力感知任务路由 |
+| `TwinIdentity.kt` | soul/profile 身份文档同步 |
+| `TwinDreamSync.kt` | 梦境事件账本集成 |
+
+#### 配对流程 (UI 隐藏, 5 连击触发)
+
+```
+侧边栏 MengPaw 框架图标 → 5 连击
+  → 确认弹窗 (显示目标设备名)
+  → 激活孪生 (如未激活) + 轮询等待 ACP 就绪 (最多 5s)
+  → TwinPairingEngine.initiatePairing() → CAPABILITY_ANNOUNCE + nonce
+  → 双方各自显示 6 位验证码 → 用户比对
+  → PAIR_CONFIRM → 派生 AES-256 密钥 → 信任持久化
+  → 自动注入配对指引到工作区 inbox
+```
+
+#### 同步协议
+
+```
+设备 A                          设备 B
+  │  LEDGER_HEAD ──────────────→ │  交换账本头部
+  │ ←────────────── LEDGER_HEAD │
+  │  LEDGER_PULL ──────────────→ │  请求缺失条目
+  │ ←──────────── LEDGER_BATCH  │  批量返回 (含跨链验证)
+  │  LEDGER_ACK ───────────────→ │  确认收妥
+  │                               │
+  │  [每 30s 双向 HEARTBEAT]      │  心跳保活, 90s 无响应→离线
+```
+
+#### QoS 自适应
+
+| 网络类型 | 同步间隔 | 内容 |
+|---------|:--:|------|
+| WiFi / Ethernet | 60s | 全量: 账本 + 身份 + 梦境 |
+| 移动网络 (非计费) | 300s | 仅 MEMORY 类型条目 |
+| 按流量计费 | 暂停 | 仅 `twin.sync` 手动触发 |
+
+#### 发现机制 (双通道)
+
+| 通道 | 方式 | 适用场景 |
+|------|------|---------|
+| mDNS 自动发现 | `TwinDiscovery` — `_mengpaw-twin._tcp` | 同 WiFi, 多播可达 |
+| 手动 IP 添加 | `twin.peer.add <ip> [port] [name]` | 多播隔离, 跨网段, 不同频段 |
+
+#### 核心 CLI 命令 (24 条)
+
+```bash
+# 生命周期
+twin.start / twin.stop / twin.status
+
+# 节点管理
+twin.peers / twin.peer.info <id> / twin.peer.add <ip> [port] [name]
+
+# 配对 (CLI 不可执行, 引导至 5 连击)
+twin.pair / twin.unpair
+
+# 同步
+twin.sync [peer] / twin.sync.auto on|off / twin.sync.qos wifi|mobile|metered
+
+# 能力与路由
+twin.capabilities [--self|--all|<peer>] / twin.delegate <peer> <task> / twin.route <task>
+
+# 账本
+twin.ledger.show [limit] / twin.ledger.verify / twin.ledger.diff <peer> / twin.ledger.stats
+
+# 身份文档
+twin.identity.push / twin.identity.pull [peer] / twin.identity.diff <peer> / twin.identity.merge <peer>
+
+# 梦境
+twin.dream.sync / twin.dream.history [limit]
+```
+
+#### 系统提示词集成
+
+中英文系统提示词含完整的记忆孪生使用指南 (11 项): 功能概述 / 状态检查 / 节点发现 / 手动同步 / 任务委派 / 能力对比 / 路由推荐 / 账本审计 / 配对方式 / 启动前提 / 解绑方式。
+
 ### 3.6 构建配置
 
 | 配置 | Shell | Browser | Core | Kernel |
@@ -580,15 +671,27 @@ Fail-secure 完整性守护：启动时校验 APK 签名，检测篡改→安全
 - **文件沙箱**：canonicalFile + workDir 限制 + 符号链接检测 + 50MB 读上限
 - **`plugin.audit`**：发布前 7 类安全检查
 
-### 6.7 记忆孪生安全 (v0.12.12+)
+### 6.7 记忆孪生安全 (v0.12.12+, v0.15.0 重构)
 
+#### 配对安全
 - **短码配对协议**: 类似蓝牙配对, 双方独立计算 6 位验证码 (SHA-256(nonceA|nonceB) → 6 digits), 用户肉眼比对防 MITM
 - **AES-256 加密通道**: 配对后通过 `AcpCrypto.deriveKey(fpA, fpB)` 派生共享密钥, 后续所有 ACP 消息加密传输
 - **信任持久化**: `PromptFirewall.trustWithKey()` → `.trusted` + `.key` 文件, 重启自动恢复
+- **配对意向指向性**: 5 连击特定框架图标 = 对特定设备的显式配对意图, 确认弹窗含目标设备名
+
+#### 数据安全
 - **账本防盗**: 未配对设备无法访问 `LEDGER_HEAD/PULL/BATCH/ACK` (AcpServer 鉴权)
 - **跨链验证**: 接收账本条目前检查 `entries[0].prevHash == localLatest.hash`
+- **原子写入**: 所有账本、梦境、身份文档使用 `tmp → rename` 原子写入, 防崩溃损坏
+- **内容去重**: 相同哈希的条目自动跳过, 幂等安全
+
+#### 运行时安全
 - **频率限制**: CAPABILITY_ANNOUNCE 同 peerId 30 秒内最多 1 次弹窗
 - **委派鉴权**: `TWIN_DELEGATE` 需已配对信任才执行
+- **解绑清理**: UI 解除孪生时完整清理 `.trusted` / `.key` 文件 + FrameworkPeerStore 记录
+- **心跳保活**: 30 秒间隔双向 heartbeat → 90 秒无响应标记离线 → 自动停止向离线节点同步
+- **QoS 自适应**: WiFi 全量同步 60s / 移动网络仅关键记忆 300s / 按流量计费暂停自动同步
+- **手动 IP 容错**: mDNS 不可用时可通过 `twin.peer.add <ip>` 手动添加节点, 绕过多播隔离
 
 ---
 
@@ -760,6 +863,8 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.15.0** | 2026-07-25 | **记忆孪生全链路重构 + 记忆双轨制** — A: 三层十二问审计 → 14 项全修 (心跳保活/QoS自适应/手动IP/配对指引/ACP就绪轮询/syncWithPeer返真值/命令命名空间修复/解绑UI/错误诊断/原子写入补全) B: 记忆架构重构 → 长期记忆(memory/memory.md)仅三种来源 + 中期记忆(memory/memory_{date}.md)按日分片 + agent.memory.keep 命令 + 系统提示词只注入长期记忆防降智 |
+| **0.14.1** | 2026-07-24 | **验证反馈修复** — 底部栏 IconButton→pointerInput + 插件页 registerBuiltins 时序 + DexClassLoader 多类名降级 + 空会话清理 |
 | **0.13.0** | 2026-07-24 | **捆绑插件补齐 + 循环检测增强 + 会话去重 + 工具输出完整展示 + Claude Bridge 移除** — 10 插件捆绑启动 (net/fs/self/clipboard/notification/memory-twin 补齐) + 连续失败 5 次自动终止 + `restoreCurrentSession` 修复重复会话 + TraceStepItem 可展开完整输出 + 左侧栏手机模式背景修复 + `plugin.marketplace` 加入系统提示词 + hardkey Enter 双触发修复 + versionCode 公式修正 |
 | **0.12.12** | 2026-07-24 | 记忆孪生 (6 BUG 修复 + 5连击激活 + ACP P2P 配对 + 账本自动同步) + 开发文档重构 · 详见 `docs/lessons-memory-twin.md` |
 | **0.11.3** | 2026-07-23 | **嵌套滚动根除 + 视觉表格 + commonmark 引擎全覆盖** — MarkdownText nestedScroll 参数 + 表格 widthIn(min) 列宽 + Image/HtmlBlock/嵌套列表/TableBody AST 全量转换 + ShellService deleteChannel SecurityException |
@@ -785,6 +890,7 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 日期 | 审校项 | 结果 |
 |------|--------|------|
+| 2026-07-25 | v0.15.0 记忆孪生全链路审计 | 三层十二问审计 → 14 问题全修: P0×6 (系统提示词/配对指引/ACP就绪/syncWithPeer/mDNS单点/命令命名空间), P1×6 (QoS/心跳/解绑UI/错误诊断/同步反馈/self.tools覆盖), P2×2 (协议版本/原子写入)。8 文件修改, 626 行新增, 编译通过, 测试通过。 |
 | 2026-07-21 | v0.6.0 设计系统合规 | 11 个 UI 文件硬编码色值清零, 全部替换为 ArcoColors token |
 | 2026-07-21 | v0.6.0 编译验证 | clean build 4m10s 通过, 15 文件修改, 编译问题 10 项已记录 |
 | 2026-07-21 | 微内核拆分验证 | kernel (44文件) + core (6文件) 编译通过, 25插件编译通过, 83/88 测试通过 |
@@ -820,4 +926,4 @@ ShellService.start(this)   // startForeground + WakeLock
 
 ---
 
-*文档结束 · 最后更新: 2026-07-24 (v0.12.12)*
+*文档结束 · 最后更新: 2026-07-25 (v0.15.0-dev)*

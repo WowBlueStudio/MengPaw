@@ -169,9 +169,13 @@ fun MainScreen(
         } catch (_: Exception) { /* layout not ready, ignore */ }
     }
 
-    // During streaming: auto-scroll to bottom when user is near the end
+    // During streaming: auto-scroll to bottom with debounce (avoids per-step layout reads)
+    var lastAutoScroll by remember { mutableLongStateOf(0L) }
     LaunchedEffect(displayedMessages.size) {
         if (displayedMessages.isNotEmpty()) {
+            val now = System.currentTimeMillis()
+            if (now - lastAutoScroll < 150) return@LaunchedEffect  // debounce: ~6.7 fps max
+            lastAutoScroll = now
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val nearBottom = lastVisible >= displayedMessages.size - 3
             if (nearBottom) safeScrollTo(displayedMessages.size - 1)
@@ -768,6 +772,31 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
     }
 }
 
+/** Shared header for Agent bubbles — agent name + execution mode + agent ref. */
+@Composable
+private fun AgentBubbleHeader(
+    agentName: String,
+    executionMode: String?,
+    agentRef: String?,
+    extraBadge: @Composable (() -> Unit)? = null
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(agentName, style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
+        if (executionMode != null) {
+            Text(" · $executionMode",
+                style = MaterialTheme.typography.labelSmall,
+                color = ThemeColors.brand)
+        }
+        if (agentRef != null) {
+            Text(" · @$agentRef",
+                style = MaterialTheme.typography.labelSmall,
+                color = ArcoColors.Orange6)
+        }
+        extraBadge?.invoke()
+    }
+}
+
 /** Left-aligned, max 90% width, tail at bottom-left. */
 @Composable private fun AgentBubble(content: String, agentName: String = "MengPaw",
     executionMode: String? = null, agentRef: String? = null
@@ -779,20 +808,7 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
             modifier = Modifier.fillMaxWidth(0.9f)
         ) {
             Column(Modifier.padding(ArcoSpacing.lg)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(agentName, style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
-                    if (executionMode != null) {
-                        Text(" · $executionMode",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = ThemeColors.brand)
-                    }
-                    if (agentRef != null) {
-                        Text(" · @$agentRef",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = ArcoColors.Orange6)
-                    }
-                }
+                AgentBubbleHeader(agentName, executionMode, agentRef)
                 Spacer(Modifier.height(ArcoSpacing.xs))
                 SelectionContainer {
                     MarkdownText(
@@ -818,26 +834,18 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
             modifier = Modifier.fillMaxWidth(0.9f)
         ) {
             Column(Modifier.padding(ArcoSpacing.lg)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(agentName, style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
-                    if (message.executionMode != null) {
-                        Text(" · ${message.executionMode}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = ThemeColors.brand)
-                        // Mission 模式显示步数
+                AgentBubbleHeader(
+                    agentName = agentName,
+                    executionMode = message.executionMode,
+                    agentRef = message.agentRef,
+                    extraBadge = {
                         if (message.executionMode == "/Mission") {
                             Text(" · ${traces.size} 步",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = ThemeColors.textSecondary)
                         }
                     }
-                    if (message.agentRef != null) {
-                        Text(" · @${message.agentRef}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = ArcoColors.Orange6)
-                    }
-                }
+                )
                 Spacer(Modifier.height(ArcoSpacing.xs))
 
                 // Collapsible trace steps
@@ -904,12 +912,14 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
 }
 
 @Composable private fun TraceStepItem(trace: AgentTrace) {
-    var thoughtExpanded by remember { mutableStateOf(false) }
-    var actionExpanded by remember { mutableStateOf(false) }
-    var observationExpanded by remember { mutableStateOf(false) }
     val thoughtLong = trace.thought.length > 150
     val actionLong = (trace.action?.length ?: 0) > 80 || (trace.action?.contains("\n") == true)
     val observationLong = (trace.observation?.length ?: 0) > 200 || (trace.observation?.contains("\n") == true)
+
+    // Lazy state: only allocate mutableState for sections that actually need expansion
+    var thoughtExpanded by remember(thoughtLong) { if (thoughtLong) mutableStateOf(false) else mutableStateOf(true) }
+    var actionExpanded by remember(actionLong) { if (actionLong) mutableStateOf(false) else mutableStateOf(true) }
+    var observationExpanded by remember(observationLong) { if (observationLong) mutableStateOf(false) else mutableStateOf(true) }
 
     Surface(
         shape = RoundedCornerShape(ArcoRadius.sm),

@@ -210,10 +210,15 @@ class PluginManager(
     // ── Private helpers ───────────────────────────────────────────────────
 
     /**
-     * Derive namespace from plugin id. E.g. "fs-plugin" → "fs", "memory-plugin" → "memory".
+     * Derive namespace from plugin id. E.g. "fs-plugin" → "fs", "memory-plugin" → "memory",
+     * "memory-twin-plugin" → "twin".
      */
-    private fun namespaceFor(id: String): String =
-        id.removeSuffix("-plugin").removeSuffix("-ext")
+    private fun namespaceFor(id: String): String {
+        val base = id.removeSuffix("-plugin").removeSuffix("-ext")
+        // memory-{name} plugins use the {name} as namespace (e.g. memory-twin → twin)
+        if (base.startsWith("memory-")) return base.removePrefix("memory-")
+        return base
+    }
 
     private fun registerCommands(id: String, plugin: Plugin) {
         val ns = namespaceFor(id)

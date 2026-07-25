@@ -116,6 +116,7 @@ dependencies {
     implementation(project(":plugin-clipboard"))
     implementation(project(":plugin-notification"))
     implementation(project(":plugin-memory-twin"))
+    implementation(project(":plugin-root"))
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))
