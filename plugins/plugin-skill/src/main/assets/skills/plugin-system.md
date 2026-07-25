@@ -30,6 +30,12 @@ plugin.list                    → 确认激活
 self.tools <新命名空间>          → 看新命令
 ```
 
+## 下载与网络
+- **源**: GitHub(海外) / Gitee(国内)，GeoRouter 根据系统语言和时区自动路由
+- **存储**: `插件仓库/{id}-{version}.jar`
+- **网络问题**: GitHub 不可达时 Gitee 自动启用。都失败时建议 VPN，或用 `net.proxy <url>` 获取 ghproxy.com 代理
+- **内置插件**: memory/skill/framework/dev/fs/net/self/clipboard/notification/memory-twin/root — 不可卸载，用 `plugin.disable` 禁用
+
 ## 学了插件怎么用
 ```
 skill.run plugin-index   → 找对应说明书

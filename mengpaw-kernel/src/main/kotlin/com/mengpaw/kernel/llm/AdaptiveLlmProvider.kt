@@ -55,16 +55,17 @@ class AdaptiveLlmProvider(
     data class AdaptiveConfig(
         val maxTokens: Int = 4096,
         val temperature: Double = 0.7,
-        val timeoutMs: Long = 60_000,
-        val maxRetries: Int = 5,   // 6 total attempts (0..5), ~15.5s total backoff
+        val timeoutMs: Long = 120_000,   // Total request timeout
+        val maxRetries: Int = 5,         // 6 total attempts (0..5)
         val retryDelayMs: Long = 500,
         val fallbacks: List<FallbackEntry> = emptyList()
     )
 
     private val client = HttpClient(OkHttp) {
         install(HttpTimeout) {
-            requestTimeoutMillis = config.timeoutMs
-            connectTimeoutMillis = 10_000
+            requestTimeoutMillis = config.timeoutMs   // 120s total
+            connectTimeoutMillis = 20_000             // DNS+TCP+TLS
+            socketTimeoutMillis = 60_000              // Idle between packets
         }
     }
 
@@ -188,7 +189,23 @@ class AdaptiveLlmProvider(
             header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             setBody(requestBody)
         }
-        val body = response.bodyAsText()
+        // Read body — socket timeout here means LLM response arrived but Ktor's timer expired.
+        val body = try {
+            response.bodyAsText()
+        } catch (e: Exception) {
+            if (response.status.isSuccess()) {
+                // HTTP 200 but body read failed (likely socket timeout between packets).
+                // Rethrow with context so retry/fallback can react.
+                throw LlmApiException(
+                    response.status.value,
+                    "Body read failed after HTTP 200: ${e.message}. Consider increasing socketTimeoutMs."
+                )
+            }
+            throw LlmApiException(
+                response.status.value,
+                "Failed to read response body: ${e.message}"
+            )
+        }
 
         // Validate HTTP-level error
         if (!response.status.isSuccess()) {

@@ -525,9 +525,27 @@ class AgentDocManager(
 
         /** Browser plugin development capabilities — readable by Agent via CLI. */
         val BROWSER_TOOLS_MD = """
-# MP浏览器 插件开发能力 (Browser Plugin API)
+# MP浏览器 插件开发能力 (Browser Plugin API) v0.6.0
 
 > Agent 可以通过 `memory.read browser-tools` 查询浏览器插件开发接口。
+> 完整使用手册请加载 Skills: `skill.run browser-control`
+
+## 核心命令 (v0.6.0 共 45 命令)
+
+### 导航 (5): browser.open, browser.nav, browser.back, browser.forward, browser.url, browser.title
+### 交互 (4): browser.click, browser.type, browser.scroll, browser.select
+### 表单 (3): browser.submit, browser.check, browser.uncheck
+### 查询 (4): browser.attr, browser.text, browser.visible, browser.enabled
+### 等待 (3): browser.wait <ms>, browser.wait.selector <css>, browser.wait.nav [ms]
+### 标签页 (6): browser.tabs, browser.tab, browser.tab.open, browser.tab.close, browser.tab.all, browser.preload
+### 效率 (4): browser.batch, browser.q, browser.inject, browser.diff
+### 截图 (3): browser.screenshot, browser.screenshot.element <sel>, browser.screenshot.full [maxH]
+### 快速点击 (2): browser.coord.click <x> <y>, browser.coord.scroll <y>
+### 存储 (3): browser.cookies, browser.cookies.set, browser.cookies.clear
+### Web存储 (1): browser.storage <local|session> <get|set|clear> [key] [value]
+### 配置 (3): browser.viewport <w> <h>, browser.userAgent [ua], browser.version
+### 执行 (1): browser.eval <js>
+### 对话框 (2): browser.dialog.accept, browser.dialog.dismiss
 
 ## 可用的浏览器钩子
 
@@ -556,6 +574,13 @@ plugin.install video-downloader
 
 ## 已安装的浏览器插件
 查询方法: `plugin.list` 查看 browser- 前缀的插件
+
+## Agent Skills
+- `skill.run browser-control` — 完整浏览器控制手册 (45 命令)
+- `skill.run browser-playwright` — Playwright API 映射参考
+- `skill.run browser-spider` — 爬虫工作流指南
+- `skill.run browser-form` — 表单自动化指南
+- `skill.run browser-debug` — 调试与排障指南
 """.trimIndent()
     }
 }

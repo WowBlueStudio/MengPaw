@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.15.0 | **更新**: 2026-07-25 | **架构**: 微内核 + AgentRuntime + 25 插件(含 Root/记忆孪生 v0.2) + 三轨记忆 + 悬浮窗/日历 + Termux 桥接 + Android Skill + 完整文件管理 + 提示词安全/行为/工作三层 + self.tools 统一入口
+> **版本**: 0.15.2 | **更新**: 2026-07-26 | **架构**: 微内核 + AgentRuntime + 25 插件(含 Root/记忆孪生 v0.2) + 三轨记忆 + 悬浮窗/日历 + Termux 桥接 + Android Skill + 完整文件管理 + 提示词安全/行为/工作三层 + self.tools 统一入口 + 提示词缓存 + 浏览器 v0.6.0
 
 ---
 
@@ -66,7 +66,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Android Agent 框架。核心
 | mengpaw-core | Android Library | 6 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 5 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
 | mengpaw-shell | APK | 25 | 0.9.1 (vc=91) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
-| mengpaw-browser | APK | 5 | 0.4.0 (vc=6) | 独立浏览器 + BrowserBridge + 22 操控命令 |
+| mengpaw-browser | APK | 12 | 0.6.0 (vc=8) | 独立浏览器 + 45 Agent命令 + 10 Skills + MD浏览 + 🧪快速点击(screenshotFull+coordClick) + 智能体协同设置页 + 暗色主题 + 页面查找 + 阅读模式 + 翻译 + MCP工具执行器 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
 
@@ -239,7 +239,7 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 - **UI 升级**: 消息区自适应宽度 (平板 80%/手机 95%) + 思考完成自动定位 + 侧栏真实头像 + 框架通讯录持久化
 - **Markdown 增强**: 新增 Heading 块 + Agent 消息非等宽字体
 
-### 3.4 mengpaw-browser（独立浏览器，5 文件）
+### 3.4 mengpaw-browser（独立浏览器，7 文件）
 
 | 文件 | 职责 |
 |------|------|
@@ -248,6 +248,8 @@ runWithMission(task, maxSubtasks, maxStepsPerSubtask)
 | `plugin/BuiltinBrowserPlugin.kt` | 浏览器插件 (22 命令) |
 | `plugin/BrowserPlugin.kt` | 浏览器插件接口 |
 | `plugin/BrowserPluginRegistry.kt` | 插件注册表 |
+| `ui/BrowserFindBar.kt` | **NEW v0.5.0** 页面查找浮条 (WebView findAllAsync) |
+| `ui/BrowserReaderMode.kt` | **NEW v0.5.0** 阅读模式 (JS 提取主内容 + 大字号渲染) |
 
 ### 3.5 插件模块（23 个，plugins/ 目录）
 
@@ -410,8 +412,8 @@ twin.dream.sync / twin.dream.history [limit]
 | compileSdk | 35 | 35 | 35 | — |
 | minSdk | 26 | 26 | 26 | — |
 | targetSdk | 35 | 35 | — | — |
-| versionName | 0.11.3 | 0.4.0 | — | 0.11.3 |
-| versionCode | 1130 | 6 | — | — |
+| versionName | 0.11.3 | 0.6.0 | — | 0.11.3 |
+| versionCode | 1130 | 8 | — | — |
 | R8 | Release 启用 | Release 启用 | 关闭(库模块) | — |
 
 **Shell 权限** (17 项):
@@ -423,7 +425,7 @@ twin.dream.sync / twin.dream.history [limit]
 - 文件/媒体: READ_MEDIA_IMAGES, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE
 - 未来扩展: RECORD_AUDIO, VIBRATE
 
-**Browser 权限**: INTERNET, ACCESS_NETWORK_STATE
+**Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
 ### 3.7 测试 (9 文件，全部在 mengpaw-kernel)
 
@@ -863,6 +865,8 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.5.0** | 2026-07-26 | **MP浏览器 v0.6.0** — 暗色模式跟随系统 + 页面查找 + 阅读模式 + SSL 错误提示 + 完整页面翻译 + 下载监听 + 错误页面 + Markdown 文件查看 + Agent 协同设置 (Quick Click/自动注入/截图配置) + MCP 工具执行器 + Skills 扩展 (browser-control/playwright/spider/form/debug) + 提示词含完整浏览器命令 + 45 命令 |
+| **0.15.2** | 2026-07-26 | **6 审计问题修复** — 缓存失效(路径匹配) + 缓存key(检查前置) + Plan进度(中英双语边界) + 错误消息(LlmApiException) + 容器高度(Step编号/观察缺失) + 提示词(恢复插件发现示例) + MCP插件解耦BrowserBridge + 超时120s |
 | **0.15.0** | 2026-07-25 | **记忆孪生全链路重构 + 记忆双轨制** — A: 三层十二问审计 → 14 项全修 (心跳保活/QoS自适应/手动IP/配对指引/ACP就绪轮询/syncWithPeer返真值/命令命名空间修复/解绑UI/错误诊断/原子写入补全) B: 记忆架构重构 → 长期记忆(memory/memory.md)仅三种来源 + 中期记忆(memory/memory_{date}.md)按日分片 + agent.memory.keep 命令 + 系统提示词只注入长期记忆防降智 |
 | **0.14.1** | 2026-07-24 | **验证反馈修复** — 底部栏 IconButton→pointerInput + 插件页 registerBuiltins 时序 + DexClassLoader 多类名降级 + 空会话清理 |
 | **0.13.0** | 2026-07-24 | **捆绑插件补齐 + 循环检测增强 + 会话去重 + 工具输出完整展示 + Claude Bridge 移除** — 10 插件捆绑启动 (net/fs/self/clipboard/notification/memory-twin 补齐) + 连续失败 5 次自动终止 + `restoreCurrentSession` 修复重复会话 + TraceStepItem 可展开完整输出 + 左侧栏手机模式背景修复 + `plugin.marketplace` 加入系统提示词 + hardkey Enter 双触发修复 + versionCode 公式修正 |
@@ -890,6 +894,7 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 日期 | 审校项 | 结果 |
 |------|--------|------|
+| 2026-07-26 | v0.15.2 功能闭环审计 | PromptEngine 三层十二问审计 → 6 问题全修: 缓存失效(路径前缀) + 缓存key(检查前置+docCache非空守卫) + Plan进度(中英双语边界标记) + 错误消息(LlmApiException替双重bodyAsText) + 容器高度(Step编号恢复+观察缺失修复) + 提示词(恢复插件发现few-shot) + MCP插件BrowserBridge解耦(toolExecutor委托) + RemoteApi超时120s。编译通过, 测试通过。 |
 | 2026-07-25 | v0.15.0 记忆孪生全链路审计 | 三层十二问审计 → 14 问题全修: P0×6 (系统提示词/配对指引/ACP就绪/syncWithPeer/mDNS单点/命令命名空间), P1×6 (QoS/心跳/解绑UI/错误诊断/同步反馈/self.tools覆盖), P2×2 (协议版本/原子写入)。8 文件修改, 626 行新增, 编译通过, 测试通过。 |
 | 2026-07-21 | v0.6.0 设计系统合规 | 11 个 UI 文件硬编码色值清零, 全部替换为 ArcoColors token |
 | 2026-07-21 | v0.6.0 编译验证 | clean build 4m10s 通过, 15 文件修改, 编译问题 10 项已记录 |
@@ -926,4 +931,4 @@ ShellService.start(this)   // startForeground + WakeLock
 
 ---
 
-*文档结束 · 最后更新: 2026-07-25 (v0.15.0-dev)*
+*文档结束 · 最后更新: 2026-07-26 (v0.15.2)*

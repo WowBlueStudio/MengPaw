@@ -1,4 +1,4 @@
-﻿// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 package com.mengpaw.shell.ui.screens
@@ -47,6 +47,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.design.tokens.ArcoColors
@@ -167,6 +168,12 @@ fun MainScreen(
             if (animated) listState.animateScrollToItem(index)
             else listState.scrollToItem(index)
         } catch (_: Exception) { /* layout not ready, ignore */ }
+    }
+
+    // Initial load: scroll to bottom
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(200) // wait for layout
+        if (displayedMessages.isNotEmpty()) safeScrollTo(displayedMessages.size - 1, animated = false)
     }
 
     // During streaming: auto-scroll to bottom with debounce (avoids per-step layout reads)
@@ -828,87 +835,59 @@ private fun AgentBubbleHeader(
 
 // ── Agent Bubble with Trace (expandable thinking steps) ──
 @Composable private fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: String = "MengPaw") {
-    var expanded by remember { mutableStateOf(false) }
     val traces = message.traces
+    var thinkingExpanded by remember { mutableStateOf(true) }
+    LaunchedEffect(message.isRunning) { if (!message.isRunning) thinkingExpanded = false }
 
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-        Surface(
-            shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm),
-            color = ThemeColors.bgCardHigh,
-            modifier = Modifier.fillMaxWidth(0.9f)
-        ) {
-            Column(Modifier.padding(ArcoSpacing.lg)) {
-                AgentBubbleHeader(
-                    agentName = agentName,
-                    executionMode = message.executionMode,
-                    agentRef = message.agentRef,
-                    extraBadge = {
-                        if (message.executionMode == "/Mission") {
-                            Text(" · ${traces.size} 步",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = ThemeColors.textSecondary)
-                        }
+    Column(Modifier.fillMaxWidth()) {
+        // ── Thinking process (outside main bubble, visible while running) ──
+        if (traces.isNotEmpty()) {
+            Surface(onClick = { thinkingExpanded = !thinkingExpanded },
+                shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh,
+                modifier = Modifier.fillMaxWidth(0.95f).padding(bottom = 2.dp)) {
+                Column {
+                    Row(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (thinkingExpanded) "思考过程 (${traces.size})" else "思考过程 (${traces.size}) · 已折叠",
+                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
+                        if (message.isRunning) { Spacer(Modifier.width(ArcoSpacing.sm)); LinearProgressIndicator(Modifier.width(40.dp).height(3.dp), color = ThemeColors.brand) }
+                        Spacer(Modifier.weight(1f))
+                        Icon(if (thinkingExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                            null, Modifier.size(16.dp), tint = ThemeColors.brand)
                     }
-                )
-                Spacer(Modifier.height(ArcoSpacing.xs))
-
-                // Collapsible trace steps
-                if (traces.isNotEmpty()) {
-                    Surface(
-                        onClick = { expanded = !expanded },
-                        shape = RoundedCornerShape(ArcoRadius.sm),
-                        color = ArcoColors.Blue1.copy(alpha = 0.5f),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                                null, Modifier.size(16.dp), tint = ThemeColors.brand
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                if (expanded) "收起思考过程" else "思考过程 (${traces.size} 步)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = ThemeColors.brand,
-                                fontWeight = FontWeight.Medium
-                            )
-                            if (message.isRunning) {
-                                Spacer(Modifier.width(ArcoSpacing.sm))
-                                LinearProgressIndicator(
-                                    Modifier.width(40.dp).height(4.dp),
-                                    color = ThemeColors.brand
-                                )
-                            }
-                        }
-                    }
-
-                    AnimatedVisibility(visible = expanded) {
-                        Column(Modifier.padding(top = ArcoSpacing.xs)) {
+                    AnimatedVisibility(visible = thinkingExpanded) {
+                        Column(Modifier.padding(start = ArcoSpacing.sm, end = ArcoSpacing.sm, bottom = ArcoSpacing.sm)) {
                             traces.forEach { trace -> TraceStepItem(trace) }
                         }
                     }
-
-                    Spacer(Modifier.height(ArcoSpacing.sm))
-                } else if (message.isRunning) {
-                    // Initial "thinking" with no traces yet
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        LinearProgressIndicator(Modifier.width(80.dp).height(4.dp), color = ThemeColors.brand)
-                        Spacer(Modifier.width(ArcoSpacing.sm))
-                        Text("思考中...", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                    }
-                    Spacer(Modifier.height(ArcoSpacing.sm))
                 }
+            }
+        } else if (message.isRunning) {
+            Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh,
+                modifier = Modifier.fillMaxWidth(0.95f).padding(bottom = 2.dp)) {
+                Row(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
+                    Spacer(Modifier.width(6.dp))
+                    LinearProgressIndicator(Modifier.width(60.dp).height(3.dp), color = ThemeColors.brand)
+                    Spacer(Modifier.width(ArcoSpacing.sm))
+                    Text("正在思考...", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                }
+            }
+        }
 
-                // Final content
-                SelectionContainer {
-                    MarkdownText(
-                        content = message.finalContent,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary),
-                        nestedScroll = true
-                    )
+        // ── Final answer bubble ──
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+            Surface(shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm),
+                color = ThemeColors.bgCardHigh, modifier = Modifier.fillMaxWidth(0.9f)) {
+                Column(Modifier.padding(ArcoSpacing.lg)) {
+                    AgentBubbleHeader(agentName = agentName, executionMode = message.executionMode, agentRef = message.agentRef)
+                    Spacer(Modifier.height(ArcoSpacing.xs))
+                    SelectionContainer {
+                        MarkdownText(content = message.finalContent,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary), nestedScroll = true)
+                    }
                 }
             }
         }
@@ -916,82 +895,51 @@ private fun AgentBubbleHeader(
 }
 
 @Composable private fun TraceStepItem(trace: AgentTrace) {
-    val thoughtLong = trace.thought.length > 150
-    val actionLong = (trace.action?.length ?: 0) > 80 || (trace.action?.contains("\n") == true)
-    val observationLong = (trace.observation?.length ?: 0) > 200 || (trace.observation?.contains("\n") == true)
+    val actionLong = (trace.action?.length ?: 0) > 60
+    val observationLong = (trace.observation?.length ?: 0) > 150
+    var mergedExpanded by remember { mutableStateOf(false) }
 
-    // Lazy state: only allocate mutableState for sections that actually need expansion
-    var thoughtExpanded by remember(thoughtLong) { if (thoughtLong) mutableStateOf(false) else mutableStateOf(true) }
-    var actionExpanded by remember(actionLong) { if (actionLong) mutableStateOf(false) else mutableStateOf(true) }
-    var observationExpanded by remember(observationLong) { if (observationLong) mutableStateOf(false) else mutableStateOf(true) }
-
-    Surface(
-        shape = RoundedCornerShape(ArcoRadius.sm),
-        color = ThemeColors.bgCard,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-    ) {
-        Column(Modifier.padding(ArcoSpacing.sm)) {
-            // ── Thought ──
+    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCard.copy(alpha = 0.6f),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+        Column(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 4.dp)) {
+            // ── Thought: step number + brain icon, always fully visible ──
             Row(verticalAlignment = Alignment.Top) {
-                Text("Step ${trace.step}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = ThemeColors.brand)
-                Spacer(Modifier.width(ArcoSpacing.xs))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "🤔 ${if (thoughtExpanded || !thoughtLong) trace.thought else trace.thought.take(150) + "..."}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ThemeColors.textSecondary,
-                        maxLines = if (thoughtExpanded) Int.MAX_VALUE else 3
-                    )
-                    if (thoughtLong) {
-                        TextButton(onClick = { thoughtExpanded = !thoughtExpanded },
-                            contentPadding = PaddingValues(0.dp), modifier = Modifier.height(24.dp)) {
-                            Text(if (thoughtExpanded) "▲ 收起" else "▼ 展开全部 (${trace.thought.length} 字)",
-                                fontSize = 10.sp, color = ThemeColors.brand)
-                        }
-                    }
-                }
+                Text("Step${trace.step}", fontSize = 10.sp, color = ArcoColors.Blue5,
+                    fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 2.dp))
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Outlined.Psychology, null, Modifier.size(14.dp).padding(top = 2.dp), tint = ArcoColors.Blue4)
+                Spacer(Modifier.width(4.dp))
+                Text(trace.thought, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
             }
-
-            // ── Action (command) ──
-            if (trace.action != null) {
+            // ── Action + Observation: terminal icon, merged into one collapsible block ──
+            if (trace.action != null || !trace.observation.isNullOrBlank()) {
                 Spacer(Modifier.height(2.dp))
-                Column {
-                    Row(verticalAlignment = Alignment.Top) {
-                        Text(
-                            "🔧 ${if (actionExpanded || !actionLong) trace.action else trace.action.take(80) + "..."}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = ThemeColors.brand,
-                            fontFamily = FontFamily.Monospace,
-                            maxLines = if (actionExpanded) Int.MAX_VALUE else 1,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (actionLong) {
-                        TextButton(onClick = { actionExpanded = !actionExpanded },
-                            contentPadding = PaddingValues(0.dp), modifier = Modifier.height(24.dp)) {
-                            Text(if (actionExpanded) "▲ 收起" else "▼ 展开命令",
-                                fontSize = 10.sp, color = ThemeColors.brand)
+                Surface(onClick = { mergedExpanded = !mergedExpanded },
+                    shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray2.copy(alpha = 0.3f),
+                    modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(horizontal = 6.dp, vertical = 3.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Terminal, null, Modifier.size(13.dp), tint = ArcoColors.Gray6)
+                            Spacer(Modifier.width(4.dp))
+                            Text(trace.action ?: "(observation)", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = ThemeColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.weight(1f))
+                            if (actionLong || observationLong) {
+                                Text(if (mergedExpanded) "▲" else "▼", fontSize = 9.sp, color = ThemeColors.textSecondary)
+                            }
                         }
-                    }
-                }
-            }
-
-            // ── Observation (tool output) ──
-            if (trace.observation != null) {
-                Spacer(Modifier.height(2.dp))
-                Column {
-                    Text(
-                        "📊 ${if (observationExpanded || !observationLong) trace.observation else trace.observation.take(200) + "..."}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = ThemeColors.textSecondary,
-                        maxLines = if (observationExpanded) Int.MAX_VALUE else 10,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    if (observationLong) {
-                        TextButton(onClick = { observationExpanded = !observationExpanded },
-                            contentPadding = PaddingValues(0.dp), modifier = Modifier.height(24.dp)) {
-                            Text(if (observationExpanded) "▲ 收起" else "▼ 展开完整输出 (${trace.observation.length} 字)",
-                                fontSize = 10.sp, color = ThemeColors.brand)
+                        AnimatedVisibility(visible = mergedExpanded) {
+                            Column {
+                                if (actionLong && trace.action != null) {
+                                    Text(trace.action, style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), color = ArcoColors.Gray6)
+                                }
+                                if (!trace.observation.isNullOrBlank()) {
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(trace.observation.take(if (mergedExpanded) 5000 else 200),
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), color = ArcoColors.Gray5,
+                                        maxLines = if (mergedExpanded) Int.MAX_VALUE else 3)
+                                }
+                            }
                         }
                     }
                 }

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Compass/crosshair outer ring -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.15"
+        android:pathData="M54,22 C71.67,22 86,36.33 86,54 C86,71.67 71.67,86 54,86 C36.33,86 22,71.67 22,54 C22,36.33 36.33,22 54,22 Z" />
+
+    <!-- Outer circle stroke -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:pathData="M54,24 C70.57,24 84,37.43 84,54 C84,70.57 70.57,84 54,84 C37.43,84 24,70.57 24,54 C24,37.43 37.43,24 54,24 Z" />
+
+    <!-- Globe circle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30 C67.26,30 78,40.74 78,54 C78,67.26 67.26,78 54,78 C40.74,78 30,67.26 30,54 C30,40.74 40.74,30 54,30 Z" />
+
+    <!-- Globe inner ellipse (cutout in brand color) -->
+    <path
+        android:fillColor="#0E4397"
+        android:pathData="M54,34 C62.4,34 69.2,42.9 69.2,54 C69.2,65.1 62.4,74 54,74 C45.6,74 38.8,65.1 38.8,54 C38.8,42.9 45.6,34 54,34 Z" />
+
+    <!-- Globe horizontal lines (latitudes) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M31,50 L77,50 L77,52 L31,52 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M35,56 L73,56 L73,58 L35,58 Z" />
+
+    <!-- Globe vertical arcs (longitudes) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30 C54,38 50.5,46 47.5,52 C44.5,58 43,64 43,70" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.2"
+        android:pathData="M50,34 C47,42 44.5,48 42.5,54 C40.5,60 40,66 40,72" />
+
+    <!-- Cursor/pointer arrow at bottom-right -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M66,64 L62,72 L68,68 L74,74 L78,70 L72,64 L78,60 Z" />
+</vector>

@@ -63,7 +63,27 @@ class BuiltinBrowserPlugin(
         "eval" to ::eval, "click" to ::click, "type" to ::type,
         "scroll" to ::scroll, "content" to ::content, "screenshot" to ::screenshot,
         "open" to ::open, "back" to ::back, "forward" to ::forward,
-        "title" to ::title, "url" to ::url
+        "title" to ::title, "url" to ::url,
+        // Page wait
+        "wait" to ::waitMs, "wait.selector" to ::waitSelector, "wait.nav" to ::waitNav,
+        // Cookies
+        "cookies" to ::cookiesGet, "cookies.set" to ::cookiesSet, "cookies.clear" to ::cookiesClear,
+        // Dialogs
+        "dialog.accept" to ::dialogAccept, "dialog.dismiss" to ::dialogDismiss,
+        // Form actions
+        "select" to ::selectOpt, "submit" to ::submitForm, "check" to ::checkBox, "uncheck" to ::uncheckBox,
+        // Element queries
+        "attr" to ::attrGet, "text" to ::textGet, "visible" to ::visibleCheck, "enabled" to ::enabledCheck,
+        // Storage
+        "storage" to ::storageOp,
+        // Element screenshot
+        "screenshot.element" to ::screenshotElement, "screenshot.full" to ::screenshotFullCmd,
+        // Quick Click (coordinate-based)
+        "coord.click" to ::coordClickCmd, "coord.scroll" to ::coordScrollCmd,
+        // Viewport & UA
+        "viewport" to ::viewportSet, "userAgent" to ::userAgentOp,
+        // Version
+        "version" to ::versionCmd
     )
 
     // ═══════════════════════════════════════════════════════════════════
@@ -307,7 +327,14 @@ class BuiltinBrowserPlugin(
         catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.content"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
     }
     private suspend fun screenshot(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        return ExecutionResult.ok("Screenshot queued. Check 截图存档/ for output.")
+        val b = bridge ?: return noBrowser()
+        return try {
+            val result = b.screenshot()
+            ExecutionResult.ok("Screenshot saved: $result")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "BuiltinBrowser.screenshot")
+            ExecutionResult.fail("Screenshot failed: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
     }
     private suspend fun open(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.open <url>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
@@ -337,10 +364,268 @@ class BuiltinBrowserPlugin(
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // Page wait commands
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun waitMs(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.wait <milliseconds>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val ms = args[0].toLongOrNull() ?: return ExecutionResult.fail("Invalid milliseconds", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        if (ms > 30000) return ExecutionResult.fail("Max wait: 30000ms (30s)", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        kotlinx.coroutines.delay(ms)
+        return ExecutionResult.ok("Waited ${ms}ms")
+    }
+
+    private suspend fun waitSelector(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.wait.selector <css> [timeoutMs]", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        val timeout = args.getOrNull(1)?.toIntOrNull() ?: 5000
+        return try { ExecutionResult.ok(b.waitForSelector(args[0], timeout)) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.waitSelector"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    private suspend fun waitNav(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val timeout = args.firstOrNull()?.toIntOrNull() ?: 10000
+        val wv = webViewProvider() ?: return noBrowser()
+        val b = bridge ?: return noBrowser()
+        return try {
+            // Use a simple delay-based approach for navigation wait
+            kotlinx.coroutines.delay(timeout.toLong())
+            ExecutionResult.ok("Navigation wait completed (${timeout}ms)")
+        } catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.waitNav"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Cookie commands
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun cookiesGet(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.cookies()) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.cookies"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+    private suspend fun cookiesSet(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.size < 2) return ExecutionResult.fail("Usage: browser.cookies.set <name> <value> [domain]", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.cookieSet(args[0], args[1], args.getOrNull(2))) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.cookiesSet"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+    private suspend fun cookiesClear(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.cookieClear()) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.cookiesClear"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Dialog commands
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun dialogAccept(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val wv = webViewProvider() ?: return noBrowser()
+        return try {
+            wv.post { wv.evaluateJavascript("(function(){try{if(window.__mpDialogCb){window.__mpDialogCb(true,'');delete window.__mpDialogCb;return'ok';}}catch(e){}})()", null) }
+            ExecutionResult.ok("Dialog accepted")
+        } catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.dialogAccept"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+    private suspend fun dialogDismiss(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val wv = webViewProvider() ?: return noBrowser()
+        return try {
+            wv.post { wv.evaluateJavascript("(function(){try{if(window.__mpDialogCb){window.__mpDialogCb(false);delete window.__mpDialogCb;return'ok';}}catch(e){}})()", null) }
+            ExecutionResult.ok("Dialog dismissed")
+        } catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.dialogDismiss"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Form action commands
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun selectOpt(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.size < 2) return ExecutionResult.fail("Usage: browser.select <css> <value>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.select(args[0], args[1])) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.select"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+    private suspend fun submitForm(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.submit <form_selector>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.submit(args[0])) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.submit"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+    private suspend fun checkBox(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.check <css>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.check(args[0])) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.check"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+    private suspend fun uncheckBox(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.uncheck <css>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.uncheck(args[0])) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.uncheck"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Element query commands
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun attrGet(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.size < 2) return ExecutionResult.fail("Usage: browser.attr <css> <attribute>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.attr(args[0], args[1])) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.attr"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+    private suspend fun textGet(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.text <css>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.text(args[0])) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.text"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+    private suspend fun visibleCheck(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.visible <css>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.visible(args[0])) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.visible"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+    private suspend fun enabledCheck(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.enabled <css>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.enabled(args[0])) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.enabled"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Storage commands
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun storageOp(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.size < 2) return ExecutionResult.fail("Usage: browser.storage <local|session> <get|set|clear> [key] [value]", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.storage(args[0], args[1], args.getOrNull(2), args.getOrNull(3))) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.storage"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Element screenshot
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun screenshotElement(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.screenshot.element <css>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val wv = webViewProvider() ?: return noBrowser()
+        return try {
+            val safe = args[0].replace("\\", "\\\\").replace("'", "\\'")
+            // Get element bounds via JS
+            val rectJson = com.mengpaw.browser.bridge.BrowserBridge(wv).eval(
+                "(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});var r=e.getBoundingClientRect();return JSON.stringify({ok:true,x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.width),h:Math.round(r.height)});})()"
+            )
+            val json = org.json.JSONObject(rectJson)
+            if (!json.optBoolean("ok", false)) {
+                return ExecutionResult.fail("Element not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
+            }
+            // Full-page screenshot and crop
+            val picture = wv.capturePicture()
+            val fullBitmap = android.graphics.Bitmap.createBitmap(picture.width, picture.height, android.graphics.Bitmap.Config.ARGB_8888)
+            picture.draw(android.graphics.Canvas(fullBitmap))
+            val x = json.optInt("x", 0).coerceAtLeast(0)
+            val y = json.optInt("y", 0).coerceAtLeast(0)
+            val w = minOf(json.optInt("w", fullBitmap.width), fullBitmap.width - x).coerceAtLeast(1)
+            val h = minOf(json.optInt("h", fullBitmap.height), fullBitmap.height - y).coerceAtLeast(1)
+            val cropped = android.graphics.Bitmap.createBitmap(fullBitmap, x, y, w, h)
+            fullBitmap.recycle()
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.SCREENSHOTS, "element_${System.currentTimeMillis()}.png")
+            file.parentFile?.mkdirs()
+            java.io.FileOutputStream(file).use { cropped.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, it) }
+            cropped.recycle()
+            ExecutionResult.ok("""{"ok":true,"path":"${file.absolutePath}","rect":{"x":$x,"y":$y,"w":$w,"h":$h}}""")
+        } catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.screenshotElement"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Quick Click — full-page screenshot + coordinate-based interaction
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** Stitched full-page screenshot — Agent's primary visual analysis tool. */
+    private suspend fun screenshotFullCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (!Companion.quickClickEnabled()) return ExecutionResult.fail(
+            "Quick Click 已禁用。请在浏览器设置→智能体协同中开启。\nQuick Click is disabled. Enable in Settings → Agent Collaboration.",
+            errorCode = ErrorCodes.ERR_PERMISSION_DENIED
+        )
+        val b = bridge ?: return noBrowser()
+        val maxH = args.firstOrNull()?.toIntOrNull() ?: Companion.screenshotMaxHeight()
+        return try {
+            val result = b.screenshotFull(maxH)
+            val r = ExecutionResult.ok(result)
+            // Append follow-up hint for Agent
+            ExecutionResult.ok(result + "\n---\n💡 使用 browser.coord.click <x> <y> 在此截图坐标上点击。参考: skill.run browser-control")
+        } catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.screenshotFull"); ExecutionResult.fail("${e.message}\n💡 可降级: browser.screenshot (视口截图)", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    /** Tap at absolute page coordinates (from screenshotFull image). */
+    private suspend fun coordClickCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (!Companion.quickClickEnabled()) return ExecutionResult.fail(
+            "Quick Click 已禁用。请在浏览器设置→智能体协同中开启。",
+            errorCode = ErrorCodes.ERR_PERMISSION_DENIED
+        )
+        if (args.size < 2) return ExecutionResult.fail("Usage: browser.coord.click <x> <y>\nCoordinates are relative to the full-page screenshot from browser.screenshot.full", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val x = args[0].toIntOrNull() ?: return ExecutionResult.fail("Invalid X coordinate", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val y = args[1].toIntOrNull() ?: return ExecutionResult.fail("Invalid Y coordinate", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.coordClick(x, y)) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.coordClick"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    /** Scroll to full-page y-coordinate (for verification before clicking). */
+    private suspend fun coordScrollCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.coord.scroll <y>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val y = args[0].toIntOrNull() ?: return ExecutionResult.fail("Invalid Y coordinate", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val b = bridge ?: return noBrowser()
+        return try { ExecutionResult.ok(b.coordScroll(y)) }
+        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.coordScroll"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Viewport and User-Agent
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun viewportSet(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.size < 2) return ExecutionResult.fail("Usage: browser.viewport <width> <height>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val w = args[0].toIntOrNull() ?: return ExecutionResult.fail("Invalid width", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val h = args[1].toIntOrNull() ?: return ExecutionResult.fail("Invalid height", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val wv = webViewProvider() ?: return noBrowser()
+        return try {
+            wv.evaluateJavascript("(function(){var m=document.querySelector('meta[name=viewport]');if(m){m.setAttribute('content','width=$w,height=$h,initial-scale=1');}else{m=document.createElement('meta');m.name='viewport';m.content='width=$w,height=$h,initial-scale=1';document.head.appendChild(m);}})()", null)
+            ExecutionResult.ok("Viewport set to ${w}x${h}")
+        } catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.viewport"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    private suspend fun userAgentOp(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val wv = webViewProvider() ?: return noBrowser()
+        return try {
+            if (args.isEmpty()) {
+                ExecutionResult.ok("Current UA: ${wv.settings.userAgentString}")
+            } else {
+                val ua = args.joinToString(" ")
+                wv.settings.userAgentString = ua
+                ExecutionResult.ok("User-Agent set to: $ua")
+            }
+        } catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.userAgent"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Version
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun versionCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        return ExecutionResult.ok("MP Browser v0.6.0 / Android SDK ${android.os.Build.VERSION.SDK_INT}")
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // Quick selector JS snippets
     // ═══════════════════════════════════════════════════════════════════
 
     companion object {
+        /** Providers set by BrowserActivity for toggle-aware command execution. */
+        @JvmStatic var quickClickEnabled: () -> Boolean = { true }
+        @JvmStatic var screenshotMaxHeight: () -> Int = { 15000 }
+
         private fun searchBoxJs() = """(function(){var s=document.querySelector('input[type=search],input[name=q],input[name=query],input[name=wd],#search,.search input,[role=search] input,[aria-label*=Search]');if(!s)return JSON.stringify({found:false});return JSON.stringify({found:true,tag:s.tagName,type:s.type||'text',id:s.id||'',name:s.name||'',placeholder:s.placeholder||'',selector:(s.id?'#'+s.id:s.name?'[name='+s.name+']':s.tagName.toLowerCase()+'[type='+(s.type||'text')+']')})})()"""
         private fun mainContentJs() = """(function(){var s=['main','article','#content','.post','.article','.main','#main','[role=main]'];for(var i=0;i<s.length;i++){var el=document.querySelector(s[i]);if(el)return JSON.stringify({found:true,selector:s[i],tag:el.tagName,text:(el.textContent||'').trim().substring(0,200)})}return JSON.stringify({found:false,tip:'Try browser.content for full page'})})()"""
         private fun navJs() = """(function(){var s=['nav','#nav','.navbar','.menu','.header','[role=navigation]'];for(var i=0;i<s.length;i++){var el=document.querySelector(s[i]);if(el)return JSON.stringify({found:true,selector:s[i],links:Array.from(el.querySelectorAll('a[href]')).slice(0,15).map(function(a){return{text:(a.textContent||'').trim().substring(0,40),href:a.href}})})}return JSON.stringify({found:false})})()"""

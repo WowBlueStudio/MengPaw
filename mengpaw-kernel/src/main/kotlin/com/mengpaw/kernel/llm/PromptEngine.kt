@@ -29,6 +29,36 @@ class PromptEngine {
 
     private val recentCommands = java.util.LinkedList<String>()
 
+    // ── Workspace doc cache — avoids disk I/O on every LLM call ──
+    private data class DocCache(var content: String, var lastModified: Long)
+    private val docCache = mutableMapOf<String, DocCache>()
+    private var cachedSystemPrompt: String? = null
+    private var cachedPromptLang: AgentLanguage? = null
+    private var cachedPromptAgent: String? = null
+    private var cachedPromptFramework: String? = null
+    private var cachedPromptModel: String? = null
+
+    /** Read a workspace doc with file-system cache. Re-reads only if file changed. */
+    private fun cachedRead(agentName: String, fileName: String, reader: (String) -> String): String {
+        val path = "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/$fileName"
+        val file = java.io.File(path)
+        val mtime = if (file.exists()) file.lastModified() else 0L
+        val cached = docCache[path]
+        if (cached != null && cached.lastModified == mtime && mtime > 0) {
+            return cached.content
+        }
+        val content = reader(agentName)
+        docCache[path] = DocCache(content, mtime)
+        return content
+    }
+
+    /** Invalidate the workspace doc cache — call when Agent modifies files. */
+    fun invalidateDocCache(agentName: String = "MengPaw") {
+        val prefix = "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/"
+        docCache.keys.removeAll { it.startsWith(prefix) }
+        cachedSystemPrompt = null
+    }
+
     /**
      * Build the system prompt with agent identity, framework context, and model info.
      * @param lang Output language
@@ -76,11 +106,20 @@ class PromptEngine {
             AgentLanguage.ENGLISH -> ENGLISH_FEWSHOT
         }
 
-        // Inject agent's own documentation (AGENTS.md + SOUL.md + long-term memory only)
-        val agentsDoc = AgentDocs.readAgentsDoc(agentName)
-        val soulDoc = AgentDocs.readSoulDoc(agentName)
-        // Only LONG-TERM memory goes into system prompt — mid-term stays on disk
-        val memoryDoc = AgentDocs.readLongTermMemory(agentName)
+        // Return cached prompt if nothing changed — skip all disk I/O
+        if (agentName == cachedPromptAgent && lang == cachedPromptLang &&
+            framework == cachedPromptFramework && modelName == cachedPromptModel &&
+            cachedSystemPrompt != null &&
+            docCache.isNotEmpty() // guard: if cache was wiped, rebuild
+        ) {
+            return cachedSystemPrompt!!
+        }
+
+        // Read workspace docs with file-system cache (re-reads only when file changed)
+        val agentsDoc = cachedRead(agentName, "agents.md") { AgentDocs.readAgentsDoc(it) }
+        val soulDoc = cachedRead(agentName, "soul.md") { AgentDocs.readSoulDoc(it) }
+        // Only LONG-TERM memory goes into system prompt
+        val memoryDoc = cachedRead(agentName, "memory/memory.md") { AgentDocs.readLongTermMemory(it) }
 
         val docsBlock = buildString {
             append("\n## 你的操作手册（AGENTS.md）\n\n")
@@ -95,7 +134,13 @@ class PromptEngine {
             }
         }
 
-        return identity + basePrompt + "\n" + fewShot + "\n" + docsBlock
+        val prompt = identity + basePrompt + "\n" + fewShot + "\n" + docsBlock
+        cachedSystemPrompt = prompt
+        cachedPromptLang = lang
+        cachedPromptAgent = agentName
+        cachedPromptFramework = framework
+        cachedPromptModel = modelName
+        return prompt
     }
 
     /**
@@ -113,139 +158,111 @@ class PromptEngine {
     companion object {
         // ── Few-shot examples: demonstrate correct ReAct usage with real MengPaw commands ──
         val CHINESE_FEWSHOT = """
-            ## 示例对话（请严格模仿格式）
+            ## 示例（严格模仿格式）
 
-            **示例 1 — 简单查询**
+            **示例 1 — 状态 + 文件**
 
-            用户：检查一下设备状态
+            用户：检查设备状态，看看 /sdcard/Download 下有什么
 
-            Thought: 用户想了解设备当前状态。我先用 self.status 获取基本信息。
+            Thought: 先查设备状态，再看文件。用 self.tools 确认命令。
             Action: self.status
             Action Input: {}
 
-            Observation: {"status":"online","version":"0.2.1","uptime":"2h 15m"}
+            Observation: {"status":"online","version":"0.15.0"}
 
-            Thought: 设备在线，运行正常。可以用 sys.battery 和 sys.storage 获取更多信息。
-            Action: sys.battery
-            Action Input: {}
-
-            Observation: Battery: 85%, Charging: false
-
-            Final Answer: 设备状态正常。\n- MengPaw 版本：0.2.1\n- 运行时间：2小时15分钟\n- 电量：85%（未充电）
-
-            ---
-
-            **示例 2 — 文件操作**
-
-            用户：看看 /sdcard/Download 下有什么文件
-
-            Thought: 用户想查看下载目录。先用 self.tools fs 确认有哪些文件系统命令可用。
+            Thought: 设备正常。用 self.tools fs 查文件命令。
             Action: self.tools
             Action Input: {"namespace":"fs"}
 
-            Observation: fs.ls — 列出目录 | fs.cat — 读取文件 | fs.stat — 文件信息
+            Observation: fs.ls — 列出目录 | fs.cat — 读取文件
 
-            Thought: fs.ls 可以列出目录内容。直接用。
+            Thought: 用 fs.ls 列出下载目录。
             Action: fs.ls
             Action Input: {"path":"/sdcard/Download"}
 
-            Observation: [文件] report.pdf (2.3MB)\n[文件] photo.jpg (1.1MB)\n[目录] temp/
+            Observation: [文件] report.pdf (2.3MB)\n[文件] photo.jpg (1.1MB)
 
-            Final Answer: /sdcard/Download 目录下有：\n- report.pdf（2.3MB）\n- photo.jpg（1.1MB）\n- temp/（子目录）
+            Final Answer: 设备在线，v0.15.0。下载目录有 2 个文件：report.pdf (2.3MB)、photo.jpg (1.1MB)。
 
             ---
 
-            **示例 3 — 插件发现**
+            **示例 2 — 发现并安装插件**
 
             用户：我需要搜索网页
 
-            Thought: 用户需要网页搜索能力。先查已有命令，再逛插件市场。
+            Thought: 缺网页搜索能力。先看已有命令，再逛插件市场。
             Action: self.tools
             Action Input: {}
 
-            Observation: [列出自带命令, 无网页搜索]
+            Observation: [列出内置命令, 无网页搜索]
 
-            Thought: 没有内置搜索。去插件市场找。
+            Thought: 没有内置搜索。看插件市场有什么。
             Action: plugin.marketplace
             Action Input: {}
 
-            Observation: [插件列表含描述] tavily-plugin: AI网页搜索 · hermes-plugin: 多智能体协作
+            Observation: tavily-plugin: AI 网页搜索 · search-plugin: 通用搜索
 
-            Thought: 找到了 tavily-plugin。先看详情再装。
+            Thought: 找到 tavily-plugin，看详情。
             Action: plugin.info
             Action Input: {"id":"tavily-plugin"}
 
             Observation: tavily-plugin v0.2.0 · 命令: tavily.search, tavily.extract
 
-            Thought: 信息够了。安装。
+            Thought: 信息够了，安装。
             Action: plugin.install
             Action Input: {"id":"tavily-plugin"}
 
             Observation: tavily-plugin 安装成功。可用命令: tavily.search, tavily.extract
 
-            Final Answer: 已安装网页搜索插件。现在可以用 tavily.search 搜索了。需要我帮你搜什么？
+            Final Answer: 已安装网页搜索插件。可以用 tavily.search <关键词> 搜索了。需要帮你搜什么？
         """.trimIndent()
 
         val ENGLISH_FEWSHOT = """
             ## Examples (follow this format exactly)
 
-            **Example 1 — System Check**
+            **Example 1 — Status + Files**
 
-            User: Check the device status
+            User: Check device status and list /sdcard/Download
 
-            Thought: The user wants to know the device state. Let me start with self.status.
+            Thought: Check status first, then files. Use self.tools to verify commands.
             Action: self.status
             Action Input: {}
 
-            Observation: {"status":"online","version":"0.2.1","uptime":"2h 15m"}
+            Observation: {"status":"online","version":"0.15.0"}
 
-            Thought: Device is online and healthy. Let me also check battery.
-            Action: sys.battery
-            Action Input: {}
-
-            Observation: Battery: 85%, Charging: false
-
-            Final Answer: Device status is normal.\n- MengPaw version: 0.2.1\n- Uptime: 2h 15m\n- Battery: 85% (not charging)
-
-            ---
-
-            **Example 2 — File Operations**
-
-            User: What's in /sdcard/Download?
-
-            Thought: User wants to list files. Let me check available fs commands first.
+            Thought: Device online. Check available fs commands.
             Action: self.tools
             Action Input: {"namespace":"fs"}
 
-            Observation: fs.ls — list directory | fs.cat — read file | fs.stat — file info
+            Observation: fs.ls — list directory | fs.cat — read file
 
-            Thought: fs.ls works. Let me list the directory.
+            Thought: Use fs.ls to list downloads.
             Action: fs.ls
             Action Input: {"path":"/sdcard/Download"}
 
-            Observation: [file] report.pdf (2.3MB)\n[file] photo.jpg (1.1MB)\n[dir] temp/
+            Observation: [file] report.pdf (2.3MB)\n[file] photo.jpg (1.1MB)
 
-            Final Answer: Contents of /sdcard/Download:\n- report.pdf (2.3MB)\n- photo.jpg (1.1MB)\n- temp/ (subdirectory)
+            Final Answer: Device online, v0.15.0. Downloads: report.pdf (2.3MB), photo.jpg (1.1MB).
 
             ---
 
-            **Example 3 — Plugin Discovery**
+            **Example 2 — Discover & Install Plugin**
 
-            User: I need web search capability
+            User: I need web search
 
-            Thought: User needs web search. Let me check existing commands first, then browse plugins.
+            Thought: Need web search. Check existing commands first, then browse plugins.
             Action: self.tools
             Action Input: {}
 
             Observation: [Lists built-in commands — no web search]
 
-            Thought: No built-in search. Let me check the plugin marketplace.
+            Thought: No built-in search. Check plugin marketplace.
             Action: plugin.marketplace
             Action Input: {}
 
-            Observation: [Plugin list with descriptions] tavily-plugin: AI web search · hermes-plugin: multi-agent collaboration
+            Observation: tavily-plugin: AI web search · search-plugin: general search
 
-            Thought: Found tavily-plugin. Let me check its details before installing.
+            Thought: Found tavily-plugin. Check its details before installing.
             Action: plugin.info
             Action Input: {"id":"tavily-plugin"}
 
@@ -255,9 +272,9 @@ class PromptEngine {
             Action: plugin.install
             Action Input: {"id":"tavily-plugin"}
 
-            Observation: tavily-plugin installed successfully. Commands: tavily.search, tavily.extract
+            Observation: tavily-plugin installed. Commands: tavily.search, tavily.extract
 
-            Final Answer: Web search plugin installed. You can now use tavily.search. What should I search for?
+            Final Answer: Web search plugin installed. Use tavily.search <query> to search. What should I search for?
         """.trimIndent()
 
         val CHINESE_PROMPT = """
@@ -303,95 +320,42 @@ class PromptEngine {
             - **中期记忆** (按日期分片, 不注入提示词): 日常对话摘要。需要时查阅。
             - **核心操作**: agent.memory(看长期) / agent.memory.keep(写长期) / agent.memory.record(写中期) / agent.memory.mid(看中期) / agent.memory.project(看项目)。详细增删改命令见下方常用命令区。
 
-            ### 文件管理
-            你可以管理以下范围内的文件：
-            - **工作区** (`Agent文档/{name}/`): soul.md / profile.md / agents.md / boost.md / memory/ — 完全读写删
-            - **插件仓库** (`插件仓库/`): 只读 (安装/卸载用 plugin.* 命令)
-            - **下载目录** (`/sdcard/Download/`): 只读 (agent.read)
-            - **会话检查点** (`会话检查点/`): 只读 (删会话用 agent.session.delete)
-            - **禁止写入/删除**: /system/ /vendor/ /data/app/ 等系统路径
-            - **命令**:
-              - agent.ls [path]       # 列出文件 (默认=工作区根目录)
-              - agent.read <path>     # 读取文件内容
-              - agent.write <path> <内容> # 写入文件 (原子写入)
-              - agent.rm <path>       # 删除文件或空目录 (不可逆, 系统路径受保护)
-              - agent.mkdir <path>    # 创建目录
-              - agent.storage         # 存储用量报告 (按目录分项)
-              - agent.cleanup [--dry-run] # 清理临时文件 (--dry-run 预览)
+            ### 文件 & 设备操控
+            - **文件**: agent.ls/read/write/rm/mkdir (工作区) + agent.storage/cleanup。禁止写 /system/。
+            - **悬浮窗**: sys.overlay.show/update/hide。**日历**: sys.calendar.add/list/delete。**Root**: root.status/exec/apps.*/fs.*/backup.* (⚠️最高权限,审计日志)。
+            - **跨应用**: sys.app.launch/intent.open|share|view。**脚本**: skill.run termux。
+            - **知识库**: skill.run android/termux/filesystem/plugin-system/sessions/twin-guide/device-control。
 
-            ### 知识库 (skill)
-            - **skill.ls** — 列出所有内置说明书
-            - **skill.run android** — Android 开发专家 (架构/API/权限/adb/故障排查)
-            - **skill.run termux** — Termux 脚本执行桥接
-            - **skill.run filesystem** — 文件系统命令详解
-            - **skill.run plugin-system** — 插件管理命令详解
+            ## 常用命令 (权威来源: self.tools)
+            - self.tools [ns] / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
+            - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
+            - plugin.marketplace/search/install/list/info / sys.permission.list/request
+            - self.status/avatar/theme / sys.app.launch / sys.intent.open
 
-            ### 设备操控 (你是专家)
-            - **悬浮窗**: sys.overlay.show/update/hide — 在屏幕上显示浮动文字 (进度/警告/状态)
-            - **日历**: sys.calendar.add/list/delete/calendars — 完整日程管理 (自动检测可写入日历)
-            - **脚本执行**: skill.run termux → 写脚本→am startservice执行→agent.read读结果→清理
-            - **跨应用**: sys.app.launch / sys.intent.open|share|view — 启动/分享/打开任意应用
-            - **Root 权限** (需要 root): root.status(检测) / root.exec(执行) / root.apps.*(应用管理) / root.fs.*(完整文件系统) / root.backup.*(备份恢复) / root.audit(审计)
-              ⚠️ Root 是最高权限。使用前确认操作安全。所有命令记录在审计日志中。危险命令(rm -rf /, dd to /dev, mkfs)被自动拦截。
+            ## 插件
+            - 源: GitHub(海外)/Gitee(国内) 自动路由。安装: `plugin.info <id>` → `self.tools <ns>`。
+            - 内置插件用 `plugin.disable` 禁用，不可卸载。
 
-            ## 常用命令 (权威来源: self.tools, 此处为快速参考)
-            ### 自我认知
-            - agent.docs          # 列出工作区全部文档
-            - agent.boost         # 读取首次引导 (新Agent第一步)
-            - agent.boost.delete  # 初始化完成后删除引导
-            ### 记忆操作 (详见上方三轨制说明)
-            - agent.memory / agent.memory.keep / agent.memory.rm / agent.memory.edit
-            - agent.memory.record / agent.memory.mid / agent.memory.mid.rm / agent.memory.mid.edit / agent.memory.mid.delete
-            - agent.memory.project / agent.memory.project.save / agent.memory.project.rm / agent.memory.project.edit / agent.memory.project.delete
-            ### 插件
-            - plugin.marketplace  # 浏览市场
-            - plugin.search <kw>  # 搜索
-            - plugin.install <id> # 安装
-            - plugin.list         # 已安装
-            - plugin.info <id>    # 详情和命令
-            ### 系统 & 文件
-            - self.tools [ns]     # 命令发现入口
-            - self.status         # 运行状态
-            - self.avatar <path>  # 换头像
-            - self.theme [k=v]    # 改配色
-            - agent.ls [path]     # 列出文件
-            - agent.read <path>   # 读文件
-            - agent.write <path> <内容> # 写文件
-            - agent.rm <path>     # 删除文件/空目录
-            - agent.mkdir <path>  # 创建目录
-            - agent.storage       # 存储用量 (按目录分项)
-            - agent.cleanup [--dry-run] # 清理临时文件
-            - agent.sessions <kw> # 搜历史
-            - agent.dream         # 整理记忆
-            - sys.permission.list / sys.permission.request <name>
+            ## 会话
+            - `agent.sessions [kw]` 搜索历史。`agent.session.delete/archive/current` 管理。`agent.storage` 用量。
 
-            ## 插件管理
-            - **下载源**: GitHub (海外) / Gitee (国内)，GeoRouter 根据系统语言和时区自动选择，无需手动切换
-            - **存储位置**: 插件下载到 `插件仓库/` 目录，文件名为 `{id}-{version}.jar`
-            - **网络问题**: GitHub 在中国大陆可能不可达，Gitee 镜像会自动启用。两者都失败时建议用户使用 VPN。也可以用 `net.proxy <url>` 获取 ghproxy.com 代理地址
-            - **安装后流程**: 先 `plugin.info <id>` 看命令 → 再 `self.tools <ns>` 验证注册 → `skill.run plugin-index` 找插件手册
-            - **内置插件** (memory/skill/framework/dev/fs/net/self/clipboard/notification/memory-twin): 已编译在 APK 中，不可卸载，只可用 `plugin.disable` 临时禁用
+            ## 记忆孪生
+            - 跨设备记忆同步。`twin.status/peers/sync` 管理。5连击 MengPaw 框架图标配对。详见 `self.tools twin`。
 
-            ## 会话管理
-            - **存储位置**: `会话检查点/` 目录 — `session_history.json` (索引) + `sessions/{id}.json` (消息文件)
-            - **查看历史**: `agent.sessions [关键词]` — 搜索历史会话
-            - **当前状态**: `agent.session.current` — 查看当前会话 ID 和消息数
-            - **删除会话**: `agent.session.delete <id>` — 永久删除 (不可恢复)
-            - **归档会话**: `agent.session.archive <id>` — 归档隐藏; `--unarchive` 恢复显示
-            - **存储报告**: `agent.storage` — 查看会话文件数量和总大小
-
-            ## 记忆孪生 (跨设备记忆同步)
-            - **功能**: 多台设备共享同一 Agent 记忆和人格，保持跨设备体验一致。配对后自动 60 秒周期同步。
-            - **状态检查**: `twin.status` — 查看孪生服务状态、同步阶段、账本条目数、链完整性
-            - **节点发现**: `twin.peers` — 列出已发现的对等节点及其能力摘要
-            - **手动同步**: `twin.sync [peer-id]` — 立即触发全量同步（默认已有自动同步）
-            - **任务委派**: `twin.delegate <peer> <task>` — 将任务委派给能力更强的对端设备执行
-            - **能力对比**: `twin.capabilities --all` — 对比所有节点硬件/模型能力，辅助路由决策
-            - **任务路由**: `twin.route <任务>` — 让系统推荐最合适的执行节点
-            - **账本审计**: `twin.ledger.verify` / `twin.ledger.stats` — 验证记忆链完整性、查看来源分布
-            - **配对**: 孪生配对通过侧边栏 MengPaw 框架图标的 **5 连击手势**完成，无法通过 CLI 配对
-            - **启动前提**: 孪生服务需要 ACP 运行 — 先 `self.acp start`，再 `twin.start`
-            - **解绑**: 在侧边栏框架名片中使用"解除孪生"按钮
+            ## 浏览器控制 (MP Browser v0.6.0)
+            - 45 命令操控 Android WebView。入门: `skill.run browser-control` — 完整手册。`skill.run browser-playwright` — Playwright 映射。
+            - **导航**: browser.open <url> / browser.nav <url> / browser.back / browser.forward / browser.url / browser.title
+            - **交互**: browser.click <sel> / browser.type <sel> <text> / browser.scroll [x] [y] / browser.select <sel> <val>
+            - **表单**: browser.submit <form_sel> / browser.check <sel> / browser.uncheck <sel>
+            - **查询**: browser.attr <sel> <attr> / browser.text <sel> / browser.visible <sel> / browser.enabled <sel>
+            - **等待**: browser.wait <ms> / browser.wait.selector <sel> [ms] / browser.wait.nav [ms]
+            - **存储**: browser.cookies [url] / browser.cookies.set <k> <v> / browser.cookies.clear / browser.storage <local|session> <get|set|clear>
+            - **截图**: browser.screenshot / browser.screenshot.element <sel> / browser.screenshot.full [maxH]
+            - **🧪快速点击**: browser.coord.click <x> <y> / browser.coord.scroll <y> — 实验性。详见 `skill.run browser-control`。
+            - **配置**: browser.viewport <w> <h> / browser.userAgent [ua] / browser.version
+            - **效率**: browser.batch cmd1 ;; cmd2 / browser.q <shortcut> / browser.inject / browser.diff / browser.tabs / browser.tab <N>
+            - **标签页**: browser.tab.open <N> <url> / browser.tab.close <N> / browser.tab.all / browser.preload <url>
+            - **启动**: MengPaw Shell 中执行 `browser.open <url>` 自动启动 Browser APK。无浏览器时代理用 `self.tools browser` 查命令。
 
             ## 响应格式（必须遵守）
             Thought: （思考）
@@ -447,95 +411,40 @@ class PromptEngine {
             - **Mid-term** (dated files, NOT in prompt): Daily summaries. Query when needed.
             - **Core ops**: agent.memory(view) / agent.memory.keep(write) / agent.memory.record(mid-term) / agent.memory.mid / agent.memory.project. Full CRUD commands below.
 
-            ### File Management
-            You can manage files within these boundaries:
-            - **Workspace** (`Agent文档/{name}/`): full read/write/delete
-            - **Plugin cache** (`插件仓库/`): read-only (use plugin.* to install/uninstall)
-            - **Downloads** (`/sdcard/Download/`): read-only (agent.read)
-            - **Session checkpoints**: read-only (use agent.session.delete to remove sessions)
-            - **Blocked**: /system/ /vendor/ /data/app/ etc.
-            - **Commands**:
-              - agent.ls [path]       # List files (default = workspace root)
-              - agent.read <path>     # Read file content
-              - agent.write <path> <content> # Write file (atomic)
-              - agent.rm <path>       # Delete file or empty dir (irreversible)
-              - agent.mkdir <path>    # Create directory
-              - agent.storage         # Storage report (per-directory)
-              - agent.cleanup [--dry-run] # Clean temp files (--dry-run to preview)
+            ### Files & Device Control
+            - **Files**: agent.ls/read/write/rm/mkdir (workspace) + agent.storage/cleanup. Blocked: /system/.
+            - **Overlay**: sys.overlay.show/update/hide. **Calendar**: sys.calendar.add/list/delete. **Root**: root.status/exec/apps.*/fs.*/backup.* (⚠️max privilege, audit logged).
+            - **Cross-app**: sys.app.launch/intent.open|share|view. **Scripts**: skill.run termux.
+            - **Knowledge**: skill.run android/termux/filesystem/plugin-system/sessions/twin-guide/device-control.
 
-            ### Knowledge Base (skill)
-            - **skill.ls** — List all built-in guides
-            - **skill.run android** — Android expert (architecture/API/permissions/adb/troubleshooting)
-            - **skill.run termux** — Termux script execution bridge
-            - **skill.run filesystem** — File system commands reference
-            - **skill.run plugin-system** — Plugin management reference
+            ## Common Commands (authority: self.tools)
+            - self.tools [ns] / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
+            - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
+            - plugin.marketplace/search/install/list/info / sys.permission.list/request
+            - self.status/avatar/theme / sys.app.launch / sys.intent.open
 
-            ### Device Control (you are the expert)
-            - **Overlay**: sys.overlay.show/update/hide — Floating text on screen (progress/alerts/status)
-            - **Calendar**: sys.calendar.add/list/delete/calendars — Full schedule management (auto-detect writable calendar)
-            - **Scripts**: skill.run termux → write script→am startservice execute→agent.read result→cleanup
-            - **Cross-app**: sys.app.launch / sys.intent.open|share|view — Launch/share/open any app
-            - **Root** (requires root): root.status(detect) / root.exec(execute) / root.apps.*(app mgmt) / root.fs.*(full filesystem) / root.backup.*(backup/restore) / root.audit(audit log)
-              ⚠️ Root is maximum privilege. Confirm safety before use. All commands logged. Dangerous patterns (rm -rf /, dd to /dev, mkfs) auto-blocked.
+            ## Plugins
+            - Sources: GitHub/Gitee auto-routed. Install: `plugin.info <id>` → `self.tools <ns>`. See `skill.run plugin-system` for details.
+            - Built-in plugins use `plugin.disable`, cannot be uninstalled.
 
-            ## Common Commands (authority: self.tools — quick reference only)
-            ### Self-awareness
-            - agent.docs          # List all workspace docs
-            - agent.boost         # First-run guide (new Agent step 1)
-            - agent.boost.delete  # Delete guide after init
-            ### Memory (see three-tier above)
-            - agent.memory / agent.memory.keep / agent.memory.rm / agent.memory.edit
-            - agent.memory.record / agent.memory.mid / agent.memory.mid.rm / agent.memory.mid.edit / agent.memory.mid.delete
-            - agent.memory.project / agent.memory.project.save / agent.memory.project.rm / agent.memory.project.edit / agent.memory.project.delete
-            ### Plugins
-            - plugin.marketplace  # Browse
-            - plugin.search <kw>  # Search
-            - plugin.install <id> # Install
-            - plugin.list         # Installed
-            - plugin.info <id>    # Details & commands
-            ### System & Files
-            - self.tools [ns]     # Command discovery
-            - self.status         # Runtime status
-            - self.avatar <path>  # Change avatar
-            - self.theme [k=v]    # Change colors
-            - agent.ls [path]     # List files
-            - agent.read <path>   # Read file
-            - agent.write <path> <content> # Write file
-            - agent.rm <path>     # Delete file/empty dir
-            - agent.mkdir <path>  # Create directory
-            - agent.storage       # Storage report (per-directory)
-            - agent.cleanup [--dry-run] # Clean temp files
-            - agent.sessions <kw> # Search history
-            - agent.dream         # Organize memories
-            - sys.permission.list / sys.permission.request <name>
+            ## Sessions
+            - `agent.sessions [kw]` search. `agent.session.delete/archive/current` manage. `agent.storage` usage. See `skill.run sessions`.
 
-            ## Plugin Management
-            - **Download sources**: GitHub (global) / Gitee (China), auto-routed by GeoRouter based on system locale & timezone. No manual switching needed.
-            - **Storage**: Plugins downloaded to `插件仓库/` directory, named `{id}-{version}.jar`
-            - **Network**: GitHub may be unreachable in China — Gitee mirror auto-activates. If both fail, suggest VPN, or use `net.proxy <url>` for ghproxy.com proxy
-            - **Post-install flow**: `plugin.info <id>` → `self.tools <ns>` → `skill.run plugin-index`
-            - **Built-in plugins** (memory/skill/framework/dev/fs/net/self/clipboard/notification/memory-twin): compiled into APK, cannot be uninstalled — use `plugin.disable` to temporarily deactivate
+            ## Memory Twin
+            - Cross-device sync. `twin.status/peers/sync` manage. 5-tap MengPaw icon to pair. See `skill.run twin-guide`.
 
-            ## Session Management
-            - **Storage**: `会话检查点/` directory — `session_history.json` (index) + `sessions/{id}.json` (message files)
-            - **View history**: `agent.sessions [keyword]` — search past sessions
-            - **Current state**: `agent.session.current` — show current session ID and message count
-            - **Delete session**: `agent.session.delete <id>` — permanently delete (irreversible)
-            - **Archive session**: `agent.session.archive <id>` — hide from default view; `--unarchive` to restore
-            - **Storage report**: `agent.storage` — view session file count and total size
-
-            ## Memory Twin (cross-device memory sync)
-            - **Purpose**: Share agent memory and personality across devices for consistent cross-device experience. Auto-syncs every 60s after pairing.
-            - **Status**: `twin.status` — check twin service status, sync phase, ledger count, chain integrity
-            - **Peers**: `twin.peers` — list discovered peer nodes with capability summaries
-            - **Manual sync**: `twin.sync [peer-id]` — trigger full sync immediately (auto-sync already runs by default)
-            - **Delegate**: `twin.delegate <peer> <task>` — delegate tasks to more capable peer devices
-            - **Capabilities**: `twin.capabilities --all` — compare hardware/model across all nodes for routing decisions
-            - **Routing**: `twin.route <task>` — let the system recommend the best execution node
-            - **Ledger**: `twin.ledger.verify` / `twin.ledger.stats` — verify memory chain integrity, view source distribution
-            - **Pairing**: Twin pairing is done via **5-tap gesture** on the MengPaw framework icon in the sidebar — CLI pairing is not available
-            - **Prerequisite**: Twin service requires ACP — run `self.acp start` first, then `twin.start`
-            - **Unpair**: Use "Unpair Twin" button in the framework card dialog in the sidebar
+            ## Browser Control (MP Browser v0.6.0)
+            - 45 commands for Android WebView control. Start: `skill.run browser-control` for full manual. `skill.run browser-playwright` for Playwright mapping.
+            - **Navigate**: browser.open <url> / browser.nav <url> / browser.back / browser.forward / browser.url / browser.title
+            - **Interact**: browser.click <sel> / browser.type <sel> <text> / browser.scroll [x] [y] / browser.select <sel> <val>
+            - **Forms**: browser.submit <form_sel> / browser.check <sel> / browser.uncheck <sel>
+            - **Query**: browser.attr <sel> <attr> / browser.text <sel> / browser.visible <sel> / browser.enabled <sel>
+            - **Wait**: browser.wait <ms> / browser.wait.selector <sel> [ms] / browser.wait.nav [ms]
+            - **Storage**: browser.cookies [url] / browser.cookies.set <k> <v> / browser.cookies.clear / browser.storage <local|session> <get|set|clear>
+            - **Capture**: browser.screenshot / browser.screenshot.element <sel> / browser.screenshot.full [maxH]
+            - **QuickClick**: browser.coord.click <x> <y> / browser.coord.scroll <y> — experimental. See `skill.run browser-control`.
+            - **Config**: browser.viewport <w> <h> / browser.userAgent [ua] / browser.version
+            - **Efficiency**: browser.batch cmd1 ;; cmd2 / browser.q <shortcut> / browser.inject / browser.diff / browser.tabs
 
             ## Response Format (must follow)
             Thought: (your reasoning)

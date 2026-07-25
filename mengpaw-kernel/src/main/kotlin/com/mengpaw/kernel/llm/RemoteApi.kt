@@ -26,13 +26,13 @@ class RemoteApi(
     data class RemoteConfig(
         val maxTokens: Int = 4096,
         val temperature: Double = 0.7,
-        val timeoutMs: Long = 60_000
+        val timeoutMs: Long = 120_000
     )
 
     private val client = HttpClient(OkHttp) {
         install(HttpTimeout) {
             requestTimeoutMillis = config.timeoutMs
-            connectTimeoutMillis = 10_000
+            connectTimeoutMillis = 20_000
         }
     }
 
