@@ -4,7 +4,46 @@
 
 ---
 
-## 2026-07-25 — v0.15.0 记忆架构重构 + 全能力扩展
+## 2026-07-26 — v0.15.2 浏览器 Agent 控制深度重构
+
+### 审计驱动的功能闭环
+
+80. **功能实现了≠Agent 知道怎么用**
+    - 场景：Quick Click 全部代码写完、编译通过，但审计发现 17 项检查中 11 项不合格——Agent 完全不知道这个功能存在。
+    - 修复：三层十二问逐条过。P0: 提示词指路→Skill、文档同步。P1: toggle 开关真正生效+原子写入+CountDownLatch 替代 Thread.sleep+自动降级。P2: fileSize+错误提示。
+    - 教训：**任何新功能上线前必须用 audit-methodology.md 自检。Agent 认知层是最容易被忽略的层——Agent 不知道=功能白做。**
+
+81. **提示词不要硬编码——指路到 Skill**
+    - 场景：最初把完整 Quick Click 工作流塞进 PromptEngine，用户指出应该放 Skills 里。
+    - 修复：提示词只写 `browser.screenshot.full / coord.click / coord.scroll — 详见 skill.run browser-control`。详细内容全部搬到 `skills/browser-control.md`（92 行）。
+    - 教训：**提示词是目录，Skills 是正文。目录只指路，正文放细节。改 Skill 文件不需要重新编译内核。**
+
+82. **全页截图 stitch: Thread.sleep → CountDownLatch + 双 post**
+    - 场景：`screenshotFull` 用 `Thread.sleep(200)` 等待滚动渲染，脆弱且阻塞 JavaBridge 线程。
+    - 修复：`webView.post{ scrollTo } → webView.post{ latch.countDown() }` 双 post 确保滚动完成再截取。MAX_SEGMENTS=30 防 OOM。tmp→rename 原子写入防损坏。
+    - 教训：**WebView 操作必须用 post 队列串行化，不能用 sleep。latch.await(500ms) 比 sleep 更可靠且不永久阻塞。**
+
+83. **Companion object + lambda provider 是轻量 DI**
+    - 场景：BrowserPrefs 在 Composable 中创建，但 BuiltinBrowserPlugin 的 toggle 检查需要在 suspend handler 中读取。
+    - 修复：`BuiltinBrowserPlugin.Companion.quickClickEnabled = { prefs.quickClickEnabled }` — lambda 在 Activity onCreate 绑定，handler 通过 `Companion.quickClickEnabled()` 读取最新值。零反射、零第三方库。
+    - 教训：**Android 模块间的轻量级依赖注入用 Companion + lambda provider 模式。比反射绑定更可靠，比 Dagger/Koin 更轻。**
+
+84. **大文件编辑首选 Edit 工具，sed 操作逐段验证**
+    - 场景：用小脚本删 createWebView 函数，行号变化连锁破坏后续操作，最终文件损坏需 git checkout 恢复。
+    - 修复：后续所有修改全部用 Edit 工具（精确字符串匹配+唯一性校验）。大型修改只删底部内容，从下到上避免行号漂移。
+    - 教训：**Kotlin 文件的结构性修改用 Edit 工具逐段进行。sed 行号删除只适用于确定不会影响后续编辑的底部区域。**
+
+### 浏览器 Agent 命令设计
+
+85. **命令设计先看 Playwright API**
+    - 场景：浏览器扩展到 48 命令。waitForSelector/cookies/storage/dialog/select/viewport 等全部对应 Playwright 同名方法。
+    - 修复：新增 `skills/browser-playwright.md` 提供 30+ 条 Playwright→browser.* 映射表。Agent 已知 Playwright 即可无缝迁移。
+    - 教训：**设计 Agent API 时，先查领域标准（Playwright/Puppeteer/Selenium）。标准 API 降低 Agent 学习成本，且经过行业验证。**
+
+86. **代码生成型插件应该加"执行"模式**
+    - 场景：`search.*` 和 `inspector.*` 插件只生成 JS 代码，Agent 需要两轮往返（生成→粘贴→执行）。效率低且易出错。
+    - 修复方向（未实现）：给插件传入 WebView 引用，`search.extract` 可直接在页面上执行并返回结果。或者 `browser.batch` 命令整合"生成+执行"。
+    - 教训：**插件命令的返回值类型要区分"文档型"(只读信息)和"执行型"(有副作用)。执行型命令应该一次性完成，不要让 Agent 做中继。**
 
 ### 三轨记忆系统
 

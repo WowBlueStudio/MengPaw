@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.15.2 (2026-07-26) — 功能闭环审计 + 浏览器 v0.6.0
+
+### 审计修复 (6 项, PromptEngine 三层十二问)
+- **缓存失效**: `invalidateDocCache` 路径前缀匹配替代子串 `contains`
+- **缓存key**: 提示词缓存检查前置到文件读取之前 + `docCache.isNotEmpty()` 守卫
+- **Plan进度**: 任务边界标记根据 `agentLanguage` 输出中英双语版本
+- **错误消息**: `AdaptiveLlmProvider` 移除无效双重 `bodyAsText()` 重试, 改用 `LlmApiException`
+- **容器高度**: `TraceStepItem` 恢复 Step 编号 + 放宽观察显示条件 (action为null也显示)
+- **提示词**: Few-shot 恢复示例2 (插件发现→查详情→安装), Agent 学会发现插件
+
+### 浏览器 v0.6.0
+- **暗色模式**: 跟随系统 UI_MODE_NIGHT_MASK
+- **页面查找**: `BrowserFindBar` + WebView `findAllAsync`
+- **阅读模式**: `BrowserReaderMode` + JS 内容提取 + 大字号渲染
+- **Markdown 文件**: intent-filter `text/markdown` + `.md pathPattern`, 浏览器直接查看
+- **Agent 协同设置**: Quick Click/自动注入/截图高度·质量/ 可配置
+- **MCP 解耦**: `toolExecutor` 委托模式, 浏览器模块注入 BrowserBridge, 插件不依赖 APK
+- **Skills**: 6 个浏览器 Skill → plugin-index 链接更新
+
+### 网络 & 超时
+- **RemoteApi**: 连接超时 10s→20s, 请求超时 60s→120s
+- **AdaptiveLlmProvider**: socketTimeoutMillis=60s 闲置超时保护
+
+### 系统提示词优化
+- 浏览器控制 section 新增 45 命令完整参考 (中英文)
+- 插件/会话/记忆孪生 sections 压缩为紧凑格式, 给出 `skill.run` 指路
+- 命令参考精简: "权威来源 self.tools" + 常用命令速查
+
+### 插件更新
+- **plugin-browser-mcp v0.2.0**: 新增 `browser.mcp.invoke` 命令 + toolExecutor 委托
+- **plugin-skill**: plugin-index 增加 5 个浏览器 Skill 入口
+
+### UI 优化
+- **自适应图标**: brand 色 `#0E4397` 背景 + 白色地球 + 光标指针
+- **滚动感知工具栏**: 向下滚动隐藏，向上显示 + fade/slide 动画
+- **冷启动页**: 品牌 logo + 快捷方式 (GitHub/百度/Google/Bing)
+- **material-icons-extended**: 完整图标集，与 Shell 一致
+- **MD 文件浏览**: `MarkdownText` 渲染 `.md` 文件 (Intent + WebView URL)
+
 ## v0.14.1 (2026-07-24) — 验证反馈修复
 
 ### 修复

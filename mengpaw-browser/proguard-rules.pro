@@ -33,6 +33,11 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 
+# ── Browser sub-packages (data / ui / web) ──
+-keep class com.mengpaw.browser.data.** { *; }
+-keep class com.mengpaw.browser.ui.** { *; }
+-keep class com.mengpaw.browser.web.** { *; }
+
 # ── Android Security Crypto ──
 -keep class androidx.security.crypto.** { *; }
 

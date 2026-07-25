@@ -35,6 +35,10 @@ object AgentDocs {
     @Volatile
     var bootstrapper: ((agentName: String) -> Unit)? = null
 
+    /** Called when Agent modifies workspace docs — PromptEngine uses this to invalidate cache. */
+    @Volatile
+    var onDocChanged: ((agentName: String) -> Unit)? = null
+
     /** Create default doc files for a new agent. */
     fun bootstrap(agentName: String) {
         val dir = File(DataPaths.AGENTS, agentName)
@@ -95,6 +99,7 @@ object AgentDocs {
             tmp.renameTo(file)
             if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
         } catch (_: Exception) {}
+        onDocChanged?.invoke(agentName)
     }
 
     /** Search long-term memory by keywords. */
@@ -158,6 +163,7 @@ object AgentDocs {
             tmp.renameTo(file)
             if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
         } catch (_: Exception) {}
+        onDocChanged?.invoke(agentName)
     }
 
     /** Search across all mid-term memory files by keywords. */

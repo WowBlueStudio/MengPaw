@@ -68,6 +68,10 @@ class AgentEngine(
     init {
         // Wire real PluginManager into AgentDocManager so CLI.md generation sees installed plugins
         agentDocManager.pluginManager = pluginManager
+        // Wire cache invalidation: when AgentDocs modifies workspace, invalidate PromptEngine cache
+        com.mengpaw.kernel.agent.AgentDocs.onDocChanged = { name ->
+            promptEngine.invalidateDocCache(name)
+        }
     }
 
     /** The active LLM provider. Can be updated after construction (e.g. when user configures API key). */
@@ -412,9 +416,14 @@ class AgentEngine(
                 if (parsed.isFinal) {
                     val answer = parsed.thought
                     sessionManager.addMessage(session.id, Message("assistant", answer))
-                    // Inject task boundary marker so previous task context doesn't leak
-                    sessionManager.addMessage(session.id, Message("system",
-                        "✅ 上一任务已完成。以下是与上一任务无关的新对话。不要参考上文中的未完成任务。"))
+                    // Task boundary: tell LLM previous task is done, don't repeat old commands
+                    val boundaryMsg = when (agentLanguage) {
+                        PromptEngine.AgentLanguage.ENGLISH ->
+                            "[Previous task complete. New conversation begins. Do NOT repeat commands from above.]"
+                        PromptEngine.AgentLanguage.CHINESE ->
+                            "[上一任务已结束。以下为新对话。不要重复上文中的命令。]"
+                    }
+                    sessionManager.addMessage(session.id, Message("system", boundaryMsg))
                     _state.value = AgentState.Finished(answer)
                     recordTaskMemory(task, answer)
                     return answer

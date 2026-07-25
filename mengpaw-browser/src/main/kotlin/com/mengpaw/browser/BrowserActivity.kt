@@ -16,12 +16,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.SideEffect
 import androidx.compose.foundation.clickable
 import com.mengpaw.core.AndroidLogger
 import com.mengpaw.core.DataPathsInitializer
 import com.mengpaw.kernel.KernelLog
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -45,7 +47,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,6 +54,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mengpaw.browser.plugin.BrowserElement
 import com.mengpaw.browser.plugin.BrowserPluginRegistry
+import com.mengpaw.browser.ui.BrowserFindBar
+import com.mengpaw.browser.ui.BrowserReaderMode
+import com.mengpaw.design.components.MarkdownText
+import com.mengpaw.design.components.parseMarkdown
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import com.mengpaw.design.theme.ArcoTheme
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
@@ -123,6 +130,28 @@ class BrowserPrefs(ctx: Context) {
     var savePasswords: Boolean
         get() = p.getBoolean("save_passwords", true)
         set(v) = p.edit().putBoolean("save_passwords", v).apply()
+
+    // ── Agent Collaboration Settings ──
+
+    /** Quick Click: full-page screenshot + coordinate taps (experimental, default ON) */
+    var quickClickEnabled: Boolean
+        get() = p.getBoolean("quick_click", true)
+        set(v) = p.edit().putBoolean("quick_click", v).apply()
+
+    /** Auto-inject the __mp bridge on every page load for faster commands */
+    var autoInjectBridge: Boolean
+        get() = p.getBoolean("auto_inject", true)
+        set(v) = p.edit().putBoolean("auto_inject", v).apply()
+
+    /** Max height (pixels) for full-page screenshots. Default 15000, range 5000-30000 */
+    var screenshotMaxHeight: Int
+        get() = p.getInt("screenshot_max_h", 15000).coerceIn(5000, 30000)
+        set(v) = p.edit().putInt("screenshot_max_h", v.coerceIn(5000, 30000)).apply()
+
+    /** Screenshot JPEG quality percentage (for full-page, lower = smaller file) */
+    var screenshotQuality: Int
+        get() = p.getInt("screenshot_quality", 85).coerceIn(30, 100)
+        set(v) = p.edit().putInt("screenshot_quality", v.coerceIn(30, 100)).apply()
 }
 
 /** Simple history store with 30-day retention and in-memory cache. */
@@ -281,14 +310,82 @@ class BrowserActivity : ComponentActivity() {
         // Bind shared PluginManager to BrowserPluginRegistry for active-state filtering
         com.mengpaw.browser.plugin.BrowserPluginRegistry.pluginManager =
             com.mengpaw.kernel.plugin.PluginManager.globalInstance
+        // Bind WebView + tool executor to BrowserMcpPlugin (via reflection, plugin is optional)
+        try {
+            val clazz = Class.forName("com.mengpaw.plugin.browsermcp.BrowserMcpPlugin")
+            val wvField = clazz.getDeclaredField("webViewProvider")
+            wvField.isAccessible = true
+            wvField.set(null, { -> webViewMapRef.values.firstOrNull() } as kotlin.jvm.functions.Function0<*>)
+            // Tool executor: delegates to instance method
+            val self = this
+            val executor: (String, Map<String, String>) -> String = { toolName, args ->
+                self.executeMcpTool(toolName, args)
+            }
+            val exField = clazz.getDeclaredField("toolExecutor")
+            exField.isAccessible = true
+            exField.set(null, executor)
+        } catch (_: Exception) { /* plugin not installed, skip */ }
+        // Bind Quick Click toggle and screenshot settings to BuiltinBrowserPlugin
+        val prefs = BrowserPrefs(this)
+        com.mengpaw.browser.plugin.BuiltinBrowserPlugin.quickClickEnabled = { prefs.quickClickEnabled }
+        com.mengpaw.browser.plugin.BuiltinBrowserPlugin.screenshotMaxHeight = { prefs.screenshotMaxHeight }
         enableEdgeToEdge()
         // Read theme from first Agent's theme.md (or default)
         val themeConfig = BrowserThemeConfig.load(this)
+        val isDark = (resources.configuration.uiMode
+            and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        // Check for .md file intent
+        val mdFileContent = checkMdFile(intent)
         setContent {
-            ArcoTheme(darkTheme = false /* follows system */) {
-                BrowserApp(initialUrl = extractUrl(intent))
+            ArcoTheme(darkTheme = isDark) {
+                BrowserApp(initialUrl = extractUrl(intent), initialMdContent = mdFileContent)
             }
         }
+    }
+
+    /** MCP tool executor called by BrowserMcpPlugin via toolExecutor delegate. */
+    private fun executeMcpTool(toolName: String, args: Map<String, String>): String {
+        val wv = webViewMapRef.values.firstOrNull()
+            ?: return """{"ok":false,"error":"WebView not available"}"""
+        val bridge = com.mengpaw.browser.bridge.BrowserBridge(wv)
+        return try {
+            when (toolName) {
+                "browser_navigate" -> {
+                    val url = args["url"] ?: return """{"ok":false,"error":"Missing 'url'"}"""
+                    wv.loadUrl(url)
+                    """{"ok":true}"""
+                }
+                "browser_screenshot" -> bridge.screenshot()
+                "browser_click" -> {
+                    val sel = args["selector"] ?: return """{"ok":false,"error":"Missing 'selector'"}"""
+                    bridge.click(sel)
+                }
+                "browser_type" -> bridge.type(args["selector"] ?: "", args["text"] ?: "")
+                "browser_extract" -> bridge.content()
+                "browser_eval" -> {
+                    val script = args["script"] ?: return """{"ok":false,"error":"Missing 'script'"}"""
+                    bridge.eval(script)
+                }
+                else -> """{"ok":false,"error":"Unknown tool: $toolName"}"""
+            }
+        } catch (e: Exception) {
+            """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
+        }
+    }
+
+    /** Check if the intent carries a Markdown file and return its content, or null. */
+    private fun checkMdFile(intent: Intent?): String? {
+        if (intent?.action != android.content.Intent.ACTION_VIEW) return null
+        val uri = intent.data ?: return null
+        // Only handle file:// URIs with .md extension
+        if (uri.scheme != "file") return null
+        val path = uri.path ?: return null
+        if (!path.endsWith(".md", ignoreCase = true) && intent.type != "text/markdown") return null
+        return try {
+            val file = java.io.File(path)
+            if (file.exists() && file.canRead()) file.readText().take(500_000) else null
+        } catch (_: Exception) { null }
     }
 
     private fun extractUrl(intent: Intent?): String? {
@@ -338,17 +435,21 @@ class BrowserActivity : ComponentActivity() {
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material.ExperimentalMaterialApi::class)
 @Composable
-fun BrowserApp(initialUrl: String? = null) {
+fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
     val ctx = LocalContext.current
     val prefs = remember { BrowserPrefs(ctx) }
     val isWide = LocalConfiguration.current.screenWidthDp >= 600
     val maxTabs = 4
 
+    // Scroll-aware toolbar animation
+    var scrollOffset by remember { mutableStateOf(0) }
+    val showToolbar = isWide || scrollOffset < 200
+
     var tabs by remember { mutableStateOf(listOf(TabState(id = 0, url = initialUrl ?: ""))) }
     var activeTabId by remember { mutableStateOf(0) }
     var isColdStart by remember { mutableStateOf(initialUrl == null) }
     var showUrlBar by remember { mutableStateOf(false) }
-    var showControls by remember { mutableStateOf(true) }
+    var showControls by remember { mutableStateOf(showToolbar) }
     var searchQuery by remember { mutableStateOf("") }
     var showImages by remember { mutableStateOf(false) }
     var images by remember { mutableStateOf<List<DetectedImage>>(emptyList()) }
@@ -357,10 +458,27 @@ fun BrowserApp(initialUrl: String? = null) {
     var showHistory by remember { mutableStateOf(false) }
     var showPasswords by remember { mutableStateOf(false) }
     var showTranslate by remember { mutableStateOf(false) }
+    var showFind by remember { mutableStateOf(false) }
+    var showReader by remember { mutableStateOf(false) }
+    var showMdViewer by remember { mutableStateOf(false) }
+    var mdContent by remember { mutableStateOf("") }
     var historyEnabled by remember { mutableStateOf(prefs.historyEnabled) }
+
+    // Auto-open Markdown viewer if launched with .md file
+    LaunchedEffect(initialMdContent) {
+        if (!initialMdContent.isNullOrBlank()) {
+            mdContent = initialMdContent
+            showMdViewer = true
+        }
+    }
     val historyStore = remember { HistoryStore(ctx) }
     var searchEngine by remember { mutableStateOf(prefs.defaultEngine()) }
     var adBlockEnabled by remember { mutableStateOf(prefs.adBlockEnabled) }
+    var quickClickEnabled by remember { mutableStateOf(prefs.quickClickEnabled) }
+    var autoInjectBridge by remember { mutableStateOf(prefs.autoInjectBridge) }
+    var screenshotMaxH by remember { mutableStateOf(prefs.screenshotMaxHeight) }
+    var screenshotQuality by remember { mutableStateOf(prefs.screenshotQuality) }
+    var showAgentSettings by remember { mutableStateOf(false) }
     val webViewMap = remember { mutableMapOf<Int, WebView>() }
     // Sync WebView map to Activity for system back-key navigation
     SideEffect { (ctx as? BrowserActivity)?.webViewMapRef = webViewMap }
@@ -385,7 +503,11 @@ fun BrowserApp(initialUrl: String? = null) {
         modifier = Modifier.fillMaxSize(),
         topBar = {
             if (!isColdStart) {
-                AnimatedVisibility(visible = showControls || isWide, enter = slideInVertically(), exit = slideOutVertically()) {
+                AnimatedVisibility(
+                    visible = showToolbar || showControls,
+                    enter = fadeIn() + slideInVertically(animationSpec = tween(200)),
+                    exit = fadeOut() + slideOutVertically(animationSpec = tween(200))
+                ) {
                     TopAppBar(
                         title = {
                             if (showUrlBar || isWide) {
@@ -475,6 +597,14 @@ fun BrowserApp(initialUrl: String? = null) {
                                     DropdownMenuItem(text = { Text("翻译页面") }, leadingIcon = { Icon(Icons.Default.Refresh, null) },
                                         enabled = !isColdStart && activeTab.title.isNotBlank(),
                                         onClick = { showTranslate = true; menuExpanded = false })
+                                    @Suppress("DEPRECATION")
+                                    DropdownMenuItem(text = { Text("页面查找") }, leadingIcon = { Icon(Icons.Default.Search, null) },
+                                        enabled = !isColdStart,
+                                        onClick = { showFind = true; menuExpanded = false })
+                                    @Suppress("DEPRECATION")
+                                    DropdownMenuItem(text = { Text("阅读模式") }, leadingIcon = { Icon(Icons.Default.Star, null) },
+                                        enabled = !isColdStart,
+                                        onClick = { showReader = true; menuExpanded = false })
                                     DropdownMenuItem(
                                         text = { Text(if (adBlockEnabled) "广告拦截: 开" else "广告拦截: 关") },
                                         leadingIcon = { Icon(if (adBlockEnabled) Icons.Default.Star else Icons.Default.Close, null) },
@@ -512,6 +642,8 @@ fun BrowserApp(initialUrl: String? = null) {
                                     }
                                     DropdownMenuItem(text = { Text("设置") }, leadingIcon = { Icon(Icons.Default.Settings, null) },
                                         onClick = { showSettings = true; menuExpanded = false })
+                                    DropdownMenuItem(text = { Text("智能体协同") }, leadingIcon = { Icon(Icons.Default.SmartToy, null) },
+                                        onClick = { showAgentSettings = true; menuExpanded = false })
                                     // Plugin-contributed menu items
                                     val pluginItems = remember { BrowserPluginRegistry.activeMenuItems() }
                                     if (pluginItems.isNotEmpty()) {
@@ -577,11 +709,15 @@ fun BrowserApp(initialUrl: String? = null) {
                 }
             }
 
-            // ── Loader ──
-            if (activeTab.isLoading && !isColdStart) LinearProgressIndicator(
-                { activeTab.progress / 100f }, Modifier.fillMaxWidth().height(2.dp),
-                color = ThemeColors.brand, trackColor = ThemeColors.bgCardHigh
-            )
+            // ── Loader (material-colored progress bar) ──
+            AnimatedVisibility(visible = activeTab.isLoading && !isColdStart, enter = fadeIn(), exit = fadeOut()) {
+                LinearProgressIndicator(
+                    { activeTab.progress / 100f },
+                    modifier = Modifier.fillMaxWidth().height(3.dp),
+                    color = ThemeColors.brand,
+                    trackColor = ThemeColors.brand.copy(alpha = 0.12f)
+                )
+            }
 
             // ── Settings dialog ──
             if (showSettings) {
@@ -645,6 +781,85 @@ fun BrowserApp(initialUrl: String? = null) {
                         }) { Text("保存") }
                     },
                     dismissButton = { TextButton(onClick = { showSettings = false }) { Text("取消") } }
+                )
+            }
+
+            // ── Agent Collaboration Settings ──
+            if (showAgentSettings) {
+                AlertDialog(
+                    onDismissRequest = { showAgentSettings = false },
+                    title = { Text("智能体协同设置") },
+                    text = {
+                        LazyColumn {
+                            // Section: Quick Click (experimental)
+                            item {
+                                Text("🧪 实验性功能", style = MaterialTheme.typography.labelLarge, color = ThemeColors.brand, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(4.dp))
+                                Text("使用全页截图 + 坐标点击替代 CSS 选择器。Vision 模型友好，对 Canvas/Shadow DOM/验证码有效。",
+                                    style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                                Spacer(Modifier.height(12.dp))
+                            }
+                            item {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("快速点击", fontWeight = FontWeight.Medium)
+                                        Text("browser.screenshot.full + coord.click", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                                    }
+                                    Switch(checked = quickClickEnabled, onCheckedChange = { quickClickEnabled = it; prefs.quickClickEnabled = it })
+                                }
+                            }
+                            item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
+
+                            // Section: Auto-inject bridge
+                            item {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("自动注入桥接", fontWeight = FontWeight.Medium)
+                                        Text("每页自动注入 __mp 加速命令 (~33x)", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                                    }
+                                    Switch(checked = autoInjectBridge, onCheckedChange = { autoInjectBridge = it; prefs.autoInjectBridge = it })
+                                }
+                            }
+                            item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
+
+                            // Section: Screenshot quality
+                            item {
+                                Text("全页截图最大高度", fontWeight = FontWeight.Medium)
+                                Text("${screenshotMaxH}px (更大=更完整, 更小=更快)", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                                Spacer(Modifier.height(4.dp))
+                                Slider(
+                                    value = screenshotMaxH.toFloat(),
+                                    onValueChange = { screenshotMaxH = it.toInt(); prefs.screenshotMaxHeight = it.toInt() },
+                                    valueRange = 5000f..30000f,
+                                    steps = 4,
+                                    colors = SliderDefaults.colors(thumbColor = ThemeColors.brand, activeTrackColor = ThemeColors.brand)
+                                )
+                            }
+                            item {
+                                Text("截图质量", fontWeight = FontWeight.Medium)
+                                Text("${screenshotQuality}% (更低=文件更小)", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                                Spacer(Modifier.height(4.dp))
+                                Slider(
+                                    value = screenshotQuality.toFloat(),
+                                    onValueChange = { screenshotQuality = it.toInt(); prefs.screenshotQuality = it.toInt() },
+                                    valueRange = 30f..100f,
+                                    steps = 6,
+                                    colors = SliderDefaults.colors(thumbColor = ThemeColors.brand, activeTrackColor = ThemeColors.brand)
+                                )
+                            }
+                            item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
+
+                            // Quick Click workflow tips
+                            item {
+                                Text("📖 使用流程", fontWeight = FontWeight.Medium)
+                                Spacer(Modifier.height(4.dp))
+                                Text("1. browser.screenshot.full → 得到全页长图\n2. Vision 模型识别目标坐标\n3. browser.coord.click <x> <y>\n4. browser.coord.scroll <y> 验证位置",
+                                    style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, lineHeight = 18.sp)
+                            }
+                        }
+                    },
+                    confirmButton = { TextButton(onClick = { showAgentSettings = false }) { Text("完成") } },
+                    dismissButton = {}
                 )
             }
 
@@ -754,11 +969,31 @@ fun BrowserApp(initialUrl: String? = null) {
                                     translating.value = true
                                     translateScope.launch(Dispatchers.IO) {
                                         try {
-                                            val pageText = activeTab.title  // FIX B39: full page translation requires JS injection to extract body text
+                                            // Extract page body text via JS injection
+                                            val pageText = withContext(Dispatchers.Main) {
+                                                suspendCancellableCoroutine { cont ->
+                                                    val wv = webViewMap[activeTabId]
+                                                    if (wv == null) {
+                                                        cont.resume(activeTab.title) {}
+                                                        return@suspendCancellableCoroutine
+                                                    }
+                                                    wv.evaluateJavascript(
+                                                        """(function(){var b=document.body;return b?b.innerText||b.textContent||"":""})()"""
+                                                    ) { jsResult ->
+                                                        val raw = jsResult?.trim()?.removeSurrounding("\"") ?: ""
+                                                        val unescaped = raw
+                                                            .replace("\\\"", "\"")
+                                                            .replace("\\n", "\n")
+                                                            .replace("\\\\", "\\")
+                                                        val text = unescaped.take(5000)
+                                                        cont.resume(text.ifBlank { activeTab.title }) {}
+                                                    }
+                                                }
+                                            }
                                             val translated = GoogleTranslate.translate(pageText, targetLang.value)
-                                            result.value = translated
+                                            withContext(Dispatchers.Main) { result.value = translated }
                                         } catch (e: Exception) {
-                                            result.value = "翻译失败: ${e.message}"
+                                            withContext(Dispatchers.Main) { result.value = "翻译失败: ${e.message}" }
                                         }
                                         translating.value = false
                                     }
@@ -815,33 +1050,106 @@ fun BrowserApp(initialUrl: String? = null) {
 
             // ── Content ──
             if (isColdStart) {
-                Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text("MengPaw 浏览器", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                // ── Branded new tab page ──
+                Column(
+                    Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    // Brand logo area
+                    Surface(
+                        modifier = Modifier.size(if (isWide) 80.dp else 64.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        color = ThemeColors.brand.copy(alpha = 0.1f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("🌐", style = MaterialTheme.typography.headlineLarge.copy(fontSize = if (isWide) 36.sp else 28.sp))
+                        }
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Text(
+                        "MengPaw 浏览器",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = ThemeColors.textPrimary
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "安全的 Agent 控制浏览器",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ThemeColors.textSecondary
+                    )
+                    Spacer(Modifier.height(28.dp))
+                    // Search / URL input bar
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(if (isWide) 0.55f else 0.88f),
+                        shape = RoundedCornerShape(ArcoRadius.round),
+                        shadowElevation = 2.dp,
+                        color = ThemeColors.surface
+                    ) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("搜索关键词或输入网址...") },
+                            leadingIcon = {
+                                IconButton(onClick = {
+                                    val engines = prefs.enabledEngines()
+                                    if (engines.isNotEmpty()) {
+                                        val idx = engines.indexOfFirst { it.key == searchEngine.key }
+                                        searchEngine = engines.getOrElse((idx + 1) % engines.size) { engines.first() }
+                                        prefs.setDefaultEngine(searchEngine)
+                                    }
+                                }) { SearchEngineLogo(searchEngine, size = 28) }
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty())
+                                    FilledIconButton(onClick = { navigate(searchQuery) }, modifier = Modifier.size(36.dp), shape = CircleShape,
+                                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = ThemeColors.brand)
+                                    ) { Icon(Icons.Default.ArrowForward, "→", tint = Color.White, modifier = Modifier.size(18.dp)) }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(ArcoRadius.round),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                            ),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                onSearch = { navigate(searchQuery) }
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = ThemeColors.brand,
+                                unfocusedBorderColor = ThemeColors.brand.copy(alpha = 0.2f)
+                            )
+                        )
+                    }
+                    // Shortcuts row
                     Spacer(Modifier.height(24.dp))
-                    OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it },
-                        modifier = Modifier.fillMaxWidth(if (isWide) 0.6f else 0.8f), placeholder = { Text("搜索关键词或输入网址...") },
-                        leadingIcon = {
-                            // Engine icon — tap to cycle through search engines
-                            IconButton(onClick = {
-                                val engines = prefs.enabledEngines()
-                                if (engines.isNotEmpty()) {
-                                    val idx = engines.indexOfFirst { it.key == searchEngine.key }
-                                    searchEngine = engines.getOrElse((idx + 1) % engines.size) { engines.first() }
-                                    prefs.setDefaultEngine(searchEngine)
-                                }
-                            }) {
-                                SearchEngineLogo(searchEngine, size = 28)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.fillMaxWidth(if (isWide) 0.55f else 0.88f)
+                    ) {
+                        val shortcuts = listOf(
+                            "GitHub" to "https://github.com",
+                            "百度" to "https://www.baidu.com",
+                            "Google" to "https://www.google.com",
+                            "Bing" to "https://www.bing.com"
+                        )
+                        shortcuts.forEach { (label, url) ->
+                            Surface(
+                                modifier = Modifier.weight(1f).clickable { navigate(url) },
+                                shape = RoundedCornerShape(10.dp),
+                                color = ThemeColors.bgCardHigh
+                            ) {
+                                Text(
+                                    label.take(6),
+                                    modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    fontSize = 11.sp,
+                                    color = ThemeColors.textSecondary
+                                )
                             }
-                        },
-                        trailingIcon = { if (searchQuery.isNotEmpty()) IconButton(onClick = { navigate(searchQuery) }) { Icon(Icons.Default.ArrowForward, "→", tint = ThemeColors.brand) } },
-                        singleLine = true, shape = RoundedCornerShape(ArcoRadius.round),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            imeAction = androidx.compose.ui.text.input.ImeAction.Search
-                        ),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                            onSearch = { navigate(searchQuery) }
-                        ),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ThemeColors.brand, unfocusedBorderColor = ThemeColors.border))
+                        }
+                    }
                 }
             } else {
                 // WebView with pull-to-refresh
@@ -854,7 +1162,7 @@ fun BrowserApp(initialUrl: String? = null) {
                     androidx.compose.runtime.key(activeTabId) {
                         var wvRef by remember { mutableStateOf<WebView?>(null) }
                         AndroidView(
-                            factory = { createWebView(it, activeTab, isWide, adBlockEnabled, updateTab, { imgs -> images = imgs; showImages = true }) },
+                            factory = { createWebView(it, activeTab, isWide, adBlockEnabled, autoInjectBridge, updateTab, { imgs -> images = imgs; showImages = true }) { dy -> scrollOffset = (scrollOffset + dy).coerceIn(0, 500) } },
                             update = { wv -> wvRef = wv; webViewMap[activeTabId] = wv },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -871,6 +1179,42 @@ fun BrowserApp(initialUrl: String? = null) {
                     PullRefreshIndicator(activeTab.isLoading, pullState, Modifier.align(Alignment.TopCenter))
                 }
             }
+
+            // ── Find-in-page bar ──
+            BrowserFindBar(
+                webView = webViewMap[activeTabId],
+                visible = showFind && !isColdStart,
+                onDismiss = { showFind = false }
+            )
+
+            // ── Reader mode dialog ──
+            BrowserReaderMode(
+                webView = webViewMap[activeTabId],
+                pageTitle = activeTab.title.ifBlank { activeTab.url },
+                visible = showReader,
+                onDismiss = { showReader = false }
+            )
+
+            // ── Markdown viewer ──
+            if (showMdViewer && mdContent.isNotBlank()) {
+                AlertDialog(
+                    onDismissRequest = { showMdViewer = false; mdContent = "" },
+                    modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f),
+                    title = {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Markdown 预览", fontWeight = FontWeight.Bold)
+                            TextButton(onClick = { showMdViewer = false; mdContent = "" }) { Text("关闭") }
+                        }
+                    },
+                    text = {
+                        Column(Modifier.verticalScroll(rememberScrollState())) {
+                            MarkdownText(content = mdContent)
+                        }
+                    },
+                    confirmButton = {},
+                    dismissButton = {}
+                )
+            }
         }
     }
 }
@@ -880,8 +1224,10 @@ fun BrowserApp(initialUrl: String? = null) {
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 private fun createWebView(
     ctx: android.content.Context, tab: TabState, isWide: Boolean, adBlock: Boolean,
+    autoInject: Boolean = true,
     updateTab: (Int, (TabState) -> TabState) -> Unit,
-    onMediaDetected: (List<DetectedImage>) -> Unit
+    onMediaDetected: (List<DetectedImage>) -> Unit,
+    onScroll: (Int) -> Unit = {}
 ): WebView = WebView(ctx).apply {
     settings.javaScriptEnabled = true
     settings.domStorageEnabled = true
@@ -915,13 +1261,13 @@ private fun createWebView(
         "MengPaw"
     )
 
-    var lastScrollY = 0
+    var lastScrollYLocal = 0
     setOnScrollChangeListener { _, _, scrollY, _, _ ->
         if (!isWide) {
-            val delta = scrollY - lastScrollY
-            if (delta > 50) { /* hide handled by Compose */ }
-            else if (delta < -20) { /* show handled by Compose */ }
-            lastScrollY = scrollY
+            val delta = scrollY - lastScrollYLocal
+            if (delta > 10) onScroll(delta)  // scrolling down
+            else if (delta < -5) onScroll(delta)  // scrolling up
+            lastScrollYLocal = scrollY
         }
     }
 
@@ -982,6 +1328,11 @@ private fun createWebView(
             // SECURITY: Reject all SSL certificate errors — no bypass allowed
             handler?.cancel()
             android.util.Log.e("BrowserActivity", "SSL error: ${error?.primaryError} for ${error?.url}")
+            // Show user-facing feedback
+            val host = try { java.net.URI(error?.url ?: "").host } catch (_: Exception) { error?.url ?: "" }
+            view?.post {
+                Toast.makeText(ctx, "SSL 证书错误，已阻止加载: $host", Toast.LENGTH_LONG).show()
+            }
         }
         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
             // SECURITY: Block dangerous URL schemes (javascript:, file:, content:, intent:, etc.)
@@ -1012,6 +1363,18 @@ private fun createWebView(
                 BrowserPluginRegistry.injectScripts(u)?.let { js -> evaluateJavascript(js, null) }
                 BrowserPluginRegistry.injectStyles(u)?.let { css ->
                     evaluateJavascript("(function(){var s=document.createElement('style');s.textContent='$css';document.head.appendChild(s);})()", null)
+                }
+                // Auto-inject __mp bridge for faster Agent commands (if enabled)
+                if (autoInject) {
+                    evaluateJavascript("(function(){if(!window.__mp||!window.__mp._v){" +
+                        "window.__mp={_v:1,_cache:{}," +
+                        "c:function(s){var e=document.querySelector(s);if(!e)return JSON.stringify({ok:false,error:'not found:'+s});e.click();return JSON.stringify({ok:true,tag:e.tagName})}," +
+                        "t:function(s,v){var e=document.querySelector(s);if(!e)return JSON.stringify({ok:false});e.focus();var d=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;d.call(e,v);e.dispatchEvent(new Event('input',{bubbles:true}));return JSON.stringify({ok:true})}," +
+                        "sc:function(x,y){window.scrollBy(x,y);return JSON.stringify({ok:true,sx:window.scrollX,sy:window.scrollY})}," +
+                        "ct:function(){try{var ls=[];document.querySelectorAll('a[href]').forEach(function(a){var t=(a.textContent||'').trim().substring(0,80);if(t&&a.href&&!a.href.startsWith('javascript:'))ls.push({text:t,href:a.href})});return JSON.stringify({title:document.title,url:location.href,links:ls.slice(0,50),text:(document.body?document.body.innerText:'').replace(/\\s+/g,' ').trim().substring(0,3000)})}catch(e){return JSON.stringify({error:e.message})}}," +
+                        "df:function(){var cur=window.__mp._cache._content||'';var raw=document.body?document.body.innerText:'';var fresh=raw.replace(/\\s+/g,' ').trim().substring(0,1000);window.__mp._cache._content=fresh;if(cur===fresh)return JSON.stringify({changed:false});return JSON.stringify({changed:true,added:fresh.substring(cur.length>0?function(a,b){for(var i=0;i<Math.min(a.length,b.length)&&a[i]===b[i];i++);return i}(cur,fresh):0)})}" +
+                        "};return JSON.stringify({ok:true,msg:'__mp injected (auto)'})" +
+                        "}})()", null)
                 }
                 // ComfyUI theme following: inject MengPaw theme colors
                 if (u.contains(":8188") || u.contains("comfyui", ignoreCase = true) || u.contains("comfy", ignoreCase = true)) {

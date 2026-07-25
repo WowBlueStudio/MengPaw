@@ -70,7 +70,7 @@ class AdaptiveLlmProviderTest {
         val config = AdaptiveLlmProvider.AdaptiveConfig()
         assertEquals(4096, config.maxTokens)
         assertEquals(0.7, config.temperature, 0.001)
-        assertEquals(60_000, config.timeoutMs)
+        assertEquals(120_000, config.timeoutMs)
         assertEquals(5, config.maxRetries)
         assertEquals(500, config.retryDelayMs)
         assertTrue(config.fallbacks.isEmpty())

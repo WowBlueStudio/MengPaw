@@ -123,7 +123,7 @@ try {
     id:el.id||'',
     classes:Array.from(el.classList).join(' '),
     rect:{x:Math.round(rect.x),y:Math.round(rect.y),w:Math.round(rect.width),h:Math.round(rect.height)},
-    attrs:{};
+    attrs:{},
     for(var a of el.attributes){if(a.name!=='class'&&a.name!=='id')info.attrs[a.name]=a.value}
     text:(el.textContent||'').trim().substring(0,100),
     html:el.outerHTML.substring(0,500)

@@ -812,6 +812,11 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             tmp.writeText(content)
             if (file.exists()) file.delete()
             tmp.renameTo(file)
+            // Invalidate prompt cache if Agent modified workspace docs
+            val wsRoot = "${com.mengpaw.kernel.DataPaths.AGENTS}/${ctx.agentName ?: "MengPaw"}"
+            if (canonical.startsWith(wsRoot)) {
+                com.mengpaw.kernel.agent.AgentDocs.onDocChanged?.invoke(ctx.agentName ?: "MengPaw")
+            }
             ExecutionResult.ok("已写入: $path (${content.length} 字符)")
         } catch (e: Exception) {
             ExecutionResult.fail("写入失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)

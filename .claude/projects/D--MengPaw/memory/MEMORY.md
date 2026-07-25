@@ -4,3 +4,5 @@
 - [release-checklist](release-checklist.md) — 版本发布必须带 APK + CHANGELOG
 - [bug-audit-methodology](bug-audit-methodology.md) — 完整 Bug 审计方法论：安全/UI/Agent/按钮 四维度 70+ 检查项
 - [release-process](release-process.md) — 完整发布流程：版本更新→编译→模拟器验证→APK构建→GitHub+Gitee上传
+- [browser-v0.5.0-optimization](browser-v0.5.0-optimization.md) — MP浏览器 v0.5.0: 暗色模式/页面查找/阅读模式/翻译/SSL/下载/错误页
+- [browser-v0.6.0](browser-v0.6.0.md) — MP浏览器 v0.6.0: 45命令/6 Skills/MD文件浏览/MCP执行/审计修复

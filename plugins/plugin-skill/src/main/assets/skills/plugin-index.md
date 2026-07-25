@@ -27,4 +27,9 @@ category: system
 | `hermes.*` — 多智能体 | `skill.run hermes` |
 | `render.*` — 图像生成 | `skill.run render` |
 | `update.*` — 自更新 | `skill.run self-update` |
-| `browser.*` — 浏览器操控 | `skill.run browser-tools` |
+| `browser.*` — 浏览器操控 (45命令) | `skill.run browser-control` |
+| `browser.*` → Playwright 映射 | `skill.run browser-playwright` |
+| `browser.*` → 爬虫工作流 | `skill.run browser-spider` |
+| `browser.*` → 表单自动化 | `skill.run browser-form` |
+| `browser.*` → 调试排障 | `skill.run browser-debug` |
+| `browser.*` → 插件开发 API | `skill.run browser-tools` |

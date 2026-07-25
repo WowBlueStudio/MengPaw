@@ -3,8 +3,10 @@
 
 package com.mengpaw.plugin.browsermcp
 
+import android.webkit.WebView
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.mcp.McpTool
 import com.mengpaw.kernel.mcp.McpToolProvider
 import com.mengpaw.kernel.plugin.Plugin
@@ -26,19 +28,39 @@ class BrowserMcpPlugin : Plugin, McpToolProvider {
     override val metadata = PluginMetadata(
         id = "browser-mcp-plugin",
         name = "浏览器 MCP",
-        version = "0.1.0",
+        version = "0.2.0",
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取",
+        description = "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取/执行脚本",
         permissions = emptyList(),
         minCoreVersion = "0.2.3",
-        commands = listOf("browser.mcp.tools", "browser.mcp.status")
+        commands = listOf("browser.mcp.tools", "browser.mcp.status", "browser.mcp.invoke")
     )
 
     override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "mcp.tools" to ::listTools,
         "mcp.status" to ::status,
+        "mcp.invoke" to ::invokeTool,
     )
+
+    companion object {
+        /** WebView provider set by BrowserActivity on initialization. */
+        @JvmField
+        var webViewProvider: (() -> WebView?)? = null
+
+        /**
+         * Tool executor delegate — set by BrowserActivity to bridge plugin ↔ browser.
+         * Accepts (toolName, args) and returns JSON result string.
+         */
+        @JvmField
+        var toolExecutor: ((String, Map<String, String>) -> String)? = null
+
+        /** Execute a named MCP tool with JSON args, returning JSON result. */
+        fun executeTool(toolName: String, args: Map<String, String>): String {
+            return toolExecutor?.invoke(toolName, args)
+                ?: """{"ok":false,"error":"Tool executor not available — activate in MP Browser"}"""
+        }
+    }
 
     // ── McpToolProvider ─────────────────────────────────────────────────
 
@@ -70,16 +92,45 @@ class BrowserMcpPlugin : Plugin, McpToolProvider {
                 if (tool.inputSchema.isNotEmpty()) {
                     appendLine("- 参数:")
                     tool.inputSchema.forEach { (k, v) ->
-                        appendLine("  - `$k`: ${v["description"] ?: v["type"] ?: ""}")
+                        val schema = v as? Map<*, *>
+                        appendLine("  - `$k`: ${schema?.get("description") ?: schema?.get("type") ?: ""}")
                     }
                 }
                 appendLine()
             }
+            appendLine("---")
+            appendLine("使用 `browser.mcp.invoke <工具名> <JSON参数>` 直接调用工具。")
         }
         return ExecutionResult.ok(output)
     }
 
     private suspend fun status(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        return ExecutionResult.ok("浏览器 MCP 服务已就绪，共 ${getTools().size} 个工具。")
+        val available = webViewProvider?.invoke() != null
+        val statusText = if (available) "就绪" else "WebView 未绑定 — 请在 MP 浏览器中激活此插件"
+        return ExecutionResult.ok("浏览器 MCP 服务状态: $statusText\n已注册 ${getTools().size} 个工具。")
+    }
+
+    /** Invoke a named MCP tool with JSON arguments and return the result. */
+    private suspend fun invokeTool(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail(
+            "Usage: browser.mcp.invoke <toolName> [jsonArgs]\n工具列表见 browser.mcp.tools",
+            errorCode = ErrorCodes.ERR_INVALID_INPUT
+        )
+        val toolName = args[0]
+        val jsonArgs = if (args.size > 1) {
+            try {
+                val json = org.json.JSONObject(args.drop(1).joinToString(" "))
+                val map = mutableMapOf<String, String>()
+                for (key in json.keys()) {
+                    map[key] = json.optString(key, "")
+                }
+                map
+            } catch (_: Exception) {
+                emptyMap()
+            }
+        } else emptyMap()
+
+        val result = executeTool(toolName, jsonArgs)
+        return ExecutionResult.ok(result)
     }
 }

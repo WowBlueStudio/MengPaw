@@ -148,6 +148,133 @@ class BrowserBridge(
     }
 
     /**
+     * Wait for an element matching the CSS selector to appear in the DOM.
+     * Polls every 200ms up to the specified timeout (default 5000ms).
+     * Returns JSON: {"ok":true,"found":true} or {"ok":false,"error":"timeout"}
+     */
+    @JavascriptInterface
+    fun waitForSelector(selector: String, timeoutMs: Int = 5000): String {
+        val safe = escapeJs(selector)
+        return evalJs("""
+(function(){try{
+  var timeout=$timeoutMs,interval=200,elapsed=0;
+  var sel='$safe';
+  function check(){
+    var el=document.querySelector(sel);
+    if(el)return JSON.stringify({ok:true,found:true,tag:el.tagName,visible:!!(el.offsetParent)});
+    elapsed+=interval;
+    if(elapsed>=timeout)return JSON.stringify({ok:false,error:'timeout: selector not found after '+timeout+'ms: '+sel});
+    setTimeout(check,interval);
+  }
+  setTimeout(check,0);
+  return '__PENDING__';
+}catch(e){return JSON.stringify({ok:false,error:e.message});}})()
+        """.trimIndent())
+    }
+
+    /**
+     * Get all cookies for the current URL, or set/clear cookies.
+     */
+    @JavascriptInterface
+    fun cookies(): String {
+        return try {
+            val cm = android.webkit.CookieManager.getInstance()
+            val url = webView.url ?: ""
+            val cookie = cm.getCookie(url)
+            """{"ok":true,"cookies":"${cookie ?: ""}"}"""
+        } catch (e: Exception) { """{"ok":false,"error":"${e.message}"}""" }
+    }
+
+    /** Set a cookie. Usage: bridge.cookieSet("name", "value", "example.com") */
+    fun cookieSet(name: String, value: String, domain: String? = null): String {
+        return try {
+            val cm = android.webkit.CookieManager.getInstance()
+            val url = domain ?: (webView.url ?: "")
+            cm.setCookie(url, "$name=$value; Path=/")
+            cm.flush()
+            """{"ok":true}"""
+        } catch (e: Exception) { """{"ok":false,"error":"${e.message}"}""" }
+    }
+
+    /** Clear all cookies. */
+    fun cookieClear(): String {
+        return try {
+            val cm = android.webkit.CookieManager.getInstance()
+            cm.removeAllCookies(null)
+            cm.flush()
+            """{"ok":true}"""
+        } catch (e: Exception) { """{"ok":false,"error":"${e.message}"}""" }
+    }
+
+    /** Get/set/clear localStorage or sessionStorage. */
+    @JavascriptInterface
+    fun storage(type: String, op: String, key: String? = null, value: String? = null): String {
+        val storageType = if (type == "session") "sessionStorage" else "localStorage"
+        return when (op) {
+            "get" -> evalJs("(function(){try{var v=${storageType}.getItem('${escapeJs(key ?: "")}');return v?JSON.stringify({ok:true,value:v}):JSON.stringify({ok:false,error:'not found'});}catch(e){return JSON.stringify({ok:false,error:e.message});}})()")
+            "set" -> evalJs("(function(){try{${storageType}.setItem('${escapeJs(key ?: "")}','${escapeJs(value ?: "")}');return JSON.stringify({ok:true});}catch(e){return JSON.stringify({ok:false,error:e.message});}})()")
+            "clear" -> evalJs("(function(){try{${storageType}.clear();return JSON.stringify({ok:true});}catch(e){return JSON.stringify({ok:false,error:e.message});}})()")
+            else -> """{"ok":false,"error":"Unknown op: $op (use get/set/clear)"}"""
+        }
+    }
+
+    /** Get element attribute value. */
+    @JavascriptInterface
+    fun attr(selector: String, attribute: String): String {
+        val safe = escapeJs(selector); val attr = escapeJs(attribute)
+        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});return JSON.stringify({ok:true,value:e.getAttribute('$attr')||''});})()")
+    }
+
+    /** Get element text content. */
+    @JavascriptInterface
+    fun text(selector: String): String {
+        val safe = escapeJs(selector)
+        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});return JSON.stringify({ok:true,text:(e.textContent||'').trim().substring(0,2000)});})()")
+    }
+
+    /** Check if element is visible (has non-zero dimensions and is not hidden). */
+    @JavascriptInterface
+    fun visible(selector: String): String {
+        val safe = escapeJs(selector)
+        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});var r=e.getBoundingClientRect();var s=getComputedStyle(e);return JSON.stringify({ok:true,visible:!!(r.width&&r.height&&s.display!=='none'&&s.visibility!=='hidden')});})()")
+    }
+
+    /** Check if element is enabled (not disabled). */
+    @JavascriptInterface
+    fun enabled(selector: String): String {
+        val safe = escapeJs(selector)
+        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});return JSON.stringify({ok:true,enabled:!e.disabled});})()")
+    }
+
+    /** Select an option in a &lt;select&gt; element by value or visible text. */
+    @JavascriptInterface
+    fun select(selector: String, value: String): String {
+        val safe = escapeJs(selector); val v = escapeJs(value)
+        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});e.value='$v';e.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true,value:'$v'});})()")
+    }
+
+    /** Submit a form. */
+    @JavascriptInterface
+    fun submit(selector: String): String {
+        val safe = escapeJs(selector)
+        return evalJs("(function(){var e=document.querySelector('$safe');if(!e||e.tagName!=='FORM')return JSON.stringify({ok:false,error:'not a form'});e.submit();return JSON.stringify({ok:true});})()")
+    }
+
+    /** Check a checkbox or radio input. */
+    @JavascriptInterface
+    fun check(selector: String): String {
+        val safe = escapeJs(selector)
+        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});e.checked=true;e.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true});})()")
+    }
+
+    /** Uncheck a checkbox. */
+    @JavascriptInterface
+    fun uncheck(selector: String): String {
+        val safe = escapeJs(selector)
+        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});e.checked=false;e.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true});})()")
+    }
+
+    /**
      * Execute arbitrary JavaScript in the page and return the result.
      * Result is truncated to 5000 chars for safety.
      * SECURITY: NOT exposed via @JavascriptInterface — only callable from Kotlin (Agent).
@@ -299,5 +426,180 @@ class BrowserBridge(
     @JavascriptInterface
     fun diff(): String {
         return evalJs("window.__mp?window.__mp.df():JSON.stringify({changed:true,full:true,text:(document.body?document.body.innerText:'').replace(/\\s+/g,' ').trim().substring(0,1000)})")
+    }
+
+    /**
+     * Capture a screenshot of the current page.
+     * Uses [WebView.capturePicture] to render the page into a Bitmap,
+     * saves it to DataPaths.SCREENSHOTS, and returns the file path.
+     */
+    @JavascriptInterface
+    fun screenshot(): String {
+        return try {
+            val picture = webView.capturePicture()
+            val bitmap = Bitmap.createBitmap(
+                picture.width, picture.height, Bitmap.Config.ARGB_8888
+            )
+            val canvas = android.graphics.Canvas(bitmap)
+            picture.draw(canvas)
+            val path = onScreenshot?.invoke(bitmap) ?: run {
+                val dir = File(DataPaths.SCREENSHOTS)
+                dir.mkdirs()
+                val file = File(dir, "browser_${System.currentTimeMillis()}.png")
+                FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 90, it) }
+                file.absolutePath
+            }
+            bitmap.recycle()
+            """{"ok":true,"path":"$path","width":${picture.width},"height":${picture.height}}"""
+        } catch (e: Exception) {
+            """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
+        }
+    }
+
+    /**
+     * Quick Click: capture a stitched full-page screenshot.
+     * Scrolls the page viewport-by-viewport, captures each segment via [WebView.capturePicture],
+     * and stitches them into ONE tall bitmap saved to DataPaths.SCREENSHOTS.
+     *
+     * Returns JSON with the file path, total width, total height, and segment count.
+     * The Agent can then use [coordClick] to tap at absolute coordinates within this image.
+     *
+     * EXPERIMENTAL: enabled by default (BrowserPrefs.quickClickEnabled).
+     */
+    /** Max segments for full-page screenshot (prevent OOM). ~20 viewports. */
+    private val MAX_SEGMENTS = 30
+
+    @JavascriptInterface
+    fun screenshotFull(maxHeight: Int = 15000): String {
+        return try {
+            // Get page dimensions via JS with a render-complete latch
+            val dimsLatch = java.util.concurrent.CountDownLatch(1)
+            var dimsJson = ""
+            webView.post {
+                webView.evaluateJavascript(
+                    "(function(){return JSON.stringify({w:document.documentElement.scrollWidth||document.body.scrollWidth||${webView.width},h:Math.min(document.documentElement.scrollHeight||document.body.scrollHeight||${webView.height},$maxHeight)})})()"
+                ) { r -> dimsJson = unquoteJs(r); dimsLatch.countDown() }
+            }
+            dimsLatch.await(3, java.util.concurrent.TimeUnit.SECONDS)
+
+            val dims = org.json.JSONObject(dimsJson.ifBlank { """{"w":${webView.width},"h":${webView.height}}""" })
+            val pageW = dims.optInt("w", webView.width).coerceAtLeast(1)
+            val pageH = dims.optInt("h", webView.height).coerceAtMost(maxHeight).coerceAtLeast(1)
+            val vpHeight = webView.height.coerceAtLeast(1)
+            val segmentCount = minOf((pageH + vpHeight - 1) / vpHeight, MAX_SEGMENTS)
+
+            val segments = mutableListOf<Bitmap>()
+            var currentY = 0
+            val latch = java.util.concurrent.CountDownLatch(1)
+
+            for (i in 0 until segmentCount) {
+                val segH = minOf(vpHeight, pageH - currentY)
+                // Scroll + wait for render via post queue
+                val segLatch = java.util.concurrent.CountDownLatch(1)
+                webView.post {
+                    webView.scrollTo(0, currentY)
+                    // Double-post ensures scroll happened before capture
+                    webView.post {
+                        segLatch.countDown()
+                    }
+                }
+                segLatch.await(500, java.util.concurrent.TimeUnit.MILLISECONDS)
+
+                val picture = webView.capturePicture()
+                val segBitmap = Bitmap.createBitmap(pageW, segH, Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(segBitmap)
+                canvas.translate(0f, -currentY.toFloat())
+                picture.draw(canvas)
+                segments.add(segBitmap)
+                currentY += vpHeight
+                if (currentY >= pageH) break
+            }
+
+            // Stitch vertically
+            val stitched = Bitmap.createBitmap(pageW, minOf(pageH, segmentCount * vpHeight), Bitmap.Config.ARGB_8888)
+            val stitchCanvas = android.graphics.Canvas(stitched)
+            var offsetY = 0
+            for (seg in segments) { stitchCanvas.drawBitmap(seg, 0f, offsetY.toFloat(), null); offsetY += seg.height; seg.recycle() }
+
+            // Atomic write: tmp → rename
+            val dir = java.io.File(DataPaths.SCREENSHOTS)
+            dir.mkdirs()
+            val tmpFile = java.io.File(dir, "full_${System.currentTimeMillis()}.tmp")
+            val finalFile = java.io.File(dir, "full_${System.currentTimeMillis()}.png")
+            java.io.FileOutputStream(tmpFile).use { stitched.compress(Bitmap.CompressFormat.PNG, 85, it) }
+            val fileSize = tmpFile.length()
+            tmpFile.renameTo(finalFile)
+            stitched.recycle()
+
+            // Scroll back to top
+            webView.post { webView.scrollTo(0, 0) }
+
+            """{"ok":true,"path":"${finalFile.absolutePath}","width":$pageW,"totalHeight":${minOf(pageH, segmentCount * vpHeight)},"segments":$segmentCount,"fileSize":$fileSize}"""
+        } catch (e: Exception) {
+            // Auto-fallback: try viewport screenshot
+            return try {
+                val fallback = screenshot()
+                """{"ok":true,"fallback":true,"note":"Full-page failed (${e.message?.take(80)}), captured viewport instead","viewport":$fallback}"""
+            } catch (_: Exception) {
+                """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}","hint":"Try browser.screenshot for viewport capture"}"""
+            }
+        }
+    }
+
+    /**
+     * Quick Click: tap at absolute coordinates relative to the FULL page (not viewport).
+     * Uses [android.view.MotionEvent] dispatch for real touch simulation.
+     *
+     * Workflow: (1) browser.screenshot.full → { path, w, totalHeight }
+     *           (2) Agent/Vision sees the image, picks coordinates
+     *           (3) browser.coord.click x y → scrolls to y, taps at x
+     */
+    @JavascriptInterface
+    fun coordClick(x: Int, y: Int): String {
+        return try {
+            val maxY = (webView.contentHeight - webView.height).coerceAtLeast(0)
+            val targetY = y.coerceAtLeast(0).coerceAtMost(webView.contentHeight)
+            val vpX = x.coerceAtLeast(0).coerceAtMost(webView.width)
+
+            // Scroll to position and wait for render
+            val scrollLatch = java.util.concurrent.CountDownLatch(1)
+            webView.post {
+                webView.scrollTo(0, minOf(targetY, maxY))
+                webView.post { scrollLatch.countDown() }
+            }
+            scrollLatch.await(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+
+            val localY = (targetY - webView.scrollY).coerceIn(0, webView.height)
+            webView.post {
+                val downTime = android.os.SystemClock.uptimeMillis()
+                val downEvent = android.view.MotionEvent.obtain(downTime, downTime, android.view.MotionEvent.ACTION_DOWN, vpX.toFloat(), localY.toFloat(), 0)
+                val upEvent = android.view.MotionEvent.obtain(downTime, downTime + 80, android.view.MotionEvent.ACTION_UP, vpX.toFloat(), localY.toFloat(), 0)
+                webView.dispatchTouchEvent(downEvent)
+                webView.dispatchTouchEvent(upEvent)
+                downEvent.recycle()
+                upEvent.recycle()
+            }
+            """{"ok":true,"x":$vpX,"pageY":$targetY,"localY":$localY,"scrollY":${webView.scrollY}}"""
+        } catch (e: Exception) {
+            """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}","hint":"Use browser.coord.scroll <y> to verify position first"}"""
+        }
+    }
+
+    /**
+     * Quick Click: scroll to a specific y-coordinate in the full page.
+     * Useful for verifying position before clicking.
+     */
+    @JavascriptInterface
+    fun coordScroll(y: Int): String {
+        return try {
+            val maxY = (webView.contentHeight - webView.height).coerceAtLeast(0)
+            val targetY = y.coerceIn(0, maxY)
+            val latch = java.util.concurrent.CountDownLatch(1)
+            webView.post { webView.scrollTo(0, targetY); webView.post { latch.countDown() } }
+            latch.await(200, java.util.concurrent.TimeUnit.MILLISECONDS)
+            """{"ok":true,"scrollY":${webView.scrollY},"contentHeight":${webView.contentHeight},"maxScrollY":$maxY}"""
+        } catch (e: Exception) {
+            """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
+        }
     }
 }
