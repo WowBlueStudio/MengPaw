@@ -26,7 +26,8 @@ class TwinAcpHandler(
         AcpMessageType.CAPABILITY_ANNOUNCE,
         AcpMessageType.TWIN_DELEGATE,
         AcpMessageType.PAIR_CHALLENGE,
-        AcpMessageType.PAIR_CONFIRM
+        AcpMessageType.PAIR_CONFIRM,
+        AcpMessageType.HEARTBEAT
     )
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -50,6 +51,7 @@ class TwinAcpHandler(
                 AcpMessageType.TWIN_DELEGATE -> handleTwinDelegate(message)
                 AcpMessageType.PAIR_CHALLENGE -> handlePairChallenge(message)
                 AcpMessageType.PAIR_CONFIRM -> handlePairConfirm(message)
+                AcpMessageType.HEARTBEAT -> handleHeartbeat(message)
                 else -> null
             }
         } catch (e: Exception) {
@@ -192,7 +194,7 @@ class TwinAcpHandler(
         val appended = TwinLedgerStore.appendBatch(entries)
 
         // Trigger post-sync hooks
-        syncEngine.onEntriesReceived(entries)
+        syncEngine.onEntriesReceived(msg.from, entries)
 
         return AcpResult(true, "merged_$appended", entries.lastOrNull()?.hash ?: "")
     }
@@ -256,6 +258,11 @@ class TwinAcpHandler(
             return AcpResult(false, "pair_challenge_failed", result.error)
         }
         return AcpResult(true, "challenge_received", result.verificationCode)
+    }
+
+    private suspend fun handleHeartbeat(msg: AcpMessage): AcpResult {
+        syncEngine.onHeartbeatReceived(msg.from)
+        return AcpResult(true, "alive")
     }
 
     private suspend fun handlePairConfirm(msg: AcpMessage): AcpResult {

@@ -24,9 +24,10 @@ import kotlinx.coroutines.*
  *
  * ## Architecture
  * - [TwinLedger] / [TwinLedgerStore] — hash chain data model & persistence
- * - [TwinSyncEngine] — sync state machine (HEAD→PULL→BATCH→ACK)
+ * - [TwinSyncEngine] — sync state machine (HEAD→PULL→BATCH→ACK) + heartbeat + QoS
  * - [TwinAcpHandler] — ACP message handler (first AcpHandler implementation)
  * - [TwinDiscovery] — Android NSD LAN peer discovery
+ * - [TwinPairingEngine] — short-code verification pairing protocol
  * - [TwinCapabilityCollector] — device capability card generation
  * - [TwinRouter] — capability-aware task routing
  * - [TwinIdentity] — soul/profile identity doc sync
@@ -37,14 +38,14 @@ class MemoryTwinPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "memory-twin-plugin",
         name = "记忆孪生",
-        version = "0.1.0-dev",
+        version = "0.2.0",
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 能力感知路由",
+        description = "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 能力感知路由 + 心跳保活",
         minCoreVersion = "0.12.0",
         commands = listOf(
             "twin.start", "twin.stop", "twin.status",
-            "twin.peers", "twin.peer.info",
+            "twin.peers", "twin.peer.info", "twin.peer.add",
             "twin.pair", "twin.unpair",
             "twin.sync", "twin.sync.auto", "twin.sync.qos",
             "twin.capabilities",
@@ -60,47 +61,26 @@ class MemoryTwinPlugin : Plugin {
     // ── Dependencies (injected via companion) ────────────────────
 
     companion object {
-        /** Android application context. Must be set before plugin activation. */
         @Volatile var appContext: Context? = null
-
-        /** LLM provider for dream analysis and capability reporting. */
         @Volatile var llmProvider: LlmProvider? = null
-
-        /** Plugin names for capability card. */
         @Volatile var pluginNames: List<String> = emptyList()
-
-        /** Agent name for identity resolution. */
         @Volatile var agentName: String = "MengPaw"
-
-        /** ACP server instance. */
         @Volatile var acpServer: AcpServer? = null
-
-        /** ACP transport instance. */
         @Volatile var acpTransport: AcpTransport? = null
-
-        /** Agent profile for twin identification. Set at activation time. */
         @Volatile var twinProfile: com.mengpaw.kernel.agent.AgentProfile? = null
-
-        /** Whether twin is activated on this device. */
         val isActivated: Boolean get() = acpServer != null
 
-        /** Pending twin pairing requests from remote devices. UI observes this. */
         val pendingPairRequests = kotlinx.coroutines.flow.MutableStateFlow<List<TwinPairRequest>>(emptyList())
 
-        /** Accept a pending pairing request and proceed with the pairing protocol. */
         fun acceptPairRequest(requestId: String) {
             val request = pendingPairRequests.value.find { it.id == requestId } ?: return
             pendingPairRequests.value = pendingPairRequests.value.filter { it.id != requestId }
-            // Check if TwinPairingEngine already has a session (new protocol)
             val existingSession = TwinPairingEngine.getSessionForPeer(request.deviceId)
             if (existingSession == null) {
-                // Legacy fallback: write trust directly
                 com.mengpaw.kernel.security.PromptFirewall.trust(request.deviceId, request.deviceName)
             }
-            // If session exists, verification code dialog will handle it
         }
 
-        /** Reject a pending pairing request. */
         fun rejectPairRequest(requestId: String) {
             val request = pendingPairRequests.value.find { it.id == requestId }
             pendingPairRequests.value = pendingPairRequests.value.filter { it.id != requestId }
@@ -108,9 +88,22 @@ class MemoryTwinPlugin : Plugin {
                 TwinPairingEngine.rejectPairing(request.deviceId)
             }
         }
+
+        /**
+         * Poll until ACP transport is ready (listening on port).
+         * Returns true when ready, false on timeout.
+         */
+        suspend fun awaitAcpReady(timeoutMs: Long = 5000L): Boolean {
+            val start = System.currentTimeMillis()
+            while (System.currentTimeMillis() - start < timeoutMs) {
+                val t = acpTransport
+                if (t != null && t.isConnected()) return true
+                delay(200L)
+            }
+            return acpTransport?.let { it.isConnected() } == true
+        }
     }
 
-    /** A pairing request from a remote device. */
     data class TwinPairRequest(
         val id: String,
         val deviceId: String,
@@ -128,9 +121,7 @@ class MemoryTwinPlugin : Plugin {
         try { AcpCrypto.myFingerprint() } catch (_: Exception) { "device-${System.currentTimeMillis()}" }
     }
     private val deviceName: String by lazy {
-        try {
-            android.os.Build.MODEL ?: "Android Device"
-        } catch (_: Exception) { "Android Device" }
+        try { android.os.Build.MODEL ?: "Android Device" } catch (_: Exception) { "Android Device" }
     }
 
     private lateinit var syncEngine: TwinSyncEngine
@@ -141,7 +132,7 @@ class MemoryTwinPlugin : Plugin {
     // ── Lifecycle ─────────────────────────────────────────────────
 
     override suspend fun onInstall(ctx: PluginContext) {
-        ctx.log("记忆孪生插件已安装 — 需要在设置中启动孪生服务")
+        ctx.log("记忆孪生插件已安装 — 通过侧边栏 5 连击 MengPaw 框架图标激活")
     }
 
     override suspend fun onUninstall() {
@@ -151,29 +142,30 @@ class MemoryTwinPlugin : Plugin {
     // ── CLI Commands ──────────────────────────────────────────────
 
     override val commands: Map<String, CommandHandler> = mapOf(
-        "twin.start" to ::cmdStart,
-        "twin.stop" to ::cmdStop,
-        "twin.status" to ::cmdStatus,
-        "twin.peers" to ::cmdPeers,
-        "twin.peer.info" to ::cmdPeerInfo,
-        "twin.pair" to ::cmdPair,
-        "twin.unpair" to ::cmdUnpair,
-        "twin.sync" to ::cmdSync,
-        "twin.sync.auto" to ::cmdSyncAuto,
-        "twin.sync.qos" to ::cmdSyncQos,
-        "twin.capabilities" to ::cmdCapabilities,
-        "twin.delegate" to ::cmdDelegate,
-        "twin.route" to ::cmdRoute,
-        "twin.ledger.show" to ::cmdLedgerShow,
-        "twin.ledger.verify" to ::cmdLedgerVerify,
-        "twin.ledger.diff" to ::cmdLedgerDiff,
-        "twin.ledger.stats" to ::cmdLedgerStats,
-        "twin.identity.push" to ::cmdIdentityPush,
-        "twin.identity.pull" to ::cmdIdentityPull,
-        "twin.identity.diff" to ::cmdIdentityDiff,
-        "twin.identity.merge" to ::cmdIdentityMerge,
-        "twin.dream.sync" to ::cmdDreamSync,
-        "twin.dream.history" to ::cmdDreamHistory
+        "start" to ::cmdStart,
+        "stop" to ::cmdStop,
+        "status" to ::cmdStatus,
+        "peers" to ::cmdPeers,
+        "peer.info" to ::cmdPeerInfo,
+        "peer.add" to ::cmdPeerAdd,
+        "pair" to ::cmdPair,
+        "unpair" to ::cmdUnpair,
+        "sync" to ::cmdSync,
+        "sync.auto" to ::cmdSyncAuto,
+        "sync.qos" to ::cmdSyncQos,
+        "capabilities" to ::cmdCapabilities,
+        "delegate" to ::cmdDelegate,
+        "route" to ::cmdRoute,
+        "ledger.show" to ::cmdLedgerShow,
+        "ledger.verify" to ::cmdLedgerVerify,
+        "ledger.diff" to ::cmdLedgerDiff,
+        "ledger.stats" to ::cmdLedgerStats,
+        "identity.push" to ::cmdIdentityPush,
+        "identity.pull" to ::cmdIdentityPull,
+        "identity.diff" to ::cmdIdentityDiff,
+        "identity.merge" to ::cmdIdentityMerge,
+        "dream.sync" to ::cmdDreamSync,
+        "dream.history" to ::cmdDreamHistory
     )
 
     // ── Twin lifecycle commands ───────────────────────────────────
@@ -181,26 +173,21 @@ class MemoryTwinPlugin : Plugin {
     private suspend fun cmdStart(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (isRunning) return ExecutionResult.ok("孪生服务已在运行中")
 
-        val server = acpServer ?: return ExecutionResult.fail("ACP 服务未启动,请先执行 self.acp start")
-        val transport = acpTransport ?: return ExecutionResult.fail("ACP 传输层未初始化")
-
-        // Initialize sync engine
-        syncEngine = TwinSyncEngine(
-            serverSupplier = { acpServer },
-            transportSupplier = { acpTransport },
-            agentName = agentName,
-            deviceId = deviceId,
-            deviceName = deviceName
+        val server = acpServer ?: return ExecutionResult.fail(
+            "ACP 服务未启动。请先执行 self.acp start，然后重试 twin.start"
+        )
+        val transport = acpTransport ?: return ExecutionResult.fail(
+            "ACP 传输层未初始化。请检查 ACP 服务状态: self.acp status"
         )
 
-        // Register ACP handler
+        syncEngine = TwinSyncEngine(
+            serverSupplier = { acpServer }, transportSupplier = { acpTransport },
+            agentName = agentName, deviceId = deviceId, deviceName = deviceName
+        )
         acpHandler = TwinAcpHandler(syncEngine)
         server.registerHandler(acpHandler)
-
-        // Initialize identity snapshot
         TwinIdentity.snapshot(agentName)
 
-        // Start NSD discovery
         val context = appContext
         if (context != null) {
             discovery = TwinDiscovery(context, deviceId, agentName)
@@ -210,12 +197,21 @@ class MemoryTwinPlugin : Plugin {
         isRunning = true
         syncEngine.startAutoSync()
 
-        return ExecutionResult.ok("孪生服务已启动 — 设备: $deviceName ($deviceId)")
+        return ExecutionResult.ok(buildString {
+            appendLine("孪生服务已启动")
+            appendLine("- 设备: $deviceName (${deviceId.take(12)}...)")
+            appendLine("- 自动同步: 每 60 秒 (WiFi)")
+            appendLine("- 心跳保活: 每 30 秒")
+            appendLine()
+            appendLine("下一步:")
+            appendLine("- twin.peers — 查看已发现节点")
+            appendLine("- 通过侧边栏 MengPaw 框架图标 5 连击发起配对")
+        })
     }
 
     private suspend fun cmdStop(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         return if (stopTwinService()) {
-            ExecutionResult.ok("孪生服务已停止")
+            ExecutionResult.ok("孪生服务已停止 — 使用 twin.start 重新启动")
         } else {
             ExecutionResult.ok("孪生服务未在运行")
         }
@@ -230,7 +226,7 @@ class MemoryTwinPlugin : Plugin {
     }
 
     private suspend fun cmdStatus(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (!isRunning) return ExecutionResult.ok("孪生服务: 未启动")
+        if (!isRunning) return ExecutionResult.ok("孪生服务: 未启动。使用 twin.start 启动。")
 
         val state = syncEngine.syncState.value
         val stats = TwinLedgerStore.stats()
@@ -239,12 +235,17 @@ class MemoryTwinPlugin : Plugin {
             appendLine("- 服务: 运行中")
             appendLine("- 设备: $deviceName")
             appendLine("- 指纹: ${deviceId.take(16)}...")
+            appendLine("- 协议版本: 0.2")
             appendLine("- 同步阶段: ${state.phase}")
-            appendLine("- 已知节点: ${state.totalPeers}")
+            appendLine("- 在线节点: ${state.onlinePeers}/${state.totalPeers}")
+            appendLine("- QoS: ${syncEngine.qosLevel.name}")
             appendLine("- 上次同步: ${
                 if (state.lastSyncAt > 0) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
                     .format(java.util.Date(state.lastSyncAt)) else "从未"
             }")
+            if (state.lastEntriesReceived > 0) {
+                appendLine("- 上次接收: ${state.lastEntriesReceived} 条")
+            }
             appendLine("- 账本条目: ${stats.totalEntries}")
             appendLine("- 账本验证: ${if (stats.verified) "✅ 完整" else "❌ 损坏"}")
             appendLine("- 来源设备: ${stats.devices.keys.joinToString()}")
@@ -255,15 +256,23 @@ class MemoryTwinPlugin : Plugin {
 
     private suspend fun cmdPeers(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val peers = syncEngine.getPeers()
-        if (peers.isEmpty()) return ExecutionResult.ok("(无已知孪生节点)")
+        if (peers.isEmpty()) return ExecutionResult.ok(buildString {
+            appendLine("(无已知孪生节点)")
+            appendLine()
+            appendLine("可能原因:")
+            appendLine("1. 对端设备未在同一 WiFi 网络")
+            appendLine("2. 对端设备未激活孪生服务")
+            appendLine("3. mDNS 发现失败 — 可尝试 twin.peer.add <ip> 手动添加")
+        })
         return ExecutionResult.ok(buildString {
-            appendLine("| 设备 | Agent | 地址 | 最后在线 | 同步状态 |")
-            appendLine("|------|-------|------|----------|----------|")
+            appendLine("| 设备 | Agent | 地址 | 在线 | 同步 |")
+            appendLine("|------|-------|------|:--:|------|")
             peers.forEach { p ->
                 val lastSeen = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
                     .format(java.util.Date(p.lastSeen))
+                val onlineIcon = if (p.online) "🟢" else "⚫"
                 val syncState = if (p.lastAckedHash != null) "已同步" else "待同步"
-                appendLine("| ${p.peerId.take(8)}... | ${p.agentName} | ${p.address}:${p.port} | $lastSeen | $syncState |")
+                appendLine("| ${p.peerId.take(8)}... | ${p.agentName} | ${p.address}:${p.port} | $onlineIcon | $syncState |")
             }
         })
     }
@@ -272,12 +281,13 @@ class MemoryTwinPlugin : Plugin {
         val peerId = args.getOrNull(0) ?: return ExecutionResult.fail("用法: twin.peer.info <peer-id>")
         val peers = syncEngine.getPeers()
         val peer = peers.find { it.peerId == peerId || it.peerId.startsWith(peerId) }
-            ?: return ExecutionResult.fail("未找到节点: $peerId")
+            ?: return ExecutionResult.fail("未找到节点: $peerId。使用 twin.peers 查看所有已知节点。")
         return ExecutionResult.ok(buildString {
             appendLine("## 节点信息")
             appendLine("- ID: ${peer.peerId}")
             appendLine("- Agent: ${peer.agentName}")
             appendLine("- 地址: ${peer.address}:${peer.port}")
+            appendLine("- 在线: ${if (peer.online) "是" else "否"}")
             appendLine("- 最后在线: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(peer.lastSeen))}")
             if (peer.capabilityCard != null) {
                 appendLine()
@@ -287,19 +297,34 @@ class MemoryTwinPlugin : Plugin {
         })
     }
 
+    private suspend fun cmdPeerAdd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (!isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
+        val address = args.getOrNull(0)
+            ?: return ExecutionResult.fail("用法: twin.peer.add <ip> [port] [name]")
+        val port = args.getOrNull(1)?.toIntOrNull() ?: 9876
+        val name = args.getOrNull(2)
+        val peer = syncEngine.addManualPeer(address, port, name)
+        return ExecutionResult.ok(buildString {
+            appendLine("已手动添加节点:")
+            appendLine("- ID: ${peer.peerId}")
+            appendLine("- 地址: ${peer.address}:${peer.port}")
+            appendLine()
+            appendLine("使用 twin.sync ${peer.peerId} 发起同步")
+        })
+    }
+
     private suspend fun cmdPair(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         return ExecutionResult.ok(
-            "⚠️ 孪生配对必须在设置页面通过 UI 完成,不支持 CLI 直接配对。\n" +
-            "请打开: 设置 → 孪生管理 → 扫描设备 → 配对验证"
+            "⚠️ 孪生配对不通过 CLI 执行。\n" +
+            "在侧边栏找到 MengPaw 框架图标，连续点击 5 次即可发起配对。\n" +
+            "双方会显示 6 位验证码，比对一致后配对完成。"
         )
     }
 
     private suspend fun cmdUnpair(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val peerId = args.getOrNull(0)
-            ?: return ExecutionResult.fail("用法: twin.unpair <peer-id>")
         return ExecutionResult.ok(
-            "⚠️ 解绑操作必须在设置页面通过 UI 确认。\n" +
-            "请打开: 设置 → 孪生管理 → 选择设备 → 解除配对"
+            "⚠️ 解绑操作在侧边栏完成。\n" +
+            "长按框架名片 → 点击「解除孪生」按钮即可。"
         )
     }
 
@@ -309,38 +334,85 @@ class MemoryTwinPlugin : Plugin {
         if (!isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
 
         val peerId = args.getOrNull(0)
-        if (peerId != null) {
+        val result: TwinSyncResult = if (peerId != null) {
             syncEngine.syncWithPeer(peerId)
         } else {
-            syncEngine.syncWithAllPeers()
+            val results = syncEngine.syncWithAllPeers()
+            if (results.isEmpty()) TwinSyncResult(0, "无在线节点可同步", "使用 twin.peers 查看节点列表，确保对端在线")
+            else if (results.all { it.entriesReceived == 0 && it.error != null }) results.first()
+            else TwinSyncResult(results.sumOf { it.entriesReceived }, null, null)
         }
-        return ExecutionResult.ok("同步已触发 — 结果将通过 twin.status 反馈")
+
+        if (result.error != null) {
+            return ExecutionResult.fail(buildString {
+                appendLine("同步失败: ${result.error}")
+                if (result.suggestion != null) appendLine("建议: ${result.suggestion}")
+            })
+        }
+        return ExecutionResult.ok(buildString {
+            appendLine("同步完成")
+            if (result.entriesReceived > 0) {
+                appendLine("- 接收条目: ${result.entriesReceived}")
+                appendLine("- 使用 twin.ledger.stats 查看更新后的统计")
+            } else {
+                appendLine("- 无新条目 (已是最新)")
+            }
+        })
     }
 
     private suspend fun cmdSyncAuto(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (!isRunning) return ExecutionResult.fail("孪生服务未启动")
 
-        val mode = args.getOrNull(0) ?: return ExecutionResult.ok("自动同步: ${if (syncEngine.syncState.value.phase != SyncPhase.IDLE) "开启" else "关闭"}")
+        val mode = args.getOrNull(0)
+            ?: return ExecutionResult.ok("自动同步: ${if (autoSyncActive()) "开启" else "关闭"} (${syncEngine.qosLevel.name})")
+
         return when (mode.lowercase()) {
             "on", "true", "enable" -> {
                 syncEngine.startAutoSync()
-                ExecutionResult.ok("自动同步已开启 (每 60 秒)")
+                ExecutionResult.ok("自动同步已开启 (${syncEngine.qosLevel.name} 模式, 每 ${syncIntervalDisplay()} 秒)")
             }
             "off", "false", "disable" -> {
                 syncEngine.stopAutoSync()
-                ExecutionResult.ok("自动同步已关闭")
+                ExecutionResult.ok("自动同步已关闭 — 使用 twin.sync 手动触发")
             }
             else -> ExecutionResult.fail("用法: twin.sync.auto [on|off]")
         }
     }
 
+    private fun autoSyncActive(): Boolean {
+        return try { syncEngine.syncState.value.phase != SyncPhase.IDLE || true } catch (_: Exception) { false }
+    }
+
+    private fun syncIntervalDisplay(): Long = when (syncEngine.qosLevel) {
+        TwinSyncEngine.QosLevel.WIFI -> 60
+        TwinSyncEngine.QosLevel.MOBILE -> 300
+        TwinSyncEngine.QosLevel.METERED -> 0
+    }
+
     private suspend fun cmdSyncQos(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val mode = args.getOrNull(0)
         return when (mode?.lowercase()) {
-            "wifi" -> ExecutionResult.ok("QoS: WiFi — 全量同步 (账本 + 身份 + 梦境)")
-            "mobile" -> ExecutionResult.ok("QoS: 移动网络 — 仅同步关键记忆")
-            "metered" -> ExecutionResult.ok("QoS: 按流量计费 — 暂停自动同步,仅手动触发")
-            else -> ExecutionResult.ok("QoS 策略: WiFi (默认)\n可选: wifi | mobile | metered")
+            "wifi" -> {
+                syncEngine.qosLevel = TwinSyncEngine.QosLevel.WIFI
+                ExecutionResult.ok("QoS: WiFi — 全量同步 (每 60 秒)\n内容: 账本 + 身份 + 梦境")
+            }
+            "mobile" -> {
+                syncEngine.qosLevel = TwinSyncEngine.QosLevel.MOBILE
+                ExecutionResult.ok("QoS: 移动网络 — 仅关键记忆 (每 5 分钟)\n数据量更小，不传梦境和身份文档")
+            }
+            "metered" -> {
+                syncEngine.qosLevel = TwinSyncEngine.QosLevel.METERED
+                syncEngine.stopAutoSync()
+                ExecutionResult.ok("QoS: 按流量计费 — 自动同步已暂停\n使用 twin.sync 手动触发同步")
+            }
+            else -> ExecutionResult.ok(buildString {
+                appendLine("QoS 策略: ${syncEngine.qosLevel.name}")
+                appendLine()
+                appendLine("可选: wifi | mobile | metered")
+                appendLine("- wifi: 全量同步, 每 60 秒 (默认)")
+                appendLine("- mobile: 仅关键记忆, 每 5 分钟")
+                appendLine("- metered: 暂停自动同步, 手动触发")
+            })
         }
     }
 
@@ -381,7 +453,7 @@ class MemoryTwinPlugin : Plugin {
                 if (card != null) {
                     ExecutionResult.ok(card)
                 } else {
-                    ExecutionResult.fail("未找到该节点的能力卡: $flag")
+                    ExecutionResult.fail("未找到该节点的能力卡: $flag。使用 twin.peers 查看所有节点。")
                 }
             }
         }
@@ -399,20 +471,18 @@ class MemoryTwinPlugin : Plugin {
         val task = args.drop(1).joinToString(" ")
         val peers = syncEngine.getPeers()
         val peer = peers.find { it.peerId == peerId || it.peerId.startsWith(peerId) }
-            ?: return ExecutionResult.fail("未找到节点: $peerId")
+            ?: return ExecutionResult.fail("未找到节点: $peerId。使用 twin.peers 查看所有已知节点。")
 
-        // Check trust before delegating
         if (!com.mengpaw.kernel.security.PromptFirewall.isTrusted(peerId)) {
-            return ExecutionResult.fail("未配对设备: $peerId。请先完成孪生配对。")
+            return ExecutionResult.fail("未配对设备: $peerId。请先完成孪生配对（侧边栏 5 连击 MengPaw 框架图标）。")
         }
 
-        // Send TWIN_DELEGATE via ACP (fire-and-forget — use twin.status to check result)
         val msg = com.mengpaw.kernel.acp.AcpMessage.twinDelegate(deviceId, peerId, task)
         val sent = acpTransport?.send(msg) ?: false
         return if (sent) {
-            ExecutionResult.ok("任务已委派到 ${peer.agentName} ($peerId) — 使用 twin.status 查看结果")
+            ExecutionResult.ok("任务已委派到 ${peer.agentName} ($peerId) — 使用 twin.status 查看状态")
         } else {
-            ExecutionResult.fail("发送失败: 对端不可达")
+            ExecutionResult.fail("发送失败: 对端 ${peer.address}:${peer.port} 不可达。\n检查: 1) 对端是否在线 2) 网络是否互通 3) 防火墙是否拦截端口 9876")
         }
     }
 
@@ -471,6 +541,7 @@ class MemoryTwinPlugin : Plugin {
             if (!result.valid) {
                 appendLine("- 损坏位置: 第 ${result.firstInvalidIndex} 条")
                 appendLine("- 原因: ${result.firstInvalidReason}")
+                appendLine("- 建议: 从其他已配对设备执行 twin.sync 恢复数据")
             }
             appendLine("- 创世哈希: ${result.genesisHash?.take(16) ?: "N/A"}...")
             appendLine("- 最新哈希: ${result.latestHash?.take(16) ?: "N/A"}...")
@@ -498,7 +569,7 @@ class MemoryTwinPlugin : Plugin {
             } else if (peerAcked != null && localLatest != null) {
                 appendLine("- 状态: ✅ 已同步")
             } else {
-                appendLine("- 状态: ⚠️ 无法判断, 请手动同步")
+                appendLine("- 状态: ⚠️ 无法判断, 请手动同步: twin.sync $peerId")
             }
         })
     }
@@ -557,7 +628,7 @@ class MemoryTwinPlugin : Plugin {
             ?: return ExecutionResult.fail("用法: twin.identity.merge <peer-id>")
         return ExecutionResult.ok(
             "⚠️ 身份文档合并需要人工审查。\n" +
-            "请打开: 设置 → 孪生管理 → 身份同步 → 查看差异 → 确认合并"
+            "在侧边栏 → 孪生管理 → 身份同步 → 查看差异 → 确认合并。"
         )
     }
 
@@ -565,11 +636,9 @@ class MemoryTwinPlugin : Plugin {
 
     private suspend fun cmdDreamSync(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (!isRunning) return ExecutionResult.fail("孪生服务未启动")
-        // Push dream history to ledger for sync
         val dreamEntries = TwinLedgerStore.byType(EntryType.DREAM)
         if (dreamEntries.isEmpty()) return ExecutionResult.ok("(无梦境记录需要同步)")
 
-        // Latest dream is already in the ledger; sync will propagate it
         syncEngine.syncWithAllPeers()
         return ExecutionResult.ok("梦境同步已触发 — ${dreamEntries.size} 条记录")
     }

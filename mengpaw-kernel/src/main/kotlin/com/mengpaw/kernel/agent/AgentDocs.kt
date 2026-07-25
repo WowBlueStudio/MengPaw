@@ -11,42 +11,42 @@ import java.io.File
 
 /**
  * Agent workspace document manager — bootstraps pre-built .md templates
- * and provides read access to agent documents.
+ * and provides read/write access to agent documents.
+ *
+ * ## Two-tier memory architecture (v0.15.0)
+ *
+ *   Mid-term (memory/memory_{date}.md)     Long-term (memory/memory.md)
+ *   ───────────────────────────────       ────────────────────────────
+ *   按日期分片, 每日/每次对话独立文件         单一文件, 永远精简
+ *   自动追加: 对话摘要                      仅三种来源:
+ *   agent.memory.record 写入                ① 用户指令 "请你记住"
+ *   梦境分析的输入源                         ② Agent 自主判断重要
+ *   可频繁读写, 旧文件可归档清理             ③ Dream 梦境整理产出
+ *   NOT injected into system prompt         Injected into system prompt
  *
  * ## Template flow
  *
- * Templates live as real .md files in APK assets (mengpaw-shell/assets/agent-templates/).
- * At app startup, [AgentTemplates.init] extracts them to a read-only path.
- * When an agent is created, files are copied from there to the agent's workspace.
- *
- * This object delegates the actual file-copy work to a [bootstrapper] callback
- * set by the Android layer — keeping the kernel module zero-Android-dependency.
- *
- * ## Customization
- *
- * Edit the .md files under mengpaw-shell/src/main/assets/agent-templates/zh/,
- * rebuild the APK. No Kotlin source changes needed.
+ * Templates live as real .md files in APK assets. At app startup,
+ * [AgentTemplates.init] extracts them. When an agent is created, files
+ * are copied from templates to the agent's workspace.
  */
 object AgentDocs {
 
-    /**
-     * Bootstrap callback set by the Android layer (AgentTemplates.bootstrapAgent).
-     * When null (e.g. JVM tests), agent creation is a no-op beyond directory setup.
-     */
     @Volatile
     var bootstrapper: ((agentName: String) -> Unit)? = null
 
-    /** Create default doc files for a new agent by copying from pre-built templates. */
+    /** Create default doc files for a new agent. */
     fun bootstrap(agentName: String) {
         val dir = File(DataPaths.AGENTS, agentName)
         if (!dir.exists()) dir.mkdirs()
-        // Fast path: if soul.md already exists, bootstrap is done
         if (File(dir, "soul.md").exists()) return
-        // Delegate to Android-layer file copy (null-safe: JVM tests skip this)
+        // Ensure long-term memory directory exists
+        File(dir, "memory").mkdirs()
         bootstrapper?.invoke(agentName)
     }
 
-    /** Read the content of agents.md for a given agent. */
+    // ── Document readers ──────────────────────────────────────────
+
     fun readAgentsDoc(agentName: String): String {
         val file = File(DataPaths.AGENTS, "$agentName/agents.md")
         return if (file.exists()) try { file.readText() } catch (e: Exception) {
@@ -54,7 +54,6 @@ object AgentDocs {
         } else ""
     }
 
-    /** Read soul.md content. */
     fun readSoulDoc(agentName: String): String {
         val file = File(DataPaths.AGENTS, "$agentName/soul.md")
         return if (file.exists()) try { file.readText() } catch (e: Exception) {
@@ -62,55 +61,304 @@ object AgentDocs {
         } else ""
     }
 
-    /** Read memory.md content — suspend 版本，在 IO 线程执行。 */
-    suspend fun readMemoryDocAsync(agentName: String): String = withContext(Dispatchers.IO) {
-        val file = File(DataPaths.AGENTS, "$agentName/memory.md")
-        if (file.exists()) try { file.readText() } catch (e: Exception) { "" } else ""
+    // ── Long-term memory (injected into system prompt) ────────────
+
+    /** Read long-term memory — injected into every LLM system prompt. */
+    suspend fun readLongTermMemoryAsync(agentName: String): String = withContext(Dispatchers.IO) {
+        readLongTermMemory(agentName)
     }
 
-    /** Read memory.md content (同步，仅限已确认在后台线程的调用). */
-    fun readMemoryDoc(agentName: String): String {
-        val file = File(DataPaths.AGENTS, "$agentName/memory.md")
+    fun readLongTermMemory(agentName: String): String {
+        val file = File(DataPaths.longTermMemoryFile(agentName))
         return if (file.exists()) try { file.readText() } catch (e: Exception) {
-            ErrorCollector.report(e, "AgentDocs.readMemoryDoc"); ""
+            ErrorCollector.report(e, "AgentDocs.readLongTermMemory"); ""
         } else ""
     }
 
     /**
-     * 跨会话召回 — 按关键词搜索 memory，只返回匹配的条目。
-     * @param keywords 从用户消息中提取的关键词列表
-     * @return 匹配的条目文本，若无匹配则返回空字符串
+     * Append to long-term memory — only for curated content.
+     * Three valid sources:
+     *   1. User says "请你记住"
+     *   2. Agent self-judges as important/reusable
+     *   3. Dream mode reorganization output
      */
-    fun recallMemory(agentName: String, keywords: List<String>): String {
-        val file = File(DataPaths.AGENTS, "$agentName/memory.md")
-        if (!file.exists() || keywords.isEmpty()) return ""
-        val content = try { file.readText() } catch (_: Exception) { return "" }
-        if (content.isBlank()) return ""
-
-        // 按 ## 标题分割为独立记忆条目
-        val entries = content.split(Regex("(?=## )")).filter { it.isNotBlank() }
-        val matched = entries.filter { entry ->
-            keywords.any { kw -> entry.contains(kw, ignoreCase = true) }
-        }
-        return if (matched.isEmpty()) ""
-        else "## 相关记忆\n\n${matched.joinToString("\n").trim()}"
-    }
-
-    /** 自动摘要 — 对话结束后追加一条记忆到 memory.md。 */
-    fun appendMemory(agentName: String, entry: String) {
+    fun appendLongTermMemory(agentName: String, entry: String) {
         try {
-            val file = File(DataPaths.AGENTS, "$agentName/memory.md")
+            val file = File(DataPaths.longTermMemoryFile(agentName))
             file.parentFile?.mkdirs()
             val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",
                 java.util.Locale.getDefault()).format(java.util.Date())
-            // 原子追加
             val line = "\n## $timestamp\n\n$entry\n"
-            // 先读后写，确保不破坏已有内容
             val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
-            val tmp = File(file.parentFile, "${file.name}.tmp")
+            val tmp = File(file.parentFile, "memory.tmp")
             tmp.writeText(existing + line)
             tmp.renameTo(file)
             if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
         } catch (_: Exception) {}
     }
+
+    /** Search long-term memory by keywords. */
+    fun searchLongTermMemory(agentName: String, keywords: List<String>): String {
+        val file = File(DataPaths.longTermMemoryFile(agentName))
+        if (!file.exists() || keywords.isEmpty()) return ""
+        val content = try { file.readText() } catch (_: Exception) { return "" }
+        if (content.isBlank()) return ""
+        val entries = content.split(Regex("(?=## )")).filter { it.isNotBlank() }
+        val matched = entries.filter { entry ->
+            keywords.any { kw -> entry.contains(kw, ignoreCase = true) }
+        }
+        return if (matched.isEmpty()) ""
+        else "## 长期记忆\n\n${matched.joinToString("\n").trim()}"
+    }
+
+    // ── Mid-term memory (dated files, auto-recording, not in prompt) ──
+
+    /** Today's date for mid-term file naming. */
+    private fun today(): String = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+
+    suspend fun readMidTermMemoryAsync(agentName: String): String = withContext(Dispatchers.IO) {
+        readMidTermMemory(agentName)
+    }
+
+    /** Read all mid-term memory files for today (for dream processing). */
+    fun readMidTermMemory(agentName: String): String = readMidTermMemoryDate(agentName, today())
+
+    /** Read mid-term memory for a specific date. */
+    fun readMidTermMemoryDate(agentName: String, date: String): String {
+        val file = File(DataPaths.midTermMemoryFile(agentName, date))
+        return if (file.exists()) try { file.readText() } catch (e: Exception) {
+            ErrorCollector.report(e, "AgentDocs.readMidTermMemory"); ""
+        } else ""
+    }
+
+    /** List all mid-term memory date files, sorted newest first. */
+    fun listMidTermDates(agentName: String): List<String> {
+        val dir = File(DataPaths.midTermMemoryDir(agentName))
+        if (!dir.exists()) return emptyList()
+        return dir.listFiles()
+            ?.filter { it.name.startsWith("memory_") && it.name.endsWith(".md") && it.name != "memory.md" }
+            ?.map { it.name.removePrefix("memory_").removeSuffix(".md") }
+            ?.sortedDescending()
+            ?: emptyList()
+    }
+
+    /**
+     * Auto-append to today's mid-term memory file.
+     * Conversation summaries, facts, observations — NOT injected into prompts.
+     */
+    fun appendMidTermMemory(agentName: String, entry: String) {
+        try {
+            val file = File(DataPaths.midTermMemoryFile(agentName, today()))
+            file.parentFile?.mkdirs()
+            val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+            val line = "\n## $timestamp\n\n$entry\n"
+            val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
+            val tmp = File(file.parentFile, "memory.tmp")
+            tmp.writeText(existing + line)
+            tmp.renameTo(file)
+            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+        } catch (_: Exception) {}
+    }
+
+    /** Search across all mid-term memory files by keywords. */
+    fun searchMidTermMemory(agentName: String, keywords: List<String>): String {
+        val dir = File(DataPaths.midTermMemoryDir(agentName))
+        if (!dir.exists() || keywords.isEmpty()) return ""
+        val allMatched = mutableListOf<String>()
+        dir.listFiles()?.filter { it.name.startsWith("memory_") && it.name.endsWith(".md") && it.name != "memory.md" }
+            ?.sortedByDescending { it.name }?.forEach { file ->
+                val content = try { file.readText() } catch (_: Exception) { "" }
+                if (content.isBlank()) return@forEach
+                val entries = content.split(Regex("(?=## )")).filter { it.isNotBlank() }
+                entries.filter { entry ->
+                    keywords.any { kw -> entry.contains(kw, ignoreCase = true) }
+                }.forEach { allMatched.add(it) }
+            }
+        return if (allMatched.isEmpty()) ""
+        else "## 相关中期记忆 (${allMatched.size} 条)\n\n${allMatched.joinToString("\n").trim()}"
+    }
+
+    /** Get mid-term memory stats: date → entry count. */
+    fun midTermStats(agentName: String): Map<String, Int> {
+        val dir = File(DataPaths.midTermMemoryDir(agentName))
+        if (!dir.exists()) return emptyMap()
+        val result = mutableMapOf<String, Int>()
+        dir.listFiles()?.filter { it.name.startsWith("memory_") && it.name.endsWith(".md") && it.name != "memory.md" }
+            ?.forEach { file ->
+                val date = file.name.removePrefix("memory_").removeSuffix(".md")
+                val count = try { file.readLines().count { it.startsWith("## ") } } catch (_: Exception) { 0 }
+                result[date] = count
+            }
+        return result.toList().sortedByDescending { it.first }.toMap()
+    }
+
+    // ── Project memory (reusable project completion patterns) ──────
+
+    /**
+     * Save a project completion report.
+     * Called at milestones or project closure to capture reusable methodology.
+     */
+    fun saveProjectMemory(agentName: String, projectName: String, report: String) {
+        try {
+            val file = File(DataPaths.projectMemoryFile(agentName, projectName))
+            file.parentFile?.mkdirs()
+            val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",
+                java.util.Locale.getDefault()).format(java.util.Date())
+            val header = buildString {
+                if (!file.exists()) {
+                    appendLine("# 项目记忆: $projectName")
+                    appendLine("> 创建: $timestamp")
+                    appendLine("> 类型: 可复用项目完成模式")
+                    appendLine()
+                }
+            }
+            val entry = "\n## $timestamp · 里程碑总结\n\n$report\n---\n"
+            val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else header
+            val tmp = File(file.parentFile, "project.tmp")
+            tmp.writeText(existing + entry)
+            tmp.renameTo(file)
+            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+        } catch (_: Exception) {}
+    }
+
+    /** Read a project memory file. */
+    fun readProjectMemory(agentName: String, projectName: String): String {
+        val file = File(DataPaths.projectMemoryFile(agentName, projectName))
+        return if (file.exists()) try { file.readText() } catch (e: Exception) {
+            ErrorCollector.report(e, "AgentDocs.readProjectMemory"); ""
+        } else ""
+    }
+
+    /** Search across all project memories by keywords. */
+    fun searchProjectMemory(agentName: String, keywords: List<String>): String {
+        val projects = DataPaths.projectMemoryFiles(agentName)
+        if (projects.isEmpty() || keywords.isEmpty()) return ""
+        val matched = mutableListOf<String>()
+        projects.forEach { name ->
+            val content = readProjectMemory(agentName, name)
+            if (content.isNotBlank() && keywords.any { kw -> content.contains(kw, ignoreCase = true) }) {
+                matched.add("### $name\n${content.take(500)}")
+            }
+        }
+        return if (matched.isEmpty()) ""
+        else "## 相关项目经验\n\n${matched.joinToString("\n\n")}"
+    }
+
+    // ── Single-entry operations (universal for all memory files) ──
+
+    /**
+     * Delete a SINGLE entry from any memory file by exact ## header match.
+     * Safety: refuses blank IDs, IDs < 10 chars, and ambiguous (multi-match) IDs.
+     * @return Number of entries deleted (0 or 1).
+     */
+    fun deleteEntry(agentName: String, filePath: String, entryId: String): Int {
+        if (entryId.isBlank() || entryId.length < 10) return 0
+        val file = File(filePath)
+        if (!file.exists()) return 0
+        return try {
+            val content = file.readText()
+            val entries = content.split(Regex("(?=## )")).filter { it.isNotBlank() }
+            val matched = entries.filter { it.trimStart().startsWith("## $entryId") }
+            if (matched.isEmpty() || matched.size > 1) return 0
+            val remaining = entries.filter { it != matched[0] }
+            writeAtomic(file, remaining.joinToString("\n").trim() + "\n")
+            1
+        } catch (_: Exception) { 0 }
+    }
+
+    /**
+     * Replace a SINGLE entry's content in any memory file.
+     * Finds the entry by exact ## header, replaces only its content (preserves header).
+     * @return Number of entries edited (0 or 1).
+     */
+    fun editEntry(agentName: String, filePath: String, entryId: String, newContent: String): Int {
+        if (entryId.isBlank() || entryId.length < 10) return 0
+        val file = File(filePath)
+        if (!file.exists()) return 0
+        return try {
+            val content = file.readText()
+            val entries = content.split(Regex("(?=## )")).filter { it.isNotBlank() }
+            val matched = entries.filter { it.trimStart().startsWith("## $entryId") }
+            if (matched.isEmpty() || matched.size > 1) return 0
+            val old = matched[0]
+            // Preserve the header line, replace everything after it
+            val headerEnd = old.indexOf('\n')
+            val header = if (headerEnd > 0) old.substring(0, headerEnd) else old.trimEnd()
+            val edited = "$header\n\n$newContent"
+            val remaining = entries.map { if (it == old) edited else it }
+            writeAtomic(file, remaining.joinToString("\n").trim() + "\n")
+            1
+        } catch (_: Exception) { 0 }
+    }
+
+    /** Count entries matching an ID in a file. Returns -1 on error. */
+    fun countMatchingEntries(filePath: String, entryId: String): Int {
+        val file = File(filePath)
+        if (!file.exists()) return 0
+        return try {
+            val content = file.readText()
+            content.split(Regex("(?=## )")).count {
+                it.isNotBlank() && it.trimStart().startsWith("## $entryId")
+            }
+        } catch (_: Exception) { -1 }
+    }
+
+    private fun writeAtomic(file: File, content: String) {
+        file.parentFile?.mkdirs()
+        val tmp = File(file.parentFile, "${file.name}.tmp")
+        tmp.writeText(content)
+        tmp.renameTo(file)
+        if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+    }
+
+    // ── Convenience wrappers (delegate to generic engine) ─────────
+
+    fun deleteLongTermEntry(agentName: String, entryId: String): Int =
+        deleteEntry(agentName, DataPaths.longTermMemoryFile(agentName), entryId)
+
+    fun editLongTermEntry(agentName: String, entryId: String, newContent: String): Int =
+        editEntry(agentName, DataPaths.longTermMemoryFile(agentName), entryId, newContent)
+
+    fun countLongTermMatches(agentName: String, entryId: String): Int =
+        countMatchingEntries(DataPaths.longTermMemoryFile(agentName), entryId)
+
+    // ── File-level deletion ───────────────────────────────────────
+
+    fun deleteMidTermFile(agentName: String, date: String): Boolean {
+        val file = File(DataPaths.midTermMemoryFile(agentName, date))
+        return if (file.exists()) { file.delete() } else false
+    }
+
+    fun deleteProjectMemory(agentName: String, projectName: String): Boolean {
+        val file = File(DataPaths.projectMemoryFile(agentName, projectName))
+        return if (file.exists()) { file.delete() } else false
+    }
+
+    fun deleteBoost(agentName: String): Boolean {
+        val file = File(DataPaths.AGENTS, "$agentName/boost.md")
+        return if (file.exists()) { file.delete() } else false
+    }
+
+    fun deleteDream(agentName: String): Boolean {
+        val file = File(DataPaths.AGENTS, "$agentName/DREAM.md")
+        return if (file.exists()) { file.delete() } else false
+    }
+
+    // ── Legacy compatibility (delegates to long-term for prompt injection) ──
+
+    /** @deprecated Use [readLongTermMemory] for system prompts. */
+    fun readMemoryDoc(agentName: String): String = readLongTermMemory(agentName)
+
+    /** @deprecated Use [readLongTermMemoryAsync]. */
+    suspend fun readMemoryDocAsync(agentName: String): String = readLongTermMemoryAsync(agentName)
+
+    /**
+     * @deprecated Use [searchLongTermMemory] or [searchMidTermMemory] explicitly.
+     * Searches LONG-TERM memory only (what goes into prompts).
+     */
+    fun recallMemory(agentName: String, keywords: List<String>): String =
+        searchLongTermMemory(agentName, keywords)
+
+    /** @deprecated Use [appendMidTermMemory] for auto-recording. */
+    fun appendMemory(agentName: String, entry: String) = appendMidTermMemory(agentName, entry)
 }

@@ -4,6 +4,123 @@
 
 ---
 
+## 2026-07-25 — v0.15.0 记忆架构重构 + 全能力扩展
+
+### 三轨记忆系统
+
+76. **单文件 memory.md 是降智的根因**
+    - 场景：memory.md 持续累积→文件过大→系统提示词膨胀→LLM 上下文窗口被记忆占满→缓存命中率下降→模型表现退化。
+    - 修复：三轨制——长期(memory/memory.md,仅三种来源写入,注入提示词)、项目(memory/project_{name}_memory.md,按项目分片)、中期(memory/memory_{date}.md,按日期分片,不注入提示词)。
+    - 教训：**系统提示词中只放长期记忆。中期按日分片、项目按名分片，全部按需查阅。Agent 永远不会因为记住太多而变笨。**
+
+77. **记忆必须有完整的 CRUD——只追加是慢性自杀**
+    - 场景：初始设计只有 keep/record 写入，没有删除和修改。过时信息永远留在记忆里，Agent 无法自清理。
+    - 修复：每条记忆可单独删改。底层安全引擎——entryId 为空/太短/多匹配全部拒绝，只有恰好 1 条才执行。OpenClaw 失忆就是因为缺少这层守卫。
+    - 教训：**任何累积性数据必须有删除能力。删除的安全约束在底层代码实现，不能靠 prompt。**
+
+### 提示词系统
+
+78. **硬编码提示词和文件系统内容是两套会互相矛盾的"真理"**
+    - 场景：agents.md 说安全原则，硬编码没提；soul.md 说行为风格，硬编码没提；agents.md 说 SKILL.md 是命令入口，硬编码说 self.tools。Agent 看到三个不同的命令发现路径。
+    - 修复：安全(agents.md)+行为(soul.md)浓缩到硬编码核心原则；统一命令入口→self.tools；硬编码命令列表标注"权威来源 self.tools,快速参考"。
+    - 教训：**每次改文件系统中的模板/文档时，必须同步检查硬编码提示词是否矛盾。**
+
+79. **提示词占比失衡会导致 LLM 选择性忽略**
+    - 场景：记忆操作 14 条命令一次性列出，占硬编码 50%。Few-shot 示例用 `agent.cli` 和 `plugin.search`——两个都已过时。
+    - 修复：记忆精简为概念+5 条核心操作，详细命令移到分类区；Few-shot 全换为 `self.tools` + `plugin.marketplace` + `plugin.info`。
+    - 教训：**提示词中任何 section 占比超过 30% 就要警惕。过时的 Few-shot 比没有 Few-shot 更危险。**
+
+### 技能系统
+
+80. **Skill 纯文件驱动——零 Kotlin 代码改动即可扩展 Agent 知识**
+    - 场景：需要让 Agent 成为 Android 专家。创建 `android.md` skill——SkillPlugin 自动播种，Agent 执行 `skill.run android` 即获完整知识。无需改任何 Kotlin。
+    - 同样模式用于 Termux 桥接——`termux.md` skill 教 Agent 用 `am startservice` 执行脚本，零 APK 改动。
+    - 教训：**知识注入走 Skill，不走硬编码。Skill 文件改完即生效，不需要重新编译。**
+
+### 插件模式复用
+
+81. **悬浮窗、日历、Root——三个完全不同领域，同一套 sys.* 命令模式**
+    - 悬浮窗 ~50 行、日历 ~130 行、Root ~400 行。全部遵循 SysExecutor 的四步法：命令注册→权限检查→try/catch→ExecutionResult。
+    - 教训：**新能力先问"能不能走现有模式"——80% 的情况不需要新架构。**
+
+82. **Root 做成插件是正确的——最危险的能力必须可控开关**
+    - plugin-root 19 条命令，四层安全（命令拦截/审计日志/首次警告/输出截断）。捆绑但不自动激活，用户可见可控。
+    - 教训：**危险能力和核心能力用插件隔离。plugin.disable 就是紧急关停按钮。**
+
+### 本次改动统计
+
+```
+新增文件: 9 个 (android.md, termux.md, RootDetector.kt, RootShell.kt, RootPlugin.kt, build.gradle.kts×2, plugin-manifest.json)
+修改文件: 9 个 (PromptEngine, AgentDocs, AgentExecutor, DataPaths, AgentProfile, SysExecutor, SidebarContent, LESSONS, DevGuide)
+新增 CLI 命令: 38 条 (agent.ls/rm/mkdir, agent.memory.mid.rm/edit/project.rm/edit, agent.boost.delete, sys.overlay.*, sys.calendar.*, root.*)
+编译: BUILD SUCCESSFUL
+测试: 88/88 PASSED
+```
+
+---
+
+## 2026-07-25 — v0.15.0 记忆孪生全链路审计重构
+
+### 方法论复用
+
+68. **三层十二问必须成为发布前固定流程**
+    - 场景：记忆孪生 v0.12.12 表面上"功能完成"，但审计暴露了 14 个缺口（P0×6, P1×6, P2×2）。`docs/audit-methodology.md` 提供了结构化框架，一次过完比零散修 Bug 效率高 3 倍。
+    - 教训：任何子系统上线前必须走一遍三层十二问。P0 不过不发布。
+    - 本次产出：系统提示词孪生章节、心跳保活、QoS 自适应、手动 IP 发现、配对指引自动注入、解绑 UI。
+
+### 架构教训
+
+69. **插件命令键不能含命名空间前缀——PluginManager 会再加一次**
+    - 场景：`MemoryTwinPlugin.commands` 的键是 `"twin.start"`，但 `PluginManager.registerCommands` 做了 `r.register("$ns.$name", handler)` → 实际注册为 `"memory-twin.twin.start"`。其他插件（FsPlugin）的键是 `"cat"`/`"ls"` 不带前缀。
+    - 后果：`self.tools twin` 看不到任何命令，Agent 无法调用任何 `twin.*` 命令——整个 CLI 接口形同虚设。这是一个致命的命名空间双写 Bug。
+    - 修复：① `PluginManager.namespaceFor` 处理 `memory-X-plugin` → 命名空间 `X` ② MemoryTwinPlugin 命令键全部去掉 `twin.` 前缀。
+    - 教训：**写新插件时参考已有插件的命令键格式。不要自创前缀——PluginManager 会替你加。**
+
+70. **同步函数返回虚假值比不返回值更危险**
+    - 场景：`TwinSyncEngine.syncWithPeer()` 永远 `return 0`。Agent 执行 `twin.sync` → 得到"同步已触发" → 不知是真同步了还是静默失败。
+    - 修复：`syncWithPeer` 返回 `TwinSyncResult(entriesReceived, error, suggestion)`。内部使用 `CompletableDeferred` + 15 秒超时等待 BATCH 响应。
+    - 教训：**任何有副作用的异步操作，必须给调用方区分"已提交"和"已完成"。用 CompletableDeferred 桥接异步回调到挂起函数。**
+
+71. **硬编码延迟是对不确定性的投降**
+    - 场景：5 连击配对后 `delay(1500L)` 等 ACP 启动——没有验证 ACP 是否真的就绪。慢设备可能不够，快设备在浪费时间。
+    - 修复：`MemoryTwinPlugin.awaitAcpReady()` — 200ms 间隔轮询 `acpTransport.isConnected()`，最多等 5 秒。
+    - 教训：**永远用轮询/回调检测状态就绪，不要用固定延迟。延迟值永远要么太大要么太小。**
+
+72. **mDNS 不能是唯一发现通道**
+    - 场景：路由器 2.4G/5G 频段隔离、AP 隔离、多播禁用 → mDNS 广播无法穿透 → 设备永远发现不了对方 → 平板打不通的根因。
+    - 修复：`twin.peer.add <ip> [port] [name]` 手动添加 + 错误消息含排查建议（检查频段、防火墙、端口）。
+    - 教训：**任何局域网发现机制必须有手动 fallback。mDNS/Bonjour/NSD 都不可靠。**
+
+73. **QoS 声明不等于 QoS 执行**
+    - 场景：`twin.sync.qos mobile` 返回文本 "仅同步关键记忆"，但 `TwinSyncEngine` 完全没检查网络类型。
+    - 修复：`autoDetectQos()` 读取 `ConnectivityManager` → `NetworkCapabilities`。WiFi 全量 60s / Mobile 300s / Metered 暂停。
+    - 教训：**配置命令最终要落到引擎的 if/else 分支上。返回一段文本不是实现。**
+
+74. **没有心跳的对等网络是盲人摸象**
+    - 场景：ACP 服务崩溃后 twin 静默停止，`syncWithAllPeers` 还在向已死节点发包。
+    - 修复：30 秒 HEARTBEAT → 90 秒无响应标记 offline → 自动跳过离线节点。`AcpServer` 转发 HEARTBEAT 给 TwinAcpHandler。
+    - 教训：**对等网络中的每个节点必须主动宣告存活。没有心跳的分布式系统 = 定时炸弹。**
+
+75. **配对必须有视觉回馈证明"你在跟谁配对"**
+    - 场景：原 5 连击确认弹窗只说"激活记忆孪生"，没说是跟哪个设备。用户不知道 5 连击的是谁。
+    - 修复：确认弹窗标题改为 "记忆孪生配对"，正文显示目标设备名（`twinPairTarget.remark`）。按钮文本从 "已确认，激活" 改为 "确认配对"。
+    - 教训：**配对是安全关键操作，每一步 UI 必须明确告知操作对象。模糊的确认 = 没有确认。**
+
+### 审计数据
+
+```
+三层十二问审计: 记忆孪生子系统
+P0 (功能不可用): 6 项 → 全部修复
+P1 (体验/容错): 6 项 → 全部修复
+P2 (锦上添花): 2 项 → 全部修复
+修改文件: 8 个
+新增代码: 626 行
+编译: BUILD SUCCESSFUL
+测试: 88/88 PASSED
+```
+
+---
+
 ## 2026-07-24 — v0.14.1 验证反馈修复
 
 67. **IconButton 是键盘焦点泄漏的元凶**

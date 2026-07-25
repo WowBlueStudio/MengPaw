@@ -158,6 +158,15 @@ object SysExecutor {
         "vibrate" to ::vibrate,
         "ringtone.play" to ::ringtonePlay,
         "alarm.set" to ::alarmSet,
+        // ── Overlay (floating window) ──
+        "overlay.show" to ::overlayShow,
+        "overlay.hide" to ::overlayHide,
+        "overlay.update" to ::overlayUpdate,
+        // ── Calendar ──
+        "calendar.add" to ::calendarAdd,
+        "calendar.list" to ::calendarList,
+        "calendar.delete" to ::calendarDelete,
+        "calendar.calendars" to ::calendarCalendars,
     )
 
     // ═══════════════════════════════════════════════════════════════════
@@ -942,6 +951,282 @@ object SysExecutor {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // Overlay (floating window)
+    // ═══════════════════════════════════════════════════════════════════
+
+    private var overlayView: android.widget.TextView? = null
+    private var overlayManager: android.view.WindowManager? = null
+
+    private suspend fun overlayShow(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        if (Build.VERSION.SDK_INT >= 23 && !android.provider.Settings.canDrawOverlays(app)) {
+            return ExecutionResult.fail(buildString {
+                appendLine("悬浮窗权限未授予（系统设置类权限，需手动开启）。")
+                appendLine()
+                appendLine("请引导用户: 设置 → 应用 → MengPaw → 在其他应用上层显示 → 开启")
+                appendLine("或让用户执行: sys.permission.request SYSTEM_ALERT_WINDOW")
+            })
+        }
+        val text = args.takeWhile { !it.startsWith("--") }.joinToString(" ")
+        if (text.isBlank()) return ExecutionResult.fail("用法: sys.overlay.show <文本> [--x 100] [--y 200] [--size 14] [--color #FFF]")
+        val flags = args.dropWhile { !it.startsWith("--") }
+        val x = flags.find { it.startsWith("--x") }?.substringAfter("--x")?.trim()?.toIntOrNull() ?: 100
+        val y = flags.find { it.startsWith("--y") }?.substringAfter("--y")?.trim()?.toIntOrNull() ?: 500
+        val size = flags.find { it.startsWith("--size") }?.substringAfter("--size")?.trim()?.toFloatOrNull() ?: 14f
+        val colorStr = flags.find { it.startsWith("--color") }?.substringAfter("--color")?.trim() ?: "#FFFFFF"
+        val color = try { android.graphics.Color.parseColor(colorStr) } catch (_: Exception) { android.graphics.Color.WHITE }
+
+        // Remove existing overlay
+        overlayView?.let { try { overlayManager?.removeView(it) } catch (_: Exception) {} }
+
+        val tv = android.widget.TextView(app).apply {
+            this.text = text
+            setTextColor(color)
+            textSize = size
+            setPadding(16, 8, 16, 8)
+            setBackgroundColor(android.graphics.Color.parseColor("#CC000000"))
+            alpha = 0.9f
+        }
+        val params = android.view.WindowManager.LayoutParams(
+            android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+            android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= 26) android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else android.view.WindowManager.LayoutParams.TYPE_PHONE,
+            android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            android.graphics.PixelFormat.TRANSLUCENT
+        ).apply { this.x = x; this.y = y; gravity = android.view.Gravity.TOP or android.view.Gravity.START }
+
+        overlayManager = app.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+        overlayManager?.addView(tv, params)
+        overlayView = tv
+        return ExecutionResult.ok(buildString {
+            appendLine("悬浮窗已显示 ✅")
+            appendLine("- 内容: \"$text\"")
+            appendLine("- 位置: ($x, $y)")
+            appendLine()
+            appendLine("更新内容: sys.overlay.update <新文本>")
+            appendLine("隐藏: sys.overlay.hide")
+        })
+    }
+
+    private suspend fun overlayHide(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        if (overlayView == null) return ExecutionResult.ok("悬浮窗未在显示")
+        try { overlayManager?.removeView(overlayView) } catch (_: Exception) {}
+        overlayView = null
+        overlayManager = null
+        return ExecutionResult.ok("悬浮窗已隐藏")
+    }
+
+    private suspend fun overlayUpdate(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        if (overlayView == null) return ExecutionResult.fail("悬浮窗未在显示。请先执行 sys.overlay.show")
+        val text = args.joinToString(" ")
+        if (text.isBlank()) return ExecutionResult.fail("用法: sys.overlay.update <文本>")
+        overlayView?.text = text
+        return ExecutionResult.ok("悬浮窗已更新: \"$text\"")
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Calendar
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** Cached writable calendar ID. Refreshed when add fails or on explicit refresh. */
+    private var cachedCalendarId: Long? = null
+
+    /** Get a writable calendar ID. Returns the first visible, non-read-only calendar. */
+    private fun resolveCalendarId(): Long? {
+        cachedCalendarId?.let { return it }
+        return try {
+            val projection = arrayOf(
+                android.provider.CalendarContract.Calendars._ID,
+                android.provider.CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
+                android.provider.CalendarContract.Calendars.VISIBLE
+            )
+            val cursor = app.contentResolver.query(
+                android.provider.CalendarContract.Calendars.CONTENT_URI, projection,
+                null, null, null
+            ) ?: return null
+            var id: Long? = null
+            while (cursor.moveToNext()) {
+                val access = cursor.getInt(1)
+                val visible = cursor.getInt(2) != 0
+                // Prefer owner-level writable visible calendar
+                if (visible && access >= android.provider.CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR) {
+                    id = cursor.getLong(0)
+                    if (access >= android.provider.CalendarContract.Calendars.CAL_ACCESS_OWNER) break
+                }
+            }
+            cursor.close()
+            cachedCalendarId = id
+            id
+        } catch (_: Exception) { null }
+    }
+
+    /** List all available calendars. */
+    private suspend fun calendarCalendars(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        if (!checkSelf(Manifest.permission.READ_CALENDAR)) {
+            return ExecutionResult.fail("需要日历读取权限。请执行: sys.permission.request READ_CALENDAR")
+        }
+        return try {
+            val projection = arrayOf(
+                android.provider.CalendarContract.Calendars._ID,
+                android.provider.CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+                android.provider.CalendarContract.Calendars.ACCOUNT_NAME,
+                android.provider.CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
+                android.provider.CalendarContract.Calendars.VISIBLE
+            )
+            val cursor = app.contentResolver.query(
+                android.provider.CalendarContract.Calendars.CONTENT_URI, projection,
+                null, null, null
+            ) ?: return ExecutionResult.fail("无法读取日历列表")
+            if (cursor.count == 0) { cursor.close(); return ExecutionResult.ok("(无可用日历账户)") }
+            val sb = StringBuilder("## 可用日历\n\n| ID | 名称 | 账户 | 权限 |\n|----|------|------|------|\n")
+            val accessLabels = mapOf(0 to "无", 100 to "只读", 500 to "贡献", 600 to "编辑", 700 to "拥有者")
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(0)
+                val name = cursor.getString(1) ?: "?"
+                val account = cursor.getString(2) ?: "本地"
+                val access = accessLabels[cursor.getInt(3)] ?: "?"
+                val visible = if (cursor.getInt(4) != 0) "" else " (隐藏)"
+                sb.appendLine("| $id | $name | $account | $access$visible |")
+            }
+            cursor.close()
+            // Refresh cached ID
+            cachedCalendarId = null
+            val resolved = resolveCalendarId()
+            if (resolved != null) sb.appendLine("\n默认写入日历: ID=$resolved")
+            ExecutionResult.ok(sb.toString().trimEnd())
+        } catch (e: Exception) {
+            ExecutionResult.fail("日历查询异常: ${e.message}")
+        }
+    }
+
+    private suspend fun calendarAdd(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        if (!checkSelf(Manifest.permission.WRITE_CALENDAR)) {
+            return ExecutionResult.fail("需要日历写入权限。请执行: sys.permission.request WRITE_CALENDAR")
+        }
+        if (args.isEmpty()) return ExecutionResult.fail(
+            "用法: sys.calendar.add <标题> <开始时间> [--end <结束时间>] [--desc <描述>] [--cal <日历ID>]\n" +
+            "时间格式: yyyy-MM-dd HH:mm 或 Unix毫秒。查看日历列表: sys.calendar.calendars"
+        )
+        val parts = args.takeWhile { !it.startsWith("--") }
+        val title = parts.getOrNull(0) ?: return ExecutionResult.fail("缺少标题")
+        val startStr = parts.getOrNull(1) ?: return ExecutionResult.fail("缺少开始时间")
+        val flags = args.dropWhile { !it.startsWith("--") }
+        val endStr = flags.find { it.startsWith("--end") }?.substringAfter("--end")?.trim()
+        val desc = flags.find { it.startsWith("--desc") }?.substringAfter("--desc")?.trim()
+        val calId = flags.find { it.startsWith("--cal") }?.substringAfter("--cal")?.trim()?.toLongOrNull()
+
+        val cal = calId ?: resolveCalendarId()
+            ?: return ExecutionResult.fail("未找到可写入的日历。请先执行 sys.calendar.calendars 查看可用日历，然后用 --cal <ID> 指定。")
+        val startMillis = parseTime(startStr) ?: return ExecutionResult.fail("时间格式无效: $startStr。使用 yyyy-MM-dd HH:mm 或 Unix毫秒")
+        val endMillis = endStr?.let { parseTime(it) } ?: (startMillis + 3600_000L)
+
+        return try {
+            val values = android.content.ContentValues().apply {
+                put(android.provider.CalendarContract.Events.CALENDAR_ID, cal)
+                put(android.provider.CalendarContract.Events.TITLE, title)
+                put(android.provider.CalendarContract.Events.DTSTART, startMillis)
+                put(android.provider.CalendarContract.Events.DTEND, endMillis)
+                if (desc != null) put(android.provider.CalendarContract.Events.DESCRIPTION, desc)
+                put(android.provider.CalendarContract.Events.EVENT_TIMEZONE, java.util.TimeZone.getDefault().id)
+            }
+            val uri = app.contentResolver.insert(android.provider.CalendarContract.Events.CONTENT_URI, values)
+            if (uri != null) {
+                val id = uri.lastPathSegment ?: "?"
+                ExecutionResult.ok(buildString {
+                    appendLine("日历事件已创建 ✅")
+                    appendLine("- 标题: $title")
+                    appendLine("- ID: $id (用于 sys.calendar.delete $id)")
+                    appendLine("- 时间: ${formatTime(startMillis)} → ${formatTime(endMillis)}")
+                    appendLine("- 日历: $cal")
+                    appendLine()
+                    appendLine("查看: sys.calendar.list --days 7")
+                    appendLine("删除: sys.calendar.delete $id")
+                })
+            } else ExecutionResult.fail("日历写入失败。尝试 sys.calendar.calendars 查看可用日历，用 --cal <ID> 指定。")
+        } catch (e: SecurityException) {
+            ExecutionResult.fail("日历权限被拒绝: ${e.message}")
+        } catch (e: Exception) {
+            ExecutionResult.fail("日历异常: ${e.message}")
+        }
+    }
+
+    private suspend fun calendarList(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        if (!checkSelf(Manifest.permission.READ_CALENDAR)) {
+            return ExecutionResult.fail("需要日历读取权限。请执行: sys.permission.request READ_CALENDAR")
+        }
+        val days = args.find { it.startsWith("--days") }?.substringAfter("--days")?.trim()?.toIntOrNull() ?: 7
+        val start = System.currentTimeMillis()
+        val end = start + days * 86_400_000L
+
+        return try {
+            val projection = arrayOf(
+                android.provider.CalendarContract.Events._ID,
+                android.provider.CalendarContract.Events.TITLE,
+                android.provider.CalendarContract.Events.DTSTART,
+                android.provider.CalendarContract.Events.DTEND,
+                android.provider.CalendarContract.Events.CALENDAR_ID
+            )
+            val cursor = app.contentResolver.query(
+                android.provider.CalendarContract.Events.CONTENT_URI, projection,
+                "${android.provider.CalendarContract.Events.DTSTART} >= ? AND ${android.provider.CalendarContract.Events.DTSTART} <= ?",
+                arrayOf(start.toString(), end.toString()),
+                "${android.provider.CalendarContract.Events.DTSTART} ASC"
+            )
+            if (cursor == null || cursor.count == 0) {
+                cursor?.close()
+                return ExecutionResult.ok("(未来 $days 天无日历事件)\n\n添加: sys.calendar.add \"标题\" \"yyyy-MM-dd HH:mm\"")
+            }
+            val sb = StringBuilder("## 未来 $days 天日历事件 (${cursor.count}个)\n\n| 时间 | 标题 | ID | 日历 |\n|------|------|----|------|\n")
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(0)
+                val title = cursor.getString(1) ?: "(无标题)"
+                val dtStart = cursor.getLong(2)
+                val calId = cursor.getLong(4)
+                sb.appendLine("| ${formatTime(dtStart)} | ${title.take(30)} | $id | $calId |")
+            }
+            cursor.close()
+            sb.appendLine("\n删除: sys.calendar.delete <ID>")
+            ExecutionResult.ok(sb.toString().trimEnd())
+        } catch (e: Exception) {
+            ExecutionResult.fail("日历查询异常: ${e.message}")
+        }
+    }
+
+    /** Delete a calendar event by ID. */
+    private suspend fun calendarDelete(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        if (!checkSelf(Manifest.permission.WRITE_CALENDAR)) {
+            return ExecutionResult.fail("需要日历写入权限。请执行: sys.permission.request WRITE_CALENDAR")
+        }
+        val idStr = args.firstOrNull() ?: return ExecutionResult.fail(
+            "用法: sys.calendar.delete <ID>\n先用 sys.calendar.list 查看事件ID。"
+        )
+        val id = idStr.toLongOrNull() ?: return ExecutionResult.fail("无效的事件ID: $idStr")
+        return try {
+            val uri = android.content.ContentUris.withAppendedId(
+                android.provider.CalendarContract.Events.CONTENT_URI, id
+            )
+            val deleted = app.contentResolver.delete(uri, null, null)
+            if (deleted > 0) ExecutionResult.ok("日历事件已删除: ID=$id")
+            else ExecutionResult.fail("未找到事件 ID=$id。用 sys.calendar.list 查看有效ID。")
+        } catch (e: SecurityException) {
+            ExecutionResult.fail("权限被拒绝: ${e.message}")
+        } catch (e: Exception) {
+            ExecutionResult.fail("删除异常: ${e.message}")
+        }
+    }
+
+    private fun parseTime(s: String): Long? {
+        return try {
+            if (s.matches(Regex("\\d{13,}"))) s.toLong() // Unix ms
+            else java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).parse(s)?.time
+        } catch (_: Exception) { null }
+    }
+
+    private fun formatTime(millis: Long): String =
+        java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(millis))
+
+    // ═══════════════════════════════════════════════════════════════════
     // Helpers
     // ═══════════════════════════════════════════════════════════════════
 
@@ -983,6 +1268,8 @@ object SysExecutor {
         Manifest.permission.READ_EXTERNAL_STORAGE,
         Manifest.permission.WRITE_EXTERNAL_STORAGE,
         Manifest.permission.READ_MEDIA_IMAGES,
+        Manifest.permission.READ_CALENDAR,
+        Manifest.permission.WRITE_CALENDAR,
     )
 
     /** Permissions that require opening system settings (cannot use standard dialog). */
@@ -1011,6 +1298,8 @@ object SysExecutor {
         Manifest.permission.READ_CONTACTS to "读取联系人",
         Manifest.permission.WRITE_SETTINGS to "修改系统设置",
         Manifest.permission.REQUEST_INSTALL_PACKAGES to "安装应用",
+        Manifest.permission.READ_CALENDAR to "读取日历",
+        Manifest.permission.WRITE_CALENDAR to "写入日历",
     )
 
     /** Actionable guidance for each permission — shown to Agent on check/deny. */
@@ -1030,5 +1319,10 @@ object SysExecutor {
         "sys.telephony" to Manifest.permission.READ_PHONE_STATE,
         "sys.notification.send" to Manifest.permission.POST_NOTIFICATIONS,
         "sys.notification.id" to Manifest.permission.POST_NOTIFICATIONS,
+        "sys.overlay.show" to Manifest.permission.SYSTEM_ALERT_WINDOW,
+        "sys.calendar.add" to Manifest.permission.WRITE_CALENDAR,
+        "sys.calendar.delete" to Manifest.permission.WRITE_CALENDAR,
+        "sys.calendar.list" to Manifest.permission.READ_CALENDAR,
+        "sys.calendar.calendars" to Manifest.permission.READ_CALENDAR,
     )
 }

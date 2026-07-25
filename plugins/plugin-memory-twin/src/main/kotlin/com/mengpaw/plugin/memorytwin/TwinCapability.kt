@@ -32,7 +32,9 @@ data class CapabilityCard(
     val hardware: HardwareProfile,
     val model: ModelProfile,
     val software: SoftwareProfile,
-    val runtime: RuntimeStatus
+    val runtime: RuntimeStatus,
+    /** Memory Twin protocol version for compatibility negotiation. */
+    val protocolVersion: String = "0.2"
 ) {
     fun toJson(): String = Json.encodeToString(this)
 

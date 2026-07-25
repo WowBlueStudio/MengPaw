@@ -1,35 +1,22 @@
 # 延后问题清单
 
 > 从 v0.13.0 全链路审计中识别，延后到后续版本处理。
-> 创建: 2026-07-24
+> 创建: 2026-07-24 | 更新: 2026-07-25
 
 ---
 
-## 一、记忆孪生平板无法打通 (#3)
+## 一、记忆孪生平板无法打通 (#3) ✅ 已在 v0.15.0 解决
 
 **来源**: `docs/remaining-issues.md` #3
 
-**现象**: 平板记忆孪生配对失败，ACP 通道不通。
+**修复方案**: 三层十二问审计 → 14 项全修, 含:
+- 手动 IP 添加 (`twin.peer.add`) — mDNS 不可用时的 fallback
+- 心跳保活 — 30s HEARTBEAT + 90s 离线检测
+- QoS 自适应 — Mobile/Metered 网络自动降频
+- 错误消息诊断建议 — 引导检查频段/防火墙/端口
+- 协议版本协商 — CapabilityCard.protocolVersion
 
-**已知信息**:
-- 手机端正常，仅平板端异常
-- ACP 协议已清理 (移除 CLAUDE_BRIDGE)
-- 未深入排查
-
-**排查方向** (来自 remaining-issues.md):
-1. 平板 `plugin.list` 检查 `memory-twin-plugin` 是否已安装
-2. `framework.discover` 检查是否能发现对方
-3. ACP 端口 9876 是否被防火墙/网络拓扑阻断
-4. 平板和手机的 Android 版本差异
-5. 平板 Wi-Fi 子网隔离 (部分路由器 2.4G/5G 不同子网)
-
-**涉及文件**:
-- `plugins/plugin-memory-twin/` — 10 文件, ~2100 行
-- `mengpaw-kernel/src/main/kotlin/com/mengpaw/kernel/acp/AcpServer.kt`
-- `mengpaw-kernel/src/main/kotlin/com/mengpaw/kernel/acp/AcpHttpTransport.kt`
-- `mengpaw-shell/src/main/kotlin/com/mengpaw/shell/MainActivity.kt` (autoRestoreTwinIfNeeded, startAcpForTwin)
-
-**建议审计方式**: 用 `docs/audit-methodology.md` 三层十二问过一遍 ACP/记忆孪生子系统。
+详见 `LESSONS.md` 2026-07-25 条目。
 
 ---
 

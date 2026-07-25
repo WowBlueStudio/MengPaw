@@ -61,6 +61,26 @@ object DataPaths {
     val TWIN_AUDIT get() = "$AGENTS/twin/audit.log"
     val TWIN_DREAMS get() = "$AGENTS/twin/dreams"
 
+    // ── Two-tier memory ────────────────────────────────────────────
+    /** Long-term memory file — injected into system prompt. Curated content only. */
+    fun longTermMemoryFile(agentName: String) = "$AGENTS/$agentName/memory/memory.md"
+    /** Mid-term memory dir — dated files, NOT injected into prompt. */
+    fun midTermMemoryDir(agentName: String) = "$AGENTS/$agentName/memory"
+    /** Mid-term memory file for a specific date. */
+    fun midTermMemoryFile(agentName: String, date: String) = "${midTermMemoryDir(agentName)}/memory_$date.md"
+    /** Project memory file — reusable project completion patterns. */
+    fun projectMemoryFile(agentName: String, projectName: String) = "${midTermMemoryDir(agentName)}/project_${projectName}_memory.md"
+    /** List all project memory files for an agent. */
+    fun projectMemoryFiles(agentName: String): List<String> {
+        val dir = java.io.File(midTermMemoryDir(agentName))
+        if (!dir.exists()) return emptyList()
+        return dir.listFiles()
+            ?.filter { it.name.startsWith("project_") && it.name.endsWith("_memory.md") }
+            ?.map { it.name.removePrefix("project_").removeSuffix("_memory.md") }
+            ?.sorted()
+            ?: emptyList()
+    }
+
     // ── Plugin-specific storage ───────────────────────────────────
 
     fun pluginDir(pluginId: String): String = "${PLUGIN_CACHE}/${pluginFolderName(pluginId)}"

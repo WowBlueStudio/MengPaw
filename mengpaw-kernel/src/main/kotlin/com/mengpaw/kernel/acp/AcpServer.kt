@@ -119,6 +119,12 @@ class AcpServer(
                 peers[msg.from]?.let {
                     peers[msg.from] = it.copy(lastSeen = System.currentTimeMillis())
                 }
+                // Also notify handlers (e.g. TwinAcpHandler for peer liveness tracking)
+                for (handler in handlers) {
+                    if (AcpMessageType.HEARTBEAT in handler.supportedTypes) {
+                        handler.handle(msg, this)
+                    }
+                }
                 AcpResult(true, "alive")
             }
             AcpMessageType.BROWSER_PUSH_RESPONSE -> AcpResult(true, "ack", msg.type)

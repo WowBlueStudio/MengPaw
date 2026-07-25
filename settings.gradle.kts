@@ -50,6 +50,7 @@ include(":plugin-browser-cdp")
 include(":plugin-browser-inspector")
 include(":plugin-update")
 include(":plugin-memory-twin")
+include(":plugin-root")
 
 // plugin-agent-loop and plugin-agent-mission removed — modes now built into AgentEngine
 
@@ -78,4 +79,5 @@ project(":plugin-browser-cdp").projectDir = File(rootDir, "plugins/plugin-browse
 project(":plugin-browser-inspector").projectDir = File(rootDir, "plugins/plugin-browser-inspector")
 project(":plugin-update").projectDir = File(rootDir, "plugins/plugin-update")
 project(":plugin-memory-twin").projectDir = File(rootDir, "plugins/plugin-memory-twin")
+project(":plugin-root").projectDir = File(rootDir, "plugins/plugin-root")
 // plugin-agent-loop / plugin-agent-mission dir mappings removed — modes built into AgentEngine

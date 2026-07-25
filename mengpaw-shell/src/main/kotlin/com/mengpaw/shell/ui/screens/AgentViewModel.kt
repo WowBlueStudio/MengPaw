@@ -655,6 +655,8 @@ class AgentViewModel : ViewModel() {
             // ── 执行模式分发变量（在 try 外，catch 中也需要）────
             val savedLoopMode = loopMode
             val modePrefix = executionMode?.prefix
+            var runningMsgIndex = -1     // fast‑path index; verified against ref before use
+            var runningMsgRef: ChatMessageUi.AgentWithTrace? = null // identity guard for concurrent insertions
             try {
                 // /Mission: 临时覆盖 loopMode
                 if (executionMode == ExecutionMode.MISSION) {
@@ -736,13 +738,17 @@ class AgentViewModel : ViewModel() {
 
                 val traces = mutableListOf<AgentTrace>()
 
-                session.messages.value = session.messages.value + ChatMessageUi.AgentWithTrace(
+                // Track running message for O(1) updates + identity guard against concurrent insertions
+                val runningMsg = ChatMessageUi.AgentWithTrace(
                     finalContent = "思考中...",
                     traces = emptyList(),
                     isRunning = true,
                     executionMode = modePrefix,
                     agentRef = agentRef
                 )
+                runningMsgRef = runningMsg
+                runningMsgIndex = session.messages.value.size
+                session.messages.value = session.messages.value + runningMsg
 
                 // Shared step callback for trace collection + token stats + UI update
                 val onStep: (com.mengpaw.kernel.AgentEngine.TraceStep) -> Unit = { trace ->
@@ -755,12 +761,16 @@ class AgentViewModel : ViewModel() {
                             cacheHitTokens = usage.cacheHitTokens
                         )
                     }
-                    val cur = session.messages.value.toMutableList()
-                    val ri = cur.indexOfLast { it is ChatMessageUi.AgentWithTrace && it.isRunning }
-                    if (ri >= 0) {
-                        cur[ri] = ChatMessageUi.AgentWithTrace("思考中...", traces.toList(),
-                            isRunning = true, executionMode = modePrefix, agentRef = agentRef)
-                        session.messages.value = cur
+                    session.messages.update { current ->
+                        val mutable = current.toMutableList()
+                        val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
+                        if (idx >= 0) {
+                            mutable[idx] = ChatMessageUi.AgentWithTrace(
+                                "思考中...", traces.toList(),
+                                isRunning = true, executionMode = modePrefix, agentRef = agentRef
+                            )
+                        }
+                        mutable
                     }
                 }
 
@@ -776,33 +786,32 @@ class AgentViewModel : ViewModel() {
                     LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = finalTask, onStep = onStep)
                 }
 
-                val current = session.messages.value.toMutableList()
                 // Translate result back to Chinese for US models
                 val displayResult = if (doTranslate) translator.toChinese(result) else result
 
-                val runningIndex = current.indexOfLast {
-                    it is ChatMessageUi.AgentWithTrace && it.isRunning
-                }
-                if (runningIndex >= 0) {
-                    current[runningIndex] = ChatMessageUi.AgentWithTrace(
-                        finalContent = displayResult,
-                        traces = traces.toList(),
-                        isRunning = false,
-                        executionMode = modePrefix,
-                        agentRef = agentRef
-                    )
-                } else {
-                    current.add(ChatMessageUi.Agent(displayResult,
-                        executionMode = modePrefix, agentRef = agentRef))
-                }
+                session.messages.update { current ->
+                    val mutable = current.toMutableList()
+                    val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
+                    if (idx >= 0) {
+                        mutable[idx] = ChatMessageUi.AgentWithTrace(
+                            finalContent = displayResult,
+                            traces = traces.toList(),
+                            isRunning = false,
+                            executionMode = modePrefix,
+                            agentRef = agentRef
+                        )
+                    } else {
+                        mutable.add(ChatMessageUi.Agent(displayResult,
+                            executionMode = modePrefix, agentRef = agentRef))
+                    }
 
-                val suggestion = checkMissingPlugin(result)
-                if (suggestion != null && pluginViewModel != null) {
-                    current.add(ChatMessageUi.Suggestion(suggestion))
-                    pluginViewModel.suggestPluginForCommand(result)
+                    val suggestion = checkMissingPlugin(result)
+                    if (suggestion != null && pluginViewModel != null) {
+                        mutable.add(ChatMessageUi.Suggestion(suggestion))
+                        pluginViewModel.suggestPluginForCommand(result)
+                    }
+                    mutable
                 }
-
-                session.messages.value = current
                 loopMode = savedLoopMode
 
                 // ── 自动摘要：对话结束后提取关键信息存入 memory ──
@@ -834,28 +843,28 @@ class AgentViewModel : ViewModel() {
                 com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Task execution failed: ${e.message}")
                 // Stop engine to prevent stale state on retry
                 try { session.engine.stop() } catch (_: Exception) {}
-                val current = session.messages.value.toMutableList()
-                val runningIndex = current.indexOfLast {
-                    it is ChatMessageUi.AgentWithTrace && it.isRunning
-                }
                 val errorMsg = if (e is OutOfMemoryError) {
                     "⚠️ 内存不足，任务已中断。请清理会话历史后重试。"
                 } else {
                     "⚠️ 执行出错：${e.message?.take(120) ?: "未知错误"}"
                 }
-                if (runningIndex >= 0) {
-                    current[runningIndex] = ChatMessageUi.AgentWithTrace(
-                        finalContent = errorMsg,
-                        traces = emptyList(),
-                        isRunning = false,
-                        executionMode = modePrefix,
-                        agentRef = agentRef
-                    )
-                } else {
-                    current.add(ChatMessageUi.Agent(errorMsg,
-                        executionMode = modePrefix, agentRef = agentRef))
+                session.messages.update { current ->
+                    val mutable = current.toMutableList()
+                    val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
+                    if (idx >= 0) {
+                        mutable[idx] = ChatMessageUi.AgentWithTrace(
+                            finalContent = errorMsg,
+                            traces = emptyList(),
+                            isRunning = false,
+                            executionMode = modePrefix,
+                            agentRef = agentRef
+                        )
+                    } else {
+                        mutable.add(ChatMessageUi.Agent(errorMsg,
+                            executionMode = modePrefix, agentRef = agentRef))
+                    }
+                    mutable
                 }
-                session.messages.value = current
                 // 恢复原始 loopMode
                 loopMode = savedLoopMode
                 // Fully sync all running/input state
@@ -1344,6 +1353,29 @@ class AgentViewModel : ViewModel() {
         scheduleAutoSave()
     }
 
+    // ── Running-message index resolution with identity guard ──────────
+    /**
+     * Resolves the index of the currently running [AgentWithTrace] message.
+     * Uses the fast-path [cachedIndex] verified by referential identity against [cachedRef];
+     * falls back to linear scan only when a concurrent insertion (e.g. notifyAgentMessage)
+     * shifted the list. Returns -1 if no running message is found.
+     */
+    private fun resolveRunningIndex(
+        list: List<ChatMessageUi>,
+        cachedIndex: Int,
+        cachedRef: ChatMessageUi.AgentWithTrace?
+    ): Int {
+        // Fast path: identity match at cached index (O(1) — normal case)
+        if (cachedIndex in list.indices && list[cachedIndex] === cachedRef) return cachedIndex
+        // Slow path: concurrent insertion shifted the list — identity scan (O(n))
+        cachedRef?.let { ref ->
+            val found = list.indexOfFirst { it === ref }
+            if (found >= 0) return found
+        }
+        // Last resort: scan by type (shouldn't happen unless ref was GC'd)
+        return list.indexOfLast { it is ChatMessageUi.AgentWithTrace && it.isRunning }
+    }
+
     // ── Plugin suggestion logic (unchanged) ──
 
     private fun checkMissingPlugin(output: String): PluginSuggestion? {
@@ -1406,14 +1438,14 @@ sealed class ChatMessageUi {
     /** Monotonic creation timestamp for true uniqueness (prevents hashCode collisions). */
     internal val createdAt: Long = java.lang.System.nanoTime()
     data class User(val content: String) : ChatMessageUi() {
-        override val stableId get() = "u_${createdAt}_${content.hashCode()}"
+        override val stableId get() = "u_$createdAt"
     }
     data class Agent(
         val content: String,
         val executionMode: String? = null,
         val agentRef: String? = null
     ) : ChatMessageUi() {
-        override val stableId get() = "a_${createdAt}_${content.hashCode()}_${executionMode ?: ""}_${agentRef ?: ""}"
+        override val stableId get() = "a_$createdAt"
     }
     data class AgentWithTrace(
         val finalContent: String,
@@ -1422,13 +1454,13 @@ sealed class ChatMessageUi {
         val executionMode: String? = null,
         val agentRef: String? = null
     ) : ChatMessageUi() {
-        override val stableId get() = "t_${createdAt}_${traces.size}_${finalContent.hashCode()}_${executionMode ?: ""}_${agentRef ?: ""}"
+        override val stableId get() = "t_$createdAt"
     }
     data class System(val content: String) : ChatMessageUi() {
-        override val stableId get() = "s_${createdAt}_${content.hashCode()}"
+        override val stableId get() = "s_$createdAt"
     }
     data class Suggestion(val suggestion: PluginSuggestion) : ChatMessageUi() {
-        override val stableId get() = "sg_${createdAt}_${suggestion.pluginId}"
+        override val stableId get() = "sg_$createdAt"
     }
 }
 

@@ -84,8 +84,11 @@ object DreamEngine {
             val headlines = s.listIndex().take(20)
             if (headlines.isNotEmpty()) parts.add("## 近期对话\n" + headlines.joinToString("\n") { "  - [${it.id}] ${it.headline}" })
         }
-        val memory = AgentDocs.readMemoryDoc(agentName)
-        if (memory.isNotBlank()) parts.add("## 记忆\n${memory.take(800)}")
+        // Dream analyzes mid-term memory to produce long-term insights
+        val midTerm = AgentDocs.readMidTermMemory(agentName)
+        if (midTerm.isNotBlank()) parts.add("## 中期记忆 (今日)\n${midTerm.take(800)}")
+        val longTerm = AgentDocs.readLongTermMemory(agentName)
+        if (longTerm.isNotBlank()) parts.add("## 长期记忆 (已有)\n${longTerm.take(400)}")
         // FIX: Use lowercase "profile.md" consistent with AgentDocManager/AgentDocs
         val profile = File(agentsDir, "$agentName/profile.md")
         if (profile.exists()) parts.add("## 档案\n${try { profile.readText().take(600) } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.buildContext"); "" }}")
@@ -155,13 +158,18 @@ object DreamEngine {
     data class MemResult(val memoriesReviewed: Int, val tagsAdded: Int,
                          val linksFound: Int, val archived: Int, val summarized: Int)
 
-    /** File-based memory organization — archive old, add tags, cross-link. */
+    /** File-based memory organization — reads mid-term, writes insights to long-term. */
     fun dream(agentId: String): MemResult {
-        val agentDir = File(agentsDir, agentId)
-        if (!agentDir.exists()) return MemResult(0, 0, 0, 0, 0)
-        // FIX: Use lowercase "memory.md" consistent with AgentDocManager
-        val memFile = File(agentDir, "memory.md")
-        val archiveFile = File(agentDir, "Memory.archive.md")
+        // Read from mid-term memory (dated files) for analysis
+        val midDir = File(DataPaths.midTermMemoryDir(agentId))
+        if (!midDir.exists()) return MemResult(0, 0, 0, 0, 0)
+        // Collect today's mid-term entries for analysis
+        val todayContent = AgentDocs.readMidTermMemory(agentId)
+        if (todayContent.isBlank()) return MemResult(0, 0, 0, 0, 0)
+        // Long-term memory for archive reference
+        val memFile = File(DataPaths.longTermMemoryFile(agentId))
+        memFile.parentFile?.mkdirs()
+        val archiveFile = File(midDir, "archive.md")
         if (!memFile.exists()) return MemResult(0, 0, 0, 0, 0)
         val records = parseMemories(try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream"); "" })
         val reviewed = records.size

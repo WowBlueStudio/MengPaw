@@ -104,6 +104,7 @@ fun SidebarContent(
     var showNewAgentDialog by remember { mutableStateOf(false) }
     var showAddFramework by remember { mutableStateOf(false) }
     var showTwinConfirmDialog by remember { mutableStateOf(false) }
+    var twinPairTarget by remember { mutableStateOf<FrameworkContact?>(null) }
 
     // Discover agents from disk — no remember() so list stays fresh when agents are created/deleted
     val agentsDir = File(com.mengpaw.kernel.DataPaths.AGENTS)
@@ -327,6 +328,7 @@ fun SidebarContent(
                                         twinTapCount++
                                         if (twinTapCount >= 5) {
                                             twinTapCount = 0
+                                            twinPairTarget = framework
                                             showTwinConfirmDialog = true
                                         }
                                     }
@@ -652,34 +654,81 @@ fun SidebarContent(
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 记忆孪生激活确认 (发起方)
+    // 记忆孪生配对确认 (发起方) — 5连击触发
     // ═══════════════════════════════════════════════════════════════════
     if (showTwinConfirmDialog) {
+        val target = twinPairTarget
         AlertDialog(
-            onDismissRequest = { showTwinConfirmDialog = false },
+            onDismissRequest = { showTwinConfirmDialog = false; twinPairTarget = null },
             icon = { Icon(Icons.Outlined.Hub, null, tint = ThemeColors.brand) },
-            title = { Text("记忆孪生", fontWeight = FontWeight.Bold) },
+            title = { Text("记忆孪生配对", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    Text("⚠️ 注意你正在发起记忆孪生功能，请确认是个人设备")
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "激活后，本设备的 Agent 记忆将与其他已配对的设备同步。请勿在他人的设备上激活此功能。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ThemeColors.textSecondary
-                    )
+                    if (target != null) {
+                        Text("即将与以下设备建立记忆孪生配对：")
+                        Spacer(Modifier.height(4.dp))
+                        Surface(shape = RoundedCornerShape(ArcoRadius.sm),
+                            color = ThemeColors.bgCardHigh, modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                target.remark.ifBlank { target.name },
+                                Modifier.padding(8.dp),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    Text("⚠️ 配对后本设备的 Agent 记忆将与对方同步。请确认是个人设备，勿与他人设备配对。",
+                        style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                 }
             },
             confirmButton = {
+                val twinAlreadyActive = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.isActivated
                 TextButton(onClick = {
                     showTwinConfirmDialog = false
-                    onActivateMemoryTwin()
+                    val peer = twinPairTarget
+                    twinPairTarget = null
+                    // 未激活则先激活孪生服务
+                    if (!twinAlreadyActive) {
+                        onActivateMemoryTwin()
+                    }
+                    // 发起配对 (已激活的直接配对, 未激活的等 ACP 就绪后配对)
+                    if (peer != null) {
+                        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                            if (!twinAlreadyActive) {
+                                // 轮询等待 ACP 就绪 (最多 5 秒)
+                                val ready = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.awaitAcpReady(5000L)
+                                if (!ready) {
+                                    android.util.Log.w("MengPawTwin", "ACP 未就绪, 放弃配对")
+                                    return@launch
+                                }
+                            }
+                            try {
+                                val transport = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpTransport
+                                if (transport != null) {
+                                    val deviceId = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() } catch (_: Exception) { "device-${System.currentTimeMillis()}" }
+                                    val ctx = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext ?: return@launch
+                                    val collector = com.mengpaw.plugin.memorytwin.TwinCapabilityCollector(ctx, deviceId, android.os.Build.MODEL ?: "")
+                                    val card = collector.collect(null, emptyList())
+                                    val result = com.mengpaw.plugin.memorytwin.TwinPairingEngine.initiatePairing(
+                                        peerId = peer.name,
+                                        myDeviceId = deviceId,
+                                        myFingerprint = deviceId,
+                                        capabilityCard = card.toJson(),
+                                        transport = transport
+                                    )
+                                    android.util.Log.i("MengPawTwin", "5连击配对发起: session=${result.sessionId} peer=${peer.name}")
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.e("MengPawTwin", "5连击配对失败: ${e.message}", e)
+                            }
+                        }
+                    }
                 }) {
-                    Text("已确认，激活", color = ThemeColors.brand)
+                    Text("确认配对", color = ThemeColors.brand)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showTwinConfirmDialog = false }) {
+                TextButton(onClick = { showTwinConfirmDialog = false; twinPairTarget = null }) {
                     Text("取消")
                 }
             }
@@ -1365,41 +1414,51 @@ private fun FrameworkCardDialog(
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // 孪生配对按钮: 本地已激活 + 对方是 MengPaw → 可发起配对
-                val twinReady = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.isActivated
-                if (twinReady && fwType == "mengpaw") {
-                    TextButton(onClick = {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            try {
-                                val ctx = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext ?: return@launch
-                                val transport = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpTransport ?: return@launch
-                                val deviceId = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() } catch (_: Exception) { "device-${System.currentTimeMillis()}" }
-                                val myFingerprint = deviceId
-                                val collector = com.mengpaw.plugin.memorytwin.TwinCapabilityCollector(ctx, deviceId, android.os.Build.MODEL ?: "")
-                                val card = collector.collect(null, emptyList())
-                                // Use the new pairing engine — sends CAPABILITY_ANNOUNCE with nonce
-                                val result = com.mengpaw.plugin.memorytwin.TwinPairingEngine.initiatePairing(
-                                    peerId = frameworkName,
-                                    myDeviceId = deviceId,
-                                    myFingerprint = myFingerprint,
-                                    capabilityCard = card.toJson(),
-                                    transport = transport
-                                )
-                                android.util.Log.i("MengPawTwin", "配对发起: session=${result.sessionId}")
-                            } catch (e: Exception) {
-                                android.util.Log.e("MengPawTwin", "配对失败: ${e.message}", e)
-                            }
-                        }
-                        onDismiss()
-                    }) {
-                        Text("发起孪生配对", color = ThemeColors.brand, fontSize = 13.sp)
+                // 删除框架按钮
+                TextButton(onClick = {
+                    // 从 FrameworkPeerStore 移除 (通过指纹)
+                    val fp = peer?.fingerprint
+                        ?: com.mengpaw.plugin.framework.FrameworkPeerStore.findByName(frameworkName)?.fingerprint
+                    if (fp != null) {
+                        com.mengpaw.plugin.framework.FrameworkPeerStore.remove(fp)
                     }
+                    // 清理 ACP_TRUSTED 文件
+                    if (acpFile.exists()) {
+                        try { acpFile.delete() } catch (_: Exception) {}
+                    }
+                    // 清理孪生信任文件
+                    val twinTrusted = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.trusted")
+                    if (twinTrusted.exists()) try { twinTrusted.delete() } catch (_: Exception) {}
+                    val twinKey = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.key")
+                    if (twinKey.exists()) try { twinKey.delete() } catch (_: Exception) {}
+                    onDismiss()
+                }) {
+                    Text("删除框架", color = ArcoColors.Red6, fontSize = 13.sp)
                 }
                 if (peer != null && !peer.trusted) {
                     TextButton(onClick = {
                         com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = true))
                         onDismiss()
                     }) { Text("信任此框架", color = ThemeColors.brand, fontSize = 13.sp) }
+                }
+                // 解除孪生按钮: 已信任 + 孪生已激活 → 可解绑
+                val twinActive = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.isActivated
+                if (peer != null && peer.trusted && twinActive) {
+                    TextButton(onClick = {
+                        // 清理孪生信任文件
+                        val peerId = peer.fingerprint.ifBlank { frameworkName }
+                        com.mengpaw.kernel.security.PromptFirewall.untrust(peerId)
+                        val twinTrusted = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.trusted")
+                        if (twinTrusted.exists()) try { twinTrusted.delete() } catch (_: Exception) {}
+                        val twinKey = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.key")
+                        if (twinKey.exists()) try { twinKey.delete() } catch (_: Exception) {}
+                        val twinKeyFp = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${peerId}.key")
+                        if (twinKeyFp.exists()) try { twinKeyFp.delete() } catch (_: Exception) {}
+                        // 更新信任状态 (保留框架但标记为非信任)
+                        com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = false))
+                        android.util.Log.i("MengPawTwin", "解除孪生: $frameworkName")
+                        onDismiss()
+                    }) { Text("解除孪生", color = ArcoColors.Orange6, fontSize = 13.sp) }
                 }
             }
         },

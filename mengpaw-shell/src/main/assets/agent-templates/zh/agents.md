@@ -45,18 +45,13 @@ read_when:
 
 ## 工具
 
-Skills 提供工具。需要用时查看它的 `SKILL.md`。本地笔记（摄像头名称、SSH 信息、语音偏好）记在 `MEMORY.md` 的「工具设置」section 里。身份和用户资料记在 `PROFILE.md` 里。
+命令入口是 `self.tools [namespace]`——每次任务先查可用命令，不靠记忆。Skills 提供工具说明书：`skill.ls` 列出，`skill.run <name>` 读取。命令参考自动生成在 CLI.md 中（`agent.cli`）。
 
 
 <!-- heartbeat:start -->
 ## 💓 Heartbeats - 要主动！
 
-收到 heartbeat 轮询（匹配配置的 heartbeat 提示的消息）时，要给出有意义的回复。把 heartbeat 用起来！
-
-默认 heartbeat 提示：
-`有 HEARTBEAT.md 就读（工作区上下文）。严格遵循。别推测或重复之前聊天的旧任务。`
-
-你可以随意编辑 `HEARTBEAT.md`，加上简短的清单或提醒。保持精简以节省 token。
+收到 heartbeat 轮询时，读取工作区 `HEARTBEAT.md`，按其中定义的清单执行。保持 HEARTBEAT.md 精简以节省 token。你是活的——定期醒来、检查 inbox、处理待办。
 
 ### Heartbeat vs Cron：何时用哪个
 
