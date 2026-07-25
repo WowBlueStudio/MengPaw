@@ -1,7 +1,7 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
-  "version": 3,
-  "updated": "2026-07-22T18:00:00Z",
+  "version": 4,
+  "updated": "2026-07-25T10:00:00Z",
   "plugins": [
     {
       "id": "framework-plugin",
@@ -50,12 +50,12 @@
     {
       "id": "memory-twin-plugin",
       "name": "记忆孪生",
-      "version": "0.1.0-dev",
+      "version": "0.2.0",
       "type": "native",
       "author": "MengPaw",
-      "description": "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + NSD 发现 + 能力感知任务路由",
+      "description": "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 心跳保活 + QoS自适应 + 手动IP发现",
       "status": "builtin",
-      "minCoreVersion": "0.12.0",
+      "minCoreVersion": "0.15.0",
       "commands": ["twin.start", "twin.stop", "twin.status", "twin.peers", "twin.peer.info", "twin.pair", "twin.unpair", "twin.sync", "twin.sync.auto", "twin.sync.qos", "twin.capabilities", "twin.delegate", "twin.route", "twin.ledger.show", "twin.ledger.verify", "twin.ledger.diff", "twin.ledger.stats", "twin.identity.push", "twin.identity.pull", "twin.identity.diff", "twin.identity.merge", "twin.dream.sync", "twin.dream.history"]
     },
     {
@@ -319,6 +319,26 @@
       "status": "embedded",
       "minCoreVersion": "0.2.3",
       "commands": ["loop.start", "loop.status", "loop.stop", "loop.config"]
+    },
+    {
+      "id": "root-plugin",
+      "name": "Root 权限",
+      "version": "0.1.0",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "Root 权限管理 — su 命令执行/应用管理/完整文件系统/系统修改/备份恢复/审计日志",
+      "status": "builtin",
+      "permissions": [],
+      "minCoreVersion": "0.15.0",
+      "commands": [
+        "root.status",
+        "root.exec", "root.shell",
+        "root.apps.list", "root.apps.freeze", "root.apps.unfreeze", "root.apps.uninstall", "root.apps.data",
+        "root.fs.ls", "root.fs.cat", "root.fs.write", "root.fs.stat",
+        "root.system.props", "root.system.setprop", "root.system.hosts",
+        "root.backup.list", "root.backup.save", "root.backup.restore",
+        "root.audit"
+      ]
     }
   ]
 }

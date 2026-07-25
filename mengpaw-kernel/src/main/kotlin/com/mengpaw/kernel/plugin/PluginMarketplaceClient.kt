@@ -111,9 +111,9 @@ class PluginMarketplaceClient(
 
     companion object {
         const val GITHUB_INDEX_URL =
-            "https://raw.githubusercontent.com/XMeng5257/mengpaw-plugins/main/plugins.json"
+            "https://raw.githubusercontent.com/WowBlueStudio/MengPaw/master/plugins.json"
         const val GITEE_INDEX_URL =
-            "https://gitee.com/XMeng5257/mengpaw-plugins/raw/main/plugins.json"
+            "https://gitee.com/WowBlueStudio/MengPaw/raw/master/plugins.json"
     }
 
     /** Resolve the best index URL based on geo-location. */
