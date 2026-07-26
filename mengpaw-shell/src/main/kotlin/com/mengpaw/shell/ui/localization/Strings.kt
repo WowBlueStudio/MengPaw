@@ -33,6 +33,8 @@ data class AppStrings(
     val agent: String,
     val maxSteps: String,
     val maxStepsDesc: String,
+    val llmConcurrency: String,
+    val llmConcurrencyDesc: String,
 
     // Settings - Appearance
     val appearance: String,
@@ -107,6 +109,8 @@ val EnglishStrings = AppStrings(
     agent = "Agent",
     maxSteps = "Max Steps",
     maxStepsDesc = "Maximum ReAct iterations before forced stop",
+    llmConcurrency = "LLM Concurrency",
+    llmConcurrencyDesc = "Max simultaneous LLM API calls (1-50)",
 
     appearance = "Appearance",
     darkTheme = "Dark Theme",
@@ -175,6 +179,8 @@ val ChineseStrings = AppStrings(
     agent = "Agent",
     maxSteps = "最大步数 (Max Steps)",
     maxStepsDesc = "ReAct 循环最大迭代次数",
+    llmConcurrency = "LLM 并发上限",
+    llmConcurrencyDesc = "同时进行的 LLM API 调用数量上限 (1-50)",
 
     appearance = "外观",
     darkTheme = "深色主题 (Dark Theme)",

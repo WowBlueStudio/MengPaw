@@ -19,6 +19,7 @@ import com.mengpaw.shell.ui.components.NotifyBannerHost
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -343,6 +344,22 @@ fun MainScreen(
                             }
                         }
                     }
+
+                        // ── 待办列表 — 浮动在气泡层上方，有内容时弹出 ──
+                        val pendingTasks by viewModel.pendingTasks.collectAsState()
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = pendingTasks.isNotEmpty(),
+                            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(msgWidth)
+                                .padding(horizontal = ArcoSpacing.sm, vertical = ArcoSpacing.xs)
+                        ) {
+                            PendingTasksBar(
+                                tasks = pendingTasks,
+                                onRemove = { viewModel.removePendingTask(it) },
+                                onClearAll = { viewModel.clearPendingTasks() }
+                            )
+                        }
                     } // close Box wrapping LazyColumn
 
                     // Persistent right sidebar (tablet only)
@@ -477,7 +494,7 @@ fun MainScreen(
                                     true  // consume ALL Enter events (DOWN + UP) — prevents focus-leak to sidebar
                                 } else false
                             },
-                        enabled = inputEnabled,
+                        enabled = true,
                         placeholder = {
                             val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
                             val hint = when (modeTag?.mode) {
@@ -503,12 +520,8 @@ fun MainScreen(
                     Box(
                         modifier = Modifier
                             .size(44.dp)
-                            .background(
-                                if (inputEnabled) ThemeColors.brand
-                                else ThemeColors.brand.copy(alpha = 0.38f),
-                                CircleShape
-                            )
-                            .clickable(enabled = inputEnabled) {
+                            .background(ThemeColors.brand, CircleShape)
+                            .clickable {
                                 val text = inputText
                                 if (text.isNotBlank()) {
                                     inputText = ""
@@ -842,38 +855,33 @@ private fun AgentBubbleHeader(
     Column(Modifier.fillMaxWidth()) {
         // ── Thinking process (outside main bubble, visible while running) ──
         if (traces.isNotEmpty()) {
-            Surface(onClick = { thinkingExpanded = !thinkingExpanded },
-                shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh,
-                modifier = Modifier.fillMaxWidth(0.95f).padding(bottom = 2.dp)) {
-                Column {
-                    Row(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (thinkingExpanded) "思考过程 (${traces.size})" else "思考过程 (${traces.size}) · 已折叠",
-                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
-                        if (message.isRunning) { Spacer(Modifier.width(ArcoSpacing.sm)); LinearProgressIndicator(Modifier.width(40.dp).height(3.dp), color = ThemeColors.brand) }
-                        Spacer(Modifier.weight(1f))
-                        Icon(if (thinkingExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                            null, Modifier.size(16.dp), tint = ThemeColors.brand)
-                    }
-                    AnimatedVisibility(visible = thinkingExpanded) {
-                        Column(Modifier.padding(start = ArcoSpacing.sm, end = ArcoSpacing.sm, bottom = ArcoSpacing.sm)) {
-                            traces.forEach { trace -> TraceStepItem(trace) }
-                        }
+            Column(Modifier.fillMaxWidth(0.95f).padding(bottom = 2.dp)
+                .clickable { thinkingExpanded = !thinkingExpanded }) {
+                Row(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
+                    Spacer(Modifier.width(6.dp))
+                    Text("思考过程 (${traces.size})",
+                        style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
+                    Spacer(Modifier.width(4.dp))
+                    Icon(if (thinkingExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        null, Modifier.size(16.dp), tint = ThemeColors.brand)
+                    if (message.isRunning) { Spacer(Modifier.width(ArcoSpacing.sm)); LinearProgressIndicator(Modifier.width(40.dp).height(3.dp), color = ThemeColors.brand) }
+                }
+                AnimatedVisibility(visible = thinkingExpanded) {
+                    Column(Modifier.padding(start = ArcoSpacing.sm, end = ArcoSpacing.sm, bottom = ArcoSpacing.sm)) {
+                        traces.forEach { trace -> TraceStepItem(trace) }
                     }
                 }
             }
         } else if (message.isRunning) {
-            Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh,
-                modifier = Modifier.fillMaxWidth(0.95f).padding(bottom = 2.dp)) {
-                Row(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
-                    Spacer(Modifier.width(6.dp))
-                    LinearProgressIndicator(Modifier.width(60.dp).height(3.dp), color = ThemeColors.brand)
-                    Spacer(Modifier.width(ArcoSpacing.sm))
-                    Text("正在思考...", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                }
+            Row(Modifier.fillMaxWidth(0.95f).padding(bottom = 2.dp).padding(horizontal = ArcoSpacing.sm, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
+                Spacer(Modifier.width(6.dp))
+                LinearProgressIndicator(Modifier.width(60.dp).height(3.dp), color = ThemeColors.brand)
+                Spacer(Modifier.width(ArcoSpacing.sm))
+                Text("正在思考...", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
             }
         }
 
@@ -899,50 +907,82 @@ private fun AgentBubbleHeader(
     val observationLong = (trace.observation?.length ?: 0) > 150
     var mergedExpanded by remember { mutableStateOf(false) }
 
-    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCard.copy(alpha = 0.6f),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
-        Column(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 4.dp)) {
-            // ── Thought: step number + brain icon, always fully visible ──
-            Row(verticalAlignment = Alignment.Top) {
-                Text("Step${trace.step}", fontSize = 10.sp, color = ArcoColors.Blue5,
-                    fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 2.dp))
-                Spacer(Modifier.width(4.dp))
-                Icon(Icons.Outlined.Psychology, null, Modifier.size(14.dp).padding(top = 2.dp), tint = ArcoColors.Blue4)
-                Spacer(Modifier.width(4.dp))
-                Text(trace.thought, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-            }
-            // ── Action + Observation: terminal icon, merged into one collapsible block ──
-            if (trace.action != null || !trace.observation.isNullOrBlank()) {
-                Spacer(Modifier.height(2.dp))
-                Surface(onClick = { mergedExpanded = !mergedExpanded },
-                    shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray2.copy(alpha = 0.3f),
-                    modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(horizontal = 6.dp, vertical = 3.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Terminal, null, Modifier.size(13.dp), tint = ArcoColors.Gray6)
-                            Spacer(Modifier.width(4.dp))
-                            Text(trace.action ?: "(observation)", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                color = ThemeColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Spacer(Modifier.weight(1f))
-                            if (actionLong || observationLong) {
-                                Text(if (mergedExpanded) "▲" else "▼", fontSize = 9.sp, color = ThemeColors.textSecondary)
-                            }
+    Column(Modifier.fillMaxWidth().padding(vertical = 1.dp).padding(horizontal = ArcoSpacing.sm, vertical = 4.dp)) {
+        // ── Thought: step number + brain icon, always fully visible ──
+        Row(verticalAlignment = Alignment.Top) {
+            Text("Step${trace.step}", fontSize = 10.sp, color = ArcoColors.Blue5,
+                fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 2.dp))
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.Outlined.Psychology, null, Modifier.size(14.dp).padding(top = 2.dp), tint = ArcoColors.Blue4)
+            Spacer(Modifier.width(4.dp))
+            Text(trace.thought, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        // ── Action + Observation: terminal icon, merged into one collapsible block ──
+        if (trace.action != null || !trace.observation.isNullOrBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp)
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { mergedExpanded = !mergedExpanded }) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Terminal, null, Modifier.size(13.dp), tint = ArcoColors.Gray6)
+                    Spacer(Modifier.width(4.dp))
+                    Text(trace.action ?: "(observation)", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        color = ThemeColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.weight(1f))
+                    if (actionLong || observationLong) {
+                        Text(if (mergedExpanded) "▲" else "▼", fontSize = 9.sp, color = ThemeColors.textSecondary)
+                    }
+                }
+                AnimatedVisibility(visible = mergedExpanded) {
+                    Column {
+                        if (actionLong && trace.action != null) {
+                            Text(trace.action, style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), color = ArcoColors.Gray6)
                         }
-                        AnimatedVisibility(visible = mergedExpanded) {
-                            Column {
-                                if (actionLong && trace.action != null) {
-                                    Text(trace.action, style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), color = ArcoColors.Gray6)
-                                }
-                                if (!trace.observation.isNullOrBlank()) {
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(trace.observation.take(if (mergedExpanded) 5000 else 200),
-                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), color = ArcoColors.Gray5,
-                                        maxLines = if (mergedExpanded) Int.MAX_VALUE else 3)
-                                }
-                            }
+                        if (!trace.observation.isNullOrBlank()) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(trace.observation.take(if (mergedExpanded) 5000 else 200),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp), color = ArcoColors.Gray5,
+                                maxLines = if (mergedExpanded) Int.MAX_VALUE else 3)
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+// ── Pending tasks bar — floating overlay at bottom of message area ──
+@Composable
+private fun PendingTasksBar(
+    tasks: List<PendingTask>,
+    onRemove: (Int) -> Unit,
+    onClearAll: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.brandContainer.copy(alpha = 0.95f),
+        shadowElevation = 4.dp
+    ) {
+        Row(
+            Modifier.padding(horizontal = ArcoSpacing.sm, vertical = ArcoSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Outlined.PendingActions, null, Modifier.size(16.dp), tint = ThemeColors.brand)
+            Spacer(Modifier.width(6.dp))
+            Text("待办 (${tasks.size})", style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                tasks.first().text.take(25) + if (tasks.first().text.length > 25) "…" else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = ThemeColors.textSecondary,
+                maxLines = 1,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (tasks.size > 1) {
+                Text(" +${tasks.size - 1}", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+            }
+            Spacer(Modifier.width(8.dp))
+            IconButton(onClick = onClearAll, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Outlined.Delete, "清空待办", Modifier.size(16.dp), tint = ThemeColors.textSecondary)
             }
         }
     }

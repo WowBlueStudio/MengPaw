@@ -412,6 +412,9 @@ class AgentViewModel : ViewModel() {
     private val _inputEnabled = MutableStateFlow(true)
     val inputEnabled: StateFlow<Boolean> = _inputEnabled.asStateFlow()
 
+    private val _pendingTasks = MutableStateFlow<List<PendingTask>>(emptyList())
+    val pendingTasks: StateFlow<List<PendingTask>> = _pendingTasks.asStateFlow()
+
     private val _activeAgent = MutableStateFlow("MengPaw")
     val activeAgent: StateFlow<String> = _activeAgent.asStateFlow()
 
@@ -647,9 +650,13 @@ class AgentViewModel : ViewModel() {
         executionMode: ExecutionMode? = null,
         agentRef: String? = null
     ) {
-        if (task.isBlank() || _isRunning.value) return
+        if (task.isBlank()) return
         val session = activeSession()
-        if (session.isRunning.value) return
+        if (session.isRunning.value || _isRunning.value) {
+            _pendingTasks.value = _pendingTasks.value + PendingTask(task, maxSteps, executionMode, agentRef)
+            session.messages.value = session.messages.value + ChatMessageUi.User(task)
+            return
+        }
 
         session.messages.value = session.messages.value + ChatMessageUi.User(task)
 
@@ -725,21 +732,8 @@ class AgentViewModel : ViewModel() {
                 }
                 val recallPrefix = if (recalledMemory.isNotBlank()) "$recalledMemory\n\n---\n\n" else ""
 
-                // Build conversation history context — summarize, don't replay commands
-                val historyMsgs = session.messages.value.filter {
-                    it !is ChatMessageUi.System && it !is ChatMessageUi.AgentWithTrace
-                }
-                val contextPrefix = if (historyMsgs.size > 1) {
-                    // Summarize previous tasks as topics only — NOT raw command transcripts
-                    // This prevents LLM from re-executing old commands when processing new tasks
-                    val prevTopics = historyMsgs.dropLast(1)
-                        .filterIsInstance<ChatMessageUi.User>()
-                        .map { it.content.take(60) }
-                        .joinToString(" → ")
-                    "## 先前已完成的任务: $prevTopics\n" +
-                    "⚠️ 以上任务已完成。旧任务的命令和结果仅供参考，不要重复执行。只处理下面的新任务。\n\n" +
-                    "---\n\n新任务: $actualTask"
-                } else actualTask
+                // 直接传递用户任务，不包装回溯摘要。Agent 通过对话历史自然感知上下文。
+                val contextPrefix = actualTask
 
                 val traces = mutableListOf<AgentTrace>()
 
@@ -820,6 +814,7 @@ class AgentViewModel : ViewModel() {
                     mutable
                 }
                 loopMode = savedLoopMode
+                processNextPending()
 
                 // ── 自动摘要：对话结束后提取关键信息存入 memory ──
                 launch {
@@ -879,11 +874,30 @@ class AgentViewModel : ViewModel() {
                 _isRunning.value = false
                 session.inputEnabled.value = true
                 _inputEnabled.value = true
+                processNextPending()
             }
         }
     }
 
     fun stopAgent() { activeSession().engine.stop() }
+
+    fun removePendingTask(index: Int) {
+        _pendingTasks.value = _pendingTasks.value.toMutableList().also { if (index in it.indices) it.removeAt(index) }
+    }
+
+    fun clearPendingTasks() {
+        _pendingTasks.value = emptyList()
+    }
+
+    private fun processNextPending() {
+        val pending = _pendingTasks.value
+        if (pending.isNotEmpty()) {
+            val next = pending.first()
+            _pendingTasks.value = pending.drop(1)
+            submitTask(next.text, maxSteps = next.maxSteps,
+                executionMode = next.executionMode, agentRef = next.agentRef)
+        }
+    }
 
     // ── Trigger task: silent background execution ────────────────────
 
@@ -1327,7 +1341,6 @@ class AgentViewModel : ViewModel() {
                     }
                     is AgentState.Running -> {
                         session.isRunning.value = true; _isRunning.value = true
-                        session.inputEnabled.value = false; _inputEnabled.value = false
                     }
                     is AgentState.Finished -> {
                         session.isRunning.value = false; _isRunning.value = false
@@ -1470,6 +1483,14 @@ sealed class ChatMessageUi {
         override val stableId get() = "sg_$createdAt"
     }
 }
+
+/** 待办任务 — Agent 运行时用户输入的排队任务。 */
+data class PendingTask(
+    val text: String,
+    val maxSteps: Int = 50,
+    val executionMode: ExecutionMode? = null,
+    val agentRef: String? = null
+)
 
 /** 执行模式 — 用户通过 /命令 主动触发，非自动检测。 */
 enum class ExecutionMode(val label: String, val prefix: String) {

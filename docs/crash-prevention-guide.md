@@ -1,7 +1,7 @@
 # MengPaw 闪退防治手册
 
-> 基于 v0.1.0 ~ v0.7.1 开发过程中的真实闪退案例，覆盖 30+ 个崩溃根因与修复模式。
-> 最后更新: 2026-07-22 (v0.8.4)
+> 基于 v0.1.0 ~ v0.15.2 开发过程中的真实闪退案例，覆盖 30+ 个崩溃根因与修复模式。
+> 最后更新: 2026-07-26
 
 ---
 
@@ -356,7 +356,7 @@ val tokens = when (statRange) { 0 -> (r as Day).tokens; else -> (r as Week).toke
 □ 5. ProGuard keep 规则已检查
 □ 6. git status 干净
 □ 7. git tag + gh release create + APK 上传
-□ 8. 开发文档 + LESSONS.md 已更新
+□ 8. 开发文档 + docs/lessons.md 已更新
 □ 9. API Key 没有硬编码在源码中
 □ 10. `!!` 断言已全部检查
 □ 11. 所有 File IO 有 try/catch
@@ -382,4 +382,4 @@ val tokens = when (statRange) { 0 -> (r as Day).tokens; else -> (r as Week).toke
 
 ---
 
-*这份文档应与 `LESSONS.md` 和 `docs/compilation-issues.md` 配合阅读。每次发现新闪退模式后更新本文。*
+*这份文档应与 `docs/lessons.md` 和 `docs/compilation-issues.md` 配合阅读。每次发现新闪退模式后更新本文。*

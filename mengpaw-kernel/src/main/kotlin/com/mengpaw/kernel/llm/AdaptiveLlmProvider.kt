@@ -157,17 +157,22 @@ class AdaptiveLlmProvider(
         for (attempt in 0..config.maxRetries) {
             try {
                 return if (provider is AdaptiveLlmProvider) {
-                    provider.callDirectApi(messages, stream, onToken)
+                    LlmRateLimiter.withLimit {
+                        provider.callDirectApi(messages, stream, onToken)
+                    }
                 } else {
                     provider.completeWithMessages(messages)
                 }
             } catch (e: Exception) {
                 // Permanent errors — fail immediately, don't retry (ref: QwenPaw retry_chat_model.py)
                 if (e is LlmApiException && e.httpStatus in NON_RETRYABLE_STATUSES) throw e
+                // Report 429 for coordinated pause across all concurrent callers
+                if (e is LlmApiException && e.httpStatus == 429) LlmRateLimiter.report429()
                 lastError = e
                 if (attempt < config.maxRetries) {
-                    val delayMs = (config.retryDelayMs * (1L shl attempt)).coerceAtMost(30_000L) // exp backoff capped at 30s
-                    delay(delayMs)
+                    val baseDelay = (config.retryDelayMs * (1L shl attempt)).coerceAtMost(30_000L)
+                    val jitteredDelay = LlmRateLimiter.jitter(baseDelay)
+                    delay(jitteredDelay)
                 }
             }
         }

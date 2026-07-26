@@ -113,6 +113,7 @@ data class SettingsState(
     val remoteModels: List<String> = emptyList(),
     val remoteModelsFetched: Boolean = false,
     val maxSteps: Int = 50,
+    val llmMaxConcurrency: Int = 10,
     val commandTimeoutSec: Int = 60,
     val timezone: String = java.util.TimeZone.getDefault().id,
     val contextStrategy: String = "default",
@@ -330,6 +331,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun updateMaxSteps(steps: Int) {
         _state.value = _state.value.copy(maxSteps = steps.coerceIn(1, 200))
+    }
+
+    fun updateLlmMaxConcurrency(count: Int) {
+        val clamped = count.coerceIn(1, 50)
+        _state.value = _state.value.copy(llmMaxConcurrency = clamped)
+        com.mengpaw.kernel.llm.LlmRateLimiter.maxConcurrency = clamped
     }
 
     fun cycleThemeMode() {

@@ -65,6 +65,10 @@ import java.net.NetworkInterface
  * sys.screen.on      亮屏
  * sys.screen.off     熄屏 (需权限)
  * sys.screen.brightness <0-255>  设置亮度
+ * sys.screenshot [--path <file>]  截图
+ * sys.screenrecord.start [path]    开始录屏 (最长3分钟)
+ * sys.screenrecord.stop             停止录屏
+ * sys.camera.photo [--confirm] [--front] [path]  拍照 (需用户确认)
  * sys.volume         音量 (媒体/铃声/闹钟/通话音量)
  * sys.volume.set <type> <0-15>   设置音量
  * sys.apps           已安装应用 (需权限)
@@ -167,6 +171,11 @@ object SysExecutor {
         "calendar.list" to ::calendarList,
         "calendar.delete" to ::calendarDelete,
         "calendar.calendars" to ::calendarCalendars,
+        // ── Media capture ──
+        "screenshot" to ::screenshot,
+        "screenrecord.start" to ::screenRecordStart,
+        "screenrecord.stop" to ::screenRecordStop,
+        "camera.photo" to ::cameraPhoto,
     )
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1312,10 +1321,193 @@ object SysExecutor {
         Manifest.permission.READ_PHONE_STATE to "读取手机状态（IMEI/运营商）。使用 sys.permission.request READ_PHONE_STATE 申请。",
     )
 
+    // ═══════════════════════════════════════════════════════════════════
+    // Screenshot
+    // ═══════════════════════════════════════════════════════════════════
+
+    private var screenRecordProcess: Process? = null
+
+    private suspend fun screenshot(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        val flags = args.filter { it.startsWith("--") }
+        val pathArg = args.filter { !it.startsWith("--") }.firstOrNull()
+        val outputPath = if (pathArg != null) {
+            java.io.File(pathArg).absolutePath
+        } else {
+            val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+            "${com.mengpaw.kernel.DataPaths.SCREENSHOTS}/screenshot_${timestamp}.png"
+        }
+        java.io.File(outputPath).parentFile?.mkdirs()
+        return try {
+            val proc = Runtime.getRuntime().exec(arrayOf("screencap", "-p", outputPath))
+            proc.waitFor()
+            if (proc.exitValue() == 0) {
+                val size = java.io.File(outputPath).length()
+                ExecutionResult.ok("截图已保存: $outputPath (${size} bytes)")
+            } else {
+                val err = proc.errorStream.bufferedReader().readText().trim()
+                ExecutionResult.fail("截图失败${if (err.isNotEmpty()) ": $err" else " — screencap 不可用（可能需要 root 或 ADB 权限）"}")
+            }
+        } catch (e: Exception) {
+            ExecutionResult.fail("截图失败: ${e.message}。screencap 需要 root 或 shell 权限。备选: 使用 browser.screenshot 截取浏览器内容。")
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Screen recording
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun screenRecordStart(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        if (screenRecordProcess != null && screenRecordProcess!!.isAlive) {
+            return ExecutionResult.fail("录屏已在运行。先执行 sys.screenrecord.stop 停止。")
+        }
+        val pathArg = args.firstOrNull()
+        val outputPath = pathArg ?: run {
+            val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+            "${com.mengpaw.kernel.DataPaths.SCREENSHOTS}/record_${timestamp}.mp4"
+        }
+        java.io.File(outputPath).parentFile?.mkdirs()
+        return try {
+            // --time-limit 180: max 3 min to prevent runaway recordings
+            val proc = Runtime.getRuntime().exec(arrayOf("screenrecord", "--time-limit", "180", outputPath))
+            screenRecordProcess = proc
+            ExecutionResult.ok("录屏已开始 (最长 3 分钟)\n输出: $outputPath\n停止: sys.screenrecord.stop")
+        } catch (e: Exception) {
+            ExecutionResult.fail("录屏启动失败: ${e.message}。screenrecord 需要 root 或 shell 权限。")
+        }
+    }
+
+    private suspend fun screenRecordStop(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        val proc = screenRecordProcess
+        if (proc == null || !proc.isAlive) {
+            screenRecordProcess = null
+            return ExecutionResult.fail("没有正在运行的录屏")
+        }
+        return try {
+            // Send signal to stop recording gracefully (screenrecord finalizes mp4 on SIGINT/SIGTERM)
+            proc.destroy()  // SIGTERM — screenrecord handles this to finalize output
+            Thread.sleep(1500) // wait for screenrecord to finalize the mp4
+            if (proc.isAlive) proc.destroyForcibly()
+            screenRecordProcess = null
+            ExecutionResult.ok("录屏已停止。文件在 ${com.mengpaw.kernel.DataPaths.SCREENSHOTS}/ 目录下。")
+        } catch (e: Exception) {
+            try { proc.destroyForcibly() } catch (_: Exception) {}
+            screenRecordProcess = null
+            ExecutionResult.fail("停止录屏异常: ${e.message}")
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Camera photo capture
+    // ═══════════════════════════════════════════════════════════════════
+
+    private suspend fun cameraPhoto(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        if (!checkSelf(Manifest.permission.CAMERA)) {
+            return ExecutionResult.fail("需要 CAMERA 权限。使用 sys.permission.request CAMERA 申请。", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        }
+        // ── User confirmation gate ──
+        if (!args.contains("--confirm")) {
+            return ExecutionResult.fail(buildString {
+                appendLine("📸 即将使用摄像头拍照")
+                appendLine()
+                appendLine("⚠️ 摄像头涉及隐私。请先告知用户并获取确认，然后执行:")
+                appendLine("  sys.camera.photo --confirm")
+                appendLine()
+                appendLine("可选参数: sys.camera.photo --confirm --front (使用前置摄像头)")
+                appendLine("          sys.camera.photo --confirm <输出路径>")
+            })
+        }
+        return try {
+            val pathArg = args.filter { !it.startsWith("--") }.firstOrNull()
+            val outputPath = pathArg ?: run {
+                val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                "${com.mengpaw.kernel.DataPaths.SCREENSHOTS}/photo_${timestamp}.jpg"
+            }
+            val useFront = args.contains("--front")
+            java.io.File(outputPath).parentFile?.mkdirs()
+
+            // Use Camera2 API to capture
+            val cm = app.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            val cameraId = if (useFront) {
+                cm.cameraIdList.firstOrNull { id ->
+                    val chars = cm.getCameraCharacteristics(id)
+                    chars.get(android.hardware.camera2.CameraCharacteristics.LENS_FACING) ==
+                        android.hardware.camera2.CameraCharacteristics.LENS_FACING_FRONT
+                }
+            } else {
+                cm.cameraIdList.firstOrNull { id ->
+                    val chars = cm.getCameraCharacteristics(id)
+                    chars.get(android.hardware.camera2.CameraCharacteristics.LENS_FACING) ==
+                        android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK
+                }
+            } ?: cm.cameraIdList.firstOrNull()
+                ?: return ExecutionResult.fail("未找到可用摄像头")
+
+            // Open camera and capture a single frame
+            val latch = java.util.concurrent.CountDownLatch(1)
+            var captureError: String? = null
+            var capturedPath: String? = null
+
+            val handler = android.os.Handler(android.os.Looper.getMainLooper())
+            cm.openCamera(cameraId, object : android.hardware.camera2.CameraDevice.StateCallback() {
+                override fun onOpened(device: android.hardware.camera2.CameraDevice) {
+                    try {
+                        val reader = android.media.ImageReader.newInstance(1920, 1080, android.graphics.ImageFormat.JPEG, 1)
+                        reader.setOnImageAvailableListener({ r ->
+                            val image = r.acquireLatestImage()
+                            if (image != null) {
+                                try {
+                                    val buffer = image.planes[0].buffer
+                                    val bytes = ByteArray(buffer.remaining())
+                                    buffer.get(bytes)
+                                    java.io.File(outputPath).writeBytes(bytes)
+                                    capturedPath = outputPath
+                                } finally {
+                                    image.close()
+                                }
+                            }
+                            latch.countDown()
+                        }, handler)
+
+                        val surfaces = listOf(reader.surface)
+                        device.createCaptureSession(surfaces,
+                            object : android.hardware.camera2.CameraCaptureSession.StateCallback() {
+                                override fun onConfigured(session: android.hardware.camera2.CameraCaptureSession) {
+                                    val req = device.createCaptureRequest(android.hardware.camera2.CameraDevice.TEMPLATE_STILL_CAPTURE)
+                                    req.addTarget(reader.surface)
+                                    session.capture(req.build(), null, null)
+                                }
+                                override fun onConfigureFailed(s: android.hardware.camera2.CameraCaptureSession) {
+                                    captureError = "Camera session config failed"
+                                    latch.countDown()
+                                }
+                            }, handler)
+                    } catch (e: Exception) {
+                        captureError = e.message
+                        latch.countDown()
+                    }
+                }
+                override fun onDisconnected(d: android.hardware.camera2.CameraDevice) { d.close(); latch.countDown() }
+                override fun onError(d: android.hardware.camera2.CameraDevice, e: Int) { d.close(); captureError = "Camera error: $e"; latch.countDown() }
+            }, handler)
+
+            latch.await(10, java.util.concurrent.TimeUnit.SECONDS)
+
+            if (capturedPath != null) {
+                val size = java.io.File(outputPath).length()
+                ExecutionResult.ok("照片已保存: $outputPath (${size} bytes)")
+            } else {
+                ExecutionResult.fail("拍照失败: ${captureError ?: "超时"}")
+            }
+        } catch (e: Exception) {
+            ExecutionResult.fail("拍照失败: ${e.message}")
+        }
+    }
+
     val PERMISSION_MAP = mapOf(
         "sys.location" to Manifest.permission.ACCESS_FINE_LOCATION,
         "sys.camera" to Manifest.permission.CAMERA,
         "sys.apps" to Manifest.permission.QUERY_ALL_PACKAGES,
+        "sys.camera.photo" to Manifest.permission.CAMERA,
         "sys.telephony" to Manifest.permission.READ_PHONE_STATE,
         "sys.notification.send" to Manifest.permission.POST_NOTIFICATIONS,
         "sys.notification.id" to Manifest.permission.POST_NOTIFICATIONS,
