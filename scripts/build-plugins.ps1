@@ -56,10 +56,11 @@ foreach ($plugin in $Plugins) {
             Copy-Item $aarFile.FullName $destPath -Force
 
             $hash = (Get-FileHash $destPath -Algorithm SHA256).Hash.ToLower()
-            $sizeKB = [math]::Round($aarFile.Length / 1024, 1)
+            $sizeBytes = $aarFile.Length
+            $sizeKB = [math]::Round($sizeBytes / 1024, 1)
 
             Write-Host "  -> $destName ($sizeKB KB, SHA256: $hash)" -ForegroundColor Green
-            $Built += @{ Module = $moduleName; File = $destName; Hash = $hash; SizeKB = $sizeKB }
+            $Built += @{ Module = $moduleName; File = $destName; Hash = $hash; SizeBytes = $sizeBytes; SizeKB = $sizeKB }
         } else {
             throw "AAR file not found in $aarDir"
         }
@@ -85,15 +86,38 @@ if ($Failed.Count -gt 0) {
 if ($Built.Count -gt 0) {
     Write-Host ""
     Write-Host "AARs saved to: $ReleaseDir" -ForegroundColor Cyan
+
+    # Auto-update plugins.json with checksums and sizes
+    $pluginsJsonPath = Join-Path $RootDir "plugins.json"
+    if (Test-Path $pluginsJsonPath) {
+        Write-Host ""
+        Write-Host "Updating plugins.json with checksums and sizes..." -ForegroundColor Cyan
+        $pluginsJson = Get-Content $pluginsJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+        foreach ($b in $Built) {
+            $pluginId = $b.Module
+            $entry = $pluginsJson.plugins | Where-Object { $_.id -eq $pluginId }
+            if ($entry) {
+                $entry | Add-Member -MemberType NoteProperty -Name "checksum" -Value "sha256:$($b.Hash)" -Force
+                $entry | Add-Member -MemberType NoteProperty -Name "size" -Value $b.SizeBytes -Force
+                Write-Host "  $pluginId`: sha256:$($b.Hash), $($b.SizeBytes) bytes" -ForegroundColor Green
+            } else {
+                Write-Host "  $pluginId`: not found in plugins.json (skip)" -ForegroundColor DarkYellow
+            }
+        }
+
+        $updatedJson = $pluginsJson | ConvertTo-Json -Depth 10
+        # PowerShell ConvertTo-Json produces compact JSON; prettify with 2-space indent
+        $updatedJson = $updatedJson -replace '    ', '  '
+        $updatedJson | Set-Content $pluginsJsonPath -Encoding UTF8
+        Write-Host "plugins.json updated." -ForegroundColor Green
+    }
+
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor White
     Write-Host "1. Upload to GitHub Release:" -ForegroundColor Gray
     Write-Host "   gh release create v0.3.0 $ReleaseDir\*.aar --title 'Plugin AARs v0.3.0'" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "2. Update plugins.json with download URLs and checksums" -ForegroundColor Gray
+    Write-Host "2. Commit plugins.json with updated checksums" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "Generated checksums:" -ForegroundColor White
-    foreach ($b in $Built) {
-        Write-Host "  $($b.Module): sha256:$($b.Hash)" -ForegroundColor Gray
-    }
 }

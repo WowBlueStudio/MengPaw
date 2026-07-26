@@ -300,24 +300,18 @@ class AgentEngine(
             if (!session.active) break
             session.iteration = turn + 1
 
-            // FIX: Accumulate context from previous turns so RubricGate has full picture
-            val previousContext = if (turnResults.isNotEmpty()) {
-                "\n## 前轮结果摘要\n" + turnResults.joinToString("\n---\n") { it.take(500) }
-            } else ""
-
-            // Build goal-aware prompt with accumulated context
+            // Build goal-aware prompt — RubricGate feedback is the only signal needed between turns.
+            // Prior turn results are NOT replayed; replaying biases the agent toward repeating old work.
             val goalPrompt = if (turn == 0) {
-                "## 目标模式\n你的任务是完成以下目标。持续工作直到目标达成：\n\n**目标**: ${session.goal}\n\n使用 Thought → Action → Final Answer 格式。完成后给出 Final Answer。"
+                "## 目标\n${session.goal}\n\n使用 Thought → Action → Final Answer 格式。自然对话，不要主动汇报进度或回溯历史——除非用户询问。"
             } else {
-                "## 目标模式 (第 ${turn + 1}/$maxTurns 轮)\n目标: ${session.goal}\n\n上次反馈: ${session.lastFeedback.ifEmpty { "无" }}\n\n继续工作，基于前轮结果改进。$previousContext"
+                "## 目标 (第 ${turn + 1}/$maxTurns 轮)\n${session.goal}\n\n反馈: ${session.lastFeedback.ifEmpty { "无" }}"
             }
 
-            // FIX: Run ReAct loop inline instead of calling run() which creates a fresh session.
-            // This preserves context across goal turns.
+            // Run ReAct loop — no prior context injection; RubricGate feedback is sufficient
             val result = runReActLoop(
                 task = "$goalPrompt\n\n$guardedTask",
                 maxSteps = 50,
-                contextPrefix = previousContext,
                 onStep = onStep
             )
             turnResults.add(result)
@@ -384,10 +378,25 @@ class AgentEngine(
             val job = kotlinx.coroutines.currentCoroutineContext()[Job]
             runningJob = job
             var consecutiveContinueCount = 0 // Tracks needsContinue without action
+            var consecutiveFailures = 0       // Tracks consecutive tool failures
+            val originalMaxSteps = maxSteps
+            var effectiveMax = maxSteps
+            var step = 0
+            var extended = false
 
-            for (step in 0 until maxSteps) {
+            while (step < effectiveMax) {
                 runningJob?.let { if (!it.isActive) throw kotlinx.coroutines.CancellationException("Agent stopped") }
-                _state.value = AgentState.Running(task, step + 1, maxSteps)
+                _state.value = AgentState.Running(task, step + 1, effectiveMax)
+
+                // ── Adaptive step extension ──
+                // If agent is still making productive progress near the limit, auto-extend
+                if (!extended && step >= effectiveMax * 0.75 && consecutiveFailures == 0) {
+                    val extendTo = minOf((effectiveMax * 1.5).toInt(), originalMaxSteps * 2)
+                    if (extendTo > effectiveMax) {
+                        effectiveMax = extendTo
+                        extended = true
+                    }
+                }
 
                 val conversation = buildConversation(session.id)
                 val llmResponse = llmProvider.completeWithMessages(conversation)
@@ -465,9 +474,12 @@ class AgentEngine(
                         ExecutionResult.fail("命令超时 (60s): $commandLine。请检查网络连接或尝试其他方式。", errorCode = ErrorCodes.ERR_INTERNAL)
                     }
                     if (!result.success) {
+                        consecutiveFailures++
                         ErrorCollector.report(ErrorType.TOOL_CALL_FAILED, "AgentEngine",
                             "$commandLine → ${result.error}", sessionId = session.id, agentName = agentName,
                             metadata = mapOf("errorCode" to (result.errorCode ?: ""), "command" to commandLine))
+                    } else {
+                        consecutiveFailures = 0
                     }
                     // Detect failure loop: 5+ consecutive failures → agent is stuck
                     if (promptEngine.trackResult(result.success)) {
@@ -485,6 +497,7 @@ class AgentEngine(
                 } else {
                     onStep?.invoke(TraceStep(step + 1, parsed.thought, null, null))
                 }
+                step++
             }
 
             val msg = localizedError("max_steps", maxSteps.toString())
@@ -633,54 +646,100 @@ Provide a concise summary with:
         onStep: ((TraceStep) -> Unit)? = null
     ): String {
         var retries = 0
-        var lastError = ""
+        var lastVerifierFeedback = ""
 
         while (retries <= maxRetries) {
             subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.RUNNING
-            val attemptLabel = if (retries > 0) " (retry $retries)" else ""
 
-            val taskWithRetry = if (retries > 0) {
-                "${subtask.description}\n\n⚠️ 上次尝试失败: $lastError。请调整方法重试。"
-            } else subtask.description
+            // Build task prompt — include verifier feedback on retry
+            val taskPrompt = if (retries > 0 && lastVerifierFeedback.isNotBlank()) {
+                buildString {
+                    append(subtask.description)
+                    append("\n\n## 质量审查反馈（第 $retries 次）\n")
+                    append("上一轮未通过验证，请根据以下审查意见改进：\n\n")
+                    append(lastVerifierFeedback)
+                    append("\n\n请修正上述问题后重新执行。原任务：${subtask.description}")
+                }
+            } else {
+                subtask.description
+            }
 
             val workerResult = try {
-                run(taskWithRetry, maxSteps = maxSteps, onStep = onStep)
+                run(taskPrompt, maxSteps = maxSteps, onStep = onStep)
             } catch (e: Exception) {
                 "Error: ${e.message}"
             }
 
             subtask.output = workerResult
-            val isSuccess = !workerResult.startsWith("Error:") &&
-                !workerResult.startsWith("已达到最大步数") &&
-                !workerResult.startsWith("Max steps")
+            val isHardError = workerResult.startsWith("Error:") ||
+                workerResult.startsWith("已达到最大步数") ||
+                workerResult.startsWith("Max steps")
 
-            if (!isSuccess) {
-                lastError = workerResult.take(200)
+            if (isHardError) {
+                lastVerifierFeedback = "Worker execution error: ${workerResult.take(300)}"
                 retries++
                 continue
             }
 
-            // Verify
-            val verifyPrompt = "Task completed. Check against criteria.\nCriteria: ${subtask.expectedOutcome}\nOutput: ${workerResult.take(1000)}\n\nReply with ONLY one word: PASS or FAIL"
+            // ── Strict Verifier (Worker-Verifier pattern) ──
+            val verifierPrompt = """
+You are a strict quality verifier. Review the worker agent's output against the success criteria.
+
+**Success criteria**: ${subtask.expectedOutcome.ifBlank { "Complete the task: ${subtask.description}" }}
+
+**Worker output**:
+${workerResult.take(2000)}
+
+**Analysis rules**:
+- Check if the output actually fulfills the criteria (not just mentions it)
+- Check for factual errors, incomplete data, or vague hand-waving
+- A "Final Answer" that says "I cannot do this" without trying alternatives = FAIL
+- Partial completion with clear next steps = FAIL (must retry to complete)
+
+Respond in this exact format:
+
+VERDICT: <PASS or FAIL>
+ANALYSIS: <1-3 sentences on what was checked and whether it meets criteria>
+FIX: <if FAIL, give the worker concrete, actionable instructions for the retry. Be specific — name which tool to use, what data to look for, what approach to try differently>
+""".trimIndent()
+
             try {
-                val verifyResult = llmProvider.complete(verifyPrompt)
-                if (verifyResult.trim().uppercase().startsWith("PASS")) {
+                val verifyResult = llmProvider.complete(verifierPrompt)
+                val verdict = verifyResult.lines()
+                    .find { it.trimStart().startsWith("VERDICT:", ignoreCase = true) }
+                    ?.substringAfter(":")?.trim()?.uppercase() ?: "PASS"
+
+                if (verdict == "PASS") {
                     subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED
-                    subtask.verifierNote = "PASS"
+                    subtask.verifierNote = verifyResult.lines()
+                        .find { it.trimStart().startsWith("ANALYSIS:", ignoreCase = true) }
+                        ?.substringAfter(":")?.trim() ?: "PASS"
                     return workerResult
                 } else {
-                    subtask.verifierNote = verifyResult.take(100)
-                    lastError = "Verification failed: ${verifyResult.take(100)}"
+                    // FAIL — extract analysis and fix instructions for the worker
+                    lastVerifierFeedback = buildString {
+                        val analysis = verifyResult.lines()
+                            .find { it.trimStart().startsWith("ANALYSIS:", ignoreCase = true) }
+                            ?.substringAfter(":")?.trim()
+                        val fix = verifyResult.lines()
+                            .find { it.trimStart().startsWith("FIX:", ignoreCase = true) }
+                            ?.substringAfter(":")?.trim()
+                        if (analysis != null) { append("问题: $analysis\n") }
+                        if (fix != null) { append("修复建议: $fix") }
+                        if (isBlank()) { append(verifyResult.take(300)) }
+                    }
+                    subtask.verifierNote = "FAIL: ${lastVerifierFeedback.take(150)}"
                     retries++
                 }
             } catch (_: Exception) {
+                // Verification unavailable — accept result without verification
                 subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.DONE
-                return workerResult // Verification skipped, accept result
+                return workerResult
             }
         }
 
         subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.FAILED
-        return lastError.ifBlank { subtask.output }
+        return lastVerifierFeedback.ifBlank { subtask.output }
     }
 
     private fun localizedError(key: String, detail: String): String = when (agentLanguage) {

@@ -19,6 +19,10 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.SideEffect
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.pointerInput
+import android.view.KeyEvent
 import com.mengpaw.core.AndroidLogger
 import com.mengpaw.core.DataPathsInitializer
 import com.mengpaw.kernel.KernelLog
@@ -26,6 +30,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -52,10 +57,30 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.mengpaw.browser.data.BrowserPrefs
+import com.mengpaw.browser.data.DetectedImage
+import com.mengpaw.browser.data.HistoryStore
+import com.mengpaw.browser.data.SearchEngine
+import com.mengpaw.browser.data.TabState
 import com.mengpaw.browser.plugin.BrowserElement
+import com.mengpaw.browser.service.GoogleTranslate
+import com.mengpaw.browser.util.downloadImage
+import com.mengpaw.browser.util.isAdRequest
+import com.mengpaw.browser.util.smartNavigate
+import com.mengpaw.browser.web.createWebView
 import com.mengpaw.browser.plugin.BrowserPluginRegistry
+import com.mengpaw.browser.ui.BrowserAgentSettingsDialog
 import com.mengpaw.browser.ui.BrowserFindBar
+import com.mengpaw.browser.ui.BrowserHistoryDialog
+import com.mengpaw.browser.ui.BrowserImagePickerDialog
+import com.mengpaw.browser.ui.BrowserMarkdownViewerDialog
+import com.mengpaw.browser.ui.BrowserPasswordDialog
 import com.mengpaw.browser.ui.BrowserReaderMode
+import com.mengpaw.browser.ui.BrowserSettingsDialog
+import com.mengpaw.browser.ui.BrowserTranslateDialog
+import com.mengpaw.browser.ui.components.SearchEngineLogo
+import com.mengpaw.browser.ui.components.TabChip
+import com.mengpaw.browser.ui.theme.BrowserThemeConfig
 import com.mengpaw.design.components.MarkdownText
 import com.mengpaw.design.components.parseMarkdown
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -71,234 +96,6 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-
-// ── Types ──────────────────────────────────────────────────────────
-
-data class TabState(
-    val id: Int, val url: String = "", val title: String = "",
-    val isLoading: Boolean = false, val progress: Int = 0,
-    val canGoBack: Boolean = false, val canGoForward: Boolean = false
-)
-
-data class DetectedImage(
-    val src: String, val alt: String, val width: Int = 0, val height: Int = 0, val z: Int = 0,
-    val mediaType: String = "image" // "image" or "video"
-)
-
-enum class SearchEngine(val label: String, val url: String, val key: String) {
-    GOOGLE("Google", "https://www.google.com/search?q=", "google"),
-    BING("Bing", "https://www.bing.com/search?q=", "bing"),
-    BAIDU("百度", "https://www.baidu.com/s?wd=", "baidu"),
-    DUCKDUCKGO("DuckDuckGo", "https://duckduckgo.com/?q=", "duckduckgo");
-
-    companion object {
-        fun fromKey(key: String) = entries.find { it.key == key } ?: BING
-    }
-}
-
-/** Persistent browser settings backed by SharedPreferences. */
-class BrowserPrefs(ctx: Context) {
-    private val p = ctx.getSharedPreferences("mp_browser", Context.MODE_PRIVATE)
-
-    var adBlockEnabled: Boolean
-        get() = p.getBoolean("adblock", true)
-        set(v) = p.edit().putBoolean("adblock", v).apply()
-
-    /** Ordered list of enabled engine keys (comma-separated). */
-    var engineKeys: List<String>
-        get() = (p.getString("engines", "bing,google,baidu,duckduckgo") ?: "bing,google,baidu,duckduckgo").split(",").filter { it.isNotBlank() }
-        set(v) = p.edit().putString("engines", v.joinToString(",")).apply()
-
-    /** Last-used engine key. */
-    var lastEngineKey: String
-        get() = p.getString("last_engine", "bing") ?: "bing"
-        set(v) = p.edit().putString("last_engine", v).apply()
-
-    /** Get the ordered list of enabled SearchEngine instances. */
-    fun enabledEngines(): List<SearchEngine> = engineKeys.mapNotNull { SearchEngine.fromKey(it) }
-
-    /** Current default engine (last used). */
-    fun defaultEngine(): SearchEngine = SearchEngine.fromKey(lastEngineKey)
-
-    /** Set a new default and persist. */
-    fun setDefaultEngine(engine: SearchEngine) { lastEngineKey = engine.key }
-
-    var historyEnabled: Boolean
-        get() = p.getBoolean("history_enabled", true)
-        set(v) = p.edit().putBoolean("history_enabled", v).apply()
-
-    var savePasswords: Boolean
-        get() = p.getBoolean("save_passwords", true)
-        set(v) = p.edit().putBoolean("save_passwords", v).apply()
-
-    // ── Agent Collaboration Settings ──
-
-    /** Quick Click: full-page screenshot + coordinate taps (experimental, default ON) */
-    var quickClickEnabled: Boolean
-        get() = p.getBoolean("quick_click", true)
-        set(v) = p.edit().putBoolean("quick_click", v).apply()
-
-    /** Auto-inject the __mp bridge on every page load for faster commands */
-    var autoInjectBridge: Boolean
-        get() = p.getBoolean("auto_inject", true)
-        set(v) = p.edit().putBoolean("auto_inject", v).apply()
-
-    /** Max height (pixels) for full-page screenshots. Default 15000, range 5000-30000 */
-    var screenshotMaxHeight: Int
-        get() = p.getInt("screenshot_max_h", 15000).coerceIn(5000, 30000)
-        set(v) = p.edit().putInt("screenshot_max_h", v.coerceIn(5000, 30000)).apply()
-
-    /** Screenshot JPEG quality percentage (for full-page, lower = smaller file) */
-    var screenshotQuality: Int
-        get() = p.getInt("screenshot_quality", 85).coerceIn(30, 100)
-        set(v) = p.edit().putInt("screenshot_quality", v.coerceIn(30, 100)).apply()
-}
-
-/** Simple history store with 30-day retention and in-memory cache. */
-class HistoryStore(ctx: Context) {
-    private val p = ctx.getSharedPreferences("mp_history", Context.MODE_PRIVATE)
-    private val cutoffTime: Long get() = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
-    private var cached: List<Entry>? = null
-    private var cacheTimestamp = 0L
-
-    data class Entry(val url: String, val title: String, val time: Long) {
-        val daysLeft: Int get() = maxOf(0, ((30L * 24 * 60 * 60 * 1000 - (System.currentTimeMillis() - time)) / (24 * 60 * 60 * 1000)).toInt())
-        val countdown: String get() = "${daysLeft}d"
-    }
-
-    fun record(url: String, title: String) {
-        val entries = all().toMutableList()
-        entries.add(0, Entry(url.take(500), title.take(100), System.currentTimeMillis()))
-        val pruned = entries.filter { it.time > cutoffTime }.take(MAX_ENTRIES)
-        p.edit().putString("entries", pruned.joinToString("|") { encode(it) }).apply()
-        cached = pruned; cacheTimestamp = System.currentTimeMillis()
-    }
-
-    fun all(): List<Entry> {
-        val now = System.currentTimeMillis()
-        if (cached != null && now - cacheTimestamp < CACHE_TTL_MS) return cached ?: emptyList()
-        val raw = p.getString("entries", "") ?: ""
-        val entries = if (raw.isBlank()) emptyList()
-        else raw.split("|").mapNotNull { decode(it) }.filter { it.time > cutoffTime }
-        cached = entries; cacheTimestamp = now
-        return entries
-    }
-
-    fun clear() { p.edit().remove("entries").apply(); cached = emptyList() }
-
-    companion object {
-        private const val MAX_ENTRIES = 500
-        private const val CACHE_TTL_MS = 5000L
-    }
-
-    private fun encode(e: Entry): String {
-        val obj = org.json.JSONObject()
-        obj.put("u", e.url)
-        obj.put("t", e.title)
-        obj.put("ts", e.time)
-        return obj.toString()
-    }
-    private fun decode(s: String): Entry? = try {
-        val obj = org.json.JSONObject(s)
-        Entry(obj.getString("u"), obj.optString("t", ""), obj.getLong("ts"))
-    } catch (e: Exception) {
-        android.util.Log.w("HistoryStore", "Failed to decode history entry", e)
-        null
-    }
-}
-
-// ── Ad Block List ──────────────────────────────────────────────────
-
-private val AD_DOMAINS = listOf(
-    "doubleclick.net", "googlesyndication.com", "googleadservices.com", "googletagservices.com",
-    "adservice.google.com", "adservice.google.nl", "pagead2.googlesyndication.com",
-    "amazon-adsystem.com", "criteo.com", "criteo.net", "adsrvr.org", "adnxs.com",
-    "rubiconproject.com", "pubmatic.com", "openx.net", "casalemedia.com",
-    "smartadserver.com", "outbrain.com", "taboola.com", "moatads.com",
-    "advertising.com", "serving-sys.com", "adsafeprotected.com", "yieldmo.com",
-    "scorecardresearch.com", "quantserve.com", "bluekai.com", "exelator.com",
-    "demdex.net", "ads.linkedin.com", "ads.twitter.com", "ads.yahoo.com",
-    "analytics.google.com", "googletagmanager.com", "facebook.com/tr",
-    "bat.bing.com", "clarity.ms", "hotjar.com", "mouseflow.com"
-)
-
-private val AD_PATTERNS = listOf(
-    Regex("[/.](?:ad|ads|advert|banner|popup|popunder|sponsor)[s]?[/.]", RegexOption.IGNORE_CASE),
-    Regex("[/.](?:tracker|tracking|pixel|beacon|analytics|stat)[s]?[/.]", RegexOption.IGNORE_CASE),
-    Regex("[?&](?:utm_|ref=|sponsored|adid|gclid|fbclid)", RegexOption.IGNORE_CASE)
-)
-
-private fun isAdRequest(url: String): Boolean {
-    val host = try { java.net.URI(url).host ?: "" } catch (_: Exception) { "" }
-    return AD_DOMAINS.any { host.contains(it, ignoreCase = true) } ||
-           AD_PATTERNS.any { it.containsMatchIn(url) }
-}
-
-/**
- * Free Google Translate client using the public web endpoint.
- * No API key required — uses the same backend as translate.google.com.
- * For higher-volume/critical use, switch to the official Cloud Translation API.
- */
-object GoogleTranslate {
-    private const val ENDPOINT = "https://translate.googleapis.com/translate_a/single"
-
-    /** Common target language codes. */
-    val LANGUAGES = mapOf(
-        "中文(简)" to "zh-CN", "中文(繁)" to "zh-TW", "English" to "en",
-        "日本語" to "ja", "한국어" to "ko", "Français" to "fr",
-        "Deutsch" to "de", "Español" to "es", "Português" to "pt",
-        "Italiano" to "it", "Русский" to "ru", "العربية" to "ar",
-        "हिन्दी" to "hi", "ไทย" to "th", "Tiếng Việt" to "vi",
-        "Bahasa Indonesia" to "id", "Türkçe" to "tr"
-    )
-
-    /** Translate text using the free public endpoint. */
-    suspend fun translate(text: String, targetLang: String, sourceLang: String = "auto"): String {
-        return withContext(Dispatchers.IO) {
-            val encoded = URLEncoder.encode(text, "UTF-8")
-            val url = "$ENDPOINT?client=gtx&sl=$sourceLang&tl=$targetLang&dt=t&q=$encoded"
-            val conn = URL(url).openConnection() as HttpURLConnection
-            conn.connectTimeout = 10000
-            conn.readTimeout = 15000
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-            val raw = try { conn.inputStream.bufferedReader().readText() } catch (e: Exception) { conn.disconnect(); "" }
-            conn.disconnect()
-            parseResult(raw)
-        }
-    }
-
-    /** Parse Google's JSON response: [[["translated","orig",...]],null,"en"] */
-    private fun parseResult(json: String): String {
-        return try {
-            // Remove the outer array wrapper, extract first string from each sentence
-            val sb = StringBuilder()
-            // Simple parser: find all ["translated","original",...] patterns
-            val sentenceRegex = Regex("""\[\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"""")
-            sentenceRegex.findAll(json).forEach { match ->
-                val translated = match.groupValues[1]
-                    .replace("\\\"", "\"")
-                    .replace("\\n", "\n")
-                    .replace("\\\\", "\\")
-                sb.append(translated)
-            }
-            sb.toString().ifBlank { "(translation empty)" }
-        } catch (e: Exception) {
-            "(translation failed: ${e.message})"
-        }
-    }
-}
-
-/** Smart URL detection: returns search URL for keywords, original URL with https for domains. */
-private fun smartNavigate(input: String, engine: SearchEngine): String {
-    val trimmed = input.trim()
-    if (trimmed.isBlank()) return ""
-    // Already a full URL
-    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed
-    // Contains a dot and no spaces → treat as domain
-    if (trimmed.contains(".") && !trimmed.contains(" ")) return "https://$trimmed"
-    // Fallback: search engine
-    return engine.url + java.net.URLEncoder.encode(trimmed, "UTF-8")
-}
 
 // ── Activity ──────────────────────────────────────────────────────
 
@@ -354,6 +151,11 @@ class BrowserActivity : ComponentActivity() {
                 "browser_navigate" -> {
                     val url = args["url"] ?: return """{"ok":false,"error":"Missing 'url'"}"""
                     wv.loadUrl(url)
+                    // Wait for page to finish loading (max 10s)
+                    var waited = 0
+                    while (wv.progress < 100 && waited < 100) {
+                        Thread.sleep(100); waited++
+                    }
                     """{"ok":true}"""
                 }
                 "browser_screenshot" -> bridge.screenshot()
@@ -398,26 +200,15 @@ class BrowserActivity : ComponentActivity() {
         return if (raw != null && (raw.startsWith("http://") || raw.startsWith("https://"))) raw else null
     }
 
-    /** Back key: navigate WebView history first, then return to Shell or exit. */
+    /** Back key: delegate to Compose callback which handles tab closing logic. */
     override fun onBackPressed() {
-        // Check all WebViews — any with history goes back first
-        for ((_, wv) in webViewMapRef) {
-            if (wv.canGoBack()) { wv.goBack(); return }
-        }
-        // No WebView history — return to Shell if installed
-        try {
-            val shellIntent = packageManager.getLaunchIntentForPackage("com.mengpaw.shell")
-            if (shellIntent != null) {
-                shellIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                startActivity(shellIntent)
-                return
-            }
-        } catch (_: Exception) { }
-        super.onBackPressed()
+        onSystemBack?.invoke() ?: super.onBackPressed()
     }
 
     /** Mutable reference to Compose's webViewMap, synced via SideEffect. */
     internal var webViewMapRef: MutableMap<Int, WebView> = mutableMapOf()
+    /** System back key callback set by Compose. */
+    internal var onSystemBack: (() -> Unit)? = null
 
     override fun onDestroy() {
         super.onDestroy()
@@ -474,6 +265,7 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
     val historyStore = remember { HistoryStore(ctx) }
     var searchEngine by remember { mutableStateOf(prefs.defaultEngine()) }
     var adBlockEnabled by remember { mutableStateOf(prefs.adBlockEnabled) }
+    var darkMode by remember { mutableStateOf(prefs.darkMode) }
     var quickClickEnabled by remember { mutableStateOf(prefs.quickClickEnabled) }
     var autoInjectBridge by remember { mutableStateOf(prefs.autoInjectBridge) }
     var screenshotMaxH by remember { mutableStateOf(prefs.screenshotMaxHeight) }
@@ -484,6 +276,37 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
     SideEffect { (ctx as? BrowserActivity)?.webViewMapRef = webViewMap }
 
     val activeTab = tabs.find { it.id == activeTabId } ?: tabs.first()
+
+    // Inject dark mode CSS after page loads (URL change + not loading + darkMode on)
+    LaunchedEffect(activeTab.url, activeTab.isLoading, darkMode) {
+        if (darkMode && !activeTab.isLoading && activeTab.url.isNotBlank()) {
+            kotlinx.coroutines.delay(300)
+            webViewMap[activeTabId]?.evaluateJavascript(DARK_MODE_CSS, null)
+        }
+    }
+
+    // System back key: WebView history → close tab → return to Shell
+    val handleBack: () -> Unit = {
+        val wv = webViewMap[activeTabId]
+        if (wv?.canGoBack() == true) { wv.goBack() }
+        else {
+            val remaining = tabs.filter { it.id != activeTabId }
+            if (remaining.isNotEmpty()) {
+                wv?.destroy(); webViewMap.remove(activeTabId)
+                tabs = remaining; activeTabId = remaining.first().id; isColdStart = false
+            } else if (!isColdStart) {
+                webViewMap.values.forEach { it.destroy() }; webViewMap.clear()
+                tabs = listOf(TabState(id = 0)); activeTabId = 0; isColdStart = true
+            } else {
+                try { ctx.startActivity(ctx.packageManager.getLaunchIntentForPackage("com.mengpaw.shell")); (ctx as? BrowserActivity)?.finish() }
+                catch (_: Exception) { (ctx as? BrowserActivity)?.finish() }
+            }
+        }
+    }
+    DisposableEffect(Unit) {
+        (ctx as? BrowserActivity)?.onSystemBack = handleBack
+        onDispose { (ctx as? BrowserActivity)?.onSystemBack = null }
+    }
 
     val navigate = { input: String ->
         val final = smartNavigate(input, searchEngine)
@@ -514,7 +337,7 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                                 var editUrl by remember(activeTabId) { mutableStateOf(activeTab.url) }
                                 OutlinedTextField(
                                     value = editUrl, onValueChange = { editUrl = it },
-                                    modifier = Modifier.fillMaxWidth(if (isWide) 0.6f else 0.8f).height(44.dp), singleLine = true,
+                                    modifier = Modifier.fillMaxWidth().height(48.dp), singleLine = true,
                                     textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
                                     shape = RoundedCornerShape(ArcoRadius.round),
                                     colors = OutlinedTextFieldDefaults.colors(
@@ -529,7 +352,7 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                                     ),
                                     trailingIcon = {
                                         FilledIconButton(onClick = { navigate(editUrl) },
-                                            modifier = Modifier.size(32.dp), shape = CircleShape,
+                                            modifier = Modifier.size(32.dp).offset(x = 1.dp), shape = CircleShape,
                                             colors = IconButtonDefaults.filledIconButtonColors(containerColor = ThemeColors.brand)
                                         ) { Icon(Icons.Default.ArrowForward, "→", tint = Color.White, modifier = Modifier.size(16.dp)) }
                                     }
@@ -550,17 +373,17 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                                 if (isWide) {
                                     // Visible nav buttons for keyboard+mouse on tablet
                                     IconButton(onClick = { navigate("https://www.baidu.com") }, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Default.Home, "主页", tint = ThemeColors.textPrimary)
+                                        Icon(Icons.Default.Home, "主页", tint = ThemeColors.brand)
                                     }
-                                    IconButton(onClick = { webViewMap[activeTabId]?.goBack() }, enabled = activeTab.canGoBack, modifier = Modifier.size(36.dp)) {
+                                    IconButton(onClick = handleBack, modifier = Modifier.size(36.dp)) {
                                         @Suppress("DEPRECATION")
-                                        Icon(Icons.Default.ArrowBack, "后退", tint = if (activeTab.canGoBack) ThemeColors.textPrimary else ThemeColors.bgCardHigh)
+                                        Icon(Icons.Default.ArrowBack, "后退", tint = if (activeTab.canGoBack) ThemeColors.brand else ThemeColors.brand.copy(alpha = 0.3f))
                                     }
                                     IconButton(onClick = { webViewMap[activeTabId]?.goForward() }, enabled = activeTab.canGoForward, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Default.ArrowForward, "前进", tint = if (activeTab.canGoForward) ThemeColors.textPrimary else ThemeColors.bgCardHigh)
+                                        Icon(Icons.Default.ArrowForward, "前进", tint = if (activeTab.canGoForward) ThemeColors.brand else ThemeColors.brand.copy(alpha = 0.3f))
                                     }
                                     IconButton(onClick = { webViewMap[activeTabId]?.reload() }, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Default.Refresh, "刷新", tint = ThemeColors.textPrimary)
+                                        Icon(Icons.Default.Refresh, "刷新", tint = ThemeColors.brand)
                                     }
                                     Spacer(Modifier.width(4.dp))
                                 }
@@ -574,16 +397,11 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                             }
                         },
                         actions = {
-                            if (showUrlBar) {
-                                IconButton(onClick = { showUrlBar = false }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Default.Close, "收起地址栏")
-                                }
-                            }
                             // Menu button with dropdown
                             var menuExpanded by remember { mutableStateOf(false) }
                             Box {
                                 IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Default.MoreVert, "菜单", tint = ThemeColors.textPrimary)
+                                    Icon(Icons.Default.MoreVert, "菜单", tint = ThemeColors.brand)
                                 }
                                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                                     DropdownMenuItem(text = { Text("刷新") }, leadingIcon = { Icon(Icons.Default.Refresh, null) },
@@ -720,332 +538,76 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
             }
 
             // ── Settings dialog ──
-            if (showSettings) {
-                val engines = prefs.enabledEngines()
-                val engineKeys = remember { mutableStateListOf(*prefs.engineKeys.toTypedArray()) }
-                AlertDialog(
-                    onDismissRequest = { showSettings = false },
-                    title = { Text("设置") },
-                    text = {
-                        LazyColumn {
-                            item { Text("搜索引擎 (勾选+拖动排序，首次为默认)", style = MaterialTheme.typography.labelMedium, color = ThemeColors.textSecondary) }
-                            item { Spacer(Modifier.height(8.dp)) }
-                            items(engineKeys.size) { idx ->
-                                val key = engineKeys[idx]
-                                val eng = SearchEngine.fromKey(key)
-                                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(checked = true, onCheckedChange = {
-                                        if (engineKeys.size > 1) engineKeys.removeAt(idx)
-                                    })
-                                    SearchEngineLogo(eng, size = 22, dimmed = false)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(eng.label, modifier = Modifier.weight(1f))
-                                    IconButton(onClick = { if (idx > 0) { val t = engineKeys[idx]; engineKeys[idx] = engineKeys[idx-1]; engineKeys[idx-1] = t } },
-                                        enabled = idx > 0, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.ArrowBack, "上移", Modifier.size(16.dp)) }
-                                    IconButton(onClick = { if (idx < engineKeys.size - 1) { val t = engineKeys[idx]; engineKeys[idx] = engineKeys[idx+1]; engineKeys[idx+1] = t } },
-                                        enabled = idx < engineKeys.size - 1, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.ArrowForward, "下移", Modifier.size(16.dp)) }
-                                }
-                            }
-                            // Add disabled engines
-                            val disabled = SearchEngine.entries.filter { it.key !in engineKeys }
-                            if (disabled.isNotEmpty()) {
-                                item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
-                                item { Text("已关闭的引擎", style = MaterialTheme.typography.labelMedium, color = ThemeColors.textSecondary) }
-                                items(disabled.size) { i ->
-                                    val eng = disabled[i]
-                                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Checkbox(checked = false, onCheckedChange = { engineKeys.add(eng.key) })
-                                        SearchEngineLogo(eng, size = 22, dimmed = true)
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(eng.label, modifier = Modifier.weight(1f), color = ThemeColors.textSecondary)
-                                    }
-                                }
-                            }
-                            item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
-                            item {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                    Text("广告拦截")
-                                    Switch(checked = adBlockEnabled, onCheckedChange = { adBlockEnabled = it; prefs.adBlockEnabled = it })
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            prefs.engineKeys = engineKeys.toList()
-                            if (engineKeys.isNotEmpty()) {
-                                searchEngine = SearchEngine.fromKey(engineKeys.first())
-                                prefs.setDefaultEngine(searchEngine)
-                            }
-                            showSettings = false
-                        }) { Text("保存") }
-                    },
-                    dismissButton = { TextButton(onClick = { showSettings = false }) { Text("取消") } }
-                )
-            }
+            // ── Settings dialog ──
+            BrowserSettingsDialog(
+                visible = showSettings,
+                onDismiss = { showSettings = false },
+                prefs = prefs,
+                adBlockEnabled = adBlockEnabled,
+                onAdBlockToggled = { adBlockEnabled = it; prefs.adBlockEnabled = it },
+                darkMode = darkMode,
+                onDarkModeToggled = { darkMode = it; prefs.darkMode = it; webViewMap[activeTabId]?.reload() },
+                searchEngine = searchEngine,
+                onDefaultEngineChanged = { searchEngine = it },
+                webViewVersion = remember {
+                    try { WebView.getCurrentWebViewPackage()?.versionName ?: "" } catch (_: Exception) { "" }
+                },
+                onOpenCoolApk = {
+                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.coolapk.com/apk/com.google.android.webview"))
+                    try { ctx.startActivity(intent) } catch (_: Exception) { }
+                },
+                onOpenApkCombo = {
+                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://apkcombo.com/zh/android-system-webview/com.google.android.webview/"))
+                    try { ctx.startActivity(intent) } catch (_: Exception) { }
+                }
+            )
 
             // ── Agent Collaboration Settings ──
-            if (showAgentSettings) {
-                AlertDialog(
-                    onDismissRequest = { showAgentSettings = false },
-                    title = { Text("智能体协同设置") },
-                    text = {
-                        LazyColumn {
-                            // Section: Quick Click (experimental)
-                            item {
-                                Text("🧪 实验性功能", style = MaterialTheme.typography.labelLarge, color = ThemeColors.brand, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.height(4.dp))
-                                Text("使用全页截图 + 坐标点击替代 CSS 选择器。Vision 模型友好，对 Canvas/Shadow DOM/验证码有效。",
-                                    style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                                Spacer(Modifier.height(12.dp))
-                            }
-                            item {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text("快速点击", fontWeight = FontWeight.Medium)
-                                        Text("browser.screenshot.full + coord.click", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-                                    }
-                                    Switch(checked = quickClickEnabled, onCheckedChange = { quickClickEnabled = it; prefs.quickClickEnabled = it })
-                                }
-                            }
-                            item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
-
-                            // Section: Auto-inject bridge
-                            item {
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text("自动注入桥接", fontWeight = FontWeight.Medium)
-                                        Text("每页自动注入 __mp 加速命令 (~33x)", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-                                    }
-                                    Switch(checked = autoInjectBridge, onCheckedChange = { autoInjectBridge = it; prefs.autoInjectBridge = it })
-                                }
-                            }
-                            item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
-
-                            // Section: Screenshot quality
-                            item {
-                                Text("全页截图最大高度", fontWeight = FontWeight.Medium)
-                                Text("${screenshotMaxH}px (更大=更完整, 更小=更快)", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-                                Spacer(Modifier.height(4.dp))
-                                Slider(
-                                    value = screenshotMaxH.toFloat(),
-                                    onValueChange = { screenshotMaxH = it.toInt(); prefs.screenshotMaxHeight = it.toInt() },
-                                    valueRange = 5000f..30000f,
-                                    steps = 4,
-                                    colors = SliderDefaults.colors(thumbColor = ThemeColors.brand, activeTrackColor = ThemeColors.brand)
-                                )
-                            }
-                            item {
-                                Text("截图质量", fontWeight = FontWeight.Medium)
-                                Text("${screenshotQuality}% (更低=文件更小)", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-                                Spacer(Modifier.height(4.dp))
-                                Slider(
-                                    value = screenshotQuality.toFloat(),
-                                    onValueChange = { screenshotQuality = it.toInt(); prefs.screenshotQuality = it.toInt() },
-                                    valueRange = 30f..100f,
-                                    steps = 6,
-                                    colors = SliderDefaults.colors(thumbColor = ThemeColors.brand, activeTrackColor = ThemeColors.brand)
-                                )
-                            }
-                            item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
-
-                            // Quick Click workflow tips
-                            item {
-                                Text("📖 使用流程", fontWeight = FontWeight.Medium)
-                                Spacer(Modifier.height(4.dp))
-                                Text("1. browser.screenshot.full → 得到全页长图\n2. Vision 模型识别目标坐标\n3. browser.coord.click <x> <y>\n4. browser.coord.scroll <y> 验证位置",
-                                    style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, lineHeight = 18.sp)
-                            }
-                        }
-                    },
-                    confirmButton = { TextButton(onClick = { showAgentSettings = false }) { Text("完成") } },
-                    dismissButton = {}
-                )
-            }
+            BrowserAgentSettingsDialog(
+                visible = showAgentSettings,
+                onDismiss = { showAgentSettings = false },
+                prefs = prefs,
+                quickClickEnabled = quickClickEnabled,
+                autoInjectBridge = autoInjectBridge,
+                screenshotMaxH = screenshotMaxH,
+                screenshotQuality = screenshotQuality,
+                onQuickClickToggled = { quickClickEnabled = it; prefs.quickClickEnabled = it },
+                onAutoInjectToggled = { autoInjectBridge = it; prefs.autoInjectBridge = it },
+                onScreenshotMaxHChanged = { screenshotMaxH = it; prefs.screenshotMaxHeight = it },
+                onScreenshotQualityChanged = { screenshotQuality = it; prefs.screenshotQuality = it }
+            )
 
             // ── History dialog ──
-            if (showHistory) {
-                val entries = remember { historyStore.all() }
-                AlertDialog(
-                    onDismissRequest = { showHistory = false },
-                    title = {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("历史记录 History")
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("记录", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-                                Switch(checked = historyEnabled, onCheckedChange = { historyEnabled = it; prefs.historyEnabled = it })
-                            }
-                        }
-                    },
-                    text = {
-                        LazyColumn {
-                            if (entries.isEmpty()) {
-                                item { Text("暂无历史记录", color = ThemeColors.textSecondary, modifier = Modifier.padding(16.dp)) }
-                            }
-                            items(entries.take(50)) { entry ->
-                                Surface(Modifier.fillMaxWidth().padding(vertical = 2.dp).clickable { navigate(entry.url); showHistory = false },
-                                    shape = RoundedCornerShape(6.dp), color = ThemeColors.bgCardHigh) {
-                                    Column(Modifier.padding(8.dp)) {
-                                        Text(entry.title.ifBlank { entry.url.take(50) }, maxLines = 1, fontSize = 13.sp)
-                                        Row { Text(entry.url.take(60), style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1, modifier = Modifier.weight(1f)); Text(entry.countdown, style = MaterialTheme.typography.labelSmall, color = if (entry.daysLeft < 3) ThemeColors.error else ThemeColors.textSecondary) }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = { TextButton(onClick = { showHistory = false }) { Text("关闭") } },
-                    dismissButton = {
-                        TextButton(onClick = { historyStore.clear(); showHistory = false }, colors = ButtonDefaults.textButtonColors(contentColor = ThemeColors.error)) {
-                            Text("清空全部")
-                        }
-                    }
-                )
-            }
+            BrowserHistoryDialog(
+                visible = showHistory,
+                onDismiss = { showHistory = false },
+                historyStore = historyStore,
+                historyEnabled = historyEnabled,
+                onHistoryEnabledToggle = { historyEnabled = it; prefs.historyEnabled = it },
+                onNavigate = { navigate(it) }
+            )
 
             // ── Password dialog ──
-            if (showPasswords) {
-                val pwdDb = remember { android.webkit.WebViewDatabase.getInstance(ctx) }
-                AlertDialog(
-                    onDismissRequest = { showPasswords = false },
-                    title = { Text("密码管理 Passwords") },
-                    text = {
-                        Column {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text("保存密码")
-                                Switch(checked = prefs.savePasswords, onCheckedChange = { prefs.savePasswords = it })
-                            }
-                            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                            Text("已保存的密码会在登录时自动填充。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                            Text("长按页面中的登录表单可以选择保存凭据。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedButton(onClick = {
-                                pwdDb.clearUsernamePassword()
-                                Toast.makeText(ctx, "已清除所有密码", Toast.LENGTH_SHORT).show()
-                            }, modifier = Modifier.fillMaxWidth()) { Text("清除所有密码") }
-                        }
-                    },
-                    confirmButton = { TextButton(onClick = { showPasswords = false }) { Text("关闭") } }
-                )
-            }
+            BrowserPasswordDialog(
+                visible = showPasswords,
+                onDismiss = { showPasswords = false },
+                prefs = prefs
+            )
 
             // ── Translate dialog ──
-            if (showTranslate) {
-                val targetLang = remember { mutableStateOf("zh-CN") }
-                val translating = remember { mutableStateOf(false) }
-                val result = remember { mutableStateOf("") }
-                val sysLang = java.util.Locale.getDefault().language.let {
-                    when (it) { "zh" -> "zh-CN"; "en" -> "en"; "ja" -> "ja"; "ko" -> "ko"; else -> "zh-CN" }
-                }
-                LaunchedEffect(showTranslate) { targetLang.value = sysLang }
-                AlertDialog(
-                    onDismissRequest = { showTranslate = false; result.value = "" },
-                    title = { Text("翻译页面") },
-                    text = {
-                        Column {
-                            Text(activeTab.title.ifBlank { activeTab.url.take(60) }, fontWeight = FontWeight.Medium, maxLines = 1)
-                            Spacer(Modifier.height(12.dp))
-                            // Language picker
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("翻译为:", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                                var expanded by remember { mutableStateOf(false) }
-                                Box {
-                                    OutlinedButton(onClick = { expanded = true }) {
-                                        Text(GoogleTranslate.LANGUAGES.entries.find { it.value == targetLang.value }?.key ?: targetLang.value, fontSize = 12.sp)
-                                    }
-                                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                                        GoogleTranslate.LANGUAGES.forEach { (name, code) ->
-                                            DropdownMenuItem(text = { Text(name) },
-                                                onClick = { targetLang.value = code; expanded = false })
-                                        }
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            // Translate button
-                            // FIX U49: Use rememberCoroutineScope (lifecycle-aware) not raw CoroutineScope
-                            val translateScope = rememberCoroutineScope()
-                            Button(
-                                onClick = {
-                                    translating.value = true
-                                    translateScope.launch(Dispatchers.IO) {
-                                        try {
-                                            // Extract page body text via JS injection
-                                            val pageText = withContext(Dispatchers.Main) {
-                                                suspendCancellableCoroutine { cont ->
-                                                    val wv = webViewMap[activeTabId]
-                                                    if (wv == null) {
-                                                        cont.resume(activeTab.title) {}
-                                                        return@suspendCancellableCoroutine
-                                                    }
-                                                    wv.evaluateJavascript(
-                                                        """(function(){var b=document.body;return b?b.innerText||b.textContent||"":""})()"""
-                                                    ) { jsResult ->
-                                                        val raw = jsResult?.trim()?.removeSurrounding("\"") ?: ""
-                                                        val unescaped = raw
-                                                            .replace("\\\"", "\"")
-                                                            .replace("\\n", "\n")
-                                                            .replace("\\\\", "\\")
-                                                        val text = unescaped.take(5000)
-                                                        cont.resume(text.ifBlank { activeTab.title }) {}
-                                                    }
-                                                }
-                                            }
-                                            val translated = GoogleTranslate.translate(pageText, targetLang.value)
-                                            withContext(Dispatchers.Main) { result.value = translated }
-                                        } catch (e: Exception) {
-                                            withContext(Dispatchers.Main) { result.value = "翻译失败: ${e.message}" }
-                                        }
-                                        translating.value = false
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !translating.value
-                            ) {
-                                if (translating.value) {
-                                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
-                                    Spacer(Modifier.width(8.dp))
-                                }
-                                Text(if (translating.value) "翻译中..." else "翻译")
-                            }
-                            if (result.value.isNotBlank()) {
-                                Spacer(Modifier.height(12.dp))
-                                Surface(color = ThemeColors.bgCardHigh, shape = RoundedCornerShape(8.dp)) {
-                                    Text(result.value, modifier = Modifier.padding(12.dp), fontSize = 14.sp)
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = { TextButton(onClick = { showTranslate = false; result.value = "" }) { Text("关闭") } }
-                )
-            }
+            BrowserTranslateDialog(
+                visible = showTranslate,
+                onDismiss = { showTranslate = false },
+                activeTab = activeTab,
+                webView = webViewMap[activeTabId]
+            )
 
             // ── Image picker ──
-            if (showImages && images.isNotEmpty()) AlertDialog(
-                onDismissRequest = { showImages = false },
-                title = { Text("检测到 ${images.size} 个图片 (顶层→底层)") },
-                text = {
-                    LazyColumn {
-                        items(images.size) { idx ->
-                            val img = images[idx]
-                            val imgScope = rememberCoroutineScope()
-                            Surface(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
-                                downloadImage(imgScope, ctx, img.src)
-                                Toast.makeText(ctx, "已保存: ${img.src.substringAfterLast('/').take(30)}", Toast.LENGTH_SHORT).show()
-                                showImages = false
-                            }, shape = RoundedCornerShape(8.dp), color = ThemeColors.bgCardHigh) {
-                                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("#${idx + 1}", fontWeight = FontWeight.Bold, color = ThemeColors.brand, modifier = Modifier.width(28.dp), fontSize = 12.sp)
-                                    Column(Modifier.weight(1f)) {
-                                        Text(img.alt.ifBlank { img.src.substringAfterLast('/').take(40) }, maxLines = 1, fontSize = 13.sp)
-                                        Text(img.src.take(50), style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
-                                    }
-                                    Icon(Icons.Default.Add, "保存", tint = ThemeColors.brand, modifier = Modifier.size(20.dp))
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = { TextButton(onClick = { showImages = false }) { Text("关闭") } }
+            BrowserImagePickerDialog(
+                visible = showImages && images.isNotEmpty(),
+                onDismiss = { showImages = false },
+                images = images,
+                ctx = ctx
             )
 
             // ── Content ──
@@ -1053,32 +615,36 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                 // ── Branded new tab page ──
                 Column(
                     Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Brand logo area
-                    Surface(
-                        modifier = Modifier.size(if (isWide) 80.dp else 64.dp),
-                        shape = RoundedCornerShape(20.dp),
-                        color = ThemeColors.brand.copy(alpha = 0.1f)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("🌐", style = MaterialTheme.typography.headlineLarge.copy(fontSize = if (isWide) 36.sp else 28.sp))
+                    // Top spacer — pushes brand + search toward center
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.BottomCenter) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            // Brand logo area
+                            Surface(
+                                modifier = Modifier.size(if (isWide) 80.dp else 64.dp),
+                                shape = RoundedCornerShape(20.dp),
+                                color = ThemeColors.brand.copy(alpha = 0.1f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("🌐", style = MaterialTheme.typography.headlineLarge.copy(fontSize = if (isWide) 36.sp else 28.sp))
+                                }
+                            }
+                            Spacer(Modifier.height(20.dp))
+                            Text(
+                                "MengPaw 浏览器",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = ThemeColors.textPrimary
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "安全的 Agent 控制浏览器",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ThemeColors.textSecondary
+                            )
                         }
                     }
-                    Spacer(Modifier.height(20.dp))
-                    Text(
-                        "MengPaw 浏览器",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = ThemeColors.textPrimary
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "安全的 Agent 控制浏览器",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ThemeColors.textSecondary
-                    )
                     Spacer(Modifier.height(28.dp))
                     // Search / URL input bar
                     Surface(
@@ -1090,17 +656,28 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("搜索关键词或输入网址...") },
-                            leadingIcon = {
-                                IconButton(onClick = {
+                            modifier = Modifier.fillMaxWidth().onPreviewKeyEvent { event ->
+                                if (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_TAB
+                                    && event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
                                     val engines = prefs.enabledEngines()
                                     if (engines.isNotEmpty()) {
                                         val idx = engines.indexOfFirst { it.key == searchEngine.key }
                                         searchEngine = engines.getOrElse((idx + 1) % engines.size) { engines.first() }
                                         prefs.setDefaultEngine(searchEngine)
                                     }
-                                }) { SearchEngineLogo(searchEngine, size = 28) }
+                                    true
+                                } else false
+                            },
+                            placeholder = { Text("搜索关键词或输入网址...") },
+                            leadingIcon = {
+                                Box(Modifier.pointerInput(Unit) { detectTapGestures {
+                                    val engines = prefs.enabledEngines()
+                                    if (engines.isNotEmpty()) {
+                                        val idx = engines.indexOfFirst { it.key == searchEngine.key }
+                                        searchEngine = engines.getOrElse((idx + 1) % engines.size) { engines.first() }
+                                        prefs.setDefaultEngine(searchEngine)
+                                    }
+                                }}) { SearchEngineLogo(searchEngine, size = 28) }
                             },
                             trailingIcon = {
                                 if (searchQuery.isNotEmpty())
@@ -1150,6 +727,8 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                             }
                         }
                     }
+                    // Bottom balance spacer
+                    Box(Modifier.weight(1f))
                 }
             } else {
                 // WebView with pull-to-refresh
@@ -1196,385 +775,14 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
             )
 
             // ── Markdown viewer ──
-            if (showMdViewer && mdContent.isNotBlank()) {
-                AlertDialog(
-                    onDismissRequest = { showMdViewer = false; mdContent = "" },
-                    modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f),
-                    title = {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Markdown 预览", fontWeight = FontWeight.Bold)
-                            TextButton(onClick = { showMdViewer = false; mdContent = "" }) { Text("关闭") }
-                        }
-                    },
-                    text = {
-                        Column(Modifier.verticalScroll(rememberScrollState())) {
-                            MarkdownText(content = mdContent)
-                        }
-                    },
-                    confirmButton = {},
-                    dismissButton = {}
-                )
-            }
+            BrowserMarkdownViewerDialog(
+                visible = showMdViewer && mdContent.isNotBlank(),
+                onDismiss = { showMdViewer = false; mdContent = "" },
+                content = mdContent
+            )
         }
     }
 }
 
-// ── WebView Factory ──────────────────────────────────────────────
 
-@SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
-private fun createWebView(
-    ctx: android.content.Context, tab: TabState, isWide: Boolean, adBlock: Boolean,
-    autoInject: Boolean = true,
-    updateTab: (Int, (TabState) -> TabState) -> Unit,
-    onMediaDetected: (List<DetectedImage>) -> Unit,
-    onScroll: (Int) -> Unit = {}
-): WebView = WebView(ctx).apply {
-    settings.javaScriptEnabled = true
-    settings.domStorageEnabled = true
-    settings.databaseEnabled = true
-    settings.loadWithOverviewMode = true
-    settings.useWideViewPort = true
-    settings.builtInZoomControls = true
-    settings.displayZoomControls = false
-    settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-    // SECURITY: Disable file access to prevent file:// URL exploits
-    settings.allowFileAccess = false
-    settings.allowContentAccess = false
-    settings.userAgentString = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-    // SECURITY: Disable third-party cookies to prevent cross-site tracking
-    try { CookieManager.getInstance().setAcceptThirdPartyCookies(this, false) } catch (_: Exception) { }
-    try { CookieManager.getInstance().setAcceptCookie(true) } catch (_: Exception) { }
 
-    // Agent-to-browser bridge — enables Agent to control this WebView via JS
-    addJavascriptInterface(
-        com.mengpaw.browser.bridge.BrowserBridge(this) { bitmap ->
-            var path = ""
-            try {
-                val dir = java.io.File(com.mengpaw.kernel.DataPaths.SCREENSHOTS)
-                dir.mkdirs()
-                val file = java.io.File(dir, "browser_${System.currentTimeMillis()}.png")
-                java.io.FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 90, it) }
-                path = file.absolutePath
-            } catch (_: Exception) { }
-            path
-        },
-        "MengPaw"
-    )
-
-    var lastScrollYLocal = 0
-    setOnScrollChangeListener { _, _, scrollY, _, _ ->
-        if (!isWide) {
-            val delta = scrollY - lastScrollYLocal
-            if (delta > 10) onScroll(delta)  // scrolling down
-            else if (delta < -5) onScroll(delta)  // scrolling up
-            lastScrollYLocal = scrollY
-        }
-    }
-
-    var touchX = 0f; var touchY = 0f
-    setOnTouchListener { _, event ->
-        if (event.action == MotionEvent.ACTION_DOWN) { touchX = event.x; touchY = event.y }
-        false
-    }
-
-    // ── Long press: detect images + videos at touch point ──
-    setOnLongClickListener {
-        val js = """
-            (function(){
-                var els=document.elementsFromPoint($touchX,$touchY);
-                var r=[];
-                for(var i=0;i<els.length;i++){
-                    var el=els[i];
-                    var src=el.src||el.getAttribute('src')||el.style.backgroundImage||el.getAttribute('poster')||'';
-                    var tag=el.tagName||'';
-                    var mt=tag==='VIDEO'?'video':'image';
-                    if(tag==='IMG'||tag==='VIDEO'||tag==='SOURCE'||src){
-                        src=src.replace(/url\(["']?/,'').replace(/["']?\)/,'');
-                        if(src&&src!=='none'&&!src.startsWith('data:')){
-                            r.push(JSON.stringify({
-                                src:src,alt:el.alt||'',tag:tag,
-                                width:el.naturalWidth||el.videoWidth||el.width||0,
-                                height:el.naturalHeight||el.videoHeight||el.height||0,
-                                z:i,mediaType:mt
-                            }));
-                        }
-                    }
-                }
-                return '['+r.join(',')+']';
-            })();
-        """.trimIndent()
-        evaluateJavascript(js) { json ->
-            try {
-                val arr = org.json.JSONArray(json)
-                val list = (0 until arr.length()).map { arr.getJSONObject(it) }.map {
-                    DetectedImage(it.getString("src"), it.optString("alt"), it.optInt("width"), it.optInt("height"), it.optInt("z"), it.optString("mediaType", "image"))
-                }
-                if (list.isNotEmpty()) {
-                    onMediaDetected(list)
-                    // Also dispatch to plugins
-                    list.firstOrNull()?.let { img ->
-                        BrowserPluginRegistry.onLongPress(
-                            BrowserElement(type = img.mediaType.uppercase(), url = img.src, alt = img.alt, width = img.width, height = img.height)
-                        )
-                    }
-                }
-            } catch (_: Exception) {}
-        }
-        true
-    }
-
-    webViewClient = object : WebViewClient() {
-        override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
-            // SECURITY: Reject all SSL certificate errors — no bypass allowed
-            handler?.cancel()
-            android.util.Log.e("BrowserActivity", "SSL error: ${error?.primaryError} for ${error?.url}")
-            // Show user-facing feedback
-            val host = try { java.net.URI(error?.url ?: "").host } catch (_: Exception) { error?.url ?: "" }
-            view?.post {
-                Toast.makeText(ctx, "SSL 证书错误，已阻止加载: $host", Toast.LENGTH_LONG).show()
-            }
-        }
-        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-            // SECURITY: Block dangerous URL schemes (javascript:, file:, content:, intent:, etc.)
-            val url = request?.url?.toString() ?: return false
-            if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                if (url.startsWith("intent://") || url.startsWith("tel:") ||
-                    url.startsWith("sms:") || url.startsWith("mailto:")) {
-                    // Allow system intent schemes (handled by Android Intent system)
-                    try {
-                        ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, request.url))
-                    } catch (_: Exception) { }
-                    return true
-                }
-                // Block javascript:, file:, content:, data:, and other dangerous schemes
-                android.util.Log.w("BrowserActivity", "Blocked unsafe URL scheme: ${url.take(80)}")
-                return true
-            }
-            return false
-        }
-        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-            url?.let { u -> updateTab(tab.id) { it.copy(url = u, isLoading = true) }; BrowserPluginRegistry.onPageStarted(u) }
-        }
-        override fun onPageFinished(view: WebView?, url: String?) {
-            updateTab(tab.id) { it.copy(isLoading = false, title = view?.title ?: "", canGoBack = view?.canGoBack() ?: false, canGoForward = view?.canGoForward() ?: false) }
-            url?.let { u ->
-                view?.title?.let { t -> BrowserPluginRegistry.onPageFinished(u, t) }
-                // Inject plugin scripts
-                BrowserPluginRegistry.injectScripts(u)?.let { js -> evaluateJavascript(js, null) }
-                BrowserPluginRegistry.injectStyles(u)?.let { css ->
-                    evaluateJavascript("(function(){var s=document.createElement('style');s.textContent='$css';document.head.appendChild(s);})()", null)
-                }
-                // Auto-inject __mp bridge for faster Agent commands (if enabled)
-                if (autoInject) {
-                    evaluateJavascript("(function(){if(!window.__mp||!window.__mp._v){" +
-                        "window.__mp={_v:1,_cache:{}," +
-                        "c:function(s){var e=document.querySelector(s);if(!e)return JSON.stringify({ok:false,error:'not found:'+s});e.click();return JSON.stringify({ok:true,tag:e.tagName})}," +
-                        "t:function(s,v){var e=document.querySelector(s);if(!e)return JSON.stringify({ok:false});e.focus();var d=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;d.call(e,v);e.dispatchEvent(new Event('input',{bubbles:true}));return JSON.stringify({ok:true})}," +
-                        "sc:function(x,y){window.scrollBy(x,y);return JSON.stringify({ok:true,sx:window.scrollX,sy:window.scrollY})}," +
-                        "ct:function(){try{var ls=[];document.querySelectorAll('a[href]').forEach(function(a){var t=(a.textContent||'').trim().substring(0,80);if(t&&a.href&&!a.href.startsWith('javascript:'))ls.push({text:t,href:a.href})});return JSON.stringify({title:document.title,url:location.href,links:ls.slice(0,50),text:(document.body?document.body.innerText:'').replace(/\\s+/g,' ').trim().substring(0,3000)})}catch(e){return JSON.stringify({error:e.message})}}," +
-                        "df:function(){var cur=window.__mp._cache._content||'';var raw=document.body?document.body.innerText:'';var fresh=raw.replace(/\\s+/g,' ').trim().substring(0,1000);window.__mp._cache._content=fresh;if(cur===fresh)return JSON.stringify({changed:false});return JSON.stringify({changed:true,added:fresh.substring(cur.length>0?function(a,b){for(var i=0;i<Math.min(a.length,b.length)&&a[i]===b[i];i++);return i}(cur,fresh):0)})}" +
-                        "};return JSON.stringify({ok:true,msg:'__mp injected (auto)'})" +
-                        "}})()", null)
-                }
-                // ComfyUI theme following: inject MengPaw theme colors
-                if (u.contains(":8188") || u.contains("comfyui", ignoreCase = true) || u.contains("comfy", ignoreCase = true)) {
-                    val theme = BrowserThemeConfig.load(ctx)
-                    val primary = "#" + java.lang.Long.toHexString(theme.primary).takeLast(6).uppercase()
-                    evaluateJavascript("""
-(function(){
-var s=document.createElement('style');
-s.textContent=`
-:root{--comfy-primary:${primary};--comfy-bg:${if (theme.surface == 0xFFFFFFFFL) "#FFFFFF" else "#1A1A2E"}}
-.comfy-menu, .comfy-topbar, .comfy-btn-primary{background:var(--comfy-primary)!important}
-.comfy-multiline-input, .comfy-modal-content{background:var(--comfy-bg)!important}
-.comfy-node{background:${primary}11!important;border-color:${primary}44!important}
-.comfy-btn-primary:hover{filter:brightness(1.1)}
-`;
-document.head.appendChild(s);
-})();
-""".trimIndent(), null)
-                }
-            }
-        }
-        override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-            request?.let { BrowserPluginRegistry.shouldIntercept(it)?.let { return it } }
-            if (adBlock && request?.url != null && isAdRequest(request.url.toString())) {
-                return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
-            }
-            return super.shouldInterceptRequest(view, request)
-        }
-    }
-    webChromeClient = object : WebChromeClient() {
-        override fun onProgressChanged(view: WebView?, p: Int) { updateTab(tab.id) { it.copy(progress = p) } }
-        override fun onReceivedTitle(view: WebView?, t: String?) { updateTab(tab.id) { it.copy(title = t ?: "") } }
-    }
-
-    if (tab.url.isNotBlank()) loadUrl(tab.url)
-}
-
-// ── Components ────────────────────────────────────────────────────
-
-@Composable
-private fun TabChip(label: String, selected: Boolean, isLoading: Boolean, onClick: () -> Unit, onClose: (() -> Unit)?) {
-    Surface(
-        modifier = Modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) ThemeColors.brandContainer else Color.Transparent,
-        tonalElevation = if (selected) 1.dp else 0.dp
-    ) {
-        Row(Modifier.padding(start = 10.dp, end = if (onClose != null) 2.dp else 10.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            if (isLoading) { CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp, color = ThemeColors.brand); Spacer(Modifier.width(6.dp)) }
-            Text(label.take(20), fontSize = 12.sp, maxLines = 1)
-            if (onClose != null) {
-                Spacer(Modifier.width(4.dp))
-                IconButton(onClick = onClose, modifier = Modifier.size(20.dp)) {
-                    Icon(Icons.Default.Close, "关闭标签", modifier = Modifier.size(12.dp), tint = ThemeColors.textSecondary)
-                }
-            }
-        }
-    }
-}
-
-// ── Search Engine Logo Bitmaps ────────────────────────────────────
-
-/** Generate a high-res bitmap for each search engine's recognizable logo. */
-private fun generateLogoBitmap(engine: SearchEngine, sizePx: Int = 128): android.graphics.Bitmap {
-    val bmp = android.graphics.Bitmap.createBitmap(sizePx, sizePx, android.graphics.Bitmap.Config.ARGB_8888)
-    val c = android.graphics.Canvas(bmp)
-    val s = sizePx.toFloat()
-    val pad = s * 0.08f
-    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-
-    when (engine) {
-        SearchEngine.GOOGLE -> {
-            // Multi-color 'G' icon — 4 colored arcs + white center
-            paint.style = android.graphics.Paint.Style.STROKE
-            paint.strokeWidth = s * 0.18f; paint.strokeCap = android.graphics.Paint.Cap.ROUND
-            val rect = android.graphics.RectF(pad, pad, s - pad, s - pad)
-            // Blue (top-left)
-            paint.color = 0xFF4285F4.toInt(); c.drawArc(rect, 45f, 170f, false, paint)
-            // Red (right)
-            paint.color = 0xFFEA4335.toInt(); c.drawArc(rect, -10f, 85f, false, paint)
-            // Yellow (bottom)
-            paint.color = 0xFFFBBC05.toInt(); c.drawArc(rect, 235f, 120f, false, paint)
-            // Green (bottom-left)
-            paint.color = 0xFF34A853.toInt(); c.drawArc(rect, 150f, 110f, false, paint)
-            // White center
-            paint.style = android.graphics.Paint.Style.FILL
-            paint.color = 0xFFFFFFFF.toInt(); c.drawCircle(s/2, s/2, s * 0.18f, paint)
-        }
-        SearchEngine.BING -> {
-            // Teal rounded square with white 'b'
-            paint.style = android.graphics.Paint.Style.FILL
-            paint.color = 0xFF00809D.toInt()
-            c.drawRoundRect(pad, pad, s - pad, s - pad, s * 0.2f, s * 0.2f, paint)
-            // White 'b' — vertical bar
-            paint.color = 0xFFFFFFFF.toInt()
-            c.drawRect(s * 0.28f, pad * 3, s * 0.42f, s - pad * 3, paint)
-            // White bowl (ring)
-            paint.style = android.graphics.Paint.Style.STROKE
-            paint.strokeWidth = s * 0.13f; paint.strokeCap = android.graphics.Paint.Cap.ROUND
-            c.drawArc(android.graphics.RectF(s*0.35f, s*0.2f, s*0.75f, s*0.7f), -30f, 240f, false, paint)
-        }
-        SearchEngine.BAIDU -> {
-            // Blue paw — circle + pad + toes
-            paint.style = android.graphics.Paint.Style.FILL
-            paint.color = 0xFF2932E1.toInt()
-            c.drawCircle(s/2, s/2, s/2 - pad, paint)
-            paint.color = 0xFFFFFFFF.toInt()
-            // Main pad
-            c.drawCircle(s/2, s * 0.62f, s * 0.16f, paint)
-            // 4 toes
-            for (a in listOf(-0.30f, -0.12f, 0.12f, 0.30f)) {
-                c.drawCircle(s/2 + s * a, s * 0.32f, s * 0.09f, paint)
-            }
-        }
-        SearchEngine.DUCKDUCKGO -> {
-            // Orange duck head
-            paint.style = android.graphics.Paint.Style.FILL
-            paint.color = 0xFFDE5833.toInt()
-            c.drawCircle(s/2, s/2, s/2 - pad, paint)
-            // White eye
-            paint.color = 0xFFFFFFFF.toInt()
-            c.drawCircle(s * 0.62f, s * 0.36f, s * 0.13f, paint)
-            // Black pupil
-            paint.color = 0xFF222222.toInt()
-            c.drawCircle(s * 0.64f, s * 0.36f, s * 0.06f, paint)
-            // Orange beak (triangle)
-            paint.color = 0xFFFFA500.toInt()
-            val path = android.graphics.Path()
-            path.moveTo(s * 0.74f, s * 0.40f)
-            path.lineTo(s * 0.92f, s * 0.50f)
-            path.lineTo(s * 0.74f, s * 0.60f)
-            path.close()
-            c.drawPath(path, paint)
-        }
-    }
-    return bmp
-}
-
-@Composable
-private fun SearchEngineLogo(engine: SearchEngine, size: Int = 32, dimmed: Boolean = false) {
-    val bitmap = remember(engine) { generateLogoBitmap(engine, 128) }
-    Image(
-        bitmap = bitmap.asImageBitmap(),
-        contentDescription = engine.label,
-        modifier = Modifier.size(size.dp).then(if (dimmed) Modifier.alpha(0.4f) else Modifier.alpha(1f))
-    )
-}
-
-/** Theme config loaded from first Agent's theme.md. Falls back to default blue. */
-object BrowserThemeConfig {
-    data class Config(val primary: Long, val surface: Long)
-
-    fun load(ctx: android.content.Context? = null): Config {
-        try {
-            val agentsDir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS)
-            val dirs = agentsDir.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name } ?: emptyList()
-            for (dir in dirs) {
-                val themeFile = java.io.File(dir, "theme.md")
-                if (themeFile.exists()) {
-                    val text = themeFile.readText()
-                    val primary = Regex("primary.*?#([0-9A-Fa-f]{6})").find(text)?.groupValues?.get(1)?.toLongOrNull(16)?.let { 0xFF000000 or it } ?: 0xFF0E4397
-                    val surface = Regex("surface.*?#([0-9A-Fa-f]{6})").find(text)?.groupValues?.get(1)?.toLongOrNull(16)?.let { 0xFF000000 or it } ?: 0xFFFFFFFF
-                    return Config(primary, surface)
-                }
-            }
-        } catch (_: Exception) {}
-        return Config(0xFF0E4397, 0xFFFFFFFF)
-    }
-}
-
-// ── Download ──────────────────────────────────────────────────────
-
-// FIX U50: Accept CoroutineScope for lifecycle-aware cancellation; ensure cleanup
-private fun downloadImage(scope: kotlinx.coroutines.CoroutineScope, ctx: android.content.Context, url: String) {
-    scope.launch(Dispatchers.IO) {
-        var conn: HttpURLConnection? = null
-        try {
-            conn = URL(url).openConnection() as HttpURLConnection
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 Chrome/120.0.0.0")
-            conn.setRequestProperty("Referer", url)
-            conn.connectTimeout = 15000; conn.readTimeout = 15000
-            val bmp = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
-            if (bmp != null) {
-                val name = url.substringAfterLast('/').substringBefore('?').take(100)
-                    .ifBlank { "img_${System.currentTimeMillis()}" }
-                val dir = File(ctx.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES), "MengPaw")
-                dir.mkdirs()
-                val file = File(dir, name)
-                file.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it) }
-                withContext(Dispatchers.Main) {
-                    android.media.MediaScannerConnection.scanFile(
-                        ctx, arrayOf(file.absolutePath), null, null
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("BrowserActivity", "Image download failed", e)
-        } finally {
-            conn?.disconnect()
-        }
-    }
-}

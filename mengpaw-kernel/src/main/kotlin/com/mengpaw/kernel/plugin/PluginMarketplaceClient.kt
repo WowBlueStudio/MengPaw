@@ -8,8 +8,10 @@ import io.ktor.client.engine.okhttp.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
 import com.mengpaw.kernel.error.ErrorCollector
@@ -263,16 +265,30 @@ class PluginMarketplaceClient(
             val ext = if (url.endsWith(".aar")) "aar" else "jar"
             val destFile = File(destDir, "${entry.id}-${entry.version}.$ext")
 
-            // Download with progress tracking (best-effort byte progress)
+            // Download with real byte-level progress via streaming channel read
             val bytes = client.prepareGet(url).execute { response ->
                 if (!response.status.isSuccess()) {
                     throw RuntimeException("Download HTTP ${response.status.value}")
                 }
                 val total = response.contentLength() ?: -1L
                 onProgress?.invoke(0, total)
-                val data = response.bodyAsBytes()
-                onProgress?.invoke(data.size.toLong(), total)
-                data
+
+                val channel: ByteReadChannel = response.bodyAsChannel()
+                val out = ByteArrayOutputStream()
+                val buffer = ByteArray(8192) // 8 KB chunks
+                var received = 0L
+                try {
+                    while (!channel.isClosedForRead) {
+                        val read = channel.readAvailable(buffer, 0, buffer.size)
+                        if (read <= 0) break
+                        out.write(buffer, 0, read)
+                        received += read
+                        onProgress?.invoke(received, total)
+                    }
+                } catch (_: Exception) {
+                    // channel may be closed abruptly — fall through to use whatever we got
+                }
+                out.toByteArray()
             }
             destFile.writeBytes(bytes)
 
@@ -308,6 +324,12 @@ class PluginMarketplaceClient(
             updates
         }
     }
+
+    /**
+     * Fetch a marketplace index from an explicit URL (used by --from custom markets).
+     * Does NOT update the cache, ETag, or lastFetchTime.
+     */
+    suspend fun fetchIndexFrom(url: String): Result<MarketplaceIndex> = tryFetch(url)
 
     /** Clear the in-memory cache (forces refresh + re-detect geo). */
     fun clearCache() {

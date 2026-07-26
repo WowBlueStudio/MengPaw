@@ -111,17 +111,34 @@ class PluginExecutor(
     }
 
     private suspend fun install(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail(
-            "Usage: plugin.install <id>", errorCode = ErrorCodes.ERR_INVALID_INPUT
+        // Parse optional --from <url> before the plugin ID
+        val fromIndex = args.indexOf("--from")
+        val customIndexUrl: String? = if (fromIndex >= 0 && fromIndex + 1 < args.size) {
+            args[fromIndex + 1]
+        } else null
+        // The plugin ID is the first arg that isn't --from or its value
+        val positionalArgs = if (customIndexUrl != null) {
+            args.toMutableList().apply { removeAt(fromIndex); removeAt(fromIndex) }
+        } else args
+        if (positionalArgs.isEmpty()) return ExecutionResult.fail(
+            "Usage: plugin.install <id> [--from <url>]", errorCode = ErrorCodes.ERR_INVALID_INPUT
         )
-        val id = args[0]
+        val id = positionalArgs[0]
+
+        // Resolve entry from appropriate source
+        val entry = if (customIndexUrl != null) {
+            fetchFromCustomIndex(customIndexUrl, id).getOrElse {
+                return ExecutionResult.fail("Custom marketplace unavailable or plugin not found: ${it.message}", errorCode = ErrorCodes.ERR_NOT_FOUND)
+            }
+        } else {
+            marketplaceClient.getPlugin(id).getOrElse {
+                return ExecutionResult.fail("Plugin not found in marketplace: $id", errorCode = ErrorCodes.ERR_NOT_FOUND)
+            }
+        }
 
         // FIX A11: Allow re-install for updates — only block if same version is already installed
         val installed = pluginManager.get(id)
         if (installed != null) {
-            val entry = marketplaceClient.getPlugin(id).getOrElse {
-                return ExecutionResult.fail("Plugin not found in marketplace: $id", errorCode = ErrorCodes.ERR_NOT_FOUND)
-            }
             val updateAvailable = pluginManager.checkUpdate(id, entry.version)
             if (updateAvailable == null) {
                 return ExecutionResult.ok("Plugin '$id' v${installed.metadata.version} is already up to date.")
@@ -130,12 +147,7 @@ class PluginExecutor(
             pluginManager.uninstall(id)
         }
 
-        // Fetch marketplace entry
-        val entry = marketplaceClient.getPlugin(id).getOrElse {
-            return ExecutionResult.fail("Plugin not found in marketplace: $id", errorCode = ErrorCodes.ERR_NOT_FOUND)
-        }
-
-        // Download
+        // Download — uses entry.downloadUrl/mirrorUrl from whichever index it came from
         val destDir = File(ctx.workDir, "plugins")
         val downloaded = marketplaceClient.download(entry, destDir, onDownloadProgress).getOrElse {
             return ExecutionResult.fail("Download failed: ${it.message}", errorCode = ErrorCodes.ERR_INTERNAL)
@@ -146,8 +158,9 @@ class PluginExecutor(
         return if (loadResult != null) {
             val ns = entry.id.removeSuffix("-plugin").removeSuffix("-ext")
             val cmdList = entry.commands.joinToString(", ") { it.removePrefix("$ns.") }
+            val sourceNote = if (customIndexUrl != null) "\n来源: $customIndexUrl" else ""
             ExecutionResult.ok(
-                "✅ ${entry.name} v${entry.version} 安装成功\n" +
+                "✅ ${entry.name} v${entry.version} 安装成功$sourceNote\n" +
                 "命令: $cmdList\n" +
                 "💡 skill.run plugin-index 查看插件手册索引\n" +
                 "💡 self.tools $ns 验证命令已注册\n" +
@@ -178,6 +191,17 @@ class PluginExecutor(
                     errorCode = ErrorCodes.ERR_INTERNAL
                 )
             }
+        }
+    }
+
+    /**
+     * Fetch a single plugin entry from a custom marketplace index URL.
+     * Downloads the remote plugins.json, parses it, and looks up [pluginId].
+     */
+    private suspend fun fetchFromCustomIndex(indexUrl: String, pluginId: String): Result<MarketplaceEntry> {
+        return marketplaceClient.fetchIndexFrom(indexUrl).map { index ->
+            index.plugins.find { it.id == pluginId }
+                ?: throw NoSuchElementException("Plugin '$pluginId' not found in custom marketplace at $indexUrl")
         }
     }
 

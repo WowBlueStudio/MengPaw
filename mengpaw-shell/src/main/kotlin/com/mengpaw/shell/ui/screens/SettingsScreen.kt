@@ -377,6 +377,21 @@ private fun AgentSettingsContent(
             singleLine = true, shape = RoundedCornerShape(ArcoRadius.md))
     }
 
+    // LLM Concurrency
+    Spacer(Modifier.height(ArcoSpacing.sm))
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Outlined.NetworkCheck, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text(state.strings.llmConcurrency, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(state.strings.llmConcurrencyDesc, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        var concurrencyText by remember(state.llmMaxConcurrency) { mutableStateOf(state.llmMaxConcurrency.toString()) }
+        OutlinedTextField(value = concurrencyText, onValueChange = { concurrencyText = it; it.toIntOrNull()?.let { n -> viewModel.updateLlmMaxConcurrency(n) } },
+            modifier = Modifier.width(80.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true, shape = RoundedCornerShape(ArcoRadius.md))
+    }
+
     // Shell timeout
     Spacer(Modifier.height(ArcoSpacing.sm))
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {

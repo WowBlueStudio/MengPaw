@@ -7,7 +7,7 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/mengpaw/mengpaw.git
+git clone https://github.com/WowBlueStudio/MengPaw.git
 cd mengpaw
 ./gradlew :mengpaw-shell:assembleDebug
 

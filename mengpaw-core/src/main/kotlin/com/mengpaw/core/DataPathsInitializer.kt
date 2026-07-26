@@ -13,5 +13,9 @@ import com.mengpaw.kernel.DataPaths
 object DataPathsInitializer {
     fun initialize(context: Context) {
         DataPaths.initialize(context.filesDir.absolutePath)
+        // User-facing output directory — accessible via system file manager under /Android/data/<pkg>/files/output/
+        val outputDir = context.getExternalFilesDir("output")?.absolutePath
+            ?: "${context.filesDir.parentFile?.absolutePath}/files/output"
+        DataPaths.initializeOutput(outputDir)
     }
 }

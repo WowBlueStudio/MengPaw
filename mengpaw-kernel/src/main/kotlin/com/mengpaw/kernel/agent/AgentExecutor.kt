@@ -7,6 +7,7 @@ import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.namespace.NotifyBus
 import kotlinx.serialization.json.*
 
 /**
@@ -47,7 +48,8 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         "write" to ::writeFile,
         "ls" to ::listFiles,
         "rm" to ::deleteFile,
-        "mkdir" to ::makeDir
+        "mkdir" to ::makeDir,
+        "output" to ::output
     )
 
     private suspend fun docs(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -754,18 +756,24 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         )
         val path = pathArgs.joinToString(" ")
         val file = resolvePath(path) ?: return ExecutionResult.fail("路径无效: $path")
+        val canonical = file.absolutePath
         if (!file.exists()) return ExecutionResult.fail("文件不存在: $path")
         if (file.isDirectory && (file.listFiles()?.isNotEmpty() == true)) {
             return ExecutionResult.fail("目录非空: $path (${file.listFiles()?.size ?: 0} 个项目)。\n请先删除目录中的文件，或用 agent.memory.mid.delete 删除中期记忆分片。")
         }
         if (file.isFile && !force) {
+            val isOutput = canonical.startsWith(com.mengpaw.kernel.DataPaths.OUTPUT)
             return ExecutionResult.fail(buildString {
                 appendLine("⚠️ 即将永久删除文件: $path (${formatSize(file.length())})")
                 appendLine()
                 appendLine("此操作不可逆。确认删除请执行: agent.rm $path --force")
+                if (isOutput) {
+                    appendLine()
+                    appendLine("⚠️ 此文件在输出目录中，删除后用户将无法在文件管理器中找到它。")
+                    appendLine("建议先确认用户是否需要此文件再删除。")
+                }
             })
         }
-        val canonical = file.absolutePath
         if (RM_BLOCKED_PREFIXES.any { canonical.startsWith(it) }) {
             return ExecutionResult.fail("禁止删除系统/应用目录: $path")
         }
@@ -793,6 +801,34 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         }
     }
 
+    /** agent.output — 显示输出目录。HTML/MD/PDF 等用户文档写出到此目录，文件管理器可访问。 */
+    private suspend fun output(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val dir = java.io.File(com.mengpaw.kernel.DataPaths.OUTPUT)
+        if (!dir.exists()) dir.mkdirs()
+        val files = dir.listFiles()?.sortedBy { if (it.isDirectory) 0 else 1 } ?: emptyList()
+        return ExecutionResult.ok(buildString {
+            appendLine("📂 输出目录: ${com.mengpaw.kernel.DataPaths.OUTPUT}")
+            appendLine("   状态: ${if (dir.canWrite()) "可写" else "⚠️ 不可写"}")
+            val totalSize = files.sumOf { it.length() }
+            if (totalSize > 0) appendLine("   总大小: ${formatSize(totalSize)}")
+            appendLine()
+            if (files.isEmpty()) {
+                appendLine("(空)")
+            } else {
+                files.forEach { f ->
+                    val icon = if (f.isDirectory) "📁" else "📄"
+                    val size = if (f.isFile) " ${formatSize(f.length())}" else ""
+                    appendLine("  $icon ${f.name}$size")
+                }
+                appendLine()
+                appendLine("${files.size} 个项目")
+            }
+            appendLine()
+            appendLine("写文件: agent.write <路径> <内容>")
+            appendLine("示例: agent.write ${com.mengpaw.kernel.DataPaths.OUTPUT}/report.html <html内容>")
+        })
+    }
+
     /** agent.write <path> <content> — write file. Blocked on system/app paths only. */
     private suspend fun writeFile(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.size < 2) return ExecutionResult.fail("用法: agent.write <path> <content>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
@@ -817,9 +853,26 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             if (canonical.startsWith(wsRoot)) {
                 com.mengpaw.kernel.agent.AgentDocs.onDocChanged?.invoke(ctx.agentName ?: "MengPaw")
             }
-            ExecutionResult.ok("已写入: $path (${content.length} 字符)")
+            val isOutput = canonical.startsWith(com.mengpaw.kernel.DataPaths.OUTPUT)
+            val msg = buildString {
+                append("已写入: $path (${content.length} 字符)")
+                if (isOutput) {
+                    append("\n\n📱 用户可在文件管理器的 ${com.mengpaw.kernel.DataPaths.OUTPUT} 找到此文件")
+                }
+            }
+            if (isOutput) {
+                try {
+                    NotifyBus.message("📄 Agent 生成了文件: ${file.name} (${formatSize(file.length())})")
+                } catch (_: Exception) {}
+            }
+            ExecutionResult.ok(msg)
         } catch (e: Exception) {
-            ExecutionResult.fail("写入失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+            val isOutput = canonical.startsWith(com.mengpaw.kernel.DataPaths.OUTPUT)
+            val errMsg = buildString {
+                append("写入失败: ${e.message}")
+                if (isOutput) append("\n输出目录: ${com.mengpaw.kernel.DataPaths.OUTPUT}")
+            }
+            ExecutionResult.fail(errMsg, errorCode = ErrorCodes.ERR_INTERNAL)
         }
     }
 }

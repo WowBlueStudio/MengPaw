@@ -35,7 +35,7 @@ MengPaw 的开发受益于以下项目和框架。此处严格区分「代码参
 | **Tavily** | AI 优化搜索引擎 API | `plugin-tavily` |
 | **ComfyUI** | 节点式工作流编排 | `plugin-comfy` |
 | **Kuri** (MIT) | WebView @JavascriptInterface 双向桥、accessibility-tree 页面内容提取架构 | `mengpaw-browser/bridge/BrowserBridge.kt` |
-| **native-devtools-mcp** (MIT) | MCP 协议暴露浏览器工具的设计思路 | `plugin-browser-mcp` (规划中) |
+| **native-devtools-mcp** (MIT) | MCP 协议暴露浏览器工具的设计思路 | `plugin-browser-mcp` |
 | **WebDroid Agent** (MIT) | WebView JS bridge 模式的 DOM 操控参考 | `BrowserScreen.kt` ShellBrowserBridge |
 
 ---

@@ -46,18 +46,18 @@ class RubricEvaluator(private val evaluatorPrompt: String = DEFAULT_RUBRIC_PROMP
 
     companion object {
         val DEFAULT_RUBRIC_PROMPT = """
-你是目标完成度评估器。阅读 Agent 的最终输出，判断目标任务是否已完成。
+判断以下目标的完成状态。
 
 目标: {goal}
 
-Agent 输出:
+Agent 执行结果:
 {output}
 
-请判断：目标是否已完成？
-- 如果 Agent 已成功完成目标，回答 YES
-- 如果目标尚未完成或只完成了部分，回答 NO
+目标是否完成？
+- 已完成 → YES
+- 未完成或部分完成 → NO
 
-只回答 YES 或 NO，然后简要说明原因。
+只回答 YES 或 NO，可加一句简短说明。
 """.trimIndent()
     }
 }

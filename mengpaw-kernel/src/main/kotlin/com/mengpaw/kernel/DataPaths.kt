@@ -55,6 +55,18 @@ object DataPaths {
     val ERROR_LOG get() = "$BASE/错误报告"
     val ERROR_QUEUE get() = "$ERROR_LOG/queue"
 
+    // ── User-facing output — accessible via system file manager ──────
+    /** User-facing output directory — HTML/MD/PDF exports.
+     *  Initialized separately via [initializeOutput] with getExternalFilesDir("output"). */
+    @Volatile
+    var OUTPUT: String = "$BASE/输出"
+        private set
+
+    fun initializeOutput(outputPath: String) {
+        OUTPUT = outputPath
+        java.io.File(OUTPUT).mkdirs()
+    }
+
     // ── Memory Twin ────────────────────────────────────────────────
     val TWIN_LEDGER get() = "$AGENTS/twin/ledger"
     val TWIN_PEERS get() = "$AGENTS/twin/peers"
