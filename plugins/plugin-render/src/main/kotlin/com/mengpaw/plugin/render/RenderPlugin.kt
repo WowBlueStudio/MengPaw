@@ -17,7 +17,6 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.serialization.json.*
 import com.mengpaw.kernel.DataPaths
-import com.mengpaw.kernel.error.ErrorCollector
 import java.io.File
 
 /**
@@ -32,7 +31,7 @@ import java.io.File
  */
 class RenderPlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "render-plugin", name = "API生图引擎", version = "0.1.1",
+        id = "render-plugin", name = "API生图引擎", version = "0.2.0",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "多后端API生图：Replicate/Stability/DALL-E，提交Job→轮询→下载→预览",
         permissions = emptyList(), minCoreVersion = "0.2.0",

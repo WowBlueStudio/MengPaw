@@ -19,9 +19,12 @@ import com.mengpaw.kernel.plugin.PluginContext
 import com.mengpaw.kernel.plugin.PluginMetadata
 import com.mengpaw.kernel.plugin.PluginType
 import io.ktor.client.*
+import io.ktor.client.call.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import java.io.File
@@ -40,7 +43,7 @@ import java.util.concurrent.TimeUnit
  */
 class UpdatePlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "update-plugin", name = "自动更新", version = "0.1.0",
+        id = "update-plugin", name = "自动更新", version = "0.2.0",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "WiFi 环境自动检测更新，可选自动下载安装。检查 GitHub Releases。",
         permissions = listOf("INTERNET", "ACCESS_NETWORK_STATE", "REQUEST_INSTALL_PACKAGES"),
@@ -121,21 +124,22 @@ class UpdatePlugin : Plugin {
                 if ("gitee" in url) header("Accept", "application/json")
                 else header("Accept", "application/vnd.github.v3+json")
             }
-            if (!response.status.isSuccess()) return null
+            if (response.status.value !in 200..299) return null
 
-            val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-            val tag = json["tag_name"]?.jsonPrimitive?.content ?: return null
-            val name = json["name"]?.jsonPrimitive?.content ?: tag
-            val body = json["body"]?.jsonPrimitive?.content?.take(500) ?: ""
+            val json = Json.parseToJsonElement(response.bodyAsText())
+            if (json !is JsonObject) return null
+            val tag = (json["tag_name"] as? JsonPrimitive)?.content ?: return null
+            val name = (json["name"] as? JsonPrimitive)?.content ?: tag
+            val body = (json["body"] as? JsonPrimitive)?.content?.take(500) ?: ""
 
             // Find shell + browser APK assets
-            val assets = json["assets"]?.jsonArray ?: emptyList()
+            val assets = (json["assets"] as? JsonArray) ?: JsonArray(emptyList())
             var shellUrl = ""; var shellSize = 0L
             var browserUrl = ""; var browserSize = 0L
             assets.forEach { a ->
-                val obj = a.jsonObject
-                val dUrl = obj["browser_download_url"]?.jsonPrimitive?.content ?: ""
-                val dSize = obj["size"]?.jsonPrimitive?.long ?: 0L
+                if (a !is JsonObject) return@forEach
+                val dUrl = (a["browser_download_url"] as? JsonPrimitive)?.content ?: ""
+                val dSize = (a["size"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L
                 when {
                     dUrl.contains("mengpaw-shell") -> { shellUrl = dUrl; shellSize = dSize }
                     dUrl.contains("mengpaw-browser") -> { browserUrl = dUrl; browserSize = dSize }
@@ -193,9 +197,12 @@ class UpdatePlugin : Plugin {
             var downloadBytes: ByteArray? = null
             for (dUrl in downloadUrls) {
                 try {
-                    val response = client.get(dUrl)
-                    if (response.status.isSuccess()) {
-                        downloadBytes = response.bodyAsBytes()
+                    val conn = java.net.URL(dUrl).openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 15000; conn.readTimeout = 30000
+                    conn.setRequestProperty("User-Agent", "MengPaw-Update/${metadata.version}")
+                    val code = conn.responseCode
+                    if (code in 200..299) {
+                        downloadBytes = conn.inputStream.use { it.readBytes() }
                         break
                     }
                 } catch (_: Exception) { /* try next */ }
@@ -250,7 +257,7 @@ class UpdatePlugin : Plugin {
             ExecutionResult.ok("正在安装 ${apk.name}...\n安装完成后请重启应用。")
         } catch (e: Exception) {
             ErrorCollector.report(e, "UpdatePlugin.install")
-            ExecutionResult.fail("安装失败: ${e.message}\n可能需要允许"未知来源"安装。", errorCode = ErrorCodes.ERR_INTERNAL)
+            ExecutionResult.fail("安装失败: ${e.message}\n可能需要允许\"未知来源\"安装。", errorCode = ErrorCodes.ERR_INTERNAL)
         }
     }
 
