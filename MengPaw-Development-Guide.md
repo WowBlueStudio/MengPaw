@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.16.0 | **更新**: 2026-07-27 | **架构**: 微内核 + AgentRuntime + 25 插件(含 Root/记忆孪生 v0.2) + 三轨记忆 + 跨平台可移植性策略 + 用户即开发者生态飞轮 + MCP 通用设备语言 + 守护态路线图 + 浏览器 v0.7.0
+> **版本**: 0.15.3 | **更新**: 2026-07-27 | **架构**: 微内核 + AgentRuntime + 25 插件(含 Root/记忆孪生 v0.2) + 三轨记忆 + 跨平台可移植性策略 + 用户即开发者生态飞轮 + MCP 通用设备语言 + 守护态路线图 + 浏览器 v0.7.0
 
 ---
 
