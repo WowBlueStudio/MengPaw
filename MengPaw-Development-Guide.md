@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.15.3 | **更新**: 2026-07-27 | **架构**: 微内核 + AgentRuntime + 25 插件(含 Root/记忆孪生 v0.2) + 三轨记忆 + 跨平台可移植性策略 + 用户即开发者生态飞轮 + MCP 通用设备语言 + 守护态路线图 + 浏览器 v0.7.0
+> **版本**: 0.16.0 | **更新**: 2026-07-27 | **架构**: 微内核(50文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 插件双语同义词表 + 6项性能优化 + 浏览器 v0.7.0
 
 ---
 
@@ -113,7 +113,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 | 模块 | 类型 | 源文件 | 版本 | 说明 |
 |------|------|--------|------|------|
-| mengpaw-kernel | JVM Library | 46 | 0.8.4 | 微内核：纯 Kotlin，零 Android 依赖 |
+| mengpaw-kernel | JVM Library | 50 | 0.16.0 | 微内核：纯 Kotlin，零 Android 依赖 |
 | mengpaw-core | Android Library | 6 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 5 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
 | mengpaw-shell | APK | 25 | 0.9.1 (vc=91) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
@@ -1077,8 +1077,7 @@ ShellService.start(this)   // startForeground + WakeLock
 | NotificationExecutor stub | 中 | 需 NotificationListenerService |
 | SelfPlugin 覆盖 kernel SelfExecutor | 低 | 4 个命令被插件版本覆盖，其余 10 个不受影响 |
 
-> v0.9.0: MD 模板文件化（~350 行硬编码字符串删除）；三大安全保护强制启用 + IntegrityGuard 接入 Pipeline；废弃插件目录物理删除；设置页文案重构
-> v0.6.1: 所有 6 项 settings-pending 已解决；Goal/Mission/Mission+ 模式已内置；4 个 QwenPaw Skills 已移植
+> v0.16.0: 内置插件版本号清空; BM25 命令检索上线; 循环模式 REACT 默认; 6 项性能优化完成
 
 ---
 
@@ -1086,7 +1085,7 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| **0.5.0** | 2026-07-26 | **MP浏览器 v0.6.0** — 暗色模式跟随系统 + 页面查找 + 阅读模式 + SSL 错误提示 + 完整页面翻译 + 下载监听 + 错误页面 + Markdown 文件查看 + Agent 协同设置 (Quick Click/自动注入/截图配置) + MCP 工具执行器 + Skills 扩展 (browser-control/playwright/spider/form/debug) + 提示词含完整浏览器命令 + 45 命令 |
+| **0.16.0** | 2026-07-27 | **三层自适应调度 + BM25 命令检索 + 6 项性能优化** — A: 循环模式重构 (QwenPaw 风格默认 REACT → 自动检测升级 GOAL/MISSION, Claude Code 风格复杂度评分, UI AssistChip 自动标注) B: BM25 命令搜索引擎 (self.search, ~50条内置命令双语同义词表, μs 级检索, bigram 分词, 插件激活/卸载自动联动) C: 插件关键词脚手架 (CommandKeywords 数据类, plugin.create 模板内置, plugin.audit 检查, plugin.keywords 查看) D: 6 项性能优化 (Prompt 缓存按文件粒度失效/中记忆批量合并/会话增量持久化/启动懒加载/协程池分离/GC 压力优化) E: 内置插件版本号清空 (随壳更新) |
 | **0.15.2** | 2026-07-26 | **6 审计问题修复** — 缓存失效(路径匹配) + 缓存key(检查前置) + Plan进度(中英双语边界) + 错误消息(LlmApiException) + 容器高度(Step编号/观察缺失) + 提示词(恢复插件发现示例) + MCP插件解耦BrowserBridge + 超时120s |
 | **0.15.0** | 2026-07-25 | **记忆孪生全链路重构 + 记忆三轨制** — A: 三层十二问审计 → 14 项全修 (心跳保活/QoS自适应/手动IP/配对指引/ACP就绪轮询/syncWithPeer返真值/命令命名空间修复/解绑UI/错误诊断/原子写入补全) B: 记忆架构重构 → 三轨制: 长期记忆(memory/memory.md, 仅三种来源, 注入系统提示词) + 中期记忆(memory/memory_{date}.md, 按日分片, 不注入提示词, 梦境按日压缩) + 项目记忆(memory/project_{name}_memory.md, 里程碑/闭环时总结, 可复用方法论) + agent.memory.keep/record/mid/project 命令族 |
 | **0.14.1** | 2026-07-24 | **验证反馈修复** — 底部栏 IconButton→pointerInput + 插件页 registerBuiltins 时序 + DexClassLoader 多类名降级 + 空会话清理 |

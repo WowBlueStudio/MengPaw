@@ -7,6 +7,15 @@ import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 
 /**
+ * 命令的 BM25 检索关键词 — 双语同义词表.
+ * 每条命令配备中英文同义词, 使 self.search 能精确匹配用户插件的命令.
+ */
+data class CommandKeywords(
+    val zh: List<String> = emptyList(),
+    val en: List<String> = emptyList()
+)
+
+/**
  * Plugin type determines how the plugin is distributed and executed.
  */
 enum class PluginType {
@@ -33,7 +42,9 @@ data class PluginMetadata(
     val commands: List<String> = emptyList(),
     val downloadUrl: String = "",
     val checksum: String = "",
-    val sizeBytes: Long = 0
+    val sizeBytes: Long = 0,
+    /** BM25 检索关键词. key = 命令短名 (不含命名空间), 如 "hello". 空 map 时自动生成. */
+    val commandKeywords: Map<String, CommandKeywords> = emptyMap()
 ) {
     /** Semantic version as [PluginVersion] for comparison. */
     val semver: PluginVersion get() = PluginVersion.parse(version)

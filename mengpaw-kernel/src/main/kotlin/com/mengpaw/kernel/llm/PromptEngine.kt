@@ -52,10 +52,18 @@ class PromptEngine {
         return content
     }
 
-    /** Invalidate the workspace doc cache — call when Agent modifies files. */
-    fun invalidateDocCache(agentName: String = "MengPaw") {
-        val prefix = "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/"
-        docCache.keys.removeAll { it.startsWith(prefix) }
+    /** Invalidate the workspace doc cache — call when Agent modifies files.
+     *  @param agentName 被修改的 Agent
+     *  @param filePath  被修改文件的完整路径; null 则全量失效 (兼容旧调用) */
+    fun invalidateDocCache(agentName: String = "MengPaw", filePath: String? = null) {
+        if (filePath != null) {
+            // 精确失效: 只删除被修改的那个文件缓存
+            docCache.remove(filePath)
+        } else {
+            // 全量失效: 清空该 agent 的所有缓存 (兼容旧行为)
+            val prefix = "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/"
+            docCache.keys.removeAll { it.startsWith(prefix) }
+        }
         cachedSystemPrompt = null
     }
 
@@ -134,7 +142,14 @@ class PromptEngine {
             }
         }
 
-        val prompt = identity + basePrompt + "\n" + fewShot + "\n" + docsBlock
+        val prompt = buildString(identity.length + basePrompt.length + fewShot.length + docsBlock.length + 4) {
+            append(identity)
+            append(basePrompt)
+            append('\n')
+            append(fewShot)
+            append('\n')
+            append(docsBlock)
+        }
         cachedSystemPrompt = prompt
         cachedPromptLang = lang
         cachedPromptAgent = agentName
@@ -160,23 +175,23 @@ class PromptEngine {
         val CHINESE_FEWSHOT = """
             ## 示例（严格模仿格式）
 
-            **示例 1 — 状态 + 文件**
+            **示例 1 — 命令查找 + 状态**
 
             用户：检查设备状态，看看 /sdcard/Download 下有什么
 
-            Thought: 先查设备状态，再看文件。用 self.tools 确认命令。
+            Thought: 不知道文件列表用什么命令。用 self.search 按需求搜索。
+            Action: self.search
+            Action Input: {"query":"列出目录文件"}
+
+            Observation: 1. fs.ls — fs.ls [path]\n  列出指定目录下的文件和子目录\n2. agent.ls — agent.ls [路径]\n  列出工作区中的文件和目录
+
+            Thought: fs.ls 就是我要的。先查状态，再列目录。
             Action: self.status
             Action Input: {}
 
             Observation: {"status":"online","version":"0.15.0"}
 
-            Thought: 设备正常。用 self.tools fs 查文件命令。
-            Action: self.tools
-            Action Input: {"namespace":"fs"}
-
-            Observation: fs.ls — 列出目录 | fs.cat — 读取文件
-
-            Thought: 用 fs.ls 列出下载目录。
+            Thought: 设备正常。用 fs.ls 列出下载目录。
             Action: fs.ls
             Action Input: {"path":"/sdcard/Download"}
 
@@ -190,13 +205,13 @@ class PromptEngine {
 
             用户：我需要搜索网页
 
-            Thought: 缺网页搜索能力。先看已有命令，再逛插件市场。
-            Action: self.tools
-            Action Input: {}
+            Thought: 缺网页搜索能力。用 self.search 按需求搜索。
+            Action: self.search
+            Action Input: {"query":"网页搜索"}
 
-            Observation: [列出内置命令, 无网页搜索]
+            Observation: (未找到匹配 "网页搜索" 的命令. 用 self.tools [ns] 查看完整列表.)
 
-            Thought: 没有内置搜索。看插件市场有什么。
+            Thought: 内置没有。看插件市场有什么。
             Action: plugin.marketplace
             Action Input: {}
 
@@ -220,23 +235,23 @@ class PromptEngine {
         val ENGLISH_FEWSHOT = """
             ## Examples (follow this format exactly)
 
-            **Example 1 — Status + Files**
+            **Example 1 — Command Search + Status**
 
             User: Check device status and list /sdcard/Download
 
-            Thought: Check status first, then files. Use self.tools to verify commands.
+            Thought: Don't know the file listing command. Use self.search to find it.
+            Action: self.search
+            Action Input: {"query":"list directory files"}
+
+            Observation: 1. fs.ls — fs.ls [path]\n  List files and subdirectories\n2. agent.ls — agent.ls [path]\n  List workspace files and directories
+
+            Thought: fs.ls is what I need. Check status first, then list.
             Action: self.status
             Action Input: {}
 
             Observation: {"status":"online","version":"0.15.0"}
 
-            Thought: Device online. Check available fs commands.
-            Action: self.tools
-            Action Input: {"namespace":"fs"}
-
-            Observation: fs.ls — list directory | fs.cat — read file
-
-            Thought: Use fs.ls to list downloads.
+            Thought: Device online. List the download directory.
             Action: fs.ls
             Action Input: {"path":"/sdcard/Download"}
 
@@ -250,13 +265,13 @@ class PromptEngine {
 
             User: I need web search
 
-            Thought: Need web search. Check existing commands first, then browse plugins.
-            Action: self.tools
-            Action Input: {}
+            Thought: Need web search. Try self.search first.
+            Action: self.search
+            Action Input: {"query":"web search"}
 
-            Observation: [Lists built-in commands — no web search]
+            Observation: (No commands matched "web search". Try self.tools [ns] for full listing.)
 
-            Thought: No built-in search. Check plugin marketplace.
+            Thought: Not built-in. Check plugin marketplace.
             Action: plugin.marketplace
             Action Input: {}
 
@@ -294,8 +309,8 @@ class PromptEngine {
             - **先自己想办法** — 读文件、查上下文、搜一搜。带着答案回来，不是带着问题。
 
             ### 工作方式
-            - **命令优先: 只用框架命令，不走弯路** — 不要尝试 Windows/Linux 原生命令(dir/ls/cat/powershell/bash/rm/mkdir/grep/curl 等)。所有操作必须使用框架的 `namespace.command` 格式。不确定命令时用 `self.tools` 查询，别猜。你跑在 Android 设备上，没有 bash shell。
-            - **命令入口: self.tools** — 每次任务先用 `self.tools [ns]` 查可用命令，不靠记忆。`agent.cli` 是旧入口，用 `self.tools` 替代。
+            - **命令优先: 只用框架命令，不走弯路** — 不要尝试 Windows/Linux 原生命令(dir/ls/cat/powershell/bash/rm/mkdir/grep/curl 等)。所有操作必须使用框架的 `namespace.command` 格式。你跑在 Android 设备上，没有 bash shell。
+            - **命令发现: self.search** — 不确定用什么命令时, 用 `self.search <自然语言描述>` 按需求搜索 (BM25 毫秒级返回 top-5 匹配). 例: `self.search 网页搜索` → [tavily.search, net.curl, browser.content]. 需要完整命令列表时用 `self.tools [ns]` 遍历.
             - **工作区: agent.docs** — 查阅 Soul/Agents/Memory/Boost/Profile。新 Agent 第一步: `agent.boost` 读引导。
             - **你是自身定制专家** — 改名字 (agent.write profile.md)、换头像 (self.avatar)、改配色 (self.theme)。主动建议，不等用户开口。
             - **你是活的** — 你有 Heartbeat 定时唤醒和 Cron 定时任务。工作区 HEARTBEAT.md 定义唤醒行为。定期检查 inbox 是否有新任务。
@@ -330,7 +345,7 @@ class PromptEngine {
             - **知识库**: skill.run android/termux/filesystem/plugin-system/sessions/twin-guide/device-control。
 
             ## 常用命令 (权威来源: self.tools)
-            - self.tools [ns] / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
+            - self.search <描述> (首选命令查找) / self.tools [ns] (完整遍历) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
             - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
             - plugin.marketplace/search/install/list/info / sys.permission.list/request
             - self.status/avatar/theme / sys.app.launch / sys.intent.open
@@ -388,8 +403,8 @@ class PromptEngine {
             - **Figure it out first** — Read files, check context, search. Come back with answers, not questions.
 
             ### Workflow
-            - **Command priority: framework commands only, no detours** — Do NOT try native Windows/Linux commands (dir/ls/cat/powershell/bash/rm/mkdir/grep/curl etc.). Every operation must use the framework's `namespace.command` format. When unsure, check `self.tools` — don't guess. You run on an Android device, there is no bash shell.
-            - **Command entry: self.tools** — Always check `self.tools [ns]` first, don't rely on memory. `agent.cli` is legacy — use `self.tools` instead.
+            - **Command priority: framework commands only, no detours** — Do NOT try native Windows/Linux commands (dir/ls/cat/powershell/bash/rm/mkdir/grep/curl etc.). Every operation must use the framework's `namespace.command` format. You run on an Android device, there is no bash shell.
+            - **Command discovery: self.search** — When unsure which command to use, search by natural language: `self.search <description>` returns top-5 matches in microseconds. E.g. `self.search web search` → [tavily.search, net.curl, browser.content]. For complete listings, fall back to `self.tools [ns]`.
             - **Workspace: agent.docs** — Read Soul/Agents/Memory/Boost/Profile. New Agent step 1: `agent.boost`.
             - **You are a self-customization expert** — Change name (agent.write profile.md), avatar (self.avatar), colors (self.theme). Proactively suggest, don't wait to be asked.
             - **You are alive** — You have Heartbeat (periodic wakeup) and Cron (scheduled tasks). HEARTBEAT.md in workspace defines wakeup behavior. Check inbox regularly.
@@ -424,7 +439,7 @@ class PromptEngine {
             - **Knowledge**: skill.run android/termux/filesystem/plugin-system/sessions/twin-guide/device-control.
 
             ## Common Commands (authority: self.tools)
-            - self.tools [ns] / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
+            - self.search <desc> (preferred) / self.tools [ns] (full listing) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
             - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
             - plugin.marketplace/search/install/list/info / sys.permission.list/request
             - self.status/avatar/theme / sys.app.launch / sys.intent.open
@@ -506,10 +521,14 @@ class PromptEngine {
             )
             val inputText = inputRegex.find(normalized)?.groupValues?.get(1)?.trim() ?: "{}"
 
-            val params = try {
-                val obj = Json.parseToJsonElement(inputText) as JsonObject
-                obj.mapValues { (it.value as? JsonPrimitive)?.content ?: it.value.toString() }
-            } catch (e: Exception) {
+            val params = if (inputText.startsWith("{") && ':' in inputText) {
+                try {
+                    val obj = Json.parseToJsonElement(inputText) as JsonObject
+                    obj.mapValues { (it.value as? JsonPrimitive)?.content ?: it.value.toString() }
+                } catch (e: Exception) {
+                    mapOf("raw" to inputText)
+                }
+            } else {
                 mapOf("raw" to inputText)
             }
 
@@ -552,7 +571,7 @@ class PromptEngine {
         "agent.docs", "agent.cli", "agent.memory", "agent.profile", "agent.boost",
         "agent.soul", "agent.audit", "agent.storage", "agent.sessions",
         "agent.read", // read-only, safe to repeat
-        "self.stats", "self.version", "self.time", "self.tools", "self.status",
+        "self.stats", "self.version", "self.time", "self.tools", "self.search", "self.status",
         "plugin.list", "plugin.info", "plugin.marketplace",
         "sys.battery", "sys.network", "sys.cpu", "sys.memory", "sys.storage",
     )

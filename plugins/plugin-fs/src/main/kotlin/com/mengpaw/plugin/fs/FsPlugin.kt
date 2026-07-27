@@ -29,7 +29,7 @@ class FsPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "fs-plugin",
         name = "文件系统",
-        version = "0.1.1",
+        version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat",

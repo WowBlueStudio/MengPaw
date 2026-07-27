@@ -86,6 +86,9 @@ class AgentViewModel : ViewModel() {
         }
     }
 
+    /** 增量持久化: 追踪上次落盘的消息数, 30s 保存时若未变化则跳过 I/O */
+    private var lastPersistedMsgCount: Int = 0
+
     /** Track current session ID for per-session save. Auto-assigned on first message. */
     private var currentSessionId: String = ""
     private fun ensureSessionId() {
@@ -94,12 +97,15 @@ class AgentViewModel : ViewModel() {
         }
     }
 
-    /** Persist active session messages so they survive process death. */
+    /** Persist active session messages so they survive process death.
+     *  增量保存: 若无新消息则跳过 I/O (30s 周期), 有变化时全量写入. */
     private fun saveCurrentSession() {
         try {
             val session = sessions[_activeAgentName] ?: return
             val msgs = session.messages.value.filter { it !is ChatMessageUi.System }
             if (msgs.isEmpty()) return
+            // 增量检查: 与上次落盘相同的消息数 → 跳过 I/O
+            if (msgs.size == lastPersistedMsgCount) return
             // Auto-assign session ID on first save
             ensureSessionId()
             // Write current_session.json with sessionId embedded
@@ -109,6 +115,7 @@ class AgentViewModel : ViewModel() {
             val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
             atomicWriteJson(file, wrapper)
             saveSessionById(currentSessionId, msgs)
+            lastPersistedMsgCount = msgs.size
             // Auto-create session record if missing (first conversation)
             if (_sessionHistory.value.none { it.id == currentSessionId }) {
                 val title = msgs.firstOrNull()?.let {
@@ -592,7 +599,7 @@ class AgentViewModel : ViewModel() {
     }
 
     /** Current loop mode — read by submitTask() to choose engine method. */
-    var loopMode: LoopMode = LoopMode.GOAL
+    var loopMode: LoopMode = LoopMode.REACT
 
     // ── Active input tags (slash commands + @mentions) ───────────────
 
@@ -620,18 +627,18 @@ class AgentViewModel : ViewModel() {
         _activeTags.value = current
     }
 
-    /** 移除标签，模式标签移除时回退到 GOAL。 */
+    /** 移除标签，模式标签移除时回退到 REACT。 */
     fun removeTag(tag: InputTag) {
         _activeTags.value = _activeTags.value.filter { it != tag }
         if (tag is InputTag.Mode && _activeTags.value.none { it is InputTag.Mode }) {
-            loopMode = LoopMode.GOAL
+            loopMode = LoopMode.REACT
         }
     }
 
     /** 清除所有标签。 */
     fun clearTags() {
         _activeTags.value = emptyList()
-        loopMode = LoopMode.GOAL
+        loopMode = LoopMode.REACT
     }
 
     /** 获取可用于 @mention 的 Agent 列表（本地 + 框架）。 */
@@ -779,12 +786,34 @@ class AgentViewModel : ViewModel() {
 
                 // Execute via the appropriate engine mode
                 val finalTask = recallPrefix + contextPrefix
+                // ── 自动复杂度检测: 无斜杠命令时评估是否升级模式 ──
+                if (executionMode == null) {
+                    val detected = detectComplexity(actualTask)
+                    if (detected != LoopMode.REACT && _activeTags.value.none { it is InputTag.Mode }) {
+                        // 自动升级: 添加 UI 标签 (复用 AssistChip 体系)
+                        val autoTag = when (detected) {
+                            LoopMode.GOAL -> InputTag.Mode(ExecutionMode.GOAL)
+                            LoopMode.MISSION -> InputTag.Mode(ExecutionMode.MISSION)
+                            else -> null
+                        }
+                        autoTag?.let { addTag(it) }
+                        // 临时覆盖 loopMode 用于本轮分发
+                        if (detected == LoopMode.GOAL || detected == LoopMode.MISSION) {
+                            loopMode = detected
+                        }
+                    }
+                }
+
                 // Mode dispatch: map slash command + loopMode to the correct engine method
                 val result = when {
                     executionMode == ExecutionMode.PLAN -> session.engine.runWithPlan(task = finalTask, onStep = onStep)
+                    executionMode == ExecutionMode.MISSION -> session.engine.runWithMission(task = finalTask, onStep = onStep)
+                    executionMode == ExecutionMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
+                    // ── 显式斜杠命令结束, 以下为 loopMode 分发 ──
+                    loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
                     loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
                     loopMode == LoopMode.MISSION || loopMode == LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = finalTask, onStep = onStep)
-                    else -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
+                    else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
                 }
 
                 // Translate result back to Chinese for US models
@@ -1491,6 +1520,49 @@ data class PendingTask(
     val executionMode: ExecutionMode? = null,
     val agentRef: String? = null
 )
+
+// ── 复杂度自动检测 (融合 QwenPaw SOUL.md + Claude Code 复杂度评分) ──
+
+/**
+ * 自动检测任务复杂度, 返回建议的 LoopMode.
+ * 简单问答 → REACT | 明确任务 → GOAL | 复杂工程 → MISSION.
+ */
+private fun detectComplexity(task: String): LoopMode {
+    val score = scoreComplexity(task)
+    return when {
+        score <= 4 -> LoopMode.REACT
+        score <= 7 -> LoopMode.GOAL
+        score <= 10 -> LoopMode.MISSION
+        else -> LoopMode.GOAL
+    }
+}
+
+/**
+ * 任务复杂度评分 (1-15).
+ * 维度: 操作风险 + 跨域操作 + 任务长度 + 多步骤信号.
+ */
+private fun scoreComplexity(task: String): Int {
+    var score = 0
+    // 1. 操作风险
+    if (Regex("删除|卸载|rm |发布|部署|格式化|清空").containsMatchIn(task)) score += 3
+    else if (Regex("创建|写入|修改|安装|配置|设置|编译|构建|生成").containsMatchIn(task)) score += 2
+    // 查询类不加分
+
+    // 2. 跨域操作
+    val domains = listOf("文件", "网络", "插件", "记忆", "系统", "浏览器", "搜索", "翻译", "应用")
+    val domainHits = domains.count { task.contains(it) }
+    score += domainHits.coerceAtMost(3)
+
+    // 3. 任务长度
+    if (task.length > 200) score += 2
+    else if (task.length > 80) score += 1
+
+    // 4. 多步骤信号
+    if (Regex("然后|之后|接着|再|并且|同时|;|；|第一步|第二步").containsMatchIn(task)) score += 2
+    if (Regex("每个|所有|全部|批量|遍历|循环").containsMatchIn(task)) score += 2
+
+    return score
+}
 
 /** 执行模式 — 用户通过 /命令 主动触发，非自动检测。 */
 enum class ExecutionMode(val label: String, val prefix: String) {

@@ -70,7 +70,7 @@ fun PluginDetailScreen(
                             Column {
                                 Text(plugin.name, fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.titleMedium)
-                                Text("v${plugin.version} · ${plugin.author}",
+                                Text("${if (plugin.version.isNotBlank()) "v${plugin.version} · " else ""}${plugin.author}",
                                     style = MaterialTheme.typography.bodySmall, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
                             }
                         }

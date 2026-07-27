@@ -40,6 +40,8 @@ object SelfExecutor {
         "trigger" to ::triggerCmd,
         "acp" to ::acpCmd,
         "tools" to ::toolsCmd,
+        "search" to ::searchCmd,
+        "search.stats" to ::searchStatsCmd,
         "time" to ::timeCmd,
         "notify.message" to ::notifyMessage,
         "notify.banner" to ::notifyBanner
@@ -318,6 +320,37 @@ object SelfExecutor {
             }
             if (ns == null) appendLine("\nTip: self.tools <namespace> to filter.")
         })
+    }
+
+    // ── Command Search (BM25 + 同义词表) ──────────────────────────────
+
+    /** 用自然语言搜索命令. Usage: self.search <query> [--top N]
+     *  无参时显示索引统计. */
+    private suspend fun searchCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        // 解析 --top 参数
+        val topArg = args.indexOfFirst { it == "--top" }
+        val topK = if (topArg >= 0 && topArg + 1 < args.size) {
+            args[topArg + 1].toIntOrNull()?.coerceIn(1, 20) ?: 5
+        } else 5
+        val query = if (topArg >= 0) args.take(topArg).joinToString(" ")
+                    else args.joinToString(" ")
+        if (query.isBlank()) return ExecutionResult.ok(
+            buildString {
+                appendLine(com.mengpaw.kernel.cli.CommandSearch.stats())
+                appendLine()
+                appendLine("用法: self.search <自然语言描述> [--top N]")
+                appendLine("示例: self.search 网页搜索")
+                appendLine("用自然语言描述你需要的操作, 返回最匹配的 top-5 命令.")
+                appendLine("完整命令列表: self.tools [ns]")
+            }
+        )
+        val results = com.mengpaw.kernel.cli.CommandSearch.search(query, topK)
+        return ExecutionResult.ok(com.mengpaw.kernel.cli.CommandSearch.formatResults(results, query))
+    }
+
+    /** 查看命令索引统计. Usage: self.search.stats */
+    private suspend fun searchStatsCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        return ExecutionResult.ok(com.mengpaw.kernel.cli.CommandSearch.stats())
     }
 
     // ── Avatar ─────────────────────────────────────────────────────

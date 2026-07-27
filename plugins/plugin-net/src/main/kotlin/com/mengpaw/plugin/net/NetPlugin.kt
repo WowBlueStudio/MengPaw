@@ -31,7 +31,7 @@ class NetPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "net-plugin",
         name = "网络请求",
-        version = "0.1.1",
+        version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "HTTP 网络请求：curl, get, post。中国大陆访问 GitHub 失败时用 net.proxy 获取代理 URL",

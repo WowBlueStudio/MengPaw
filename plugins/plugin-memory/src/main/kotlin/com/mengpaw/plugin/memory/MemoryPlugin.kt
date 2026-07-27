@@ -21,7 +21,7 @@ class MemoryPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "memory-plugin",
         name = "记忆系统",
-        version = "0.1.1",
+        version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "Markdown 持久化记忆系统，含 LRU 缓存和被动索引",

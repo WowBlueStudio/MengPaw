@@ -107,6 +107,8 @@ class PluginManager(
 
         registerCommands(id, plugin)
         statuses[id] = PluginStatus.ACTIVE
+        // 联动命令搜索索引: 插件激活后注册其命令到 BM25 索引
+        registerSearchIndex(id, plugin)
         return Result.success(Unit)
     }
 
@@ -138,6 +140,8 @@ class PluginManager(
 
         // FIX A14: Call uninstall lifecycle callback
         try { /* onUninstall() requires coroutine scope; called at plugin unload time */ } catch (_: Exception) {}
+        // 联动命令搜索索引: 卸载时移除该插件的所有命令
+        com.mengpaw.kernel.cli.CommandSearch.removeByNamespace(namespaceFor(id))
 
         // Clean up downloaded JAR/AAR and odex files from disk
         try {
@@ -233,6 +237,37 @@ class PluginManager(
         val r = registry ?: return
         plugin.commands.keys.forEach { name ->
             r.unregister("$ns.$name")
+        }
+    }
+
+    /** 将插件命令注册到 BM25 命令搜索索引, 使 Agent 能通过 self.search 发现.
+     *  优先读取插件的自定义关键词, 无定义时自动生成基础关键词. */
+    private fun registerSearchIndex(id: String, plugin: Plugin) {
+        val ns = namespaceFor(id)
+        val name = plugin.metadata.name
+        val desc = plugin.metadata.description
+        val kws = plugin.metadata.commandKeywords
+
+        plugin.commands.keys.forEach { cmdName ->
+            val fullName = "$ns.$cmdName"
+            val entry = kws[cmdName]
+            // 有自定义关键词 → 用自定义的; 无 → 兜底用命名空间/命令名/插件名
+            val zh = if (entry != null && entry.zh.isNotEmpty()) entry.zh
+                     else listOf(ns, cmdName, name)
+            val en = if (entry != null && entry.en.isNotEmpty()) entry.en
+                     else listOf(ns, cmdName, name)
+            val displayDesc = if (entry != null) desc else "[$name] $desc"
+            try {
+                // registerOrUpdate: 重新激活时允许更新关键词 (用户可能改进了同义词表)
+                com.mengpaw.kernel.cli.CommandSearch.registerOrUpdate(
+                    com.mengpaw.kernel.cli.CommandIndex(
+                        fullName = fullName, namespace = ns,
+                        description = displayDesc,
+                        usage = fullName,
+                        zhKeywords = zh, enKeywords = en
+                    )
+                )
+            } catch (_: Exception) {}
         }
     }
 }

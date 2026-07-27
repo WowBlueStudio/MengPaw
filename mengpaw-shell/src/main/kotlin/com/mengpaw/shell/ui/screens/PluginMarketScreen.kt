@@ -158,7 +158,8 @@ private fun PluginCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(item.name, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.width(ArcoSpacing.sm))
-                    Text("v${item.version}", style = MaterialTheme.typography.labelSmall,
+                    Text(if (item.version.isNotBlank()) "v${item.version}" else "内置",
+                        style = MaterialTheme.typography.labelSmall,
                         color = com.mengpaw.design.theme.ThemeColors.textSecondary)
                 }
                 Text(item.description, style = MaterialTheme.typography.bodySmall,
