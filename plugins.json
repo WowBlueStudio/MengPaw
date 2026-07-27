@@ -6,7 +6,7 @@
     {
       "id": "framework-plugin",
       "name": "框架发现",
-      "version": "0.1.0",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理",
@@ -17,7 +17,7 @@
     {
       "id": "fs-plugin",
       "name": "文件系统",
-      "version": "0.1.1",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat",
@@ -28,7 +28,7 @@
     {
       "id": "net-plugin",
       "name": "网络请求",
-      "version": "0.1.1",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "HTTP 请求：GET/POST，支持自定义 Header 和超时",
@@ -39,7 +39,7 @@
     {
       "id": "memory-plugin",
       "name": "记忆系统",
-      "version": "0.1.1",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "Markdown 持久化记忆系统，含 LRU 缓存和被动索引",
@@ -50,7 +50,7 @@
     {
       "id": "memory-twin-plugin",
       "name": "记忆孪生",
-      "version": "0.2.0",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 心跳保活 + QoS自适应 + 手动IP发现",
@@ -61,7 +61,7 @@
     {
       "id": "skill-plugin",
       "name": "技能系统",
-      "version": "0.1.1",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "可复用的 Agent 剧本系统（YAML+Markdown），含 3 个默认 Skill",
@@ -72,7 +72,7 @@
     {
       "id": "self-plugin",
       "name": "Agent 自省",
-      "version": "0.1.1",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 自身状态查询和配置管理",
@@ -83,7 +83,7 @@
     {
       "id": "clipboard-plugin",
       "name": "剪贴板",
-      "version": "0.1.1",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "系统剪贴板读写操作",
@@ -94,7 +94,7 @@
     {
       "id": "notification-plugin",
       "name": "通知管理",
-      "version": "0.1.1",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "系统通知发送和管理",
@@ -106,7 +106,7 @@
     {
       "id": "dev-plugin",
       "name": "插件开发工具",
-      "version": "0.1.1",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "创建、审计、构建、分享自建插件 — Agent 可自主扩展 MengPaw 功能",
@@ -117,7 +117,7 @@
     {
       "id": "update-plugin",
       "name": "自动更新",
-      "version": "0.1.1",
+      "version": "0.1.0",
       "type": "native",
       "author": "MengPaw",
       "description": "WiFi 环境自动检测更新，可选自动下载安装",
@@ -236,7 +236,7 @@
     {
       "id": "browser-push-plugin",
       "name": "跨设备推送",
-      "version": "0.1.1",
+      "version": "0.1.0",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 跨设备推送网页，基于 ACP 协议",
@@ -249,7 +249,7 @@
     {
       "id": "browser-search-plugin",
       "name": "搜索分析",
-      "version": "0.1.1",
+      "version": "0.1.0",
       "type": "native",
       "author": "MengPaw",
       "description": "搜索引擎结果提取：Google/Bing/百度/DuckDuckGo 结构化数据",
@@ -262,7 +262,7 @@
     {
       "id": "browser-mcp-plugin",
       "name": "浏览器 MCP",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "type": "native",
       "author": "MengPaw",
       "description": "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取",
@@ -275,7 +275,7 @@
     {
       "id": "browser-cdp-plugin",
       "name": "CDP 调试",
-      "version": "0.1.1",
+      "version": "0.1.0",
       "type": "native",
       "author": "MengPaw",
       "description": "Chrome DevTools Protocol 调试支持，仅 debug 构建",
@@ -288,7 +288,7 @@
     {
       "id": "browser-inspector-plugin",
       "name": "网页开发套件",
-      "version": "0.1.1",
+      "version": "0.1.0",
       "type": "native",
       "author": "MengPaw",
       "description": "元素选择器+批注：悬停高亮、点击选择、添加备注、导出元素地图",
@@ -323,7 +323,7 @@
     {
       "id": "root-plugin",
       "name": "Root 权限",
-      "version": "0.1.0",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "Root 权限管理 — su 命令执行/应用管理/完整文件系统/系统修改/备份恢复/审计日志",
