@@ -844,17 +844,6 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                             )
                         }
                     }
-                    // Pause/resume WebViews on tab switch
-                    LaunchedEffect(activeTabId) {
-                        tabs.forEach { tab ->
-                            val wv = webViewMap[tab.id] ?: return@forEach
-                            if (tab.id == activeTabId) {
-                                try { wv.onResume() } catch (_: Exception) {}
-                            } else {
-                                try { wv.onPause() } catch (_: Exception) {}
-                            }
-                        }
-                    }
                     PullRefreshIndicator(activeTab.isLoading, pullState, Modifier.align(Alignment.TopCenter))
                 }
             }
