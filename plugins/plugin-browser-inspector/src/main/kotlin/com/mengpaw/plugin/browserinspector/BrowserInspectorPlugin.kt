@@ -210,9 +210,9 @@ try {
 ```
 
 导出后，Agent 可以通过选择器精确操作元素:
-- browser.click "$selector"
-- browser.type "$selector" "新内容"
-- browser.eval "document.querySelector('$selector').style.color='red'"
+- browser.click "${'$'}selector"
+- browser.type "${'$'}selector" "新内容"
+- browser.eval "document.querySelector('${'$'}selector').style.color='red'"
 """.trimIndent())
     }
 

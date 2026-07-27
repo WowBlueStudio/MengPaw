@@ -3,6 +3,7 @@
 
 package com.mengpaw.kernel.plugin
 
+import com.mengpaw.kernel.cli.CommandExecutor
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 
@@ -67,6 +68,8 @@ interface PluginContext {
     val coreVersion: String
     /** Log a message visible in Agent execution logs. */
     fun log(message: String)
+    /** CLI command executor for invoking other plugin commands programmatically. */
+    val commandExecutor: CommandExecutor
 }
 
 /**
@@ -82,7 +85,9 @@ enum class ButtonPlacement {
     /** Browser toolbar (next to back/forward/refresh). */
     BROWSER_TOOLBAR,
     /** Settings screen — appears as a section card. */
-    SETTINGS_SECTION
+    SETTINGS_SECTION,
+    /** Agent sidebar — the right-side panel showing agent-specific tools. */
+    AGENT_SIDEBAR
 }
 
 /**
