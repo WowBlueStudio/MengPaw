@@ -89,6 +89,11 @@ class AgentEngine(
 
     private val llmRequestBuilder = LlmRequestBuilder(systemPrompt = promptEngine.buildSystemPrompt())
 
+    // ── Persistent conversation session (Claude Code pattern) ──────────
+    // Instead of creating a new Session per run(), reuse the same session
+    // so the LLM sees full conversation history across multiple user messages.
+    @Volatile private var conversationSessionId: String? = null
+
     /** Replace the LLM provider at runtime (e.g. after user configures API key). */
     fun updateLlmProvider(provider: LlmProvider) {
         llmProvider = provider
@@ -133,6 +138,59 @@ class AgentEngine(
         const val COMPACT_FORCE_RATIO = 0.90
         const val MIN_FOLD_TOKENS = 400
         const val DEFAULT_CONTEXT_WINDOW = 131_072
+
+        // ── QwenPaw-style tool result pruning thresholds ──
+        /** Recent steps (≤3): generous threshold before offloading to disk. */
+        private const val TOOL_SNIPPET_RECENT_BYTES = 30_000
+        /** Older steps: aggressive truncation, keep only snippet + file path. */
+        private const val TOOL_SNIPPET_OLD_BYTES = 2_000
+        /** Auto-clean tool result files older than this (days). */
+        private const val TOOL_RESULT_RETENTION_DAYS = 5L
+    }
+
+    /**
+     * QwenPaw-style tool result offloading.
+     * Long tool outputs (> threshold) are saved to disk; only a snippet stays in context.
+     * Two-tier: recent steps get higher threshold, older steps get aggressive pruning.
+     */
+    private fun pruneToolResult(commandLine: String, rawOutput: String, step: Int): String {
+        val threshold = if (step <= 3) TOOL_SNIPPET_RECENT_BYTES else TOOL_SNIPPET_OLD_BYTES
+        if (rawOutput.length <= threshold) return rawOutput
+
+        val fileUuid = java.util.UUID.randomUUID().toString().take(8)
+        val dir = java.io.File(com.mengpaw.kernel.DataPaths.toolResultsDir(agentName)).also { it.mkdirs() }
+        val file = java.io.File(dir, "$fileUuid.txt")
+        return try {
+            file.writeText(rawOutput)
+            val snippet = rawOutput.take(threshold / 2)
+            "$snippet\n... [完整输出 (${rawOutput.length} 字节): tool_results/$fileUuid.txt — 用 agent.read 查阅]"
+        } catch (_: Exception) {
+            rawOutput.take(threshold)
+        }
+    }
+
+    /** Clean up old tool result cache files. Called periodically. */
+    private fun cleanupOldToolResults() {
+        try {
+            val dir = java.io.File(com.mengpaw.kernel.DataPaths.toolResultsDir(agentName))
+            if (!dir.exists()) return
+            val cutoff = System.currentTimeMillis() - TOOL_RESULT_RETENTION_DAYS * 24 * 3600 * 1000L
+            dir.listFiles()?.forEach { f ->
+                if (f.lastModified() < cutoff) f.delete()
+            }
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Start a new conversation — resets the persistent session.
+     * Call when user taps "新会话" in UI.
+     * Old session remains in SessionManager for history browsing.
+     */
+    fun newConversation() {
+        conversationSessionId = null
+        consecutiveCompacts = 0
+        compactStuck = false
+        promptEngine.resetLoopDetection()
     }
 
     private var consecutiveCompacts = 0
@@ -205,6 +263,7 @@ class AgentEngine(
 
     fun setAgentIdentity(name: String, framework: String?, model: String) {
         agentName = name; this.framework = framework; this.modelName = model
+        sessionManager.agentName = name
         rebuildSystemPrompt()
     }
 
@@ -366,11 +425,30 @@ class AgentEngine(
         onStep: ((TraceStep) -> Unit)? = null
     ): String {
         ErrorCollector.init()
-        val session = sessionManager.createSession(task)
+
+        // ── Persistent conversation (Claude Code pattern) ──
+        // Reuse existing session across multiple user messages so the
+        // LLM sees full conversation history, not just the current message.
+        val session: Session
+        if (conversationSessionId != null) {
+            val existing = sessionManager.getSession(conversationSessionId!!)
+            if (existing != null) {
+                session = existing
+            } else {
+                // Session lost (e.g., process restart) — create new
+                session = sessionManager.createSession(task)
+                conversationSessionId = session.id
+            }
+        } else {
+            session = sessionManager.createSession(task)
+            conversationSessionId = session.id
+        }
+        sessionManager.agentName = agentName
         val context = ExecutionContext(sessionId = session.id, agentName = agentName)
         _state.value = AgentState.Running(task, 0, maxSteps)
         _output.value = ""
 
+        // Append user message to existing conversation history (Claude Code pattern)
         sessionManager.addMessage(session.id, Message("user", task))
         if (contextPrefix.isNotBlank()) {
             sessionManager.addMessage(session.id, Message("system", contextPrefix))
@@ -429,17 +507,13 @@ class AgentEngine(
                 if (parsed.isFinal) {
                     val answer = parsed.thought
                     sessionManager.addMessage(session.id, Message("assistant", answer))
-                    // Task boundary: tell LLM previous task is done, don't repeat old commands
-                    val boundaryMsg = when (agentLanguage) {
-                        PromptEngine.AgentLanguage.ENGLISH ->
-                            "[Previous task complete. New conversation begins. Do NOT repeat commands from above.]"
-                        PromptEngine.AgentLanguage.CHINESE ->
-                            "[上一任务已结束。以下为新对话。不要重复上文中的命令。]"
-                    }
-                    sessionManager.addMessage(session.id, Message("system", boundaryMsg))
+                    // No boundary message — the conversation continues naturally.
+                    // The LLM sees full history: previous FinalAnswer + new user message = context.
                     _state.value = AgentState.Finished(answer)
                     com.mengpaw.kernel.agent.AgentDocs.flushMidTermMemoryQueue()
                     recordTaskMemory(task, answer)
+                    // Periodic cleanup of old tool result cache files
+                    if (java.lang.Math.random() < 0.1) cleanupOldToolResults()
                     return answer
                 }
 
@@ -494,10 +568,12 @@ class AgentEngine(
                         onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, errorMsg))
                         return errorMsg
                     }
-                    val observation = if (result.success) result.output else "Error: ${result.error}"
-                    onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, observation))
+                    var rawObservation = if (result.success) result.output else "Error: ${result.error}"
+                    // ── QwenPaw-style tool result pruning ──
+                    rawObservation = pruneToolResult(commandLine, rawObservation, step + 1)
+                    onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, rawObservation))
 
-                    val observationEntry = "Command: $commandLine\nResult: $observation"
+                    val observationEntry = "Command: $commandLine\nResult: $rawObservation"
                     sessionManager.addMessage(session.id, Message("assistant", observationEntry))
                 } else {
                     onStep?.invoke(TraceStep(step + 1, parsed.thought, null, null))
@@ -879,7 +955,7 @@ FIX: <if FAIL, give the worker concrete, actionable instructions for the retry. 
     fun stop() { _state.value = AgentState.Idle; runningJob?.cancel(); runningJob = null }
 
     private suspend fun buildConversation(sessionId: String): List<Map<String, String>> {
-        sessionManager.compressIfNeeded(llmProvider)
+        sessionManager.compressIfNeeded(llmProvider, specificSessionId = sessionId)
         val history = sessionManager.getStructuredHistory(sessionId)
         val nonSystemHistory = if (history.isNotEmpty() && history[0]["role"] == "system") history.drop(1) else history
         return llmRequestBuilder.buildMessages(nonSystemHistory, injectCacheAnnotations = true)

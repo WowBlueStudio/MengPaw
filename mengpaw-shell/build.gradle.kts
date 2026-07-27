@@ -41,13 +41,7 @@ android {
 
     buildTypes {
         debug {
-            applicationVariants.all {
-                outputs.all {
-                    (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
-                        it.outputFileName = "mengpaw-shell-v${versionName}-debug.apk"
-                    }
-                }
-            }
+            // Debug: no minification, fast builds
         }
         release {
             isMinifyEnabled = true
@@ -56,10 +50,27 @@ android {
                 "proguard-rules.pro"
             )
             isShrinkResources = false
+        }
+    }
+
+    // Per-variant output naming. applicationVariants is resolved at android scope
+    // and must be called from inside a buildTypes block to avoid Kotlin DSL
+    // type-inference issues with Boolean-returning lambdas in AGP 8.x.
+    // We put it in the debug block but filter by buildType.name to cover all variants.
+    buildTypes {
+        debug {
             applicationVariants.all {
-                outputs.all {
-                    (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
-                        it.outputFileName = "mengpaw-shell-v${versionName}-release.apk"
+                if (buildType.name == "debug") {
+                    outputs.all {
+                        (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
+                            it.outputFileName = "mengpaw-shell-v${mengpawVersion}-debug.apk"
+                        }
+                    }
+                } else {
+                    outputs.all {
+                        (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
+                            it.outputFileName = "mengpaw-shell-v${mengpawVersion}-release.apk"
+                        }
                     }
                 }
             }

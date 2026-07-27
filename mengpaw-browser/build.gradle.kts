@@ -36,13 +36,7 @@ android {
 
     buildTypes {
         debug {
-            applicationVariants.all {
-                outputs.all {
-                    (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
-                        it.outputFileName = "mengpaw-browser-v${versionName}-debug.apk"
-                    }
-                }
-            }
+            // Debug: no minification, fast builds
         }
         release {
             isMinifyEnabled = true
@@ -51,10 +45,25 @@ android {
                 "proguard-rules.pro"
             )
             isShrinkResources = false
+        }
+    }
+
+    // Per-variant output naming. Must be inside buildTypes to avoid Kotlin DSL
+    // type-inference issues with Boolean-returning lambdas in AGP 8.x.
+    buildTypes {
+        debug {
             applicationVariants.all {
-                outputs.all {
-                    (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
-                        it.outputFileName = "mengpaw-browser-v${versionName}-release.apk"
+                if (buildType.name == "debug") {
+                    outputs.all {
+                        (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
+                            it.outputFileName = "mengpaw-browser-v${mengpawVersion}-debug.apk"
+                        }
+                    }
+                } else {
+                    outputs.all {
+                        (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
+                            it.outputFileName = "mengpaw-browser-v${mengpawVersion}-release.apk"
+                        }
                     }
                 }
             }

@@ -19,6 +19,8 @@ package com.mengpaw.kernel
  *   ├── 插件仓库/              ← plugin cache + downloaded JARs
  *   ├── Agent文档/             ← Agent document system
  *   │   └── {agent-id}/
+ *   │       ├── dialog/         ← 压缩归档 (YYYY-MM-DD.jsonl)
+ *   │       └── tool_results/   ← 工具结果外存
  *   └── mengpaw.sock           ← Unix Socket (Termux IPC)
  */
 object DataPaths {
@@ -52,6 +54,7 @@ object DataPaths {
     val RENDER_OUTPUTS get() = "$PLUGIN_CACHE/renders"
     val WORKFLOW_DIR get() = "$PLUGIN_CACHE/workflows"
     val WORKFLOW_OUTPUTS get() = "$PLUGIN_CACHE/workflows/outputs"
+    val SEARCH_OUTPUTS get() = "$PLUGIN_CACHE/search"
     val ERROR_LOG get() = "$BASE/错误报告"
     val ERROR_QUEUE get() = "$ERROR_LOG/queue"
 
@@ -61,6 +64,12 @@ object DataPaths {
     @Volatile
     var OUTPUT: String = "$BASE/输出"
         private set
+
+    // ── Conversation context archive (QwenPaw-style no-data-loss) ──
+    /** Archived raw dialog before compaction. Agent can read_file to recall. */
+    fun dialogArchiveDir(agentName: String) = "$AGENTS/$agentName/dialog"
+    /** Long tool outputs offloaded to disk. Agent references snippet + path. */
+    fun toolResultsDir(agentName: String) = "$AGENTS/$agentName/tool_results"
 
     fun initializeOutput(outputPath: String) {
         OUTPUT = outputPath

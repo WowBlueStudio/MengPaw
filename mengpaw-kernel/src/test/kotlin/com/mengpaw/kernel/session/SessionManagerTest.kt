@@ -73,7 +73,8 @@ class SessionManagerTest {
             manager.addMessage(session.id, Message("user", "message $i"))
         }
 
-        manager.compressIfNeeded(mockLlm)
+        val didCompress = manager.compressIfNeeded(mockLlm)
+        assertFalse(didCompress)
         val history = manager.getHistory(session.id)
         assertEquals(10, history.size)
         // All original messages should be intact
@@ -92,12 +93,14 @@ class SessionManagerTest {
             manager.addMessage(session.id, Message("user", "message $i"))
         }
 
-        manager.compressIfNeeded(mockLlm)
+        val didCompress = manager.compressIfNeeded(mockLlm)
+        assertTrue(didCompress)
         val history = manager.getHistory(session.id)
         // 1 system summary + 10 kept messages = 11
         assertEquals(11, history.size)
         assertEquals("system", history[0].role)
-        assertTrue(history[0].content.contains("[Compressed: previous 45 messages summarized as: summary of the conversation]"))
+        assertTrue(history[0].content.contains("[📋 对话摘要]"))
+        assertTrue(history[0].content.contains("summary of the conversation"))
         // Last 10 messages should be the most recent
         assertEquals("message 45", history[1].content)
         assertEquals("message 54", history[10].content)
@@ -117,7 +120,8 @@ class SessionManagerTest {
         repeat(55) { i ->
             manager.addMessage(session.id, Message("user", "message batch1 $i"))
         }
-        manager.compressIfNeeded(mockLlm)
+        val didCompress1 = manager.compressIfNeeded(mockLlm)
+        assertTrue(didCompress1)
         assertEquals(1, callCount)
         var history = manager.getHistory(session.id)
         assertEquals(11, history.size)
@@ -128,11 +132,13 @@ class SessionManagerTest {
         }
         assertEquals(56, manager.getHistory(session.id).size)
 
-        manager.compressIfNeeded(mockLlm)
+        val didCompress2 = manager.compressIfNeeded(mockLlm)
+        assertTrue(didCompress2)
         assertEquals(2, callCount)
         history = manager.getHistory(session.id)
         assertEquals(11, history.size)
         // The first message is the newest compression summary
+        assertTrue(history[0].content.contains("[📋 对话摘要]"))
         assertTrue(history[0].content.contains("summary iteration 2"))
         // The last 10 messages are the most recent additions
         assertEquals("message batch2 44", history[10].content)
@@ -143,7 +149,8 @@ class SessionManagerTest {
         val manager = SessionManager()
         val mockLlm = MockLlmProvider { "should not be called" }
         // No session created, should not throw
-        manager.compressIfNeeded(mockLlm)
+        val didCompress = manager.compressIfNeeded(mockLlm)
+        assertFalse(didCompress)
     }
 
     // Mock LlmProvider for testing

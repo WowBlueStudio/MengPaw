@@ -1,0 +1,1 @@
+{"id":"browser-search-plugin","name":"搜索分析","version":"0.2.0","type":"native","author":"MengPaw","description":"搜索结果清洗+MD生成：提取→去噪→生成正文（识别文本块/表格），支持网页直读 fetch、历史输出管理。","minCoreVersion":"0.8.0","commands":["search.extract","search.summary","search.engines","search.clean","search.md","search.fetch","search.outputs","search.clear"]}
