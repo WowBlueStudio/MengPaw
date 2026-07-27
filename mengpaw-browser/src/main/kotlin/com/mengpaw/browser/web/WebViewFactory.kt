@@ -17,6 +17,33 @@ import com.mengpaw.browser.plugin.BrowserPluginRegistry
 import com.mengpaw.browser.ui.theme.BrowserThemeConfig
 import com.mengpaw.browser.util.isAdRequest
 
+// ── Block non-user-initiated popups ─────────────────────────────
+
+// ── App-banner hiding CSS ───────────────────────────────────────
+
+private val HIDE_APP_BANNER_JS = """
+(function(){if(window.__mpHideBanner)return;window.__mpHideBanner=true;
+var s=document.createElement('style');s.id='mp-hide-banner';
+s.textContent=[
+'#smartbanner,.smartbanner,[class*=app-banner],[class*=app_banner]',
+'[class*=open-app],[class*=openApp],[class*=OpenInApp],[class*=open_in_app]',
+'[class*=app-download],[class*=appDownload],[class*=mobile-app]',
+'[class*=native-app],.app-install,.appInstallBanner',
+'[id*=smartbanner],[id*=app-banner],[id*=app_banner]',
+'.weibo-app-banner,.open-in-app,.openAppBtn',
+'.downloadApp,.download-app,.download_app',
+'.app-promotion,.appPromotion,.app-guide,.appGuide',
+'[class*=float-app],[class*=app-float],[class*=floatBtn]',
+'[class*=bottom-bar],[class*=bottomBar],[class*=openIn]',
+'.OpenInAppButton,.Button--openInApp,.AppHeader',
+'.MobileAppHeader__button,.sohu-app-bar,.appBtn',
+'.open-app-btn,.open-in-app-btn,.go-app-btn',
+'[class*=goToApp],[class*=launchApp],[class*=appLink]',
+'[class*=app-guide-bottom],[class*=bottom-app]'
+].join(',')+'{display:none!important}';
+document.head.appendChild(s)})();
+""".trimIndent()
+
 // ── WebView Factory ──────────────────────────────────────────────
 
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
@@ -131,6 +158,8 @@ fun createWebView(
             }
         }
         override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+            // Only replace content for main frame errors, not subresources (images/scripts)
+            if (request?.isForMainFrame != true) return
             val failingUrl = request?.url?.toString() ?: view?.url ?: ""
             val desc = error?.description?.toString() ?: "未知错误"
             val html = "<html><body style='padding:40px;font-family:sans-serif;text-align:center'>" +
@@ -169,6 +198,8 @@ fun createWebView(
                 BrowserPluginRegistry.injectStyles(u)?.let { css ->
                     evaluateJavascript("(function(){var s=document.createElement('style');s.textContent='$css';document.head.appendChild(s);})()", null)
                 }
+                // Hide app-banner elements
+                evaluateJavascript(HIDE_APP_BANNER_JS, null)
                 // Auto-inject __mp bridge for faster Agent commands (if enabled)
                 if (autoInject) {
                     evaluateJavascript("(function(){if(!window.__mp||!window.__mp._v){" +
@@ -204,7 +235,7 @@ fun createWebView(
         override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
             request?.let { BrowserPluginRegistry.shouldIntercept(it)?.let { return it } }
             if (adBlock && request?.url != null && isAdRequest(request.url.toString())) {
-                return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
+                return WebResourceResponse("text/plain", "utf-8", null)
             }
             return super.shouldInterceptRequest(view, request)
         }

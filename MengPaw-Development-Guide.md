@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.15.3 | **更新**: 2026-07-27 | **架构**: 微内核 + AgentRuntime + 25 插件(含 Root/记忆孪生 v0.2) + 三轨记忆 + 跨平台可移植性策略 + 用户即开发者生态飞轮 + MCP 通用设备语言 + 守护态路线图 + 浏览器 v0.6.1
+> **版本**: 0.16.0 | **更新**: 2026-07-27 | **架构**: 微内核 + AgentRuntime + 25 插件(含 Root/记忆孪生 v0.2) + 三轨记忆 + 跨平台可移植性策略 + 用户即开发者生态飞轮 + MCP 通用设备语言 + 守护态路线图 + 浏览器 v0.7.0
 
 ---
 
@@ -117,7 +117,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | mengpaw-core | Android Library | 6 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 5 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
 | mengpaw-shell | APK | 25 | 0.9.1 (vc=91) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
-| mengpaw-browser | APK | 12 | 0.6.1 (vc=9) | 独立浏览器 + 45 Agent命令 + 暗色模式开关 + 向后导航关闭标签 + Tab键切换引擎 + SVG引擎图标 + file://支持 + onReceivedError + WebView版本显示 + 架构拆分27文件 |
+| mengpaw-browser | APK | 12 | 0.7.0 (vc=10) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 27文件架构 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
 
@@ -333,23 +333,23 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 - **UI 升级**: 消息区自适应宽度 (平板 80%/手机 95%) + 思考完成自动定位 + 侧栏真实头像 + 框架通讯录持久化
 - **Markdown 增强**: 新增 Heading 块 + Agent 消息非等宽字体
 
-### 3.4 mengpaw-browser（独立浏览器，27 文件）
+### 3.4 mengpaw-browser（独立浏览器，30+ 文件）
 
 | 目录/文件 | 职责 |
 |-----------|------|
-| `BrowserActivity.kt` | 薄 Activity (741行) — 生命周期、MCP、返回键 |
-| `data/` (3 文件) | BrowserTypes, BrowserPrefs, HistoryStore |
+| `BrowserActivity.kt` | 薄 Activity — 生命周期、MCP、返回键、onTrimMemory |
+| `data/` (3 文件) | BrowserTypes, BrowserPrefs (含书签+会话持久化), HistoryStore |
 | `service/GoogleTranslate.kt` | 免费翻译客户端 |
-| `web/WebViewFactory.kt` | createWebView 工厂函数 |
+| `web/WebViewFactory.kt` | WebView 工厂 + App横幅CSS屏蔽 + onReceivedError |
 | `util/` (3 文件) | AdBlocker, SmartNavigate, DownloadUtil |
-| `ui/` (10 文件) | 7 弹窗 + FindBar + ReaderMode + Icons |
-| `ui/components/` (2 文件) | TabChip, SearchEngineLogo (SVG) |
+| `ui/` (12 文件) | 9 弹窗 + FindBar + ReaderMode + Icons |
+| `ui/components/` (2 文件) | TabChip (标签样式), SearchEngineLogo (SVG) |
 | `ui/theme/BrowserThemeConfig.kt` | Agent 主题配置 |
 | `bridge/BrowserBridge.kt` | Java↔JS 双向桥 |
 | `plugin/` (3 文件) | BuiltinBrowserPlugin, BrowserPlugin, BrowserPluginRegistry |
-| `plugin/BrowserPluginRegistry.kt` | 插件注册表 |
-| `ui/BrowserFindBar.kt` | **NEW v0.5.0** 页面查找浮条 (WebView findAllAsync) |
-| `ui/BrowserReaderMode.kt` | **NEW v0.5.0** 阅读模式 (JS 提取主内容 + 大字号渲染) |
+
+**v0.7.0 新特性**: 5标签预渲染(alpha可见性切换) + 会话持久化(杀进程恢复) + 收藏夹 +
+App横幅CSS屏蔽(30+选择器) + 平板标签栏白色主题 + 暗色模式自适应 + onTrimMemory内存保护
 
 ### 3.5 插件模块（23 个，plugins/ 目录）
 
