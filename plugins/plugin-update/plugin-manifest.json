@@ -1,0 +1,1 @@
+{"id":"update-plugin","name":"自动更新","version":"0.2.0","type":"native","author":"MengPaw","description":"WiFi 环境自动检测更新，可选自动下载安装。GitHub→Gitee→ghproxy 三级回退。","minCoreVersion":"0.8.0","permissions":["INTERNET","ACCESS_NETWORK_STATE","REQUEST_INSTALL_PACKAGES"],"commands":["update.check","update.download","update.install","update.auto"]}

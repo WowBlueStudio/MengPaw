@@ -15,10 +15,11 @@ val generatedDir = layout.buildDirectory.dir("generated/version")
 
 sourceSets["main"].kotlin.srcDir(generatedDir)
 
-tasks.register("generateVersion") {
+val genVersionTask = tasks.register("generateVersion") {
+    // Use Provider-based inputs for configuration-cache compatibility
+    val versionProvider: Provider<String> = providers.gradleProperty("mengpaw.version").orElse("0.0.0")
     val outputDir = layout.buildDirectory.dir("generated/version/com/mengpaw/kernel")
-    // Declare inputs so Gradle detects when version changes
-    inputs.property("mengpawVersion", mengpawVersion)
+    inputs.property("mengpawVersion", versionProvider)
     outputs.dir(outputDir)
     doLast {
         val dir = outputDir.get().asFile
@@ -28,13 +29,13 @@ tasks.register("generateVersion") {
             package com.mengpaw.kernel
 
             object MengPawVersion {
-                const val FRAMEWORK: String = "$mengpawVersion"
+                const val FRAMEWORK: String = "${versionProvider.get()}"
             }
         """.trimIndent())
     }
 }
 
-tasks.named("compileKotlin") { dependsOn("generateVersion") }
+tasks.named("compileKotlin") { dependsOn(genVersionTask) }
 
 dependencies {
     // Kotlin

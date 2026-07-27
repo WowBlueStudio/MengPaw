@@ -1168,6 +1168,9 @@ class AgentViewModel : ViewModel() {
     /** Auto-save current session and start a new one. */
     fun newSession() {
         stopAgent() // Stop running agent before clearing messages
+        // v0.17: Reset kernel persistent conversation session so the engine
+        // doesn't leak old conversation history into the new session.
+        activeEngine()?.newConversation()
         val msgs = activeSession().messages.value.filter { it !is ChatMessageUi.System }
         if (msgs.isNotEmpty()) {
             // Auto-indexed title: 会话 #N per agent

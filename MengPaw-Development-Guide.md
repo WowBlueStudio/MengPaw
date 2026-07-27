@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.16.0 | **更新**: 2026-07-27 | **架构**: 微内核(50文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 插件双语同义词表 + 6项性能优化 + 浏览器 v0.7.0
+> **版本**: 0.17.0 | **更新**: 2026-07-27 | **架构**: 微内核(54文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1
 
 ---
 
@@ -56,7 +56,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | 插件同级 | 内置功能 (`sys`) 与外挂插件同等地位，均实现 `Plugin` 接口，均只依赖 kernel |
 | 零 Python | 纯 Kotlin，无 Python 运行时 |
 | 多通道 | AIDL（系统集成）/ Unix Socket（Termux）/ HTTP（调试） |
-| 独立浏览器 | `mengpaw-browser` v0.6.0，Intent 互通，45 条浏览器操控命令 |
+| 独立浏览器 | `mengpaw-browser` v0.7.1，Intent 互通，45 条浏览器操控命令 |
 | 多模型 | 12 LLM Provider — OpenAI / DeepSeek / Kimi / GLM / Qwen / Grok / 火山引擎 / OpenModel / Self-Hosted / 自定义 |
 | 插件市场 | GitHub Pages 托管 `plugins.json`，ETag 缓存，SHA256 校验 |
 | 记忆孪生 | v0.15.0 — 跨设备 Agent 记忆同步 + 哈希链账本 + 短码配对 + 心跳保活 + QoS 自适应 + 手动 IP 发现 (plugin-memory-twin v0.2) |
@@ -113,11 +113,11 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 | 模块 | 类型 | 源文件 | 版本 | 说明 |
 |------|------|--------|------|------|
-| mengpaw-kernel | JVM Library | 50 | 0.16.0 | 微内核：纯 Kotlin，零 Android 依赖 |
+| mengpaw-kernel | JVM Library | 54 | 0.17.0 | 微内核：纯 Kotlin，零 Android 依赖 |
 | mengpaw-core | Android Library | 6 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 5 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
 | mengpaw-shell | APK | 25 | 0.9.1 (vc=91) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
-| mengpaw-browser | APK | 12 | 0.7.0 (vc=10) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 27文件架构 |
+| mengpaw-browser | APK | 12 | 0.7.1 (vc=71) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 27文件架构 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
 
@@ -251,7 +251,7 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|
-| `cli/` | 4 | CliInterpreter, CommandRegistry, CommandExecutor, Pipeline |
+| `cli/` | 6 | CliInterpreter, CommandRegistry, CommandExecutor, Pipeline, CommandSearch (BM25), CliAudit |
 | `llm/` | 6 | AdaptiveLlmProvider, LlmProvider, LlmRequestBuilder, PromptEngine, RemoteApi, TranslateMiddleware |
 | `session/` | 3 | SessionManager, History, Checkpoint |
 | `plugin/` | 4 | Plugin, PluginManager, PluginExecutor, PluginMarketplaceClient |
@@ -264,8 +264,9 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 | `extension/` | 1 | ManifestParser |
 | `trigger/` | 1 | TriggerEngine |
 | `namespace/` | 3 | SelfExecutor, ScreenshotManager, NotifyBus |
-| 根 | 3 | AgentEngine, DataPaths, KernelLog |
+| 根 | 4 | AgentEngine, DataPaths, KernelLog, KernelDispatchers |
 
+> **v0.17.0 新增**: `AgentEngine` 持久会话 (Claude Code 模式) — 多次 `run()` 复用同一 Session，LLM 看到完整对话历史；QwenPaw 风格结构化压缩 (Goal/Progress/KeyDecisions/NextSteps/CriticalContext) + 对话归档 (`dialog/YYYY-MM-DD.jsonl`) 保证零数据丢失；工具结果双阈值裁剪 (≤3步 30KB / 更早 2KB) + 文件外存。`SessionManager` 结构化摘要 + `agentName` 绑定。`DataPaths` 新增 `dialogArchiveDir` / `toolResultsDir`。
 > **v0.6.1 新增**: `GoalSession.kt` (GoalSession + RubricEvaluator + MissionSubtask), `NotifyBus.kt` (Agent→User 推送总线), SelfExecutor +5 命令
 
 ### 3.2 mengpaw-core（Android 适配层，6 文件）
@@ -975,6 +976,20 @@ MengPaw方案：
 - Android SDK 35 + JDK 17 + Gradle 8.12
 - AGP 8.7.3, Kotlin 2.0.21, Compose BOM 2024.12.01
 
+### 9.1.1 编译性能优化 (v0.17.0)
+
+| 优化项 | 说明 |
+|--------|------|
+| `org.gradle.caching=true` | 本地构建缓存，增量编译 ~30-50% 加速 |
+| `org.gradle.configuration-cache=true` | 配置阶段缓存，跳过 30 模块重复解析 |
+| `org.gradle.jvmargs=-Xmx4096m -XX:+UseParallelGC` | 30 模块需 4GB+ 堆，ParallelGC 比 G1 更适合构建 |
+| `android.enableJetifier=false` | 全量 AndroidX，Jetifier 零开销 |
+| `android.nonTransitiveRClass=true` | R 类非传递，减少编译中间产物 |
+| `kotlin.daemon.jvmargs=-Xmx2048m` | Kotlin 编译独立内存池 |
+| 统一 Android 配置 | `build.gradle.kts` 根节点 `subprojects` 统一 compileSdk/minSdk/compileOptions，25 插件模块无需重复声明 |
+| Release 资源压缩 | Shell + Browser 均启用 `isShrinkResources=true` |
+| 版本联动 | Browser versionCode 跟随 `mengpaw.version` 公式计算 |
+
 ### 9.2 主要依赖
 
 | 依赖 | 版本 | 位置 |
@@ -1026,7 +1041,7 @@ MengPaw方案：
 | `mengpaw-kernel/build.gradle.kts` | JVM 模块, kotlinx-serialization, ktor, coroutines-core |
 | `mengpaw-core/build.gradle.kts` | Android Library, 依赖 kernel, security-crypto |
 | `mengpaw-shell/build.gradle.kts` | Compose, material-icons-extended, work-runtime, 4 捆绑插件, v0.15.2 |
-| `mengpaw-browser/build.gradle.kts` | material-icons-core (轻量), v0.6.0 |
+| `mengpaw-browser/build.gradle.kts` | material-icons-core (轻量), version follows mengpaw.version |
 | `mengpaw-shell/.../AndroidManifest.xml` | 6 权限, MainActivity, ShellService (foregroundServiceType=dataSync) |
 | `mengpaw-browser/.../AndroidManifest.xml` | 2 权限, BrowserActivity (3 intent-filter) |
 
@@ -1085,6 +1100,7 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.17.0** | 2026-07-27 | **持久会话 + 结构化压缩 + 工具裁剪** — 四框架对话上下文融合: A) Claude Code 模式: AgentEngine.conversationSessionId 持久复用 Session, LLM 每次请求看到完整历史而非孤立消息, 移除 "[上一任务已结束]" 上下文切割边界 B) QwenPaw 模式: SessionManager 五字段结构化摘要(Goal/Progress/KeyDecisions/NextSteps/CriticalContext), 压缩前归档原始消息到 dialog/YYYY-MM-DD.jsonl 零数据丢失 C) QwenPaw 模式: pruneToolResult 双阈值(≤3步30KB/>3步2KB), 完整输出存 tool_results/{uuid}.txt, 5天清理 D) OpenClaw 模式: engine.newConversation() 重置持久会话, UI newSession 联动 E) DataPaths +dialogArchiveDir/+toolResultsDir, SessionManager +agentName/+specificSessionId |
 | **0.16.0** | 2026-07-27 | **三层自适应调度 + BM25 命令检索 + 6 项性能优化** — A: 循环模式重构 (QwenPaw 风格默认 REACT → 自动检测升级 GOAL/MISSION, Claude Code 风格复杂度评分, UI AssistChip 自动标注) B: BM25 命令搜索引擎 (self.search, ~50条内置命令双语同义词表, μs 级检索, bigram 分词, 插件激活/卸载自动联动) C: 插件关键词脚手架 (CommandKeywords 数据类, plugin.create 模板内置, plugin.audit 检查, plugin.keywords 查看) D: 6 项性能优化 (Prompt 缓存按文件粒度失效/中记忆批量合并/会话增量持久化/启动懒加载/协程池分离/GC 压力优化) E: 内置插件版本号清空 (随壳更新) |
 | **0.15.2** | 2026-07-26 | **6 审计问题修复** — 缓存失效(路径匹配) + 缓存key(检查前置) + Plan进度(中英双语边界) + 错误消息(LlmApiException) + 容器高度(Step编号/观察缺失) + 提示词(恢复插件发现示例) + MCP插件解耦BrowserBridge + 超时120s |
 | **0.15.0** | 2026-07-25 | **记忆孪生全链路重构 + 记忆三轨制** — A: 三层十二问审计 → 14 项全修 (心跳保活/QoS自适应/手动IP/配对指引/ACP就绪轮询/syncWithPeer返真值/命令命名空间修复/解绑UI/错误诊断/原子写入补全) B: 记忆架构重构 → 三轨制: 长期记忆(memory/memory.md, 仅三种来源, 注入系统提示词) + 中期记忆(memory/memory_{date}.md, 按日分片, 不注入提示词, 梦境按日压缩) + 项目记忆(memory/project_{name}_memory.md, 里程碑/闭环时总结, 可复用方法论) + agent.memory.keep/record/mid/project 命令族 |
@@ -1151,4 +1167,4 @@ ShellService.start(this)   // startForeground + WakeLock
 
 ---
 
-*文档结束 · 最后更新: 2026-07-26 (v0.15.2) · 本版新增: 碎片哲学 + 跨平台策略 + MCP 协议独立性 + 用户即开发者 + 守护态路线图*
+*文档结束 · 最后更新: 2026-07-27 (v0.17.0) · 本版新增: 四框架对话上下文融合 (Claude Code 持久会话 + QwenPaw 结构化压缩归档 + 工具结果裁剪)*
