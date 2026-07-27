@@ -65,4 +65,15 @@ class BrowserPrefs(ctx: Context) {
     var darkMode: Boolean
         get() = p.getBoolean("dark_mode", false)
         set(v) = p.edit().putBoolean("dark_mode", v).apply()
+
+    // ── Bookmarks ──
+    var bookmarks: List<String>
+        get() = (p.getString("bookmarks", "") ?: "").split(",").filter { it.isNotBlank() }
+        set(v) = p.edit().putString("bookmarks", v.joinToString(",")).apply()
+
+    fun addBookmark(url: String) { val list = bookmarks.toMutableList(); if (url !in list) { list.add(0, url); bookmarks = list } }
+
+    fun removeBookmark(url: String) { bookmarks = bookmarks.filter { it != url } }
+
+    fun isBookmarked(url: String): Boolean = url in bookmarks
 }
