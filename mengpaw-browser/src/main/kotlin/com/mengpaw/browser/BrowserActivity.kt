@@ -26,6 +26,7 @@ import android.view.KeyEvent
 import com.mengpaw.core.AndroidLogger
 import com.mengpaw.core.DataPathsInitializer
 import com.mengpaw.kernel.KernelLog
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
@@ -70,6 +71,7 @@ import com.mengpaw.browser.util.smartNavigate
 import com.mengpaw.browser.web.createWebView
 import com.mengpaw.browser.plugin.BrowserPluginRegistry
 import com.mengpaw.browser.ui.BrowserAgentSettingsDialog
+import com.mengpaw.browser.ui.BrowserBookmarkDialog
 import com.mengpaw.browser.ui.BrowserFindBar
 import com.mengpaw.browser.ui.BrowserHistoryDialog
 import com.mengpaw.browser.ui.BrowserImagePickerDialog
@@ -77,6 +79,7 @@ import com.mengpaw.browser.ui.BrowserMarkdownViewerDialog
 import com.mengpaw.browser.ui.BrowserPasswordDialog
 import com.mengpaw.browser.ui.BrowserReaderMode
 import com.mengpaw.browser.ui.BrowserSettingsDialog
+import com.mengpaw.browser.ui.BrowserTabDialog
 import com.mengpaw.browser.ui.BrowserTranslateDialog
 import com.mengpaw.browser.ui.components.SearchEngineLogo
 import com.mengpaw.browser.ui.components.TabChip
@@ -253,6 +256,7 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
     var showReader by remember { mutableStateOf(false) }
     var showMdViewer by remember { mutableStateOf(false) }
     var mdContent by remember { mutableStateOf("") }
+    var showBookmarks by remember { mutableStateOf(false) }
     var historyEnabled by remember { mutableStateOf(prefs.historyEnabled) }
 
     // Auto-open Markdown viewer if launched with .md file
@@ -387,16 +391,27 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                                     }
                                     Spacer(Modifier.width(4.dp))
                                 }
-                                // Tab count badge
-                                IconButton(onClick = { showTabs = !showTabs }, modifier = Modifier.size(40.dp)) {
-                                    BadgedBox(badge = { Badge { Text("${tabs.size}") } }) {
-                                        @Suppress("DEPRECATION")
-                                        Icon(Icons.Default.Favorite, "标签页 (${tabs.size})", tint = ThemeColors.brand)
+                                // Tab count badge (phone only, hidden when 1 tab)
+                                if (!isWide) {
+                                    IconButton(onClick = { showTabs = !showTabs }, modifier = Modifier.size(40.dp)) {
+                                        if (tabs.size > 1) {
+                                            BadgedBox(badge = { Badge(containerColor = ThemeColors.textSecondary) { Text("${tabs.size}") } }) {
+                                                Icon(Icons.Default.List, "标签页", tint = ThemeColors.brand)
+                                            }
+                                        } else {
+                                            Icon(Icons.Default.List, "标签页", tint = ThemeColors.brand)
+                                        }
                                     }
                                 }
                             }
                         },
                         actions = {
+                            // Bookmark star
+                            val isBm = prefs.isBookmarked(activeTab.url)
+                            IconButton(onClick = { showBookmarks = true }, modifier = Modifier.size(36.dp)) {
+                                @Suppress("DEPRECATION")
+                                Icon(Icons.Default.Star, "收藏夹", tint = if (isBm) ThemeColors.brand else ThemeColors.textSecondary)
+                            }
                             // Menu button with dropdown
                             var menuExpanded by remember { mutableStateOf(false) }
                             Box {
@@ -502,8 +517,10 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
             // ── Desktop tab bar ──
             if (isWide && !isColdStart) {
                 Surface(tonalElevation = 1.dp, color = ThemeColors.bgCardHigh) {
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column {
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 6.dp, end = 6.dp, top = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        var tabMenuTabId by remember { mutableStateOf<Int?>(null) }
                         tabs.forEach { tab ->
                             TabChip(
                                 label = tab.title.ifBlank { "新标签页" },
@@ -514,8 +531,24 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                                     webViewMap.remove(tab.id)?.destroy()
                                     tabs = tabs.filter { it.id != tab.id }
                                     if (activeTabId == tab.id) activeTabId = tabs.first().id
-                                }} else null
+                                }} else null,
+                                onMenu = { tabMenuTabId = tab.id }
                             )
+                            // Per-tab dropdown menu (no emoji)
+                            DropdownMenu(expanded = tabMenuTabId == tab.id, onDismissRequest = { tabMenuTabId = null }) {
+                                DropdownMenuItem(text = { Text("静音标签") }, onClick = { tabMenuTabId = null })
+                                DropdownMenuItem(text = { Text("推送给智能体") }, onClick = {
+                                    val intent = Intent("com.mengpaw.action.OPEN_URL").apply {
+                                        setClassName("com.mengpaw.shell", "com.mengpaw.shell.MainActivity")
+                                        putExtra("url", tab.url)
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                    }
+                                    try { ctx.startActivity(intent) } catch (_: Exception) { }
+                                    tabMenuTabId = null
+                                })
+                                DropdownMenuItem(text = { Text("强制刷新") }, onClick = { webViewMap[tab.id]?.reload(); tabMenuTabId = null })
+                                DropdownMenuItem(text = { Text("添加收藏") }, onClick = { prefs.addBookmark(tab.url); tabMenuTabId = null })
+                            }
                         }
                         if (tabs.size < maxTabs) {
                             IconButton(onClick = {
@@ -523,6 +556,10 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                                 tabs = tabs + TabState(id = newId); activeTabId = newId; isColdStart = true
                             }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Add, "新标签", tint = ThemeColors.textSecondary, modifier = Modifier.size(18.dp)) }
                         }
+                    }
+                    // Seam line below tabs — same color as active tab, bridges to webpage
+                    val seamColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF1A1A1A) else Color.White
+                    Box(Modifier.fillMaxWidth().height(2.dp).background(seamColor))
                     }
                 }
             }
@@ -617,20 +654,9 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                     Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Top spacer — pushes brand + search toward center
+                    // Top spacer
                     Box(Modifier.weight(1f), contentAlignment = Alignment.BottomCenter) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            // Brand logo area
-                            Surface(
-                                modifier = Modifier.size(if (isWide) 80.dp else 64.dp),
-                                shape = RoundedCornerShape(20.dp),
-                                color = ThemeColors.brand.copy(alpha = 0.1f)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text("🌐", style = MaterialTheme.typography.headlineLarge.copy(fontSize = if (isWide) 36.sp else 28.sp))
-                                }
-                            }
-                            Spacer(Modifier.height(20.dp))
                             Text(
                                 "MengPaw 浏览器",
                                 style = MaterialTheme.typography.headlineSmall,
@@ -677,11 +703,11 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                                         searchEngine = engines.getOrElse((idx + 1) % engines.size) { engines.first() }
                                         prefs.setDefaultEngine(searchEngine)
                                     }
-                                }}) { SearchEngineLogo(searchEngine, size = 28) }
+                                }}) { Box(Modifier.offset(x = 2.dp)) { SearchEngineLogo(searchEngine, size = 28) } }
                             },
                             trailingIcon = {
                                 if (searchQuery.isNotEmpty())
-                                    FilledIconButton(onClick = { navigate(searchQuery) }, modifier = Modifier.size(36.dp), shape = CircleShape,
+                                    FilledIconButton(onClick = { navigate(searchQuery) }, modifier = Modifier.size(36.dp).offset(x = (-2).dp), shape = CircleShape,
                                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = ThemeColors.brand)
                                     ) { Icon(Icons.Default.ArrowForward, "→", tint = Color.White, modifier = Modifier.size(18.dp)) }
                             },
@@ -699,31 +725,50 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                             )
                         )
                     }
-                    // Shortcuts row
-                    Spacer(Modifier.height(24.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.fillMaxWidth(if (isWide) 0.55f else 0.88f)
-                    ) {
-                        val shortcuts = listOf(
-                            "GitHub" to "https://github.com",
-                            "百度" to "https://www.baidu.com",
-                            "Google" to "https://www.google.com",
-                            "Bing" to "https://www.bing.com"
-                        )
-                        shortcuts.forEach { (label, url) ->
-                            Surface(
-                                modifier = Modifier.weight(1f).clickable { navigate(url) },
-                                shape = RoundedCornerShape(10.dp),
-                                color = ThemeColors.bgCardHigh
-                            ) {
-                                Text(
-                                    label.take(6),
-                                    modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    fontSize = 11.sp,
-                                    color = ThemeColors.textSecondary
-                                )
+                    // Dynamic bookmark bar
+                    val bmList = prefs.bookmarks
+                    if (bmList.isNotEmpty()) {
+                        Spacer(Modifier.height(24.dp))
+                        BoxWithConstraints(
+                            modifier = Modifier.fillMaxWidth(if (isWide) 0.55f else 0.88f)
+                        ) {
+                            val itemWidth = 72.dp
+                            val maxItems = (maxWidth / itemWidth).toInt().coerceAtLeast(1).coerceAtMost(6)
+                            val showOverflow = bmList.size > maxItems
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                bmList.take(if (showOverflow) maxItems - 1 else maxItems).forEach { url ->
+                                    val domain = url.substringAfter("://").substringBefore("/").take(10)
+                                    Surface(
+                                        modifier = Modifier.weight(1f).clickable { navigate(url) },
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = ThemeColors.bgCardHigh
+                                    ) {
+                                        Text(
+                                            domain,
+                                            modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                            fontSize = 11.sp,
+                                            color = ThemeColors.textSecondary,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                                if (showOverflow) {
+                                    Surface(
+                                        modifier = Modifier.weight(1f).clickable { showBookmarks = true },
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = ThemeColors.brand.copy(alpha = 0.1f)
+                                    ) {
+                                        Text(
+                                            "…",
+                                            modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                            fontSize = 14.sp,
+                                            color = ThemeColors.brand,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -772,6 +817,39 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                 pageTitle = activeTab.title.ifBlank { activeTab.url },
                 visible = showReader,
                 onDismiss = { showReader = false }
+            )
+
+            // ── Tab dialog (phone) ──
+            if (!isWide) {
+                BrowserTabDialog(
+                    visible = showTabs,
+                    onDismiss = { showTabs = false },
+                    tabs = tabs,
+                    activeTabId = activeTabId,
+                    webViewMap = webViewMap,
+                    prefs = prefs,
+                    onTabSelected = { id, cold -> activeTabId = id; isColdStart = cold; showTabs = false },
+                    onTabClose = { id ->
+                        webViewMap.remove(id)?.destroy()
+                        tabs = tabs.filter { it.id != id }
+                        if (tabs.isEmpty()) { tabs = listOf(TabState(id = 0)); activeTabId = 0; isColdStart = true; showTabs = false }
+                        else if (activeTabId == id) activeTabId = tabs.first().id
+                    },
+                    onNewTab = {
+                        val newId = (tabs.maxOfOrNull { it.id } ?: 0) + 1
+                        tabs = tabs + TabState(id = newId); activeTabId = newId; isColdStart = true
+                    },
+                    maxTabs = maxTabs
+                )
+            }
+
+            // ── Bookmarks ──
+            BrowserBookmarkDialog(
+                visible = showBookmarks,
+                onDismiss = { showBookmarks = false },
+                prefs = prefs,
+                currentUrl = activeTab.url,
+                onNavigate = { navigate(it) }
             )
 
             // ── Markdown viewer ──
