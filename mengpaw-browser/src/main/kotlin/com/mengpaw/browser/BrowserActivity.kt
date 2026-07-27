@@ -222,6 +222,26 @@ class BrowserActivity : ComponentActivity() {
         webViewMapRef.clear()
         try { android.webkit.CookieManager.getInstance().flush() } catch (_: Exception) { }
     }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        when (level) {
+            android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE -> {
+                // Pause all non-visible WebView rendering
+                webViewMapRef.values.forEach { wv ->
+                    try { wv.onPause() } catch (_: Exception) {}
+                }
+            }
+            android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> {
+                // Destroy up to 3 least-recently-used inactive WebViews
+                var destroyed = 0
+                webViewMapRef.entries.toList().forEach { (_, wv) ->
+                    if (destroyed >= 3) return@forEach
+                    try { wv.stopLoading(); wv.destroy(); destroyed++ } catch (_: Exception) {}
+                }
+            }
+        }
+    }
 }
 
 // ── Main Browser App ──────────────────────────────────────────────
@@ -233,15 +253,40 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
     val ctx = LocalContext.current
     val prefs = remember { BrowserPrefs(ctx) }
     val isWide = LocalConfiguration.current.screenWidthDp >= 600
-    val maxTabs = 4
+    val maxTabs = 5
 
     // Scroll-aware toolbar animation
     var scrollOffset by remember { mutableStateOf(0) }
     val showToolbar = isWide || scrollOffset < 200
 
-    var tabs by remember { mutableStateOf(listOf(TabState(id = 0, url = initialUrl ?: ""))) }
-    var activeTabId by remember { mutableStateOf(0) }
-    var isColdStart by remember { mutableStateOf(initialUrl == null) }
+    // Restore tabs from previous session, or start fresh
+    var tabs by remember {
+        val savedUrls = prefs.savedTabUrls
+        val savedActive = prefs.savedActiveTabId
+        if (initialUrl == null && savedUrls.isNotEmpty()) {
+            mutableStateOf(savedUrls.mapIndexed { i, url ->
+                TabState(id = i, url = url)
+            })
+        } else {
+            mutableStateOf(listOf(TabState(id = 0, url = initialUrl ?: "")))
+        }
+    }
+    var activeTabId by remember {
+        val savedUrls = prefs.savedTabUrls
+        val savedActive = prefs.savedActiveTabId
+        if (initialUrl == null && savedUrls.isNotEmpty() && savedActive in savedUrls.indices) {
+            mutableStateOf(savedActive)
+        } else {
+            mutableStateOf(0)
+        }
+    }
+    var isColdStart by remember { mutableStateOf(initialUrl == null && prefs.savedTabUrls.isEmpty()) }
+
+    // Persist tab session on every change
+    LaunchedEffect(tabs.map { it.url }, activeTabId) {
+        prefs.savedTabUrls = tabs.filter { it.url.isNotBlank() }.map { it.url }
+        prefs.savedActiveTabId = activeTabId
+    }
     var showUrlBar by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(showToolbar) }
     var searchQuery by remember { mutableStateOf("") }
@@ -781,22 +826,32 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                     refreshing = activeTab.isLoading,
                     onRefresh = { webViewMap[activeTabId]?.reload() }
                 )
+                // Pre-render: keep all WebViews alive, visibility-toggle instead of destroy
                 Box(Modifier.weight(1f).pullRefresh(pullState)) {
-                    // FIX U47+U48: key() ensures each tab gets its own WebView, and old ones are disposed
-                    androidx.compose.runtime.key(activeTabId) {
-                        var wvRef by remember { mutableStateOf<WebView?>(null) }
-                        AndroidView(
-                            factory = { createWebView(it, activeTab, isWide, adBlockEnabled, autoInjectBridge, updateTab, { imgs -> images = imgs; showImages = true }) { dy -> scrollOffset = (scrollOffset + dy).coerceIn(0, 500) } },
-                            update = { wv -> wvRef = wv; webViewMap[activeTabId] = wv },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        // FIX U48: Clean up WebView when tab leaves composition
-                        DisposableEffect(activeTabId) {
-                            onDispose {
-                                wvRef?.let { wv ->
-                                    try { wv.stopLoading(); wv.destroy() } catch (_: Exception) { }
-                                }
-                                webViewMap.remove(activeTabId)
+                    tabs.forEach { tab ->
+                        val isActive = tab.id == activeTabId
+                        androidx.compose.runtime.key(tab.id) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    val wv = webViewMap[tab.id]
+                                    if (wv != null) wv
+                                    else createWebView(ctx, tab, isWide, adBlockEnabled, autoInjectBridge, updateTab, { imgs -> images = imgs; showImages = true }) { dy -> scrollOffset = (scrollOffset + dy).coerceIn(0, 500) }
+                                },
+                                update = { wv -> webViewMap[tab.id] = wv },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .then(if (isActive) Modifier else Modifier.alpha(0f).height(0.dp))
+                            )
+                        }
+                    }
+                    // Pause/resume WebViews on tab switch
+                    LaunchedEffect(activeTabId) {
+                        tabs.forEach { tab ->
+                            val wv = webViewMap[tab.id] ?: return@forEach
+                            if (tab.id == activeTabId) {
+                                try { wv.onResume() } catch (_: Exception) {}
+                            } else {
+                                try { wv.onPause() } catch (_: Exception) {}
                             }
                         }
                     }
