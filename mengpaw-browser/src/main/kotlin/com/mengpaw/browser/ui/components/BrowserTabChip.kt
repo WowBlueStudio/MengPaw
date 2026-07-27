@@ -42,7 +42,8 @@ fun TabChip(
         Row(Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically) {
             if (isLoading) { CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp, color = ThemeColors.brand); Spacer(Modifier.width(6.dp)) }
-            Text(label.take(16), fontSize = 12.sp, maxLines = 1)
+            Text(label.take(16), fontSize = 12.sp, maxLines = 1,
+                color = if (selected) ThemeColors.textPrimary else ThemeColors.textSecondary)
             if (onMenu != null) {
                 IconButton(onClick = onMenu, modifier = Modifier.size(16.dp)) {
                     Icon(Icons.Default.MoreHoriz, "菜单", modifier = Modifier.size(14.dp), tint = ThemeColors.textSecondary)

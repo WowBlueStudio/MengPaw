@@ -76,4 +76,13 @@ class BrowserPrefs(ctx: Context) {
     fun removeBookmark(url: String) { bookmarks = bookmarks.filter { it != url } }
 
     fun isBookmarked(url: String): Boolean = url in bookmarks
+
+    // ── Tab session persistence ──
+    var savedTabUrls: List<String>
+        get() = (p.getString("tab_urls", "") ?: "").split("|").filter { it.isNotBlank() }
+        set(v) = p.edit().putString("tab_urls", v.joinToString("|")).apply()
+
+    var savedActiveTabId: Int
+        get() = p.getInt("active_tab_id", -1)
+        set(v) = p.edit().putInt("active_tab_id", v).apply()
 }
