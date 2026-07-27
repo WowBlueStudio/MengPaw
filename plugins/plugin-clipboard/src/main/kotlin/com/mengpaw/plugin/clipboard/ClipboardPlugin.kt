@@ -19,7 +19,7 @@ import com.mengpaw.kernel.plugin.PluginType
  */
 class ClipboardPlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "clipboard-plugin", name = "剪贴板", version = "0.1.1",
+        id = "clipboard-plugin", name = "剪贴板", version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE, author = "MengPaw",
         description = "剪贴板操作：copy, paste, clear（按会话隔离）", minCoreVersion = "0.2.0",
         commands = listOf("clipboard.copy", "clipboard.paste", "clipboard.clear")

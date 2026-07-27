@@ -23,7 +23,7 @@ class FrameworkPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "framework-plugin",
         name = "框架发现",
-        version = "0.1.0",
+        version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理",

@@ -220,10 +220,10 @@ class AdaptiveLlmProvider(
             )
         }
 
-        // Extract token usage from response for stats collection
-        lastUsage = parseUsage(body)
-
-        return parseResponse(body)
+        // 合并双次 JSON 解析: 一次 parseToJsonElement 同时提取 usage 和 content
+        val (parsedContent, usage) = parseBody(body)
+        lastUsage = usage
+        return parsedContent
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -278,44 +278,30 @@ class AdaptiveLlmProvider(
     }
 
     /**
-     * Parse the `usage` object from the LLM API response JSON.
-     * Supports OpenAI format: {"usage": {"prompt_tokens": N, "completion_tokens": N, "total_tokens": N}}
-     * DeepSeek additionally returns: prompt_cache_hit_tokens, prompt_cache_miss_tokens
+     * 合并解析 LLM 响应体: 一次 Json.parseToJsonElement 同时提取 content 和 usage.
+     * 取代之前两次独立解析 (parseUsage + parseResponse), 减少 GC 压力.
+     * @return Pair(content, usage) — content 绝不会为 null, usage 可能为 null
      */
-    private fun parseUsage(body: String): TokenUsage? {
+    private fun parseBody(body: String): Pair<String, TokenUsage?> {
         return try {
             val root = Json.parseToJsonElement(body).jsonObject
-            val usage = root["usage"]?.jsonObject ?: return null
-            val promptTokens = usage["prompt_tokens"]?.jsonPrimitive?.int ?: 0
-            val completionTokens = usage["completion_tokens"]?.jsonPrimitive?.int ?: 0
-            val totalTokens = usage["total_tokens"]?.jsonPrimitive?.int ?: (promptTokens + completionTokens)
-            val cacheHit = usage["prompt_cache_hit_tokens"]?.jsonPrimitive?.int ?: 0
-            val cacheMiss = usage["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
-            TokenUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss)
+            // 1. 提取 usage
+            val usage = root["usage"]?.jsonObject?.let { u ->
+                val pt = u["prompt_tokens"]?.jsonPrimitive?.int ?: 0
+                val ct = u["completion_tokens"]?.jsonPrimitive?.int ?: 0
+                val tt = u["total_tokens"]?.jsonPrimitive?.int ?: (pt + ct)
+                val ch = u["prompt_cache_hit_tokens"]?.jsonPrimitive?.int ?: 0
+                val cm = u["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
+                TokenUsage(pt, ct, tt, ch, cm)
+            }
+            // 2. 提取 content (OpenAI / GLM 格式)
+            val content = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.let { c ->
+                c["message"]?.jsonObject?.get("content")?.jsonPrimitive?.content
+                    ?: c["delta"]?.jsonObject?.get("content")?.jsonPrimitive?.content
+            } ?: root["data"]?.jsonArray?.firstOrNull()?.jsonObject?.get("content")?.jsonPrimitive?.content
+            Pair(content ?: body, usage)
         } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun parseResponse(body: String): String {
-        return try {
-            val root = Json.parseToJsonElement(body).jsonObject
-            // Standard OpenAI format
-            root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.let { choice ->
-                choice["message"]?.jsonObject?.let { msg ->
-                    return msg["content"]?.jsonPrimitive?.content ?: body
-                }
-                choice["delta"]?.jsonObject?.let { delta ->
-                    return delta["content"]?.jsonPrimitive?.content ?: ""
-                }
-            }
-            // GLM format
-            root["data"]?.jsonArray?.firstOrNull()?.jsonObject?.let { data ->
-                return data["content"]?.jsonPrimitive?.content ?: body
-            }
-            body
-        } catch (e: Exception) {
-            body.take(500)
+            Pair(body, null)
         }
     }
 

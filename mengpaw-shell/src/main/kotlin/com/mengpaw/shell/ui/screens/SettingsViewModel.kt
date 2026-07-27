@@ -86,6 +86,7 @@ enum class AgentLanguageMode(val labelKey: String) { FOLLOW_UI("followUi"), CHIN
 
 /** Agent loop / execution mode. */
 enum class LoopMode(val label: String, val desc: String) {
+    REACT("React 模式", "标准问答，灵活高效"),
     GOAL("Goal 模式", "单目标驱动，完成即停"),
     MISSION("Mission 模式", "建立临时子 Agent 分解任务链，逐步执行"),
     MISSION_PLUS("Mission+ 模式", "协调跨 Agent、跨框架、跨设备的多 Agent 协同处理复杂任务")
@@ -123,7 +124,7 @@ data class SettingsState(
     val backgroundMode: BackgroundMode = BackgroundMode.NOTIFICATION,
     val useChinese: Boolean = true,
     val agentLanguageMode: AgentLanguageMode = AgentLanguageMode.FOLLOW_UI,
-    val loopMode: LoopMode = LoopMode.GOAL,
+    val loopMode: LoopMode = LoopMode.REACT,
     // API section state
     val apiSectionExpanded: Boolean = true,
     val savedProviders: List<SavedProvider> = emptyList(),

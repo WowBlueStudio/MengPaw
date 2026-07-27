@@ -38,7 +38,7 @@ class MemoryTwinPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "memory-twin-plugin",
         name = "记忆孪生",
-        version = "0.2.0",
+        version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 能力感知路由 + 心跳保活",

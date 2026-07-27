@@ -20,7 +20,7 @@ class DevPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "dev-plugin",
         name = "插件开发工具",
-        version = "0.1.0",
+        version = "", // 内置插件, 随 Shell APK 版本更新
         description = "创建、审计、构建、分享自建插件——Agent 可自主扩展 MengPaw 功能",
         author = "MengPaw Core",
         type = PluginType.NATIVE
@@ -31,6 +31,7 @@ class DevPlugin : Plugin {
         "plugin.audit"   to ::audit,
         "plugin.share"   to ::share,
         "plugin.examples" to ::examples,
+        "plugin.keywords" to ::keywords,
     )
 
     // ── plugin.create ────────────────────────────────────────────────
@@ -61,6 +62,7 @@ class DevPlugin : Plugin {
 
         when (type.lowercase()) {
             "script" -> {
+                val ns = id.removeSuffix("-plugin")
                 val json = buildString {
                     appendLine("{")
                     appendLine("  \"id\": \"$id\",")
@@ -70,10 +72,16 @@ class DevPlugin : Plugin {
                     appendLine("  \"author\": \"${a["author"] ?: "Agent-Unknown"}\",")
                     appendLine("  \"description\": \"${a["desc"] ?: ""}\",")
                     appendLine("  \"commands\": {")
-                    appendLine("    \"$id.hello\": {")
+                    appendLine("    \"hello\": {")
                     appendLine("      \"shell\": \"echo 'Hello from $name!'\",")
                     appendLine("      \"params\": [],")
                     appendLine("      \"description\": \"示例命令\"")
+                    appendLine("    }")
+                    appendLine("  },")
+                    appendLine("  \"keywords\": {")
+                    appendLine("    \"hello\": {")
+                    appendLine("      \"zh\": [\"替换为中文同义词\"],")
+                    appendLine("      \"en\": [\"replace-with-english-synonyms\"]")
                     appendLine("    }")
                     appendLine("  }")
                     appendLine("}")
@@ -197,6 +205,10 @@ class DevPlugin : Plugin {
         // Size limits
         if (json.length > 50000) issues.add("[大小] 插件定义过大 (${json.length/1024}KB) — 建议 ≤ 50KB")
 
+        // Keyword check
+        if (!json.contains("\"keywords\""))
+            issues.add("[检索] 🟡 缺少 keywords — 建议添加中英文同义词以提升 self.search 可发现性")
+
         return issues
     }
 
@@ -250,7 +262,43 @@ class DevPlugin : Plugin {
         if (code.contains("..") && code.contains("\"path\""))
             issues.add("[路径] 可能存在路径穿越 (..) — 参数校验不充分")
 
+        // Keyword check
+        if (!code.contains("commandKeywords") && !code.contains("CommandKeywords"))
+            issues.add("[检索] 🟡 缺少 commandKeywords — 建议添加中英文同义词以提升 self.search 可发现性")
+
         return issues
+    }
+
+    // ── plugin.keywords ───────────────────────────────────────────────
+
+    /** 查看或编辑插件命令的关键词配置. */
+    private suspend fun keywords(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val a = parseArgs(args)
+        val id = a["target"] ?: return ExecutionResult.fail("用法: plugin.keywords --target <插件ID>")
+
+        // 尝试从已安装+激活的插件读取 metadata
+        val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+        val plugin = try { pm.get(id) } catch (_: Exception) { null }
+        val kws = plugin?.metadata?.commandKeywords
+
+        if (plugin == null) return ExecutionResult.ok("插件 '$id' 未安装或未激活. 已安装但未激活的插件无关键词信息.")
+        if (kws.isNullOrEmpty()) return ExecutionResult.ok(buildString {
+            appendLine("插件 '$id' 未定义关键词. Agent 搜索时使用自动生成的基础关键词.")
+            appendLine()
+            appendLine("建议添加: 在 plugin.json 中增加 keywords 字段, 或在 Kotlin metadata 中设置 commandKeywords.")
+        })
+
+        return ExecutionResult.ok(buildString {
+            appendLine("=== $id · 命令关键词 ===")
+            appendLine()
+            kws.forEach { (cmd, kw) ->
+                appendLine("$cmd:")
+                if (kw.zh.isNotEmpty()) appendLine("  中文: ${kw.zh.joinToString(", ")}")
+                if (kw.en.isNotEmpty()) appendLine("  英文: ${kw.en.joinToString(", ")}")
+                appendLine()
+            }
+            appendLine("提示: 修改 plugin.json 后重新激活以更新关键词.")
+        })
     }
 
     // ── plugin.examples ───────────────────────────────────────────────
@@ -426,7 +474,13 @@ class {CLS}Plugin : Plugin {
         type = PluginType.NATIVE, author = "", description = "",
         permissions = emptyList(),
         minCoreVersion = "0.2.0",
-        commands = listOf("{NS}.example")
+        commands = listOf("{NS}.example"),
+        commandKeywords = mapOf(
+            "example" to CommandKeywords(
+                zh = listOf("示例", "样例", "demo", "测试"),
+                en = listOf("example", "demo", "test", "sample")
+            )
+        )
     )
     override val commands: Map<String, CommandHandler> = mapOf(
         "example" to ::example

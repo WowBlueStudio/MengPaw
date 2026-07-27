@@ -8,6 +8,7 @@ import com.mengpaw.kernel.error.ErrorCollector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
  * Agent workspace document manager — bootstraps pre-built .md templates
@@ -35,9 +36,11 @@ object AgentDocs {
     @Volatile
     var bootstrapper: ((agentName: String) -> Unit)? = null
 
-    /** Called when Agent modifies workspace docs — PromptEngine uses this to invalidate cache. */
+    /** Called when Agent modifies workspace docs — PromptEngine uses this to invalidate cache.
+     *  @param agentName 被修改的 Agent 名称
+     *  @param filePath  被修改文件的完整路径; null 表示未知 (兼容旧行为, 全量失效) */
     @Volatile
-    var onDocChanged: ((agentName: String) -> Unit)? = null
+    var onDocChanged: ((agentName: String, filePath: String?) -> Unit)? = null
 
     /** Create default doc files for a new agent. */
     fun bootstrap(agentName: String) {
@@ -68,7 +71,7 @@ object AgentDocs {
     // ── Long-term memory (injected into system prompt) ────────────
 
     /** Read long-term memory — injected into every LLM system prompt. */
-    suspend fun readLongTermMemoryAsync(agentName: String): String = withContext(Dispatchers.IO) {
+    suspend fun readLongTermMemoryAsync(agentName: String): String = withContext(com.mengpaw.kernel.KernelDispatchers.PROMPT_IO) {
         readLongTermMemory(agentName)
     }
 
@@ -98,8 +101,8 @@ object AgentDocs {
             tmp.writeText(existing + line)
             tmp.renameTo(file)
             if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+            onDocChanged?.invoke(agentName, file.absolutePath)
         } catch (_: Exception) {}
-        onDocChanged?.invoke(agentName)
     }
 
     /** Search long-term memory by keywords. */
@@ -118,10 +121,14 @@ object AgentDocs {
 
     // ── Mid-term memory (dated files, auto-recording, not in prompt) ──
 
+    /** 中期记忆写入队列 — 批量刷盘, 利用 LLM 等待窗口消除 I/O 延迟 */
+    private data class QueuedWrite(val agentName: String, val line: String)
+    private val midTermQueue = ConcurrentLinkedQueue<QueuedWrite>()
+
     /** Today's date for mid-term file naming. */
     private fun today(): String = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
 
-    suspend fun readMidTermMemoryAsync(agentName: String): String = withContext(Dispatchers.IO) {
+    suspend fun readMidTermMemoryAsync(agentName: String): String = withContext(com.mengpaw.kernel.KernelDispatchers.PROMPT_IO) {
         readMidTermMemory(agentName)
     }
 
@@ -151,19 +158,46 @@ object AgentDocs {
      * Auto-append to today's mid-term memory file.
      * Conversation summaries, facts, observations — NOT injected into prompts.
      */
+    /**
+     * 将中期记忆条目加入写入队列 (立即返回, 不阻塞).
+     * 实际落盘由 flushMidTermMemoryQueue() 在 LLM 响应返回后执行,
+     * 利用 2-5 秒网络等待窗口消除 I/O 感知延迟.
+     */
     fun appendMidTermMemory(agentName: String, entry: String) {
-        try {
-            val file = File(DataPaths.midTermMemoryFile(agentName, today()))
-            file.parentFile?.mkdirs()
-            val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-            val line = "\n## $timestamp\n\n$entry\n"
-            val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
-            val tmp = File(file.parentFile, "memory.tmp")
-            tmp.writeText(existing + line)
-            tmp.renameTo(file)
-            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
-        } catch (_: Exception) {}
-        onDocChanged?.invoke(agentName)
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        val line = "\n## $timestamp\n\n$entry\n"
+        midTermQueue.add(QueuedWrite(agentName, line))
+        // 中期记忆不注入系统提示词, 不需要触发缓存失效
+    }
+
+    /**
+     * 刷新中期记忆写入队列到磁盘.
+     * 在 LLM 响应返回后调用, 利用已有等待窗口使 I/O 成本为零.
+     * @return 成功落盘的条目数
+     */
+    fun flushMidTermMemoryQueue(): Int {
+        if (midTermQueue.isEmpty()) return 0
+        // 按 agentName 分组, 合并每个 agent 的写入
+        val grouped = mutableMapOf<String, StringBuilder>()
+        var count = 0
+        while (true) {
+            val item = midTermQueue.poll() ?: break
+            grouped.getOrPut(item.agentName) { StringBuilder() }.append(item.line)
+            count++
+        }
+        if (grouped.isEmpty()) return 0
+        for ((agent, lines) in grouped) {
+            try {
+                val file = File(DataPaths.midTermMemoryFile(agent, today()))
+                file.parentFile?.mkdirs()
+                val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
+                val tmp = File(file.parentFile, "memory.tmp")
+                tmp.writeText(existing + lines.toString())
+                tmp.renameTo(file)
+                if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+            } catch (_: Exception) {}
+        }
+        return count
     }
 
     /** Search across all mid-term memory files by keywords. */

@@ -22,7 +22,7 @@ import java.util.UUID
  */
 class NotificationPlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "notification-plugin", name = "通知管理", version = "0.1.1",
+        id = "notification-plugin", name = "通知管理", version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE, author = "MengPaw",
         description = "通知管理：send, list, dismiss（按会话隔离，防伪造ID）",
         permissions = listOf("POST_NOTIFICATIONS"), minCoreVersion = "0.2.0",

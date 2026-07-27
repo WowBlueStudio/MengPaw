@@ -69,9 +69,11 @@ class AgentEngine(
         // Wire real PluginManager into AgentDocManager so CLI.md generation sees installed plugins
         agentDocManager.pluginManager = pluginManager
         // Wire cache invalidation: when AgentDocs modifies workspace, invalidate PromptEngine cache
-        com.mengpaw.kernel.agent.AgentDocs.onDocChanged = { name ->
-            promptEngine.invalidateDocCache(name)
+        com.mengpaw.kernel.agent.AgentDocs.onDocChanged = { name, filePath ->
+            promptEngine.invalidateDocCache(name, filePath)
         }
+        // 构建命令搜索索引 (BM25 + 双语同义词表) — 一次性初始化
+        com.mengpaw.kernel.cli.BuiltinCommandIndex.buildAll()
     }
 
     /** The active LLM provider. Can be updated after construction (e.g. when user configures API key). */
@@ -400,6 +402,8 @@ class AgentEngine(
 
                 val conversation = buildConversation(session.id)
                 val llmResponse = llmProvider.completeWithMessages(conversation)
+                // 利用 LLM 等待窗口刚刚结束的间隙刷盘中期记忆 (I/O 成本隐藏)
+                com.mengpaw.kernel.agent.AgentDocs.flushMidTermMemoryQueue()
                 val sanitized = Sanitizer.sanitize(llmResponse)
 
                 val totalChars = llmRequestBuilder.currentSystemPrompt.length +
@@ -434,6 +438,7 @@ class AgentEngine(
                     }
                     sessionManager.addMessage(session.id, Message("system", boundaryMsg))
                     _state.value = AgentState.Finished(answer)
+                    com.mengpaw.kernel.agent.AgentDocs.flushMidTermMemoryQueue()
                     recordTaskMemory(task, answer)
                     return answer
                 }

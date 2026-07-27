@@ -37,7 +37,7 @@ class SkillPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "skill-plugin",
         name = "技能系统",
-        version = "0.3.0",
+        version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "全类型 Skill 引擎 — Markdown 剧本 + 参数化 + 分类过滤 + 搜索 + 管理",

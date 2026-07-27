@@ -101,6 +101,7 @@ class MainActivity : ComponentActivity() {
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
+        // ── 关键路径: 必须在 UI 渲染前完成的初始化 ──
         DataPathsInitializer.initialize(this)
         com.mengpaw.kernel.plugin.PluginManager.initializeGlobalInstance(
             com.mengpaw.kernel.AgentEngine.CORE_VERSION)
@@ -109,93 +110,8 @@ class MainActivity : ComponentActivity() {
         com.mengpaw.core.security.IntegrityGuard.globalInstance.init(this)
         com.mengpaw.core.AgentTemplates.init(this)
         com.mengpaw.kernel.agent.AgentDocs.bootstrapper = { name -> com.mengpaw.core.AgentTemplates.bootstrapAgent(name) }
-
-        // 自动恢复孪生服务 (已配对的设备不需要每次5连击)
-        autoRestoreTwinIfNeeded()
         KernelLog.setLogger(AndroidLogger())
-        com.mengpaw.shell.ui.components.TokenStatsCollector.load()
         enableEdgeToEdge()
-
-        // ── 框架发现插件：初始化 mDNS 服务 ──
-        com.mengpaw.plugin.framework.FrameworkDiscovery.instance =
-            com.mengpaw.plugin.framework.FrameworkDiscovery(this).apply {
-                frameworkName = "MengPaw"
-                frameworkVersion = com.mengpaw.kernel.AgentEngine.CORE_VERSION
-                // Agent 列表从文件系统读取
-                val agentsDir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS)
-                agentNames = agentsDir.listFiles()
-                    ?.filter { it.isDirectory && !it.name.startsWith(".") }
-                    ?.map { it.name } ?: listOf("MengPaw")
-            }
-        com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.register()
-        com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.startContinuousDiscovery()
-
-        // ── Trigger engine init: load persisted triggers, set context, start loop ──
-        com.mengpaw.kernel.trigger.TriggerEngine.setContext(this)
-        com.mengpaw.kernel.trigger.TriggerEngine.load()
-        com.mengpaw.kernel.trigger.TriggerEngine.registerSystemWake(this, 10)
-        com.mengpaw.kernel.trigger.TriggerEngine.refreshCronAlarm()
-        // TriggerEngine.start() deferred to MengPawApp composable —
-        // onFire must be wired first to avoid silent trigger consumption
-
-        // Start persistent foreground notification to keep process alive
-        com.mengpaw.shell.service.ShellService.start(this)
-
-        // Register zero-overhead system event receiver (no polling)
-        com.mengpaw.shell.service.EventReceiver.register(this)
-        PluginViewModel.registerPluginClass("fs-plugin", "com.mengpaw.plugin.fs.FsPlugin")
-        PluginViewModel.registerPluginClass("net-plugin", "com.mengpaw.plugin.net.NetPlugin")
-        PluginViewModel.registerPluginClass("memory-plugin", "com.mengpaw.plugin.memory.MemoryPlugin")
-        PluginViewModel.registerPluginClass("framework-plugin", "com.mengpaw.plugin.framework.FrameworkPlugin")
-        PluginViewModel.registerPluginClass("skill-plugin", "com.mengpaw.plugin.skill.SkillPlugin")
-        PluginViewModel.registerPluginClass("self-plugin", "com.mengpaw.plugin.self.SelfPlugin")
-        PluginViewModel.registerPluginClass("clipboard-plugin", "com.mengpaw.plugin.clipboard.ClipboardPlugin")
-        PluginViewModel.registerPluginClass("notification-plugin", "com.mengpaw.plugin.notification.NotificationPlugin")
-        PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
-        PluginViewModel.registerPluginClass("memory-twin-plugin", "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin")
-
-        // Auto-install bundled plugins — direct instantiation (no reflection),
-        // immune to R8 obfuscation since all plugins are compile-time dependencies.
-        CoroutineScope(Dispatchers.IO).launch {
-            val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
-            val bundled: List<Pair<String, com.mengpaw.kernel.plugin.Plugin>> = listOf(
-                "framework-plugin" to FrameworkPlugin(),
-                "memory-plugin" to MemoryPlugin(),
-                "skill-plugin" to SkillPlugin(),
-                "dev-plugin" to DevPlugin(),
-                "fs-plugin" to FsPlugin(),
-                "net-plugin" to NetPlugin(),
-                "self-plugin" to SelfPlugin(),
-                "clipboard-plugin" to ClipboardPlugin(),
-                "notification-plugin" to NotificationPlugin(),
-                "memory-twin-plugin" to MemoryTwinPlugin(),
-            )
-            for ((id, plugin) in bundled) {
-                try {
-                    if (pm.get(id) == null) {
-                        pm.install(plugin).fold(
-                            onSuccess = {
-                                pm.activate(id).fold(
-                                    onSuccess = { android.util.Log.i("MengPaw", "Bundled plugin $id installed + activated") },
-                                    onFailure = { android.util.Log.w("MengPaw", "Bundled plugin $id installed but activate failed: ${it.message}", it) }
-                                )
-                            },
-                            onFailure = { android.util.Log.w("MengPaw", "Bundled plugin $id install failed: ${it.message}", it) }
-                        )
-                    } else {
-                        android.util.Log.d("MengPaw", "Bundled plugin $id already installed, skipping")
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.w("MengPaw", "Auto-install $id panicked: ${e.message}", e)
-                }
-            }
-            val total = pm.count()
-            val active = pm.activeCount()
-            android.util.Log.i("MengPaw", "Bundled auto-install done: $total installed, $active active")
-        }
-
-        // Handle URL sent from Browser APK (singleTask — onNewIntent)
-        handleOpenUrl(intent)
 
         // 启动阶段：深蓝背景 → 白色状态栏图标
         val window = window
@@ -217,6 +133,9 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) { MengPawApp(strings, settingsViewModel) }
             }
         }
+        // 延迟初始化: 非关键路径在 UI 渲染后异步执行
+        val launchIntent = intent
+        CoroutineScope(Dispatchers.IO).launch { deferInit(launchIntent) }
     }
 
     /** Handle incoming OPEN_URL intent from Browser APK without creating a new task. */
@@ -252,6 +171,95 @@ class MainActivity : ComponentActivity() {
                 } catch (_: Exception) {}
             }
         }
+    }
+
+    /**
+     * 延迟初始化 — 非关键路径, 在 UI 渲染后执行.
+     * 包含: 框架发现, 触发器引擎, 前台服务, 事件接收器, 插件注册/安装, URL 处理.
+     */
+    private suspend fun deferInit(launchIntent: Intent) = kotlinx.coroutines.withContext(Dispatchers.Default) {
+        // ── 孪生恢复 ──
+        try { autoRestoreTwinIfNeeded() } catch (_: Exception) {}
+
+        // ── Token 统计 ──
+        try { com.mengpaw.shell.ui.components.TokenStatsCollector.load() } catch (_: Exception) {}
+
+        // ── PluginViewModel 类注册 ──
+        PluginViewModel.registerPluginClass("fs-plugin", "com.mengpaw.plugin.fs.FsPlugin")
+        PluginViewModel.registerPluginClass("net-plugin", "com.mengpaw.plugin.net.NetPlugin")
+        PluginViewModel.registerPluginClass("memory-plugin", "com.mengpaw.plugin.memory.MemoryPlugin")
+        PluginViewModel.registerPluginClass("framework-plugin", "com.mengpaw.plugin.framework.FrameworkPlugin")
+        PluginViewModel.registerPluginClass("skill-plugin", "com.mengpaw.plugin.skill.SkillPlugin")
+        PluginViewModel.registerPluginClass("self-plugin", "com.mengpaw.plugin.self.SelfPlugin")
+        PluginViewModel.registerPluginClass("clipboard-plugin", "com.mengpaw.plugin.clipboard.ClipboardPlugin")
+        PluginViewModel.registerPluginClass("notification-plugin", "com.mengpaw.plugin.notification.NotificationPlugin")
+        PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
+        PluginViewModel.registerPluginClass("memory-twin-plugin", "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin")
+
+        // ── 框架发现 (mDNS) ──
+        try {
+            com.mengpaw.plugin.framework.FrameworkDiscovery.instance =
+                com.mengpaw.plugin.framework.FrameworkDiscovery(this@MainActivity).apply {
+                    frameworkName = "MengPaw"
+                    frameworkVersion = com.mengpaw.kernel.AgentEngine.CORE_VERSION
+                    val agentsDir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS)
+                    agentNames = agentsDir.listFiles()
+                        ?.filter { it.isDirectory && !it.name.startsWith(".") }
+                        ?.map { it.name } ?: listOf("MengPaw")
+                }
+            com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.register()
+            com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.startContinuousDiscovery()
+        } catch (_: Exception) {}
+
+        // ── 触发器引擎 ──
+        try {
+            com.mengpaw.kernel.trigger.TriggerEngine.setContext(this@MainActivity)
+            com.mengpaw.kernel.trigger.TriggerEngine.load()
+            com.mengpaw.kernel.trigger.TriggerEngine.registerSystemWake(this@MainActivity, 10)
+            com.mengpaw.kernel.trigger.TriggerEngine.refreshCronAlarm()
+        } catch (_: Exception) {}
+
+        // ── 前台服务 ──
+        try { com.mengpaw.shell.service.ShellService.start(this@MainActivity) } catch (_: Exception) {}
+
+        // ── 系统事件接收器 ──
+        try { com.mengpaw.shell.service.EventReceiver.register(this@MainActivity) } catch (_: Exception) {}
+
+        // ── 捆绑插件自动安装 ──
+        try {
+            val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+            val bundled: List<Pair<String, com.mengpaw.kernel.plugin.Plugin>> = listOf(
+                "framework-plugin" to FrameworkPlugin(),
+                "memory-plugin" to MemoryPlugin(),
+                "skill-plugin" to SkillPlugin(),
+                "dev-plugin" to DevPlugin(),
+                "fs-plugin" to FsPlugin(),
+                "net-plugin" to NetPlugin(),
+                "self-plugin" to SelfPlugin(),
+                "clipboard-plugin" to ClipboardPlugin(),
+                "notification-plugin" to NotificationPlugin(),
+                "memory-twin-plugin" to MemoryTwinPlugin(),
+            )
+            for ((id, plugin) in bundled) {
+                try {
+                    if (pm.get(id) == null) {
+                        pm.install(plugin).fold(
+                            onSuccess = {
+                                pm.activate(id).fold(
+                                    onSuccess = { android.util.Log.i("MengPaw", "Bundled plugin $id installed + activated") },
+                                    onFailure = { android.util.Log.w("MengPaw", "Bundled plugin $id installed but activate failed: ${it.message}", it) }
+                                )
+                            },
+                            onFailure = { android.util.Log.w("MengPaw", "Bundled plugin $id install failed: ${it.message}", it) }
+                        )
+                    } else { android.util.Log.d("MengPaw", "Bundled plugin $id already installed, skipping") }
+                } catch (e: Exception) { android.util.Log.w("MengPaw", "Auto-install $id panicked: ${e.message}", e) }
+            }
+            android.util.Log.i("MengPaw", "Bundled auto-install done: ${pm.count()} installed, ${pm.activeCount()} active")
+        } catch (_: Exception) {}
+
+        // ── 处理外部 URL ──
+        try { handleOpenUrl(launchIntent) } catch (_: Exception) {}
     }
 
     /** 如果之前激活过孪生, 自动恢复 ACP + 同步 (无需5连击) */

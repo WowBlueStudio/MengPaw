@@ -848,10 +848,11 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             tmp.writeText(content)
             if (file.exists()) file.delete()
             tmp.renameTo(file)
-            // Invalidate prompt cache if Agent modified workspace docs
+            // 仅对系统提示词中的三个缓存文件触发精确失效
             val wsRoot = "${com.mengpaw.kernel.DataPaths.AGENTS}/${ctx.agentName ?: "MengPaw"}"
-            if (canonical.startsWith(wsRoot)) {
-                com.mengpaw.kernel.agent.AgentDocs.onDocChanged?.invoke(ctx.agentName ?: "MengPaw")
+            val cachedDocs = setOf("agents.md", "soul.md", "memory/memory.md")
+            if (canonical.startsWith(wsRoot) && cachedDocs.any { canonical.endsWith("/$it") }) {
+                com.mengpaw.kernel.agent.AgentDocs.onDocChanged?.invoke(ctx.agentName ?: "MengPaw", canonical)
             }
             val isOutput = canonical.startsWith(com.mengpaw.kernel.DataPaths.OUTPUT)
             val msg = buildString {
