@@ -479,16 +479,6 @@ class AgentDocManager(
         return records.sortedByDescending { it.id }
     }
 
-    private fun appendNamespaceCommands(sb: StringBuilder, ns: String, desc: String, commands: List<Triple<String, String, String>>) {
-        sb.appendLine("## $ns ($desc)")
-        sb.appendLine("| 命令 | 用法 | 说明 |")
-        sb.appendLine("|------|------|------|")
-        commands.forEach { (cmd, usage, detail) ->
-            sb.appendLine("| $ns.$cmd | $usage | $detail |")
-        }
-        sb.appendLine()
-    }
-
     // ── Default document templates ────────────────────────────────────
 
     companion object {

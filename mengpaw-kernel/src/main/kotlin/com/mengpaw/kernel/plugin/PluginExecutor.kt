@@ -277,10 +277,13 @@ class PluginExecutor(
 
             "Downloaded and activated ${entry.id} v${entry.version} (runtime-loaded via DexClassLoader)"
         } catch (e: ClassNotFoundException) {
+            KernelLog.w("PluginExecutor", "loadPluginJar(${entry.id}): dalvik DexClassLoader not available (JVM/desktop)")
             null
         } catch (e: NoClassDefFoundError) {
+            KernelLog.w("PluginExecutor", "loadPluginJar(${entry.id}): missing class dependency: ${e.message}")
             null
         } catch (e: Exception) {
+            KernelLog.w("PluginExecutor", "loadPluginJar(${entry.id}): ${e::class.simpleName}: ${e.message}")
             null
         }
     }

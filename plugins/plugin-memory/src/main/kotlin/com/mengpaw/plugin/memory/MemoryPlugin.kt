@@ -104,7 +104,15 @@ class MemoryPlugin : Plugin {
 
     fun save(id: String, title: String, content: String, tags: List<String> = emptyList()): MemoryEntry {
         val entry = MemoryEntry(id = id, title = title, content = content, tags = tags)
-        try { File(dir, "$id.md").writeText(entry.toMarkdown()) } catch (e: Exception) { ErrorCollector.report(e, "MemoryPlugin.save") }
+        try {
+            val file = File(dir, "$id.md")
+            // Backup existing file before overwrite (prevents silent data loss)
+            if (file.exists()) {
+                val bak = File(dir, "$id.md.bak")
+                file.copyTo(bak, overwrite = true)
+            }
+            file.writeText(entry.toMarkdown())
+        } catch (e: Exception) { ErrorCollector.report(e, "MemoryPlugin.save") }
         cache = null
         return entry
     }
