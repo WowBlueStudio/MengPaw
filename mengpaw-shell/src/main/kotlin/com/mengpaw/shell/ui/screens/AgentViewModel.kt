@@ -14,8 +14,8 @@ import com.mengpaw.kernel.agent.ScrollContextManager
 import com.mengpaw.kernel.llm.AdaptiveLlmProvider
 import com.mengpaw.kernel.llm.LlmProvider
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import com.mengpaw.kernel.llm.PromptEngine
@@ -835,11 +835,11 @@ class AgentViewModel : ViewModel() {
                 try { session.engine.stop() } catch (_: Exception) {}
 
                 // ── Streaming job: observe engine._output and update finalContent ──
-                val debouncedOutput = session.engine.output
-                    .debounce(50)
+                val sampledOutput = session.engine.output
+                    .sample(50)
                     .filter { it.isNotBlank() }
                 streamingJob = launch {
-                    debouncedOutput.collect { text ->
+                    sampledOutput.collect { text ->
                         session.messages.update { current ->
                             val mutable = current.toMutableList()
                             val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
