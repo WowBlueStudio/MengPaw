@@ -448,7 +448,7 @@ class BrowserBridge(
                 file.absolutePath
             }
             bitmap.recycle()
-            """{"ok":true,"path":"$path","width":${picture.width},"height":${picture.height}}"""
+            """{"ok":true,"path":"$path","width":${webView.width},"height":${webView.height}}"""
         } catch (e: Exception) {
             """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
         }
