@@ -66,10 +66,14 @@ object DataPaths {
         private set
 
     // ── Conversation context archive (QwenPaw-style no-data-loss) ──
+    /** Sanitize agent name for filesystem use — prevent path traversal. */
+    private fun safeAgentDir(agentName: String): String =
+        "$AGENTS/${agentName.replace(Regex("[/\\\\]"), "_")}"
+
     /** Archived raw dialog before compaction. Agent can read_file to recall. */
-    fun dialogArchiveDir(agentName: String) = "$AGENTS/$agentName/dialog"
+    fun dialogArchiveDir(agentName: String) = "${safeAgentDir(agentName)}/dialog"
     /** Long tool outputs offloaded to disk. Agent references snippet + path. */
-    fun toolResultsDir(agentName: String) = "$AGENTS/$agentName/tool_results"
+    fun toolResultsDir(agentName: String) = "${safeAgentDir(agentName)}/tool_results"
 
     fun initializeOutput(outputPath: String) {
         OUTPUT = outputPath

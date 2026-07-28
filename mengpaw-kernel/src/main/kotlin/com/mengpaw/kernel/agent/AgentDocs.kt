@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.agent
 
 import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.error.ErrorCollector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -96,12 +97,12 @@ object AgentDocs {
             val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",
                 java.util.Locale.getDefault()).format(java.util.Date())
             val line = "\n## $timestamp\n\n$entry\n"
-            val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
+            val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "appendLongTermMemory.read: ${e.message}"); "" } else ""
             val tmp = File(file.parentFile, "memory.tmp")
             tmp.writeText(existing + line)
             file.delete() // ensure target removed (Windows: renameTo fails if target exists)
             tmp.renameTo(file)
-            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+            if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "appendLongTermMemory.cleanup: ${e.message}") } }
             onDocChanged?.invoke(agentName, file.absolutePath)
         } catch (_: Exception) {}
     }
@@ -110,7 +111,7 @@ object AgentDocs {
     fun searchLongTermMemory(agentName: String, keywords: List<String>): String {
         val file = File(DataPaths.longTermMemoryFile(agentName))
         if (!file.exists() || keywords.isEmpty()) return ""
-        val content = try { file.readText() } catch (_: Exception) { return "" }
+        val content = try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "searchLongTermMemory: ${e.message}"); return "" }
         if (content.isBlank()) return ""
         val entries = content.split(Regex("(?=## )")).filter { it.isNotBlank() }
         val matched = entries.filter { entry ->
@@ -191,11 +192,11 @@ object AgentDocs {
             try {
                 val file = File(DataPaths.midTermMemoryFile(agent, today()))
                 file.parentFile?.mkdirs()
-                val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
+                val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "appendLongTermMemory.read: ${e.message}"); "" } else ""
                 val tmp = File(file.parentFile, "memory.tmp")
                 tmp.writeText(existing + lines.toString())
                 tmp.renameTo(file)
-                if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+                if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "appendLongTermMemory.cleanup: ${e.message}") } }
             } catch (_: Exception) {}
         }
         return count
@@ -258,7 +259,7 @@ object AgentDocs {
             val tmp = File(file.parentFile, "project.tmp")
             tmp.writeText(existing + entry)
             tmp.renameTo(file)
-            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+            if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "appendLongTermMemory.cleanup: ${e.message}") } }
         } catch (_: Exception) {}
     }
 

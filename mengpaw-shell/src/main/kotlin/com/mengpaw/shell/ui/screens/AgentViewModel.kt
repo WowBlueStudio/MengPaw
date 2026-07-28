@@ -82,9 +82,10 @@ class AgentViewModel : ViewModel() {
 
     private fun scheduleAutoSave() {
         viewModelScope.launch {
-            kotlinx.coroutines.delay(30_000)
-            saveCurrentSession()
-            scheduleAutoSave()
+            while (true) {
+                kotlinx.coroutines.delay(30_000)
+                saveCurrentSession()
+            }
         }
     }
 

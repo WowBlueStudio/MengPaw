@@ -217,7 +217,7 @@ object DreamEngine {
 
     fun dreamStats(): String {
         if (!dreamLog.exists()) return "总计: 0 次"
-        val lines = try { dreamLog.readLines() } catch (_: Exception) { return "总计: 0 次" }
+        val lines = try { dreamLog.readLines() } catch (e: Exception) { KernelLog.w("DreamEngine", "dreamStats: ${e.message}"); return "总计: 0 次" }
         return "梦境: ${lines.size} 次"
     }
 
