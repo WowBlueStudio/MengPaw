@@ -99,6 +99,7 @@ object AgentDocs {
             val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
             val tmp = File(file.parentFile, "memory.tmp")
             tmp.writeText(existing + line)
+            file.delete() // ensure target removed (Windows: renameTo fails if target exists)
             tmp.renameTo(file)
             if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
             onDocChanged?.invoke(agentName, file.absolutePath)

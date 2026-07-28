@@ -204,6 +204,11 @@ class FsPlugin : Plugin {
         var matchCount = 0
         for (file in files) {
             if (matchCount >= 100) { results.add("...(truncated, ${matchCount}+ matches)"); break }
+            // Skip files larger than 50MB to prevent OOM
+            if (file.length() > MAX_READ_SIZE) {
+                results.add("${file.name}: [skipped — exceeds 50MB limit]")
+                continue
+            }
             try {
                 val lines = file.readLines()
                 for ((i, line) in lines.withIndex()) {
