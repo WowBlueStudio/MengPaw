@@ -45,7 +45,7 @@ class ErrorReportPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "error-report-plugin",
         name = "错误上报",
-        version = "0.1.1",
+        version = "0.2.0",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "官方错误收集与上报。安装即同意帮助改进框架和插件。WiFi下自动上传到Gitee/GitHub。",
@@ -347,7 +347,7 @@ class ErrorReportPlugin : Plugin {
                 failed = batch.size
             }
         } catch (e: Exception) {
-            failed = ErrorCollector.pendingUploads().coerceAtMost(10)
+            failed = ErrorCollector.pendingUploads().size.coerceAtMost(10)
         } finally {
             isUploading = false
         }
@@ -363,7 +363,7 @@ class ErrorReportPlugin : Plugin {
             val pkgInfo = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
             val currentVersion = pkgInfo.versionName ?: return
             val prefs = getPrefs(ctx)
-            val lastVersion = prefs.getString(KEY_LAST_VERSION, "")
+            val lastVersion = prefs.getString(KEY_LAST_VERSION, "") ?: ""
             if (lastVersion.isNotEmpty() && lastVersion != currentVersion) {
                 // Version changed — clean old errors
                 ErrorCollector.clear()

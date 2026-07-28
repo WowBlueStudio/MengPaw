@@ -42,3 +42,21 @@ data class ExecutionContext(
     val environment: Map<String, String> = emptyMap(),
     val agentName: String? = null
 )
+
+/**
+ * Pluggable command executor — enables plugins to invoke CLI commands
+ * programmatically (e.g. workflow nodes executing other plugin commands).
+ *
+ * The framework injects an implementation via [com.mengpaw.kernel.plugin.PluginContext].
+ * Kernel provides [DefaultCommandExecutor] as the reference implementation.
+ */
+interface CommandExecutor {
+    /**
+     * Execute a raw command line (e.g. "tavily.search hello world").
+     *
+     * @param commandLine  the full CLI command string including namespace and args
+     * @param ctx          execution context (session, user, workDir)
+     * @return [ExecutionResult] with success flag, output, and optional error details
+     */
+    suspend fun execute(commandLine: String, ctx: ExecutionContext): ExecutionResult
+}

@@ -52,9 +52,9 @@ object DataPaths {
     val COMFY_WORKFLOWS get() = "$PLUGIN_CACHE/comfy/workflows"
     val COMFY_OUTPUTS get() = "$PLUGIN_CACHE/comfy/outputs"
     val RENDER_OUTPUTS get() = "$PLUGIN_CACHE/renders"
+    val SEARCH_OUTPUTS get() = "$PLUGIN_CACHE/search/outputs"
     val WORKFLOW_DIR get() = "$PLUGIN_CACHE/workflows"
     val WORKFLOW_OUTPUTS get() = "$PLUGIN_CACHE/workflows/outputs"
-    val SEARCH_OUTPUTS get() = "$PLUGIN_CACHE/search"
     val ERROR_LOG get() = "$BASE/错误报告"
     val ERROR_QUEUE get() = "$ERROR_LOG/queue"
 
