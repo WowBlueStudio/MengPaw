@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.17.2 | **更新**: 2026-07-28 | **架构**: 微内核(54文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1
+> **版本**: 0.17.3 | **更新**: 2026-07-28 | **架构**: 微内核(54文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1
 
 ---
 
@@ -1100,6 +1100,7 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.17.3** | 2026-07-28 | **斜杠命令标签全局悬浮 + 会话管理重构(溢出自动压缩+缓存可视化+归档重载)** — A) 斜杠命令标签从Column流改为全局悬浮式(Box叠加), 平板模式下跟随左侧边栏右侧(280dp偏移), Surface阴影卡片效果 B) P0 待办顺序修复: 排队时不写入会话气泡, 实际执行时才出现 C) P0 成功路径 isRunning 重置: session.isRunning 未复位导致 processNextPending 重新入队而非执行, 最终崩溃 D) P0 事件驱动持久化: 每次Agent返回后 saveCurrentSession+refreshCacheStats, 保留30s兜底 E) P1 溢出自动压缩(取代 takeLast): maxActiveSessionCount 配置, 超限时标记最旧会话为 compacted, 已归档只读可检索不可续聊 F) P1 缓存可视化: AgentEngine.getContextUsage + CacheStats(上下文使用率/会话数/存储) G) P1 归档重载: compressIfNeeded 后自动注入归档提示, agent.read.archive \<date\> 命令 |
 | **0.17.0** | 2026-07-27 | **持久会话 + 结构化压缩 + 工具裁剪** — 四框架对话上下文融合: A) Claude Code 模式: AgentEngine.conversationSessionId 持久复用 Session, LLM 每次请求看到完整历史而非孤立消息, 移除 "[上一任务已结束]" 上下文切割边界 B) QwenPaw 模式: SessionManager 五字段结构化摘要(Goal/Progress/KeyDecisions/NextSteps/CriticalContext), 压缩前归档原始消息到 dialog/YYYY-MM-DD.jsonl 零数据丢失 C) QwenPaw 模式: pruneToolResult 双阈值(≤3步30KB/>3步2KB), 完整输出存 tool_results/{uuid}.txt, 5天清理 D) OpenClaw 模式: engine.newConversation() 重置持久会话, UI newSession 联动 E) DataPaths +dialogArchiveDir/+toolResultsDir, SessionManager +agentName/+specificSessionId |
 | **0.16.0** | 2026-07-27 | **三层自适应调度 + BM25 命令检索 + 6 项性能优化** — A: 循环模式重构 (QwenPaw 风格默认 REACT → 自动检测升级 GOAL/MISSION, Claude Code 风格复杂度评分, UI AssistChip 自动标注) B: BM25 命令搜索引擎 (self.search, ~50条内置命令双语同义词表, μs 级检索, bigram 分词, 插件激活/卸载自动联动) C: 插件关键词脚手架 (CommandKeywords 数据类, plugin.create 模板内置, plugin.audit 检查, plugin.keywords 查看) D: 6 项性能优化 (Prompt 缓存按文件粒度失效/中记忆批量合并/会话增量持久化/启动懒加载/协程池分离/GC 压力优化) E: 内置插件版本号清空 (随壳更新) |
 | **0.15.2** | 2026-07-26 | **6 审计问题修复** — 缓存失效(路径匹配) + 缓存key(检查前置) + Plan进度(中英双语边界) + 错误消息(LlmApiException) + 容器高度(Step编号/观察缺失) + 提示词(恢复插件发现示例) + MCP插件解耦BrowserBridge + 超时120s |
@@ -1167,4 +1168,4 @@ ShellService.start(this)   // startForeground + WakeLock
 
 ---
 
-*文档结束 · 最后更新: 2026-07-27 (v0.17.0) · 本版新增: 四框架对话上下文融合 (Claude Code 持久会话 + QwenPaw 结构化压缩归档 + 工具结果裁剪)*
+*文档结束 · 最后更新: 2026-07-28 (v0.17.3) · 本版新增: 全局悬浮斜杠命令标签 + 会话溢出自动压缩 + 缓存可视化 + 归档重载*
