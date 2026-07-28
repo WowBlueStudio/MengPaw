@@ -23,7 +23,7 @@ class BrowserSearchPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "browser-search-plugin",
         name = "搜索分析",
-        version = "0.1.0",
+        version = "0.2.0",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "搜索引擎结果提取：Google/Bing/百度/DuckDuckGo 结构化数据",
