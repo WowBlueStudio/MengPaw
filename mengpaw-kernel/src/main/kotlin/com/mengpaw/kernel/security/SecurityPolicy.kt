@@ -30,11 +30,14 @@ class SecurityPolicy(
         Regex("[\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]"),
     )
 
+    private val syncLock = Any()
     private val blockList = mutableListOf("proc.exec", "proc.system")
 
     fun isAllowed(command: String): Boolean {
         val cmdName = command.split(" ").firstOrNull() ?: return false
-        if (blockList.any { cmdName.startsWith(it) }) return false
+        synchronized(syncLock) {
+            if (blockList.any { cmdName.startsWith(it) }) return false
+        }
         for (pattern in restrictedPatterns) {
             if (pattern.containsMatchIn(command)) return false
         }
@@ -48,12 +51,14 @@ class SecurityPolicy(
     private val blockListAudit = mutableListOf<Pair<Long, String>>()
 
     fun blockCommand(command: String, reason: String = "") {
-        if (command !in blockList) {
-            blockList.add(command)
-            blockListAudit.add(System.currentTimeMillis() to "BLOCKED: $command (reason: ${reason.ifEmpty { "unspecified" }})")
+        synchronized(syncLock) {
+            if (command !in blockList) {
+                blockList.add(command)
+                blockListAudit.add(System.currentTimeMillis() to "BLOCKED: $command (reason: ${reason.ifEmpty { "unspecified" }})")
+            }
         }
     }
 
-    fun getBlockList(): List<String> = blockList.toList()
-    fun getBlockListAudit(): List<String> = blockListAudit.map { "${it.first}: ${it.second}" }
+    fun getBlockList(): List<String> = synchronized(syncLock) { blockList.toList() }
+    fun getBlockListAudit(): List<String> = synchronized(syncLock) { blockListAudit.map { "${it.first}: ${it.second}" } }
 }

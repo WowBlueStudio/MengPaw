@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.plugin
 
 import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.cli.CommandRegistry
 import java.io.File
 
@@ -59,38 +60,43 @@ class PluginManager(
      *
      * @return Result with the plugin id on success, or an error message.
      */
-    fun install(plugin: Plugin): Result<String> = synchronized(this) {
+    suspend fun install(plugin: Plugin): Result<String> {
         val id = plugin.metadata.id
 
-        // Check version compatibility
-        val coreVer = PluginVersion.parse(coreVersion)
-        val minVer = PluginVersion.parse(plugin.metadata.minCoreVersion)
-        val maxVer = PluginVersion.parse(plugin.metadata.maxCoreVersion)
+        // Version checks and dependency validation (synchronized — uses shared state)
+        synchronized(this) {
+            val coreVer = PluginVersion.parse(coreVersion)
+            val minVer = PluginVersion.parse(plugin.metadata.minCoreVersion)
+            val maxVer = PluginVersion.parse(plugin.metadata.maxCoreVersion)
 
-        if (coreVer < minVer) {
-            return Result.failure(IllegalStateException(
-                "Plugin '$id' requires core ≥ ${plugin.metadata.minCoreVersion}, current is $coreVersion"
-            ))
-        }
-        if (coreVer > maxVer) {
-            return Result.failure(IllegalStateException(
-                "Plugin '$id' not tested with core > ${plugin.metadata.maxCoreVersion}, current is $coreVersion"
-            ))
-        }
-
-        // Check dependencies
-        for (dep in plugin.metadata.dependencies) {
-            if (!plugins.containsKey(dep) || statuses[dep] != PluginStatus.ACTIVE) {
+            if (coreVer < minVer) {
                 return Result.failure(IllegalStateException(
-                    "Plugin '$id' depends on '$dep' which is not active"
+                    "Plugin '$id' requires core ≥ ${plugin.metadata.minCoreVersion}, current is $coreVersion"
                 ))
             }
+            if (coreVer > maxVer) {
+                return Result.failure(IllegalStateException(
+                    "Plugin '$id' not tested with core > ${plugin.metadata.maxCoreVersion}, current is $coreVersion"
+                ))
+            }
+
+            // Check dependencies
+            for (dep in plugin.metadata.dependencies) {
+                if (!plugins.containsKey(dep) || statuses[dep] != PluginStatus.ACTIVE) {
+                    return Result.failure(IllegalStateException(
+                        "Plugin '$id' depends on '$dep' which is not active"
+                    ))
+                }
+            }
+
+            plugins[id] = plugin
+            statuses[id] = PluginStatus.INSTALLED
         }
 
-        plugins[id] = plugin
-        statuses[id] = PluginStatus.INSTALLED
-        // FIX A14: Lifecycle callback — plugin gets notified on install
-        try { /* onInstall(ctx) requires coroutine scope; called at plugin load time */ } catch (_: Exception) {}
+        // Lifecycle callback — called outside synchronized block (suspend function)
+        try { plugin.onInstall(DefaultPluginContext(id)) } catch (e: Exception) {
+            KernelLog.w("PluginManager", "onInstall failed for $id: ${e.message}")
+        }
         return Result.success(id)
     }
 
@@ -130,16 +136,19 @@ class PluginManager(
     /**
      * Uninstall a plugin completely: deactivate if active, then remove.
      */
-    fun uninstall(id: String): Result<Unit> = synchronized(this) {
-        val plugin = plugins[id]
-            ?: return Result.failure(NoSuchElementException("Plugin not found: $id"))
-
-        if (statuses[id] == PluginStatus.ACTIVE) {
-            unregisterCommands(id, plugin)
+    suspend fun uninstall(id: String): Result<Unit> {
+        // Lifecycle callback — called outside synchronized block (suspend function)
+        val plugin = synchronized(this) {
+            val p = plugins[id]
+                ?: return Result.failure(NoSuchElementException("Plugin not found: $id"))
+            if (statuses[id] == PluginStatus.ACTIVE) {
+                unregisterCommands(id, p)
+            }
+            p
         }
-
-        // FIX A14: Call uninstall lifecycle callback
-        try { /* onUninstall() requires coroutine scope; called at plugin unload time */ } catch (_: Exception) {}
+        try { plugin.onUninstall() } catch (e: Exception) {
+            KernelLog.w("PluginManager", "onUninstall failed for $id: ${e.message}")
+        }
         // 联动命令搜索索引: 卸载时移除该插件的所有命令
         com.mengpaw.kernel.cli.CommandSearch.removeByNamespace(namespaceFor(id))
 
@@ -201,13 +210,15 @@ class PluginManager(
      * Only returns buttons from ACTIVE plugins (or plugins where requireActive=false and status >= INSTALLED).
      */
     fun getActiveButtons(placement: ButtonPlacement? = null): List<Pair<Plugin, PluginUiButton>> {
-        return plugins.flatMap { (_, plugin) ->
-            val status = statuses[plugin.metadata.id] ?: PluginStatus.ERROR
-            plugin.uiButtons
-                .filter { btn -> placement == null || btn.placement == placement }
-                .filter { btn -> !btn.requireActive || status == PluginStatus.ACTIVE }
-                .filter { btn -> status == PluginStatus.ACTIVE || status == PluginStatus.INSTALLED }
-                .map { btn -> plugin to btn }
+        synchronized(this) {
+            return plugins.flatMap { (_, plugin) ->
+                val status = statuses[plugin.metadata.id] ?: PluginStatus.ERROR
+                plugin.uiButtons
+                    .filter { btn -> placement == null || btn.placement == placement }
+                    .filter { btn -> !btn.requireActive || status == PluginStatus.ACTIVE }
+                    .filter { btn -> status == PluginStatus.ACTIVE || status == PluginStatus.INSTALLED }
+                    .map { btn -> plugin to btn }
+            }
         }
     }
 
@@ -269,5 +280,14 @@ class PluginManager(
                 )
             } catch (_: Exception) {}
         }
+    }
+
+    /**
+     * Simple PluginContext implementation for lifecycle callbacks.
+     */
+    private inner class DefaultPluginContext(private val pluginId: String) : PluginContext {
+        override val storageDir: String = DataPaths.pluginDir(pluginId)
+        override val coreVersion: String = this@PluginManager.coreVersion
+        override fun log(message: String) { KernelLog.i("Plugin/$pluginId", message) }
     }
 }

@@ -113,9 +113,9 @@ class PluginMarketplaceClient(
             }
         }
     }
-    private var cachedIndex: MarketplaceIndex? = null
+    @Volatile private var cachedIndex: MarketplaceIndex? = null
     private var lastEtag: String? = null
-    private var lastFetchTime = 0L
+    @Volatile private var lastFetchTime = 0L
     private val cacheTtlMs = 300_000L // 5 minutes
 
     companion object {

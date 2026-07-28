@@ -399,7 +399,8 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                             android.util.Log.i("MengPawTwin", "依赖已注入")
                             val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
                             android.util.Log.i("MengPawTwin", "PluginManager: $pm")
-                            val installResult = pm.install(plugin)
+                            // Setup/initialization context — blocking is acceptable
+                            val installResult = kotlinx.coroutines.runBlocking { pm.install(plugin) }
                             android.util.Log.i("MengPawTwin", "install结果: ${installResult.isSuccess}")
                             installResult.fold(
                                 onSuccess = {

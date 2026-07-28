@@ -16,21 +16,9 @@ object Sanitizer {
     private const val MAX_INPUT_LENGTH = 10_000
 
     // ── API Key & Token Patterns ──────────────────────────────────────────
-    // ── Prompt Injection Patterns (Inspired by QwenPaw Skill Scanner) ──
-    private val promptInjectionPatterns = listOf(
-        // Ignore/override instructions
-        Regex("(?i)ignore\\s+(all\\s+)?(previous|prior|earlier)\\s+(instructions|rules|prompts)"),
-        Regex("(?:忽略|忘掉|无视)\\s*(?:所有)?\\s*(?:之前|先前|上文)?\\s*(?:指令|指示|规则|提示|要求)"),
-        // Unrestricted mode
-        Regex("(?i)(unrestricted|debug|developer|admin|god|jailbreak)\\s+mode"),
-        Regex("(?:无限制|越狱|开发者|调试|管理员|上帝)(?:模式)?"),
-        // Bypass policy
-        Regex("(?i)bypass\\s+(content|usage|safety)\\s+policy"),
-        Regex("(?:绕过|躲开|规避)\\s*(?:内容|使用|安全)?\\s*(?:策略|政策|限制|审核)"),
-        // Concealment
-        Regex("(?i)do\\s+not\\s+(tell|inform|mention|notify)\\s+(the\\s+)?user"),
-        Regex("(?:不要|勿|请勿|别)\\s*(?:告诉|告知|通知|提及)\\s*(?:用户|使用者)")
-    )
+    // ── Prompt Injection Patterns (single source of truth in InjectionPatterns.kt) ──
+    private val promptInjectionPatterns = InjectionPatterns.INJECTION_PATTERNS
+    private val injectionLabels = InjectionPatterns.INJECTION_LABELS
 
     private val secretPatterns = listOf(
         Regex("sk-[a-zA-Z0-9_-]{20,60}"),                  // OpenAI (sk-proj-... or sk-...)
@@ -101,11 +89,10 @@ object Sanitizer {
         }
 
         // Step 4: Flag prompt injection attempts (Inspired by QwenPaw)
-        for (pattern in promptInjectionPatterns) {
-            if (pattern.containsMatchIn(result)) {
-                result = "[PROMPT_INJECTION_WARN] " + result
-                break
-            }
+        // Uses InjectionPatterns.kt shared patterns — single source of truth.
+        val injectionMatch = InjectionPatterns.findMatch(result)
+        if (injectionMatch != null && !result.startsWith("[PROMPT_INJECTION_WARN]")) {
+            result = "[PROMPT_INJECTION_WARN: $injectionMatch] " + result
         }
 
         // Step 5: Strip sensitive Unicode characters
