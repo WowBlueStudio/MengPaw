@@ -187,5 +187,6 @@ class AgentEngineTest {
         override suspend fun completeWithMessages(messages: List<Map<String, String>>): String = nextResponse
 
         override fun info(): ProviderInfo = ProviderInfo("mock", "mock-v1", ProviderType.LOCAL)
+        override fun close() {}
     }
 }

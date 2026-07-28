@@ -3,6 +3,7 @@
 
 package com.mengpaw.kernel.plugin
 
+import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.cli.ErrorCodes
@@ -53,6 +54,13 @@ class PluginExecutor(
         "auto" to ::autoCmd,
         "verify" to ::verify
     )
+
+    // ── Utilities ──────────────────────────────────────────────────────
+
+    private fun sha256Hex(bytes: ByteArray): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        return md.digest(bytes).joinToString("") { "%02x".format(it) }
+    }
 
     // ── Commands ──────────────────────────────────────────────────────
 
@@ -214,6 +222,20 @@ class PluginExecutor(
      */
     private fun loadPluginJar(jarFile: File, entry: MarketplaceEntry): String? {
         return try {
+            // ── SHA256 integrity verification BEFORE loading ──
+            // Verify that the downloaded JAR matches the expected checksum from
+            // the marketplace index. This prevents loading tampered/malicious code.
+            if (entry.checksum.isNotBlank()) {
+                val expected = entry.checksum.removePrefix("sha256:")
+                val actual = sha256Hex(jarFile.readBytes())
+                if (!actual.equals(expected, ignoreCase = true)) {
+                    KernelLog.w("PluginExecutor", "SHA256 mismatch for ${entry.id}: expected $expected, got $actual")
+                    return "Integrity check failed for ${entry.id}: JAR checksum does not match marketplace entry. The file may be corrupted or tampered."
+                }
+            } else {
+                KernelLog.w("PluginExecutor", "No checksum in marketplace entry for ${entry.id} — skipping integrity verification (UNTRUSTED)")
+            }
+
             val optimizedDir = File(jarFile.parentFile, "odex-${entry.id}")
             optimizedDir.mkdirs()
 

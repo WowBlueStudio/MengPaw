@@ -104,5 +104,5 @@ class RemoteApi(
         }
     }
 
-    fun close() { client.close() }
+    override fun close() { client.close() }
 }

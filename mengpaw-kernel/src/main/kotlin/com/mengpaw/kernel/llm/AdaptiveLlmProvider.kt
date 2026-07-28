@@ -332,7 +332,7 @@ class AdaptiveLlmProvider(
         else -> "openai"
     }
 
-    fun close() {
+    override fun close() {
         client.close()
     }
 }

@@ -56,7 +56,9 @@ class SessionManager {
 
     /**
      * Add a message to the active session.
+     * Synchronized to prevent concurrent add/compress race conditions.
      */
+    @Synchronized
     fun addMessage(sessionId: String, message: Message): Boolean {
         val maxHistory = 200
         val session = _sessions.value[sessionId] ?: return false
@@ -121,11 +123,13 @@ class SessionManager {
         val afterSnap = session.messages.toList()
         val concurrentNew = if (afterSnap.size > snapshot.size) afterSnap.drop(snapshot.size) else emptyList()
 
-        session.messages.clear()
-        session.messages.add(summaryMsg)
-        session.messages.addAll(toKeep)
-        if (concurrentNew.isNotEmpty()) session.messages.addAll(concurrentNew)
-        _sessions.value = _sessions.value + (sessionId to session)
+        synchronized(this) {
+            session.messages.clear()
+            session.messages.add(summaryMsg)
+            session.messages.addAll(toKeep)
+            if (concurrentNew.isNotEmpty()) session.messages.addAll(concurrentNew)
+            _sessions.value = _sessions.value + (sessionId to session)
+        }
         return true
     }
 

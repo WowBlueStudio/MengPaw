@@ -70,6 +70,8 @@ class AgentViewModel : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         saveCurrentSession()
+        // Unwire static trigger callback to prevent ViewModel memory leak
+        com.mengpaw.shell.service.AgentRuntime.unwireTriggers()
         sessions.values.forEach { session ->
             try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) {}
         }
@@ -1473,6 +1475,8 @@ class UnconfiguredLlmProvider : LlmProvider {
     override fun info(): ProviderInfo = ProviderInfo(
         "未配置", "none", ProviderType.LOCAL
     )
+
+    override fun close() {}
 
     override var lastUsage: TokenUsage? = null
 }

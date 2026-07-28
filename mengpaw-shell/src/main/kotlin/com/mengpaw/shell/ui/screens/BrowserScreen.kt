@@ -167,7 +167,17 @@ fun BrowserScreen(
                         addJavascriptInterface(ShellBrowserBridge(this), "MengPaw")
                         webViewClient = object : WebViewClient() {
                             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
-                                handler?.cancel()
+                                // Proceed on common recoverable errors (self-signed, date, untrusted CA
+                                // which is typical for enterprise/intranet proxies). Cancel on critical errors.
+                                val primary = error?.primaryError
+                                if (primary == SslError.SSL_DATE_INVALID ||
+                                    primary == SslError.SSL_UNTRUSTED ||
+                                    primary == SslError.SSL_IDMISMATCH) {
+                                    com.mengpaw.kernel.KernelLog.w("BrowserScreen", "SSL error (proceeding): $primary")
+                                    handler?.proceed()
+                                } else {
+                                    handler?.cancel()
+                                }
                             }
                             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                                 val u = request?.url?.toString() ?: return false

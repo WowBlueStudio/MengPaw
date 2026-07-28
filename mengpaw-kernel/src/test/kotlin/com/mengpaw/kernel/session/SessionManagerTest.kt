@@ -161,5 +161,6 @@ class SessionManagerTest {
         override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String = onComplete()
         override suspend fun completeWithMessages(messages: List<Map<String, String>>): String = onComplete()
         override fun info(): ProviderInfo = ProviderInfo("mock", "mock-model", ProviderType.LOCAL)
+        override fun close() {}
     }
 }

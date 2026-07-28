@@ -18,7 +18,15 @@ object AgentRuntime {
 
     /** Wire TriggerEngine → AgentViewModel. Called once at app startup. */
     fun wireTriggers(vm: AgentViewModel) {
-        TriggerEngine.onFire = { trigger -> vm.submitTriggerTask(trigger) }
+        // Use a weak reference to prevent the static onFire callback from
+        // leaking the ViewModel — TriggerEngine is a JVM singleton.
+        val ref = java.lang.ref.WeakReference(vm)
+        TriggerEngine.onFire = { trigger -> ref.get()?.submitTriggerTask(trigger) }
         TriggerEngine.start()
+    }
+
+    /** Clear the trigger callback. Call when the host ViewModel is being destroyed. */
+    fun unwireTriggers() {
+        TriggerEngine.onFire = null
     }
 }

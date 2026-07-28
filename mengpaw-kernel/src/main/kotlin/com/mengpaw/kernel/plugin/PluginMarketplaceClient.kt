@@ -95,7 +95,7 @@ object GeoRouter {
  */
 class PluginMarketplaceClient(
     private val cacheDir: File = File(com.mengpaw.kernel.DataPaths.PLUGIN_CACHE)
-) {
+) : AutoCloseable {
     private val client = HttpClient(OkHttp) {
         engine {
             config {
@@ -382,5 +382,10 @@ class PluginMarketplaceClient(
             host.startsWith("10.") || host.startsWith("192.168.") ||
             host.startsWith("172.") && host.substringAfter("172.").substringBefore(".").toIntOrNull()?.let { it in 16..31 } == true ||
             host.startsWith("169.254.")
+    }
+
+    /** Release the underlying HTTP client resources (connection pool, thread pool). */
+    override fun close() {
+        try { client.close() } catch (_: Exception) {}
     }
 }
