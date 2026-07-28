@@ -10,7 +10,7 @@ MengPaw 的开发受益于以下项目和框架。此处严格区分「代码参
 
 | 项目 | 许可证 | 引用内容 | MengPaw 位置 | 说明 |
 |------|--------|---------|-------------|------|
-| **Reasonix** | MIT | 上下文折叠阈值体系（50%/60%/80%/90% 四级）；陈旧工具结果裁剪；tokPerChar 动态校准；折叠经济性检查；卡死检测 | `AgentEngine.kt`, `LlmRequestBuilder.kt` | 参考 `internal/agent/compact.go` 和 `internal/agent/cache_shape.go`，移植为 Kotlin 实现。Copyright (c) 2026 Reasonix Contributors |
+| **Reasonix** | MIT | 上下文折叠阈值体系（50%/60%/80%/90% 四级）；陈旧工具结果裁剪；tokPerChar 动态校准；折叠经济性检查；卡死检测；命令执行器 DesignCommandExecutor ProcessBuilder 沙箱 | `AgentEngine.kt`, `LlmRequestBuilder.kt`, `DefaultCommandExecutor.kt` | 参考 `internal/agent/compact.go` 和 `internal/agent/cache_shape.go`，移植为 Kotlin 实现。Copyright (c) 2026 Reasonix Contributors |
 | **QwenPaw** | Apache 2.0 | Agent 文档模板体系（SOUL / BOOTSTRAP / MEMORY / PROFILE / AGENTS / HEARTBEAT 六文件结构）；Goal/Mission Loop 模式（RubricGate / GoalTurnGate / GoalBudgetGate）；LLM 重试策略（可重试状态码分类、指数退避上限、永久错误立即失败） | `AgentDocs.kt`, `AgentEngine.kt` (GoalSession, RubricGate), `AdaptiveLlmProvider.kt` (NON_RETRYABLE_STATUSES) | 文件结构参考 `agents/md_files/zh/` 目录；Loop 模式参考 `GoalMode`/`MissionMode` 设计；重试分类参考 `retry_chat_model.py`。内容已改写为 MengPaw 专属。Copyright 2025 The QwenPaw Authors |
 | **ReAct** (Google) | Apache 2.0 | Thought → Action → Observation 循环推理模式 | `PromptEngine.kt`, `AgentEngine.kt` | 论文《ReAct: Synergizing Reasoning and Acting in Language Models》提出的范式 |
 | **commonmark-java** | BSD-2-Clause | Markdown AST 解析引擎（GFM 表格/删除线扩展） | `MarkdownText.kt` | 替代手写正则解析器, 提供完整 GFM 语法支持。Copyright (c) 2015-2024 Atlassian and others |
