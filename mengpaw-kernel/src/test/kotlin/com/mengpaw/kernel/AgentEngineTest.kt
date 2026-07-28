@@ -6,6 +6,8 @@ package com.mengpaw.kernel
 import com.mengpaw.kernel.cli.*
 import com.mengpaw.kernel.llm.*
 import com.mengpaw.kernel.session.SessionManager
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -179,9 +181,8 @@ class AgentEngineTest {
 
         override suspend fun complete(prompt: String): String = nextResponse
 
-        override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String {
-            nextResponse.forEach { onToken(it.toString()) }
-            return nextResponse
+        override fun completeStreamingWithMessages(messages: List<Map<String, String>>): Flow<String> = flow {
+            for (char in nextResponse) emit(char.toString())
         }
 
         override suspend fun completeWithMessages(messages: List<Map<String, String>>): String = nextResponse

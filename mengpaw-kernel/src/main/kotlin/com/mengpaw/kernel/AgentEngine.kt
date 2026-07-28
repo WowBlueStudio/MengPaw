@@ -166,6 +166,9 @@ class AgentEngine(
         private const val TOOL_SNIPPET_OLD_BYTES = 2_000
         /** Auto-clean tool result files older than this (days). */
         private const val TOOL_RESULT_RETENTION_DAYS = 5L
+
+        /** Regex to detect "Final Answer:" marker in streaming LLM output. */
+        private val FINAL_ANSWER_REGEX = Regex("""(?i)Final Answer[:：]""")
     }
 
     /**
@@ -501,8 +504,26 @@ class AgentEngine(
                 }
 
                 val conversation = buildConversation(session.id)
-                val llmResponse = llmProvider.completeWithMessages(conversation)
-                // 利用 LLM 等待窗口刚刚结束的间隙刷盘中期记忆 (I/O 成本隐藏)
+                // ── 流式 LLM 调用: 实时推送 Final Answer tokens 到 _output ──
+                _output.value = ""
+                var isFinalAnswerDetected = false
+                val streamingBuffer = StringBuilder()
+
+                llmProvider.completeStreamingWithMessages(conversation).collect { token ->
+                    streamingBuffer.append(token)
+                    if (isFinalAnswerDetected) {
+                        _output.value = _output.value + token
+                    } else {
+                        val text = streamingBuffer.toString()
+                        FINAL_ANSWER_REGEX.find(text)?.let { match ->
+                            isFinalAnswerDetected = true
+                            val after = text.substring(match.range.last + 1)
+                            if (after.isNotBlank()) _output.value = after
+                        }
+                    }
+                }
+                val llmResponse = streamingBuffer.toString()
+                // 利用 LLM 等待窗口刚刚结束的间隙刷盘 (I/O 成本隐藏)
                 com.mengpaw.kernel.agent.AgentDocs.flushMidTermMemoryQueue()
                 val sanitized = Sanitizer.sanitize(llmResponse)
 
@@ -514,7 +535,7 @@ class AgentEngine(
 
                 val postResult = postCallMiddleware.onPostCall(sanitized, step + 1, totalChars, estimatedTokens)
                 sessionManager.addMessage(session.id, Message("assistant", postResult.text))
-                _output.value = postResult.text
+                // _output already contains the streamed final answer text — don't overwrite with postResult.text
 
                 if (postResult.shouldFold) {
                     scrollContext?.evictSpan(

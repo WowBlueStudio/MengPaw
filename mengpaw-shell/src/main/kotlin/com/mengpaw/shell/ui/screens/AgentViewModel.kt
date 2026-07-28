@@ -13,6 +13,11 @@ import com.mengpaw.kernel.agent.PostCallResult
 import com.mengpaw.kernel.agent.ScrollContextManager
 import com.mengpaw.kernel.llm.AdaptiveLlmProvider
 import com.mengpaw.kernel.llm.LlmProvider
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import com.mengpaw.kernel.llm.PromptEngine
 import com.mengpaw.kernel.llm.ProviderInfo
 import com.mengpaw.kernel.llm.ProviderType
@@ -714,6 +719,7 @@ class AgentViewModel : ViewModel() {
             val modePrefix = executionMode?.prefix
             var runningMsgIndex = -1     // fast‑path index; verified against ref before use
             var runningMsgRef: ChatMessageUi.AgentWithTrace? = null // identity guard for concurrent insertions
+            var streamingJob: Job? = null
             try {
                 // /Mission /Goal: 临时覆盖 loopMode
                 if (executionMode == ExecutionMode.MISSION) {
@@ -812,8 +818,11 @@ class AgentViewModel : ViewModel() {
                         val mutable = current.toMutableList()
                         val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
                         if (idx >= 0) {
+                            val existing = mutable[idx] as? ChatMessageUi.AgentWithTrace
+                            // 保留流式 finalContent，只更新 traces
                             mutable[idx] = ChatMessageUi.AgentWithTrace(
-                                "思考中...", traces.toList(),
+                                finalContent = existing?.finalContent ?: "思考中...",
+                                traces = traces.toList(),
                                 isRunning = true, executionMode = modePrefix, agentRef = agentRef
                             )
                         }
@@ -824,6 +833,24 @@ class AgentViewModel : ViewModel() {
                 // Reset stale state from previous runs before starting
                 session.engine.resetLoopDetection()
                 try { session.engine.stop() } catch (_: Exception) {}
+
+                // ── Streaming job: observe engine._output and update finalContent ──
+                val debouncedOutput = session.engine.output
+                    .debounce(50)
+                    .filter { it.isNotBlank() }
+                streamingJob = launch {
+                    debouncedOutput.collect { text ->
+                        session.messages.update { current ->
+                            val mutable = current.toMutableList()
+                            val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
+                            if (idx >= 0) {
+                                val msg = mutable[idx] as? ChatMessageUi.AgentWithTrace ?: return@update current
+                                mutable[idx] = msg.copy(finalContent = text)
+                            }
+                            mutable
+                        }
+                    }
+                }
 
                 // Execute via the appropriate engine mode
                 val finalTask = recallPrefix + contextPrefix
@@ -856,6 +883,7 @@ class AgentViewModel : ViewModel() {
                     loopMode == LoopMode.MISSION || loopMode == LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = finalTask, onStep = onStep)
                     else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
                 }
+                streamingJob?.cancel()
 
                 // Translate result back to Chinese for US models
                 val displayResult = if (doTranslate) translator.toChinese(result) else result
@@ -920,6 +948,7 @@ class AgentViewModel : ViewModel() {
             } catch (e: Throwable) {
                 // Safety net: catch OOM, unexpected runtime errors, etc.
                 // Prevents process crash — degrades gracefully to error message
+                streamingJob?.cancel()
                 com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Task execution failed: ${e.message}")
                 // Stop engine to prevent stale state on retry
                 try { session.engine.stop() } catch (_: Exception) {}
@@ -1549,10 +1578,16 @@ class UnconfiguredLlmProvider : LlmProvider {
     override suspend fun completeWithMessages(messages: List<Map<String, String>>): String =
         complete("")
 
-    override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String {
-        val msg = complete(prompt)
-        msg.forEach { onToken(it.toString()) }
-        return msg
+    override fun completeStreaming(prompt: String): Flow<String> = flow {
+        emit(complete(prompt))
+    }
+
+    override fun completeStreamingWithMessages(messages: List<Map<String, String>>): Flow<String> = flow {
+        val msg = completeWithMessages(messages)
+        for (char in msg) {
+            emit(char.toString())
+            kotlinx.coroutines.delay(20)
+        }
     }
 
     override fun info(): ProviderInfo = ProviderInfo(

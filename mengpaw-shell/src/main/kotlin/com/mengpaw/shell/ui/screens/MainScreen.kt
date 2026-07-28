@@ -193,6 +193,17 @@ fun MainScreen(
         }
     }
 
+    // Streaming auto-scroll: follow content growth of the running message
+    val lastRunningMsg = displayedMessages.lastOrNull()
+    if (lastRunningMsg is ChatMessageUi.AgentWithTrace && lastRunningMsg.isRunning) {
+        LaunchedEffect(lastRunningMsg.finalContent.length) {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            if (lastVisible >= displayedMessages.size - 2) {
+                safeScrollTo(displayedMessages.size - 1)
+            }
+        }
+    }
+
     // When thinking ends: scroll to top of output + auto-focus input
     LaunchedEffect(isRunning) {
         if (wasRunning && !isRunning && displayedMessages.isNotEmpty()) {

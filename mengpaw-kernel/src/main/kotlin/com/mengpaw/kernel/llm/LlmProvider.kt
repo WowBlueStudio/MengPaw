@@ -3,6 +3,9 @@
 
 package com.mengpaw.kernel.llm
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+
 /**
  * Core interface for LLM providers (local or remote).
  */
@@ -13,11 +16,6 @@ interface LlmProvider : AutoCloseable {
     suspend fun complete(prompt: String): String
 
     /**
-     * Stream a completion token by token.
-     */
-    suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String
-
-    /**
      * Send a structured messages list as a completion request.
      * Each message has "role" and "content" keys for proper chat formatting.
      *
@@ -26,6 +24,22 @@ interface LlmProvider : AutoCloseable {
     suspend fun completeWithMessages(messages: List<Map<String, String>>): String {
         val flatPrompt = messages.joinToString("\n") { "${it["role"]}: ${it["content"]}" }
         return complete(flatPrompt)
+    }
+
+    /**
+     * Stream a completion token by token via Flow.
+     * Default emits the entire response as a single token (no real streaming).
+     */
+    fun completeStreaming(prompt: String): Flow<String> = flow {
+        emit(complete(prompt))
+    }
+
+    /**
+     * Stream from a structured messages list.
+     * Default emits the entire response as a single token.
+     */
+    fun completeStreamingWithMessages(messages: List<Map<String, String>>): Flow<String> = flow {
+        emit(completeWithMessages(messages))
     }
 
     /**

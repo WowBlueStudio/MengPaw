@@ -10,6 +10,12 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.utils.io.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.*
 
 /**
@@ -57,16 +63,19 @@ class RemoteApi(
         return parseResponse(response.bodyAsText())
     }
 
-    override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String {
-        val messages = listOf(mapOf("role" to "user", "content" to prompt))
+    override fun completeStreamingWithMessages(messages: List<Map<String, String>>): Flow<String> = flow {
         val requestBody = buildRequestBody(messages, stream = true)
-
         val response = client.post(apiEndpoint) {
             header(HttpHeaders.Authorization, "Bearer $apiKey")
             header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             setBody(requestBody)
         }
-        return parseResponse(response.bodyAsText())
+        if (!response.status.isSuccess()) {
+            val errorBody = try { response.bodyAsText().take(200) } catch (_: Exception) { "unknown error" }
+            throw LlmApiException(response.status.value, errorBody)
+        }
+        val usageHolder = SseUsageHolder()
+        emitAll(response.bodyAsChannel().parseSseEvents(usageHolder).flowOn(Dispatchers.IO))
     }
 
     override fun info(): ProviderInfo = ProviderInfo(

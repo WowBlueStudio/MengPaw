@@ -9,7 +9,14 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.utils.io.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.serialization.json.*
 
 /**
@@ -89,9 +96,9 @@ class AdaptiveLlmProvider(
         return callWithRetryAndFallback(messages, stream = false, onToken = null)
     }
 
-    override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String {
-        val messages = listOf(mapOf("role" to "user", "content" to prompt))
-        return callWithRetryAndFallback(messages, stream = true, onToken = onToken)
+    override fun completeStreamingWithMessages(messages: List<Map<String, String>>): Flow<String> = flow {
+        val result = callStreamingWithRetryAndFallback(messages)
+        emitAll(result)
     }
 
     override fun info(): ProviderInfo = ProviderInfo(
@@ -224,6 +231,101 @@ class AdaptiveLlmProvider(
         val (parsedContent, usage) = parseBody(body)
         lastUsage = usage
         return parsedContent
+    }
+
+    // ── Streaming Flow Chain ─────────────────────────────────────────────
+
+    /**
+     * Execute a streaming API call with retry and fallback chain (mirror of [callWithRetryAndFallback]).
+     * Returns a [Flow] that emits tokens from the first successful provider.
+     */
+    private suspend fun callStreamingWithRetryAndFallback(
+        messages: List<Map<String, String>>
+    ): Flow<String> = flow {
+        val chain = listOf("primary" to this@AdaptiveLlmProvider) + fallbackProviders.mapIndexed { i, fb ->
+            "fallback[$i]" to fb
+        }
+        var lastError: Exception? = null
+
+        for ((label, provider) in chain) {
+            try {
+                val result = executeStreamingWithRetry(provider, label, messages)
+                emitAll(result)
+                return@flow
+            } catch (e: Exception) {
+                lastError = e
+            }
+        }
+
+        val cause = lastError?.message?.take(120) ?: "未知网络错误"
+        val hint = if (fallbackProviders.isEmpty()) "（可配置备用 API 以提高可用性）" else ""
+        throw LlmFallbackExhaustedException(
+            "LLM 流式调用失败，已重试 ${config.maxRetries + 1} 次。" +
+            "错误原因：$cause。" +
+            "请检查网络连接和 API Key 配置。$hint",
+            lastError
+        )
+    }
+
+    /**
+     * Retry streaming on a single provider up to [maxRetries] times with exponential backoff.
+     */
+    private suspend fun executeStreamingWithRetry(
+        provider: LlmProvider,
+        label: String,
+        messages: List<Map<String, String>>
+    ): Flow<String> = flow {
+        var lastError: Exception? = null
+
+        for (attempt in 0..config.maxRetries) {
+            try {
+                val result = if (provider is AdaptiveLlmProvider) {
+                    LlmRateLimiter.withLimit {
+                        provider.callDirectApiStreaming(messages)
+                    }
+                } else {
+                    provider.completeStreamingWithMessages(messages)
+                }
+                emitAll(result)
+                return@flow
+            } catch (e: Exception) {
+                if (e is LlmApiException && e.httpStatus in NON_RETRYABLE_STATUSES) throw e
+                if (e is LlmApiException && e.httpStatus == 429) LlmRateLimiter.report429()
+                lastError = e
+                if (attempt < config.maxRetries) {
+                    val baseDelay = (config.retryDelayMs * (1L shl attempt)).coerceAtMost(30_000L)
+                    val jitteredDelay = LlmRateLimiter.jitter(baseDelay)
+                    delay(jitteredDelay)
+                }
+            }
+        }
+        throw lastError ?: RuntimeException("$label: streaming retry exhausted with no captured error")
+    }
+
+    /**
+     * Direct streaming API call using SSE (Server-Sent Events).
+     * Uses [ByteReadChannel] to read tokens incrementally as they arrive.
+     */
+    internal suspend fun callDirectApiStreaming(
+        messages: List<Map<String, String>>
+    ): Flow<String> {
+        val requestBody = buildRequestBody(messages, stream = true)
+        val usageHolder = SseUsageHolder()
+
+        val response = client.post(apiEndpoint) {
+            header(HttpHeaders.Authorization, buildAuthHeader())
+            header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            setBody(requestBody)
+        }
+
+        // Validate HTTP status before streaming
+        if (!response.status.isSuccess()) {
+            val errorBody = try { response.bodyAsText().take(200) } catch (_: Exception) { "unknown error" }
+            throw LlmApiException(response.status.value, errorBody)
+        }
+
+        return response.bodyAsChannel().parseSseEvents(usageHolder).flowOn(Dispatchers.IO)
+            .onCompletion { if (usageHolder.usage != null) lastUsage = usageHolder.usage }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
