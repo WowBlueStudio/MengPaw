@@ -395,36 +395,52 @@ fun MainScreen(
                         onDismiss = { showRightSidebar = false },
                         content = { rightSidebarContent { showRightSidebar = false } })
                 }
-            }
 
-            // ── Active tags row (above input) ──
-            if (activeTags.isNotEmpty()) {
-                Row(
-                    Modifier.fillMaxWidth()
-                        .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.xs),
-                    horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)
-                ) {
-                    activeTags.forEach { tag ->
-                        val chipLabel = when (tag) {
-                            is InputTag.Mode -> tag.mode.prefix
-                            is InputTag.AgentRef -> "@${tag.agentName}"
+                // ── Floating active tags (全局悬浮，不干扰侧边栏布局) ──
+                if (activeTags.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = if (isWide() && showLeftSidebar) 280.dp else 0.dp)
+                            .padding(bottom = 4.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(ArcoRadius.md),
+                            color = ThemeColors.bgPrimary.copy(alpha = 0.95f),
+                            shadowElevation = 4.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(
+                                    horizontal = ArcoSpacing.sm,
+                                    vertical = ArcoSpacing.xs
+                                ),
+                                horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)
+                            ) {
+                                activeTags.forEach { tag ->
+                                    val chipLabel = when (tag) {
+                                        is InputTag.Mode -> tag.mode.prefix
+                                        is InputTag.AgentRef -> "@${tag.agentName}"
+                                    }
+                                    AssistChip(
+                                        onClick = {},
+                                        label = { Text(chipLabel, style = MaterialTheme.typography.labelSmall) },
+                                        trailingIcon = {
+                                            Icon(Icons.Filled.Close, strings.tagDismiss,
+                                                Modifier.size(14.dp).clickable { viewModel.removeTag(tag) })
+                                        },
+                                        shape = RoundedCornerShape(ArcoRadius.sm),
+                                        colors = AssistChipDefaults.assistChipColors(
+                                            containerColor = ThemeColors.brandContainer,
+                                            labelColor = ThemeColors.brand
+                                        )
+                                    )
+                                }
+                            }
                         }
-                        AssistChip(
-                            onClick = {},
-                            label = { Text(chipLabel, style = MaterialTheme.typography.labelSmall) },
-                            trailingIcon = {
-                                Icon(Icons.Filled.Close, strings.tagDismiss,
-                                    Modifier.size(14.dp).clickable { viewModel.removeTag(tag) })
-                            },
-                            shape = RoundedCornerShape(ArcoRadius.sm),
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = ThemeColors.brandContainer,
-                                labelColor = ThemeColors.brand
-                            )
-                        )
                     }
                 }
-            }
+            } // close content area Box
+
 
             // ── Bottom input bar ──
             Box {
