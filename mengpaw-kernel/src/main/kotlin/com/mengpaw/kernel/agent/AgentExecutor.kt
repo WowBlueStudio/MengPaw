@@ -587,6 +587,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             // Atomic write updated history
             val tmp = java.io.File(historyFile.parentFile, "session_history.json.tmp")
             tmp.writeText(newJson.toString())
+            historyFile.delete() // ensure target removed for Windows compat
             tmp.renameTo(historyFile)
             if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
 

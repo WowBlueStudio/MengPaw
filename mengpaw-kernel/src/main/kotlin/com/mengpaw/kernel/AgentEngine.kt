@@ -975,6 +975,8 @@ FIX: <if FAIL, give the worker concrete, actionable instructions for the retry. 
                 keywords = task.split(" ").filter { it.length > 1 }.take(5),
                 content = result.take(500))
             agentDocManager.updateMemory(entry)
-        } catch (e: Exception) { }
+        } catch (e: Exception) {
+            KernelLog.w("AgentEngine", "Failed to record task memory: ${e.message}")
+        }
     }
 }

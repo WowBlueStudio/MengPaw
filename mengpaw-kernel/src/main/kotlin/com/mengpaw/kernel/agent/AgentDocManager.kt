@@ -379,6 +379,8 @@ class AgentDocManager(
         parentFile?.mkdirs()
         val tmp = File(parentFile, "$name.tmp")
         tmp.writeText(text)
+        // Delete target first — renameTo on Windows fails if target exists
+        this.delete()
         tmp.renameTo(this)
         if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
     }

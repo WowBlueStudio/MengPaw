@@ -429,19 +429,17 @@ class BrowserBridge(
     }
 
     /**
-     * Capture a screenshot of the current page.
-     * Uses [WebView.capturePicture] to render the page into a Bitmap,
-     * saves it to DataPaths.SCREENSHOTS, and returns the file path.
+     * Capture a screenshot of the current visible viewport.
+     * Uses [View.draw] on a Canvas-backed Bitmap (API 26+ compatible).
+     * Saves to DataPaths.SCREENSHOTS and returns the file path.
      */
     @JavascriptInterface
     fun screenshot(): String {
         return try {
-            val picture = webView.capturePicture()
-            val bitmap = Bitmap.createBitmap(
-                picture.width, picture.height, Bitmap.Config.ARGB_8888
-            )
+            // Use View.draw() instead of deprecated capturePicture() (removed in API 33+)
+            val bitmap = Bitmap.createBitmap(webView.width, webView.height, Bitmap.Config.ARGB_8888)
             val canvas = android.graphics.Canvas(bitmap)
-            picture.draw(canvas)
+            webView.draw(canvas)
             val path = onScreenshot?.invoke(bitmap) ?: run {
                 val dir = File(DataPaths.SCREENSHOTS)
                 dir.mkdirs()
