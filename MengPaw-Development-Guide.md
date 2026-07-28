@@ -123,12 +123,12 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 | 命名空间 | 源文件 | 命令数 | 职责 |
 |---------|--------|--------|------|
-| `self` | SelfExecutor.kt | 13 | Agent 自省 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/time/notify.message/notify.banner) |
-| `agent` | AgentExecutor.kt | 12 | 文档管理 (docs/memory/memory.record/cli/profile/soul/audit/browser-tools/dream/cleanup/storage/sessions) |
+| `self` | SelfExecutor.kt | 15 | Agent 自省 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/search/search.stats/time/notify.message/notify.banner) |
+| `agent` | AgentExecutor.kt | 35 | 文档(6) + 记忆三轨(14) + 其他(5) + 会话(4) + 工作区文件(6) |
 | `plugin` | PluginExecutor + DevPlugin | 11 + 4 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade/auto + create/audit/share/examples) |
-`framework` | FrameworkPlugin | 6 | 框架发现 (discover/peers/trust/untrust/info/ping) |
+`framework` | FrameworkPlugin | 6 | 框架发现 (discover/peers/trust/untrust/info/ping) [↔ 同捆插件 plugin-framework] |
 
-> `sys` 命名空间 (39 命令) 在 `mengpaw-core` 中实现，通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。
+> `sys` 命名空间 (39 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。
 
 ### 2.4 依赖关系
 
@@ -258,7 +258,7 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 | `agent/` | 9 | AgentDocManager, AgentDocs, AgentExecutor, AgentMiddleware, AgentProfile, DreamEngine, PromptBuilder, ScrollContext, GoalSession |
 | `security/` | 4 | Sanitizer, SecurityPolicy, PromptFirewall, IntegrityProvider |
 | `mcp/` | 2 | McpServer, McpClient |
-| `acp/` | 4 | AcpProtocol, AcpServer, AcpCrypto, AcpTransport |
+| `acp/` | 7 | AcpProtocol, AcpServer, AcpCrypto, AcpTransport, DelegateHandler, McpOverAcpBridge, ShareMemoryHandler |
 | `mission/` | 1 | MissionMonitor |
 | `error/` | 1 | ErrorCollector |
 | `extension/` | 1 | ManifestParser |
