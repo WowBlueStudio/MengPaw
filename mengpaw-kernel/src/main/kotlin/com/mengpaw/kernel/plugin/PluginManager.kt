@@ -289,5 +289,7 @@ class PluginManager(
         override val storageDir: String = DataPaths.pluginDir(pluginId)
         override val coreVersion: String = this@PluginManager.coreVersion
         override fun log(message: String) { KernelLog.i("Plugin/$pluginId", message) }
+        override val commandExecutor: com.mengpaw.kernel.cli.CommandExecutor =
+            com.mengpaw.kernel.cli.DefaultCommandExecutor()
     }
 }
