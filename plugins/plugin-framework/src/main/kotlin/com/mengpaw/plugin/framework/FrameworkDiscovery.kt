@@ -30,6 +30,7 @@ class FrameworkDiscovery(private val context: Context) {
     private var registered = false
     private var discovering = false
     private var discoveryLoop: Job? = null
+    private val discoveryScope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
     /** 设备显示名称 */
     var deviceName: String = Build.MODEL ?: "MengPaw"
@@ -78,7 +79,7 @@ class FrameworkDiscovery(private val context: Context) {
     fun startContinuousDiscovery() {
         startDiscovery()
         discoveryLoop?.cancel()
-        discoveryLoop = GlobalScope.launch(Dispatchers.IO) {
+        discoveryLoop = discoveryScope.launch(Dispatchers.IO) {
             while (isActive) {
                 delay(30_000)
                 // 停止旧扫描 → 重启，确保发现列表持续刷新

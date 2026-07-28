@@ -83,18 +83,6 @@
 }
 -keep,includedescriptorclasses class com.mengpaw.kernel.**$$serializer { *; }
 -keep,includedescriptorclasses class com.mengpaw.core.**$$serializer { *; }
--keepclassmembers class com.mengpaw.kernel.** {
-    *** Companion;
-}
--keepclassmembers class com.mengpaw.core.** {
-    *** Companion;
-}
--keepclasseswithmembers class com.mengpaw.kernel.** {
-    kotlinx.serialization.KSerializer serializer(...);
-}
--keepclasseswithmembers class com.mengpaw.core.** {
-    kotlinx.serialization.KSerializer serializer(...);
-}
 
 # ── Android Security Crypto ──
 -keep class androidx.security.crypto.** { *; }

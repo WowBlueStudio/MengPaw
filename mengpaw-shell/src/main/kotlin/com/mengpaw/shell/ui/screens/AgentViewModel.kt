@@ -560,7 +560,7 @@ class AgentViewModel : ViewModel() {
         // Read Boost.md content for the agent to process on startup
         val boostFile = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$workspaceFolder/boost.md")
         val boostContent = if (boostFile.exists()) {
-            try { boostFile.readText() } catch (_: Exception) { "" }
+            try { boostFile.readText(java.nio.charset.Charset.forName("UTF-8")) } catch (_: Exception) { "" }
         } else ""
 
         // Set initial system message, then trigger agent startup
@@ -661,7 +661,10 @@ class AgentViewModel : ViewModel() {
     ) {
         if (task.isBlank()) return
         val session = activeSession()
-        if (session.isRunning.value || _isRunning.value) {
+        // Snapshot both state values atomically to avoid TOCTOU race
+        val sessionRunning = session.isRunning.value
+        val isRunning = _isRunning.value
+        if (sessionRunning || isRunning) {
             _pendingTasks.value = _pendingTasks.value + PendingTask(task, maxSteps, executionMode, agentRef)
             session.messages.value = session.messages.value + ChatMessageUi.User(task)
             return

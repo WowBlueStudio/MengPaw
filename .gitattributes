@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Auto-detect text files and normalize to LF
+* text=auto eol=lf
+
+# Explicitly mark generated/build artifacts as binary
+*.class binary
+*.dex binary
+*.apk binary
+*.jar binary
+*.aar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.svg text
+*.woff binary
+*.woff2 binary
+*.ttf binary
+
+# Kotlin/Java sources should always use LF
+*.kt text eol=lf
+*.kts text eol=lf
+*.java text eol=lf
+*.xml text eol=lf
+*.pro text eol=lf
+*.properties text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
