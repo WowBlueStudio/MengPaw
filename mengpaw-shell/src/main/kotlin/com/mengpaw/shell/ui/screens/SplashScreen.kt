@@ -188,6 +188,4 @@ fun WowBlueSplash(onFinished: () -> Unit) {
     }
 }
 
-/** Legacy: empty, no longer needed. */
-@Composable
-private fun LetterBox(letter: String, scale: Float, size: androidx.compose.ui.unit.TextUnit) {}
+
