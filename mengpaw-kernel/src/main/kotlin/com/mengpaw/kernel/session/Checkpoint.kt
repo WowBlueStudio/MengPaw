@@ -16,11 +16,6 @@ import com.mengpaw.kernel.error.ErrorCollector
  */
 class CheckpointManager(private val storageDir: String = com.mengpaw.kernel.DataPaths.CHECKPOINTS) {
 
-    companion object {
-        /** Default number of checkpoints to keep when cleaning up. */
-        const val DEFAULT_KEEP_COUNT = 3
-    }
-
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
 
     /**
@@ -63,5 +58,9 @@ class CheckpointManager(private val storageDir: String = com.mengpaw.kernel.Data
         if (files.size > keep) {
             files.drop(keep).forEach { it.delete() }
         }
+    }
+
+    companion object {
+        const val DEFAULT_KEEP_COUNT = 3
     }
 }

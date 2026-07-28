@@ -203,14 +203,30 @@ fun BrowserScreen(
 /**
  * Lightweight JS bridge for Shell's built-in WebView.
  * Provides click/type/scroll/content/eval via @JavascriptInterface.
+ *
+ * SECURITY: All @JavascriptInterface methods are callable from any web page loaded in this WebView.
+ * Input strings are bounded to prevent injection / resource exhaustion.
  */
 private class ShellBrowserBridge(private val webView: WebView) {
+    companion object {
+        private const val MAX_SELECTOR_LENGTH = 200
+        private const val MAX_TEXT_LENGTH = 10_000
+        private const val MAX_SCRIPT_LENGTH = 100_000
+    }
+
     @JavascriptInterface
-    fun click(selector: String): String = evalJs(
+    fun click(selector: String): String {
+        if (selector.length > MAX_SELECTOR_LENGTH) return """{"ok":false,"error":"selector too long"}"""
+        return evalJs(
         "(function(){try{var e=document.querySelector('${selector.replace("'","\\'")}');if(!e)return JSON.stringify({ok:false,error:'not found'});e.click();return JSON.stringify({ok:true})}catch(e){return JSON.stringify({ok:false,error:e.message})}})()")
+    }
     @JavascriptInterface
-    fun type(selector: String, text: String): String = evalJs(
+    fun type(selector: String, text: String): String {
+        if (selector.length > MAX_SELECTOR_LENGTH) return """{"ok":false,"error":"selector too long"}"""
+        if (text.length > MAX_TEXT_LENGTH) return """{"ok":false,"error":"text too long"}"""
+        return evalJs(
         "(function(){try{var e=document.querySelector('${selector.replace("'","\\'")}');if(!e)return JSON.stringify({ok:false,error:'not found'});e.focus();var v=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;v.call(e,'${text.replace("'","\\'")}');e.dispatchEvent(new Event('input',{bubbles:true}));return JSON.stringify({ok:true})}catch(e){return JSON.stringify({ok:false,error:e.message})}})()")
+    }
     @JavascriptInterface
     fun scroll(x: Float, y: Float): String = evalJs(
         "(function(){try{window.scrollBy($x,$y);return JSON.stringify({ok:true,scrollX:window.scrollX,scrollY:window.scrollY})}catch(e){return JSON.stringify({ok:false,error:e.message})}})()")
@@ -218,7 +234,10 @@ private class ShellBrowserBridge(private val webView: WebView) {
     fun content(): String = evalJs(
         "(function(){try{var ls=[];document.querySelectorAll('a[href]').forEach(function(a){var t=(a.textContent||'').trim().substring(0,80);if(t&&a.href&&!a.href.startsWith('javascript:'))ls.push({text:t,href:a.href})});return JSON.stringify({title:document.title,url:location.href,links:ls.slice(0,50),text:(document.body?document.body.innerText:'').replace(/\\s+/g,' ').trim().substring(0,3000)})}catch(e){return JSON.stringify({error:e.message})}})()")
     // SECURITY: NOT exposed via @JavascriptInterface — only callable from Kotlin (Agent)
-    fun eval(js: String): String = evalJs(js)
+    fun eval(js: String): String {
+        if (js.length > MAX_SCRIPT_LENGTH) return """{"ok":false,"error":"script too long"}"""
+        return evalJs(js)
+    }
 
     private fun evalJs(script: String): String {
         val latch = java.util.concurrent.CountDownLatch(1)

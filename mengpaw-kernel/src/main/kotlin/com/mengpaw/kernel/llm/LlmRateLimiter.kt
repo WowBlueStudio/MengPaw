@@ -29,15 +29,10 @@ import kotlin.random.Random
  */
 object LlmRateLimiter {
 
-    /** Maximum concurrent LLM API calls. User-adjustable in settings. Default matches QwenPaw. */
-    @Volatile var maxConcurrency: Int = 10
-        set(value) {
-            field = value.coerceIn(1, 50)
-            // Recreate semaphore with new limit
-            semaphore = Semaphore(field)
-        }
+    /** Maximum concurrent LLM API calls. Set at init â€?restart to change. Default matches QwenPaw. */
+    @Volatile val maxConcurrency: Int = 10
 
-    @Volatile private var semaphore: Semaphore = Semaphore(maxConcurrency)
+    private val semaphore: Semaphore = Semaphore(maxConcurrency)
 
     /** Timestamp of the most recent HTTP 429 response, used for coordinated backoff. */
     @Volatile private var last429Time: Long = 0L

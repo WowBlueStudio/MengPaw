@@ -338,7 +338,7 @@ class PluginExecutor(
                     val size = when { entry.sizeBytes >= 1_048_576 -> "%.1f MB".format(entry.sizeBytes / 1_048_576.0); else -> "%.1f KB".format(entry.sizeBytes / 1024.0) }
                     appendLine("Size: $size")
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) { KernelLog.w("PluginExecutor", "info: ${e.message}") }
         })
     }
 
@@ -492,7 +492,7 @@ class PluginExecutor(
             val sha = try {
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
                 digest.digest(file.readBytes()).joinToString("") { "%02x".format(it) }.take(16) + "..."
-            } catch (_: Exception) { "n/a" }
+            } catch (e: Exception) { KernelLog.w("PluginExecutor", "verifyOne sha: ${e.message}"); "n/a" }
             val odexInfo = if (odexExists) ", odex: ${odexCount} files" else ", odex: missing"
             "✅ $id v$version: ${file.name} (${sizeMb}MB, sha256=$sha$odexInfo)" to true
         } else {
