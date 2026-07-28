@@ -133,8 +133,9 @@ class AgentViewModel : ViewModel() {
                     agentName = _activeAgentName,
                     framework = session.framework
                 )
-                _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
+                _sessionHistory.value = _sessionHistory.value + record
                 saveSessionHistory()
+                autoCompactOverflow()
             }
         } catch (_: Exception) {}
     }
@@ -304,7 +305,7 @@ class AgentViewModel : ViewModel() {
                 } else {
                     // Clean up orphan: if we're using "sess_restored" fallback, remove old "sess_restored"
                     // If we have a real ID, just add
-                    _sessionHistory.value = (_sessionHistory.value.filter { it.id != sessionId } + record).takeLast(100)
+                    _sessionHistory.value = _sessionHistory.value.filter { it.id != sessionId } + record
                 }
                 saveSessionHistory()
                 currentSessionId = sessionId
@@ -431,6 +432,42 @@ class AgentViewModel : ViewModel() {
 
     /** All agent names currently in the session map. */
     val agentNames: Set<String> get() = sessions.keys
+
+    /** Max active (non-compacted) sessions before auto-compacting oldest. */
+    @Volatile var maxActiveSessionCount: Int = 100
+
+    // ── Cache stats ──
+
+    data class CacheStats(
+        val contextRatio: Double = 0.0,
+        val sessionCount: Int = 0,
+        val maxSessionCount: Int = 100,
+        val sessionStorageBytes: Long = 0L,
+        val archiveStorageBytes: Long = 0L
+    )
+
+    private val _cacheStats = MutableStateFlow(CacheStats())
+    val cacheStats: StateFlow<CacheStats> = _cacheStats.asStateFlow()
+
+    fun refreshCacheStats() {
+        val engine = activeEngine()
+        val ctx = engine?.getContextUsage()
+        _cacheStats.value = CacheStats(
+            contextRatio = ctx?.ratio ?: 0.0,
+            sessionCount = _sessionHistory.value.count { !it.compacted },
+            maxSessionCount = maxActiveSessionCount,
+            sessionStorageBytes = try {
+                val dir = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "sessions")
+                if (dir.exists()) dir.walkTopDown().filter { it.isFile }.sumOf { it.length() } else 0L
+            } catch (_: Exception) { 0L },
+            archiveStorageBytes = try {
+                val dir = java.io.File(
+                    com.mengpaw.kernel.DataPaths.AGENTS, "$_activeAgentName/dialog"
+                )
+                if (dir.exists()) dir.walkTopDown().filter { it.isFile }.sumOf { it.length() } else 0L
+            } catch (_: Exception) { 0L }
+        )
+    }
 
     private var stateObserverJob: Job? = null
     private var messageBindingJob: Job? = null
@@ -665,7 +702,7 @@ class AgentViewModel : ViewModel() {
         val isRunning = _isRunning.value
         if (sessionRunning || isRunning) {
             _pendingTasks.value = _pendingTasks.value + PendingTask(task, maxSteps, executionMode, agentRef)
-            session.messages.value = session.messages.value + ChatMessageUi.User(task)
+            // 不写入会话气泡 — 任务实际执行时自然加入
             return
         }
 
@@ -847,7 +884,15 @@ class AgentViewModel : ViewModel() {
                     mutable
                 }
                 loopMode = savedLoopMode
+                session.isRunning.value = false
+                _isRunning.value = false
+                session.inputEnabled.value = true
+                _inputEnabled.value = true
                 processNextPending()
+
+                // 事件驱动持久化：Agent 返回后立即落盘
+                saveCurrentSession()
+                refreshCacheStats()
 
                 // ── 自动摘要：对话结束后提取关键信息存入 memory ──
                 launch {
@@ -908,6 +953,10 @@ class AgentViewModel : ViewModel() {
                 session.inputEnabled.value = true
                 _inputEnabled.value = true
                 processNextPending()
+
+                // 事件驱动持久化：Agent 返回后立即落盘
+                saveCurrentSession()
+                refreshCacheStats()
             }
         }
     }
@@ -1200,14 +1249,17 @@ class AgentViewModel : ViewModel() {
                 agentName = currentAgent,
                 framework = activeSession().framework
             )
-            _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
+            _sessionHistory.value = _sessionHistory.value + record
             saveSessionHistory()
+            autoCompactOverflow()
         }
         activeSession().messages.value = listOf(ChatMessageUi.Agent("新会话已创建。"))
     }
 
     /** Switch to a saved session, restoring its messages. */
     fun switchToSession(record: SessionRecord) {
+        // 已归档会话不可续聊
+        if (record.compacted) return
         // Save current session back to its per-session file
         ensureSessionId()
         val currentMsgs = activeSession().messages.value.filter { it !is ChatMessageUi.System }
@@ -1239,6 +1291,33 @@ class AgentViewModel : ViewModel() {
             else it
         }
         saveSessionHistory()
+    }
+
+    /** Auto-compact oldest non-active sessions when count exceeds maxActiveSessionCount. */
+    private fun autoCompactOverflow() {
+        val max = maxActiveSessionCount
+        val active = _sessionHistory.value.filter { !it.compacted }
+        val overflow = active.size - max
+        if (overflow <= 0) return
+
+        val toCompact = active.sortedBy { it.timestamp }.take(overflow)
+            .filter { it.id != currentSessionId }
+        if (toCompact.isEmpty()) return
+
+        val compactedIds = toCompact.map { it.id }.toSet()
+        _sessionHistory.value = _sessionHistory.value.map { record ->
+            if (record.id in compactedIds) {
+                record.copy(compacted = true, compactedSummary = record.preview.take(200))
+            } else record
+        }
+        saveSessionHistory()
+        android.util.Log.i("AgentViewModel", "Auto-compacted ${toCompact.size} oldest sessions, active=${active.size - toCompact.size}")
+    }
+
+    /** Set max active session count and trigger auto-compaction. */
+    fun updateMaxActiveSessionCount(count: Int) {
+        maxActiveSessionCount = count
+        autoCompactOverflow()
     }
 
     /** Repair a session — fixes truncated markdown / unclosed syntax caused by abnormal interruption. */
@@ -1401,6 +1480,8 @@ class AgentViewModel : ViewModel() {
         cleanupOrphanSessions()
         // ── Dedup: merge records with same title+agent that are likely duplicates ──
         dedupSessionHistory()
+        // ── Auto-compact overflow sessions based on maxActiveSessionCount ──
+        autoCompactOverflow()
         // Restore last active session messages
         if (!restoreCurrentSession()) {
             // Only show welcome if no saved session

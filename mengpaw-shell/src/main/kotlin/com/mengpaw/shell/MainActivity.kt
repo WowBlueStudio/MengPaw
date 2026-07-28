@@ -454,8 +454,12 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                     hideArchived = hideArchived,
                     onToggleHideArchived = { agentViewModel.toggleHideArchived() },
                     onSelectSession = { record ->
-                        agentViewModel.switchToSession(record)
-                        close()
+                        if (record.compacted) {
+                            android.widget.Toast.makeText(ctx, "📦 会话已归档，只读不可续聊", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            agentViewModel.switchToSession(record)
+                            close()
+                        }
                     },
                     onDeleteSession = { agentViewModel.deleteSession(it) },
                     onCompactSession = { agentViewModel.compactSession(it) },

@@ -125,6 +125,7 @@ data class SettingsState(
     val useChinese: Boolean = true,
     val agentLanguageMode: AgentLanguageMode = AgentLanguageMode.FOLLOW_UI,
     val loopMode: LoopMode = LoopMode.REACT,
+    val maxActiveSessionCount: Int = 100,
     // API section state
     val apiSectionExpanded: Boolean = true,
     val savedProviders: List<SavedProvider> = emptyList(),
@@ -154,6 +155,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     init {
         loadSavedProviders()
+        loadMaxActiveSessionCount()
+    }
+
+    /** Load persisted maxActiveSessionCount from file. */
+    private fun loadMaxActiveSessionCount() {
+        try {
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "max_active_sessions")
+            if (file.exists()) {
+                val count = file.readText().trim().toIntOrNull()?.coerceIn(1, 1000)
+                if (count != null) _state.value = _state.value.copy(maxActiveSessionCount = count)
+            }
+        } catch (_: Exception) {}
     }
 
     /** Returns the first saved provider, or null if none configured. */
@@ -360,6 +373,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun updateCommandTimeout(sec: Int) {
         _state.value = _state.value.copy(commandTimeoutSec = sec.coerceIn(10, 600))
+    }
+    fun updateMaxActiveSessionCount(count: Int) {
+        val clamped = count.coerceIn(1, 1000)
+        _state.value = _state.value.copy(maxActiveSessionCount = clamped)
+        // Persist to file
+        try {
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "max_active_sessions")
+            file.parentFile?.mkdirs()
+            file.writeText(clamped.toString())
+        } catch (_: Exception) {}
     }
     fun updateTimezone(tz: String) { _state.value = _state.value.copy(timezone = tz) }
     fun updateContextStrategy(s: String) { _state.value = _state.value.copy(contextStrategy = s) }

@@ -45,6 +45,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         "session.archive" to ::sessionArchive,
         "session.current" to ::sessionCurrent,
         "read" to ::readFile,
+        "read.archive" to ::readArchive,
         "write" to ::writeFile,
         "ls" to ::listFiles,
         "rm" to ::deleteFile,
@@ -716,6 +717,23 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             ExecutionResult.ok(content)
         } catch (e: Exception) {
             ExecutionResult.fail("读取失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+    }
+
+    /** agent.read.archive <date> — read archived dialog/YYYY-MM-DD.jsonl content. */
+    private suspend fun readArchive(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val date = args.firstOrNull() ?: return ExecutionResult.fail("用法: agent.read.archive <YYYY-MM-DD>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        if (!Regex("""^\d{4}-\d{2}-\d{2}$""").matches(date)) {
+            return ExecutionResult.fail("日期格式无效: $date，请使用 YYYY-MM-DD", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        }
+        val agent = ctx.agentName ?: "MengPaw"
+        val file = java.io.File(com.mengpaw.kernel.DataPaths.dialogArchiveDir(agent), "$date.jsonl")
+        if (!file.exists()) return ExecutionResult.fail("未找到 $date 的归档", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        return try {
+            val content = file.readText().take(8000)
+            ExecutionResult.ok("📦 归档 $date.jsonl (${file.length()}B):\n\n$content")
+        } catch (e: Exception) {
+            ExecutionResult.fail("读取归档失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
         }
     }
 

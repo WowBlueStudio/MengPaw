@@ -989,8 +989,11 @@ private fun PendingTasksBar(
             Spacer(Modifier.width(6.dp))
             Text("待办 (${tasks.size})", style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
             Spacer(Modifier.width(8.dp))
+            val previewText = tasks.firstOrNull()?.text?.let {
+                it.take(25) + if (it.length > 25) "…" else ""
+            } ?: ""
             Text(
-                tasks.first().text.take(25) + if (tasks.first().text.length > 25) "…" else "",
+                previewText,
                 style = MaterialTheme.typography.bodySmall,
                 color = ThemeColors.textSecondary,
                 maxLines = 1,

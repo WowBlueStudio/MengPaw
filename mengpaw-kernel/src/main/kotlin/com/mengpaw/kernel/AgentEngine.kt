@@ -107,6 +107,27 @@ class AgentEngine(
     val estimatedSavingsUsd: Double get() = cacheHitTokens * 0.0001372
     val cacheStrategyLabel: String get() = CacheStrategy.labelFor(llmRequestBuilder.cacheStrategy)
 
+    /** Context usage stats for UI display. */
+    data class ContextUsage(
+        val usedTokens: Int,
+        val maxTokens: Int,
+        val ratio: Double
+    )
+
+    /** Get current LLM context window usage. */
+    fun getContextUsage(): ContextUsage {
+        val sessionId = conversationSessionId ?: return ContextUsage(0, 0, 0.0)
+        val session = sessionManager.getSession(sessionId) ?: return ContextUsage(0, 0, 0.0)
+        val totalChars = llmRequestBuilder.currentSystemPrompt.length +
+            sessionManager.getStructuredHistory(session.id).sumOf { (it["content"]?.length ?: 0) }
+        val estimatedTokens = (totalChars * llmRequestBuilder.calibratedTokPerChar).toInt()
+        return ContextUsage(
+            usedTokens = estimatedTokens,
+            maxTokens = DEFAULT_CONTEXT_WINDOW,
+            ratio = estimateContextRatio(estimatedTokens)
+        )
+    }
+
     fun configureCacheStrategy(endpoint: String) {
         llmRequestBuilder.cacheStrategy = CacheStrategy.forProvider(endpoint)
     }
@@ -959,7 +980,13 @@ FIX: <if FAIL, give the worker concrete, actionable instructions for the retry. 
     fun stop() { _state.value = AgentState.Idle; runningJob?.cancel(); runningJob = null }
 
     private suspend fun buildConversation(sessionId: String): List<Map<String, String>> {
-        sessionManager.compressIfNeeded(llmProvider, specificSessionId = sessionId)
+        val didCompact = sessionManager.compressIfNeeded(llmProvider, specificSessionId = sessionId)
+        if (didCompact) {
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val dialogRef = "dialog/$today.jsonl"
+            sessionManager.addMessage(sessionId, Message("system",
+                "[上下文已压缩] 完整历史已归档至 $dialogRef。如需查阅历史细节，使用命令: agent.read.archive $dialogRef"))
+        }
         val history = sessionManager.getStructuredHistory(sessionId)
         val nonSystemHistory = if (history.isNotEmpty() && history[0]["role"] == "system") history.drop(1) else history
         return llmRequestBuilder.buildMessages(nonSystemHistory, injectCacheAnnotations = true)
