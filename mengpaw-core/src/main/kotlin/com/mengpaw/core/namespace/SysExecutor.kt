@@ -527,11 +527,16 @@ object SysExecutor {
 
     private suspend fun appUninstall(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val pkg = args.firstOrNull() ?: return ExecutionResult.fail("Usage: sys.app.uninstall <package>")
+        // Prevent Agent from uninstalling MengPaw itself or system packages
+        if (pkg == app.packageName) {
+            return ExecutionResult.fail("Cannot uninstall MengPaw itself", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        }
         return try {
+            // ACTION_DELETE opens the system uninstall dialog — user must confirm manually
             val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg"))
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             app.startActivity(intent)
-            ExecutionResult.ok("Uninstall dialog opened for: $pkg")
+            ExecutionResult.ok("Uninstall dialog opened for: $pkg (user confirmation required)")
         } catch (e: Exception) {
             ExecutionResult.fail("Uninstall failed: ${e.message}")
         }

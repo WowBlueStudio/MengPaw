@@ -6,7 +6,7 @@ package com.mengpaw.kernel.llm
 /**
  * Core interface for LLM providers (local or remote).
  */
-interface LlmProvider {
+interface LlmProvider : AutoCloseable {
     /**
      * Send a prompt and get a completion.
      */

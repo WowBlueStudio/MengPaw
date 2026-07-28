@@ -22,10 +22,11 @@ class Pipeline(
 ) {
     /** Integrity provider for path-level protection; set after construction for Android. */
     var integrityProvider: IntegrityProvider = NoOpIntegrityProvider
-    /** Audit log of executed commands. */
+    private val pipelineLock = Any()
+    /** Audit log of executed commands. Guarded by [pipelineLock]. */
     private val auditLog = mutableListOf<AuditEntry>()
 
-    /** Timestamps of recent commands for rate limiting. */
+    /** Timestamps of recent commands for rate limiting. Guarded by [pipelineLock]. */
     private val recentTimestamps = mutableListOf<Long>()
 
     /** Execute a command through the full security pipeline. */
@@ -75,9 +76,11 @@ class Pipeline(
             // SECURITY: Sanitize output to prevent API key/token leakage in audit log
             val sanitizedOutput = com.mengpaw.kernel.security.Sanitizer.sanitize(result.output.take(200))
             val entry = AuditEntry(startTime, context.sessionId, trimmed, result.success, sanitizedOutput)
-            auditLog.add(entry)
+            synchronized(pipelineLock) {
+                auditLog.add(entry)
+                if (auditLog.size > MAX_AUDIT_ENTRIES) auditLog.removeAt(0)
+            }
             Pipeline.addAuditEntry(entry)
-            if (auditLog.size > MAX_AUDIT_ENTRIES) auditLog.removeAt(0)
             return result
 
         } catch (e: Exception) {
@@ -100,14 +103,16 @@ class Pipeline(
         val now = System.currentTimeMillis()
         val windowStart = now - 1000
 
-        // Remove timestamps outside the 1-second window
-        recentTimestamps.removeAll { it < windowStart }
+        synchronized(pipelineLock) {
+            // Remove timestamps outside the 1-second window
+            recentTimestamps.removeAll { it < windowStart }
 
-        if (recentTimestamps.size >= maxCommandsPerSecond) {
-            return "Rate limit exceeded: max $maxCommandsPerSecond commands/second. Wait and retry."
+            if (recentTimestamps.size >= maxCommandsPerSecond) {
+                return "Rate limit exceeded: max $maxCommandsPerSecond commands/second. Wait and retry."
+            }
+
+            recentTimestamps.add(now)
         }
-
-        recentTimestamps.add(now)
         return null
     }
 
@@ -125,7 +130,7 @@ class Pipeline(
      * when explicitly authorized by the current security context.
      */
     fun clearAuditLog() {
-        auditLog.clear()
+        synchronized(pipelineLock) { auditLog.clear() }
     }
 
     private fun failAudit(
@@ -134,26 +139,32 @@ class Pipeline(
         ErrorCollector.report(ErrorType.PLUGIN_ERROR, "Pipeline", "$error [$errorCode]",
             sessionId = context.sessionId, agentName = context.agentName,
             metadata = mapOf("command" to command.take(200), "errorCode" to errorCode))
-        auditLog.add(AuditEntry(
-            timestamp = startTime, sessionId = context.sessionId,
-            command = command, success = false, output = error.take(200)
-        ))
-        if (auditLog.size > MAX_AUDIT_ENTRIES) auditLog.removeAt(0)
+        synchronized(pipelineLock) {
+            auditLog.add(AuditEntry(
+                timestamp = startTime, sessionId = context.sessionId,
+                command = command, success = false, output = error.take(200)
+            ))
+            if (auditLog.size > MAX_AUDIT_ENTRIES) auditLog.removeAt(0)
+        }
         return ExecutionResult.fail(error, errorCode = errorCode)
     }
 
     companion object {
         private const val MAX_AUDIT_ENTRIES = 500
+        private val globalAuditLock = Any()
 
-        /** Shared audit log — readable by agent.audit command. */
+        /** Shared audit log — readable by agent.audit command. Guarded by [globalAuditLock]. */
         private val globalAuditLog = mutableListOf<AuditEntry>()
 
         fun addAuditEntry(entry: AuditEntry) {
-            globalAuditLog.add(entry)
-            if (globalAuditLog.size > MAX_AUDIT_ENTRIES) globalAuditLog.removeAt(0)
+            synchronized(globalAuditLock) {
+                globalAuditLog.add(entry)
+                if (globalAuditLog.size > MAX_AUDIT_ENTRIES) globalAuditLog.removeAt(0)
+            }
         }
 
-        fun getGlobalAuditLog(count: Int = 50): List<AuditEntry> = globalAuditLog.takeLast(count)
+        fun getGlobalAuditLog(count: Int = 50): List<AuditEntry> =
+            synchronized(globalAuditLock) { globalAuditLog.takeLast(count) }
     }
 }
 

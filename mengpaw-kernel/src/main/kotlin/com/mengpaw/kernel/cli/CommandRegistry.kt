@@ -12,7 +12,9 @@ class CommandRegistry {
 
     /**
      * Register a command with full path like "fs.cat"
+     * Synchronized: called from plugin lifecycle and AgentEngine threads.
      */
+    @Synchronized
     fun register(fullName: String, executor: suspend (List<String>, ExecutionContext) -> ExecutionResult) {
         commands[fullName] = executor
         val parts = fullName.split(".", limit = 2)
@@ -24,6 +26,7 @@ class CommandRegistry {
     /**
      * Register all commands for a namespace at once.
      */
+    @Synchronized
     fun registerNamespace(namespace: String, executors: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult>) {
         executors.forEach { (name, executor) ->
             register("$namespace.$name", executor)
@@ -31,7 +34,7 @@ class CommandRegistry {
     }
 
     /**
-     * Find a command by its full name.
+     * Find a command by its full name. Read-only, thread-safe due to Map COW semantics.
      */
     fun find(fullName: String): (suspend (List<String>, ExecutionContext) -> ExecutionResult)? {
         return commands[fullName]
@@ -52,6 +55,7 @@ class CommandRegistry {
      * Unregister a single command by its full name.
      * @return true if a command was removed, false if it didn't exist.
      */
+    @Synchronized
     fun unregister(fullName: String): Boolean {
         val removed = commands.remove(fullName) != null
         val parts = fullName.split(".", limit = 2)
@@ -68,6 +72,7 @@ class CommandRegistry {
      * Unregister all commands belonging to a namespace.
      * @return the number of commands removed.
      */
+    @Synchronized
     fun unregisterNamespace(namespace: String): Int {
         val nsCommands = namespaces.remove(namespace) ?: return 0
         var count = 0

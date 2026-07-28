@@ -430,8 +430,10 @@ class AgentEngine(
         // Reuse existing session across multiple user messages so the
         // LLM sees full conversation history, not just the current message.
         val session: Session
-        if (conversationSessionId != null) {
-            val existing = sessionManager.getSession(conversationSessionId!!)
+        // Snapshot volatile field to avoid TOCTOU race with newConversation()
+        val currentSessionId = conversationSessionId
+        if (currentSessionId != null) {
+            val existing = sessionManager.getSession(currentSessionId)
             if (existing != null) {
                 session = existing
             } else {
@@ -585,6 +587,9 @@ class AgentEngine(
             sessionManager.addMessage(session.id, Message("assistant", msg))
             _state.value = AgentState.Finished(msg)
             return msg
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Re-throw to respect coroutine cancellation contract
+            throw e
         } catch (e: Exception) {
             ErrorCollector.report(ErrorType.AGENT_CRASH, "AgentEngine.runReActLoop", e.message ?: "(no message)",
                 throwable = e, sessionId = session.id, agentName = agentName)
