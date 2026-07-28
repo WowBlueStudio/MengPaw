@@ -407,7 +407,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                                     pm.activate(plugin.metadata.id).fold(
                                         onSuccess = {
                                             android.util.Log.i("MengPawTwin", "插件激活成功")
-                                            this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
+                                            (ctx as? androidx.activity.ComponentActivity)?.lifecycleScope?.launch(Dispatchers.IO) {
                                                 startAcpForTwin(ctx, name)
                                             }
                                             android.widget.Toast.makeText(ctx, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
@@ -423,7 +423,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                                     pm.activate(plugin.metadata.id).fold(
                                         onSuccess = {
                                             android.util.Log.i("MengPawTwin", "二次激活成功")
-                                            this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
+                                            (ctx as? androidx.activity.ComponentActivity)?.lifecycleScope?.launch(Dispatchers.IO) {
                                                 startAcpForTwin(ctx, name)
                                             }
                                             android.widget.Toast.makeText(ctx, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()

@@ -16,10 +16,6 @@ import kotlin.random.Random
  *   - Random jitter (±25%) on retry delays (prevents thundering herd on reconnect)
  *   - Shared 429 backoff: when any call gets HTTP 429, all callers pause briefly
  *
- * Usage:
- *   LlmRateLimiter.maxConcurrency = 10  // User-configurable via settings
- *   LlmRateLimiter.withLimit { ... }     // Wrap LLM API calls
- *
  * Design rationale (Android single-user):
  *   - Semaphore is preferred over sliding-window QPM: Android runs one user at a time,
  *     peak concurrency is 3-5 calls (Mission workers + Heartbeat + manual chat). Sliding
@@ -29,10 +25,13 @@ import kotlin.random.Random
  */
 object LlmRateLimiter {
 
-    /** Maximum concurrent LLM API calls. Set at init �?restart to change. Default matches QwenPaw. */
-    @Volatile val maxConcurrency: Int = 10
+    /** Maximum concurrent LLM API calls. User-configurable via settings. */
+    @Volatile var maxConcurrency: Int = 10
 
-    private val semaphore: Semaphore = Semaphore(maxConcurrency)
+    /** Fixed-size semaphore initialized at startup. Concurrency changes update only the
+     *  tracking field — the semaphore instance stays fixed to avoid race conditions
+     *  with in-flight permits. */
+    private val semaphore: Semaphore = Semaphore(10)
 
     /** Timestamp of the most recent HTTP 429 response, used for coordinated backoff. */
     @Volatile private var last429Time: Long = 0L
@@ -44,8 +43,7 @@ object LlmRateLimiter {
     }
 
     /**
-     * Wait if the system is in a post-429 cooldown period.
-     * Returns immediately if no recent 429 was reported.
+     * Wait if a 429 cooldown is active.
      */
     private suspend fun await429Cooldown() {
         val elapsed = System.currentTimeMillis() - last429Time
@@ -56,10 +54,6 @@ object LlmRateLimiter {
 
     /**
      * Execute [block] under the concurrency limit.
-     * - Acquires a semaphore permit (suspends if at capacity)
-     * - Checks for post-429 cooldown before proceeding
-     *
-     * @return the result of [block]
      */
     suspend fun <T> withLimit(block: suspend () -> T): T {
         await429Cooldown()
@@ -69,9 +63,6 @@ object LlmRateLimiter {
     /**
      * Apply random jitter to a retry delay.
      * Adds ±25% random variation to prevent thundering herd.
-     *
-     * @param baseDelayMs the base delay in milliseconds
-     * @return jittered delay in milliseconds
      */
     fun jitter(baseDelayMs: Long): Long {
         val jitterRange = (baseDelayMs * 0.25).toLong().coerceAtLeast(1)
