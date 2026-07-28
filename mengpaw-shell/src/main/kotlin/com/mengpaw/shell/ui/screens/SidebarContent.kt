@@ -105,6 +105,7 @@ fun SidebarContent(
     var showAddFramework by remember { mutableStateOf(false) }
     var showTwinConfirmDialog by remember { mutableStateOf(false) }
     var twinPairTarget by remember { mutableStateOf<FrameworkContact?>(null) }
+    val scope = rememberCoroutineScope()
 
     // Discover agents from disk — no remember() so list stays fresh when agents are created/deleted
     val agentsDir = File(com.mengpaw.kernel.DataPaths.AGENTS)
@@ -118,6 +119,7 @@ fun SidebarContent(
     Column(Modifier.fillMaxHeight().width(280.dp).background(ThemeColors.bgPrimary).padding(ArcoSpacing.lg).verticalScroll(rememberScrollState())) {
         // ── Agents ──
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
             Text("智能体", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             IconButton(onClick = { showNewAgentDialog = true }, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Outlined.Add, "新建智能体", tint = ThemeColors.brand, modifier = Modifier.size(20.dp))
@@ -176,6 +178,7 @@ fun SidebarContent(
 
                 if (dirName == activeAgent) {
                     Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.15f)) {
+                            // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
                         Text("当前", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
                     }
@@ -186,6 +189,7 @@ fun SidebarContent(
         Spacer(Modifier.height(ArcoSpacing.md))
 
         // ── Framework Status ──
+        // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
         Text("框架状态", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(ArcoSpacing.sm))
         FrameworkStatus.entries.forEach { status ->
@@ -214,6 +218,7 @@ fun SidebarContent(
         if (manualStatus) {
             TextButton(onClick = { manualStatus = false; frameworkStatus = FrameworkStatus.ONLINE },
                 modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
+                // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
                 Text("恢复自动切换", style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
             }
         }
@@ -222,6 +227,7 @@ fun SidebarContent(
 
         // ── Framework Directory ──
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
             Text("框架通讯录", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             IconButton(onClick = { showAddFramework = true }, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Outlined.PersonAdd, "添加框架", tint = ThemeColors.brand, modifier = Modifier.size(20.dp))
@@ -419,6 +425,7 @@ fun SidebarContent(
                                 Spacer(Modifier.weight(1f))
                                 if (agentName == activeAgent) {
                                     Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.15f)) {
+                            // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
                                         Text("当前", Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand, fontSize = 9.sp)
                                     }
@@ -437,6 +444,7 @@ fun SidebarContent(
         HorizontalDivider(Modifier.padding(vertical = ArcoSpacing.lg))
 
         // ── Quick Nav ──
+        // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
         Text("功能", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(ArcoSpacing.sm))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
@@ -693,7 +701,7 @@ fun SidebarContent(
                     }
                     // 发起配对 (已激活的直接配对, 未激活的等 ACP 就绪后配对)
                     if (peer != null) {
-                        kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.Job()).launch {
+                        scope.launch(Dispatchers.IO) {
                             if (!twinAlreadyActive) {
                                 // 轮询等待 ACP 就绪 (最多 5 秒)
                                 val ready = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.awaitAcpReady(5000L)
@@ -729,6 +737,7 @@ fun SidebarContent(
             },
             dismissButton = {
                 TextButton(onClick = { showTwinConfirmDialog = false; twinPairTarget = null }) {
+                // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
                     Text("取消")
                 }
             }
@@ -780,6 +789,7 @@ private fun AgentCardDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
+            // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
                 Text("智能体名片", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = {
@@ -940,6 +950,7 @@ private fun AgentCardDialog(
                     var showDeleteConfirm by remember { mutableStateOf(false) }
                     TextButton(onClick = { showDeleteConfirm = true },
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                        // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
                         Text("删除智能体", fontSize = 13.sp)
                     }
                     if (showDeleteConfirm) {
@@ -1270,6 +1281,7 @@ private fun FrameworkCardDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
+            // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
                 Text("框架名片", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = {

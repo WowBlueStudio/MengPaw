@@ -14,11 +14,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import com.mengpaw.core.AndroidLogger
 import com.mengpaw.core.DataPathsInitializer
@@ -135,7 +135,7 @@ class MainActivity : ComponentActivity() {
         }
         // 延迟初始化: 非关键路径在 UI 渲染后异步执行
         val launchIntent = intent
-        CoroutineScope(Dispatchers.IO).launch { deferInit(launchIntent) }
+        lifecycleScope.launch(Dispatchers.IO) { deferInit(launchIntent) }
     }
 
     /** Handle incoming OPEN_URL intent from Browser APK without creating a new task. */
@@ -267,7 +267,7 @@ class MainActivity : ComponentActivity() {
         val marker = java.io.File(filesDir, "twin_activated")
         if (!marker.exists()) return
         val agentName = try { marker.readText().trim() } catch (_: Exception) { "MengPaw" }
-        CoroutineScope(Dispatchers.IO).launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val plugin = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin()
                 com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext = this@MainActivity
@@ -407,7 +407,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                                     pm.activate(plugin.metadata.id).fold(
                                         onSuccess = {
                                             android.util.Log.i("MengPawTwin", "插件激活成功")
-                                            CoroutineScope(Dispatchers.IO).launch {
+                                            this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
                                                 startAcpForTwin(ctx, name)
                                             }
                                             android.widget.Toast.makeText(ctx, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
@@ -423,7 +423,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                                     pm.activate(plugin.metadata.id).fold(
                                         onSuccess = {
                                             android.util.Log.i("MengPawTwin", "二次激活成功")
-                                            CoroutineScope(Dispatchers.IO).launch {
+                                            this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
                                                 startAcpForTwin(ctx, name)
                                             }
                                             android.widget.Toast.makeText(ctx, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
