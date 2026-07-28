@@ -197,34 +197,11 @@ self.acp trusted — 查看已配对设备列表
      * @return null if the prompt is clean, or a defensive prefix to wrap the prompt.
      */
     fun checkUserPrompt(prompt: String): String? {
-        val lower = prompt.lowercase()
-
-        // Ignore/override instructions
-        if (Regex("(?i)ignore\\s+(all\\s+)?(previous|prior|earlier)\\s+(instructions|rules|prompts)").containsMatchIn(prompt)) {
-            return "⚠️ [注入防御] 检测到指令覆盖攻击 — 已添加安全前缀"
+        // Single source of truth: InjectionPatterns.kt shared patterns
+        val match = InjectionPatterns.findMatch(prompt)
+        if (match != null) {
+            return "⚠️ [注入防御] 检测到$match — 已添加安全前缀"
         }
-        if (Regex("(?:忽略|忘掉|无视)\\s*(?:所有)?\\s*(?:之前|先前|上文)?\\s*(?:指令|指示|规则|提示|要求)").containsMatchIn(prompt)) {
-            return "⚠️ [注入防御] 检测到指令覆盖攻击 — 已添加安全前缀"
-        }
-
-        // Unrestricted/jailbreak mode
-        if (Regex("(?i)(unrestricted|jailbreak|god\\s*mode)\\s*(mode|prompt)?").containsMatchIn(prompt)) {
-            return "⚠️ [注入防御] 检测到越狱模式请求 — 已添加安全前缀"
-        }
-
-        // Bypass policy
-        if (Regex("(?i)bypass\\s+(content|usage|safety)\\s+policy").containsMatchIn(prompt)) {
-            return "⚠️ [注入防御] 检测到策略绕过请求 — 已添加安全前缀"
-        }
-
-        // Concealment — "do not tell the user"
-        if (Regex("(?i)do\\s+not\\s+(tell|inform|mention|notify)\\s+(the\\s+)?user").containsMatchIn(prompt)) {
-            return "⚠️ [注入防御] 检测到信息隐藏请求 — 已添加安全前缀"
-        }
-        if (Regex("(?:不要|勿|请勿|别)\\s*(?:告诉|告知|通知|提及)\\s*(?:用户|使用者)").containsMatchIn(prompt)) {
-            return "⚠️ [注入防御] 检测到信息隐藏请求 — 已添加安全前缀"
-        }
-
         return null // clean
     }
 

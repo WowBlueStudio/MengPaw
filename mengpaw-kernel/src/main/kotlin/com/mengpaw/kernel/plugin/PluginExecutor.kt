@@ -220,7 +220,7 @@ class PluginExecutor(
      * Plugins distributed via the marketplace should be packaged as DEX-containing JARs.
      * Returns a success message on load, or null if loading is not possible.
      */
-    private fun loadPluginJar(jarFile: File, entry: MarketplaceEntry): String? {
+    private suspend fun loadPluginJar(jarFile: File, entry: MarketplaceEntry): String? {
         return try {
             // ── SHA256 integrity verification BEFORE loading ──
             // Verify that the downloaded JAR matches the expected checksum from

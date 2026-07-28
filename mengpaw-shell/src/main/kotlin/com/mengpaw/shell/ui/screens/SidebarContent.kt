@@ -693,7 +693,7 @@ fun SidebarContent(
                     }
                     // 发起配对 (已激活的直接配对, 未激活的等 ACP 就绪后配对)
                     if (peer != null) {
-                        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                        kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.Job()).launch {
                             if (!twinAlreadyActive) {
                                 // 轮询等待 ACP 就绪 (最多 5 秒)
                                 val ready = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.awaitAcpReady(5000L)

@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.agent
 
 import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.llm.LlmProvider
 import java.io.File
@@ -175,8 +176,12 @@ object DreamEngine {
         val reviewed = records.size
         var tagsAdded = 0; var linksFound = 0; var archived = 0; var summarized = 0
 
-        // Auto-tag
-        records.filter { it.tags.size < 3 }.forEach { _ -> tagsAdded++ }
+        // NOTE: Auto-tagging is deferred — requires modifying MemoryRecord objects
+        // and persisting them back to the memory file. Tracked for future implementation.
+        val underTagged = records.count { it.tags.size < 3 }
+        if (underTagged > 0) {
+            KernelLog.w("DreamEngine", "$underTagged records have < 3 tags (auto-tagging not yet implemented)")
+        }
 
         // Cross-link
         for (i in records.indices) {
