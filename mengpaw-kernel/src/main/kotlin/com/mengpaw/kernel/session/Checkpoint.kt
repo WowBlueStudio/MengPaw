@@ -16,6 +16,11 @@ import com.mengpaw.kernel.error.ErrorCollector
  */
 class CheckpointManager(private val storageDir: String = com.mengpaw.kernel.DataPaths.CHECKPOINTS) {
 
+    companion object {
+        /** Default number of checkpoints to keep when cleaning up. */
+        const val DEFAULT_KEEP_COUNT = 3
+    }
+
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
 
     /**
@@ -49,7 +54,7 @@ class CheckpointManager(private val storageDir: String = com.mengpaw.kernel.Data
     /**
      * Clean up old checkpoints, keeping only the N most recent.
      */
-    suspend fun cleanup(sessionId: String, keep: Int = 3) = withContext(Dispatchers.IO) {
+    suspend fun cleanup(sessionId: String, keep: Int = DEFAULT_KEEP_COUNT) = withContext(Dispatchers.IO) {
         val dir = File(storageDir)
         if (!dir.exists()) return@withContext
         val files = dir.listFiles { f -> f.name.startsWith(sessionId) }

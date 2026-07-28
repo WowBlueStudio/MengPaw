@@ -51,8 +51,9 @@ class AgentDocManager(
             ErrorCollector.report(e, "AgentDocManager.initAgentDocs")
         }
 
-        // CLI.md — always regenerate from active plugin list
-        regenerateCliDoc(pluginManager ?: PluginManager())
+        // CLI.md — always regenerate from active plugin list (skip if no plugin manager yet)
+        val pm = pluginManager
+        if (pm != null) regenerateCliDoc(pm)
     }
 
     // ── Read ──────────────────────────────────────────────────────────

@@ -8,9 +8,6 @@ import com.mengpaw.kernel.llm.LlmProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.text.SimpleDateFormat
@@ -204,27 +201,6 @@ $conversationText
             // Fallback: simple concatenation
             "目标: (参见完整历史)\n进展: 对话已压缩\n关键决策: 无\n下一步: 继续对话\n关键上下文: 见 dialog/归档文件"
         }
-    }
-
-    /**
-     * Deprecated — kept for backward compatibility.
-     * Calls the LLM to produce a simple summary. Prefer [summarizeMessagesStructured].
-     */
-    @Deprecated("Use summarizeMessagesStructured for QwenPaw-style structured output")
-    private suspend fun summarizeMessages(
-        llmProvider: LlmProvider,
-        messages: List<Message>
-    ): String {
-        val conversationText = messages.joinToString("\n") { "[${it.role}] ${it.content}" }
-        val summaryPrompt = listOf(
-            mapOf(
-                "role" to "user",
-                "content" to "Summarize the following conversation history concisely. " +
-                    "Capture key decisions, actions taken, important context, and outcomes. " +
-                    "Keep the summary under 500 words.\n\n$conversationText"
-            )
-        )
-        return llmProvider.completeWithMessages(summaryPrompt)
     }
 
     /**

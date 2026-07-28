@@ -114,7 +114,7 @@ val EnglishStrings = AppStrings(
 
     appearance = "Appearance",
     darkTheme = "Dark Theme",
-    darkThemeDesc = "亮色 / 暗色 / 跟随系统",
+    darkThemeDesc = "Light / Dark / Follow System",
     language = "Language",
     languageDesc = "Switch UI language",
     languageZh = "中文",
