@@ -78,8 +78,6 @@ class AgentViewModel : ViewModel() {
     }
 
     /** Autosave active session every 30s and on pause. */
-    private val autoSaveJob = kotlinx.coroutines.Job()
-
     private fun scheduleAutoSave() {
         viewModelScope.launch {
             while (true) {

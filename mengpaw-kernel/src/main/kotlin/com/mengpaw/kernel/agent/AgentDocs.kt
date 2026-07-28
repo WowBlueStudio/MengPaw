@@ -97,14 +97,14 @@ object AgentDocs {
             val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",
                 java.util.Locale.getDefault()).format(java.util.Date())
             val line = "\n## $timestamp\n\n$entry\n"
-            val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "appendLongTermMemory.read: ${e.message}"); "" } else ""
+            val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "readExisting: ${e.message}"); "" } else ""
             val tmp = File(file.parentFile, "memory.tmp")
             tmp.writeText(existing + line)
             file.delete() // ensure target removed (Windows: renameTo fails if target exists)
             tmp.renameTo(file)
-            if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "appendLongTermMemory.cleanup: ${e.message}") } }
+            if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
             onDocChanged?.invoke(agentName, file.absolutePath)
-        } catch (_: Exception) {}
+        } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup2: ${e.message}") }
     }
 
     /** Search long-term memory by keywords. */
@@ -192,12 +192,12 @@ object AgentDocs {
             try {
                 val file = File(DataPaths.midTermMemoryFile(agent, today()))
                 file.parentFile?.mkdirs()
-                val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "appendLongTermMemory.read: ${e.message}"); "" } else ""
+                val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "readExisting: ${e.message}"); "" } else ""
                 val tmp = File(file.parentFile, "memory.tmp")
                 tmp.writeText(existing + lines.toString())
                 tmp.renameTo(file)
-                if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "appendLongTermMemory.cleanup: ${e.message}") } }
-            } catch (_: Exception) {}
+                if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
+            } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup2: ${e.message}") }
         }
         return count
     }
@@ -209,7 +209,7 @@ object AgentDocs {
         val allMatched = mutableListOf<String>()
         dir.listFiles()?.filter { it.name.startsWith("memory_") && it.name.endsWith(".md") && it.name != "memory.md" }
             ?.sortedByDescending { it.name }?.forEach { file ->
-                val content = try { file.readText() } catch (_: Exception) { "" }
+                val content = try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "searchMidTermMemory: ${e.message}"); "" }
                 if (content.isBlank()) return@forEach
                 val entries = content.split(Regex("(?=## )")).filter { it.isNotBlank() }
                 entries.filter { entry ->
@@ -228,7 +228,7 @@ object AgentDocs {
         dir.listFiles()?.filter { it.name.startsWith("memory_") && it.name.endsWith(".md") && it.name != "memory.md" }
             ?.forEach { file ->
                 val date = file.name.removePrefix("memory_").removeSuffix(".md")
-                val count = try { file.readLines().count { it.startsWith("## ") } } catch (_: Exception) { 0 }
+                val count = try { file.readLines().count { it.startsWith("## ") } } catch (e: Exception) { KernelLog.w("AgentDocs", "midTermStats: ${e.message}"); 0 }
                 result[date] = count
             }
         return result.toList().sortedByDescending { it.first }.toMap()
@@ -255,12 +255,12 @@ object AgentDocs {
                 }
             }
             val entry = "\n## $timestamp · 里程碑总结\n\n$report\n---\n"
-            val existing = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else header
+            val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "saveProjectMemory.read: ${e.message}"); "" } else header
             val tmp = File(file.parentFile, "project.tmp")
             tmp.writeText(existing + entry)
             tmp.renameTo(file)
-            if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "appendLongTermMemory.cleanup: ${e.message}") } }
-        } catch (_: Exception) {}
+            if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
+        } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup2: ${e.message}") }
     }
 
     /** Read a project memory file. */
@@ -305,7 +305,7 @@ object AgentDocs {
             val remaining = entries.filter { it != matched[0] }
             writeAtomic(file, remaining.joinToString("\n").trim() + "\n")
             1
-        } catch (_: Exception) { 0 }
+        } catch (e: Exception) { KernelLog.w("AgentDocs", "deleteEntry: ${e.message}"); 0 }
     }
 
     /**
@@ -330,7 +330,7 @@ object AgentDocs {
             val remaining = entries.map { if (it == old) edited else it }
             writeAtomic(file, remaining.joinToString("\n").trim() + "\n")
             1
-        } catch (_: Exception) { 0 }
+        } catch (e: Exception) { KernelLog.w("AgentDocs", "editEntry: ${e.message}"); 0 }
     }
 
     /** Count entries matching an ID in a file. Returns -1 on error. */
@@ -342,7 +342,7 @@ object AgentDocs {
             content.split(Regex("(?=## )")).count {
                 it.isNotBlank() && it.trimStart().startsWith("## $entryId")
             }
-        } catch (_: Exception) { -1 }
+        } catch (e: Exception) { KernelLog.w("AgentDocs", "countMatchingEntries: ${e.message}"); -1 }
     }
 
     private fun writeAtomic(file: File, content: String) {
@@ -350,7 +350,7 @@ object AgentDocs {
         val tmp = File(file.parentFile, "${file.name}.tmp")
         tmp.writeText(content)
         tmp.renameTo(file)
-        if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+        if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "writeAtomic.cleanup: ${e.message}") } }
     }
 
     // ── Convenience wrappers (delegate to generic engine) ─────────

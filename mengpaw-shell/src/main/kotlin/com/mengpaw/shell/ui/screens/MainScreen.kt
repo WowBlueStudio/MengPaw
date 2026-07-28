@@ -63,6 +63,9 @@ import com.mengpaw.shell.ui.MAX_CONTENT_WIDTH
 import com.mengpaw.shell.ui.isWide
 import java.io.File
 
+/** Regex for extracting image paths from Markdown: ![alt](path). Cached. */
+private val MARKDOWN_IMAGE_REGEX = Regex("!\\[.*?]\\((.*?)\\)")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -1060,7 +1063,7 @@ private fun BubbleWrapper(
                 })
             }
             // Image save for Agent messages
-            val imgs = Regex("!\\[.*?]\\((.*?)\\)").findAll(bubbleText).toList()
+            val imgs = MARKDOWN_IMAGE_REGEX.findAll(bubbleText).toList()
             if (imgs.isNotEmpty()) {
                 DropdownMenuItem(text = { Text("💾 保存图片 (${imgs.size})") }, onClick = {
                     imgs.forEach { m ->
