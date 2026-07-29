@@ -10,6 +10,7 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.utils.io.*
 import kotlinx.serialization.json.*
 
 /**
@@ -66,7 +67,44 @@ class RemoteApi(
             header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             setBody(requestBody)
         }
-        return parseResponse(response.bodyAsText())
+
+        // HTTP error check
+        if (!response.status.isSuccess()) {
+            val errorBody = try { response.bodyAsText() } catch (_: Exception) { "unknown" }
+            return errorBody.take(500)
+        }
+
+        // SSE streaming: read data: lines incrementally
+        val channel = response.bodyAsChannel()
+        val fullContent = StringBuilder()
+
+        while (!channel.isClosedForRead) {
+            val line = try {
+                channel.readUTF8Line()?.trim()
+            } catch (_: Exception) { break }
+
+            if (line == null) break
+            if (line.isEmpty() || !line.startsWith("data:")) continue
+
+            val data = line.removePrefix("data:").trim()
+            if (data == "[DONE]") break
+
+            try {
+                val json = Json.parseToJsonElement(data).jsonObject
+                val delta = json["choices"]?.jsonArray
+                    ?.firstOrNull()?.jsonObject
+                    ?.get("delta")?.jsonObject
+                    ?: continue
+                delta["content"]?.jsonPrimitive?.contentOrNull?.let { text ->
+                    if (text.isNotEmpty()) {
+                        fullContent.append(text)
+                        onToken(text)
+                    }
+                }
+            } catch (_: Exception) { /* skip malformed SSE */ }
+        }
+
+        return fullContent.toString()
     }
 
     override fun info(): ProviderInfo = ProviderInfo(

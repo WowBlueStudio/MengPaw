@@ -84,6 +84,7 @@ class AgentViewModel : ViewModel() {
             // Write current_session.json with sessionId embedded
             val wrapper = org.json.JSONObject()
             wrapper.put("sessionId", currentSessionId)
+            wrapper.put("engineSessionId", session.engine.currentConversationId() ?: "")
             wrapper.put("messages", messagesToJson(msgs))
             val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
             atomicWriteJson(file, wrapper)
@@ -249,6 +250,44 @@ class AgentViewModel : ViewModel() {
                     recovered.add(ChatMessageUi.System("⚠️ 上次会话异常中断，已自动恢复。"))
                 }
                 activeSession().messages.value = recovered
+
+                // ── Engine session restore after process death ──
+                // Android kills processes without warning. The engine's in-memory
+                // SessionManager and conversationSessionId are lost. We must push
+                // the restored UI messages back into the engine so the LLM sees
+                // full conversation history on the next user message.
+                if (msgs.isNotEmpty()) {
+                    val engineMsgs = msgs.mapNotNull { msg ->
+                        when (msg) {
+                            is ChatMessageUi.User -> "user" to msg.content
+                            is ChatMessageUi.Agent -> "assistant" to msg.content
+                            is ChatMessageUi.AgentWithTrace -> {
+                                if (msg.isRunning) null  // interrupted — handled below
+                                else "assistant" to msg.finalContent
+                            }
+                            else -> null
+                        }
+                    }
+                    val restoredId = try {
+                        val text = file.readText()
+                        val json = org.json.JSONObject(text)
+                        json.optString("sessionId", null)?.takeIf { it.isNotBlank() && it != "null" }
+                    } catch (_: Exception) { null }
+                    val prevEngineId = try {
+                        val text = file.readText()
+                        org.json.JSONObject(text).optString("engineSessionId", null)?.takeIf { it.isNotBlank() && it != "null" }
+                    } catch (_: Exception) { null }
+                    // Use UI session ID for the engine restore if available
+                    val engineSessionId = restoredId ?: "sess_${System.currentTimeMillis()}"
+                    try {
+                        activeSession().engine.restoreConversation(
+                            externalSessionId = engineSessionId,
+                            messages = engineMsgs,
+                            lastWasInterrupted = wasStuck,
+                            previousEngineSessionId = prevEngineId
+                        )
+                    } catch (_: Exception) { /* engine restore best-effort */ }
+                }
 
                 // Build sidebar record — reuse original ID if available, fallback to "sess_restored"
                 val preview = msgs.firstOrNull()?.let {
@@ -853,7 +892,7 @@ class AgentViewModel : ViewModel() {
                 val errorMsg = if (e is OutOfMemoryError) {
                     "⚠️ 内存不足，任务已中断。请清理会话历史后重试。"
                 } else {
-                    "⚠️ 执行出错：${e.message?.take(120) ?: "未知错误"}"
+                    "⚠️ 执行出错：${e.message?.take(120) ?: "未知错误"} — 已完成的工作已自动记录，继续对话可恢复进度。"
                 }
                 session.messages.update { current ->
                     val mutable = current.toMutableList()
@@ -1379,6 +1418,41 @@ class AgentViewModel : ViewModel() {
         }
         // Start periodic auto-save
         scheduleAutoSave()
+
+        // ── Observe session lifecycle events for recovery hints ──
+        viewModelScope.launch {
+            com.mengpaw.kernel.session.SessionEventBus.events.collect { event ->
+                when (event.kind) {
+                    com.mengpaw.kernel.session.SessionEventBus.EventKind.RUN_INTERRUPTED,
+                    com.mengpaw.kernel.session.SessionEventBus.EventKind.LLM_CALL_ERROR -> {
+                        // Show a brief recovery hint in the message stream
+                        val hint = when {
+                            event.summary.contains("timeout", ignoreCase = true) ||
+                                event.summary.contains("超时", ignoreCase = true) ||
+                                event.summary.contains("timed out", ignoreCase = true) ->
+                                "ℹ️ 连接短暂中断，已自动记录恢复点。继续对话即可。"
+                            event.summary.contains("consecutive", ignoreCase = true) ||
+                                event.payload["consecutive"] == "true" ->
+                                "ℹ️ 连续错误，建议清理会话历史或检查 API 配置后重试。"
+                            else ->
+                                "ℹ️ 执行中断，已自动恢复。继续发送消息即可。"
+                        }
+                        val session = sessions[_activeAgentName]
+                        if (session != null && !_isRunning.value) {
+                            session.messages.value = session.messages.value + ChatMessageUi.System(hint)
+                        }
+                    }
+                    com.mengpaw.kernel.session.SessionEventBus.EventKind.SESSION_RECOVERED -> {
+                        val session = sessions[_activeAgentName]
+                        if (session != null) {
+                            session.messages.value = session.messages.value +
+                                ChatMessageUi.System("🔄 已从上次中断处恢复，继续执行。")
+                        }
+                    }
+                    else -> { /* no UI action needed */ }
+                }
+            }
+        }
     }
 
     // ── Running-message index resolution with identity guard ──────────

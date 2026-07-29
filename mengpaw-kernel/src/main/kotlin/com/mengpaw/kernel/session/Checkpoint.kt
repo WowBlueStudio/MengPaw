@@ -32,13 +32,21 @@ class CheckpointManager(private val storageDir: String = com.mengpaw.kernel.Data
      * Load the latest checkpoint for a session asynchronously.
      */
     suspend fun loadLatest(sessionId: String): Checkpoint? = withContext(Dispatchers.IO) {
+        loadLatestSync(sessionId)
+    }
+
+    /**
+     * Synchronous version for use in init/recovery paths where coroutine context
+     * is not available (e.g. process death recovery in restoreCurrentSession).
+     */
+    fun loadLatestSync(sessionId: String): Checkpoint? {
         val dir = File(storageDir)
-        if (!dir.exists()) return@withContext null
+        if (!dir.exists()) return null
         val files = dir.listFiles { f -> f.name.startsWith(sessionId) }
             ?.sortedByDescending { it.lastModified() }
-            ?: return@withContext null
-        if (files.isEmpty()) return@withContext null
-        try {
+            ?: return null
+        if (files.isEmpty()) return null
+        return try {
             json.decodeFromString<Checkpoint>(files.first().readText())
         } catch (e: Exception) {
             ErrorCollector.report(e, "CheckpointManager.loadLatest")

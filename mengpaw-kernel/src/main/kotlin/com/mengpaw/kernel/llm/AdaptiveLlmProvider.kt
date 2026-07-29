@@ -10,6 +10,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.delay
+import io.ktor.utils.io.*
 import kotlinx.serialization.json.*
 
 /**
@@ -182,6 +183,9 @@ class AdaptiveLlmProvider(
 
     /**
      * Direct API call (bypasses retry/fallback — used internally by executeWithRetry).
+     *
+     * When [stream]=true and [onToken] is provided, uses SSE line-by-line parsing
+     * and invokes [onToken] for each content delta (matching Reasonix readStream pattern).
      */
     internal suspend fun callDirectApi(
         messages: List<Map<String, String>>,
@@ -194,29 +198,29 @@ class AdaptiveLlmProvider(
             header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             setBody(requestBody)
         }
-        // Read body — socket timeout here means LLM response arrived but Ktor's timer expired.
-        val body = try {
-            response.bodyAsText()
-        } catch (e: Exception) {
-            if (response.status.isSuccess()) {
-                // HTTP 200 but body read failed (likely socket timeout between packets).
-                // Rethrow with context so retry/fallback can react.
-                throw LlmApiException(
-                    response.status.value,
-                    "Body read failed after HTTP 200: ${e.message}. Consider increasing socketTimeoutMs."
-                )
-            }
+
+        // Validate HTTP-level error before reading body
+        if (!response.status.isSuccess()) {
+            val errorBody = try { response.bodyAsText() } catch (_: Exception) { "unknown" }
             throw LlmApiException(
                 response.status.value,
-                "Failed to read response body: ${e.message}"
+                "HTTP ${response.status.value}: ${errorBody.take(200)}"
             )
         }
 
-        // Validate HTTP-level error
-        if (!response.status.isSuccess()) {
+        // ── Streaming path: SSE line-by-line (Reasonix readStream pattern) ──
+        if (stream && onToken != null) {
+            return consumeSseStream(response, onToken)
+        }
+
+        // ── Non-streaming path ──
+        val body = try {
+            response.bodyAsText()
+        } catch (e: Exception) {
+            // HTTP 200 but body read failed (likely socket timeout between packets).
             throw LlmApiException(
                 response.status.value,
-                "HTTP ${response.status.value}: ${body.take(200)}"
+                "Body read failed after HTTP 200: ${e.message}. Consider increasing socketTimeoutMs."
             )
         }
 
@@ -224,6 +228,80 @@ class AdaptiveLlmProvider(
         val (parsedContent, usage) = parseBody(body)
         lastUsage = usage
         return parsedContent
+    }
+
+    // ── SSE Streaming (Reasonix readStream pattern) ─────────────────────────
+
+    /**
+     * Consume an SSE streaming response line by line.
+     *
+     * Architecture (matching Reasonix ② SSE 解析层):
+     *   bufio.Scanner(resp.Body) → data: line → json.Unmarshal → onToken(delta.content)
+     *
+     * Handles:
+     * - OpenAI-compatible `data: {...}` events with `choices[0].delta.content`
+     * - DeepSeek `reasoning_content` delta
+     * - `[DONE]` terminator
+     * - Inline `usage` in the final event
+     */
+    private suspend fun consumeSseStream(
+        response: HttpResponse,
+        onToken: (String) -> Unit
+    ): String {
+        val channel = response.bodyAsChannel()
+        val fullContent = StringBuilder()
+
+        while (!channel.isClosedForRead) {
+            val line = try {
+                channel.readUTF8Line()?.trim()
+            } catch (_: Exception) { break }
+
+            if (line == null) break
+            if (line.isEmpty() || !line.startsWith("data:")) continue
+
+            val data = line.removePrefix("data:").trim()
+            if (data == "[DONE]") break
+
+            try {
+                val json = Json.parseToJsonElement(data).jsonObject
+
+                // Capture usage from inline usage event (some APIs include it in last chunk)
+                json["usage"]?.jsonObject?.let { u ->
+                    lastUsage = TokenUsage(
+                        promptTokens = u["prompt_tokens"]?.jsonPrimitive?.int ?: 0,
+                        completionTokens = u["completion_tokens"]?.jsonPrimitive?.int ?: 0,
+                        totalTokens = u["total_tokens"]?.jsonPrimitive?.int ?: 0,
+                        cacheHitTokens = u["prompt_cache_hit_tokens"]?.jsonPrimitive?.int ?: 0,
+                        cacheMissTokens = u["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
+                    )
+                }
+
+                // Extract delta content from choices[0]
+                val delta = json["choices"]?.jsonArray
+                    ?.firstOrNull()?.jsonObject
+                    ?.get("delta")?.jsonObject
+                    ?: continue
+
+                // Visible text delta (OpenAI standard)
+                delta["content"]?.jsonPrimitive?.contentOrNull?.let { text ->
+                    if (text.isNotEmpty()) {
+                        fullContent.append(text)
+                        onToken(text)
+                    }
+                }
+
+                // Reasoning delta (DeepSeek reasoning_content)
+                delta["reasoning_content"]?.jsonPrimitive?.contentOrNull?.let { text ->
+                    if (text.isNotEmpty()) {
+                        onToken(text)
+                    }
+                }
+            } catch (_: Exception) {
+                // Skip malformed SSE lines (same resilience as Reasonix readStream)
+            }
+        }
+
+        return fullContent.toString()
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

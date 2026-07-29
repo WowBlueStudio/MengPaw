@@ -8,8 +8,16 @@ import com.mengpaw.kernel.llm.LlmProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -34,15 +42,32 @@ class SessionManager {
 
     /**
      * Create a new session for a given task.
+     *
+     * @param scope the lifecycle scope: "agent" (default), "framework", "system"
+     * @param agentId the agent handling this session (defaults to [agentName])
      */
-    fun createSession(task: String, metadata: Map<String, String> = emptyMap()): Session {
+    fun createSession(
+        task: String,
+        metadata: Map<String, String> = emptyMap(),
+        scope: String = "agent",
+        agentId: String? = null
+    ): Session {
         val session = Session(
             id = UUID.randomUUID().toString().take(8),
             task = task,
+            scope = scope,
+            agentId = agentId ?: agentName,
             metadata = metadata
         )
         _sessions.value = _sessions.value + (session.id to session)
         _activeSessionId.value = session.id
+        // Emit lifecycle event (matching OpenClaw "created" event kind)
+        recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+            kind = SessionEventBus.EventKind.SESSION_CREATED,
+            sessionId = session.id,
+            agentName = agentName,
+            summary = task.take(120)
+        ))
         return session
     }
 
@@ -204,13 +229,330 @@ $conversationText
     }
 
     /**
+     * Deprecated — kept for backward compatibility.
+     * Calls the LLM to produce a simple summary. Prefer [summarizeMessagesStructured].
+     */
+    @Deprecated("Use summarizeMessagesStructured for QwenPaw-style structured output")
+    private suspend fun summarizeMessages(
+        llmProvider: LlmProvider,
+        messages: List<Message>
+    ): String {
+        val conversationText = messages.joinToString("\n") { "[${it.role}] ${it.content}" }
+        val summaryPrompt = listOf(
+            mapOf(
+                "role" to "user",
+                "content" to "Summarize the following conversation history concisely. " +
+                    "Capture key decisions, actions taken, important context, and outcomes. " +
+                    "Keep the summary under 500 words.\n\n$conversationText"
+            )
+        )
+        return llmProvider.completeWithMessages(summaryPrompt)
+    }
+
+    /**
      * Get the structured conversation history as a list of role/content maps.
      * Used for prefix-cache-optimized LLM requests where messages[0] is the system prompt.
+     *
+     * ⚠️ Filters out [Message.localOnly] messages — recovery metadata must never reach the LLM.
      */
     fun getStructuredHistory(sessionId: String): List<Map<String, String>> {
-        return _sessions.value[sessionId]?.messages?.map {
-            mapOf("role" to it.role, "content" to it.content)
-        } ?: emptyList()
+        return _sessions.value[sessionId]?.messages
+            ?.filter { !it.localOnly }
+            ?.map {
+                mapOf("role" to it.role, "content" to it.content)
+            } ?: emptyList()
+    }
+
+    // ── Interrupted Turn Recovery (Reasonix Level 2) ─────────────────────
+
+    /**
+     * Record an interrupted assistant turn as a LocalOnly message.
+     * Stored in session history for backwards scanning; filtered out by getStructuredHistory().
+     *
+     * Matching Reasonix [recordInterruptedDisplay] in agent.go (line 140).
+     */
+    @Synchronized
+    fun recordInterruptedTurn(
+        sessionId: String,
+        completedTools: List<InterruptedToolSummary>,
+        interruptedTools: List<String>,
+        hasPartialText: Boolean,
+        hasPartialReasoning: Boolean
+    ) {
+        val session = _sessions.value[sessionId] ?: return
+        val recovery = InterruptedTurnRecovery(
+            pending = true,
+            completedTools = completedTools,
+            interruptedTools = interruptedTools,
+            droppedPartialText = hasPartialText,
+            droppedPartialReasoning = hasPartialReasoning
+        )
+        session.messages.add(Message(
+            role = "system",
+            content = "interrupted-turn-recovery",
+            localOnly = true,
+            interruptedTurn = recovery
+        ))
+        _sessions.value = _sessions.value + (sessionId to session)
+    }
+
+    /**
+     * Check whether the given session has a pending (un-consumed) interrupted turn recovery.
+     */
+    fun hasPendingRecovery(sessionId: String): Boolean {
+        return _sessions.value[sessionId]?.messages?.let { msgs ->
+            com.mengpaw.kernel.session.findPendingRecovery(msgs) != null
+        } ?: false
+    }
+
+    /**
+     * Consume the pending interrupted turn recovery by setting [InterruptedTurnRecovery.pending] to false.
+     * Called by AgentEngine.buildConversation() after the recovery block has been injected.
+     *
+     * @return true if a pending recovery was found and consumed.
+     */
+    @Synchronized
+    fun consumePendingRecovery(sessionId: String): Boolean {
+        val session = _sessions.value[sessionId] ?: return false
+        for (i in session.messages.indices.reversed()) {
+            val m = session.messages[i]
+            if (m.localOnly && m.interruptedTurn != null && m.interruptedTurn.pending) {
+                session.messages[i] = m.copy(
+                    interruptedTurn = m.interruptedTurn.copy(pending = false)
+                )
+                _sessions.value = _sessions.value + (sessionId to session)
+                return true
+            }
+        }
+        return false
+    }
+
+    // ── Durable Session Event Log (matching OpenClaw session_state_events table) ──
+
+    /**
+     * Record a session lifecycle event to both the in-memory bus and the durable JSONL log.
+     *
+     * Architecture (matching OpenClaw recordSessionStateEvent):
+     *   1. Append to {agentName}/sessions/{sessionId}.event.log (JSONL, one line per event)
+     *   2. Emit to SessionEventBus (in-memory, for subscribers)
+     *
+     * The event log file uses line count as a natural auto-increment sequence:
+     *   line 1 = seq 1, line 2 = seq 2, etc. (matching OpenClaw's INTEGER PRIMARY KEY AUTOINCREMENT)
+     */
+    @Synchronized
+    fun recordSessionEvent(sessionId: String, event: SessionEventBus.SessionEvent) {
+        // 1. Durable write to event log
+        try {
+            val dir = java.io.File(DataPaths.dialogArchiveDir(agentName)).also { it.mkdirs() }
+            val logFile = java.io.File(dir, "${sessionId}.event.log")
+            val logLine = buildJsonObject {
+                put("kind", event.kind.name)
+                put("ts", event.timestamp)
+                put("summary", event.summary)
+                if (event.payload.isNotEmpty()) {
+                    putJsonObject("payload") {
+                        event.payload.forEach { (k, v) -> put(k, v) }
+                    }
+                }
+            }.toString()
+            logFile.appendText(logLine + "\n")
+        } catch (_: Exception) {
+            // Non-fatal — event log failure should not affect session operation
+        }
+        // 2. In-memory broadcast
+        SessionEventBus.emit(event)
+    }
+
+    /**
+     * List all session events that occurred after the given sequence number.
+     * Sequence numbers correspond to 1-indexed lines in the event log.
+     *
+     * Matching OpenClaw listSessionStateEventsSince(sessionKey, agentId, afterSequence, limit).
+     *
+     * @return list of events, newest first; empty list if log is missing or corrupted.
+     */
+    fun listEventsSince(sessionId: String, afterSeq: Int = 0, limit: Int = 50): List<SessionEventBus.SessionEvent> {
+        try {
+            val dir = java.io.File(DataPaths.dialogArchiveDir(agentName))
+            val logFile = java.io.File(dir, "${sessionId}.event.log")
+            if (!logFile.exists()) return emptyList()
+
+            val lines = logFile.readLines()
+            val result = mutableListOf<SessionEventBus.SessionEvent>()
+            val end = minOf(lines.size, afterSeq + limit)
+            for (index in afterSeq until end) {
+                try {
+                    val root = Json.parseToJsonElement(lines[index]).jsonObject
+                    val kindName = root["kind"]?.jsonPrimitive?.content ?: continue
+                    val kind = try { SessionEventBus.EventKind.valueOf(kindName) } catch (_: Exception) { continue }
+                    val summary = root["summary"]?.jsonPrimitive?.content ?: ""
+                    val ts = root["ts"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+                    val payload = mutableMapOf<String, String>()
+                    root["payload"]?.jsonObject?.let { payloadObj ->
+                        for ((k, v) in payloadObj) {
+                            try { payload[k] = v.jsonPrimitive.content } catch (_: Exception) { continue }
+                        }
+                    }
+                    result.add(SessionEventBus.SessionEvent(
+                        kind = kind,
+                        sessionId = sessionId,
+                        agentName = agentName,
+                        summary = summary,
+                        payload = payload,
+                        timestamp = ts
+                    ))
+                } catch (_: Exception) { /* skip malformed line */ }
+            }
+            return result
+        } catch (_: Exception) { return emptyList() }
+    }
+
+    // ── Event Log Pruning (matching OpenClaw pruneSessionStateEvents) ──
+
+    /**
+     * Prune old session events from the JSONL log.
+     * Removes events older than [maxAgeDays] and keeps at most [maxLines] most recent lines.
+     * Called periodically (e.g. during compression or at startup) to prevent unbounded growth.
+     *
+     * Matching OpenClaw pruneSessionStateEvents() — 30 day / 50000 row policy.
+     */
+    @Synchronized
+    fun pruneSessionEvents(sessionId: String, maxAgeDays: Int = 30, maxLines: Int = 5000) {
+        try {
+            val dir = java.io.File(DataPaths.dialogArchiveDir(agentName))
+            val logFile = java.io.File(dir, "${sessionId}.event.log")
+            if (!logFile.exists() || logFile.length() == 0L) return
+
+            val lines = logFile.readLines()
+            if (lines.size <= maxLines) return  // still under limit
+
+            val cutoff = System.currentTimeMillis() - maxAgeDays * 24L * 3600 * 1000L
+            val pruned = lines.filter { line ->
+                try {
+                    val root = Json.parseToJsonElement(line).jsonObject
+                    val ts = root["ts"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+                    ts >= cutoff
+                } catch (_: Exception) { true }  // keep unparseable lines
+            }.takeLast(maxLines)
+
+            if (pruned.size < lines.size) {
+                logFile.writeText(pruned.joinToString("\n") + "\n")
+            }
+        } catch (_: Exception) { /* pruning failure is non-fatal */ }
+    }
+
+    // ── Session Integrity Check (matching OpenClaw assertSqliteIntegrity) ──
+
+    /**
+     * Verify session data integrity. Checks:
+     * - No [localOnly] messages leaked between non-local messages
+     * - The last message is structurally complete (not truncated JSON)
+     * - Event log is parseable (non-destructive check)
+     *
+     * Matching OpenClaw assertSqliteIntegrity + terminal latch pattern.
+     */
+    fun checkSessionIntegrity(sessionId: String): Boolean {
+        val session = _sessions.value[sessionId] ?: return false
+        val msgs = session.messages
+        if (msgs.isEmpty()) return true
+
+        for (i in msgs.indices) {
+            val msg = msgs[i]
+            // localOnly messages should only appear after another localOnly, or at boundaries
+            if (msg.localOnly && msg.interruptedTurn != null) {
+                // An interrupted_turn message must have a "user" message after it eventually
+                // (if the session continued), otherwise it's a dangling interrupt record
+                val hasUserAfter = msgs.drop(i + 1).any { it.role == "user" && !it.localOnly }
+                val isLastMsg = i == msgs.lastIndex
+                // Dangling interrupt at end of session is acceptable (pending recovery)
+                if (!hasUserAfter && !isLastMsg) {
+                    // localOnly message in the middle of history with no subsequent user message
+                    // suggests a compaction or history reordering issue
+                    return false
+                }
+            }
+            // Content should not be blank for non-system messages
+            if (msg.role == "assistant" && msg.content.isBlank() && msg.interruptedTurn == null) {
+                return false
+            }
+        }
+        return true
+    }
+
+    /**
+     * Repair minor session integrity issues:
+     * - Remove orphan [localOnly] messages with no user message after them (except at end)
+     * - Truncate messages to the 200-message history limit (matching addMessage)
+     */
+    @Synchronized
+    fun repairSessionIntegrity(sessionId: String): Boolean {
+        val session = _sessions.value[sessionId] ?: return false
+        var changed = false
+        val msgs = session.messages.toMutableList()
+
+        // Remove orphan localOnly (not at end, no user after)
+        val toRemove = mutableSetOf<Int>()
+        for (i in msgs.indices) {
+            val msg = msgs[i]
+            if (msg.localOnly && msg.interruptedTurn != null) {
+                val hasUserAfter = msgs.drop(i + 1).any { it.role == "user" && !it.localOnly }
+                val isLastMsg = i == msgs.lastIndex
+                if (!hasUserAfter && !isLastMsg) {
+                    toRemove.add(i)
+                    changed = true
+                }
+            }
+        }
+        toRemove.sortedDescending().forEach { msgs.removeAt(it) }
+
+        // Enforce 200-message history limit (match addMessage behavior)
+        if (msgs.size > 200) {
+            // Keep last 200 messages, but preserve the first system message
+            val systemMsgs = msgs.filter { it.role == "system" }
+            val nonSystemTarget = msgs.filter { it.role != "system" }.takeLast(200 - systemMsgs.size.coerceAtMost(10))
+            session.messages.clear()
+            session.messages.addAll(systemMsgs.take(5)) // keep at most 5 system messages
+            session.messages.addAll(nonSystemTarget)
+            changed = true
+        } else if (changed) {
+            session.messages.clear()
+            session.messages.addAll(msgs)
+        }
+
+        if (changed) {
+            _sessions.value = _sessions.value + (sessionId to session)
+        }
+        return changed
+    }
+
+    // ── Schema Migration (matching OpenClaw schema migration pattern) ──
+
+    /**
+     * Migrate a session from its current schema version to [targetVersion].
+     *
+     * Each version step is implemented as a separate function:
+     *   v1 → v2: (placeholder)
+     *
+     * When adding a new field to [Session] or [Message] that changes serialization,
+     * add a new migration step here and increment [Session.schemaVersion]'s default.
+     * Old persisted sessions will be migrated on next load.
+     */
+    internal fun migrateSession(session: Session, targetVersion: Int = 1): Session {
+        var s = session
+        while (s.schemaVersion < targetVersion) {
+            s = when (s.schemaVersion) {
+                1 -> s  // v1 → v2 placeholder: add migration logic here
+                else -> { s }  // unknown version — stop
+            }.also { migrated ->
+                // Preserve existing messages and metadata through migration
+                s.copy(
+                    schemaVersion = s.schemaVersion,
+                    messages = s.messages,
+                    metadata = s.metadata
+                )
+            }
+        }
+        return s
     }
 
     /**

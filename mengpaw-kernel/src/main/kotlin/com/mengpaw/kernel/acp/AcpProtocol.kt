@@ -4,8 +4,9 @@
 package com.mengpaw.kernel.acp
 
 import kotlinx.serialization.json.JsonPrimitive
-
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * ACP (Agent Communication Protocol) — MengPaw Agent 间通信协议。
@@ -37,7 +38,12 @@ enum class AcpMessageType {
     PAIR_CHALLENGE,         // 配对挑战（接收方响应, 携带 nonce+指纹）
     PAIR_CONFIRM,           // 配对确认（发起方验证短码后, 携带签名）
     MCP_REQUEST,            // MCP JSON-RPC 请求 (tools/list, tools/call, etc.)
-    MCP_RESPONSE            // MCP JSON-RPC 响应 (通过 ACP 返回)
+    MCP_RESPONSE,           // MCP JSON-RPC 响应 (通过 ACP 返回)
+    // ── Session Sync (会话同步 / Upstream Links) ──
+    SESSION_HEAD,           // 交换会话最新事件序列号
+    SESSION_PULL,           // 请求 N 个最新的会话事件
+    SESSION_DELTA,          // 传输会话事件增量
+    SESSION_ACK             // 确认接收会话事件
 }
 
 /** ACP 消息。 */
@@ -111,6 +117,36 @@ data class AcpMessage(
                     put("task", JsonPrimitive(task))
                     put("sessionId", JsonPrimitive(from))
                     put("requirements", kotlinx.serialization.json.Json.parseToJsonElement(requirements))
+                }.toString())
+
+        // ── Session Sync factory methods ────────────────────────────
+
+        fun sessionHead(from: String, to: String, sessionKey: String, lastSequence: Int, entryCount: Int) =
+            AcpMessage(from, to, AcpMessageType.SESSION_HEAD.name,
+                buildJsonObject {
+                    put("sessionKey", JsonPrimitive(sessionKey))
+                    put("lastSequence", JsonPrimitive(lastSequence))
+                    put("entryCount", JsonPrimitive(entryCount))
+                }.toString())
+
+        fun sessionPull(from: String, to: String, sessionKey: String, afterSequence: Int, limit: Int = 50) =
+            AcpMessage(from, to, AcpMessageType.SESSION_PULL.name,
+                buildJsonObject {
+                    put("sessionKey", JsonPrimitive(sessionKey))
+                    put("afterSequence", JsonPrimitive(afterSequence))
+                    put("limit", JsonPrimitive(limit))
+                }.toString())
+
+        fun sessionDelta(from: String, to: String, sessionKey: String, events: String,
+                         rangeStart: Int, rangeEnd: Int) =
+            AcpMessage(from, to, AcpMessageType.SESSION_DELTA.name,
+                """{"sessionKey":"$sessionKey","events":$events,"rangeStart":$rangeStart,"rangeEnd":$rangeEnd}""")
+
+        fun sessionAck(from: String, to: String, sessionKey: String, receivedSequence: Int) =
+            AcpMessage(from, to, AcpMessageType.SESSION_ACK.name,
+                buildJsonObject {
+                    put("sessionKey", JsonPrimitive(sessionKey))
+                    put("receivedSequence", JsonPrimitive(receivedSequence))
                 }.toString())
 
         // ── Memory Twin pairing protocol ─────────────────────────────

@@ -14,7 +14,9 @@ class AcpServer(
     private val port: Int = 9876,
     /** Shared secret for peer authentication. Must be set to enable secure pairing.
      *  Use AcpCrypto.deriveKey() to generate this from paired device fingerprints. */
-    private val sharedSecret: String
+    private val sharedSecret: String,
+    /** SessionManager for session sync handler. If null, session sync is disabled. */
+    private val sessionManager: com.mengpaw.kernel.session.SessionManager? = null
 ) {
     init {
         if (sharedSecret.isEmpty()) {
@@ -43,6 +45,10 @@ class AcpServer(
         // Auto-register kernel handlers so core ACP messages are always processed
         handlers.add(delegateHandler)
         handlers.add(shareHandler)
+        // Register session sync handler if SessionManager is available
+        if (sessionManager != null) {
+            handlers.add(SessionSyncHandler(sessionManager, profile.agentName))
+        }
     }
 
     fun registerHandler(handler: AcpHandler) {
@@ -187,6 +193,22 @@ class AcpServer(
                 mcpResult ?: AcpResult(false, "no_mcp_handler", "MCP bridge not enabled. Call server.enableMcpBridge(mcpServer).")
             }
             AcpMessageType.MCP_RESPONSE -> AcpResult(true, "mcp_response", msg.payload)
+            // Session Sync — requires trusted peer (session data is sensitive)
+            AcpMessageType.SESSION_HEAD, AcpMessageType.SESSION_PULL,
+            AcpMessageType.SESSION_DELTA, AcpMessageType.SESSION_ACK -> {
+                if (!PromptFirewall.isTrusted(msg.from)) {
+                    return AcpResult(false, "auth_required",
+                        "Session sync requires paired trust. Complete twin pairing first.")
+                }
+                var customResult: AcpResult? = null
+                for (handler in handlers) {
+                    if (type in handler.supportedTypes) {
+                        val result = handler.handle(msg, this)
+                        if (result != null) { customResult = result; break }
+                    }
+                }
+                customResult ?: AcpResult(true, "ack", msg.type)
+            }
             // Memory Twin pairing types — NO firewall (their purpose IS establishing trust)
             AcpMessageType.CAPABILITY_ANNOUNCE, AcpMessageType.TWIN_DELEGATE,
             AcpMessageType.PAIR_CHALLENGE, AcpMessageType.PAIR_CONFIRM -> {
