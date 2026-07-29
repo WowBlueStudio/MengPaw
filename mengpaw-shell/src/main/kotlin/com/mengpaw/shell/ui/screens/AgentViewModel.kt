@@ -17,6 +17,13 @@ import com.mengpaw.kernel.llm.PromptEngine
 import com.mengpaw.kernel.llm.ProviderInfo
 import com.mengpaw.kernel.llm.ProviderType
 import com.mengpaw.kernel.llm.TokenUsage
+import com.mengpaw.shell.ui.screens.model.AgentSession
+import com.mengpaw.shell.ui.screens.model.AgentTrace
+import com.mengpaw.shell.ui.screens.model.ExecutionMode
+import com.mengpaw.shell.ui.screens.model.ChatMessageUi
+import com.mengpaw.shell.ui.screens.model.InputTag
+import com.mengpaw.shell.ui.screens.model.PendingTask
+import com.mengpaw.shell.ui.screens.model.UnconfiguredLlmProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -25,41 +32,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-
-/**
- * Per-agent session: independent engine, provider, and message history.
- */
-class AgentSession(
-    val name: String,
-    val framework: String?,       // null = local device, non-null = remote framework name
-    var modelName: String,
-    var endpoint: String = "",
-    var apiKey: String = "",
-    var provider: LlmProvider,
-    val engine: AgentEngine,
-    val messages: MutableStateFlow<List<ChatMessageUi>>,
-    val scrollContext: ScrollContextManager,
-    val isRunning: MutableStateFlow<Boolean> = MutableStateFlow(false),
-    val inputEnabled: MutableStateFlow<Boolean> = MutableStateFlow(true)
-) {
-    /** Human-readable provider + model label for UI display. */
-    val providerLabel: String get() {
-        if (endpoint.isBlank() || apiKey.isBlank()) return "智能体还未配置模型"
-        val p = when {
-            endpoint.contains("openai.com") -> "OpenAI"
-            endpoint.contains("deepseek.com") -> "DeepSeek"
-            endpoint.contains("x.ai") -> "Grok"
-            endpoint.contains("moonshot.cn") -> "Kimi"
-            endpoint.contains("bigmodel.cn") -> "GLM"
-            endpoint.contains("dashscope") -> "Qwen"
-            endpoint.contains("volces.com") -> "火山引擎"
-            endpoint.contains("openmodel.ai") -> "OpenModel"
-            else -> "Custom"
-        }
-        val modelLabel = modelName.take(24).ifBlank { "auto" }
-        return "$p / $modelLabel"
-    }
-}
 
 /**
  * ViewModel for the main agent chat screen.
@@ -1455,81 +1427,6 @@ class AgentViewModel : ViewModel() {
     }
 }
 
-// ── Data types ──
-
-/**
- * Placeholder provider shown when no API key is configured.
- * Returns a helpful message instead of fake simulated responses.
- */
-class UnconfiguredLlmProvider : LlmProvider {
-    override suspend fun complete(prompt: String): String =
-        "请先配置 API Key：打开设置 → 框架设置 → 选择服务商 → 粘贴 API Key → 退出设置。"
-
-    override suspend fun completeWithMessages(messages: List<Map<String, String>>): String =
-        complete("")
-
-    override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String {
-        val msg = complete(prompt)
-        msg.forEach { onToken(it.toString()) }
-        return msg
-    }
-
-    override fun info(): ProviderInfo = ProviderInfo(
-        "未配置", "none", ProviderType.LOCAL
-    )
-
-    override fun close() {}
-
-    override var lastUsage: TokenUsage? = null
-}
-
-data class AgentTrace(
-    val step: Int,
-    val thought: String,
-    val action: String?,
-    val observation: String?
-)
-
-sealed class ChatMessageUi {
-    /** Stable unique ID for LazyColumn key — prevents animation/state bugs during streaming. */
-    abstract val stableId: String
-    /** Monotonic creation timestamp for true uniqueness (prevents hashCode collisions). */
-    internal val createdAt: Long = java.lang.System.nanoTime()
-    data class User(val content: String) : ChatMessageUi() {
-        override val stableId get() = "u_$createdAt"
-    }
-    data class Agent(
-        val content: String,
-        val executionMode: String? = null,
-        val agentRef: String? = null
-    ) : ChatMessageUi() {
-        override val stableId get() = "a_$createdAt"
-    }
-    data class AgentWithTrace(
-        val finalContent: String,
-        val traces: List<AgentTrace>,
-        val isRunning: Boolean = false,
-        val executionMode: String? = null,
-        val agentRef: String? = null
-    ) : ChatMessageUi() {
-        override val stableId get() = "t_$createdAt"
-    }
-    data class System(val content: String) : ChatMessageUi() {
-        override val stableId get() = "s_$createdAt"
-    }
-    data class Suggestion(val suggestion: PluginSuggestion) : ChatMessageUi() {
-        override val stableId get() = "sg_$createdAt"
-    }
-}
-
-/** 待办任务 — Agent 运行时用户输入的排队任务。 */
-data class PendingTask(
-    val text: String,
-    val maxSteps: Int = 50,
-    val executionMode: ExecutionMode? = null,
-    val agentRef: String? = null
-)
-
 // ── 复杂度自动检测 (融合 QwenPaw SOUL.md + Claude Code 复杂度评分) ──
 
 /**
@@ -1552,44 +1449,18 @@ private fun detectComplexity(task: String): LoopMode {
  */
 private fun scoreComplexity(task: String): Int {
     var score = 0
-    // 1. 操作风险
     if (Regex("删除|卸载|rm |发布|部署|格式化|清空").containsMatchIn(task)) score += 3
     else if (Regex("创建|写入|修改|安装|配置|设置|编译|构建|生成").containsMatchIn(task)) score += 2
-    // 查询类不加分
 
-    // 2. 跨域操作
     val domains = listOf("文件", "网络", "插件", "记忆", "系统", "浏览器", "搜索", "翻译", "应用")
     val domainHits = domains.count { task.contains(it) }
     score += domainHits.coerceAtMost(3)
 
-    // 3. 任务长度
     if (task.length > 200) score += 2
     else if (task.length > 80) score += 1
 
-    // 4. 多步骤信号
     if (Regex("然后|之后|接着|再|并且|同时|;|；|第一步|第二步").containsMatchIn(task)) score += 2
     if (Regex("每个|所有|全部|批量|遍历|循环").containsMatchIn(task)) score += 2
 
     return score
-}
-
-/** 执行模式 — 用户通过 /命令 主动触发，非自动检测。 */
-enum class ExecutionMode(val label: String, val prefix: String) {
-    MISSION("Mission", "/Mission"),
-    GOAL("Goal", "/Goal"),
-    PLAN("Plan", "/Plan"),
-    RESEARCH("Research", "/Research"),
-    TRANSLATE("Translate", "/Translate"),
-    SILENT("Silent", "/Silent");
-}
-
-/** 输入框标签 — 斜杠命令或 @mention 的活跃状态。 */
-sealed class InputTag {
-    abstract val label: String
-    data class Mode(val mode: ExecutionMode) : InputTag() {
-        override val label get() = mode.prefix
-    }
-    data class AgentRef(val agentName: String) : InputTag() {
-        override val label get() = "@$agentName"
-    }
 }
