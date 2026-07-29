@@ -5,6 +5,11 @@ package com.mengpaw.shell.ui.screens
 
 import android.graphics.BitmapFactory
 import android.net.Uri
+import com.mengpaw.shell.ui.screens.model.AgentTrace
+import com.mengpaw.shell.ui.screens.model.ChatMessageUi
+import com.mengpaw.shell.ui.screens.model.ExecutionMode
+import com.mengpaw.shell.ui.screens.model.InputTag
+import com.mengpaw.shell.ui.screens.model.PendingTask
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*

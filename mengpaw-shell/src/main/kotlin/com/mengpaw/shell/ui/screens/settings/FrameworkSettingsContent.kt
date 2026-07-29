@@ -1,0 +1,261 @@
+// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package com.mengpaw.shell.ui.screens
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mengpaw.design.theme.ThemeColors
+import com.mengpaw.design.tokens.ArcoColors
+import com.mengpaw.design.tokens.ArcoRadius
+import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.kernel.llm.CacheStrategy
+
+@Composable
+fun FrameworkSettingsContent(
+    state: SettingsState,
+    viewModel: SettingsViewModel,
+    onNavigateToPluginMarket: () -> Unit,
+    pluginItems: List<FrameworkItem> = emptyList(),
+    toolItems: List<FrameworkItem> = emptyList(),
+    skillItems: List<FrameworkItem> = emptyList()
+) {
+    SectionHeader("供应商连接")
+
+    if (state.savedProviders.isNotEmpty()) {
+        state.savedProviders.forEach { saved ->
+            Surface(
+                modifier = Modifier.fillMaxWidth().clickable { viewModel.editProvider(saved) },
+                shape = RoundedCornerShape(ArcoRadius.lg), color = ThemeColors.bgCard
+            ) {
+                Row(Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
+                    Surface(shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.brandContainer) {
+                        Icon(Icons.Outlined.Key, null, tint = ThemeColors.brand, modifier = Modifier.size(32.dp).padding(6.dp))
+                    }
+                    Spacer(Modifier.width(ArcoSpacing.md))
+                    Column(Modifier.weight(1f)) {
+                        Text(saved.preset.label, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                        Text("${saved.model} · ${saved.endpoint.take(35)}",
+                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
+                    }
+                    if (saved.balance.isNotBlank()) {
+                        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green1) {
+                            Text("$${saved.balance}", Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green7)
+                        }
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    IconButton(onClick = { viewModel.removeProvider(saved.preset) }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Filled.Close, "删除", tint = ThemeColors.textSecondary, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+            Spacer(Modifier.height(ArcoSpacing.sm))
+        }
+    }
+
+    if (state.apiSectionExpanded) {
+        SectionHeader(if (state.savedProviders.isNotEmpty()) "编辑连接" else "新增连接")
+        LlmProviderPreset.entries.forEach { preset ->
+            if (preset != LlmProviderPreset.CUSTOM && preset != LlmProviderPreset.SELF_HOSTED) {
+                ProviderCard(preset, state.selectedProvider == preset, state.modelName, state.remoteModels,
+                    { viewModel.selectProvider(preset) }, { viewModel.updateModelName(it) })
+            }
+        }
+        ProviderCard(LlmProviderPreset.SELF_HOSTED, state.selectedProvider == LlmProviderPreset.SELF_HOSTED,
+            state.modelName, state.remoteModels,
+            { viewModel.selectProvider(LlmProviderPreset.SELF_HOSTED) }, { viewModel.updateModelName(it) })
+        ProviderCard(LlmProviderPreset.CUSTOM, state.selectedProvider == LlmProviderPreset.CUSTOM,
+            state.modelName, state.remoteModels,
+            { viewModel.selectProvider(LlmProviderPreset.CUSTOM) }, { viewModel.updateModelName(it) })
+        Spacer(Modifier.height(ArcoSpacing.sm))
+
+        SettingsTextField(Icons.Outlined.Key, "API Key", state.apiKey,
+            onValueChange = { viewModel.updateApiKey(it) },
+            visualTransformation = if (state.showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = { viewModel.toggleShowApiKey() }) {
+                    Icon(if (state.showApiKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                        contentDescription = if (state.showApiKey) "隐藏" else "显示")
+                }
+            })
+        Spacer(Modifier.height(ArcoSpacing.sm))
+        SettingsTextField(Icons.Outlined.Link, "API 地址", state.apiEndpoint,
+            onValueChange = { viewModel.updateApiEndpoint(it) })
+        Spacer(Modifier.height(ArcoSpacing.sm))
+
+        if (state.remoteModelsFetched && state.remoteModels.isNotEmpty()) {
+            var modelDropdownExpanded by remember { mutableStateOf(false) }
+            Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.ModelTraining, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
+                Spacer(Modifier.width(ArcoSpacing.sm))
+                Column(Modifier.weight(1f)) {
+                    Text("模型", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                    Box {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().clickable { modelDropdownExpanded = true },
+                            shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCardHigh
+                        ) {
+                            Row(Modifier.padding(horizontal = ArcoSpacing.md, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(state.modelName, Modifier.weight(1f), fontSize = 14.sp, color = ArcoColors.Green6, fontWeight = FontWeight.Medium)
+                                Icon(Icons.Outlined.ArrowDropDown, null, Modifier.size(20.dp), tint = ArcoColors.Green6)
+                            }
+                        }
+                        DropdownMenu(expanded = modelDropdownExpanded, onDismissRequest = { modelDropdownExpanded = false }) {
+                            Text("API 返回 ${state.remoteModels.size} 个模型", Modifier.padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.xs),
+                                fontSize = 10.sp, color = ThemeColors.textSecondary)
+                            HorizontalDivider()
+                            state.remoteModels.take(30).forEach { model ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(model.take(40),
+                                            fontWeight = if (model == state.modelName) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (model == state.modelName) ArcoColors.Green6 else ThemeColors.textPrimary)
+                                    },
+                                    onClick = { viewModel.updateModelName(model); modelDropdownExpanded = false },
+                                    leadingIcon = if (model == state.modelName) {
+                                        { Icon(Icons.Outlined.Check, null, Modifier.size(16.dp), tint = ArcoColors.Green6) }
+                                    } else null
+                                )
+                            }
+                            if (state.remoteModels.size > 30) {
+                                Text("... 还有 ${state.remoteModels.size - 30} 个模型",
+                                    Modifier.padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.xs),
+                                    fontSize = 10.sp, color = ThemeColors.textSecondary)
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            SettingsTextField(Icons.Outlined.ModelTraining, "模型", state.modelName, onValueChange = { viewModel.updateModelName(it) })
+        }
+        Spacer(Modifier.height(ArcoSpacing.sm))
+
+        val cacheStrategy = CacheStrategy.forProvider(state.apiEndpoint)
+        if (cacheStrategy != CacheStrategy.NONE) {
+            Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green6.copy(alpha = 0.08f), modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(horizontal = ArcoSpacing.md, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.CheckCircle, null, Modifier.size(14.dp), tint = ArcoColors.Green6)
+                    Spacer(Modifier.width(6.dp))
+                    Text(CacheStrategy.labelFor(cacheStrategy), style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6)
+                    Spacer(Modifier.weight(1f))
+                    Text("已优化", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = ArcoColors.Green6)
+                }
+            }
+            Spacer(Modifier.height(ArcoSpacing.sm))
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
+            OutlinedButton(onClick = { viewModel.testConnection() }, modifier = Modifier.weight(1f),
+                enabled = !state.isTesting && state.apiKey.isNotBlank(), shape = RoundedCornerShape(ArcoRadius.md)) {
+                if (state.isTesting) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = ThemeColors.brand)
+                else Icon(Icons.Outlined.Wifi, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("测试", style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(onClick = { viewModel.saveApiKey() }, modifier = Modifier.weight(1f),
+                enabled = state.apiKey.isNotBlank(), shape = RoundedCornerShape(ArcoRadius.md)) {
+                Icon(Icons.Outlined.Check, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("保存", style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(onClick = { viewModel.toggleApiSection() }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(ArcoRadius.md)) {
+                Text("收起", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        if (state.isTesting) {
+            Spacer(Modifier.height(4.dp))
+            Text("正在测试连接...", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+        }
+        Spacer(Modifier.height(ArcoSpacing.lg))
+    } else {
+        OutlinedButton(onClick = { viewModel.toggleApiSection() },
+            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
+            Icon(Icons.Filled.Add, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("新增供应商连接")
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    NavigationLink(Icons.Outlined.Extension, "插件管理", "浏览、安装、管理 Agent 插件") { onNavigateToPluginMarket() }
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    SectionHeader("记忆管理")
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("记忆管理后端", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(if (state.memoryBackend == "memory-plugin") "内置 · Markdown 文件" else state.memoryBackend,
+                style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
+            Text("需安装插件", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    SectionHeader("上下文策略")
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("上下文策略", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(if (state.contextStrategy == "default") "内置 · Reasonix 四级折叠" else state.contextStrategy,
+                style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        }
+        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
+            Text("需安装插件", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    SecurityRulesSection()
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    FrameworkItemSection("全局插件", Icons.Outlined.Extension, pluginItems)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    FrameworkItemSection("全局工具(Tools)", Icons.Outlined.Terminal, toolItems)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    FrameworkItemSection("全局工具(Skills)", Icons.Outlined.AutoAwesome, skillItems)
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+        color = ThemeColors.brand, modifier = Modifier.padding(bottom = ArcoSpacing.sm))
+}
