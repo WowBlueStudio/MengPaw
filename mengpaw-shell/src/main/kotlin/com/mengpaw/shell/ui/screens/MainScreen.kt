@@ -258,10 +258,6 @@ fun MainScreen(
                         Text(agentViewModel?.activeSessionLabel ?: "MengPaw / 未配置",
                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
                     }
-                    if (isRunning) {
-                        LinearProgressIndicator(Modifier.width(60.dp).height(4.dp), color = ThemeColors.brand)
-                        Spacer(Modifier.width(ArcoSpacing.sm))
-                    }
                     Box(modifier = Modifier.size(44.dp).pointerInput(Unit) { detectTapGestures { viewModel.newSession() } },
                         contentAlignment = Alignment.Center) {
                         Icon(Icons.Outlined.Add, "新建会话", tint = ThemeColors.textSecondary)
@@ -315,20 +311,11 @@ fun MainScreen(
                         ) {
                             leftSidebarContent({ showLeftSidebar = false }, isRunning)
                         }
+                        VerticalDivider(
+                            color = ThemeColors.border,
+                            thickness = 0.5.dp
+                        )
                     }
-
-                    // ── Slash command floating buttons (between left sidebar and messages) ──
-                    SlashCommandButtons(
-                        activeTags = activeTags,
-                        onToggleMode = { mode ->
-                            val existing = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
-                            if (existing?.mode == mode) { viewModel.removeTag(existing) }
-                            else {
-                                existing?.let { viewModel.removeTag(it) }
-                                viewModel.addTag(InputTag.Mode(mode))
-                            }
-                        }
-                    )
 
                     // Messages — container centered, tablet 80% / phone 95%
                     val msgWidth = if (isWide()) 0.8f else 0.95f
@@ -396,6 +383,10 @@ fun MainScreen(
 
                     // Persistent right sidebar (tablet only)
                     if (isWide() && showRightSidebar) {
+                        VerticalDivider(
+                            color = ThemeColors.border,
+                            thickness = 0.5.dp
+                        )
                         Surface(
                             color = ThemeColors.bgPrimary,
                             shadowElevation = 8.dp,
@@ -462,6 +453,44 @@ fun MainScreen(
                                 labelColor = ThemeColors.brand
                             )
                         )
+                    }
+                }
+            }
+
+            // ── Execution mode buttons (above input bar) ──
+            Row(
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.xs),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf(
+                    ExecutionMode.MISSION to Icons.Outlined.AccountTree,
+                    ExecutionMode.RESEARCH to Icons.Outlined.TravelExplore,
+                    ExecutionMode.TRANSLATE to Icons.Outlined.Translate,
+                    ExecutionMode.SILENT to Icons.Outlined.NotificationsOff
+                ).forEach { (mode, icon) ->
+                    val isActive = activeTags.any { it is InputTag.Mode && it.mode == mode }
+                    Surface(
+                        onClick = {
+                            val existing = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
+                            if (existing?.mode == mode) { viewModel.removeTag(existing) }
+                            else {
+                                existing?.let { viewModel.removeTag(it) }
+                                viewModel.addTag(InputTag.Mode(mode))
+                            }
+                        },
+                        shape = RoundedCornerShape(ArcoRadius.sm),
+                        color = if (isActive) ThemeColors.brand.copy(alpha = 0.12f) else ThemeColors.bgCardHigh
+                    ) {
+                        Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(icon, null, Modifier.size(16.dp),
+                                tint = if (isActive) ThemeColors.brand else ThemeColors.textSecondary)
+                            Spacer(Modifier.width(4.dp))
+                            Text(mode.prefix, style = MaterialTheme.typography.labelSmall,
+                                color = if (isActive) ThemeColors.brand else ThemeColors.textSecondary,
+                                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal)
+                        }
                     }
                 }
             }
@@ -848,8 +877,6 @@ private fun AgentBubbleHeader(
     extraBadge: @Composable (() -> Unit)? = null
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(agentName, style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold, color = ThemeColors.brand)
         if (executionMode != null) {
             Text(" · $executionMode",
                 style = MaterialTheme.typography.labelSmall,
@@ -909,22 +936,12 @@ private fun AgentBubbleHeader(
                     Spacer(Modifier.width(4.dp))
                     Icon(if (thinkingExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
                         null, Modifier.size(16.dp), tint = ThemeColors.brand)
-                    if (message.isRunning) { Spacer(Modifier.width(ArcoSpacing.sm)); LinearProgressIndicator(Modifier.width(40.dp).height(3.dp), color = ThemeColors.brand) }
                 }
                 AnimatedVisibility(visible = thinkingExpanded) {
                     Column(Modifier.padding(start = ArcoSpacing.sm, end = ArcoSpacing.sm, bottom = ArcoSpacing.sm)) {
                         traces.forEach { trace -> TraceStepItem(trace) }
                     }
                 }
-            }
-        } else if (message.isRunning) {
-            Row(Modifier.fillMaxWidth(0.95f).padding(bottom = 2.dp).padding(horizontal = ArcoSpacing.sm, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
-                Spacer(Modifier.width(6.dp))
-                LinearProgressIndicator(Modifier.width(60.dp).height(3.dp), color = ThemeColors.brand)
-                Spacer(Modifier.width(ArcoSpacing.sm))
-                Text("正在思考...", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
             }
         }
 
@@ -1269,45 +1286,3 @@ fun AgentInitializingCard() {
     }
 }
 
-/**
- * Floating slash command buttons — vertical strip between left sidebar and message area.
- * No external container, no shadow — just icon buttons for quick mode toggling.
- */
-@Composable
-private fun SlashCommandButtons(
-    activeTags: List<InputTag>,
-    onToggleMode: (ExecutionMode) -> Unit
-) {
-    val activeMode = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()?.mode
-    val modes = listOf(
-        ExecutionMode.MISSION to Icons.Outlined.AccountTree,
-        ExecutionMode.RESEARCH to Icons.Outlined.TravelExplore,
-        ExecutionMode.TRANSLATE to Icons.Outlined.Translate,
-        ExecutionMode.SILENT to Icons.Outlined.NotificationsOff
-    )
-
-    Column(
-        modifier = Modifier.padding(horizontal = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        modes.forEach { (mode, icon) ->
-            val isActive = activeMode == mode
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .background(
-                        if (isActive) ThemeColors.brand.copy(alpha = 0.15f) else Color.Transparent,
-                        CircleShape
-                    )
-                    .clickable { onToggleMode(mode) },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon, mode.prefix, Modifier.size(20.dp),
-                    tint = if (isActive) ThemeColors.brand else ThemeColors.textSecondary
-                )
-            }
-        }
-    }
-}

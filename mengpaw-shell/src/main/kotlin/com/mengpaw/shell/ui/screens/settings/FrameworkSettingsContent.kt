@@ -69,18 +69,37 @@ fun FrameworkSettingsContent(
 
     if (state.apiSectionExpanded) {
         SectionHeader(if (state.savedProviders.isNotEmpty()) "编辑连接" else "新增连接")
-        LlmProviderPreset.entries.forEach { preset ->
-            if (preset != LlmProviderPreset.CUSTOM && preset != LlmProviderPreset.SELF_HOSTED) {
-                ProviderCard(preset, state.selectedProvider == preset, state.modelName, state.remoteModels,
-                    { viewModel.selectProvider(preset) }, { viewModel.updateModelName(it) })
+
+        // Provider preset chips
+        Text("供应商", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+        Spacer(Modifier.height(4.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            LlmProviderPreset.entries.filter { it != LlmProviderPreset.CUSTOM && it != LlmProviderPreset.SELF_HOSTED }
+                .forEach { preset ->
+                    Surface(
+                        onClick = { viewModel.selectProvider(preset) },
+                        shape = RoundedCornerShape(ArcoRadius.sm),
+                        color = if (state.selectedProvider == preset) ThemeColors.brand.copy(alpha = 0.12f) else ThemeColors.bgCardHigh
+                    ) {
+                        Text(preset.label, Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            fontSize = 12.sp, fontWeight = if (state.selectedProvider == preset) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (state.selectedProvider == preset) ThemeColors.brand else ThemeColors.textPrimary)
+                    }
+                }
+        }
+        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf(LlmProviderPreset.SELF_HOSTED, LlmProviderPreset.CUSTOM).forEach { preset ->
+                Surface(
+                    onClick = { viewModel.selectProvider(preset) },
+                    shape = RoundedCornerShape(ArcoRadius.sm),
+                    color = if (state.selectedProvider == preset) ThemeColors.brand.copy(alpha = 0.12f) else ThemeColors.bgCardHigh
+                ) {
+                    Text(preset.label, Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        fontSize = 12.sp, fontWeight = if (state.selectedProvider == preset) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (state.selectedProvider == preset) ThemeColors.brand else ThemeColors.textPrimary)
+                }
             }
         }
-        ProviderCard(LlmProviderPreset.SELF_HOSTED, state.selectedProvider == LlmProviderPreset.SELF_HOSTED,
-            state.modelName, state.remoteModels,
-            { viewModel.selectProvider(LlmProviderPreset.SELF_HOSTED) }, { viewModel.updateModelName(it) })
-        ProviderCard(LlmProviderPreset.CUSTOM, state.selectedProvider == LlmProviderPreset.CUSTOM,
-            state.modelName, state.remoteModels,
-            { viewModel.selectProvider(LlmProviderPreset.CUSTOM) }, { viewModel.updateModelName(it) })
         Spacer(Modifier.height(ArcoSpacing.sm))
 
         SettingsTextField(Icons.Outlined.Key, "API Key", state.apiKey,
@@ -111,17 +130,23 @@ fun FrameworkSettingsContent(
                 Spacer(Modifier.width(4.dp))
                 Text("保存", style = MaterialTheme.typography.labelSmall)
             }
-            OutlinedButton(onClick = { viewModel.toggleApiSection() }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(ArcoRadius.md)) {
-                Text("收起", style = MaterialTheme.typography.labelSmall)
-            }
         }
         if (state.isTesting) {
             Spacer(Modifier.height(4.dp))
             Text("正在测试连接...", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
         }
+
+        Spacer(Modifier.height(ArcoSpacing.sm))
+        // 收起按钮（替代原来独立按钮的功能）
+        OutlinedButton(onClick = { viewModel.toggleApiSection() },
+            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
+            Icon(Icons.Outlined.ExpandLess, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("收起API供应商列表", style = MaterialTheme.typography.labelSmall)
+        }
         Spacer(Modifier.height(ArcoSpacing.lg))
     } else {
-        OutlinedButton(onClick = { viewModel.toggleApiSection() },
+        OutlinedButton(onClick = { viewModel.expandForNewProvider() },
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
             Icon(Icons.Filled.Add, null, Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))

@@ -406,17 +406,8 @@ private fun TableTextView(block: MdBlock.Table, baseStyle: TextStyle, background
     if (block.header.isEmpty() && block.rows.isEmpty()) return
 
     // 计算每列固定宽度（取最宽单元格 + 2）
-    val colWidths = mutableListOf<Int>()
-    val allRows = listOf(block.header) + block.rows
-    allRows.forEach { row ->
-        row.forEachIndexed { i, cell ->
-            val w = maxOf(cell.length + 2, 4)
-            while (colWidths.size <= i) colWidths.add(0)
-            if (w > colWidths[i]) colWidths[i] = w
-        }
-    }
     val borderColor = ThemeColors.border
-    val cellMod = { i: Int -> Modifier.width((colWidths.getOrElse(i) { 6 } * 7).dp).padding(horizontal = 6.dp, vertical = 4.dp) }
+    val cellMod = { _: Int -> Modifier.widthIn(max = 360.dp).padding(horizontal = 8.dp, vertical = 4.dp) }
     val cellStyle = baseStyle.copy(fontSize = (baseStyle.fontSize.value * 0.9f).sp)
 
     Surface(
