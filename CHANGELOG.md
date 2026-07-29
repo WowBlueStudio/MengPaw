@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.18.2 (2026-07-29) — 会话恢复系统 + ACP 会话同步
+
+### 会话恢复 (Session Recovery)
+- **Level 1 流中断**: AgentEngine catch 块记录已完成工具 → `recordInterruptedTurn()` 注入恢复块
+- **Level 2 中断轮次**: `InterruptedTurnRecovery` 数据结构 + `localOnly` 安全过滤 + 结构化恢复块注入
+- **Level 3 持久化**: `CheckpointManager` 每 5 步自动保存 + `restoreConversation()` 进程死亡恢复
+- **事件总线**: `SessionEventBus` (11 种事件种类, SharedFlow) + 持久化 JSONL 事件日志
+- **恢复决策树**: `decideRecovery()` 5 种策略 (NoAction/SimpleRetry/RecoverFromInterrupt/RecoverWithGoal/SuggestCleanup)
+- **完整性终端锁**: `checkSessionIntegrity()` + `integrityFailed` 门控 — 损坏数据阻断 LLM 调用
+- **事件日志裁剪**: `pruneSessionEvents()` 防止 JSONL 无限增长
+- **Schema 迁移**: `migrateSession()` + `schemaVersion` 基础设施
+- **进程死亡恢复**: `engineSessionId` 持久化 + checkpoint 消费 + 重新挂载引擎会话
+
+### 流式传输修复 (Streaming)
+- **SSE 逐行解析**: `AdaptiveLlmProvider.consumeSseStream()` — 替代 `bodyAsText()` 整块读取
+- **RemoteApi 流式修复**: 同样的 SSE 逐行解析模式
+- **onToken 回调**: 每条 delta content/reasoning_content 即时回调
+
+### ACP 会话同步 (SessionSync Protocol)
+- **4 种新消息**: `SESSION_HEAD/PULL/DELTA/ACK`
+- **SessionSyncHandler**: 基于 `SessionEventBus` + `SessionManager` 的事件级会话同步
+- **AcpServer 集成**: 自动注册 + 消息路由 + 配对信任门控
+- **跨设备会话恢复**: 与记忆孪生共享 ACP 传输/发现/配对层
+
+### 事件系统
+- 10 个事件发射点: SESSION_CREATED / RUN_COMPLETED / LLM_CALL_ERROR / RUN_INTERRUPTED / SESSION_RECOVERED
+- AgentViewModel 观察 `SessionEventBus` 自动显示恢复提示
+- UI 系统消息: 中断恢复 / 网络超时 / 连续错误 各类型提示
+
 ## v0.15.2 (2026-07-26) — 功能闭环审计 + 浏览器 v0.6.0
 
 ### 审计修复 (6 项, PromptEngine 三层十二问)

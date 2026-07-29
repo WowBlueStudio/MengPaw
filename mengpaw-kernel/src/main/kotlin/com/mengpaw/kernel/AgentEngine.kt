@@ -62,6 +62,7 @@ class AgentEngine(
     private val middleware: AgentMiddleware = AgentMiddleware.NoOp,
     private val postCallMiddleware: PostCallMiddleware = PostCallMiddleware.NoOp,
     val scrollContext: ScrollContextManager? = null,
+    private val checkpointManager: CheckpointManager = CheckpointManager(),
     /** Additional namespaces to register alongside built-ins (e.g. "sys" → SysExecutor.commands). */
     private val additionalNamespaces: Map<String, Map<String, suspend (List<String>, ExecutionContext) -> com.mengpaw.kernel.cli.ExecutionResult>> = emptyMap()
 ) {
@@ -93,6 +94,111 @@ class AgentEngine(
     // Instead of creating a new Session per run(), reuse the same session
     // so the LLM sees full conversation history across multiple user messages.
     @Volatile private var conversationSessionId: String? = null
+
+    /** Exposed for persistence in current_session.json — survives process death via disk save. */
+    fun currentConversationId(): String? = conversationSessionId
+
+    // ── Integrity terminal latch (matching OpenClaw terminal latch pattern) ──
+    // Once tripped, blocks further LLM calls until the session is repaired.
+    @Volatile private var integrityFailed: Boolean = false
+
+    /** Check integrity of the current session. Returns false if terminal latch is active. */
+    fun checkIntegrity(sessionId: String? = null): Boolean {
+        if (integrityFailed) return false
+        val sid = sessionId ?: conversationSessionId ?: return true
+        if (!sessionManager.checkSessionIntegrity(sid)) {
+            integrityFailed = true
+            KernelLog.w("AgentEngine", "Integrity check failed for session $sid — terminal latch engaged")
+            return false
+        }
+        return true
+    }
+
+    /** Attempt to repair integrity. Returns true if repair succeeded and latch is released. */
+    fun repairIntegrity(sessionId: String? = null): Boolean {
+        val sid = sessionId ?: conversationSessionId ?: return false
+        if (sessionManager.repairSessionIntegrity(sid)) {
+            // Re-check after repair
+            if (sessionManager.checkSessionIntegrity(sid)) {
+                integrityFailed = false
+                KernelLog.i("AgentEngine", "Integrity repaired for session $sid — latch released")
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Restore conversation state after process death.
+     *
+     * Android kills processes without notice (no cleanup, no finalizers).
+     * When the app restarts:
+     * 1. AgentViewModel restores UI messages from current_session.json
+     * 2. We must ALSO push those messages back into the engine's SessionManager
+     * 3. And restore conversationSessionId so the engine doesn't start a fresh session
+     *
+     * Without this, the LLM sees zero history on the next user message —
+     * all previous conversation context is lost.
+     *
+     * @param externalSessionId the UI-level session ID (from current_session.json)
+     * @param messages the restored ChatMessageUi-derived messages in role/content format
+     * @param lastWasInterrupted if the last run was cut short (isRunning=true at death)
+     * @param previousEngineSessionId the engine session ID from before death (for checkpoint lookup)
+     */
+    fun restoreConversation(
+        externalSessionId: String,
+        messages: List<Pair<String, String>>,
+        lastWasInterrupted: Boolean,
+        previousEngineSessionId: String? = null
+    ) {
+        // Create a new engine session (SessionManager is in-memory, always empty after restart)
+        val session = sessionManager.createSession(
+            task = "restored after process death",
+            agentId = agentName
+        )
+        // Push all messages into the engine session so the LLM sees full history
+        for ((role, content) in messages) {
+            sessionManager.addMessage(session.id, com.mengpaw.kernel.session.Message(role, content))
+        }
+        // Set conversationSessionId so runReActLoop() reuses this session
+        conversationSessionId = session.id
+
+        // ── Checkpoint recovery ──
+        // If we have the previous engine session ID, try to find its last checkpoint.
+        // This gives us diagnostic context about where the interrupted run was.
+        var checkpointStep = 0
+        if (previousEngineSessionId != null) {
+            val ckpt = checkpointManager.loadLatestSync(previousEngineSessionId)
+            if (ckpt != null) {
+                checkpointStep = ckpt.step
+                sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
+                    kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.SESSION_RECOVERED,
+                    sessionId = session.id,
+                    agentName = agentName,
+                    summary = "Checkpoint found: step ${ckpt.step}, task: ${ckpt.remainingTask.take(60)}",
+                    payload = mapOf("prevSessionId" to previousEngineSessionId, "step" to ckpt.step.toString())
+                ))
+            }
+        }
+
+        // If the last run was interrupted, set up recovery for the next user message
+        if (lastWasInterrupted) {
+            val summary = extractCompletedToolSummaries(session.id)
+            sessionManager.recordInterruptedTurn(
+                sessionId = session.id,
+                completedTools = summary,
+                interruptedTools = emptyList(),
+                hasPartialText = false,
+                hasPartialReasoning = false
+            )
+            sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
+                kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.RUN_INTERRUPTED,
+                sessionId = session.id,
+                agentName = agentName,
+                summary = "Session restored after process death (was at step $checkpointStep)"
+            ))
+        }
+    }
 
     /** Replace the LLM provider at runtime (e.g. after user configures API key). */
     fun updateLlmProvider(provider: LlmProvider) {
@@ -447,6 +553,15 @@ class AgentEngine(
         }
         sessionManager.agentName = agentName
         val context = ExecutionContext(sessionId = session.id, agentName = agentName)
+
+        // ★ Integrity check after session creation — terminal latch blocks corrupt sessions
+        if (!checkIntegrity(session.id)) {
+            val errorMsg = localizedError("session_corrupted", session.id)
+            sessionManager.addMessage(session.id, Message("system", errorMsg))
+            _state.value = AgentState.Error(errorMsg)
+            return errorMsg
+        }
+
         _state.value = AgentState.Running(task, 0, maxSteps)
         _output.value = ""
 
@@ -511,6 +626,13 @@ class AgentEngine(
                     sessionManager.addMessage(session.id, Message("assistant", answer))
                     // No boundary message — the conversation continues naturally.
                     // The LLM sees full history: previous FinalAnswer + new user message = context.
+                    sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
+                        kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.RUN_COMPLETED,
+                        sessionId = session.id,
+                        agentName = agentName,
+                        summary = "Run completed at step ${step + 1}",
+                        payload = mapOf("steps" to (step + 1).toString())
+                    ))
                     _state.value = AgentState.Finished(answer)
                     com.mengpaw.kernel.agent.AgentDocs.flushMidTermMemoryQueue()
                     recordTaskMemory(task, answer)
@@ -581,16 +703,58 @@ class AgentEngine(
                     onStep?.invoke(TraceStep(step + 1, parsed.thought, null, null))
                 }
                 step++
+                // ── Checkpoint: persist progress every 5 steps ──
+                if (step > 0 && step % 5 == 0) {
+                    checkpointManager.save(Checkpoint(
+                        sessionId = session.id,
+                        step = step,
+                        remainingTask = task,
+                        context = mapOf("agentName" to agentName, "modelName" to modelName)
+                    ))
+                    checkpointManager.cleanup(session.id, keep = 3)
+                }
             }
 
             val msg = localizedError("max_steps", maxSteps.toString())
             sessionManager.addMessage(session.id, Message("assistant", msg))
+            sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
+                kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.RUN_COMPLETED,
+                sessionId = session.id,
+                agentName = agentName,
+                summary = "Max steps ($effectiveMax) reached",
+                payload = mapOf("steps" to step.toString(), "max" to effectiveMax.toString())
+            ))
             _state.value = AgentState.Finished(msg)
             return msg
         } catch (e: kotlinx.coroutines.CancellationException) {
             // Re-throw to respect coroutine cancellation contract
             throw e
         } catch (e: Exception) {
+            // ★ Record completed tools as interrupted turn recovery (Reasonix Level 2)
+            val completedTools = extractCompletedToolSummaries(session.id)
+            sessionManager.recordInterruptedTurn(
+                sessionId = session.id,
+                completedTools = completedTools,
+                interruptedTools = emptyList(),
+                hasPartialText = false,
+                hasPartialReasoning = false
+            )
+
+            // ★ Emit lifecycle events (matching OpenClaw session-state-events.ts)
+            sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
+                kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.LLM_CALL_ERROR,
+                sessionId = session.id,
+                agentName = agentName,
+                summary = e.message?.take(120) ?: "Unknown error",
+                payload = mapOf("error" to (e.message?.take(200) ?: ""), "consecutive" to "true")
+            ))
+            sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
+                kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.RUN_INTERRUPTED,
+                sessionId = session.id,
+                agentName = agentName,
+                summary = "Run interrupted after error: ${e.message?.take(80) ?: "unknown"}"
+            ))
+
             ErrorCollector.report(ErrorType.AGENT_CRASH, "AgentEngine.runReActLoop", e.message ?: "(no message)",
                 throwable = e, sessionId = session.id, agentName = agentName)
             val errorMsg = localizedError("agent_error", e.message ?: e::class.simpleName ?: "unknown")
@@ -598,6 +762,24 @@ class AgentEngine(
             _state.value = AgentState.Error(errorMsg)
             return errorMsg
         }
+    }
+
+    /**
+     * Extract completed tool summaries from a session's history.
+     * Scans the most recent assistant messages for Command: patterns.
+     */
+    private fun extractCompletedToolSummaries(sessionId: String): List<InterruptedToolSummary> {
+        val msgs = sessionManager.getHistory(sessionId)
+        val summaries = mutableListOf<InterruptedToolSummary>()
+        for (msg in msgs.reversed()) {
+            if (msg.localOnly) continue  // skip recovery metadata
+            if (msg.role == "user") break // stop at user boundary
+            if (msg.content.startsWith("Command:")) {
+                val summary = extractToolSummary(msg.content)
+                if (summary != null) summaries.add(summary)
+            }
+        }
+        return summaries.takeLast(10) // keep only recent tools
     }
 
     // ── Mission Mode (ported from QwenPaw MissionMode) ────────────────
@@ -835,6 +1017,7 @@ FIX: <if FAIL, give the worker concrete, actionable instructions for the retry. 
             "max_steps" -> "已达到最大步数 ($detail)，未获得最终答案"
             "agent_error" -> "Agent 错误：$detail"
             "no_plan" -> "无法为任务生成计划：$detail"
+            "session_corrupted" -> "会话数据完整性检查失败 ($detail)。请使用 agent.repair 修复后重试，或开启新会话。"
             else -> detail
         }
         PromptEngine.AgentLanguage.ENGLISH -> when (key) {
@@ -843,6 +1026,7 @@ FIX: <if FAIL, give the worker concrete, actionable instructions for the retry. 
             "max_steps" -> "Max steps ($detail) reached without final answer"
             "agent_error" -> "Agent error: $detail"
             "no_plan" -> "Could not generate a plan for: $detail"
+            "session_corrupted" -> "Session data integrity check failed ($detail). Run agent.repair or start a new conversation."
             else -> detail
         }
     }
@@ -960,9 +1144,51 @@ FIX: <if FAIL, give the worker concrete, actionable instructions for the retry. 
     fun stop() { _state.value = AgentState.Idle; runningJob?.cancel(); runningJob = null }
 
     private suspend fun buildConversation(sessionId: String): List<Map<String, String>> {
+        // ★ Integrity gate: terminal latch (matching OpenClaw assertSqliteIntegrity)
+        // If session data is corrupted, block LLM calls with a warning instead of
+        // letting the model act on potentially garbage history.
+        if (integrityFailed) {
+            KernelLog.w("AgentEngine", "Integrity latch active — blocking LLM call")
+            return listOf(mapOf("role" to "system", "content" to "Session data integrity issue detected. " +
+                "Please use agent.repair or start a new conversation to continue."))
+        }
         sessionManager.compressIfNeeded(llmProvider, specificSessionId = sessionId)
         val history = sessionManager.getStructuredHistory(sessionId)
         val nonSystemHistory = if (history.isNotEmpty() && history[0]["role"] == "system") history.drop(1) else history
+
+        // ★ Recovery block injection: if there's a pending interrupted turn from a prior
+        // failed LLM call, inject the structured recovery block before the last user message.
+        // Matching Reasonix [withInterruptedRecovery] in interrupted_recovery.go.
+        val rawMessages = sessionManager.getSession(sessionId)?.messages ?: emptyList()
+        val pendingRecovery = com.mengpaw.kernel.session.findPendingRecovery(rawMessages)
+        if (pendingRecovery != null) {
+            val block = com.mengpaw.kernel.session.buildInterruptedRecoveryBlock(pendingRecovery)
+            // Prepend recovery block to the last user message
+            val mutableMessages = nonSystemHistory.toMutableList()
+            val lastUserIdx = mutableMessages.indexOfLast { it["role"] == "user" }
+            if (lastUserIdx >= 0) {
+                val lastUser = mutableMessages[lastUserIdx]
+                mutableMessages[lastUserIdx] = mapOf(
+                    "role" to "user",
+                    "content" to "$block\n\n${lastUser["content"]}"
+                )
+            }
+            // Consume the recovery after injection so it doesn't fire again
+            sessionManager.consumePendingRecovery(sessionId)
+            // Emit recovery event (matching OpenClaw session_state_notices pattern)
+            sessionManager.recordSessionEvent(sessionId, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
+                kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.SESSION_RECOVERED,
+                sessionId = sessionId,
+                agentName = agentName,
+                summary = "Recovery block injected: ${pendingRecovery.completedTools.size} tools completed"
+            ))
+            return llmRequestBuilder.buildMessages(
+                listOf(mapOf("role" to "system", "content" to llmRequestBuilder.currentSystemPrompt)) +
+                    mutableMessages,
+                injectCacheAnnotations = true
+            )
+        }
+
         return llmRequestBuilder.buildMessages(nonSystemHistory, injectCacheAnnotations = true)
     }
 

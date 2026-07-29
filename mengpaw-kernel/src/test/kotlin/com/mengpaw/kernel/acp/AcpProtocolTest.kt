@@ -26,7 +26,7 @@ class AcpProtocolTest {
 
     @Test fun `round-trip all message types`() {
         val types = AcpMessageType.entries
-        assertTrue("Should have 18 message types but has ${types.size}", types.size == 18)
+        assertTrue("Should have 22 message types but has ${types.size}", types.size == 22)
 
         for (type in types) {
             val msg = AcpMessage("test-from", "test-to", type.name, """{"test":true}""")
