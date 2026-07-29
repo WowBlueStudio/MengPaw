@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.17.2 | **更新**: 2026-07-28 | **架构**: 微内核(54文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1
+> **版本**: 0.18.3 | **更新**: 2026-07-29 | **架构**: 微内核(54文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1
 
 ---
 
@@ -1100,6 +1100,7 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.18.3** | 2026-07-29 | **UI重构 + 暗色模式Arco规范 + 主题色安全加固** — A) 斜杠命令改为悬浮按钮排列于左侧边栏右侧, 无容器无阴影 B) 框架状态自动忙碌切换, 移除恢复自动切换按钮 C) 暗色模式按Arco Design规范全面调整 (bg-1~bg-5层级, text-1~text-4透明度体系) D) 主题色自定义仅亮色模式生效, 排除暗色模式泄露; AgentTheme 移除无效深色字段 E) 设置页重构: 框架设置→API供应商, 模型选择移入智能体设置, 供应商卡片支持模型下拉选择+API自动拉取 F) 侧边栏滑动关闭手势 G) Qwen→DashScope(dashiscope) H) 后台运行策略移至后台运行区排首位 |
 | **0.17.0** | 2026-07-27 | **持久会话 + 结构化压缩 + 工具裁剪** — 四框架对话上下文融合: A) Claude Code 模式: AgentEngine.conversationSessionId 持久复用 Session, LLM 每次请求看到完整历史而非孤立消息, 移除 "[上一任务已结束]" 上下文切割边界 B) QwenPaw 模式: SessionManager 五字段结构化摘要(Goal/Progress/KeyDecisions/NextSteps/CriticalContext), 压缩前归档原始消息到 dialog/YYYY-MM-DD.jsonl 零数据丢失 C) QwenPaw 模式: pruneToolResult 双阈值(≤3步30KB/>3步2KB), 完整输出存 tool_results/{uuid}.txt, 5天清理 D) OpenClaw 模式: engine.newConversation() 重置持久会话, UI newSession 联动 E) DataPaths +dialogArchiveDir/+toolResultsDir, SessionManager +agentName/+specificSessionId |
 | **0.16.0** | 2026-07-27 | **三层自适应调度 + BM25 命令检索 + 6 项性能优化** — A: 循环模式重构 (QwenPaw 风格默认 REACT → 自动检测升级 GOAL/MISSION, Claude Code 风格复杂度评分, UI AssistChip 自动标注) B: BM25 命令搜索引擎 (self.search, ~50条内置命令双语同义词表, μs 级检索, bigram 分词, 插件激活/卸载自动联动) C: 插件关键词脚手架 (CommandKeywords 数据类, plugin.create 模板内置, plugin.audit 检查, plugin.keywords 查看) D: 6 项性能优化 (Prompt 缓存按文件粒度失效/中记忆批量合并/会话增量持久化/启动懒加载/协程池分离/GC 压力优化) E: 内置插件版本号清空 (随壳更新) |
 | **0.15.2** | 2026-07-26 | **6 审计问题修复** — 缓存失效(路径匹配) + 缓存key(检查前置) + Plan进度(中英双语边界) + 错误消息(LlmApiException) + 容器高度(Step编号/观察缺失) + 提示词(恢复插件发现示例) + MCP插件解耦BrowserBridge + 超时120s |
@@ -1167,4 +1168,4 @@ ShellService.start(this)   // startForeground + WakeLock
 
 ---
 
-*文档结束 · 最后更新: 2026-07-27 (v0.17.0) · 本版新增: 四框架对话上下文融合 (Claude Code 持久会话 + QwenPaw 结构化压缩归档 + 工具结果裁剪)*
+*文档结束 · 最后更新: 2026-07-30 (v0.18.3) · 本版新增: UI重构 + 暗色模式Arco规范 + 主题色安全加固 + 设置页重构*

@@ -33,7 +33,7 @@ fun FrameworkSettingsContent(
     toolItems: List<FrameworkItem> = emptyList(),
     skillItems: List<FrameworkItem> = emptyList()
 ) {
-    SectionHeader("供应商连接")
+    SectionHeader("API供应商")
 
     if (state.savedProviders.isNotEmpty()) {
         state.savedProviders.forEach { saved ->
@@ -48,7 +48,7 @@ fun FrameworkSettingsContent(
                     Spacer(Modifier.width(ArcoSpacing.md))
                     Column(Modifier.weight(1f)) {
                         Text(saved.preset.label, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-                        Text("${saved.model} · ${saved.endpoint.take(35)}",
+                        Text(saved.endpoint.take(40),
                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
                     }
                     if (saved.balance.isNotBlank()) {
@@ -97,68 +97,6 @@ fun FrameworkSettingsContent(
             onValueChange = { viewModel.updateApiEndpoint(it) })
         Spacer(Modifier.height(ArcoSpacing.sm))
 
-        if (state.remoteModelsFetched && state.remoteModels.isNotEmpty()) {
-            var modelDropdownExpanded by remember { mutableStateOf(false) }
-            Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.xs), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.ModelTraining, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
-                Spacer(Modifier.width(ArcoSpacing.sm))
-                Column(Modifier.weight(1f)) {
-                    Text("模型", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-                    Box {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().clickable { modelDropdownExpanded = true },
-                            shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCardHigh
-                        ) {
-                            Row(Modifier.padding(horizontal = ArcoSpacing.md, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(state.modelName, Modifier.weight(1f), fontSize = 14.sp, color = ArcoColors.Green6, fontWeight = FontWeight.Medium)
-                                Icon(Icons.Outlined.ArrowDropDown, null, Modifier.size(20.dp), tint = ArcoColors.Green6)
-                            }
-                        }
-                        DropdownMenu(expanded = modelDropdownExpanded, onDismissRequest = { modelDropdownExpanded = false }) {
-                            Text("API 返回 ${state.remoteModels.size} 个模型", Modifier.padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.xs),
-                                fontSize = 10.sp, color = ThemeColors.textSecondary)
-                            HorizontalDivider()
-                            state.remoteModels.take(30).forEach { model ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(model.take(40),
-                                            fontWeight = if (model == state.modelName) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (model == state.modelName) ArcoColors.Green6 else ThemeColors.textPrimary)
-                                    },
-                                    onClick = { viewModel.updateModelName(model); modelDropdownExpanded = false },
-                                    leadingIcon = if (model == state.modelName) {
-                                        { Icon(Icons.Outlined.Check, null, Modifier.size(16.dp), tint = ArcoColors.Green6) }
-                                    } else null
-                                )
-                            }
-                            if (state.remoteModels.size > 30) {
-                                Text("... 还有 ${state.remoteModels.size - 30} 个模型",
-                                    Modifier.padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.xs),
-                                    fontSize = 10.sp, color = ThemeColors.textSecondary)
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            SettingsTextField(Icons.Outlined.ModelTraining, "模型", state.modelName, onValueChange = { viewModel.updateModelName(it) })
-        }
-        Spacer(Modifier.height(ArcoSpacing.sm))
-
-        val cacheStrategy = CacheStrategy.forProvider(state.apiEndpoint)
-        if (cacheStrategy != CacheStrategy.NONE) {
-            Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green6.copy(alpha = 0.08f), modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(horizontal = ArcoSpacing.md, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.CheckCircle, null, Modifier.size(14.dp), tint = ArcoColors.Green6)
-                    Spacer(Modifier.width(6.dp))
-                    Text(CacheStrategy.labelFor(cacheStrategy), style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6)
-                    Spacer(Modifier.weight(1f))
-                    Text("已优化", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = ArcoColors.Green6)
-                }
-            }
-            Spacer(Modifier.height(ArcoSpacing.sm))
-        }
-
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
             OutlinedButton(onClick = { viewModel.testConnection() }, modifier = Modifier.weight(1f),
                 enabled = !state.isTesting && state.apiKey.isNotBlank(), shape = RoundedCornerShape(ArcoRadius.md)) {
@@ -187,7 +125,7 @@ fun FrameworkSettingsContent(
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
             Icon(Icons.Filled.Add, null, Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))
-            Text("新增供应商连接")
+            Text("新增API供应商")
         }
     }
 

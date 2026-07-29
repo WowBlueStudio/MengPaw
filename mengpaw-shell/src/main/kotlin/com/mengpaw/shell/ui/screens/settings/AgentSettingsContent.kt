@@ -3,6 +3,7 @@
 
 package com.mengpaw.shell.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,44 +41,109 @@ fun AgentSettingsContent(
 ) {
     SectionHeader("供应商 & 模型")
     if (state.savedProviders.isEmpty()) {
-        Text("尚未配置供应商，请先在「框架设置」中添加 API Key",
+        Text("尚未添加 API 供应商，请先前往「框架设置」配置",
             style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         Spacer(Modifier.height(ArcoSpacing.sm))
     } else {
         state.savedProviders.forEach { saved ->
             val active = saved.endpoint == activeEndpoint && saved.model == activeModel
+            var expanded by remember { mutableStateOf(false) }
             Surface(
-                modifier = Modifier.fillMaxWidth().clickable { onSelectProvider?.invoke(saved) },
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
                 shape = RoundedCornerShape(ArcoRadius.lg),
                 color = if (active) ArcoColors.Blue1.copy(alpha = 0.4f) else ThemeColors.bgCard,
                 tonalElevation = if (active) 2.dp else 0.dp
             ) {
-                Row(Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
-                    Surface(shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.brandContainer) {
-                        Icon(Icons.Outlined.Key, null, tint = ThemeColors.brand, modifier = Modifier.size(32.dp).padding(6.dp))
-                    }
-                    Spacer(Modifier.width(ArcoSpacing.md))
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(saved.preset.label, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-                            if (active) {
-                                Spacer(Modifier.width(6.dp))
-                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.12f)) {
-                                    Text("当前", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                        style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
+                Column {
+                    Row(Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.brandContainer) {
+                            Icon(Icons.Outlined.Key, null, tint = ThemeColors.brand, modifier = Modifier.size(32.dp).padding(6.dp))
+                        }
+                        Spacer(Modifier.width(ArcoSpacing.md))
+                        Column(Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(saved.preset.label, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                                if (active) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.12f)) {
+                                        Text("当前", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
+                                    }
                                 }
                             }
+                            Text(saved.model, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
                         }
-                        Text(saved.model, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                        Icon(
+                            if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                            null, Modifier.size(20.dp), tint = ThemeColors.textSecondary
+                        )
                     }
-                    if (active) {
-                        Icon(Icons.Outlined.CheckCircle, null, Modifier.size(20.dp), tint = ThemeColors.brand)
+                    AnimatedVisibility(visible = expanded) {
+                        Column(Modifier.padding(start = ArcoSpacing.lg, end = ArcoSpacing.md, bottom = ArcoSpacing.sm)) {
+                            Text("选择模型", style = MaterialTheme.typography.labelSmall,
+                                color = ThemeColors.textSecondary, modifier = Modifier.padding(bottom = 4.dp))
+                            // Preset models
+                            saved.preset.models.forEach { model ->
+                                val selected = saved.model == model.name
+                                Row(Modifier.fillMaxWidth().clickable {
+                                    viewModel.updateModelName(model.name)
+                                    onSelectProvider?.invoke(saved.copy(model = model.name))
+                                }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    RadioButton(selected = selected, onClick = {
+                                        viewModel.updateModelName(model.name)
+                                        onSelectProvider?.invoke(saved.copy(model = model.name))
+                                    }, modifier = Modifier.size(18.dp),
+                                        colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(model.name, Modifier.weight(1f), fontSize = 13.sp)
+                                    if (model.type == "Coding") Text("💻", fontSize = 12.sp)
+                                    else if (model.type == "多模态") Text("🖼", fontSize = 12.sp)
+                                    else if (model.type.contains("思维链")) Text("🧠", fontSize = 12.sp)
+                                }
+                            }
+                            // API-fetched models (not in preset)
+                            val extraModels = state.remoteModels.filter { rm -> saved.preset.models.none { it.name == rm } }
+                            if (extraModels.isNotEmpty()) {
+                                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                                Text("API 返回模型", fontSize = 10.sp, color = ArcoColors.Green6,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp))
+                                extraModels.take(20).forEach { model ->
+                                    val selected = saved.model == model
+                                    Row(Modifier.fillMaxWidth().clickable {
+                                        viewModel.updateModelName(model)
+                                        onSelectProvider?.invoke(saved.copy(model = model))
+                                    }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        RadioButton(selected = selected, onClick = {
+                                            viewModel.updateModelName(model)
+                                            onSelectProvider?.invoke(saved.copy(model = model))
+                                        }, modifier = Modifier.size(18.dp),
+                                            colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(model, Modifier.weight(1f), fontSize = 13.sp, color = ArcoColors.Green6)
+                                    }
+                                }
+                                if (extraModels.size > 20) {
+                                    Text("... 还有 ${extraModels.size - 20} 个",
+                                        fontSize = 10.sp, color = ThemeColors.textSecondary,
+                                        modifier = Modifier.padding(start = ArcoSpacing.sm))
+                                }
+                            }
+                            // Refresh button
+                            TextButton(onClick = {
+                                viewModel.selectProvider(saved.preset)
+                                viewModel.updateApiKey(saved.apiKey)
+                                viewModel.refreshModels()
+                            }) {
+                                Icon(Icons.Outlined.Refresh, null, Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("刷新模型列表", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                     }
                 }
             }
             Spacer(Modifier.height(ArcoSpacing.sm))
         }
-        Text("在「框架设置」中管理供应商和 API Key", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
     }
 
     Spacer(Modifier.height(ArcoSpacing.lg))

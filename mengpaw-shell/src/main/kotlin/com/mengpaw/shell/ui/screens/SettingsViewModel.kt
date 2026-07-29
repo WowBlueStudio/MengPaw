@@ -42,7 +42,7 @@ enum class LlmProviderPreset(
     GLM("GLM (智谱)", "https://open.bigmodel.cn/api/paas/v4/chat/completions", "glm-5.2", "",
         listOf(ModelInfo("glm-5.2", "旗舰·1M上下文"), ModelInfo("glm-5.1", "Coding"),
             ModelInfo("glm-5", "前代"), ModelInfo("glm-5-turbo", "高速"), ModelInfo("glm-5v-turbo", "多模态"))),
-    QWEN("Qwen (通义千问)", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", "qwen3.7-max", "sk-",
+    QWEN("DashScope (dashiscope)", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", "qwen3.7-max", "sk-",
         listOf(ModelInfo("qwen3.7-max", "旗舰·1M上下文"), ModelInfo("qwen3.6-35b-a3b", "开源MoE"),
             ModelInfo("qwen3.5-plus", "均衡"), ModelInfo("qwen-flash", "快速"),
             ModelInfo("qwen3-coder-plus", "Coding"), ModelInfo("qwq-plus", "思维链"),

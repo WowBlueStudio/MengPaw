@@ -391,10 +391,7 @@ object SelfExecutor {
         val updated = current.copy(
             primary = parseHex(map["primary"]) ?: current.primary,
             surface = parseHex(map["surface"]) ?: current.surface,
-            darkPrimary = parseHex(map["darkPrimary"]) ?: current.darkPrimary,
-            darkSurface = parseHex(map["darkSurface"]) ?: current.darkSurface,
             containerLight = parseHex(map["containerLight"]) ?: current.containerLight,
-            containerDark = parseHex(map["containerDark"]) ?: current.containerDark,
         )
         themeFile.parentFile?.mkdirs()
         return try {
@@ -409,37 +406,35 @@ object SelfExecutor {
     private fun parseHex(s: String?): Long? = s?.removePrefix("#")?.toLongOrNull(16)?.let { 0xFF000000 or it }
 }
 
+/**
+ * Agent theme data — light mode only.
+ *
+ * Dark mode always uses the default DarkColorScheme and is not customizable.
+ * When custom light mode colors are set, all other colors (text, borders,
+ * containers) are derived automatically by ArcoTheme from these 3 base values.
+ */
 data class AgentTheme(
     val primary: Long = 0xFF0E4397,
     val surface: Long = 0xFFFFFFFF,
-    val darkPrimary: Long = 0xFF5B8BD1,
-    val darkSurface: Long = 0xFF272E3B,
-    val containerLight: Long = 0xFFE7EEF8,
-    val containerDark: Long = 0xFF4E5969
+    val containerLight: Long = 0xFFE7EEF8
 ) {
     fun toMarkdown(): String = """
 # Agent 主题配色
 
 > Agent 可自由修改以下色值。填写十六进制颜色码（如 `#0E4397`）。
+> 自定义主题仅影响亮色模式。深色模式始终使用默认配色方案。
 
-## 浅色模式
+## 色值表
 | 角色 | 色值 | 说明 |
 |------|------|------|
 | primary | `#${primary.toString(16).takeLast(6).uppercase()}` | 主色（按钮、链接、强调） |
-| surface | `#${surface.toString(16).takeLast(6).uppercase()}` | 背景色 |
+| surface | `#${surface.toString(16).takeLast(6).uppercase()}` | 页面背景色 |
 | containerLight | `#${containerLight.toString(16).takeLast(6).uppercase()}` | 卡片/容器背景 |
 
-## 深色模式
-| 角色 | 色值 | 说明 |
-|------|------|------|
-| darkPrimary | `#${darkPrimary.toString(16).takeLast(6).uppercase()}` | 主色（暗色模式） |
-| darkSurface | `#${darkSurface.toString(16).takeLast(6).uppercase()}` | 背景色（暗色模式） |
-| containerDark | `#${containerDark.toString(16).takeLast(6).uppercase()}` | 卡片/容器背景（暗色模式） |
-
 ## 配色建议
-- 浅色模式 primary 建议亮度 40-60%，饱和度 60-90%
-- 深色模式 primary 建议亮度 50-70%，饱和度 50-80%
-- surface/container 建议使用低饱和度中性色
+- primary 建议亮度 40-60%，饱和度 60-90%
+- surface 使用接近白色（#FFFFFF ~ #F5F5F5）的浅色
+- containerLight 比 surface 略深，使用低饱和度中性色
 - 参考: https://m3.material.io/theme-builder
 
 ## 修改命令
@@ -459,10 +454,7 @@ self.theme primary=#FF6B35 surface=#FFF8F0
             return AgentTheme(
                 primary = readHex("primary", 0xFF0E4397),
                 surface = readHex("surface", 0xFFFFFFFF),
-                darkPrimary = readHex("darkPrimary", 0xFF5B8BD1),
-                darkSurface = readHex("darkSurface", 0xFF272E3B),
                 containerLight = readHex("containerLight", 0xFFE8F3FF),
-                containerDark = readHex("containerDark", 0xFF4E5969),
             )
         }
     }

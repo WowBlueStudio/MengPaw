@@ -49,26 +49,6 @@ fun SystemSettingsContent(
     }
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    val notifyContext = androidx.compose.ui.platform.LocalContext.current
-    Surface(
-        modifier = Modifier.fillMaxWidth().clickable {
-            viewModel.cycleBackgroundMode()
-            com.mengpaw.shell.service.ShellService.refreshNotification(notifyContext)
-        },
-        shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCardHigh
-    ) {
-        Row(Modifier.padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.Notifications, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(ArcoSpacing.md))
-            Column(Modifier.weight(1f)) {
-                Text("后台运行策略", style = MaterialTheme.typography.bodyMedium)
-                Text(state.backgroundMode.desc, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-            }
-            Text(state.backgroundMode.label, style = MaterialTheme.typography.labelMedium, color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
-        }
-    }
-    Spacer(Modifier.height(ArcoSpacing.lg))
-
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Icon(Icons.Outlined.Translate, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(ArcoSpacing.md))
@@ -101,6 +81,27 @@ fun SystemSettingsContent(
     Spacer(Modifier.height(ArcoSpacing.lg))
 
     SectionHeader("后台运行")
+
+    val notifyContext = androidx.compose.ui.platform.LocalContext.current
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable {
+            viewModel.cycleBackgroundMode()
+            com.mengpaw.shell.service.ShellService.refreshNotification(notifyContext)
+        },
+        shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCardHigh
+    ) {
+        Row(Modifier.padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.Notifications, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(ArcoSpacing.md))
+            Column(Modifier.weight(1f)) {
+                Text("后台运行策略", style = MaterialTheme.typography.bodyMedium)
+                Text(state.backgroundMode.desc, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+            }
+            Text(state.backgroundMode.label, style = MaterialTheme.typography.labelMedium, color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
+        }
+    }
+    Spacer(Modifier.height(ArcoSpacing.md))
+
     var powerSaverEnabled by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {

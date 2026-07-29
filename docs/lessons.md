@@ -90,4 +90,30 @@ MengPaw 从 v0.6.1 起默认 `loopMode = GOAL`——每条消息都走 `runWithG
 
 ---
 
-*最后更新: 2026-07-27 · 提炼自 v0.16.0 完整开发周期*
+## 5. UI / 主题
+
+### 5.1 暗色模式必须用规范色阶，固定色值在深色背景上不可靠
+
+Arco Design 暗色模式规范 bg-1~bg-5 五级背景 + text-1~text-4 白透明度层级。之前使用 `Gray7~Gray10` 固定色值，在深色模式下层次感不足且不符合 Arco 规范。改用 `#17171A` → `#232324` → `#2A2A2B` → `#313132` → `#373739` 五级背景和白透明度 `0.9/0.7/0.5/0.3` 文字后，层次清晰且语义明确。
+
+### 5.2 主题色自定义必须守卫暗色模式
+
+`ArcoTheme` 中 `if (customTheme != null) baseScheme.copy(...)` 在暗色模式下也会应用亮色自定义色值，导致暗色模式被亮色色值覆盖。修正为 `if (customTheme != null && !darkTheme)`，暗色模式始终使用默认 `DarkColorScheme`。
+
+### 5.3 Material3 ColorScheme.copy 必须覆盖完整
+
+自定义主题时 `baseScheme.copy()` 只覆盖 primary/surface/container 是不够的。`onSurface`、`onSurfaceVariant`、`outline`、`surfaceContainerLow`/`high` 等如果不覆盖，会在亮色模式下保留基方案色值，导致文本/边框与自定义背景不匹配。应推导所有衍生色值一次性覆盖。
+
+### 5.4 Dialog 提取到独立文件后必须删除旧 private 定义
+
+`AgentCardDialog`/`NewAgentDialog`/`AddFrameworkDialog`/`FrameworkCardDialog` 从 `SidebarContent.kt` 提取到 `sidebar-dialogs/` 后，旧 private 函数未删除导致 `Conflicting overloads` 编译错误。Kotlin 的 private 函数是文件级作用域，不会与同包其他文件的同名函数冲突，但 `FrameworkCardDialog` 调用了 `SidebarContent.kt` 的 `private fun frameworkTypeIcon`——private 函数不能被同包其他文件访问，必须改为 `internal` 或公开。
+
+## 6. 设置页重构
+
+### 6.1 API 供应商设置与模型选择分离
+
+"连接 API" 和 "选择模型" 是两个不同的用户意图。前者只需要 endpoint + API Key，后者需要 API 返回模型列表。分离到框架设置（新增 API Key）和智能体设置（选择模型）两个页面后，职责清晰，且智能体设置页可通过 `refreshModels()` 实时拉取模型列表。
+
+---
+
+*最后更新: 2026-07-30 · 提炼自 v0.18.3 完整开发周期*

@@ -82,7 +82,7 @@ fun MainScreen(
     viewModel: AgentViewModel = viewModel(),
     pluginViewModel: PluginViewModel = viewModel(),
     agentViewModel: AgentViewModel? = null,
-    leftSidebarContent: @Composable (close: () -> Unit) -> Unit = {},
+    leftSidebarContent: @Composable (close: () -> Unit, isRunning: Boolean) -> Unit = { _, _ -> },
     rightSidebarContent: @Composable (close: () -> Unit) -> Unit = {}
 ) {
     val messages by viewModel.messages.collectAsState()
@@ -300,11 +300,35 @@ fun MainScreen(
                     if (isWide() && showLeftSidebar) {
                         Surface(
                             color = ThemeColors.bgPrimary,
-                            shadowElevation = 8.dp
+                            shadowElevation = 8.dp,
+                            modifier = Modifier.pointerInput(Unit) {
+                                var totalDrag = 0f
+                                detectHorizontalDragGestures(
+                                    onDragEnd = {
+                                        if (totalDrag < -120f) showLeftSidebar = false
+                                        totalDrag = 0f
+                                    }
+                                ) { _, dragAmount ->
+                                    totalDrag += dragAmount
+                                }
+                            }
                         ) {
-                            leftSidebarContent { showLeftSidebar = false }
+                            leftSidebarContent({ showLeftSidebar = false }, isRunning)
                         }
                     }
+
+                    // ── Slash command floating buttons (between left sidebar and messages) ──
+                    SlashCommandButtons(
+                        activeTags = activeTags,
+                        onToggleMode = { mode ->
+                            val existing = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
+                            if (existing?.mode == mode) { viewModel.removeTag(existing) }
+                            else {
+                                existing?.let { viewModel.removeTag(it) }
+                                viewModel.addTag(InputTag.Mode(mode))
+                            }
+                        }
+                    )
 
                     // Messages — container centered, tablet 80% / phone 95%
                     val msgWidth = if (isWide()) 0.8f else 0.95f
@@ -374,7 +398,18 @@ fun MainScreen(
                     if (isWide() && showRightSidebar) {
                         Surface(
                             color = ThemeColors.bgPrimary,
-                            shadowElevation = 8.dp
+                            shadowElevation = 8.dp,
+                            modifier = Modifier.pointerInput(Unit) {
+                                var totalDrag = 0f
+                                detectHorizontalDragGestures(
+                                    onDragEnd = {
+                                        if (totalDrag > 120f) showRightSidebar = false
+                                        totalDrag = 0f
+                                    }
+                                ) { _, dragAmount ->
+                                    totalDrag += dragAmount
+                                }
+                            }
                         ) {
                             rightSidebarContent { showRightSidebar = false }
                         }
@@ -395,7 +430,7 @@ fun MainScreen(
                 if (!isWide()) {
                     SidebarOverlay(showLeftSidebar, fromLeft = true,
                         onDismiss = { showLeftSidebar = false },
-                        content = { leftSidebarContent { showLeftSidebar = false } })
+                        content = { leftSidebarContent({ showLeftSidebar = false }, isRunning) })
                     SidebarOverlay(showRightSidebar, fromLeft = false,
                         onDismiss = { showRightSidebar = false },
                         content = { rightSidebarContent { showRightSidebar = false } })
@@ -1138,7 +1173,18 @@ private fun SidebarOverlay(
                 enter = slideInHorizontally(animationSpec = tween(300)) { if (fromLeft) -it else it },
                 exit = slideOutHorizontally(animationSpec = tween(300)) { if (fromLeft) -it else it }
             ) {
-                Row(Modifier.fillMaxSize()) {
+                Row(Modifier.fillMaxSize().pointerInput(fromLeft) {
+                    var totalDrag = 0f
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (fromLeft && totalDrag < -100f) onDismiss()
+                            else if (!fromLeft && totalDrag > 100f) onDismiss()
+                            totalDrag = 0f
+                        }
+                    ) { _, dragAmount ->
+                        totalDrag += dragAmount
+                    }
+                }) {
                     if (fromLeft) {
                         content()
                         Spacer(Modifier.weight(1f))
@@ -1219,6 +1265,49 @@ fun AgentInitializingCard() {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+/**
+ * Floating slash command buttons — vertical strip between left sidebar and message area.
+ * No external container, no shadow — just icon buttons for quick mode toggling.
+ */
+@Composable
+private fun SlashCommandButtons(
+    activeTags: List<InputTag>,
+    onToggleMode: (ExecutionMode) -> Unit
+) {
+    val activeMode = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()?.mode
+    val modes = listOf(
+        ExecutionMode.MISSION to Icons.Outlined.AccountTree,
+        ExecutionMode.RESEARCH to Icons.Outlined.TravelExplore,
+        ExecutionMode.TRANSLATE to Icons.Outlined.Translate,
+        ExecutionMode.SILENT to Icons.Outlined.NotificationsOff
+    )
+
+    Column(
+        modifier = Modifier.padding(horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        modes.forEach { (mode, icon) ->
+            val isActive = activeMode == mode
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(
+                        if (isActive) ThemeColors.brand.copy(alpha = 0.15f) else Color.Transparent,
+                        CircleShape
+                    )
+                    .clickable { onToggleMode(mode) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon, mode.prefix, Modifier.size(20.dp),
+                    tint = if (isActive) ThemeColors.brand else ThemeColors.textSecondary
+                )
+            }
         }
     }
 }
