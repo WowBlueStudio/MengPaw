@@ -504,21 +504,26 @@ class AgentEngine(
                 }
 
                 val conversation = buildConversation(session.id)
-                // ── 流式 LLM 调用: 实时推送 Final Answer tokens 到 _output ──
+                // ── 流式 LLM 调用: 实时推送 token 到 _output ──
                 _output.value = ""
-                var isFinalAnswerDetected = false
+                var finalAnswerFound = false
                 val streamingBuffer = StringBuilder()
 
                 llmProvider.completeStreamingWithMessages(conversation).collect { token ->
                     streamingBuffer.append(token)
-                    if (isFinalAnswerDetected) {
+                    if (finalAnswerFound) {
+                        // 已过 "Final Answer:" 标记，只发干净答案
                         _output.value = _output.value + token
                     } else {
+                        // 实时查找 "Final Answer:" 标记
                         val text = streamingBuffer.toString()
                         FINAL_ANSWER_REGEX.find(text)?.let { match ->
-                            isFinalAnswerDetected = true
+                            finalAnswerFound = true
                             val after = text.substring(match.range.last + 1)
                             if (after.isNotBlank()) _output.value = after
+                        } ?: run {
+                            // 未找到标记，直接把原始 token 推出去（对聊天模型友好）
+                            _output.value = text
                         }
                     }
                 }

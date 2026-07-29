@@ -816,15 +816,29 @@ class AgentViewModel : ViewModel() {
                     }
                     session.messages.update { current ->
                         val mutable = current.toMutableList()
-                        val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
-                        if (idx >= 0) {
-                            val existing = mutable[idx] as? ChatMessageUi.AgentWithTrace
-                            // 保留流式 finalContent，只更新 traces
-                            mutable[idx] = ChatMessageUi.AgentWithTrace(
-                                finalContent = existing?.finalContent ?: "思考中...",
-                                traces = traces.toList(),
-                                isRunning = true, executionMode = modePrefix, agentRef = agentRef
-                            )
+                        // 用 isRunning 类型搜索替代引用恒等
+                        var updated = false
+                        for (i in mutable.indices.reversed()) {
+                            val msg = mutable[i] as? ChatMessageUi.AgentWithTrace
+                            if (msg?.isRunning == true) {
+                                mutable[i] = msg.copy(
+                                    traces = traces.toList(),
+                                    isRunning = true, executionMode = modePrefix, agentRef = agentRef
+                                )
+                                updated = true
+                                break
+                            }
+                        }
+                        if (!updated) {
+                            val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
+                            if (idx >= 0) {
+                                val existing = mutable[idx] as? ChatMessageUi.AgentWithTrace
+                                mutable[idx] = ChatMessageUi.AgentWithTrace(
+                                    finalContent = existing?.finalContent ?: "思考中...",
+                                    traces = traces.toList(),
+                                    isRunning = true, executionMode = modePrefix, agentRef = agentRef
+                                )
+                            }
                         }
                         mutable
                     }
@@ -842,10 +856,23 @@ class AgentViewModel : ViewModel() {
                     sampledOutput.collect { text ->
                         session.messages.update { current ->
                             val mutable = current.toMutableList()
-                            val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
-                            if (idx >= 0) {
-                                val msg = mutable[idx] as? ChatMessageUi.AgentWithTrace ?: return@update current
-                                mutable[idx] = msg.copy(finalContent = text)
+                            // 用 isRunning 类型搜索替代引用恒等 — copy() 会创建新实例
+                            var updated = false
+                            for (i in mutable.indices.reversed()) {
+                                val msg = mutable[i] as? ChatMessageUi.AgentWithTrace
+                                if (msg?.isRunning == true) {
+                                    mutable[i] = msg.copy(finalContent = text)
+                                    updated = true
+                                    break
+                                }
+                            }
+                            if (!updated) {
+                                // 回退: 用 index + ref (兼容旧路径)
+                                val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
+                                if (idx >= 0) {
+                                    val msg = mutable[idx] as? ChatMessageUi.AgentWithTrace ?: return@update current
+                                    mutable[idx] = msg.copy(finalContent = text)
+                                }
                             }
                             mutable
                         }
