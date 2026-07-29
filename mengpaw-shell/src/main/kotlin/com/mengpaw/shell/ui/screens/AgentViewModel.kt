@@ -848,6 +848,22 @@ class AgentViewModel : ViewModel() {
                 session.engine.resetLoopDetection()
                 try { session.engine.stop() } catch (_: Exception) {}
 
+                // ── Restore conversation context into engine SessionManager ──
+                // 重启后 session.messages 保存了历史，但引擎 SessionManager 是空的。
+                // 把已有消息回灌让 LLM 看见前文，否则每次都是孤立请求。
+                val existingMsgs = session.messages.value
+                if (existingMsgs.isNotEmpty()) {
+                    val replayMessages = existingMsgs.mapNotNull { msg ->
+                        when (msg) {
+                            is ChatMessageUi.User -> Pair("user", msg.content)
+                            is ChatMessageUi.Agent -> Pair("assistant", msg.content)
+                            is ChatMessageUi.AgentWithTrace -> Pair("assistant", msg.finalContent)
+                            else -> null
+                        }
+                    }
+                    session.engine.restoreConversation(replayMessages)
+                }
+
                 // ── Streaming job: observe engine._output and update finalContent ──
                 val sampledOutput = session.engine.output
                     .sample(50)

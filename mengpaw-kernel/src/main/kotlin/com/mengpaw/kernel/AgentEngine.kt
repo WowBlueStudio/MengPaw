@@ -149,6 +149,32 @@ class AgentEngine(
     /** Reset loop detection state — call before each new task. */
     fun resetLoopDetection() = promptEngine.resetLoopDetection()
 
+    /**
+     * Pre-populate the conversation session with previously saved messages.
+     * Called on app restart to restore context so the LLM sees the full conversation history.
+     * @param messages list of (role, content) pairs, e.g. ("user", "hello"), ("assistant", "hi")
+     */
+    fun restoreConversation(messages: List<Pair<String, String>>) {
+        if (messages.isEmpty()) return
+        // Create or reuse the persistent conversation session
+        val existingId = conversationSessionId
+        val session = if (existingId != null) sessionManager.getSession(existingId) else null
+        if (session != null) {
+            messages.forEach { (role, content) ->
+                sessionManager.addMessage(session.id, com.mengpaw.kernel.session.Message(role, content))
+            }
+        } else {
+            val newSession = sessionManager.createSession(
+                task = messages.firstOrNull()?.second?.take(60) ?: "restored",
+                metadata = mapOf("restored" to "true")
+            )
+            conversationSessionId = newSession.id
+            messages.forEach { (role, content) ->
+                sessionManager.addMessage(newSession.id, com.mengpaw.kernel.session.Message(role, content))
+            }
+        }
+    }
+
     companion object {
         /** Single source of truth: generated from gradle.properties mengpaw.version. */
         val CORE_VERSION: String get() = MengPawVersion.FRAMEWORK
