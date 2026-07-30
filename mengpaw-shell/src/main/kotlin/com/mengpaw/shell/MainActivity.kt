@@ -480,7 +480,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     LaunchedEffect(Dispatchers.IO) {
         val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
         val installed = pm.listAll().map { (plugin, status) ->
-            FrameworkItem(name = plugin.metadata.name,
+            FrameworkItem(name = plugin.metadata.name, isWowBlue = plugin.metadata.id in BUILTIN_PLUGIN_IDS,
                 category = if (plugin.metadata.id in BUILTIN_PLUGIN_IDS) ItemCategory.BUILTIN else ItemCategory.OFFICIAL,
                 summary = plugin.metadata.description,
                 docMarkdown = "## ${plugin.metadata.name}\n\n${plugin.metadata.description}\n\nID: ${plugin.metadata.id}\n版本: ${plugin.metadata.version}\n状态: ${status.name}\n命令数: ${plugin.commands.size}")
@@ -504,24 +504,26 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             FrameworkItem("self.version", ItemCategory.BUILTIN, "MengPaw 版本号", ""),
             FrameworkItem("self.time [format]", ItemCategory.BUILTIN, "当前时间", ""),
             FrameworkItem("self.tools [namespace]", ItemCategory.BUILTIN, "列出所有可用命令", ""),
-            FrameworkItem("self.notify.message <text>", ItemCategory.BUILTIN, "Agent 推送消息到聊天", ""),
-            FrameworkItem("self.notify.banner <text> [--level]", ItemCategory.BUILTIN, "Agent 推送通知横幅", ""),
-            FrameworkItem("self.avatar <path>", ItemCategory.BUILTIN, "设置 Agent 头像", ""),
-            FrameworkItem("self.theme primary=#xxx surface=#xxx", ItemCategory.BUILTIN, "修改主题色", ""),
-            FrameworkItem("self.trigger add|list|remove|topics", ItemCategory.BUILTIN, "CRON/LIFETIME 触发器", ""),
+            FrameworkItem("self.notify.message <text>", ItemCategory.BUILTIN, "Agent 推送消息到聊天", "", isWowBlue = true),
+            FrameworkItem("self.notify.banner <text> [--level]", ItemCategory.BUILTIN, "Agent 推送通知横幅", "", isWowBlue = true),
+            FrameworkItem("self.avatar <path>", ItemCategory.BUILTIN, "设置 Agent 头像", "", isWowBlue = true),
+            FrameworkItem("self.theme primary=#xxx surface=#xxx", ItemCategory.BUILTIN, "修改主题色", "", isWowBlue = true),
+            FrameworkItem("self.trigger add|list|remove|topics", ItemCategory.BUILTIN, "CRON/LIFETIME 触发器", "", isWowBlue = true),
         )
         val agentTools = listOf(
             FrameworkItem("agent.cli", ItemCategory.BUILTIN, "查阅完整 CLI.md 命令参考", ""),
             FrameworkItem("agent.docs", ItemCategory.BUILTIN, "列出所有 Agent 文档", ""),
-            FrameworkItem("agent.memory [query]", ItemCategory.BUILTIN, "记忆索引/搜索", ""),
-            FrameworkItem("agent.memory.record <content>", ItemCategory.BUILTIN, "手动记录一条记忆", ""),
+            FrameworkItem("agent.memory [query]", ItemCategory.BUILTIN, "记忆索引/搜索", "", isWowBlue = true),
+            FrameworkItem("agent.memory.record <content>", ItemCategory.BUILTIN, "手动记录一条记忆", "", isWowBlue = true),
             FrameworkItem("agent.profile", ItemCategory.BUILTIN, "查看 Agent 身份档案", ""),
             FrameworkItem("agent.soul", ItemCategory.BUILTIN, "查看 Agent 灵魂设定", ""),
-            FrameworkItem("agent.audit [N]", ItemCategory.BUILTIN, "查看最近 N 条命令审计日志", ""),
-            FrameworkItem("agent.browser-tools", ItemCategory.BUILTIN, "MP浏览器插件开发能力参考", ""),
-            FrameworkItem("agent.dream", ItemCategory.BUILTIN, "触发梦境整理", ""),
-            FrameworkItem("agent.cleanup", ItemCategory.BUILTIN, "清理过期文件和归档记忆", ""),
-            FrameworkItem("agent.storage", ItemCategory.BUILTIN, "工作区存储空间报告", ""),
+            FrameworkItem("agent.audit [N]", ItemCategory.BUILTIN, "查看最近 N 条命令审计日志", "", isWowBlue = true),
+            FrameworkItem("agent.browser-tools", ItemCategory.BUILTIN, "MP浏览器插件开发能力参考", "", isWowBlue = true),
+            FrameworkItem("agent.dream", ItemCategory.BUILTIN, "触发梦境整理", "", isWowBlue = true),
+            FrameworkItem("agent.cleanup", ItemCategory.BUILTIN, "清理过期文件和归档记忆", "", isWowBlue = true),
+            FrameworkItem("agent.storage", ItemCategory.BUILTIN, "工作区存储空间报告", "", isWowBlue = true),
+            FrameworkItem("agent.boost", ItemCategory.BUILTIN, "首次引导初始化", "", isWowBlue = true),
+            FrameworkItem("agent.boost.delete", ItemCategory.BUILTIN, "删除引导文件", "", isWowBlue = true),
         )
         val pluginTools = listOf(
             FrameworkItem("plugin.marketplace [--refresh]", ItemCategory.BUILTIN, "浏览插件市场", ""),

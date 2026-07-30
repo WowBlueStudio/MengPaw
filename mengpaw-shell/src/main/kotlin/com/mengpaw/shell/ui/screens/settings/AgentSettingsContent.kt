@@ -204,7 +204,15 @@ fun AgentSettingsContent(
         ) {
             Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(mode.label, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(mode.label, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
+                        if (mode == LoopMode.FLEET) {
+                            Spacer(Modifier.width(6.dp))
+                            Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Pink6.copy(alpha = 0.1f)) {
+                                Text("WowBlue", Modifier.padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = ArcoColors.Pink6)
+                            }
+                        }
+                    }
                     Text(mode.desc, fontSize = 12.sp, color = ThemeColors.textSecondary)
                 }
             }
