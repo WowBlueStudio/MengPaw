@@ -15,8 +15,21 @@ import androidx.compose.ui.unit.sp
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.error.ErrorCollector
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.io.File
+
+private val appJson = Json { ignoreUnknownKeys = true; prettyPrint = true }
+
+@Serializable
+data class FrameworkFileData(
+    val name: String = "",
+    val address: String = "",
+    val frameworkType: String = "mengpaw",
+    val addedAt: Long = 0L
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,10 +133,8 @@ fun AddFrameworkDialog(onDismiss: () -> Unit) {
                         trustedDir.mkdirs()
                         val fwFile = File(trustedDir, "$name.json")
                         val tmp = File(trustedDir, "$name.tmp.json")
-                        val json = org.json.JSONObject().apply {
-                            put("name", name); put("address", address); put("frameworkType", frameworkType); put("addedAt", System.currentTimeMillis())
-                        }
-                        try { tmp.writeText(json.toString()); tmp.renameTo(fwFile); if (tmp.exists()) try { tmp.delete() } catch (_: Exception) {}; onDismiss() } catch (e: Exception) { ErrorCollector.report(e, "SidebarContent.saveFramework") }
+                        val fwData = FrameworkFileData(name = name, address = address, frameworkType = frameworkType, addedAt = System.currentTimeMillis())
+                        try { tmp.writeText(appJson.encodeToString(FrameworkFileData.serializer(), fwData)); if (fwFile.exists()) fwFile.delete(); tmp.renameTo(fwFile); if (tmp.exists()) try { tmp.delete() } catch (_: Exception) { KernelLog.w("AddFramework", "delete tmp failed") }; onDismiss() } catch (e: Exception) { ErrorCollector.report(e, "SidebarContent.saveFramework") }
                     }
                 },
                 enabled = name.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),

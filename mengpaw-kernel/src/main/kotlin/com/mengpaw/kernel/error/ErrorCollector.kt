@@ -106,7 +106,8 @@ object ErrorCollector {
         try {
             val file = logFile()
             if (file.exists()) {
-                file.readLines().takeLast(MAX_MEMORY).forEach { line ->
+                val loaded = file.useLines { it.toList().takeLast(MAX_MEMORY) }
+                loaded.forEach { line ->
                     try {
                         val entry = json.decodeFromString<ErrorEntry>(line)
                         buffer.add(entry)

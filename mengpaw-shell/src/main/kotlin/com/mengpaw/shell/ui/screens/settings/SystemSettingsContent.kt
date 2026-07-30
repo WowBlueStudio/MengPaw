@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mengpaw.kernel.KernelLog
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
@@ -23,6 +24,7 @@ import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.shell.ui.components.TokenLineChart
 import com.mengpaw.shell.ui.components.TokenStatsCollector
 import com.mengpaw.shell.ui.components.formatTokenCount
+import com.mengpaw.design.components.SectionHeader
 
 @Composable
 fun SystemSettingsContent(
@@ -68,11 +70,11 @@ fun SystemSettingsContent(
         Icon(Icons.Outlined.Language, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(ArcoSpacing.md))
         Column(Modifier.weight(1f)) {
-            Text("时区", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(state.strings.systemTimezone, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
             Text(state.timezone, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
         TextButton(onClick = { viewModel.updateTimezone(if (state.timezone == "Asia/Shanghai") java.util.TimeZone.getDefault().id else "Asia/Shanghai") }) {
-            Text(if (state.timezone == "Asia/Shanghai") "自动" else "上海")
+            Text(if (state.timezone == "Asia/Shanghai") state.strings.systemTimezoneAuto else state.strings.systemTimezoneShanghai)
         }
     }
 
@@ -80,7 +82,7 @@ fun SystemSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    SectionHeader("后台运行")
+    SectionHeader(state.strings.systemBackground)
 
     val notifyContext = androidx.compose.ui.platform.LocalContext.current
     Surface(
@@ -94,7 +96,7 @@ fun SystemSettingsContent(
             Icon(Icons.Outlined.Notifications, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(ArcoSpacing.md))
             Column(Modifier.weight(1f)) {
-                Text("后台运行策略", style = MaterialTheme.typography.bodyMedium)
+                Text(state.strings.systemBackgroundMode, style = MaterialTheme.typography.bodyMedium)
                 Text(state.backgroundMode.desc, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
             }
             Text(state.backgroundMode.label, style = MaterialTheme.typography.labelMedium, color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
@@ -105,8 +107,8 @@ fun SystemSettingsContent(
     var powerSaverEnabled by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("后台省电模式", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text("降低后台轮询频率和动画帧率，延长续航", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+            Text(state.strings.systemBackgroundPowerSaver, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(state.strings.systemBackgroundPowerSaverDesc, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
         Switch(checked = powerSaverEnabled, onCheckedChange = { powerSaverEnabled = it })
     }
@@ -119,8 +121,8 @@ fun SystemSettingsContent(
             null, Modifier.size(20.dp), tint = if (isIgnoring) ArcoColors.Green6 else ArcoColors.Orange6)
         Spacer(Modifier.width(ArcoSpacing.md))
         Column(Modifier.weight(1f)) {
-            Text(if (isIgnoring) "已忽略电池优化" else "电池优化未忽略", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text(if (isIgnoring) "系统不会在息屏时限制后台运行" else "点击跳转系统设置，关闭后可防止息屏限制",
+            Text(if (isIgnoring) state.strings.systemBatteryIgnored else state.strings.systemBatteryNotIgnored, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(if (isIgnoring) state.strings.systemBatteryIgnoredDesc else state.strings.systemBatteryNotIgnoredDesc,
                 style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
         if (!isIgnoring) {
@@ -132,8 +134,8 @@ fun SystemSettingsContent(
                     }
                     if (intent.resolveActivity(ctx.packageManager) != null) ctx.startActivity(intent)
                     else ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                } catch (_: Exception) {}
-            }) { Text("前往设置 →", style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand) }
+                } catch (_: Exception) { KernelLog.w("SystemSettings", "start battery settings intent failed") }
+            }) { Text(state.strings.systemGoToBatterySettings, style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand) }
         }
     }
 
@@ -141,11 +143,11 @@ fun SystemSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    SectionHeader("Token 用量统计")
+    SectionHeader(state.strings.systemTokenStats)
     var statRange by remember { mutableIntStateOf(0) }
 
     Row(Modifier.fillMaxWidth().padding(bottom = ArcoSpacing.sm), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
-        listOf("每日", "每周", "每月").forEachIndexed { i, label ->
+        listOf(state.strings.systemDaily, state.strings.systemWeekly, state.strings.systemMonthly).forEachIndexed { i, label ->
             Surface(modifier = Modifier.clickable { statRange = i }, shape = RoundedCornerShape(ArcoRadius.sm),
                 color = if (statRange == i) ThemeColors.brand else ThemeColors.bgCard) {
                 Text(label, Modifier.padding(horizontal = 12.dp, vertical = 4.dp), fontSize = 12.sp,
@@ -186,7 +188,7 @@ fun SystemSettingsContent(
         }
         TokenLineChart(series = modelSeries, cacheSeries = cacheSeries)
     } else {
-        Text("暂无 Token 用量数据。开始使用后自动记录。",
+        Text(state.strings.systemNoTokenData,
             style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(vertical = ArcoSpacing.lg))
     }
 
@@ -195,9 +197,9 @@ fun SystemSettingsContent(
     if (totalTokens > 0) {
         Spacer(Modifier.height(ArcoSpacing.md))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
-            StatCard("总用量", formatTokenCount(totalTokens), Icons.Outlined.BarChart, ArcoColors.Blue1, ArcoColors.Blue6)
-            StatCard("缓存节省", formatTokenCount(cacheSaved), Icons.Outlined.Cached, ArcoColors.Green1, ArcoColors.Green6)
-            StatCard("预估节省", "\$" + "%.2f".format(collector.estimatedSavingsUsd()),
+            StatCard(state.strings.systemTotalUsage, formatTokenCount(totalTokens), Icons.Outlined.BarChart, ArcoColors.Blue1, ArcoColors.Blue6)
+            StatCard(state.strings.systemCacheSaved, formatTokenCount(cacheSaved), Icons.Outlined.Cached, ArcoColors.Green1, ArcoColors.Green6)
+            StatCard(state.strings.systemEstimatedSavings, "\$" + "%.2f".format(collector.estimatedSavingsUsd()),
                 Icons.Outlined.AttachMoney, ArcoColors.Orange1, ArcoColors.Orange6)
         }
     }
@@ -211,13 +213,13 @@ fun SystemSettingsContent(
     InfoRow(state.strings.core, "mengpaw-core")
 
     Spacer(Modifier.height(ArcoSpacing.md))
-    SectionHeader("法律与联系")
+    SectionHeader(state.strings.systemLegalContact)
 
     Row(Modifier.fillMaxWidth().clickable { onNavigateToLicense() }.padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Outlined.Description, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
         Spacer(Modifier.width(ArcoSpacing.md))
         Column(Modifier.weight(1f)) {
-            Text("许可证", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(state.strings.systemLicense, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
             Text("AGPL-3.0 · GNU Affero General Public License v3.0", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
         }
         Icon(Icons.Outlined.ChevronRight, null, Modifier.size(16.dp), tint = ArcoColors.Gray5)
@@ -226,8 +228,8 @@ fun SystemSettingsContent(
         Icon(Icons.Outlined.MenuBook, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
         Spacer(Modifier.width(ArcoSpacing.md))
         Column(Modifier.weight(1f)) {
-            Text("开源声明与致谢", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text("代码参考、灵感来源与许可合规", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+            Text(state.strings.systemAttribution, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(state.strings.systemAttributionDesc, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
         }
         Icon(Icons.Outlined.ChevronRight, null, Modifier.size(16.dp), tint = ArcoColors.Gray5)
     }
@@ -235,7 +237,7 @@ fun SystemSettingsContent(
         Icon(Icons.Outlined.Email, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
         Spacer(Modifier.width(ArcoSpacing.md))
         Column(Modifier.weight(1f)) {
-            Text("联系我们", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(state.strings.systemContactUs, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
             Text("1138018324@qq.com", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
     }
@@ -243,17 +245,11 @@ fun SystemSettingsContent(
         Icon(Icons.Outlined.Info, null, Modifier.size(20.dp), tint = ThemeColors.textSecondary)
         Spacer(Modifier.width(ArcoSpacing.md))
         Column(Modifier.weight(1f)) {
-            Text("版权声明", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text("© 2026 深圳哇蓝文化科技有限公司", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+            Text(state.strings.systemCopyright, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(state.strings.systemCopyrightDesc, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
     }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
-        color = ThemeColors.brand, modifier = Modifier.padding(bottom = ArcoSpacing.sm))
 }

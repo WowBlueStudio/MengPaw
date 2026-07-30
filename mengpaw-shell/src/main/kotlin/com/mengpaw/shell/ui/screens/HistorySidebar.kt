@@ -36,6 +36,7 @@ import java.io.File
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.design.components.SectionHeader
 
 /**
  * Right sidebar — hierarchical session history like QQ contacts.
@@ -56,14 +57,14 @@ import com.mengpaw.design.tokens.ArcoSpacing
  */
 @Composable
 fun HistorySidebar(
-    localGroups: List<AgentViewModel.AgentSessionGroup>,
+    localGroups: List<SessionPersistenceService.AgentSessionGroup>,
     frameworkNames: List<String>,
-    frameworkGroups: List<Pair<String, List<AgentViewModel.AgentSessionGroup>>>,
+    frameworkGroups: List<Pair<String, List<SessionPersistenceService.AgentSessionGroup>>>,
     hideCompacted: Boolean,
     onToggleHideCompacted: () -> Unit,
     hideArchived: Boolean = true,
     onToggleHideArchived: () -> Unit = {},
-    onSelectSession: (AgentViewModel.SessionRecord) -> Unit,
+    onSelectSession: (SessionPersistenceService.SessionRecord) -> Unit,
     onDeleteSession: (String) -> Unit,
     onCompactSession: (String) -> Unit,
     onNewSessionFor: (agentName: String, framework: String?) -> Unit,
@@ -158,16 +159,6 @@ fun HistorySidebar(
 
 // ── Building blocks ──
 
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        title,
-        modifier = Modifier.padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm),
-        fontWeight = FontWeight.Bold,
-        fontSize = 13.sp,
-        color = ThemeColors.textSecondary
-    )
-}
 
 /**
  * Collapsible agent entry showing agent name, session count, [+], and session list.
@@ -176,8 +167,8 @@ private fun SectionHeader(title: String) {
 private fun AgentGroupItem(
     agentName: String,
     framework: String?,
-    sessions: List<AgentViewModel.SessionRecord>,
-    onSelectSession: (AgentViewModel.SessionRecord) -> Unit,
+    sessions: List<SessionPersistenceService.SessionRecord>,
+    onSelectSession: (SessionPersistenceService.SessionRecord) -> Unit,
     onDeleteSession: (String) -> Unit,
     onCompactSession: (String) -> Unit,
     onNewSession: () -> Unit
@@ -368,8 +359,8 @@ private fun AgentGroupItem(
 @Composable
 private fun FrameworkGroupItem(
     frameworkName: String,
-    agentGroups: List<AgentViewModel.AgentSessionGroup>,
-    onSelectSession: (AgentViewModel.SessionRecord) -> Unit,
+    agentGroups: List<SessionPersistenceService.AgentSessionGroup>,
+    onSelectSession: (SessionPersistenceService.SessionRecord) -> Unit,
     onDeleteSession: (String) -> Unit,
     onCompactSession: (String) -> Unit,
     onNewSession: (agentName: String, framework: String?) -> Unit
@@ -462,7 +453,7 @@ private fun FrameworkGroupItem(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SessionItem(
-    session: AgentViewModel.SessionRecord,
+    session: SessionPersistenceService.SessionRecord,
     onSelect: () -> Unit,
     onDelete: () -> Unit,
     onCompact: () -> Unit,

@@ -23,6 +23,7 @@ import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.design.components.SectionHeader
 
 @Composable
 fun AgentSettingsContent(
@@ -39,9 +40,9 @@ fun AgentSettingsContent(
     workspaceItems: List<FrameworkItem> = emptyList(),
     onRefreshWorkspace: (() -> Unit)? = null
 ) {
-    SectionHeader("供应商 & 模型")
+    SectionHeader(state.strings.agentProviderModel)
     if (state.savedProviders.isEmpty()) {
-        Text("尚未添加 API 供应商，请先前往「框架设置」配置",
+        Text(state.strings.agentNoProvider,
             style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         Spacer(Modifier.height(ArcoSpacing.sm))
     } else {
@@ -66,7 +67,7 @@ fun AgentSettingsContent(
                                 if (active) {
                                     Spacer(Modifier.width(6.dp))
                                     Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.12f)) {
-                                        Text("当前", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                        Text(state.strings.sidebarCurrent, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
                                     }
                                 }
@@ -80,7 +81,7 @@ fun AgentSettingsContent(
                     }
                     AnimatedVisibility(visible = expanded) {
                         Column(Modifier.padding(start = ArcoSpacing.lg, end = ArcoSpacing.md, bottom = ArcoSpacing.sm)) {
-                            Text("选择模型", style = MaterialTheme.typography.labelSmall,
+                            Text(state.strings.agentSelectModel, style = MaterialTheme.typography.labelSmall,
                                 color = ThemeColors.textSecondary, modifier = Modifier.padding(bottom = 4.dp))
                             // Preset models
                             saved.preset.models.forEach { model ->
@@ -105,7 +106,7 @@ fun AgentSettingsContent(
                             val extraModels = state.remoteModels.filter { rm -> saved.preset.models.none { it.name == rm } }
                             if (extraModels.isNotEmpty()) {
                                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                                Text("API 返回模型", fontSize = 10.sp, color = ArcoColors.Green6,
+                                Text(state.strings.agentApiReturnedModels, fontSize = 10.sp, color = ArcoColors.Green6,
                                     modifier = Modifier.padding(top = 2.dp, bottom = 2.dp))
                                 extraModels.take(20).forEach { model ->
                                     val selected = saved.model == model
@@ -123,7 +124,7 @@ fun AgentSettingsContent(
                                     }
                                 }
                                 if (extraModels.size > 20) {
-                                    Text("... 还有 ${extraModels.size - 20} 个",
+                                    Text(String.format(state.strings.agentRemainingCount, extraModels.size - 20),
                                         fontSize = 10.sp, color = ThemeColors.textSecondary,
                                         modifier = Modifier.padding(start = ArcoSpacing.sm))
                                 }
@@ -136,7 +137,7 @@ fun AgentSettingsContent(
                             }) {
                                 Icon(Icons.Outlined.Refresh, null, Modifier.size(14.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text("刷新模型列表", style = MaterialTheme.typography.labelSmall)
+                                Text(state.strings.agentRefreshModels, style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -150,7 +151,7 @@ fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    SectionHeader("Agent 参数")
+    SectionHeader(state.strings.agentParams)
 
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Icon(Icons.Outlined.Repeat, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
@@ -184,8 +185,8 @@ fun AgentSettingsContent(
         Icon(Icons.Outlined.Timer, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(ArcoSpacing.md))
         Column(Modifier.weight(1f)) {
-            Text("Shell 命令超时", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text("单个命令最长执行时间（秒）", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+            Text(state.strings.agentShellTimeout, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(state.strings.agentShellTimeoutDesc, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
         var tText by remember(state.commandTimeoutSec) { mutableStateOf(state.commandTimeoutSec.toString()) }
         OutlinedTextField(value = tText, onValueChange = { tText = it; it.toIntOrNull()?.let { n -> viewModel.updateCommandTimeout(n) } },
@@ -194,8 +195,8 @@ fun AgentSettingsContent(
     }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
-    SectionHeader("Loop 模式")
-    Text("Agent 会根据任务复杂度自动选择合适的执行模式，无需手动切换。",
+    SectionHeader(state.strings.agentLoopMode)
+    Text(state.strings.agentLoopModeDesc,
         style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary,
         modifier = Modifier.padding(bottom = ArcoSpacing.xs))
     LoopMode.entries.forEach { mode ->
@@ -240,14 +241,14 @@ fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    SectionHeader("定时任务 & 触发器")
+    SectionHeader(state.strings.agentTriggers)
     var triggerVersion by remember { mutableStateOf(0) }
     var showAddCronDialog by remember { mutableStateOf(false) }
     var showAddLifetimeDialog by remember { mutableStateOf(false) }
     val triggers = remember(triggerVersion) { com.mengpaw.kernel.trigger.TriggerEngine.list() }
 
     if (triggers.isEmpty()) {
-        Text("暂无触发器。添加定时任务让 Agent 在指定时间自动执行。",
+        Text(state.strings.agentNoTriggers,
             style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         Spacer(Modifier.height(ArcoSpacing.sm))
     } else {
@@ -269,7 +270,7 @@ fun AgentSettingsContent(
                                 color = if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON)
                                     ArcoColors.Blue6.copy(alpha = 0.1f) else ArcoColors.Orange6.copy(alpha = 0.1f)) {
                                 Text(
-                                    if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON) "定时" else "真人",
+                                    if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON) state.strings.agentTriggerScheduled else state.strings.agentTriggerHuman,
                                     Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                     fontSize = 9.sp, color = if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON)
                                         ArcoColors.Blue6 else ArcoColors.Orange6)
@@ -279,7 +280,7 @@ fun AgentSettingsContent(
                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
                         if (trigger.lastFired > 0) {
                             Text(
-                                "上次触发: ${java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(trigger.lastFired))}",
+                                String.format(state.strings.agentLastFired, java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(trigger.lastFired))),
                                 fontSize = 10.sp, color = ArcoColors.Gray6)
                         }
                     }
@@ -292,7 +293,7 @@ fun AgentSettingsContent(
                         com.mengpaw.kernel.trigger.TriggerEngine.remove(trigger.id)
                         triggerVersion++
                     }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Outlined.Close, "删除", Modifier.size(16.dp), tint = ThemeColors.textSecondary)
+                        Icon(Icons.Outlined.Close, state.strings.delete, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
                     }
                 }
             }
@@ -304,13 +305,13 @@ fun AgentSettingsContent(
             modifier = Modifier.weight(1f), shape = RoundedCornerShape(ArcoRadius.md)) {
             Icon(Icons.Outlined.Schedule, null, Modifier.size(16.dp))
             Spacer(Modifier.width(4.dp))
-            Text("添加定时", style = MaterialTheme.typography.labelSmall)
+            Text(state.strings.agentAddScheduled, style = MaterialTheme.typography.labelSmall)
         }
         OutlinedButton(onClick = { showAddLifetimeDialog = true },
             modifier = Modifier.weight(1f), shape = RoundedCornerShape(ArcoRadius.md)) {
             Icon(Icons.Outlined.Person, null, Modifier.size(16.dp))
             Spacer(Modifier.width(4.dp))
-            Text("添加真人感", style = MaterialTheme.typography.labelSmall)
+            Text(state.strings.agentAddHumanTouch, style = MaterialTheme.typography.labelSmall)
         }
     }
 
@@ -340,16 +341,16 @@ fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    FrameworkItemSection("Agent 插件", Icons.Outlined.Extension, agentPluginItems)
+    FrameworkItemSection(state.strings.agentPlugins, Icons.Outlined.Extension, agentPluginItems)
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
     AgentItemsSection(
-        title = "智能体工具(Agent Tools)", icon = Icons.Outlined.Terminal,
+        title = state.strings.agentTools, icon = Icons.Outlined.Terminal,
         agentItems = agentToolItems, globalPoolItems = globalToolItems,
-        globalPoolLabel = "从全局工具池安装",
-        installHelp = "三种安装方式：①从全局工具池安装 ②Agent 自行搜索下载安装 ③用户手动下载并提供路径，Agent 自行安装"
+        globalPoolLabel = state.strings.agentFromGlobalPool,
+        installHelp = state.strings.agentInstallHelp
     )
 
     Spacer(Modifier.height(ArcoSpacing.lg))
@@ -357,10 +358,10 @@ fun AgentSettingsContent(
     Spacer(Modifier.height(ArcoSpacing.lg))
 
     AgentItemsSection(
-        title = "智能体技能(Agent Skills)", icon = Icons.Outlined.AutoAwesome,
+        title = state.strings.agentSkills, icon = Icons.Outlined.AutoAwesome,
         agentItems = agentSkillItems, globalPoolItems = globalSkillItems,
-        globalPoolLabel = "从全局技能池安装",
-        installHelp = "三种安装方式：①从全局技能池安装 ②Agent 自行搜索下载安装 ③用户手动下载并提供路径，Agent 自行安装"
+        globalPoolLabel = state.strings.agentFromSkillPool,
+        installHelp = state.strings.agentInstallHelp
     )
 
     Spacer(Modifier.height(ArcoSpacing.lg))
@@ -368,19 +369,13 @@ fun AgentSettingsContent(
     Spacer(Modifier.height(ArcoSpacing.lg))
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        SectionHeader("工作区文件")
+        SectionHeader(state.strings.agentWorkspaceFiles)
         Spacer(Modifier.weight(1f))
         if (onRefreshWorkspace != null) {
             IconButton(onClick = onRefreshWorkspace, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Outlined.Refresh, "刷新文件列表", Modifier.size(18.dp), tint = ThemeColors.textSecondary)
+                Icon(Icons.Outlined.Refresh, state.strings.agentRefreshFileList, Modifier.size(18.dp), tint = ThemeColors.textSecondary)
             }
         }
     }
     FrameworkItemSection("", Icons.Outlined.Description, workspaceItems)
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
-        color = ThemeColors.brand, modifier = Modifier.padding(bottom = ArcoSpacing.sm))
 }

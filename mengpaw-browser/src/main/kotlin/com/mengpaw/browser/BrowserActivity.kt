@@ -80,9 +80,10 @@ import com.mengpaw.browser.ui.BrowserPasswordDialog
 import com.mengpaw.browser.ui.BrowserReaderMode
 import com.mengpaw.browser.ui.BrowserSettingsDialog
 import com.mengpaw.browser.ui.BrowserTabDialog
+import com.mengpaw.browser.ui.BrowserTopBar
 import com.mengpaw.browser.ui.BrowserTranslateDialog
-import com.mengpaw.browser.ui.components.SearchEngineLogo
-import com.mengpaw.browser.ui.components.TabChip
+import com.mengpaw.browser.ui.DesktopTabBar
+import com.mengpaw.browser.ui.NewTabPage
 import com.mengpaw.browser.ui.theme.BrowserThemeConfig
 import com.mengpaw.design.components.MarkdownText
 import com.mengpaw.design.components.parseMarkdown
@@ -375,238 +376,99 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
         modifier = Modifier.fillMaxSize(),
         topBar = {
             if (!isColdStart) {
-                AnimatedVisibility(
+                BrowserTopBar(
                     visible = showToolbar || showControls,
-                    enter = fadeIn() + slideInVertically(animationSpec = tween(200)),
-                    exit = fadeOut() + slideOutVertically(animationSpec = tween(200))
-                ) {
-                    TopAppBar(
-                        title = {
-                            if (showUrlBar || isWide) {
-                                var editUrl by remember(activeTabId) { mutableStateOf(activeTab.url) }
-                                OutlinedTextField(
-                                    value = editUrl, onValueChange = { editUrl = it },
-                                    modifier = Modifier.fillMaxWidth().height(48.dp), singleLine = true,
-                                    textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
-                                    shape = RoundedCornerShape(ArcoRadius.round),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = ThemeColors.brand, unfocusedBorderColor = ThemeColors.border
-                                    ),
-                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
-                                        imeAction = androidx.compose.ui.text.input.ImeAction.Search
-                                    ),
-                                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                                        onSearch = { navigate(editUrl) }
-                                    ),
-                                    trailingIcon = {
-                                        FilledIconButton(onClick = { navigate(editUrl) },
-                                            modifier = Modifier.size(32.dp).offset(x = 1.dp), shape = CircleShape,
-                                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = ThemeColors.brand)
-                                        ) { Icon(Icons.Default.ArrowForward, "→", tint = Color.White, modifier = Modifier.size(16.dp)) }
-                                    }
-                                )
-                            } else {
-                                Row(Modifier.fillMaxWidth().clickable { showUrlBar = true },
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    if (activeTab.title.isNotBlank()) Column(Modifier.weight(1f)) {
-                                        Text(activeTab.title, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(activeTab.url.take(60), style = MaterialTheme.typography.labelSmall,
-                                            color = ThemeColors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                        },
-                        navigationIcon = {
-                            Row {
-                                if (isWide) {
-                                    // Visible nav buttons for keyboard+mouse on tablet
-                                    IconButton(onClick = { navigate("https://www.baidu.com") }, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Default.Home, "主页", tint = ThemeColors.brand)
-                                    }
-                                    IconButton(onClick = handleBack, modifier = Modifier.size(36.dp)) {
-                                        @Suppress("DEPRECATION")
-                                        Icon(Icons.Default.ArrowBack, "后退", tint = if (activeTab.canGoBack) ThemeColors.brand else ThemeColors.brand.copy(alpha = 0.3f))
-                                    }
-                                    IconButton(onClick = { webViewMap[activeTabId]?.goForward() }, enabled = activeTab.canGoForward, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Default.ArrowForward, "前进", tint = if (activeTab.canGoForward) ThemeColors.brand else ThemeColors.brand.copy(alpha = 0.3f))
-                                    }
-                                    IconButton(onClick = { webViewMap[activeTabId]?.reload() }, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Default.Refresh, "刷新", tint = ThemeColors.brand)
-                                    }
-                                    Spacer(Modifier.width(4.dp))
-                                }
-                                // Tab count badge (phone only, hidden when 1 tab)
-                                if (!isWide) {
-                                    IconButton(onClick = { showTabs = !showTabs }, modifier = Modifier.size(40.dp)) {
-                                        if (tabs.size > 1) {
-                                            BadgedBox(badge = { Badge(containerColor = ThemeColors.textSecondary) { Text("${tabs.size}") } }) {
-                                                Icon(Icons.Default.List, "标签页", tint = ThemeColors.brand)
-                                            }
-                                        } else {
-                                            Icon(Icons.Default.List, "标签页", tint = ThemeColors.brand)
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        actions = {
-                            // Bookmark star
-                            val isBm = prefs.isBookmarked(activeTab.url)
-                            IconButton(onClick = { showBookmarks = true }, modifier = Modifier.size(36.dp)) {
-                                @Suppress("DEPRECATION")
-                                Icon(Icons.Default.Star, "收藏夹", tint = if (isBm) ThemeColors.brand else ThemeColors.textSecondary)
-                            }
-                            // Menu button with dropdown
-                            var menuExpanded by remember { mutableStateOf(false) }
-                            Box {
-                                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Default.MoreVert, "菜单", tint = ThemeColors.brand)
-                                }
-                                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                                    DropdownMenuItem(text = { Text("刷新") }, leadingIcon = { Icon(Icons.Default.Refresh, null) },
-                                        onClick = { webViewMap[activeTabId]?.reload(); menuExpanded = false })
-                                    DropdownMenuItem(text = { Text("新标签页") }, leadingIcon = { Icon(Icons.Default.Add, null) },
-                                        onClick = {
-                                            val newId = (tabs.maxOfOrNull { it.id } ?: 0) + 1
-                                            tabs = tabs + TabState(id = newId); activeTabId = newId; isColdStart = true
-                                            menuExpanded = false
-                                        })
-                                    DropdownMenuItem(text = { Text("翻译页面") }, leadingIcon = { Icon(Icons.Default.Refresh, null) },
-                                        enabled = !isColdStart && activeTab.title.isNotBlank(),
-                                        onClick = { showTranslate = true; menuExpanded = false })
-                                    @Suppress("DEPRECATION")
-                                    DropdownMenuItem(text = { Text("页面查找") }, leadingIcon = { Icon(Icons.Default.Search, null) },
-                                        enabled = !isColdStart,
-                                        onClick = { showFind = true; menuExpanded = false })
-                                    @Suppress("DEPRECATION")
-                                    DropdownMenuItem(text = { Text("阅读模式") }, leadingIcon = { Icon(Icons.Default.Star, null) },
-                                        enabled = !isColdStart,
-                                        onClick = { showReader = true; menuExpanded = false })
-                                    DropdownMenuItem(
-                                        text = { Text(if (adBlockEnabled) "广告拦截: 开" else "广告拦截: 关") },
-                                        leadingIcon = { Icon(if (adBlockEnabled) Icons.Default.Star else Icons.Default.Close, null) },
-                                        onClick = { adBlockEnabled = !adBlockEnabled; prefs.adBlockEnabled = adBlockEnabled; webViewMap[activeTabId]?.reload(); menuExpanded = false })
-                                    DropdownMenuItem(text = { Text("后退") }, leadingIcon = { Icon(Icons.Default.ArrowBack, null) },
-                                        enabled = activeTab.canGoBack,
-                                        onClick = { webViewMap[activeTabId]?.goBack(); menuExpanded = false })
-                                    DropdownMenuItem(text = { Text("前进") }, leadingIcon = { Icon(Icons.Default.ArrowForward, null) },
-                                        enabled = activeTab.canGoForward,
-                                        onClick = { webViewMap[activeTabId]?.goForward(); menuExpanded = false })
-                                    HorizontalDivider()
-                                    DropdownMenuItem(text = { Text("历史记录") }, leadingIcon = { Icon(Icons.Default.Star, null) },
-                                        onClick = { showHistory = true; menuExpanded = false })
-                                    DropdownMenuItem(text = { Text("密码管理") }, leadingIcon = { Icon(Icons.Default.Lock, null) },
-                                        onClick = { showPasswords = true; menuExpanded = false })
-                                    DropdownMenuItem(text = { Text("分享链接") }, leadingIcon = { Icon(Icons.Default.Share, null) },
-                                        onClick = {
-                                            val intent = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, activeTab.url) }
-                                            ctx.startActivity(Intent.createChooser(intent, "分享到"))
-                                            menuExpanded = false
-                                        })
-                                    if (ctx.packageManager.getLaunchIntentForPackage("com.mengpaw.shell") != null) {
-                                        DropdownMenuItem(text = { Text("发送给 MengPaw Agent") }, leadingIcon = { Icon(Icons.Default.Send, null) },
-                                            onClick = {
-                                                val intent = Intent("com.mengpaw.action.OPEN_URL").apply {
-                                                    setClassName("com.mengpaw.shell", "com.mengpaw.shell.MainActivity")
-                                                    putExtra("url", activeTab.url)
-                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
-                                                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                                        Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                                                }
-                                                try { ctx.startActivity(intent) } catch (_: Exception) { Toast.makeText(ctx, "MengPaw 未安装", Toast.LENGTH_SHORT).show() }
-                                                menuExpanded = false
-                                            })
-                                    }
-                                    DropdownMenuItem(text = { Text("设置") }, leadingIcon = { Icon(Icons.Default.Settings, null) },
-                                        onClick = { showSettings = true; menuExpanded = false })
-                                    DropdownMenuItem(text = { Text("智能体协同") }, leadingIcon = { Icon(Icons.Default.SmartToy, null) },
-                                        onClick = { showAgentSettings = true; menuExpanded = false })
-                                    // Plugin-contributed menu items
-                                    val pluginItems = remember { BrowserPluginRegistry.activeMenuItems() }
-                                    if (pluginItems.isNotEmpty()) {
-                                        HorizontalDivider()
-                                        pluginItems.forEach { item ->
-                                            DropdownMenuItem(
-                                                text = { Text(item.label) },
-                                                leadingIcon = { Icon(Icons.Default.Star, null) },
-                                                onClick = {
-                                                    // FIX B21: Execute plugin command via the current tab's WebView
-                                                    item.command?.let { cmd ->
-                                                        webViewMap[activeTabId]?.evaluateJavascript(cmd, null)
-                                                    }
-                                                    menuExpanded = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                    HorizontalDivider()
-                                    DropdownMenuItem(text = { Text("关闭标签 Close Tab") }, leadingIcon = { Icon(Icons.Default.Close, null) },
-                                        enabled = tabs.size > 1,
-                                        onClick = {
-                                            tabs = tabs.filter { it.id != activeTabId }
-            webViewMap.remove(activeTabId)?.destroy()
-            activeTabId = tabs.first().id
-            menuExpanded = false
-                                        })
-                                }
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-                    )
-                }
+                    showUrlBar = showUrlBar,
+                    onShowUrlBarChange = { showUrlBar = it },
+                    isWide = isWide,
+                    activeTab = activeTab,
+                    activeTabId = activeTabId,
+                    tabs = tabs,
+                    adBlockEnabled = adBlockEnabled,
+                    isBookmarked = prefs.isBookmarked(activeTab.url),
+                    webViewMap = webViewMap,
+                    onNavigate = { navigate(it) },
+                    onBack = handleBack,
+                    onShowTabs = { showTabs = !showTabs },
+                    onShowBookmarks = { showBookmarks = true },
+                    onRefresh = { webViewMap[activeTabId]?.reload() },
+                    onGoForward = { webViewMap[activeTabId]?.goForward() },
+                    onGoBack = { webViewMap[activeTabId]?.goBack() },
+                    onNewTab = {
+                        val newId = (tabs.maxOfOrNull { it.id } ?: 0) + 1
+                        tabs = tabs + TabState(id = newId)
+                        activeTabId = newId
+                        isColdStart = true
+                    },
+                    onCloseTab = {
+                        tabs = tabs.filter { it.id != activeTabId }
+                        webViewMap.remove(activeTabId)?.destroy()
+                        activeTabId = tabs.first().id
+                    },
+                    onShowTranslate = { showTranslate = true },
+                    onShowFind = { showFind = true },
+                    onShowReader = { showReader = true },
+                    onAdBlockToggle = {
+                        adBlockEnabled = !adBlockEnabled
+                        prefs.adBlockEnabled = adBlockEnabled
+                        webViewMap[activeTabId]?.reload()
+                    },
+                    onShowHistory = { showHistory = true },
+                    onShowPasswords = { showPasswords = true },
+                    onShare = { url ->
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, url)
+                        }
+                        ctx.startActivity(Intent.createChooser(intent, "分享到"))
+                    },
+                    onSendToAgent = { url ->
+                        val intent = Intent("com.mengpaw.action.OPEN_URL").apply {
+                            setClassName("com.mengpaw.shell", "com.mengpaw.shell.MainActivity")
+                            putExtra("url", url)
+                            addFlags(
+                                Intent.FLAG_ACTIVITY_NEW_TASK or
+                                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            )
+                        }
+                        try {
+                            ctx.startActivity(intent)
+                        } catch (_: Exception) {
+                            Toast.makeText(ctx, "MengPaw 未安装", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onShowSettings = { showSettings = true },
+                    onShowAgentSettings = { showAgentSettings = true }
+                )
             }
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             // ── Desktop tab bar ──
             if (isWide && !isColdStart) {
-                Surface(tonalElevation = 1.dp, color = ThemeColors.bgCardHigh) {
-                    Column {
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 6.dp, end = 6.dp, top = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        var tabMenuTabId by remember { mutableStateOf<Int?>(null) }
-                        tabs.forEach { tab ->
-                            TabChip(
-                                label = tab.title.ifBlank { "新标签页" },
-                                selected = tab.id == activeTabId,
-                                isLoading = tab.isLoading,
-                                onClick = { activeTabId = tab.id; isColdStart = tab.url.isBlank() },
-                                onClose = if (tabs.size > 1) {{
-                                    webViewMap.remove(tab.id)?.destroy()
-                                    tabs = tabs.filter { it.id != tab.id }
-                                    if (activeTabId == tab.id) activeTabId = tabs.first().id
-                                }} else null,
-                                onMenu = { tabMenuTabId = tab.id }
-                            )
-                            // Per-tab dropdown menu (no emoji)
-                            DropdownMenu(expanded = tabMenuTabId == tab.id, onDismissRequest = { tabMenuTabId = null }) {
-                                DropdownMenuItem(text = { Text("静音标签") }, onClick = { tabMenuTabId = null })
-                                DropdownMenuItem(text = { Text("推送给智能体") }, onClick = {
-                                    val intent = Intent("com.mengpaw.action.OPEN_URL").apply {
-                                        setClassName("com.mengpaw.shell", "com.mengpaw.shell.MainActivity")
-                                        putExtra("url", tab.url)
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                    }
-                                    try { ctx.startActivity(intent) } catch (_: Exception) { }
-                                    tabMenuTabId = null
-                                })
-                                DropdownMenuItem(text = { Text("强制刷新") }, onClick = { webViewMap[tab.id]?.reload(); tabMenuTabId = null })
-                                DropdownMenuItem(text = { Text("添加收藏") }, onClick = { prefs.addBookmark(tab.url); tabMenuTabId = null })
-                            }
-                        }
-                        if (tabs.size < maxTabs) {
-                            IconButton(onClick = {
-                                val newId = (tabs.maxOfOrNull { it.id } ?: 0) + 1
-                                tabs = tabs + TabState(id = newId); activeTabId = newId; isColdStart = true
-                            }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Add, "新标签", tint = ThemeColors.textSecondary, modifier = Modifier.size(18.dp)) }
-                        }
+                DesktopTabBar(
+                    tabs = tabs,
+                    activeTabId = activeTabId,
+                    maxTabs = maxTabs,
+                    webViewMap = webViewMap,
+                    prefs = prefs,
+                    onTabSelected = { id ->
+                        activeTabId = id
+                        isColdStart = tabs.find { it.id == id }?.url.isNullOrBlank() ?: true
+                    },
+                    onTabClose = { id ->
+                        webViewMap.remove(id)?.destroy()
+                        tabs = tabs.filter { it.id != id }
+                        if (activeTabId == id) activeTabId = tabs.first().id
+                    },
+                    onNewTab = {
+                        val newId = (tabs.maxOfOrNull { it.id } ?: 0) + 1
+                        tabs = tabs + TabState(id = newId)
+                        activeTabId = newId
+                        isColdStart = true
                     }
-                    // Seam line below tabs — same color as active tab, bridges to webpage
-                    val seamColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF1A1A1A) else Color.White
-                    Box(Modifier.fillMaxWidth().height(2.dp).background(seamColor))
-                    }
-                }
+                )
             }
 
             // ── Loader (material-colored progress bar) ──
@@ -694,132 +556,23 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
 
             // ── Content ──
             if (isColdStart) {
-                // ── Branded new tab page ──
-                Column(
-                    Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Top spacer
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.BottomCenter) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                "MengPaw 浏览器",
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = ThemeColors.textPrimary
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                "安全的 Agent 控制浏览器",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = ThemeColors.textSecondary
-                            )
+                NewTabPage(
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = { searchQuery = it },
+                    searchEngine = searchEngine,
+                    onSearchEngineCycle = {
+                        val engines = prefs.enabledEngines()
+                        if (engines.isNotEmpty()) {
+                            val idx = engines.indexOfFirst { it.key == searchEngine.key }
+                            searchEngine = engines.getOrElse((idx + 1) % engines.size) { engines.first() }
+                            prefs.setDefaultEngine(searchEngine)
                         }
-                    }
-                    Spacer(Modifier.height(28.dp))
-                    // Search / URL input bar
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(if (isWide) 0.55f else 0.88f),
-                        shape = RoundedCornerShape(ArcoRadius.round),
-                        shadowElevation = 2.dp,
-                        color = ThemeColors.surface
-                    ) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            modifier = Modifier.fillMaxWidth().onPreviewKeyEvent { event ->
-                                if (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_TAB
-                                    && event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                                    val engines = prefs.enabledEngines()
-                                    if (engines.isNotEmpty()) {
-                                        val idx = engines.indexOfFirst { it.key == searchEngine.key }
-                                        searchEngine = engines.getOrElse((idx + 1) % engines.size) { engines.first() }
-                                        prefs.setDefaultEngine(searchEngine)
-                                    }
-                                    true
-                                } else false
-                            },
-                            placeholder = { Text("搜索关键词或输入网址...") },
-                            leadingIcon = {
-                                Box(Modifier.pointerInput(Unit) { detectTapGestures {
-                                    val engines = prefs.enabledEngines()
-                                    if (engines.isNotEmpty()) {
-                                        val idx = engines.indexOfFirst { it.key == searchEngine.key }
-                                        searchEngine = engines.getOrElse((idx + 1) % engines.size) { engines.first() }
-                                        prefs.setDefaultEngine(searchEngine)
-                                    }
-                                }}) { Box(Modifier.offset(x = 2.dp)) { SearchEngineLogo(searchEngine, size = 28) } }
-                            },
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty())
-                                    FilledIconButton(onClick = { navigate(searchQuery) }, modifier = Modifier.size(36.dp).offset(x = (-2).dp), shape = CircleShape,
-                                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = ThemeColors.brand)
-                                    ) { Icon(Icons.Default.ArrowForward, "→", tint = Color.White, modifier = Modifier.size(18.dp)) }
-                            },
-                            singleLine = true,
-                            shape = RoundedCornerShape(ArcoRadius.round),
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                                imeAction = androidx.compose.ui.text.input.ImeAction.Search
-                            ),
-                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                                onSearch = { navigate(searchQuery) }
-                            ),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = ThemeColors.brand,
-                                unfocusedBorderColor = ThemeColors.brand.copy(alpha = 0.2f)
-                            )
-                        )
-                    }
-                    // Dynamic bookmark bar
-                    val bmList = prefs.bookmarks
-                    if (bmList.isNotEmpty()) {
-                        Spacer(Modifier.height(24.dp))
-                        BoxWithConstraints(
-                            modifier = Modifier.fillMaxWidth(if (isWide) 0.55f else 0.88f)
-                        ) {
-                            val itemWidth = 72.dp
-                            val maxItems = (maxWidth / itemWidth).toInt().coerceAtLeast(1).coerceAtMost(6)
-                            val showOverflow = bmList.size > maxItems
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                bmList.take(if (showOverflow) maxItems - 1 else maxItems).forEach { url ->
-                                    val domain = url.substringAfter("://").substringBefore("/").take(10)
-                                    Surface(
-                                        modifier = Modifier.weight(1f).clickable { navigate(url) },
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = ThemeColors.bgCardHigh
-                                    ) {
-                                        Text(
-                                            domain,
-                                            modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                            fontSize = 11.sp,
-                                            color = ThemeColors.textSecondary,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-                                if (showOverflow) {
-                                    Surface(
-                                        modifier = Modifier.weight(1f).clickable { showBookmarks = true },
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = ThemeColors.brand.copy(alpha = 0.1f)
-                                    ) {
-                                        Text(
-                                            "…",
-                                            modifier = Modifier.padding(vertical = 12.dp).fillMaxWidth(),
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                            fontSize = 14.sp,
-                                            color = ThemeColors.brand,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Bottom balance spacer
-                    Box(Modifier.weight(1f))
-                }
+                    },
+                    isWide = isWide,
+                    prefs = prefs,
+                    onNavigate = { navigate(it) },
+                    onShowBookmarks = { showBookmarks = true }
+                )
             } else {
                 // WebView with pull-to-refresh
                 val pullState = rememberPullRefreshState(

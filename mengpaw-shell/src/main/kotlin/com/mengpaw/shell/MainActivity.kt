@@ -378,6 +378,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             agentViewModel = agentViewModel,
             leftSidebarContent = { close, isRunning ->
                 SidebarContent(
+                    strings = strings,
                     isRunning = isRunning,
                     onNavigateToPlugins = { showPlugins = true; close() },
                     onNavigateToSettings = { showSettings = true; close() },

@@ -1,6 +1,29 @@
 # Changelog
 
-## v0.18.2 (2026-07-29) — 会话恢复系统 + ACP 会话同步
+## v0.19.0 (2026-07-30) — 代码审查全量修复 + 超大文件拆解重构
+
+### 全量代码审查与功能审计
+- **九维代码审查**: 按 9-Dimension 方法论对 v0.18.0~v0.18.4 新增代码进行全面审查
+- **三层十二问功能审计**: 对会话恢复/ACP同步/事件总线/中断恢复子系统逐条过审
+- **P0 修复**: `DefaultCommandExecutor` shell 注入漏洞 — `sh -c` 替换为带元字符检测的沙箱, 添加 30s 超时实现
+- **P1 修复**: 10 项 — 非原子文件写入(8文件), readLines OOM(4文件), 插件循环依赖检测, ACP JSON注入, 事件日志完整性缺失
+- **P2/P3 修复**: 50+ 项 — 空catch日志(10+文件), renameTo Windows兼容, Locale统一, ProGuard去重, CHANGELOG补充
+
+### 超大文件拆解
+- **AgentViewModel.kt** (70KB→35KB): 提取 SessionPersistenceService / AgentSessionFactory / InputTagManager / ComplexityDetector
+- **MainScreen.kt** (65KB→35KB): 提取 ChatBubbles / InputComponents / SidebarOverlay / FilePickerUtils
+- **AgentEngine.kt** (58KB→28KB): 提取 AgentEngineTypes / AgentErrors / ToolResultManager / PipelineManager / GoalModeExecutor / MissionModeExecutor / PlanModeExecutor
+- **BrowserActivity.kt** (51KB→25KB): 提取 BrowserTopBar / NewTabPage / DesktopTabBar
+
+### 代码质量
+- `org.json` → `kotlinx.serialization` 迁移 (5文件25处)
+- 国际化: 107条中英文字符串迁移, 7个TODO(i18n)解决, 5个设置文件本地化
+- SectionHeader 去重: 6份私有定义 → 共享 design/components 组件
+- AgentExecutor 硬编码"MengPaw"(19处) → agentName(ctx) 辅助方法
+- PromptEngine 缓存陈旧修复 / SHA256格式校验 / DefaultPluginContext inner→class / AgentSession封装
+- 新增 24 项 kernel 测试 (InterruptedRecoveryTest + CheckpointManagerTest + SessionManagerTest扩展)
+
+## v0.18.4 (2026-07-30)
 
 ### 会话恢复 (Session Recovery)
 - **Level 1 流中断**: AgentEngine catch 块记录已完成工具 → `recordInterruptedTurn()` 注入恢复块
@@ -28,6 +51,17 @@
 - 10 个事件发射点: SESSION_CREATED / RUN_COMPLETED / LLM_CALL_ERROR / RUN_INTERRUPTED / SESSION_RECOVERED
 - AgentViewModel 观察 `SessionEventBus` 自动显示恢复提示
 - UI 系统消息: 中断恢复 / 网络超时 / 连续错误 各类型提示
+
+## v0.18.4 (2026-07-30)
+- 气泡精简：对话气泡样式简化，减少冗余边框和背景层
+- 表格自适应：Markdown 表格支持水平滚动和自适应列宽
+- API供应商表单重构：设置页供应商卡片 UI 重构，支持更多 API 提供商
+
+## v0.18.3 (2026-07-29)
+- UI重构：Compose UI 大规模重构，按模块拆分设置页和侧边栏
+- 暗色模式 Arco规范：统一深色模式下 Arco Design System 色彩令牌
+- 主题色安全加固：颜色推导添加边界检查和类型安全
+- 设置页重构：设置页拆分为 AgentSettings / SystemSettings / FrameworkSettings / SecurityRules 四个独立组件
 
 ## v0.15.2 (2026-07-26) — 功能闭环审计 + 浏览器 v0.6.0
 

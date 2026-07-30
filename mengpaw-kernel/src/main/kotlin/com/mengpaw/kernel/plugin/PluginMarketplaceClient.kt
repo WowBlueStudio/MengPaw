@@ -14,6 +14,7 @@ import kotlinx.serialization.json.*
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
+import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.error.ErrorCollector
 
 /**
@@ -165,7 +166,11 @@ class PluginMarketplaceClient(
         val ghproxy = ghproxyUrl(primary)
         if (ghproxy != null) return tryFetch(ghproxy)
 
-        return fbResult
+        // All sources failed — add proxy guidance
+        val originalError = fbResult.exceptionOrNull()
+        return Result.failure(RuntimeException(
+            "${originalError?.message ?: "Unknown error"}; 检查网络连接或使用网络代理; 中国用户可尝试配置 net.proxy"
+        ))
     }
 
     private suspend fun tryFetch(url: String): Result<MarketplaceIndex> {
@@ -250,7 +255,11 @@ class PluginMarketplaceClient(
             return tryDownload(ghproxy, entry, destDir, onProgress)
         }
 
-        return result
+        // All sources failed — add proxy guidance
+        val originalError = result.exceptionOrNull()
+        return Result.failure(RuntimeException(
+            "${originalError?.message ?: "Unknown error"}; 检查网络连接或使用网络代理; 中国用户可尝试配置 net.proxy"
+        ))
     }
 
     private suspend fun tryDownload(url: String, entry: MarketplaceEntry, destDir: File, onProgress: ((Long, Long) -> Unit)? = null): Result<File> {
@@ -285,7 +294,8 @@ class PluginMarketplaceClient(
                         received += read
                         onProgress?.invoke(received, total)
                     }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    KernelLog.w("PluginMarket", "download channel read error: ${e.message}")
                     // channel may be closed abruptly — fall through to use whatever we got
                 }
                 out.toByteArray()
@@ -386,6 +396,6 @@ class PluginMarketplaceClient(
 
     /** Release the underlying HTTP client resources (connection pool, thread pool). */
     override fun close() {
-        try { client.close() } catch (_: Exception) {}
+        try { client.close() } catch (e: Exception) { KernelLog.w("PluginMarket", "client.close failed: ${e.message}") }
     }
 }

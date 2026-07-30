@@ -89,12 +89,15 @@ class PluginManager(
                 }
             }
 
+            // Cyclic dependency detection
+            checkCyclicDeps(id, plugin.metadata.dependencies)
+
             plugins[id] = plugin
             statuses[id] = PluginStatus.INSTALLED
         }
 
         // Lifecycle callback — called outside synchronized block (suspend function)
-        try { plugin.onInstall(DefaultPluginContext(id)) } catch (e: Exception) {
+        try { plugin.onInstall(DefaultPluginContext(id, coreVersion)) } catch (e: Exception) {
             KernelLog.w("PluginManager", "onInstall failed for $id: ${e.message}")
         }
         return Result.success(id)
@@ -283,11 +286,27 @@ class PluginManager(
     }
 
     /**
+     * Recursively detect cyclic dependencies starting from [id].
+     * Throws [IllegalStateException] if a cycle or self-reference is found.
+     */
+    private fun checkCyclicDeps(id: String, deps: List<String>, visited: MutableSet<String> = mutableSetOf()) {
+        visited.add(id)
+        for (dep in deps) {
+            if (dep == id) throw IllegalStateException("Plugin $id depends on itself")
+            if (dep in visited) throw IllegalStateException("Cyclic dependency detected: $id -> $dep")
+            val depPlugin = plugins[dep]
+            if (depPlugin != null && statuses[dep] == PluginStatus.ACTIVE) {
+                checkCyclicDeps(dep, depPlugin.metadata.dependencies, visited)
+            }
+        }
+    }
+
+    /**
      * Simple PluginContext implementation for lifecycle callbacks.
      */
-    private inner class DefaultPluginContext(private val pluginId: String) : PluginContext {
+    private class DefaultPluginContext(private val pluginId: String, private val coreVer: String) : PluginContext {
         override val storageDir: String = DataPaths.pluginDir(pluginId)
-        override val coreVersion: String = this@PluginManager.coreVersion
+        override val coreVersion: String = coreVer
         override fun log(message: String) { KernelLog.i("Plugin/$pluginId", message) }
         override val commandExecutor: com.mengpaw.kernel.cli.CommandExecutor =
             com.mengpaw.kernel.cli.DefaultCommandExecutor()

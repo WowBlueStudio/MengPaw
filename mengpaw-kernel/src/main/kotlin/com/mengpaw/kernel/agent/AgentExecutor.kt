@@ -14,6 +14,10 @@ import kotlinx.serialization.json.*
  * Built-in agent.* CLI commands — Agent document management.
  */
 class AgentExecutor(private val docManager: AgentDocManager) {
+
+    /** Resolve the effective agent name, falling back to default. */
+    private fun agentName(ctx: ExecutionContext) = ctx.agentName ?: "agent"
+
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         "docs" to ::docs,
         "memory" to ::memory,
@@ -59,7 +63,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
 
     private suspend fun memory(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         // Show LONG-TERM memory — what's in the system prompt
-        val ltm = AgentDocs.readLongTermMemory(ctx.agentName ?: "MengPaw")
+        val ltm = AgentDocs.readLongTermMemory(agentName(ctx))
         if (ltm.isBlank()) return ExecutionResult.ok(buildString {
             appendLine("(长期记忆为空)")
             appendLine()
@@ -82,7 +86,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     private suspend fun memoryRecord(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("用法: agent.memory.record <内容>\n记录到中期记忆 (按日分片), 不会注入系统提示词。用 agent.memory.keep 升级到长期记忆。", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val content = args.joinToString(" ")
-        AgentDocs.appendMidTermMemory(ctx.agentName ?: "MengPaw", content)
+        AgentDocs.appendMidTermMemory(agentName(ctx), content)
         return ExecutionResult.ok(buildString {
             appendLine("已记录到中期记忆 (今日分片)")
             appendLine("提示: 如果这是重要的/可复用的经验, 用 agent.memory.keep 升级到长期记忆")
@@ -93,12 +97,12 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     private suspend fun memoryKeep(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("用法: agent.memory.keep <内容>\n将重要信息写入长期记忆 (注入系统提示词)", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val content = args.joinToString(" ")
-        AgentDocs.appendLongTermMemory(ctx.agentName ?: "MengPaw", content)
+        AgentDocs.appendLongTermMemory(agentName(ctx), content)
         return ExecutionResult.ok(buildString {
             appendLine("已写入长期记忆 ✅")
             appendLine("此内容将在下次对话中出现在系统提示词中")
             appendLine()
-            appendLine("当前长期记忆总数: ${AgentDocs.readLongTermMemory(ctx.agentName ?: "MengPaw").lines().count { it.startsWith("## ") }} 条")
+            appendLine("当前长期记忆总数: ${AgentDocs.readLongTermMemory(agentName(ctx)).lines().count { it.startsWith("## ") }} 条")
         })
     }
 
@@ -106,9 +110,9 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     private suspend fun memoryMid(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         return if (args.isEmpty()) {
             // Show available date files
-            val dates = AgentDocs.listMidTermDates(ctx.agentName ?: "MengPaw")
+            val dates = AgentDocs.listMidTermDates(agentName(ctx))
             if (dates.isEmpty()) return ExecutionResult.ok("(无中期记忆)")
-            val stats = AgentDocs.midTermStats(ctx.agentName ?: "MengPaw")
+            val stats = AgentDocs.midTermStats(agentName(ctx))
             ExecutionResult.ok(buildString {
                 appendLine("## 中期记忆分片 (按日期)")
                 appendLine()
@@ -122,7 +126,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             })
         } else {
             val date = args[0]
-            val content = AgentDocs.readMidTermMemoryDate(ctx.agentName ?: "MengPaw", date)
+            val content = AgentDocs.readMidTermMemoryDate(agentName(ctx), date)
             if (content.isBlank()) return ExecutionResult.ok("(该日期无中期记忆: $date)")
             val lineCount = content.lines().count { it.startsWith("## ") }
             ExecutionResult.ok(buildString {
@@ -136,7 +140,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
 
     /** Project memory — list all project memories or read one. */
     private suspend fun memoryProject(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         return if (args.isEmpty()) {
             val projects = DataPaths.projectMemoryFiles(agent)
             if (projects.isEmpty()) return ExecutionResult.ok(buildString {
@@ -174,7 +178,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         )
         val projectName = args[0]
         val report = args.drop(1).joinToString(" ")
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         AgentDocs.saveProjectMemory(agent, projectName, report)
         return ExecutionResult.ok(buildString {
             appendLine("项目记忆已保存: $projectName ✅")
@@ -193,7 +197,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         val entryId = args[0]
         val newContent = args.drop(1).joinToString(" ")
         if (entryId.length < 10) return ExecutionResult.fail("时间戳太短，需要至少 10 字符的完整时间戳。")
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         val edited = AgentDocs.editLongTermEntry(agent, entryId, newContent)
         return when (edited) {
             1 -> ExecutionResult.ok("已修改: $entryId")
@@ -210,7 +214,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         val date = args[0]
         val entryId = args.drop(1).joinToString(" ")
         if (entryId.length < 6) return ExecutionResult.fail("时间戳太短。中期记忆条目以 HH:mm:ss 开头，如 \"14:30:15\"。")
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         val path = DataPaths.midTermMemoryFile(agent, date)
         val deleted = AgentDocs.deleteEntry(agent, path, entryId)
         return when (deleted) {
@@ -229,7 +233,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         val entryId = args[1]
         val newContent = args.drop(2).joinToString(" ")
         if (entryId.length < 6) return ExecutionResult.fail("时间戳太短。")
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         val path = DataPaths.midTermMemoryFile(agent, date)
         val edited = AgentDocs.editEntry(agent, path, entryId, newContent)
         return when (edited) {
@@ -247,7 +251,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         val projectName = args[0]
         val entryId = args.drop(1).joinToString(" ")
         if (entryId.length < 10) return ExecutionResult.fail("时间戳太短，需要至少 10 字符。")
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         val path = DataPaths.projectMemoryFile(agent, projectName)
         val deleted = AgentDocs.deleteEntry(agent, path, entryId)
         return when (deleted) {
@@ -266,7 +270,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         val entryId = args[1]
         val newContent = args.drop(2).joinToString(" ")
         if (entryId.length < 10) return ExecutionResult.fail("时间戳太短。")
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         val path = DataPaths.projectMemoryFile(agent, projectName)
         val edited = AgentDocs.editEntry(agent, path, entryId, newContent)
         return when (edited) {
@@ -292,7 +296,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             "用法: agent.memory.mid.delete <date>\n删除指定日期的中期记忆分片。用 agent.memory.mid 查看可用日期。"
         )
         val date = args[0]
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         val ok = AgentDocs.deleteMidTermFile(agent, date)
         return if (ok) ExecutionResult.ok("已删除中期记忆分片: $date")
         else ExecutionResult.fail("分片不存在: $date。用 agent.memory.mid 查看可用日期。")
@@ -304,7 +308,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             "用法: agent.memory.project.delete <项目名>\n删除指定项目的记忆。用 agent.memory.project 查看所有项目。"
         )
         val projectName = args[0]
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         val ok = AgentDocs.deleteProjectMemory(agent, projectName)
         return if (ok) ExecutionResult.ok("已删除项目记忆: $projectName")
         else ExecutionResult.fail("项目记忆不存在: $projectName。用 agent.memory.project 查看所有项目。")
@@ -328,7 +332,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         if (entryId.length < 10) return ExecutionResult.fail(
             "时间戳太短 (${entryId.length} 字符)，需要完整时间戳（至少 10 字符，如 \"2026-07-25\"）。先用 agent.memory 查看。"
         )
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         val deleted = AgentDocs.deleteLongTermEntry(agent, entryId)
         return when (deleted) {
             1 -> ExecutionResult.ok("已删除: $entryId\n下次系统提示词不再包含此条目。")
@@ -351,7 +355,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
 
     /** Delete boost.md — Agent has completed initialization. */
     private suspend fun boostDelete(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         val ok = AgentDocs.deleteBoost(agent)
         return if (ok) ExecutionResult.ok("BOOST.md 已删除。你已完成初始化，不再需要引导文件。")
         else ExecutionResult.ok("BOOST.md 不存在——你早已完成初始化。")
@@ -385,7 +389,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     /** Clean workspace — screenshots, temp files, old checkpoints. Use --dry-run to preview. */
     private suspend fun cleanup(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val dryRun = args.contains("--dry-run")
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         if (dryRun) {
             val report = buildCleanupPreview(agent)
             return ExecutionResult.ok(report)
@@ -436,7 +440,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
 
     /** Comprehensive storage usage report — per-directory breakdown. */
     private suspend fun storageReport(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         return ExecutionResult.ok(buildString {
             appendLine("## 存储用量")
             appendLine()
@@ -509,7 +513,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             return ExecutionResult.ok(com.mengpaw.kernel.agent.DreamEngine.dreamHistory())
         }
         // FIX: sessionId → agentName; sessionId 是 UUID 而 DreamEngine 需要 agent 目录名
-        val result = com.mengpaw.kernel.agent.DreamEngine.dream(ctx.agentName ?: "MengPaw" ?: "agent-001")
+        val result = com.mengpaw.kernel.agent.DreamEngine.dream(agentName(ctx))
         val cleanup = com.mengpaw.kernel.agent.DreamEngine.cleanupWorkspace()
         return ExecutionResult.ok("""
 梦境完成:
@@ -721,7 +725,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
 
     /** agent.ls <path> — list files in a directory. Defaults to workspace root. */
     private suspend fun listFiles(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val agent = ctx.agentName ?: "MengPaw"
+        val agent = agentName(ctx)
         val defaultPath = "${com.mengpaw.kernel.DataPaths.AGENTS}/$agent"
         val path = if (args.isEmpty()) defaultPath else args.joinToString(" ")
         val dir = resolvePath(path) ?: return ExecutionResult.fail("路径无效: $path")
@@ -850,10 +854,10 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             if (file.exists()) file.delete()
             tmp.renameTo(file)
             // 仅对系统提示词中的三个缓存文件触发精确失效
-            val wsRoot = "${com.mengpaw.kernel.DataPaths.AGENTS}/${ctx.agentName ?: "MengPaw"}"
+            val wsRoot = "${com.mengpaw.kernel.DataPaths.AGENTS}/${agentName(ctx)}"
             val cachedDocs = setOf("agents.md", "soul.md", "memory/memory.md")
             if (canonical.startsWith(wsRoot) && cachedDocs.any { canonical.endsWith("/$it") }) {
-                com.mengpaw.kernel.agent.AgentDocs.onDocChanged?.invoke(ctx.agentName ?: "MengPaw", canonical)
+                com.mengpaw.kernel.agent.AgentDocs.onDocChanged?.invoke(agentName(ctx), canonical)
             }
             val isOutput = canonical.startsWith(com.mengpaw.kernel.DataPaths.OUTPUT)
             val msg = buildString {

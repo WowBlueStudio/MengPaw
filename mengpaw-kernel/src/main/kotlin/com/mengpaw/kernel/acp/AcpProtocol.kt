@@ -5,6 +5,7 @@ package com.mengpaw.kernel.acp
 
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -95,7 +96,11 @@ data class AcpMessage(
         fun ledgerBatch(from: String, to: String, entries: String, rangeStart: String, rangeEnd: String) =
             AcpMessage(from, to, AcpMessageType.LEDGER_BATCH.name,
                 // entries is already a serialized JSON array — embed directly
-                """{"entries":$entries,"rangeStart":"$rangeStart","rangeEnd":"$rangeEnd"}""")
+                buildJsonObject {
+                    put("entries", Json.parseToJsonElement(entries))
+                    put("rangeStart", JsonPrimitive(rangeStart))
+                    put("rangeEnd", JsonPrimitive(rangeEnd))
+                }.toString())
 
         fun ledgerAck(from: String, to: String, receivedHash: String, verified: Boolean = true) =
             AcpMessage(from, to, AcpMessageType.LEDGER_ACK.name,
@@ -140,7 +145,12 @@ data class AcpMessage(
         fun sessionDelta(from: String, to: String, sessionKey: String, events: String,
                          rangeStart: Int, rangeEnd: Int) =
             AcpMessage(from, to, AcpMessageType.SESSION_DELTA.name,
-                """{"sessionKey":"$sessionKey","events":$events,"rangeStart":$rangeStart,"rangeEnd":$rangeEnd}""")
+                buildJsonObject {
+                    put("sessionKey", JsonPrimitive(sessionKey))
+                    put("events", Json.parseToJsonElement(events))
+                    put("rangeStart", JsonPrimitive(rangeStart))
+                    put("rangeEnd", JsonPrimitive(rangeEnd))
+                }.toString())
 
         fun sessionAck(from: String, to: String, sessionKey: String, receivedSequence: Int) =
             AcpMessage(from, to, AcpMessageType.SESSION_ACK.name,

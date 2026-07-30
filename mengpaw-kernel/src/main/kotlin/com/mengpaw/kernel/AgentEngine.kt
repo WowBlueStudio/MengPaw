@@ -13,10 +13,11 @@ import com.mengpaw.kernel.cli.*
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.error.ErrorType
 import com.mengpaw.kernel.llm.*
-import com.mengpaw.kernel.namespace.SelfExecutor
 import com.mengpaw.kernel.plugin.PluginExecutor
 import com.mengpaw.kernel.plugin.PluginManager
 import com.mengpaw.kernel.plugin.PluginMarketplaceClient
+import com.mengpaw.kernel.security.IntegrityProvider
+import com.mengpaw.kernel.security.NoOpIntegrityProvider
 import com.mengpaw.kernel.security.Sanitizer
 import com.mengpaw.kernel.session.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,33 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withTimeout
-
-sealed class AgentState {
-    data object Idle : AgentState()
-    data class Running(val task: String, val step: Int, val maxSteps: Int) : AgentState()
-    data class Finished(val result: String) : AgentState()
-    data class Error(val message: String) : AgentState()
-}
-
-data class PlanStep(
-    val index: Int,
-    val description: String,
-    val action: String,
-    val expectedOutcome: String,
-    var status: PlanStepStatus = PlanStepStatus.PENDING
-)
-
-enum class PlanStepStatus { PENDING, RUNNING, COMPLETED, FAILED }
-
-data class TaskPlan(
-    val task: String,
-    val steps: List<PlanStep>,
-    val createdAt: Long = System.currentTimeMillis()
-) {
-    val totalSteps: Int get() = steps.size
-    val completedSteps: Int get() = steps.count { it.status == PlanStepStatus.COMPLETED }
-    val isComplete: Boolean get() = steps.all { it.status == PlanStepStatus.COMPLETED }
-}
 
 class AgentEngine(
     llmProvider: LlmProvider,
@@ -63,8 +37,23 @@ class AgentEngine(
     val scrollContext: ScrollContextManager? = null,
     private val checkpointManager: CheckpointManager = CheckpointManager(),
     /** Additional namespaces to register alongside built-ins (e.g. "sys" → SysExecutor.commands). */
-    private val additionalNamespaces: Map<String, Map<String, suspend (List<String>, ExecutionContext) -> com.mengpaw.kernel.cli.ExecutionResult>> = emptyMap()
+    private val additionalNamespaces: Map<String, Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult>> = emptyMap()
 ) {
+    // ── Sub-managers and executors (declared before init for initialization order) ──
+    private val marketplaceClient = PluginMarketplaceClient()
+    private val pluginExecutor = PluginExecutor(pluginManager, marketplaceClient)
+    private val agentExecutor = AgentExecutor(agentDocManager)
+    private val pipelineManager = PipelineManager(pluginManager, pluginExecutor, agentExecutor, additionalNamespaces)
+    private var toolResultManager = ToolResultManager("agent")
+    private val goalModeExecutor = GoalModeExecutor(this)
+    private val missionModeExecutor = MissionModeExecutor(this)
+    private val planModeExecutor = PlanModeExecutor(this, pipelineManager, sessionManager, promptEngine)
+    var integrityProvider: IntegrityProvider = NoOpIntegrityProvider
+        set(value) {
+            field = value
+            pipelineManager.integrityProvider = value
+        }
+
     init {
         // Wire real PluginManager into AgentDocManager so CLI.md generation sees installed plugins
         agentDocManager.pluginManager = pluginManager
@@ -74,6 +63,8 @@ class AgentEngine(
         }
         // 构建命令搜索索引 (BM25 + 双语同义词表) — 一次性初始化
         com.mengpaw.kernel.cli.BuiltinCommandIndex.buildAll()
+        // Sync integrity provider to pipeline manager
+        pipelineManager.integrityProvider = integrityProvider
     }
 
     /** The active LLM provider. Can be updated after construction (e.g. when user configures API key). */
@@ -157,7 +148,7 @@ class AgentEngine(
         )
         // Push all messages into the engine session so the LLM sees full history
         for ((role, content) in messages) {
-            sessionManager.addMessage(session.id, com.mengpaw.kernel.session.Message(role, content))
+            sessionManager.addMessage(session.id, Message(role, content))
         }
         // Set conversationSessionId so runReActLoop() reuses this session
         conversationSessionId = session.id
@@ -170,8 +161,8 @@ class AgentEngine(
             val ckpt = checkpointManager.loadLatestSync(previousEngineSessionId)
             if (ckpt != null) {
                 checkpointStep = ckpt.step
-                sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
-                    kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.SESSION_RECOVERED,
+                sessionManager.recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+                    kind = SessionEventBus.EventKind.SESSION_RECOVERED,
                     sessionId = session.id,
                     agentName = agentName,
                     summary = "Checkpoint found: step ${ckpt.step}, task: ${ckpt.remainingTask.take(60)}",
@@ -190,8 +181,8 @@ class AgentEngine(
                 hasPartialText = false,
                 hasPartialReasoning = false
             )
-            sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
-                kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.RUN_INTERRUPTED,
+            sessionManager.recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+                kind = SessionEventBus.EventKind.RUN_INTERRUPTED,
                 sessionId = session.id,
                 agentName = agentName,
                 summary = "Session restored after process death (was at step $checkpointStep)"
@@ -203,6 +194,15 @@ class AgentEngine(
     fun updateLlmProvider(provider: LlmProvider) {
         llmProvider = provider
     }
+
+    /** Expose the current LLM provider for delegation to sub-executors. */
+    internal fun getLlmProvider(): LlmProvider = llmProvider
+
+    /** Update agent state flow (used by sub-executors for progress reporting). */
+    internal fun updateAgentState(state: AgentState) { _state.value = state }
+
+    /** Update agent output flow (used by sub-executors for progress reporting). */
+    internal fun updateAgentOutput(output: String) { _output.value = output }
 
     val cacheHitTokens: Long get() = llmRequestBuilder.cumulativeCacheHitTokens
     val cacheMissTokens: Long get() = llmRequestBuilder.cumulativeCacheMissTokens
@@ -217,19 +217,14 @@ class AgentEngine(
         llmRequestBuilder.cacheStrategy = CacheStrategy.forProvider(endpoint)
     }
 
-    /** List all active CLI namespaces (built-in + plugins) for settings display. */
-    fun getActiveNamespaces(): List<String> {
-        val namespaces = mutableSetOf("self", "agent", "plugin")
-        additionalNamespaces.keys.forEach { namespaces.add(it) }
-        pluginManager.getActivePlugins().forEach { plugin ->
-            val ns = plugin.metadata.id.removeSuffix("-plugin").removeSuffix("-ext")
-            namespaces.add(ns)
-        }
-        return namespaces.sorted()
-    }
+    /** Delegate to PipelineManager. */
+    fun getActiveNamespaces(): List<String> = pipelineManager.getActiveNamespaces()
 
     /** Access the plugin manager for settings display. */
     fun getPluginManager(): PluginManager = pluginManager
+
+    /** Invalidate cached pipeline when plugins change. Call after plugin install/uninstall. */
+    fun invalidatePipeline() { pipelineManager.invalidatePipeline() }
 
     /** Reset loop detection state — call before each new task. */
     fun resetLoopDetection() = promptEngine.resetLoopDetection()
@@ -237,53 +232,6 @@ class AgentEngine(
     companion object {
         /** Single source of truth: generated from gradle.properties mengpaw.version. */
         val CORE_VERSION: String get() = MengPawVersion.FRAMEWORK
-        private const val SOFT_COMPACT_RATIO = 0.50
-        const val TOOL_SNIP_RATIO = 0.60
-        const val COMPACT_RATIO = 0.80
-        const val COMPACT_FORCE_RATIO = 0.90
-        const val MIN_FOLD_TOKENS = 400
-        const val DEFAULT_CONTEXT_WINDOW = 131_072
-
-        // ── QwenPaw-style tool result pruning thresholds ──
-        /** Recent steps (≤3): generous threshold before offloading to disk. */
-        private const val TOOL_SNIPPET_RECENT_BYTES = 30_000
-        /** Older steps: aggressive truncation, keep only snippet + file path. */
-        private const val TOOL_SNIPPET_OLD_BYTES = 2_000
-        /** Auto-clean tool result files older than this (days). */
-        private const val TOOL_RESULT_RETENTION_DAYS = 5L
-    }
-
-    /**
-     * QwenPaw-style tool result offloading.
-     * Long tool outputs (> threshold) are saved to disk; only a snippet stays in context.
-     * Two-tier: recent steps get higher threshold, older steps get aggressive pruning.
-     */
-    private fun pruneToolResult(commandLine: String, rawOutput: String, step: Int): String {
-        val threshold = if (step <= 3) TOOL_SNIPPET_RECENT_BYTES else TOOL_SNIPPET_OLD_BYTES
-        if (rawOutput.length <= threshold) return rawOutput
-
-        val fileUuid = java.util.UUID.randomUUID().toString().take(8)
-        val dir = java.io.File(com.mengpaw.kernel.DataPaths.toolResultsDir(agentName)).also { it.mkdirs() }
-        val file = java.io.File(dir, "$fileUuid.txt")
-        return try {
-            file.writeText(rawOutput)
-            val snippet = rawOutput.take(threshold / 2)
-            "$snippet\n... [完整输出 (${rawOutput.length} 字节): tool_results/$fileUuid.txt — 用 agent.read 查阅]"
-        } catch (_: Exception) {
-            rawOutput.take(threshold)
-        }
-    }
-
-    /** Clean up old tool result cache files. Called periodically. */
-    private fun cleanupOldToolResults() {
-        try {
-            val dir = java.io.File(com.mengpaw.kernel.DataPaths.toolResultsDir(agentName))
-            if (!dir.exists()) return
-            val cutoff = System.currentTimeMillis() - TOOL_RESULT_RETENTION_DAYS * 24 * 3600 * 1000L
-            dir.listFiles()?.forEach { f ->
-                if (f.lastModified() < cutoff) f.delete()
-            }
-        } catch (_: Exception) {}
     }
 
     /**
@@ -301,7 +249,7 @@ class AgentEngine(
     private var consecutiveCompacts = 0
     private var compactStuck = false
 
-    private fun estimateContextRatio(promptTokens: Int): Double = promptTokens / DEFAULT_CONTEXT_WINDOW.toDouble()
+    private fun estimateContextRatio(promptTokens: Int): Double = promptTokens / PipelineManager.DEFAULT_CONTEXT_WINDOW.toDouble()
 
     private fun estimateTokens(text: String): Int = (text.length * llmRequestBuilder.calibratedTokPerChar).toInt()
 
@@ -330,7 +278,7 @@ class AgentEngine(
         }
         if (count > 0) {
             // Update session state to reflect modified messages
-            sessionManager.addMessage(sessionId, com.mengpaw.kernel.session.Message(
+            sessionManager.addMessage(sessionId, Message(
                 "system", "[snip — $count old tool results compressed to free context]"))
         }
         return count
@@ -339,11 +287,11 @@ class AgentEngine(
     private suspend fun maybeFoldContext(sessionId: String, promptTokens: Int, currentStep: Int = 0): Boolean {
         if (compactStuck) return false
         val ratio = estimateContextRatio(promptTokens)
-        if (ratio < SOFT_COMPACT_RATIO) { consecutiveCompacts = 0; compactStuck = false; return false }
-        if (ratio < TOOL_SNIP_RATIO) return false
-        if (ratio < COMPACT_RATIO) { return snipStaleToolResults(sessionId, currentStep) > 0 }
+        if (ratio < PipelineManager.SOFT_COMPACT_RATIO) { consecutiveCompacts = 0; compactStuck = false; return false }
+        if (ratio < PipelineManager.TOOL_SNIP_RATIO) return false
+        if (ratio < PipelineManager.COMPACT_RATIO) { return snipStaleToolResults(sessionId, currentStep) > 0 }
         val estimatedFoldTokens = (promptTokens * 0.3).toInt()
-        if (ratio < COMPACT_FORCE_RATIO && estimatedFoldTokens < MIN_FOLD_TOKENS) return false
+        if (ratio < PipelineManager.COMPACT_FORCE_RATIO && estimatedFoldTokens < PipelineManager.MIN_FOLD_TOKENS) return false
         sessionManager.compressIfNeeded(llmProvider)
         consecutiveCompacts++
         if (consecutiveCompacts >= 2) {
@@ -367,7 +315,10 @@ class AgentEngine(
         private set
 
     fun setAgentIdentity(name: String, framework: String?, model: String) {
-        agentName = name; this.framework = framework; this.modelName = model
+        agentName = name
+        this.framework = framework
+        this.modelName = model
+        toolResultManager = ToolResultManager(name)
         sessionManager.agentName = name
         rebuildSystemPrompt()
     }
@@ -384,56 +335,6 @@ class AgentEngine(
         llmRequestBuilder.updateSystemPrompt(processed)
     }
 
-    private val marketplaceClient = PluginMarketplaceClient()
-    private val pluginExecutor = PluginExecutor(pluginManager, marketplaceClient)
-    private val agentExecutor = AgentExecutor(agentDocManager)
-
-    // FIX: Cache pipeline to avoid rebuilding CommandRegistry on every command execution.
-    // Rebuilt only when plugins are installed/uninstalled (via invalidatePipeline).
-    @Volatile private var cachedPipeline: Pipeline? = null
-
-    /** Invalidate cached pipeline when plugins change. Call after plugin install/uninstall. */
-    fun invalidatePipeline() { cachedPipeline = null }
-
-    /** Integrity provider for path-level file protection; set after construction for Android. */
-    var integrityProvider: com.mengpaw.kernel.security.IntegrityProvider = com.mengpaw.kernel.security.NoOpIntegrityProvider
-
-    private fun buildPipeline(): Pipeline {
-        cachedPipeline?.let { return it }
-        val registry = CommandRegistry()
-
-        // Expose registry for self.tools command
-        SelfExecutor.commandRegistry = registry
-
-        // Built-in: self namespace (always available)
-        registry.registerNamespace("self", SelfExecutor.commands)
-
-        // Built-in: plugin namespace (always available)
-        registry.registerNamespace("plugin", pluginExecutor.commands)
-
-        // Built-in: agent namespace (always available)
-        registry.registerNamespace("agent", agentExecutor.commands)
-
-        // Additional namespaces (e.g. "sys" from Android adapter)
-        additionalNamespaces.forEach { (ns, commands) ->
-            registry.registerNamespace(ns, commands)
-        }
-
-        // Dynamic: register all active plugin commands
-        pluginManager.getActivePlugins().forEach { plugin ->
-            val ns = plugin.metadata.id.removeSuffix("-plugin").removeSuffix("-ext")
-            plugin.commands.forEach { (name, handler) ->
-                registry.register("$ns.$name", handler)
-            }
-        }
-
-        pluginManager.bindRegistry(registry)
-        val pipeline = Pipeline(registry = registry)
-        pipeline.integrityProvider = integrityProvider
-        cachedPipeline = pipeline
-        return pipeline
-    }
-
     data class TraceStep(val step: Int, val thought: String, val action: String?, val observation: String?)
 
     suspend fun run(task: String, maxSteps: Int = 50, onStep: ((TraceStep) -> Unit)? = null): String {
@@ -442,88 +343,22 @@ class AgentEngine(
         return runReActLoop(task = guardedTask, maxSteps = maxSteps, onStep = onStep)
     }
 
-    // ── Goal Mode (ported from QwenPaw GoalMode) ─────────────────────
+    // ── Goal Mode (delegated to GoalModeExecutor) ────────────────────
 
     /**
      * Goal-mode execution with RubricGate auto-completion detection.
-     *
-     * Each turn: inject goal prompt → run ReAct loop → evaluate completion via LLM.
-     * Stops when RubricGate returns SATISFIED or max iterations exhausted.
+     * Delegates to [GoalModeExecutor].
      */
     suspend fun runWithGoal(
         task: String, maxTurns: Int = 20, maxTokensBudget: Int = 300_000,
         onStep: ((TraceStep) -> Unit)? = null
-    ): String {
-        val guardedTask = if (com.mengpaw.kernel.security.PromptFirewall.checkUserPrompt(task) != null)
-            com.mengpaw.kernel.security.PromptFirewall.wrapWithDefense(task) else task
-        val session = com.mengpaw.kernel.agent.GoalSession(
-            goal = guardedTask, maxIterations = maxTurns, maxTokens = maxTokensBudget
-        )
-        val evaluator = com.mengpaw.kernel.agent.RubricEvaluator()
-        val turnResults = mutableListOf<String>()
-
-        for (turn in 0 until maxTurns) {
-            if (!session.active) break
-            session.iteration = turn + 1
-
-            // Build goal-aware prompt — RubricGate feedback is the only signal needed between turns.
-            // Prior turn results are NOT replayed; replaying biases the agent toward repeating old work.
-            val goalPrompt = if (turn == 0) {
-                "## 目标\n${session.goal}\n\n使用 Thought → Action → Final Answer 格式。自然对话，不要主动汇报进度或回溯历史——除非用户询问。"
-            } else {
-                "## 目标 (第 ${turn + 1}/$maxTurns 轮)\n${session.goal}\n\n反馈: ${session.lastFeedback.ifEmpty { "无" }}"
-            }
-
-            // Run ReAct loop — no prior context injection; RubricGate feedback is sufficient
-            val result = runReActLoop(
-                task = "$goalPrompt\n\n$guardedTask",
-                maxSteps = 50,
-                onStep = onStep
-            )
-            turnResults.add(result)
-
-            // Budget gate: estimate tokens from result length
-            session.tokensUsed += result.length / 4  // rough char→token estimate
-            if (session.tokensUsed >= maxTokensBudget) {
-                session.active = false
-                session.lastVerdict = "Token budget exceeded"
-                break
-            }
-
-            // RubricGate: LLM-based completion evaluation on every turn
-            val evalPrompt = evaluator.buildPrompt(session.goal, result)
-            try {
-                val evalResult = llmProvider.complete(evalPrompt)
-                val satisfied = evalResult.trim().uppercase().startsWith("YES")
-                if (satisfied) {
-                    session.lastVerdict = "SATISFIED"
-                    session.active = false
-                } else {
-                    session.lastVerdict = "NEEDS_REVISION"
-                    session.lastFeedback = evalResult.take(200)
-                }
-            } catch (_: Exception) {
-                // LLM eval failed — fall back to heuristic
-                if (result.contains("Final Answer:", ignoreCase = true)) {
-                    session.lastVerdict = "SATISFIED (heuristic)"
-                    session.active = false
-                }
-            }
-        }
-
-        return if (!session.active && session.lastVerdict.startsWith("SATISFIED")) {
-            "目标已完成: ${session.goal}\n\n" + turnResults.lastOrNull().orEmpty()
-        } else {
-            "目标未完成 (${session.iteration}/${maxTurns} 轮): ${session.goal}\n\n最后结果:\n" +
-                turnResults.lastOrNull().orEmpty()
-        }
-    }
+    ): String = goalModeExecutor.runWithGoal(task, maxTurns, maxTokensBudget, onStep)
 
     /**
      * Internal ReAct loop with optional context prefix.
      * Shared by run() and runWithGoal() to avoid session-creation overhead.
      */
-    private suspend fun runReActLoop(
+    internal suspend fun runReActLoop(
         task: String,
         maxSteps: Int,
         contextPrefix: String = "",
@@ -555,7 +390,7 @@ class AgentEngine(
 
         // ★ Integrity check after session creation — terminal latch blocks corrupt sessions
         if (!checkIntegrity(session.id)) {
-            val errorMsg = localizedError("session_corrupted", session.id)
+            val errorMsg = localizedError("session_corrupted", session.id, agentLanguage)
             sessionManager.addMessage(session.id, Message("system", errorMsg))
             _state.value = AgentState.Error(errorMsg)
             return errorMsg
@@ -625,8 +460,8 @@ class AgentEngine(
                     sessionManager.addMessage(session.id, Message("assistant", answer))
                     // No boundary message — the conversation continues naturally.
                     // The LLM sees full history: previous FinalAnswer + new user message = context.
-                    sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
-                        kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.RUN_COMPLETED,
+                    sessionManager.recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+                        kind = SessionEventBus.EventKind.RUN_COMPLETED,
                         sessionId = session.id,
                         agentName = agentName,
                         summary = "Run completed at step ${step + 1}",
@@ -636,7 +471,7 @@ class AgentEngine(
                     com.mengpaw.kernel.agent.AgentDocs.flushMidTermMemoryQueue()
                     recordTaskMemory(task, answer)
                     // Periodic cleanup of old tool result cache files
-                    if (java.lang.Math.random() < 0.1) cleanupOldToolResults()
+                    if (java.lang.Math.random() < 0.1) toolResultManager.cleanupOldToolResults()
                     return answer
                 }
 
@@ -646,7 +481,7 @@ class AgentEngine(
                     consecutiveContinueCount++
                     if (consecutiveContinueCount >= 2) {
                         // Model keeps thinking without acting — force finalize
-                        val msg = localizedError("max_steps", maxSteps.toString())
+                        val msg = localizedError("max_steps", maxSteps.toString(), agentLanguage)
                         sessionManager.addMessage(session.id, Message("assistant", msg))
                         _state.value = AgentState.Finished(msg)
                         return msg
@@ -663,7 +498,7 @@ class AgentEngine(
                     if (promptEngine.detectLoop(commandLine)) {
                         ErrorCollector.report(ErrorType.LOOP_DETECTED, "AgentEngine", commandLine,
                             sessionId = session.id, agentName = agentName)
-                        val errorMsg = localizedError("loop_detected", commandLine)
+                        val errorMsg = localizedError("loop_detected", commandLine, agentLanguage)
                         sessionManager.addMessage(session.id, Message("assistant", errorMsg))
                         _state.value = AgentState.Error(errorMsg)
                         onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, errorMsg))
@@ -671,7 +506,7 @@ class AgentEngine(
                     }
 
                     val result = try {
-                        kotlinx.coroutines.withTimeout(60_000L) { buildPipeline().execute(commandLine, context) }
+                        kotlinx.coroutines.withTimeout(60_000L) { pipelineManager.buildPipeline().execute(commandLine, context) }
                     } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                         ExecutionResult.fail("命令超时 (60s): $commandLine。请检查网络连接或尝试其他方式。", errorCode = ErrorCodes.ERR_INTERNAL)
                     }
@@ -685,7 +520,7 @@ class AgentEngine(
                     }
                     // Detect failure loop: 5+ consecutive failures → agent is stuck
                     if (promptEngine.trackResult(result.success)) {
-                        val errorMsg = localizedError("consecutive_failures", "5")
+                        val errorMsg = localizedError("consecutive_failures", "5", agentLanguage)
                         sessionManager.addMessage(session.id, Message("assistant", errorMsg))
                         _state.value = AgentState.Error(errorMsg)
                         onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, errorMsg))
@@ -693,7 +528,7 @@ class AgentEngine(
                     }
                     var rawObservation = if (result.success) result.output else "Error: ${result.error}"
                     // ── QwenPaw-style tool result pruning ──
-                    rawObservation = pruneToolResult(commandLine, rawObservation, step + 1)
+                    rawObservation = toolResultManager.pruneToolResult(commandLine, rawObservation, step + 1)
                     onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, rawObservation))
 
                     val observationEntry = "Command: $commandLine\nResult: $rawObservation"
@@ -714,10 +549,10 @@ class AgentEngine(
                 }
             }
 
-            val msg = localizedError("max_steps", maxSteps.toString())
+            val msg = localizedError("max_steps", maxSteps.toString(), agentLanguage)
             sessionManager.addMessage(session.id, Message("assistant", msg))
-            sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
-                kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.RUN_COMPLETED,
+            sessionManager.recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+                kind = SessionEventBus.EventKind.RUN_COMPLETED,
                 sessionId = session.id,
                 agentName = agentName,
                 summary = "Max steps ($effectiveMax) reached",
@@ -740,15 +575,15 @@ class AgentEngine(
             )
 
             // ★ Emit lifecycle events (matching OpenClaw session-state-events.ts)
-            sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
-                kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.LLM_CALL_ERROR,
+            sessionManager.recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+                kind = SessionEventBus.EventKind.LLM_CALL_ERROR,
                 sessionId = session.id,
                 agentName = agentName,
                 summary = e.message?.take(120) ?: "Unknown error",
                 payload = mapOf("error" to (e.message?.take(200) ?: ""), "consecutive" to "true")
             ))
-            sessionManager.recordSessionEvent(session.id, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
-                kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.RUN_INTERRUPTED,
+            sessionManager.recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+                kind = SessionEventBus.EventKind.RUN_INTERRUPTED,
                 sessionId = session.id,
                 agentName = agentName,
                 summary = "Run interrupted after error: ${e.message?.take(80) ?: "unknown"}"
@@ -756,7 +591,7 @@ class AgentEngine(
 
             ErrorCollector.report(ErrorType.AGENT_CRASH, "AgentEngine.runReActLoop", e.message ?: "(no message)",
                 throwable = e, sessionId = session.id, agentName = agentName)
-            val errorMsg = localizedError("agent_error", e.message ?: e::class.simpleName ?: "unknown")
+            val errorMsg = localizedError("agent_error", e.message ?: e::class.simpleName ?: "unknown", agentLanguage)
             sessionManager.addMessage(session.id, Message("assistant", errorMsg))
             _state.value = AgentState.Error(errorMsg)
             return errorMsg
@@ -781,368 +616,40 @@ class AgentEngine(
         return summaries.takeLast(10) // keep only recent tools
     }
 
-    // ── Mission Mode (ported from QwenPaw MissionMode) ────────────────
+    // ── Mission Mode (delegated to MissionModeExecutor) ──────────────
 
     /**
-     * Mission-mode: decompose → worker execution → verification.
+     * Mission-mode: decompose -> worker execution -> verification.
      * Uses the LLM to decompose the task, then runs each subtask sequentially.
-     */
-    /**
-     * Mission mode — Claude Code style decomposition with parallel workers,
-     * verification, retry on failure, and LLM synthesis.
+     * Delegates to [MissionModeExecutor].
      */
     suspend fun runWithMission(
         task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
         maxRetriesPerSubtask: Int = 2, onStep: ((TraceStep) -> Unit)? = null
-    ): String {
-        val guardedTask = if (com.mengpaw.kernel.security.PromptFirewall.checkUserPrompt(task) != null)
-            com.mengpaw.kernel.security.PromptFirewall.wrapWithDefense(task) else task
+    ): String = missionModeExecutor.runWithMission(task, maxSubtasks, maxStepsPerSubtask, maxRetriesPerSubtask, onStep)
 
-        // Step 1: Structured decomposition — LLM produces JSON subtask list
-        val decomposePrompt = """
-You are decomposing a complex task into independent subtasks for parallel execution.
+    // ── Plan Mode (delegated to PlanModeExecutor) ─────────────────────
 
-Task: $guardedTask
+    /**
+     * Plan-mode: structured plan generation and step-by-step execution.
+     * Delegates to [PlanModeExecutor].
+     */
+    suspend fun runWithPlan(task: String, maxStepsPerPlanStep: Int = 5, onStep: ((TraceStep) -> Unit)? = null): String =
+        planModeExecutor.runWithPlan(task, maxStepsPerPlanStep, onStep)
 
-Output a JSON array of subtasks. Each subtask has:
-- "id": short kebab-case id
-- "desc": what to do (one sentence, actionable)
-- "criteria": how to verify success (one sentence, concrete)
+    /** Format a plan summary for display. Delegates to [PlanModeExecutor]. */
+    fun formatPlanSummary(plan: TaskPlan): String = planModeExecutor.formatPlanSummary(plan)
 
-Rules:
-- Maximum $maxSubtasks subtasks
-- Each subtask must be independently executable (no cross-dependencies)
-- Order from most critical to least
-
-Output ONLY the JSON array, no other text:
-[{"id":"...","desc":"...","criteria":"..."}]
-""".trimIndent()
-
-        val decomposeResult = try {
-            llmProvider.complete(decomposePrompt)
-        } catch (e: Exception) {
-            return run(task, maxStepsPerSubtask * maxSubtasks, onStep)
-        }
-
-        // Parse JSON subtasks
-        val subtasks = try {
-            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-            val jsonStr = decomposeResult.trim().substringAfter("[").substringBeforeLast("]").let { "[$it]" }
-            val array = json.parseToJsonElement(jsonStr)
-            (array as? kotlinx.serialization.json.JsonArray)?.map { el ->
-                val obj = el as? kotlinx.serialization.json.JsonObject ?: return@map null
-                com.mengpaw.kernel.agent.MissionSubtask(
-                    id = (obj["id"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "task-?",
-                    description = (obj["desc"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "?",
-                    expectedOutcome = (obj["criteria"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: ""
-                )
-            }?.filterNotNull()?.take(maxSubtasks) ?: emptyList()
-        } catch (e: Exception) {
-            // Fallback: simple line parsing
-            decomposeResult.lines()
-                .filter { it.trimStart().startsWith("-") || it.trimStart().startsWith("*") }
-                .take(maxSubtasks)
-                .mapIndexed { i, line ->
-                    val parts = line.removePrefix("-").removePrefix("*").trim().split("|", limit = 2)
-                    com.mengpaw.kernel.agent.MissionSubtask(
-                        id = "task-${i + 1}",
-                        description = parts.getOrElse(0) { "Subtask ${i + 1}" }.trim(),
-                        expectedOutcome = parts.getOrElse(1) { "" }.trim()
-                    )
-                }
-        }
-
-        if (subtasks.isEmpty()) {
-            return run(task, maxStepsPerSubtask * maxSubtasks, onStep)
-        }
-
-        _state.value = AgentState.Running("Mission: ${subtasks.size} subtasks", 0, subtasks.size)
-
-        // Step 2: Sequential execution with retry+verify per subtask
-        val results = mutableListOf<String>()
-        for ((i, subtask) in subtasks.withIndex()) {
-            _state.value = AgentState.Running("Mission: ${i + 1}/${subtasks.size}", i + 1, subtasks.size)
-            val result = executeSubtask(subtask, maxStepsPerSubtask, maxRetriesPerSubtask, onStep)
-            results.add(result)
-        }
-
-        // Step 3: LLM synthesis of all results
-        val verified = subtasks.count { it.status == com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED }
-        val failed = subtasks.count { it.status == com.mengpaw.kernel.agent.SubtaskStatus.FAILED }
-        val parts = subtasks.joinToString("\n") { st ->
-            val icon = when (st.status) {
-                com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED -> "✅"
-                com.mengpaw.kernel.agent.SubtaskStatus.DONE -> "👍"
-                com.mengpaw.kernel.agent.SubtaskStatus.FAILED -> "❌"
-                else -> "⬜"
-            }
-            "$icon ${st.description}: ${st.output.take(300)}"
-        }
-        val synthesisPrompt = """
-Synthesize the following Mission results into a clear, structured final report.
-
-Original task: $guardedTask
-Subtask results ($verified verified, $failed failed of ${subtasks.size}):
-
-$parts
-
-Provide a concise summary with:
-1. What was accomplished
-2. Key findings or outputs
-3. Any remaining issues (if $failed > 0)
-""".trimIndent()
-
-        val synthesis = try {
-            llmProvider.complete(synthesisPrompt)
-        } catch (_: Exception) {
-            parts
-        }
-
-        return buildString {
-            appendLine("## Mission: $task")
-            appendLine("子任务: ${subtasks.size} | ✅ $verified | 👍 ${subtasks.filter { it.status == com.mengpaw.kernel.agent.SubtaskStatus.DONE }.size} | ❌ $failed")
-            appendLine()
-            appendLine(synthesis)
-        }
-    }
-
-    /** Execute a single subtask with verification and retry. */
-    private suspend fun executeSubtask(
-        subtask: com.mengpaw.kernel.agent.MissionSubtask,
-        maxSteps: Int, maxRetries: Int,
-        onStep: ((TraceStep) -> Unit)? = null
-    ): String {
-        var retries = 0
-        var lastVerifierFeedback = ""
-
-        while (retries <= maxRetries) {
-            subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.RUNNING
-
-            // Build task prompt — include verifier feedback on retry
-            val taskPrompt = if (retries > 0 && lastVerifierFeedback.isNotBlank()) {
-                buildString {
-                    append(subtask.description)
-                    append("\n\n## 质量审查反馈（第 $retries 次）\n")
-                    append("上一轮未通过验证，请根据以下审查意见改进：\n\n")
-                    append(lastVerifierFeedback)
-                    append("\n\n请修正上述问题后重新执行。原任务：${subtask.description}")
-                }
-            } else {
-                subtask.description
-            }
-
-            val workerResult = try {
-                run(taskPrompt, maxSteps = maxSteps, onStep = onStep)
-            } catch (e: Exception) {
-                "Error: ${e.message}"
-            }
-
-            subtask.output = workerResult
-            val isHardError = workerResult.startsWith("Error:") ||
-                workerResult.startsWith("已达到最大步数") ||
-                workerResult.startsWith("Max steps")
-
-            if (isHardError) {
-                lastVerifierFeedback = "Worker execution error: ${workerResult.take(300)}"
-                retries++
-                continue
-            }
-
-            // ── Strict Verifier (Worker-Verifier pattern) ──
-            val verifierPrompt = """
-You are a strict quality verifier. Review the worker agent's output against the success criteria.
-
-**Success criteria**: ${subtask.expectedOutcome.ifBlank { "Complete the task: ${subtask.description}" }}
-
-**Worker output**:
-${workerResult.take(2000)}
-
-**Analysis rules**:
-- Check if the output actually fulfills the criteria (not just mentions it)
-- Check for factual errors, incomplete data, or vague hand-waving
-- A "Final Answer" that says "I cannot do this" without trying alternatives = FAIL
-- Partial completion with clear next steps = FAIL (must retry to complete)
-
-Respond in this exact format:
-
-VERDICT: <PASS or FAIL>
-ANALYSIS: <1-3 sentences on what was checked and whether it meets criteria>
-FIX: <if FAIL, give the worker concrete, actionable instructions for the retry. Be specific — name which tool to use, what data to look for, what approach to try differently>
-""".trimIndent()
-
-            try {
-                val verifyResult = llmProvider.complete(verifierPrompt)
-                val verdict = verifyResult.lines()
-                    .find { it.trimStart().startsWith("VERDICT:", ignoreCase = true) }
-                    ?.substringAfter(":")?.trim()?.uppercase() ?: "PASS"
-
-                if (verdict == "PASS") {
-                    subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.VERIFIED
-                    subtask.verifierNote = verifyResult.lines()
-                        .find { it.trimStart().startsWith("ANALYSIS:", ignoreCase = true) }
-                        ?.substringAfter(":")?.trim() ?: "PASS"
-                    return workerResult
-                } else {
-                    // FAIL — extract analysis and fix instructions for the worker
-                    lastVerifierFeedback = buildString {
-                        val analysis = verifyResult.lines()
-                            .find { it.trimStart().startsWith("ANALYSIS:", ignoreCase = true) }
-                            ?.substringAfter(":")?.trim()
-                        val fix = verifyResult.lines()
-                            .find { it.trimStart().startsWith("FIX:", ignoreCase = true) }
-                            ?.substringAfter(":")?.trim()
-                        if (analysis != null) { append("问题: $analysis\n") }
-                        if (fix != null) { append("修复建议: $fix") }
-                        if (isBlank()) { append(verifyResult.take(300)) }
-                    }
-                    subtask.verifierNote = "FAIL: ${lastVerifierFeedback.take(150)}"
-                    retries++
-                }
-            } catch (_: Exception) {
-                // Verification unavailable — accept result without verification
-                subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.DONE
-                return workerResult
-            }
-        }
-
-        subtask.status = com.mengpaw.kernel.agent.SubtaskStatus.FAILED
-        return lastVerifierFeedback.ifBlank { subtask.output }
-    }
-
-    private fun localizedError(key: String, detail: String): String = when (agentLanguage) {
-        PromptEngine.AgentLanguage.CHINESE -> when (key) {
-            "loop_detected" -> "错误：检测到命令循环 — '$detail' 已重复 3+ 次"
-            "consecutive_failures" -> "错误：连续 $detail 次命令执行失败，Agent 可能陷入困境。请检查网络、权限或换个方式提问。"
-            "max_steps" -> "已达到最大步数 ($detail)，未获得最终答案"
-            "agent_error" -> "Agent 错误：$detail"
-            "no_plan" -> "无法为任务生成计划：$detail"
-            "session_corrupted" -> "会话数据完整性检查失败 ($detail)。请使用 agent.repair 修复后重试，或开启新会话。"
-            else -> detail
-        }
-        PromptEngine.AgentLanguage.ENGLISH -> when (key) {
-            "loop_detected" -> "Error: Detected command loop — '$detail' repeated 3+ times"
-            "consecutive_failures" -> "Error: $detail consecutive command failures. Agent may be stuck. Check network, permissions, or rephrase."
-            "max_steps" -> "Max steps ($detail) reached without final answer"
-            "agent_error" -> "Agent error: $detail"
-            "no_plan" -> "Could not generate a plan for: $detail"
-            "session_corrupted" -> "Session data integrity check failed ($detail). Run agent.repair or start a new conversation."
-            else -> detail
-        }
-    }
-
-    suspend fun runWithPlan(task: String, maxStepsPerPlanStep: Int = 5, onStep: ((TraceStep) -> Unit)? = null): String {
-        _state.value = AgentState.Running(task, 0, 0)
-        _output.value = ""
-
-        val plan = generatePlan(task)
-        if (plan.steps.isEmpty()) {
-            val msg = localizedError("no_plan", task)
-            _state.value = AgentState.Error(msg)
-            return msg
-        }
-
-        _output.value = formatPlanSummary(plan)
-
-        val results = mutableListOf<String>()
-        for (step in plan.steps) {
-            step.status = PlanStepStatus.RUNNING
-            _state.value = AgentState.Running("[Step ${step.index + 1}/${plan.totalSteps}] ${step.description}", step.index + 1, plan.totalSteps)
-            try {
-                val stepResult = executePlanStep(step, maxStepsPerPlanStep)
-                results.add("[OK] Step ${step.index + 1}: ${stepResult}")
-                step.status = PlanStepStatus.COMPLETED
-            } catch (e: Exception) {
-                ErrorCollector.report(ErrorType.AGENT_CRASH, "AgentEngine.runWithPlan",
-                    "Step ${step.index + 1}: ${step.description}", throwable = e, agentName = agentName)
-                results.add("[FAIL] Step ${step.index + 1}: ${e.message}")
-                step.status = PlanStepStatus.FAILED
-            }
-            _output.value = "${results.joinToString("\n")}\nProgress: ${plan.completedSteps}/${plan.totalSteps} steps done"
-        }
-
-        val summary = buildString {
-            appendLine("=== Task Plan Execution Complete ===")
-            appendLine("Task: ${plan.task}")
-            appendLine("Steps: ${plan.completedSteps}/${plan.totalSteps} completed")
-            appendLine()
-            results.forEach { appendLine(it) }
-            val failed = plan.steps.filter { it.status == PlanStepStatus.FAILED }
-            if (failed.isNotEmpty()) {
-                appendLine()
-                appendLine("WARNING: ${failed.size} step(s) failed:")
-                failed.forEach { appendLine("  - ${it.description}") }
-            }
-        }
-
-        _state.value = AgentState.Finished(summary)
-        return summary
-    }
-
-    suspend fun generatePlan(task: String): TaskPlan {
-        val planPrompt = listOf(mapOf("role" to "user", "content" to """
-                Decompose the following task into a step-by-step execution plan.
-                Your response must use ONLY the following format, one step per line:
-
-                STEP <N>: <description> | ACTION: <cli-command> | EXPECT: <expected outcome>
-
-                Rules:
-                - Number steps starting from 1
-                - Each ACTION must be a single CLI command (e.g. fs.cat /path)
-                - Keep the total to 3-7 steps
-                - Do NOT include any other text before or after the plan
-
-                Task: $task
-            """.trimIndent()))
-        val response = llmProvider.completeWithMessages(planPrompt)
-        return parsePlan(task, response)
-    }
-
-    private fun parsePlan(task: String, text: String): TaskPlan {
-        val stepRegex = Regex("""STEP\s*(\d+)\s*:\s*(.+?)\s*\|\s*ACTION\s*:\s*(.+?)\s*\|\s*EXPECT\s*:\s*(.+)""",
-            setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE))
-        val steps = stepRegex.findAll(text).map { match ->
-            val (num, desc, action, expected) = match.destructured
-            PlanStep(index = num.toIntOrNull() ?: 0, description = desc.trim(), action = action.trim(), expectedOutcome = expected.trim())
-        }.toList().sortedBy { it.index }
-        return TaskPlan(task = task, steps = steps.mapIndexed { i, s -> s.copy(index = i) })
-    }
-
-    private suspend fun executePlanStep(step: PlanStep, maxSteps: Int): String {
-        val stepSession = sessionManager.createSession("PlanStep: ${step.description}")
-        val context = ExecutionContext(sessionId = stepSession.id)
-        sessionManager.addMessage(stepSession.id, Message("system",
-            "Execute this single step: ${step.description}\nPlanned action: ${step.action}\nExpected outcome: ${step.expectedOutcome}"))
-        for (iteration in 0 until maxSteps) {
-            val conversation = buildConversation(stepSession.id)
-            val llmResponse = llmProvider.completeWithMessages(conversation)
-            val sanitized = Sanitizer.sanitize(llmResponse)
-            sessionManager.addMessage(stepSession.id, Message("assistant", sanitized))
-            val parsed = promptEngine.parse(sanitized)
-            if (parsed.isFinal) return parsed.thought
-            if (parsed.action != null) {
-                val cmd = "${parsed.action.name} ${parsed.action.parameters.values.joinToString(" ")}"
-                val result = buildPipeline().execute(cmd, context)
-                val observation = if (result.success) result.output else "Error: ${result.error}"
-                sessionManager.addMessage(stepSession.id, Message("assistant", "Command: $cmd\nResult: $observation"))
-            }
-        }
-        return "Step completed (max iterations reached): ${step.description}"
-    }
-
-    private fun formatPlanSummary(plan: TaskPlan): String = buildString {
-        appendLine("=== Task Plan ===")
-        appendLine("Task: ${plan.task}")
-        appendLine("Steps: ${plan.totalSteps}")
-        plan.steps.forEach { step ->
-            appendLine("  ${step.index + 1}. ${step.description}")
-            appendLine("     Action: ${step.action}")
-            appendLine("     Expect: ${step.expectedOutcome}")
-        }
-    }
+    /** Generate a plan by asking the LLM to decompose the task. Delegates to [PlanModeExecutor]. */
+    suspend fun generatePlan(task: String): TaskPlan = planModeExecutor.generatePlan(task, llmProvider)
 
     fun stop() { _state.value = AgentState.Idle; runningJob?.cancel(); runningJob = null }
 
-    private suspend fun buildConversation(sessionId: String): List<Map<String, String>> {
+    /**
+     * Build the conversation message list for an LLM call.
+     * Includes integrity gate, recovery block injection, and cache annotations.
+     */
+    internal suspend fun buildConversation(sessionId: String): List<Map<String, String>> {
         // ★ Integrity gate: terminal latch (matching OpenClaw assertSqliteIntegrity)
         // If session data is corrupted, block LLM calls with a warning instead of
         // letting the model act on potentially garbage history.
@@ -1175,8 +682,8 @@ FIX: <if FAIL, give the worker concrete, actionable instructions for the retry. 
             // Consume the recovery after injection so it doesn't fire again
             sessionManager.consumePendingRecovery(sessionId)
             // Emit recovery event (matching OpenClaw session_state_notices pattern)
-            sessionManager.recordSessionEvent(sessionId, com.mengpaw.kernel.session.SessionEventBus.SessionEvent(
-                kind = com.mengpaw.kernel.session.SessionEventBus.EventKind.SESSION_RECOVERED,
+            sessionManager.recordSessionEvent(sessionId, SessionEventBus.SessionEvent(
+                kind = SessionEventBus.EventKind.SESSION_RECOVERED,
                 sessionId = sessionId,
                 agentName = agentName,
                 summary = "Recovery block injected: ${pendingRecovery.completedTools.size} tools completed"

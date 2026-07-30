@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.session
 
 import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.llm.LlmProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,19 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
+/** Atomic file write: write to tmp, then rename (crash-safe, prevents partial writes). */
+private fun java.io.File.atomicWriteText(text: String) {
+    val tmp = java.io.File(this.parentFile, "${this.name}.tmp")
+    try {
+        tmp.writeText(text)
+        if (this.exists()) this.delete()
+        tmp.renameTo(this)
+    } catch (e: Exception) {
+        try { tmp.delete() } catch (_: Exception) {}
+        throw e
+    }
+}
+
 /**
  * Manages Agent sessions and conversation history.
  *
@@ -33,7 +47,7 @@ import java.util.UUID
 class SessionManager {
 
     /** Agent name for archive paths. Set by AgentEngine. */
-    @Volatile var agentName: String = "MengPaw"
+    @Volatile var agentName: String = "agent"
     private val _sessions = MutableStateFlow<Map<String, Session>>(emptyMap())
     val sessions: StateFlow<Map<String, Session>> = _sessions.asStateFlow()
 
@@ -174,8 +188,8 @@ class SessionManager {
             }
             // Append to JSONL file
             file.appendText(lines.joinToString("\n") + "\n")
-        } catch (_: Exception) {
-            // Archive failure is non-fatal — compaction proceeds without archive
+        } catch (e: Exception) {
+            KernelLog.w("History", "archiveRawMessages: ${e.message}")
         }
     }
 
@@ -222,8 +236,8 @@ $conversationText
         )
         return try {
             llmProvider.completeWithMessages(summaryPrompt).take(600)
-        } catch (_: Exception) {
-            // Fallback: simple concatenation
+        } catch (e: Exception) {
+            KernelLog.w("History", "summarize failed: ${e.message}")
             "目标: (参见完整历史)\n进展: 对话已压缩\n关键决策: 无\n下一步: 继续对话\n关键上下文: 见 dialog/归档文件"
         }
     }
@@ -355,9 +369,12 @@ $conversationText
                     }
                 }
             }.toString()
-            logFile.appendText(logLine + "\n")
-        } catch (_: Exception) {
-            // Non-fatal — event log failure should not affect session operation
+            java.io.FileWriter(logFile, true).use { fw ->
+                fw.write(logLine + "\n")
+                fw.flush()
+            }
+        } catch (e: Exception) {
+            KernelLog.w("History", "recordSessionEvent: ${e.message}")
         }
         // 2. In-memory broadcast
         SessionEventBus.emit(event)
@@ -377,34 +394,35 @@ $conversationText
             val logFile = java.io.File(dir, "${sessionId}.event.log")
             if (!logFile.exists()) return emptyList()
 
-            val lines = logFile.readLines()
-            val result = mutableListOf<SessionEventBus.SessionEvent>()
-            val end = minOf(lines.size, afterSeq + limit)
-            for (index in afterSeq until end) {
-                try {
-                    val root = Json.parseToJsonElement(lines[index]).jsonObject
-                    val kindName = root["kind"]?.jsonPrimitive?.content ?: continue
-                    val kind = try { SessionEventBus.EventKind.valueOf(kindName) } catch (_: Exception) { continue }
-                    val summary = root["summary"]?.jsonPrimitive?.content ?: ""
-                    val ts = root["ts"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-                    val payload = mutableMapOf<String, String>()
-                    root["payload"]?.jsonObject?.let { payloadObj ->
-                        for ((k, v) in payloadObj) {
-                            try { payload[k] = v.jsonPrimitive.content } catch (_: Exception) { continue }
+            return logFile.useLines { lines ->
+                lines.drop(afterSeq).take(limit).mapNotNull { line ->
+                    try {
+                        val root = Json.parseToJsonElement(line).jsonObject
+                        val kindName = root["kind"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                        val kind = try { SessionEventBus.EventKind.valueOf(kindName) } catch (_: Exception) { return@mapNotNull null }
+                        val summary = root["summary"]?.jsonPrimitive?.content ?: ""
+                        val ts = root["ts"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
+                        val payload = mutableMapOf<String, String>()
+                        root["payload"]?.jsonObject?.let { payloadObj ->
+                            for ((k, v) in payloadObj) {
+                                try { payload[k] = v.jsonPrimitive.content } catch (_: Exception) { }
+                            }
                         }
-                    }
-                    result.add(SessionEventBus.SessionEvent(
-                        kind = kind,
-                        sessionId = sessionId,
-                        agentName = agentName,
-                        summary = summary,
-                        payload = payload,
-                        timestamp = ts
-                    ))
-                } catch (_: Exception) { /* skip malformed line */ }
+                        SessionEventBus.SessionEvent(
+                            kind = kind,
+                            sessionId = sessionId,
+                            agentName = agentName,
+                            summary = summary,
+                            payload = payload,
+                            timestamp = ts
+                        )
+                    } catch (_: Exception) { null }
+                }.toList()
             }
-            return result
-        } catch (_: Exception) { return emptyList() }
+        } catch (e: Exception) {
+            KernelLog.w("History", "listEventsSince: ${e.message}")
+            return emptyList()
+        }
     }
 
     // ── Event Log Pruning (matching OpenClaw pruneSessionStateEvents) ──
@@ -423,7 +441,7 @@ $conversationText
             val logFile = java.io.File(dir, "${sessionId}.event.log")
             if (!logFile.exists() || logFile.length() == 0L) return
 
-            val lines = logFile.readLines()
+            val lines = logFile.useLines { it.toList() }
             if (lines.size <= maxLines) return  // still under limit
 
             val cutoff = System.currentTimeMillis() - maxAgeDays * 24L * 3600 * 1000L
@@ -436,9 +454,11 @@ $conversationText
             }.takeLast(maxLines)
 
             if (pruned.size < lines.size) {
-                logFile.writeText(pruned.joinToString("\n") + "\n")
+                logFile.atomicWriteText(pruned.joinToString("\n") + "\n")
             }
-        } catch (_: Exception) { /* pruning failure is non-fatal */ }
+        } catch (e: Exception) {
+            KernelLog.w("History", "pruneSessionEvents: ${e.message}")
+        }
     }
 
     // ── Session Integrity Check (matching OpenClaw assertSqliteIntegrity) ──

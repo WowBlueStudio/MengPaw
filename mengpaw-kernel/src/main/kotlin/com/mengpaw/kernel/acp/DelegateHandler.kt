@@ -6,6 +6,19 @@ package com.mengpaw.kernel.acp
 import com.mengpaw.kernel.security.PromptFirewall
 import kotlinx.serialization.json.*
 
+/** Atomic file write: write to tmp, then rename (crash-safe, prevents partial writes). */
+private fun java.io.File.atomicWriteText(text: String) {
+    val tmp = java.io.File(this.parentFile, "${this.name}.tmp")
+    try {
+        tmp.writeText(text)
+        if (this.exists()) this.delete()
+        tmp.renameTo(this)
+    } catch (e: Exception) {
+        try { tmp.delete() } catch (_: Exception) {}
+        throw e
+    }
+}
+
 /**
  * ACP handler for DELEGATE messages — cross-device / cross-agent task delegation.
  *
@@ -30,13 +43,14 @@ class DelegateHandler : AcpHandler {
         try {
             val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX).also { it.mkdirs() }
             val taskFile = java.io.File(inbox, "delegate_${System.currentTimeMillis()}.md")
-            taskFile.writeText(buildString {
+            val content = buildString {
                 appendLine("# 委派任务")
                 appendLine("> 来自: ${message.from}")
-                appendLine("> 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
+                appendLine("> 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}")
                 appendLine()
                 appendLine(task)
-            })
+            }
+            taskFile.atomicWriteText(content)
             return AcpResult(true, "delegate_queued", taskFile.name)
         } catch (e: Exception) {
             return AcpResult(false, "write_failed", e.message ?: "inbox write error")

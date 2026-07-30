@@ -24,7 +24,22 @@ import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.kernel.KernelLog
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.io.File
+
+private val appJson = Json { ignoreUnknownKeys = true; prettyPrint = true }
+
+@Serializable
+data class AcpContactFile(
+    val name: String = "",
+    val address: String = "",
+    val frameworkType: String = "mengpaw",
+    val addedAt: Long = 0L,
+    val remark: String = "",
+    val notes: String = ""
+)
 
 @Composable
 fun FrameworkCardDialog(
@@ -33,14 +48,14 @@ fun FrameworkCardDialog(
 ) {
     val peer = remember(frameworkName) { com.mengpaw.plugin.framework.FrameworkPeerStore.findByName(frameworkName) }
     val acpFile = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "$frameworkName.json")
-    val acpJson = remember(frameworkName) { if (acpFile.exists()) try { org.json.JSONObject(acpFile.readText()) } catch (_: Exception) { null } else null }
+    val acpJson = remember(frameworkName) { if (acpFile.exists()) try { appJson.decodeFromString<AcpContactFile>(acpFile.readText()) } catch (_: Exception) { null } else null }
 
-    val fwType = remember(frameworkName, peer) { peer?.frameworkType?.ifBlank { acpJson?.optString("frameworkType", "mengpaw") } ?: "mengpaw" }
+    val fwType = remember(frameworkName, peer) { peer?.frameworkType?.ifBlank { acpJson?.frameworkType ?: "mengpaw" } ?: "mengpaw" }
     val proto = com.mengpaw.plugin.framework.FrameworkPeerStore.PROTOCOL_LABELS[fwType]
     val protoLabel = proto?.first ?: "?"
     val protoMode = proto?.second ?: ""
 
-    val savedRemark = remember(frameworkName, peer) { peer?.remark?.ifBlank { acpJson?.optString("remark", "")?.ifBlank { acpJson?.optString("notes", "") ?: "" } } ?: "" }
+    val savedRemark = remember(frameworkName, peer) { peer?.remark?.ifBlank { acpJson?.remark?.ifBlank { acpJson?.notes?.ifBlank { "" } } } ?: "" }
     var editRemark by remember { mutableStateOf(savedRemark) }
     var isEditing by remember { mutableStateOf(false) }
 
@@ -55,9 +70,10 @@ fun FrameworkCardDialog(
                         if (peer != null) com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(remark = editRemark.trim()))
                         if (acpFile.exists()) {
                             try {
-                                val updated = org.json.JSONObject(acpFile.readText()); updated.put("remark", editRemark.trim())
-                                val tmp = File(acpFile.parentFile, "$frameworkName.tmp.json"); tmp.writeText(updated.toString()); tmp.renameTo(acpFile); if (tmp.exists()) tmp.delete()
-                            } catch (_: Exception) {}
+                                val current = appJson.decodeFromString<AcpContactFile>(acpFile.readText())
+                                val updated = current.copy(remark = editRemark.trim())
+                                val tmp = File(acpFile.parentFile, "$frameworkName.tmp.json"); tmp.writeText(appJson.encodeToString(AcpContactFile.serializer(), updated)); if (acpFile.exists()) acpFile.delete(); tmp.renameTo(acpFile); if (tmp.exists()) try { tmp.delete() } catch (_: Exception) {}; isEditing = false
+                            } catch (_: Exception) { KernelLog.w("FrameworkDialog", "update remark json failed") }
                         }
                     }
                     isEditing = !isEditing
@@ -99,7 +115,7 @@ fun FrameworkCardDialog(
                     Spacer(Modifier.height(4.dp))
                 }
 
-                val addr = peer?.address ?: acpJson?.optString("address", "") ?: ""
+                val addr = peer?.address ?: acpJson?.address ?: ""
                 if (addr.isNotBlank()) {
                     Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Language, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
@@ -142,11 +158,11 @@ fun FrameworkCardDialog(
                 TextButton(onClick = {
                     val fp = peer?.fingerprint ?: com.mengpaw.plugin.framework.FrameworkPeerStore.findByName(frameworkName)?.fingerprint
                     if (fp != null) com.mengpaw.plugin.framework.FrameworkPeerStore.remove(fp)
-                    if (acpFile.exists()) try { acpFile.delete() } catch (_: Exception) {}
+                    if (acpFile.exists()) try { acpFile.delete() } catch (_: Exception) { KernelLog.w("FrameworkDialog", "delete acpFile failed") }
                     val twinTrusted = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.trusted")
-                    if (twinTrusted.exists()) try { twinTrusted.delete() } catch (_: Exception) {}
+                    if (twinTrusted.exists()) try { twinTrusted.delete() } catch (_: Exception) { KernelLog.w("FrameworkDialog", "delete twinTrusted failed") }
                     val twinKey = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.key")
-                    if (twinKey.exists()) try { twinKey.delete() } catch (_: Exception) {}
+                    if (twinKey.exists()) try { twinKey.delete() } catch (_: Exception) { KernelLog.w("FrameworkDialog", "delete twinKey failed") }
                     onDismiss()
                 }) { Text("删除框架", color = ArcoColors.Red6, fontSize = 13.sp) }
 
@@ -160,11 +176,11 @@ fun FrameworkCardDialog(
                         val peerId = peer.fingerprint.ifBlank { frameworkName }
                         com.mengpaw.kernel.security.PromptFirewall.untrust(peerId)
                         val twinTrusted = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.trusted")
-                        if (twinTrusted.exists()) try { twinTrusted.delete() } catch (_: Exception) {}
+                        if (twinTrusted.exists()) try { twinTrusted.delete() } catch (_: Exception) { KernelLog.w("FrameworkDialog", "delete twinTrusted failed") }
                         val twinKey = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.key")
-                        if (twinKey.exists()) try { twinKey.delete() } catch (_: Exception) {}
+                        if (twinKey.exists()) try { twinKey.delete() } catch (_: Exception) { KernelLog.w("FrameworkDialog", "delete twinKey failed") }
                         val twinKeyFp = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${peerId}.key")
-                        if (twinKeyFp.exists()) try { twinKeyFp.delete() } catch (_: Exception) {}
+                        if (twinKeyFp.exists()) try { twinKeyFp.delete() } catch (_: Exception) { KernelLog.w("FrameworkDialog", "delete twinKeyFp failed") }
                         com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = false))
                         android.util.Log.i("MengPawTwin", "解除孪生: $frameworkName")
                         onDismiss()

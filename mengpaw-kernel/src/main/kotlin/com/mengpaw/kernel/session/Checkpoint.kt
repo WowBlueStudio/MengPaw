@@ -25,7 +25,12 @@ class CheckpointManager(private val storageDir: String = com.mengpaw.kernel.Data
         val dir = File(storageDir)
         dir.mkdirs()
         val file = File(dir, "${checkpoint.sessionId}_step_${checkpoint.step}.json")
-        try { file.writeText(json.encodeToString(checkpoint)) } catch (e: Exception) { ErrorCollector.report(e, "CheckpointManager.save") }
+        try {
+            val tmp = File(dir, "${file.name}.tmp")
+            tmp.writeText(json.encodeToString(checkpoint))
+            if (file.exists()) file.delete()
+            tmp.renameTo(file)
+        } catch (e: Exception) { ErrorCollector.report(e, "CheckpointManager.save") }
     }
 
     /**

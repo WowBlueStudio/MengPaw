@@ -43,6 +43,9 @@ class PromptEngine {
         val path = "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/$fileName"
         val file = java.io.File(path)
         val mtime = if (file.exists()) file.lastModified() else 0L
+        if (mtime == 0L && !file.exists()) {
+            docCache.remove(path)
+        }
         val cached = docCache[path]
         if (cached != null && cached.lastModified == mtime && mtime > 0) {
             return cached.content

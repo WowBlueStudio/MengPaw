@@ -6,6 +6,19 @@ package com.mengpaw.kernel.acp
 import com.mengpaw.kernel.security.PromptFirewall
 import kotlinx.serialization.json.*
 
+/** Atomic file write: write to tmp, then rename (crash-safe, prevents partial writes). */
+private fun java.io.File.atomicWriteText(text: String) {
+    val tmp = java.io.File(this.parentFile, "${this.name}.tmp")
+    try {
+        tmp.writeText(text)
+        if (this.exists()) this.delete()
+        tmp.renameTo(this)
+    } catch (e: Exception) {
+        try { tmp.delete() } catch (_: Exception) {}
+        throw e
+    }
+}
+
 /**
  * ACP handler for SHARE_MEMORY and SHARE_SKILL messages.
  *
@@ -35,16 +48,17 @@ class ShareMemoryHandler : AcpHandler {
         try {
             val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX).also { it.mkdirs() }
             val memFile = java.io.File(inbox, "shared_memory_${System.currentTimeMillis()}.md")
-            memFile.writeText(buildString {
+            val content = buildString {
                 appendLine("# 共享记忆")
                 appendLine("> 来自: ${msg.from}")
-                appendLine("> 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
+                appendLine("> 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}")
                 appendLine()
                 appendLine(memoryId)
                 appendLine()
                 appendLine("---")
                 appendLine("审查后使用 `agent.memory.record <内容>` 将共享记忆记录到本地。")
-            })
+            }
+            memFile.atomicWriteText(content)
             return AcpResult(true, "memory_shared", memFile.name)
         } catch (e: Exception) {
             return AcpResult(false, "write_failed", e.message ?: "inbox write error")
@@ -56,16 +70,17 @@ class ShareMemoryHandler : AcpHandler {
         try {
             val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX).also { it.mkdirs() }
             val skillFile = java.io.File(inbox, "shared_skill_${System.currentTimeMillis()}.md")
-            skillFile.writeText(buildString {
+            val content = buildString {
                 appendLine("# 共享技能: $skillName")
                 appendLine("> 来自: ${msg.from}")
-                appendLine("> 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
+                appendLine("> 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}")
                 appendLine()
                 appendLine("对方共享了技能: **$skillName**")
                 appendLine()
                 appendLine("---")
                 appendLine("使用 `skill.create $skillName <内容>` 安装此技能到本地。")
-            })
+            }
+            skillFile.atomicWriteText(content)
             return AcpResult(true, "skill_shared", skillFile.name)
         } catch (e: Exception) {
             return AcpResult(false, "write_failed", e.message ?: "inbox write error")

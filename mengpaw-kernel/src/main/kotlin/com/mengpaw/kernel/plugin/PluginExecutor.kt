@@ -227,6 +227,9 @@ class PluginExecutor(
             // the marketplace index. This prevents loading tampered/malicious code.
             if (entry.checksum.isNotBlank()) {
                 val expected = entry.checksum.removePrefix("sha256:")
+                if (!expected.matches(Regex("^[0-9a-fA-F]+$"))) {
+                    KernelLog.w("PluginExecutor", "Unexpected checksum format: ${expected.take(16)}...")
+                }
                 val actual = sha256Hex(jarFile.readBytes())
                 if (!actual.equals(expected, ignoreCase = true)) {
                     KernelLog.w("PluginExecutor", "SHA256 mismatch for ${entry.id}: expected $expected, got $actual")
@@ -261,9 +264,10 @@ class PluginExecutor(
                         pluginInstance = pluginClass.getDeclaredConstructor().newInstance()
                         loadedClass = name
                         break
-                    } catch (_: ClassNotFoundException) { /* try next */ }
+                    } catch (_: ClassNotFoundException) { KernelLog.w("PluginExecutor", "class not found in candidate list"); /* try next */ }
                 }
             } catch (_: ClassNotFoundException) {
+                KernelLog.w("PluginExecutor", "DexClassLoader not available (JVM/desktop)")
                 null // dalvik not available (JVM/desktop) — JAR loading not supported
             }
 

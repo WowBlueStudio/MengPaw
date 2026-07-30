@@ -39,11 +39,31 @@ import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.agent.AgentProfile
+import com.mengpaw.shell.ui.localization.AppStrings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+
+private val appJson = Json { ignoreUnknownKeys = true; prettyPrint = true }
+
+@Serializable
+data class FrameworkContactFile(
+    val name: String = "",
+    val address: String = "",
+    val remark: String = "",
+    val frameworkType: String = "mengpaw"
+)
+
+@Serializable
+data class TwinPairFile(
+    val deviceName: String = "",
+    val deviceModel: String = "",
+    val peerId: String = ""
+)
 
 /** Agent online / presence status for external frameworks. */
 enum class FrameworkStatus(val label: String, val desc: String, val indicatorColor: Color) {
@@ -83,6 +103,7 @@ data class NewAgentForm(
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 fun SidebarContent(
+    strings: AppStrings,
     onNavigateToPlugins: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onClose: () -> Unit,
@@ -131,10 +152,9 @@ fun SidebarContent(
     Column(Modifier.fillMaxHeight().width(280.dp).background(ThemeColors.bgPrimary).padding(ArcoSpacing.lg).verticalScroll(rememberScrollState())) {
         // ── Agents ──
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
-            Text("智能体", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text(strings.sidebarAgents, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             IconButton(onClick = { showNewAgentDialog = true }, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Outlined.Add, "新建智能体", tint = ThemeColors.brand, modifier = Modifier.size(20.dp))
+                Icon(Icons.Outlined.Add, strings.sidebarAgents, tint = ThemeColors.brand, modifier = Modifier.size(20.dp))
             }
         }
         Spacer(Modifier.height(ArcoSpacing.sm))
@@ -190,8 +210,7 @@ fun SidebarContent(
 
                 if (dirName == activeAgent) {
                     Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.15f)) {
-                            // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
-                        Text("当前", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                        Text(strings.sidebarCurrent, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
                     }
                 }
@@ -201,8 +220,7 @@ fun SidebarContent(
         Spacer(Modifier.height(ArcoSpacing.md))
 
         // ── Framework Status ──
-        // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
-        Text("框架状态", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        Text(strings.sidebarFrameworkStatus, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(ArcoSpacing.sm))
         FrameworkStatus.entries.forEach { status ->
             val selected = frameworkStatus == status
@@ -231,10 +249,9 @@ fun SidebarContent(
 
         // ── Framework Directory ──
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
-            Text("框架通讯录", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text(strings.sidebarFrameworkDirectory, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             IconButton(onClick = { showAddFramework = true }, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Outlined.PersonAdd, "添加框架", tint = ThemeColors.brand, modifier = Modifier.size(20.dp))
+                Icon(Icons.Outlined.PersonAdd, strings.sidebarFrameworkDirectory, tint = ThemeColors.brand, modifier = Modifier.size(20.dp))
             }
         }
         Spacer(Modifier.height(ArcoSpacing.sm))
@@ -248,17 +265,17 @@ fun SidebarContent(
                     ?.filter { it.extension == "json" && !it.name.endsWith(".tmp.json") }
                     ?.forEach { file ->
                         try {
-                            val json = org.json.JSONObject(file.readText())
+                            val contactFile = appJson.decodeFromString<FrameworkContactFile>(file.readText())
                             contacts.add(FrameworkContact(
-                                name = json.optString("name", file.nameWithoutExtension),
-                                address = json.optString("address", ""),
+                                name = contactFile.name.ifBlank { file.nameWithoutExtension },
+                                address = contactFile.address,
                                 online = false,
                                 trusted = true,
                                 agents = emptyList(),
-                                remark = json.optString("remark", ""),
-                                frameworkType = json.optString("frameworkType", "mengpaw")
+                                remark = contactFile.remark,
+                                frameworkType = contactFile.frameworkType
                             ))
-                        } catch (_: Exception) { /* skip corrupted files */ }
+                        } catch (e: Exception) { com.mengpaw.kernel.KernelLog.w("SidebarContent", "load framework: ${e.message}") }
                     }
             }
             // 合并 mDNS 发现的框架
@@ -295,7 +312,7 @@ fun SidebarContent(
         }
 
         if (frameworks.isEmpty()) {
-            Text("你的智能体还没有朋友", style = MaterialTheme.typography.bodySmall,
+            Text(strings.sidebarNoFriends, style = MaterialTheme.typography.bodySmall,
                 color = ThemeColors.textSecondary, modifier = Modifier.padding(vertical = ArcoSpacing.sm))
         }
 
@@ -367,7 +384,7 @@ fun SidebarContent(
                             if (framework.trusted) {
                                 Spacer(Modifier.width(4.dp))
                                 Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green6.copy(alpha = 0.12f)) {
-                                    Text("已信任", Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                    Text(strings.securityTrusted, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                         style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6, fontSize = 9.sp)
                                 }
                             }
@@ -429,8 +446,7 @@ fun SidebarContent(
                                 Spacer(Modifier.weight(1f))
                                 if (agentName == activeAgent) {
                                     Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.15f)) {
-                            // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
-                                        Text("当前", Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                        Text(strings.sidebarCurrent, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand, fontSize = 9.sp)
                                     }
                                 }
@@ -448,8 +464,7 @@ fun SidebarContent(
         HorizontalDivider(Modifier.padding(vertical = ArcoSpacing.lg))
 
         // ── Quick Nav ──
-        // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
-        Text("功能", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        Text(strings.sidebarFeatures, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(ArcoSpacing.sm))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             val pluginsInteraction = remember { MutableInteractionSource() }
@@ -471,7 +486,7 @@ fun SidebarContent(
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Extension, null, Modifier.size(18.dp), tint = ThemeColors.brand)
                     Spacer(Modifier.width(6.dp))
-                    Text("插件管理", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textPrimary)
+                    Text(strings.sidebarPlugins, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textPrimary)
                 }
             }
             Spacer(Modifier.width(ArcoSpacing.sm))
@@ -486,7 +501,7 @@ fun SidebarContent(
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Settings, null, Modifier.size(18.dp), tint = ThemeColors.brand)
                     Spacer(Modifier.width(6.dp))
-                    Text("设置", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textPrimary)
+                    Text(strings.sidebarSettings, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textPrimary)
                 }
             }
         }
@@ -532,11 +547,11 @@ fun SidebarContent(
         }
     }
     twinPairFiles.firstOrNull()?.let { pairFile ->
-        val json = try { org.json.JSONObject(pairFile.readText()) } catch (_: Exception) { null }
-        if (json != null) {
-            val peerName = json.optString("deviceName", json.optString("peerId", "未知").take(16))
-            val peerModel = json.optString("deviceModel", "")
-            val peerId = json.optString("peerId", "")
+        val twinData = try { appJson.decodeFromString<TwinPairFile>(pairFile.readText()) } catch (_: Exception) { null }
+        if (twinData != null) {
+            val peerName = twinData.deviceName.ifBlank { twinData.peerId.take(16).ifBlank { "未知" } }
+            val peerModel = twinData.deviceModel
+            val peerId = twinData.peerId
             AlertDialog(
                 onDismissRequest = { pairFile.delete() },
                 icon = { Icon(Icons.Outlined.Warning, null, tint = ArcoColors.Orange6) },
@@ -742,8 +757,7 @@ fun SidebarContent(
             },
             dismissButton = {
                 TextButton(onClick = { showTwinConfirmDialog = false; twinPairTarget = null }) {
-                // TODO(i18n): Use Strings.kt localization instead of hardcoded Chinese
-                    Text("取消")
+                    Text(strings.cancel)
                 }
             }
         )

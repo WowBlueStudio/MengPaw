@@ -61,7 +61,7 @@ data class Session(
     val id: String,
     val task: String,
     val scope: String = "agent",
-    val agentId: String = "MengPaw",
+    val agentId: String = "agent",
     val schemaVersion: Int = 1,
     val createdAt: Long = System.currentTimeMillis(),
     val messages: MutableList<Message> = mutableListOf(),

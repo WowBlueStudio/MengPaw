@@ -76,9 +76,9 @@ fun SettingsScreen(
     var selectedSection by remember { mutableIntStateOf(0) }
 
     val sectionTitle = when (selectedSection) {
-        0 -> "智能体设置 - $activeAgentName"
-        1 -> "框架设置"
-        2 -> "系统设置"
+        0 -> "${s.sidebarSettingsAgent} - $activeAgentName"
+        1 -> s.sidebarSettingsFramework
+        2 -> s.sidebarSettingsSystem
         else -> s.settings
     }
 
@@ -105,6 +105,7 @@ fun SettingsScreen(
             Modifier.fillMaxSize().padding(padding)
         ) {
             SettingsSidebar(
+                strings = s,
                 selected = selectedSection,
                 onSelect = { selectedSection = it },
                 expanded = isWide()

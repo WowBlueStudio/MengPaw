@@ -7,30 +7,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mengpaw.kernel.AgentEngine
 import com.mengpaw.kernel.AgentState
-import com.mengpaw.kernel.agent.AgentMiddleware
-import com.mengpaw.kernel.agent.PostCallMiddleware
-import com.mengpaw.kernel.agent.PostCallResult
-import com.mengpaw.kernel.agent.ScrollContextManager
-import com.mengpaw.kernel.llm.AdaptiveLlmProvider
+import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.llm.LlmProvider
 import com.mengpaw.kernel.llm.PromptEngine
-import com.mengpaw.kernel.llm.ProviderInfo
-import com.mengpaw.kernel.llm.ProviderType
-import com.mengpaw.kernel.llm.TokenUsage
 import com.mengpaw.shell.ui.screens.model.AgentSession
 import com.mengpaw.shell.ui.screens.model.AgentTrace
-import com.mengpaw.shell.ui.screens.model.ExecutionMode
 import com.mengpaw.shell.ui.screens.model.ChatMessageUi
+import com.mengpaw.shell.ui.screens.model.ExecutionMode
 import com.mengpaw.shell.ui.screens.model.InputTag
 import com.mengpaw.shell.ui.screens.model.PendingTask
-import com.mengpaw.shell.ui.screens.model.UnconfiguredLlmProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 
 /**
@@ -41,298 +31,13 @@ class AgentViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        saveCurrentSession()
+        sessionPersistence.saveCurrentSession()
         // Unwire static trigger callback to prevent ViewModel memory leak
         com.mengpaw.shell.service.AgentRuntime.unwireTriggers()
         sessions.values.forEach { session ->
             try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) {}
         }
     }
-
-    /** Autosave active session every 30s and on pause. */
-    private fun scheduleAutoSave() {
-        viewModelScope.launch {
-            while (true) {
-                kotlinx.coroutines.delay(30_000)
-                saveCurrentSession()
-            }
-        }
-    }
-
-    /** 增量持久化: 追踪上次落盘的消息数, 30s 保存时若未变化则跳过 I/O */
-    private var lastPersistedMsgCount: Int = 0
-
-    /** Track current session ID for per-session save. Auto-assigned on first message. */
-    private var currentSessionId: String = ""
-    private fun ensureSessionId() {
-        if (currentSessionId.isBlank()) {
-            currentSessionId = "sess_${System.currentTimeMillis()}"
-        }
-    }
-
-    /** Persist active session messages so they survive process death.
-     *  增量保存: 若无新消息则跳过 I/O (30s 周期), 有变化时全量写入. */
-    private fun saveCurrentSession() {
-        try {
-            val session = sessions[_activeAgentName] ?: return
-            val msgs = session.messages.value.filter { it !is ChatMessageUi.System }
-            if (msgs.isEmpty()) return
-            // 增量检查: 与上次落盘相同的消息数 → 跳过 I/O
-            if (msgs.size == lastPersistedMsgCount) return
-            // Auto-assign session ID on first save
-            ensureSessionId()
-            // Write current_session.json with sessionId embedded
-            val wrapper = org.json.JSONObject()
-            wrapper.put("sessionId", currentSessionId)
-            wrapper.put("engineSessionId", session.engine.currentConversationId() ?: "")
-            wrapper.put("messages", messagesToJson(msgs))
-            val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
-            atomicWriteJson(file, wrapper)
-            saveSessionById(currentSessionId, msgs)
-            lastPersistedMsgCount = msgs.size
-            // Auto-create session record if missing (first conversation)
-            if (_sessionHistory.value.none { it.id == currentSessionId }) {
-                val title = msgs.firstOrNull()?.let {
-                    when (it) { is ChatMessageUi.User -> it.content.take(40); else -> "" }
-                } ?: "会话"
-                val record = SessionRecord(
-                    id = currentSessionId,
-                    title = if (title.isNotBlank()) title else "会话",
-                    preview = msgs.lastOrNull()?.let {
-                        when (it) { is ChatMessageUi.Agent -> it.content.take(60); is ChatMessageUi.User -> it.content.take(60); else -> "" }
-                    } ?: "",
-                    timestamp = System.currentTimeMillis(),
-                    messageCount = msgs.size,
-                    agentName = _activeAgentName,
-                    framework = session.framework
-                )
-                _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
-                saveSessionHistory()
-            }
-        } catch (_: Exception) {}
-    }
-
-    /** Save a specific session's messages to a per-session file. */
-    private fun saveSessionById(sessionId: String, msgs: List<ChatMessageUi>) {
-        try {
-            val nonSystem = msgs.filter { it !is ChatMessageUi.System }
-            if (nonSystem.isEmpty()) return
-            val dir = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "sessions")
-            dir.mkdirs()
-            val file = java.io.File(dir, "$sessionId.json")
-            val arr = messagesToJson(nonSystem)
-            atomicWriteJson(file, arr)
-        } catch (_: Exception) {}
-    }
-
-    /** Load a session's messages from its per-session file. */
-    private fun loadSessionMessages(sessionId: String): List<ChatMessageUi> {
-        try {
-            val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "sessions/$sessionId.json")
-            if (!file.exists()) return emptyList()
-            val text = file.readText()
-            if (text.isBlank()) return emptyList()
-            return jsonToMessages(org.json.JSONArray(text))
-        } catch (_: Exception) { return emptyList() }
-    }
-
-    private fun messagesToJson(msgs: List<ChatMessageUi>): org.json.JSONArray {
-        val arr = org.json.JSONArray()
-        msgs.forEach { msg ->
-            val obj = org.json.JSONObject()
-            when (msg) {
-                is ChatMessageUi.User -> { obj.put("type", "user"); obj.put("text", msg.content) }
-                is ChatMessageUi.Agent -> {
-                    obj.put("type", "agent"); obj.put("text", msg.content)
-                    msg.executionMode?.let { obj.put("executionMode", it) }
-                    msg.agentRef?.let { obj.put("agentRef", it) }
-                }
-                is ChatMessageUi.AgentWithTrace -> {
-                    obj.put("type", "agent_trace"); obj.put("text", msg.finalContent)
-                    val traceArr = org.json.JSONArray()
-                    msg.traces.forEach { t ->
-                        val tObj = org.json.JSONObject()
-                        tObj.put("step", t.step); tObj.put("thought", t.thought)
-                        tObj.put("action", t.action ?: ""); tObj.put("observation", t.observation ?: "")
-                        traceArr.put(tObj)
-                    }
-                    obj.put("traces", traceArr)
-                    msg.executionMode?.let { obj.put("executionMode", it) }
-                    msg.agentRef?.let { obj.put("agentRef", it) }
-                }
-                else -> return@forEach
-            }
-            arr.put(obj)
-        }
-        return arr
-    }
-
-    private fun jsonToMessages(arr: org.json.JSONArray): List<ChatMessageUi> {
-        val msgs = mutableListOf<ChatMessageUi>()
-        for (i in 0 until arr.length()) {
-            val obj = arr.getJSONObject(i)
-            val type = obj.optString("type", "")
-            val txt = obj.optString("text", "")
-            if (txt.isBlank()) continue
-            when (type) {
-                "user" -> msgs.add(ChatMessageUi.User(txt))
-                "agent" -> msgs.add(ChatMessageUi.Agent(txt,
-                    executionMode = obj.optString("executionMode", "").ifEmpty { null },
-                    agentRef = obj.optString("agentRef", "").ifEmpty { null }))
-                "agent_trace" -> {
-                    val traces = mutableListOf<AgentTrace>()
-                    val traceArr = obj.optJSONArray("traces")
-                    if (traceArr != null) for (j in 0 until traceArr.length()) {
-                        val t = traceArr.getJSONObject(j)
-                        traces.add(AgentTrace(t.optInt("step", 0), t.optString("thought", ""),
-                            t.optString("action", "").ifEmpty { null },
-                            t.optString("observation", "").ifEmpty { null }))
-                    }
-                    msgs.add(ChatMessageUi.AgentWithTrace(txt, traces, isRunning = false,
-                        executionMode = obj.optString("executionMode", "").ifEmpty { null },
-                        agentRef = obj.optString("agentRef", "").ifEmpty { null }))
-                }
-            }
-        }
-        return msgs
-    }
-
-    private fun atomicWriteJson(file: java.io.File, json: Any) {
-        file.parentFile?.mkdirs()
-        val tmp = java.io.File(file.parentFile, "${file.name}.tmp")
-        tmp.writeText(when (json) { is org.json.JSONArray -> json.toString(2); is org.json.JSONObject -> json.toString(2); else -> json.toString() })
-        tmp.renameTo(file)
-        if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
-    }
-
-    /** Restore last session messages from disk. Returns true if restored. */
-    private fun restoreCurrentSession(): Boolean {
-        return try {
-            val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
-            if (!file.exists()) return false
-            val text = file.readText()
-            if (text.isBlank()) return false
-
-            // Parse: new format {"sessionId":"...","messages":[...]} or old format [...]
-            var restoredId: String? = null
-            val arr: org.json.JSONArray = try {
-                val wrapper = org.json.JSONObject(text)
-                restoredId = wrapper.optString("sessionId", null)?.takeIf { it.isNotBlank() && it != "null" }
-                wrapper.getJSONArray("messages")
-            } catch (_: org.json.JSONException) {
-                org.json.JSONArray(text) // old format fallback
-            }
-
-            val msgs = jsonToMessages(arr)
-            if (msgs.isNotEmpty()) {
-                // Skip restoration if session ended with an error (corrupted state)
-                val lastMsg = msgs.lastOrNull()
-                val endsWithError = lastMsg is ChatMessageUi.Agent && lastMsg.content.startsWith("⚠️ 执行出错")
-                if (endsWithError) {
-                    try { file.delete() } catch (_: Exception) {}
-                    return false
-                }
-                // Detect stuck thinking state from killed session, convert to recovery message
-                val recovered = msgs.toMutableList()
-                var wasStuck = false
-                for (i in recovered.indices) {
-                    val m = recovered[i]
-                    if (m is ChatMessageUi.AgentWithTrace && m.isRunning) {
-                        recovered[i] = ChatMessageUi.Agent(
-                            "⚠️ 智能体生成被打断，请回复指令以继续。",
-                            executionMode = m.executionMode,
-                            agentRef = m.agentRef
-                        )
-                        wasStuck = true
-                    }
-                }
-                if (wasStuck) {
-                    recovered.add(ChatMessageUi.System("⚠️ 上次会话异常中断，已自动恢复。"))
-                }
-                activeSession().messages.value = recovered
-
-                // ── Engine session restore after process death ──
-                // Android kills processes without warning. The engine's in-memory
-                // SessionManager and conversationSessionId are lost. We must push
-                // the restored UI messages back into the engine so the LLM sees
-                // full conversation history on the next user message.
-                if (msgs.isNotEmpty()) {
-                    val engineMsgs = msgs.mapNotNull { msg ->
-                        when (msg) {
-                            is ChatMessageUi.User -> "user" to msg.content
-                            is ChatMessageUi.Agent -> "assistant" to msg.content
-                            is ChatMessageUi.AgentWithTrace -> {
-                                if (msg.isRunning) null  // interrupted — handled below
-                                else "assistant" to msg.finalContent
-                            }
-                            else -> null
-                        }
-                    }
-                    val restoredId = try {
-                        val text = file.readText()
-                        val json = org.json.JSONObject(text)
-                        json.optString("sessionId", null)?.takeIf { it.isNotBlank() && it != "null" }
-                    } catch (_: Exception) { null }
-                    val prevEngineId = try {
-                        val text = file.readText()
-                        org.json.JSONObject(text).optString("engineSessionId", null)?.takeIf { it.isNotBlank() && it != "null" }
-                    } catch (_: Exception) { null }
-                    // Use UI session ID for the engine restore if available
-                    val engineSessionId = restoredId ?: "sess_${System.currentTimeMillis()}"
-                    try {
-                        activeSession().engine.restoreConversation(
-                            externalSessionId = engineSessionId,
-                            messages = engineMsgs,
-                            lastWasInterrupted = wasStuck,
-                            previousEngineSessionId = prevEngineId
-                        )
-                    } catch (_: Exception) { /* engine restore best-effort */ }
-                }
-
-                // Build sidebar record — reuse original ID if available, fallback to "sess_restored"
-                val preview = msgs.firstOrNull()?.let {
-                    when (it) {
-                        is ChatMessageUi.User -> it.content.take(40)
-                        is ChatMessageUi.Agent -> it.content.take(40)
-                        else -> ""
-                    }
-                } ?: ""
-                val sessionId = restoredId ?: "sess_restored"
-
-                // Check if this ID already exists in history → update instead of duplicate
-                val existingIndex = _sessionHistory.value.indexOfFirst { it.id == sessionId }
-                val record = SessionRecord(
-                    id = sessionId, title = preview.ifBlank { "会话" }, preview = preview,
-                    timestamp = file.lastModified(), messageCount = msgs.size,
-                    agentName = _activeAgentName
-                )
-
-                if (existingIndex >= 0) {
-                    // Update existing record in-place
-                    val mutable = _sessionHistory.value.toMutableList()
-                    mutable[existingIndex] = record
-                    _sessionHistory.value = mutable
-                } else {
-                    // Clean up orphan: if we're using "sess_restored" fallback, remove old "sess_restored"
-                    // If we have a real ID, just add
-                    _sessionHistory.value = (_sessionHistory.value.filter { it.id != sessionId } + record).takeLast(100)
-                }
-                saveSessionHistory()
-                currentSessionId = sessionId
-            }
-            msgs.isNotEmpty()
-        } catch (_: Exception) {
-            // Delete corrupted file so next save starts fresh
-            try { java.io.File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json").delete() } catch (_: Exception) {}
-            false
-        }
-    }
-
-    // ── Global LLM config (shared across new agents as default) ──
-    private var globalEndpoint: String = ""
-    private var globalApiKey: String = ""
-    private var globalModel: String = "unknown"
-    private var globalAgentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE
 
     // ── Multi-session store ──
     private val sessions = mutableMapOf<String, AgentSession>()
@@ -341,83 +46,84 @@ class AgentViewModel : ViewModel() {
     // Prevents re-triggering on every config change.
     private val bootstrappedAgents = mutableSetOf<String>()
 
-    private fun defaultProvider(): LlmProvider =
-        if (globalApiKey.isBlank()) UnconfiguredLlmProvider()
-        else try { AdaptiveLlmProvider(globalEndpoint, globalApiKey, globalModel) } catch (_: Exception) { UnconfiguredLlmProvider() }
-
-    private fun createProviderForSession(endpoint: String, apiKey: String, model: String): LlmProvider =
-        if (apiKey.isBlank()) UnconfiguredLlmProvider()
-        else try { AdaptiveLlmProvider(endpoint, apiKey, model) }
-        catch (e: Exception) {
-            com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Cannot create real provider, using unconfigured: ${e.message}")
-            UnconfiguredLlmProvider()
-        }
-
-    private fun createSession(name: String, framework: String?): AgentSession {
-        val model = globalModel.ifBlank { "unknown" }
-        val provider = defaultProvider()
-
-        // Scroll context manager — eviction index + recall per agent
-        val scroll = ScrollContextManager(name)
-
-        // Memory middleware: inject essential agent docs only (soul + agents)
-        val memoryMw = AgentMiddleware { prompt, agentName ->
-            val soul = com.mengpaw.kernel.agent.AgentDocs.readSoulDoc(agentName)
-            if (soul.isNotBlank() && soul !in prompt) {
-                "$prompt\n\n## 智能体身份\n\n$soul"
-            } else prompt
-        }
-
-        // Post-call middleware: context folding + scroll eviction
-        val postMw = PostCallMiddleware { response, step, totalChars, estimatedTokens ->
-            // Trigger folding when above 80% threshold (delegates to engine's maybeFoldContext)
-            val ratio = estimatedTokens.toDouble() / 131_072.0
-            if (ratio > 0.80) {
-                PostCallResult(response, shouldFold = true,
-                    foldReason = "Step $step: context at ${(ratio * 100).toInt()}%")
-            } else {
-                PostCallResult(response)
-            }
-        }
-
-        val engine = AgentEngine(
-            llmProvider = provider,
-            middleware = memoryMw,
-            postCallMiddleware = postMw,
-            scrollContext = scroll,
-            additionalNamespaces = mapOf("sys" to com.mengpaw.core.namespace.SysExecutor.commands)
-        ).also {
-            it.integrityProvider = com.mengpaw.core.security.IntegrityGuard.globalInstance
-            it.setAgentIdentity(name, framework, model)
-            it.setAgentLanguage(globalAgentLang)
-            it.configureCacheStrategy(globalEndpoint)
-        }
-
-        val msgs = MutableStateFlow<List<ChatMessageUi>>(
-            if (globalApiKey.isBlank())
-                listOf(ChatMessageUi.System("欢迎使用 MengPaw。请先进入设置 → 框架设置，配置 API Key 和模型。"))
-            else
-                listOf(ChatMessageUi.System("$name 就绪。请描述你想完成的任务。"))
-        )
-        return AgentSession(name, framework, model, globalEndpoint, globalApiKey, provider, engine, msgs, scroll)
-    }
-
-    /** Ensure the default "MengPaw" agent session always exists, with workspace files. */
-    private fun ensureDefaultSession() {
-        if (!sessions.containsKey("MengPaw")) {
-            sessions["MengPaw"] = createSession("MengPaw", null)
-        }
-        // Bootstrap workspace files if missing (safe: writeIfMissing won't overwrite existing).
-        // This ensures the default agent has all preset .md files (agents, soul, boost, trigger, etc.)
-        com.mengpaw.kernel.agent.AgentDocs.bootstrap("MengPaw")
-    }
-
     // ── Active agent state ──
     private var _activeAgentName = "MengPaw"
 
+    // ── Helper services ─────────────────────────────────────────────────
+
+    private val inputTagManager = InputTagManager()
+
+    private val sessionPersistence = SessionPersistenceService(
+        sessions = sessions,
+        viewModelScope = viewModelScope,
+        getActiveAgentName = { _activeAgentName },
+        onSwitchAgent = { switchAgent(it) },
+        onStopAgent = { stopAgent() },
+        onCreateAgent = { name, framework -> createAgent(name, framework) },
+    )
+
+    private val sessionFactory = AgentSessionFactory(
+        sessions = sessions,
+        viewModelScope = viewModelScope,
+        bootstrappedAgents = bootstrappedAgents,
+        onSubmitTask = { task, maxSteps -> submitTask(task, maxSteps = maxSteps) },
+        onSwitchAgent = { switchAgent(it) },
+    )
+
+    // ── Delegated state from helpers ──
+
+    val activeTags: StateFlow<List<InputTag>> = inputTagManager.activeTags
+
+    val sessionHistory: StateFlow<List<SessionPersistenceService.SessionRecord>>
+        get() = sessionPersistence.sessionHistory
+    val hideCompacted: StateFlow<Boolean> get() = sessionPersistence.hideCompacted
+    val hideArchived: StateFlow<Boolean> get() = sessionPersistence.hideArchived
+
+    // ── Delegated tag methods ──
+
+    fun addTag(tag: InputTag) = inputTagManager.addTag(tag)
+    fun removeTag(tag: InputTag) = inputTagManager.removeTag(tag)
+    fun clearTags() = inputTagManager.clearTags()
+    fun agentNamesForMention(): List<Pair<String, String?>> = inputTagManager.agentNamesForMention(sessions)
+
+    /** Delegate loopMode to InputTagManager. */
+    var loopMode: LoopMode
+        get() = inputTagManager.loopMode
+        set(v) { inputTagManager.loopMode = v }
+
+    // ── Delegated session persistence methods ──
+
+    fun getSessions(): List<SessionPersistenceService.SessionRecord> = sessionPersistence.getSessions()
+    fun getLocalAgentGroups(): List<SessionPersistenceService.AgentSessionGroup> =
+        sessionPersistence.getLocalAgentGroups()
+    fun getFrameworkGroups(): List<Pair<String, List<SessionPersistenceService.AgentSessionGroup>>> =
+        sessionPersistence.getFrameworkGroups()
+    fun knownFrameworks(): List<String> = sessionPersistence.knownFrameworks()
+    fun newSessionFor(agentName: String, framework: String? = null) =
+        sessionPersistence.newSessionFor(agentName, framework)
+    fun newSession() = sessionPersistence.newSession()
+    fun switchToSession(record: SessionPersistenceService.SessionRecord) =
+        sessionPersistence.switchToSession(record)
+    fun compactSession(id: String) = sessionPersistence.compactSession(id)
+    fun repairSession(id: String) = sessionPersistence.repairSession(id)
+    fun deleteSession(id: String) = sessionPersistence.deleteSession(id)
+    fun toggleHideCompacted() = sessionPersistence.toggleHideCompacted()
+    fun toggleHideArchived() = sessionPersistence.toggleHideArchived()
+
+    // ── Delegated factory methods ──
+
+    fun createAgent(name: String, framework: String? = null) =
+        sessionFactory.createAgent(name, framework)
+
+    fun createAgentWithDetails(
+        name: String, workspaceFolder: String, intro: String, framework: String? = null
+    ) = sessionFactory.createAgentWithDetails(name, workspaceFolder, intro, framework)
+
+    // ── Active session helpers ──
+
     private fun activeSession(): AgentSession {
-        ensureDefaultSession()
-        return sessions.getOrPut(_activeAgentName) { createSession(_activeAgentName, null) }
+        sessionFactory.ensureDefaultSession()
+        return sessions.getOrPut(_activeAgentName) { sessionFactory.createSession(_activeAgentName, null) }
     }
 
     // ── Observable state (backed by active session) ──
@@ -426,7 +132,6 @@ class AgentViewModel : ViewModel() {
 
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
-
 
     private val _inputEnabled = MutableStateFlow(true)
     val inputEnabled: StateFlow<Boolean> = _inputEnabled.asStateFlow()
@@ -447,10 +152,6 @@ class AgentViewModel : ViewModel() {
     private var messageBindingJob: Job? = null
 
     /**
-     * Reconfigure the LLM provider with real API settings.
-     * Applies to all existing sessions and will be used as default for new ones.
-     */
-    /**
      * Apply a pre-created LLM provider to the active agent.
      * Called by AgentRuntime on IO thread — lightweight, no network calls.
      */
@@ -458,13 +159,13 @@ class AgentViewModel : ViewModel() {
         endpoint: String,
         apiKey: String,
         model: String,
-        provider: com.mengpaw.kernel.llm.LlmProvider,
+        provider: LlmProvider,
         agentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE
     ) {
-        globalEndpoint = endpoint
-        globalApiKey = apiKey
-        globalModel = model
-        globalAgentLang = agentLang
+        sessionFactory.globalEndpoint = endpoint
+        sessionFactory.globalApiKey = apiKey
+        sessionFactory.globalModel = model
+        sessionFactory.globalAgentLang = agentLang
 
         sessions.values.forEach { session ->
             try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) { }
@@ -505,7 +206,7 @@ class AgentViewModel : ViewModel() {
     fun switchAgent(name: String) {
         if (name == _activeAgentName) return
         // Verify agent exists (directory on disk or existing session) before switching
-        val agentDir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, name)
+        val agentDir = File(com.mengpaw.kernel.DataPaths.AGENTS, name)
         if (!agentDir.exists() && !sessions.containsKey(name)) return
         stopAgent() // Stop old agent engine before switching
         // Reset old session state
@@ -513,86 +214,15 @@ class AgentViewModel : ViewModel() {
         old?.isRunning?.value = false
         // Create session if directory exists but session doesn't (e.g., agent created externally)
         if (!sessions.containsKey(name) && agentDir.exists() && agentDir.isDirectory) {
-            sessions[name] = createSession(name, null)
+            sessions[name] = sessionFactory.createSession(name, null)
         }
         _activeAgentName = name
         bindActiveSession()
     }
 
-    /** Create a new agent with the given name and optional framework. */
-    fun createAgent(name: String, framework: String? = null) {
-        createAgentWithDetails(name, name, "", framework)
-    }
-
-    /**
-     * Create a new agent with full details.
-     * @param name Agent display name
-     * @param workspaceFolder Folder name for workspace (under AGENTS/)
-     * @param intro Agent introduction/bio
-     * @param framework Optional remote framework
-     */
-    fun createAgentWithDetails(
-        name: String,
-        workspaceFolder: String,
-        intro: String,
-        framework: String? = null
-    ) {
-        if (sessions.containsKey(name)) return
-
-        // Bootstrap agent documentation files into the workspace folder
-        com.mengpaw.kernel.agent.AgentDocs.bootstrap(workspaceFolder)
-
-        // Save profile with intro
-        if (intro.isNotBlank()) {
-            val profile = com.mengpaw.kernel.agent.AgentProfile(
-                agentName = name,
-                name = name,
-                bio = intro
-            )
-            com.mengpaw.kernel.agent.AgentProfile.save(workspaceFolder, profile)
-        }
-
-        // Create session and switch to new agent
-        sessions[name] = createSession(name, framework)
-        switchAgent(name)
-
-        // Auto-start: send "启动" — agent reads Boost.md and begins onboarding
-        autoStartAgent(name, workspaceFolder)
-    }
-
-    /**
-     * Auto-start a newly created agent: sends "启动" message so the agent reads
-     * Boost.md from its workspace and proactively engages with the user.
-     */
-    private fun autoStartAgent(agentName: String, workspaceFolder: String) {
-        val session = sessions[agentName] ?: return
-        bootstrappedAgents.add(agentName)
-        // Read Boost.md content for the agent to process on startup
-        val boostFile = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$workspaceFolder/boost.md")
-        val boostContent = if (boostFile.exists()) {
-            try { boostFile.readText(java.nio.charset.Charset.forName("UTF-8")) } catch (_: Exception) { "" }
-        } else ""
-
-        // Set initial system message, then trigger agent startup
-        session.messages.value = listOf(
-            ChatMessageUi.System("$agentName 已创建。正在读取工作区引导文件...")
-        )
-
-        // Submit startup task — agent reads Boost.md and proactively engages
-        viewModelScope.launch {
-            kotlinx.coroutines.delay(300)
-            val prompt = if (boostContent.isNotBlank()) {
-                "启动。请读取并执行你的工作区引导文件 Boost.md，内容如下：\n\n$boostContent"
-            } else {
-                "启动。请介绍你自己并询问用户如何配置你的身份。"
-            }
-            submitTask(prompt, maxSteps = 30)
-        }
-    }
-
     /** Update Agent language without re-creating the engine. */
     fun setAgentLanguage(lang: PromptEngine.AgentLanguage) {
-        globalAgentLang = lang
+        sessionFactory.globalAgentLang = lang
         sessions.values.forEach { it.engine.setAgentLanguage(lang) }
     }
 
@@ -610,57 +240,9 @@ class AgentViewModel : ViewModel() {
         }
     }
 
-    /** Current loop mode — read by submitTask() to choose engine method. */
-    var loopMode: LoopMode = LoopMode.REACT
-
-    // ── Active input tags (slash commands + @mentions) ───────────────
-
-    private val _activeTags = MutableStateFlow<List<InputTag>>(emptyList())
-    val activeTags: StateFlow<List<InputTag>> = _activeTags.asStateFlow()
-
-    /** 添加标签，同类型替换旧值。 */
-    fun addTag(tag: InputTag) {
-        val current = _activeTags.value.toMutableList()
-        when (tag) {
-            is InputTag.Mode -> {
-                current.removeAll { it is InputTag.Mode }
-                when (tag.mode) {
-                    ExecutionMode.MISSION -> loopMode = LoopMode.MISSION
-                    ExecutionMode.GOAL -> loopMode = LoopMode.GOAL
-                    ExecutionMode.PLAN -> {} // Plan uses explicit dispatch, doesn't change loopMode
-                    else -> {} // RESEARCH/TRANSLATE/SILENT 不改变 loopMode
-                }
-            }
-            is InputTag.AgentRef -> {
-                current.removeAll { it is InputTag.AgentRef && it.agentName == tag.agentName }
-            }
-        }
-        current.add(tag)
-        _activeTags.value = current
-    }
-
-    /** 移除标签，模式标签移除时回退到 REACT。 */
-    fun removeTag(tag: InputTag) {
-        _activeTags.value = _activeTags.value.filter { it != tag }
-        if (tag is InputTag.Mode && _activeTags.value.none { it is InputTag.Mode }) {
-            loopMode = LoopMode.REACT
-        }
-    }
-
-    /** 清除所有标签。 */
-    fun clearTags() {
-        _activeTags.value = emptyList()
-        loopMode = LoopMode.REACT
-    }
-
-    /** 获取可用于 @mention 的 Agent 列表（本地 + 框架）。 */
-    fun agentNamesForMention(): List<Pair<String, String?>> {
-        return sessions.keys.map { it to sessions[it]?.framework }
-    }
-
     /**
      * Submit a task to the currently active agent.
-     * Uses the active [loopMode] to select engine execution strategy.
+     * Uses the active [inputTagManager.loopMode] to select engine execution strategy.
      */
     fun submitTask(
         task: String,
@@ -684,16 +266,16 @@ class AgentViewModel : ViewModel() {
 
         viewModelScope.launch {
             // ── 执行模式分发变量（在 try 外，catch 中也需要）────
-            val savedLoopMode = loopMode
+            val savedLoopMode = inputTagManager.loopMode
             val modePrefix = executionMode?.prefix
             var runningMsgIndex = -1     // fast‑path index; verified against ref before use
             var runningMsgRef: ChatMessageUi.AgentWithTrace? = null // identity guard for concurrent insertions
             try {
                 // /Mission /Goal: 临时覆盖 loopMode
                 if (executionMode == ExecutionMode.MISSION) {
-                    loopMode = LoopMode.MISSION
+                    inputTagManager.loopMode = LoopMode.MISSION
                 } else if (executionMode == ExecutionMode.GOAL) {
-                    loopMode = LoopMode.GOAL
+                    inputTagManager.loopMode = LoopMode.GOAL
                 }
 
                 // /Dream: 后台执行 — 直接 LLM 调用，不触发主引擎状态变化
@@ -717,7 +299,7 @@ class AgentViewModel : ViewModel() {
                         }
                     }
                     // 不添加 AgentWithTrace，不锁定输入
-                    loopMode = savedLoopMode
+                    inputTagManager.loopMode = savedLoopMode
                     return@launch
                 }
 
@@ -804,7 +386,7 @@ class AgentViewModel : ViewModel() {
                 // ── 自动复杂度检测: 无斜杠命令时评估是否升级模式 ──
                 if (executionMode == null) {
                     val detected = detectComplexity(actualTask)
-                    if (detected != LoopMode.REACT && _activeTags.value.none { it is InputTag.Mode }) {
+                    if (detected != LoopMode.REACT && inputTagManager.activeTags.value.none { it is InputTag.Mode }) {
                         // 自动升级: 添加 UI 标签 (复用 AssistChip 体系)
                         val autoTag = when (detected) {
                             LoopMode.GOAL -> InputTag.Mode(ExecutionMode.GOAL)
@@ -814,7 +396,7 @@ class AgentViewModel : ViewModel() {
                         autoTag?.let { addTag(it) }
                         // 临时覆盖 loopMode 用于本轮分发
                         if (detected == LoopMode.GOAL || detected == LoopMode.MISSION) {
-                            loopMode = detected
+                            inputTagManager.loopMode = detected
                         }
                     }
                 }
@@ -825,9 +407,9 @@ class AgentViewModel : ViewModel() {
                     executionMode == ExecutionMode.MISSION -> session.engine.runWithMission(task = finalTask, onStep = onStep)
                     executionMode == ExecutionMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
                     // ── 显式斜杠命令结束, 以下为 loopMode 分发 ──
-                    loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
-                    loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
-                    loopMode == LoopMode.MISSION || loopMode == LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = finalTask, onStep = onStep)
+                    inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
+                    inputTagManager.loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
+                    inputTagManager.loopMode == LoopMode.MISSION || inputTagManager.loopMode == LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = finalTask, onStep = onStep)
                     else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
                 }
 
@@ -857,7 +439,7 @@ class AgentViewModel : ViewModel() {
                     }
                     mutable
                 }
-                loopMode = savedLoopMode
+                inputTagManager.loopMode = savedLoopMode
                 processNextPending()
 
                 // ── 自动摘要：对话结束后提取关键信息存入 memory ──
@@ -886,7 +468,7 @@ class AgentViewModel : ViewModel() {
             } catch (e: Throwable) {
                 // Safety net: catch OOM, unexpected runtime errors, etc.
                 // Prevents process crash — degrades gracefully to error message
-                com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Task execution failed: ${e.message}")
+                KernelLog.w("AgentViewModel", "Task execution failed: ${e.message}")
                 // Stop engine to prevent stale state on retry
                 try { session.engine.stop() } catch (_: Exception) {}
                 val errorMsg = if (e is OutOfMemoryError) {
@@ -912,7 +494,7 @@ class AgentViewModel : ViewModel() {
                     mutable
                 }
                 // 恢复原始 loopMode
-                loopMode = savedLoopMode
+                inputTagManager.loopMode = savedLoopMode
                 // Fully sync all running/input state
                 session.isRunning.value = false
                 _isRunning.value = false
@@ -947,24 +529,16 @@ class AgentViewModel : ViewModel() {
 
     /**
      * Called by TriggerEngine.onFire when a CRON/LIFETIME trigger fires.
-     *
-     * Submits the trigger action as a background task. The agent decides how
-     * to handle it based on its workspace rules (trigger.md / agents.md):
-     * - Whether to work silently or chat visibly
-     * - Whether to push a notification banner via [notify.banner]
-     * - What level to use (info/warn/error)
-     *
-     * Users can edit their agent's trigger.md to customize or disable banners.
      */
     fun submitTriggerTask(trigger: com.mengpaw.kernel.trigger.TriggerEngine.Trigger) {
         val targetAgent = "MengPaw"
-        val session = sessions.getOrPut(targetAgent) { createSession(targetAgent, null) }
+        val session = sessions.getOrPut(targetAgent) { sessionFactory.createSession(targetAgent, null) }
 
         // Don't interrupt a running agent; queue to inbox for later pickup
         if (session.isRunning.value) {
-            val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
+            val inbox = File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
             inbox.mkdirs()
-            java.io.File(inbox, "trigger_${trigger.id}_${System.currentTimeMillis()}.md").writeText(
+            File(inbox, "trigger_${trigger.id}_${System.currentTimeMillis()}.md").writeText(
                 "# 触发器任务\n- ID: ${trigger.id}\n- 类型: ${trigger.type}\n- Cron: ${trigger.config}\n- 时间: ${
                     java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
                 }\n\n${trigger.action}\n"
@@ -973,7 +547,6 @@ class AgentViewModel : ViewModel() {
         }
 
         // Minimal prompt — behavior governed by trigger.md workspace rules.
-        // Agent can read trigger.md via agent.cli to see the default behavior spec.
         val prompt = "[触发器任务 · ${trigger.type}] ${trigger.action}\n(行为规范: workspace/trigger.md)"
 
         // Light system note so user knows something happened
@@ -1024,350 +597,10 @@ class AgentViewModel : ViewModel() {
         return msg == lastUser
     }
 
-    // ── Session History ─────────────────────────────────────────────────
-
-    /** A recorded chat session (persists across newSession() calls and app restarts). */
-    data class SessionRecord(
-        val id: String,
-        val title: String,
-        val preview: String,
-        val timestamp: Long,
-        val messageCount: Int,
-        val compacted: Boolean = false,
-        val compactedSummary: String = "",
-        val agentName: String = "",
-        val framework: String? = null,     // null = local agent, non-null = remote framework name
-        val archived: Boolean = false      // true = hidden from default view, can be toggled back
-    ) {
-        fun toJson(): JSONObject = JSONObject().apply {
-            put("id", id)
-            put("title", title)
-            put("preview", preview)
-            put("timestamp", timestamp)
-            put("messageCount", messageCount)
-            put("compacted", compacted)
-            put("compactedSummary", compactedSummary)
-            put("agentName", agentName)
-            put("archived", archived)
-            if (framework != null) put("framework", framework)
-        }
-
-        companion object {
-            fun fromJson(obj: JSONObject): SessionRecord = SessionRecord(
-                id = obj.optString("id", ""),
-                title = obj.optString("title", ""),
-                preview = obj.optString("preview", ""),
-                timestamp = obj.optLong("timestamp", 0L),
-                messageCount = obj.optInt("messageCount", 0),
-                compacted = obj.optBoolean("compacted", false),
-                compactedSummary = obj.optString("compactedSummary", ""),
-                agentName = obj.optString("agentName", ""),
-                framework = if (obj.has("framework")) obj.getString("framework") else null,
-                archived = obj.optBoolean("archived", false)
-            )
-        }
-    }
-
-    private val _sessionHistory = MutableStateFlow<List<SessionRecord>>(emptyList())
-    val sessionHistory: StateFlow<List<SessionRecord>> = _sessionHistory.asStateFlow()
-
-    /** JSON file path for session persistence. */
-    private val sessionHistoryFile: File
-        get() = File(com.mengpaw.kernel.DataPaths.BASE, "session_history.json")
-
-    /** Load session history from disk. Called once at init. */
-    private fun loadSessionHistory(): List<SessionRecord> {
-        return try {
-            val file = sessionHistoryFile
-            if (file.exists()) {
-                val text = file.readText()
-                if (text.isNotBlank()) {
-                    val arr = JSONArray(text)
-                    (0 until arr.length()).map { i -> SessionRecord.fromJson(arr.getJSONObject(i)) }
-                } else emptyList()
-            } else emptyList()
-        } catch (e: Exception) {
-            com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Corrupted session_history.json, resetting: ${e.message}")
-            // Delete corrupted file so next save starts fresh
-            try { sessionHistoryFile.delete() } catch (_: Exception) {}
-            emptyList()
-        }
-    }
-
-    /** Persist session history to disk. Uses atomic write + backup to prevent corruption on crash. */
-    private fun saveSessionHistory() {
-        try {
-            val file = sessionHistoryFile
-            // Backup old version before overwriting
-            if (file.exists() && file.length() > 0) {
-                val bak = java.io.File(file.parentFile, "${file.name}.bak")
-                try { file.copyTo(bak, overwrite = true) } catch (_: Exception) {}
-            }
-            val arr = JSONArray()
-            _sessionHistory.value.forEach { arr.put(it.toJson()) }
-            // Atomic write: tmp file then rename — avoids partial writes on crash
-            file.parentFile?.mkdirs()
-            val tmp = java.io.File(file.parentFile, "${file.name}.tmp")
-            tmp.writeText(arr.toString(2))
-            tmp.renameTo(file)
-            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
-        } catch (e: Exception) {
-            com.mengpaw.kernel.KernelLog.w("AgentViewModel", "Failed to save session history: ${e.message}")
-        }
-    }
-
-    /** Remove records whose per-session file no longer exists on disk. */
-    private fun cleanupOrphanSessions() {
-        try {
-            val sessionsDir = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "sessions")
-            val before = _sessionHistory.value.size
-            _sessionHistory.value = _sessionHistory.value.filter { record ->
-                // Remove records with no file on disk
-                val sessionFile = java.io.File(sessionsDir, "${record.id}.json")
-                if (!sessionFile.exists() && record.id != currentSessionId) return@filter false
-                // Remove empty sessions (no messages, never used)
-                if (record.messageCount <= 0 && record.id != currentSessionId) return@filter false
-                true
-            }
-            val removed = before - _sessionHistory.value.size
-            if (removed > 0) {
-                saveSessionHistory()
-                com.mengpaw.kernel.KernelLog.i("AgentViewModel", "Cleaned $removed orphan session records")
-            }
-        } catch (_: Exception) {}
-    }
-
-    /** Merge duplicate session records (same agent + same title + overlapping timestamps). */
-    private fun dedupSessionHistory() {
-        try {
-            val records = _sessionHistory.value.toMutableList()
-            var changed = false
-            val seen = mutableMapOf<String, SessionRecord>() // key = agentName|title
-            val toRemove = mutableSetOf<String>()
-            for (record in records.sortedByDescending { it.timestamp }) {
-                val key = "${record.agentName}|${record.title}"
-                val existing = seen[key]
-                if (existing != null) {
-                    // Duplicate found — keep the newer one (higher timestamp), remove older
-                    if (record.timestamp >= existing.timestamp) {
-                        toRemove.add(existing.id)
-                        seen[key] = record
-                    } else {
-                        toRemove.add(record.id)
-                    }
-                } else {
-                    seen[key] = record
-                }
-            }
-            if (toRemove.isNotEmpty()) {
-                _sessionHistory.value = records.filter { it.id !in toRemove }
-                saveSessionHistory()
-                changed = true
-                com.mengpaw.kernel.KernelLog.i("AgentViewModel", "Deduped ${toRemove.size} duplicate session records")
-            }
-        } catch (_: Exception) {}
-    }
-
-    /** Start a new session for a specific agent (switches to it if needed). */
-    fun newSessionFor(agentName: String, framework: String? = null) {
-        val target = if (framework != null) "$framework/$agentName" else agentName
-        if (_activeAgent.value != target) {
-            switchAgent(target)
-        }
-        if (!sessions.containsKey(target)) {
-            createAgent(agentName, framework)
-        }
-        newSession()
-    }
-
-    /** Auto-save current session and start a new one. */
-    fun newSession() {
-        stopAgent() // Stop running agent before clearing messages
-        // v0.17: Reset kernel persistent conversation session so the engine
-        // doesn't leak old conversation history into the new session.
-        activeEngine()?.newConversation()
-        val msgs = activeSession().messages.value.filter { it !is ChatMessageUi.System }
-        if (msgs.isNotEmpty()) {
-            // Auto-indexed title: 会话 #N per agent
-            val existingCount = _sessionHistory.value.count { it.agentName == _activeAgentName }
-            val title = "会话 #${existingCount + 1}"
-            val preview = msgs.last().let {
-                when (it) {
-                    is ChatMessageUi.Agent -> it.content.take(60)
-                    is ChatMessageUi.User -> it.content.take(60)
-                    else -> ""
-                }
-            }
-            val currentAgent = _activeAgent.value
-            val sessId = "sess_${System.currentTimeMillis()}"
-            // Save messages to per-session file so switching works
-            saveSessionById(sessId, msgs)
-            currentSessionId = sessId
-            val record = SessionRecord(
-                id = sessId,
-                title = title, preview = preview,
-                timestamp = System.currentTimeMillis(),
-                messageCount = msgs.size,
-                agentName = currentAgent,
-                framework = activeSession().framework
-            )
-            _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
-            saveSessionHistory()
-        }
-        activeSession().messages.value = listOf(ChatMessageUi.Agent("新会话已创建。"))
-    }
-
-    /** Switch to a saved session, restoring its messages. */
-    fun switchToSession(record: SessionRecord) {
-        // Save current session back to its per-session file
-        ensureSessionId()
-        val currentMsgs = activeSession().messages.value.filter { it !is ChatMessageUi.System }
-        if (currentMsgs.isNotEmpty()) {
-            saveSessionById(currentSessionId, currentMsgs)
-        }
-        // Switch agent if needed
-        if (record.agentName.isNotBlank() && record.agentName != _activeAgentName) {
-            val target = if (record.framework != null) "${record.framework}/${record.agentName}" else record.agentName
-            switchAgent(target)
-        }
-        // Load saved messages
-        val loaded = loadSessionMessages(record.id)
-        if (loaded.isNotEmpty()) {
-            currentSessionId = record.id
-            activeSession().messages.value = loaded
-        } else {
-            currentSessionId = ""
-            activeSession().messages.value = listOf(
-                ChatMessageUi.Agent("已切换到「${record.title}」，但该会话暂无已保存的消息记录。")
-            )
-        }
-    }
-
-    /** Compact a session — keep summary, mark as read-only. */
-    fun compactSession(id: String) {
-        _sessionHistory.value = _sessionHistory.value.map {
-            if (it.id == id) it.copy(compacted = true, compactedSummary = "已压缩: ${it.preview.take(100)}")
-            else it
-        }
-        saveSessionHistory()
-    }
-
-    /** Repair a session — fixes truncated markdown / unclosed syntax caused by abnormal interruption. */
-    fun repairSession(id: String) {
-        val record = _sessionHistory.value.find { it.id == id } ?: return
-        val sessionKey = if (record.framework != null) "${record.framework}/${record.agentName}" else record.agentName
-        val session = sessions[sessionKey] ?: return
-        val msgs = session.messages.value.toMutableList()
-        var changed = false
-        for (i in msgs.indices) {
-            val msg = msgs[i]
-            if (msg is ChatMessageUi.Agent) {
-                var text = msg.content
-                // Fix unclosed code fences ```
-                val fenceCount = text.count { it == '`' } / 3
-                if (fenceCount % 2 != 0) {
-                    text = text.trimEnd() + "\n```"
-                    changed = true
-                }
-                // Fix unclosed bold **
-                val boldCount = text.split("**").size - 1
-                if (boldCount % 2 != 0) {
-                    text = text.trimEnd() + "**"
-                    changed = true
-                }
-                // Fix unclosed italics *
-                val italicCount = text.replace("**", "").count { it == '*' }
-                if (italicCount % 2 != 0) {
-                    text = text.trimEnd() + "*"
-                    changed = true
-                }
-                if (changed) msgs[i] = ChatMessageUi.Agent(text)
-            }
-        }
-        if (changed) {
-            session.messages.value = msgs
-            // Mark session record as repaired
-            _sessionHistory.value = _sessionHistory.value.map {
-                if (it.id == id) it.copy(compactedSummary = "已修复: ${it.preview.take(60)}") else it
-            }
-            saveSessionHistory()
-        }
-    }
-
-    /** Delete a session record. */
-    fun deleteSession(id: String) {
-        _sessionHistory.value = _sessionHistory.value.filter { it.id != id }
-        saveSessionHistory()
-        try {
-            val file = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "sessions/$id.json")
-            if (file.exists()) file.delete()
-        } catch (_: Exception) {}
-    }
-
-    /** Toggle visibility of compacted sessions. */
-    private val _hideCompacted = MutableStateFlow(false)
-    val hideCompacted: StateFlow<Boolean> = _hideCompacted.asStateFlow()
-    fun toggleHideCompacted() { _hideCompacted.value = !_hideCompacted.value }
-
-    private val _hideArchived = MutableStateFlow(true) // default: hide archived
-    val hideArchived: StateFlow<Boolean> = _hideArchived.asStateFlow()
-    fun toggleHideArchived() { _hideArchived.value = !_hideArchived.value }
-
-    /** Get sessions for the current agent (excluding compacted/archived if hidden). */
-    fun getSessions(): List<SessionRecord> {
-        val all = _sessionHistory.value.sortedByDescending { it.timestamp }
-        return all.filter { showSession(it) }
-    }
-
-    private fun showSession(r: SessionRecord): Boolean {
-        if (_hideCompacted.value && r.compacted) return false
-        if (_hideArchived.value && r.archived) return false
-        return true
-    }
-
-    /** Sessions grouped by agent name (local + framework). */
-    data class AgentSessionGroup(
-        val agentName: String,
-        val framework: String?,        // null = local, non-null = remote framework
-        val sessions: List<SessionRecord>
-    )
-
-    /** Sessions grouped by local agents (framework == null), sorted by most recent. */
-    fun getLocalAgentGroups(): List<AgentSessionGroup> {
-        val all = _sessionHistory.value
-            .filter { showSession(it) }
-        return all
-            .filter { it.framework == null }
-            .groupBy { it.agentName.ifBlank { "MengPaw" } }
-            .map { (name, sessions) -> AgentSessionGroup(name, null, sessions.sortedByDescending { it.timestamp }) }
-            .sortedByDescending { it.sessions.firstOrNull()?.timestamp ?: 0L }
-    }
-
-    /** Sessions grouped by framework → agent, for the frameworks section. */
-    fun getFrameworkGroups(): List<Pair<String, List<AgentSessionGroup>>> {
-        val all = _sessionHistory.value
-            .filter { showSession(it) }
-        return all
-            .filter { it.framework != null }
-            .groupBy { it.framework!! }
-            .mapValues { (_, sessions) ->
-                sessions.groupBy { it.agentName.ifBlank { "Agent" } }
-                    .map { (name, s) -> AgentSessionGroup(name, sessions.first().framework, s.sortedByDescending { it.timestamp }) }
-                    .sortedByDescending { it.sessions.firstOrNull()?.timestamp ?: 0L }
-            }
-            .toList()
-            .sortedByDescending { (_, groups) -> groups.maxOfOrNull { it.sessions.firstOrNull()?.timestamp ?: 0L } ?: 0L }
-    }
-
-    /** All known framework names (even those without sessions yet, from SidebarContent contacts). */
-    fun knownFrameworks(): List<String> = sessions.values
-        .mapNotNull { it.framework }
-        .distinct()
-
     // ── Internals ──
 
     private fun bindActiveSession() {
-        ensureDefaultSession()
+        sessionFactory.ensureDefaultSession()
         val session = sessions[_activeAgentName] ?: return
         _activeAgent.value = _activeAgentName
 
@@ -1404,20 +637,20 @@ class AgentViewModel : ViewModel() {
     }
 
     init {
-        ensureDefaultSession()
+        sessionFactory.ensureDefaultSession()
         bindActiveSession()
         // Restore persisted session history
-        _sessionHistory.value = loadSessionHistory()
+        sessionPersistence.loadSessionHistory()
         // ── Orphan cleanup: remove records whose session file no longer exists ──
-        cleanupOrphanSessions()
+        sessionPersistence.cleanupOrphanSessions()
         // ── Dedup: merge records with same title+agent that are likely duplicates ──
-        dedupSessionHistory()
+        sessionPersistence.dedupSessionHistory()
         // Restore last active session messages
-        if (!restoreCurrentSession()) {
+        if (!sessionPersistence.restoreCurrentSession()) {
             // Only show welcome if no saved session
         }
         // Start periodic auto-save
-        scheduleAutoSave()
+        sessionPersistence.scheduleAutoSave()
 
         // ── Observe session lifecycle events for recovery hints ──
         viewModelScope.launch {
@@ -1499,42 +732,4 @@ class AgentViewModel : ViewModel() {
 
         return knownPlugins[namespace]
     }
-}
-
-// ── 复杂度自动检测 (融合 QwenPaw SOUL.md + Claude Code 复杂度评分) ──
-
-/**
- * 自动检测任务复杂度, 返回建议的 LoopMode.
- * 简单问答 → REACT | 明确任务 → GOAL | 复杂工程 → MISSION.
- */
-private fun detectComplexity(task: String): LoopMode {
-    val score = scoreComplexity(task)
-    return when {
-        score <= 4 -> LoopMode.REACT
-        score <= 7 -> LoopMode.GOAL
-        score <= 10 -> LoopMode.MISSION
-        else -> LoopMode.GOAL
-    }
-}
-
-/**
- * 任务复杂度评分 (1-15).
- * 维度: 操作风险 + 跨域操作 + 任务长度 + 多步骤信号.
- */
-private fun scoreComplexity(task: String): Int {
-    var score = 0
-    if (Regex("删除|卸载|rm |发布|部署|格式化|清空").containsMatchIn(task)) score += 3
-    else if (Regex("创建|写入|修改|安装|配置|设置|编译|构建|生成").containsMatchIn(task)) score += 2
-
-    val domains = listOf("文件", "网络", "插件", "记忆", "系统", "浏览器", "搜索", "翻译", "应用")
-    val domainHits = domains.count { task.contains(it) }
-    score += domainHits.coerceAtMost(3)
-
-    if (task.length > 200) score += 2
-    else if (task.length > 80) score += 1
-
-    if (Regex("然后|之后|接着|再|并且|同时|;|；|第一步|第二步").containsMatchIn(task)) score += 2
-    if (Regex("每个|所有|全部|批量|遍历|循环").containsMatchIn(task)) score += 2
-
-    return score
 }

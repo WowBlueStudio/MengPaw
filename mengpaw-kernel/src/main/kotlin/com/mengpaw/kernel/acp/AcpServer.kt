@@ -9,6 +9,19 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+/** Atomic file write: write to tmp, then rename (crash-safe, prevents partial writes). */
+private fun java.io.File.atomicWriteText(text: String) {
+    val tmp = java.io.File(this.parentFile, "${this.name}.tmp")
+    try {
+        tmp.writeText(text)
+        if (this.exists()) this.delete()
+        tmp.renameTo(this)
+    } catch (e: Exception) {
+        try { tmp.delete() } catch (_: Exception) {}
+        throw e
+    }
+}
+
 class AcpServer(
     private val profile: AgentProfile,
     private val port: Int = 9876,
@@ -237,17 +250,20 @@ class AcpServer(
             val replyTo = data?.get("replyTo")?.jsonPrimitive?.content ?: ""
             val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX).also { it.mkdirs() }
             val taskFile = java.io.File(inbox, "claude_task_${System.currentTimeMillis()}.md")
-            taskFile.writeText("""# Claude Code 任务
+            val content = """# Claude Code 任务
 > 来自: $from
-> 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}
+> 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}
 > 回复: $replyTo
 
 $task
 
 ---
 完成后将结果写入工作区，并用 `agent.write` 回复。
-""".trimIndent())
-        } catch (_: Exception) { }
+""".trimIndent()
+            taskFile.atomicWriteText(content)
+        } catch (e: Exception) {
+            com.mengpaw.kernel.KernelLog.w("AcpServer", "writeBridgeTaskToInbox: ${e.message}")
+        }
     }
 
     private fun writePushToInbox(from: String, payload: String) {
@@ -257,7 +273,7 @@ $task
             val data = try { kotlinx.serialization.json.Json.parseToJsonElement(payload).jsonObject } catch (_: Exception) { null }
             val url = data?.get("url")?.jsonPrimitive?.content ?: payload
             val title = data?.get("title")?.jsonPrimitive?.content ?: ""
-            taskFile.writeText("""# 浏览器推送请求
+            val content = """# 浏览器推送请求
 - 来自: $from
 - 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}
 - URL: $url
@@ -266,8 +282,11 @@ $task
 ## 操作
 - 接受: browser.push.accept push_${taskFile.nameWithoutExtension}
 - 拒绝: browser.push.reject push_${taskFile.nameWithoutExtension}
-""".trimIndent())
-        } catch (_: Exception) { }
+""".trimIndent()
+            taskFile.atomicWriteText(content)
+        } catch (e: Exception) {
+            com.mengpaw.kernel.KernelLog.w("AcpServer", "writePushToInbox: ${e.message}")
+        }
     }
 
     fun cleanup() {

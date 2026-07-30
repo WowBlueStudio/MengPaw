@@ -22,6 +22,7 @@ import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.design.components.SectionHeader
 
 @Composable
 fun StatCard(
@@ -194,10 +195,4 @@ fun AgentItemsSection(
     }
 
     Spacer(Modifier.height(ArcoSpacing.sm))
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
-        color = ThemeColors.brand, modifier = Modifier.padding(bottom = ArcoSpacing.sm))
 }

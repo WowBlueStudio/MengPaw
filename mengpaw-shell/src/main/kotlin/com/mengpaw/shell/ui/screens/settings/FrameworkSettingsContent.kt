@@ -23,6 +23,7 @@ import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.llm.CacheStrategy
+import com.mengpaw.design.components.SectionHeader
 
 @Composable
 fun FrameworkSettingsContent(
@@ -33,7 +34,7 @@ fun FrameworkSettingsContent(
     toolItems: List<FrameworkItem> = emptyList(),
     skillItems: List<FrameworkItem> = emptyList()
 ) {
-    SectionHeader("API供应商")
+    SectionHeader(state.strings.frameworkApiProvider)
 
     if (state.savedProviders.isNotEmpty()) {
         state.savedProviders.forEach { saved ->
@@ -59,7 +60,7 @@ fun FrameworkSettingsContent(
                     }
                     Spacer(Modifier.width(4.dp))
                     IconButton(onClick = { viewModel.removeProvider(saved.preset) }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Filled.Close, "删除", tint = ThemeColors.textSecondary, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.Close, state.strings.delete, tint = ThemeColors.textSecondary, modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -68,10 +69,10 @@ fun FrameworkSettingsContent(
     }
 
     if (state.apiSectionExpanded) {
-        SectionHeader(if (state.savedProviders.isNotEmpty()) "编辑连接" else "新增连接")
+        SectionHeader(if (state.savedProviders.isNotEmpty()) state.strings.frameworkEditConnection else state.strings.frameworkNewConnection)
 
         // Provider preset chips
-        Text("供应商", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+        Text(state.strings.frameworkProviderLabel, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
         Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             LlmProviderPreset.entries.filter { it != LlmProviderPreset.CUSTOM && it != LlmProviderPreset.SELF_HOSTED }
@@ -102,17 +103,17 @@ fun FrameworkSettingsContent(
         }
         Spacer(Modifier.height(ArcoSpacing.sm))
 
-        SettingsTextField(Icons.Outlined.Key, "API Key", state.apiKey,
+        SettingsTextField(Icons.Outlined.Key, state.strings.apiKey, state.apiKey,
             onValueChange = { viewModel.updateApiKey(it) },
             visualTransformation = if (state.showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
                 IconButton(onClick = { viewModel.toggleShowApiKey() }) {
                     Icon(if (state.showApiKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                        contentDescription = if (state.showApiKey) "隐藏" else "显示")
+                        contentDescription = if (state.showApiKey) state.strings.apiKeyHide else state.strings.apiKeyShow)
                 }
             })
         Spacer(Modifier.height(ArcoSpacing.sm))
-        SettingsTextField(Icons.Outlined.Link, "API 地址", state.apiEndpoint,
+        SettingsTextField(Icons.Outlined.Link, state.strings.apiEndpoint, state.apiEndpoint,
             onValueChange = { viewModel.updateApiEndpoint(it) })
         Spacer(Modifier.height(ArcoSpacing.sm))
 
@@ -122,18 +123,18 @@ fun FrameworkSettingsContent(
                 if (state.isTesting) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = ThemeColors.brand)
                 else Icon(Icons.Outlined.Wifi, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("测试", style = MaterialTheme.typography.labelSmall)
+                Text(state.strings.frameworkTestConnection, style = MaterialTheme.typography.labelSmall)
             }
             OutlinedButton(onClick = { viewModel.saveApiKey() }, modifier = Modifier.weight(1f),
                 enabled = state.apiKey.isNotBlank(), shape = RoundedCornerShape(ArcoRadius.md)) {
                 Icon(Icons.Outlined.Check, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("保存", style = MaterialTheme.typography.labelSmall)
+                Text(state.strings.frameworkSaveConnection, style = MaterialTheme.typography.labelSmall)
             }
         }
         if (state.isTesting) {
             Spacer(Modifier.height(4.dp))
-            Text("正在测试连接...", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+            Text(state.strings.frameworkTestingConnection, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
         }
 
         Spacer(Modifier.height(ArcoSpacing.sm))
@@ -142,7 +143,7 @@ fun FrameworkSettingsContent(
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
             Icon(Icons.Outlined.ExpandLess, null, Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))
-            Text("收起API供应商列表", style = MaterialTheme.typography.labelSmall)
+            Text(state.strings.frameworkCollapseList, style = MaterialTheme.typography.labelSmall)
         }
         Spacer(Modifier.height(ArcoSpacing.lg))
     } else {
@@ -150,7 +151,7 @@ fun FrameworkSettingsContent(
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md)) {
             Icon(Icons.Filled.Add, null, Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))
-            Text("新增API供应商")
+            Text(state.strings.frameworkAddProvider)
         }
     }
 
@@ -158,20 +159,20 @@ fun FrameworkSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    NavigationLink(Icons.Outlined.Extension, "插件管理", "浏览、安装、管理 Agent 插件") { onNavigateToPluginMarket() }
+    NavigationLink(Icons.Outlined.Extension, state.strings.frameworkPluginManagement, state.strings.frameworkPluginManagementDesc) { onNavigateToPluginMarket() }
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    SectionHeader("记忆管理")
+    SectionHeader(state.strings.frameworkMemoryManagement)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("记忆管理后端", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text(if (state.memoryBackend == "memory-plugin") "内置 · Markdown 文件" else state.memoryBackend,
+            Text(state.strings.frameworkMemoryBackend, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(if (state.memoryBackend == "memory-plugin") state.strings.frameworkMemoryBackendDesc else state.memoryBackend,
                 style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
-            Text("需安装插件", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
+            Text(state.strings.frameworkRequiresPlugin, Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
         }
     }
 
@@ -179,15 +180,15 @@ fun FrameworkSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    SectionHeader("上下文策略")
+    SectionHeader(state.strings.frameworkContextStrategy)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("上下文策略", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text(if (state.contextStrategy == "default") "内置 · Reasonix 四级折叠" else state.contextStrategy,
+            Text(state.strings.frameworkContextStrategy, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(if (state.contextStrategy == "default") state.strings.frameworkContextStrategyDesc else state.contextStrategy,
                 style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
-            Text("需安装插件", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
+            Text(state.strings.frameworkRequiresPlugin, Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
         }
     }
 
@@ -198,27 +199,21 @@ fun FrameworkSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    SecurityRulesSection()
+    SecurityRulesSection(strings = state.strings)
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    FrameworkItemSection("全局插件", Icons.Outlined.Extension, pluginItems)
+    FrameworkItemSection(state.strings.frameworkGlobalPlugins, Icons.Outlined.Extension, pluginItems)
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    FrameworkItemSection("全局工具(Tools)", Icons.Outlined.Terminal, toolItems)
+    FrameworkItemSection(state.strings.frameworkGlobalTools, Icons.Outlined.Terminal, toolItems)
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    FrameworkItemSection("全局工具(Skills)", Icons.Outlined.AutoAwesome, skillItems)
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
-        color = ThemeColors.brand, modifier = Modifier.padding(bottom = ArcoSpacing.sm))
+    FrameworkItemSection(state.strings.frameworkGlobalSkills, Icons.Outlined.AutoAwesome, skillItems)
 }

@@ -6,6 +6,9 @@ package com.mengpaw.kernel.session
 import com.mengpaw.kernel.llm.LlmProvider
 import com.mengpaw.kernel.llm.ProviderInfo
 import com.mengpaw.kernel.llm.ProviderType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -151,6 +154,194 @@ class SessionManagerTest {
         // No session created, should not throw
         val didCompress = manager.compressIfNeeded(mockLlm)
         assertFalse(didCompress)
+    }
+
+    @Test
+    fun `recordInterruptedTurn sets pending recovery on active session`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.recordInterruptedTurn(
+            sessionId = session.id,
+            completedTools = listOf(InterruptedToolSummary("fs.write", listOf("test.txt"))),
+            interruptedTools = emptyList(),
+            hasPartialText = false,
+            hasPartialReasoning = false
+        )
+        val history = manager.getHistory(session.id)
+        assertEquals(1, history.size)
+        assertTrue(history[0].localOnly)
+        assertNotNull(history[0].interruptedTurn)
+        assertTrue(history[0].interruptedTurn!!.pending)
+        assertEquals("fs.write", history[0].interruptedTurn!!.completedTools[0].name)
+    }
+
+    @Test
+    fun `consumePendingRecovery marks recovery as consumed`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.recordInterruptedTurn(
+            sessionId = session.id,
+            completedTools = listOf(InterruptedToolSummary("grep")),
+            interruptedTools = emptyList(),
+            hasPartialText = false,
+            hasPartialReasoning = false
+        )
+        val consumed = manager.consumePendingRecovery(session.id)
+        assertTrue(consumed)
+        val history = manager.getHistory(session.id)
+        assertFalse(history[0].interruptedTurn!!.pending)
+    }
+
+    @Test
+    fun `consumePendingRecovery returns false when no pending recovery`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        assertFalse(manager.consumePendingRecovery(session.id))
+    }
+
+    @Test
+    fun `checkSessionIntegrity returns true for clean session`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.addMessage(session.id, Message("user", "hello"))
+        manager.addMessage(session.id, Message("assistant", "hi"))
+        val result = manager.checkSessionIntegrity(session.id)
+        assertTrue(result) // true = clean
+    }
+
+    @Test
+    fun `getStructuredHistory returns non-localOnly messages only`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.addMessage(session.id, Message("user", "visible 1"))
+        manager.recordInterruptedTurn(
+            sessionId = session.id,
+            completedTools = emptyList(),
+            interruptedTools = listOf("grep"),
+            hasPartialText = true,
+            hasPartialReasoning = false
+        )
+        manager.addMessage(session.id, Message("assistant", "visible 2"))
+        val structured = manager.getStructuredHistory(session.id)
+        // Should exclude the localOnly recovery record
+        assertEquals(2, structured.size)
+        assertEquals("visible 1", structured[0]["content"])
+        assertEquals("visible 2", structured[1]["content"])
+    }
+
+    @Test
+    fun `deleteSession removes session`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.addMessage(session.id, Message("user", "hello"))
+        manager.deleteSession(session.id)
+        assertNull(manager.getSession(session.id))
+    }
+
+    @Test
+    fun `repairSessionIntegrity returns false for clean session`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.addMessage(session.id, Message("user", "hello"))
+        manager.addMessage(session.id, Message("assistant", "hi"))
+        val changed = manager.repairSessionIntegrity(session.id)
+        assertFalse(changed) // no repair needed
+    }
+
+    @Test
+    fun `checkSessionIntegrity returns true for dangling interrupt at end`() {
+        // An interrupted turn at the end of history is acceptable (pending recovery)
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.addMessage(session.id, Message("user", "hello"))
+        manager.recordInterruptedTurn(
+            sessionId = session.id,
+            completedTools = emptyList(),
+            interruptedTools = listOf("grep"),
+            hasPartialText = true,
+            hasPartialReasoning = false
+        )
+        val result = manager.checkSessionIntegrity(session.id)
+        assertTrue(result) // dangling at end is acceptable
+    }
+
+    @Test
+    fun `checkSessionIntegrity returns false for blank assistant message`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.addMessage(session.id, Message("user", "hello"))
+        manager.addMessage(session.id, Message("assistant", "")) // blank content = corruption
+        val result = manager.checkSessionIntegrity(session.id)
+        assertFalse(result)
+    }
+
+    @Test
+    fun `repairSessionIntegrity does not fail on nonexistent session`() {
+        val manager = SessionManager()
+        val result = manager.repairSessionIntegrity("nonexistent")
+        assertFalse(result)
+    }
+
+    // ── EventLog (in-memory coverage) ───────────────────────────────
+
+    @Test
+    fun `recordSessionEvent emits on event bus`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        val events = mutableListOf<SessionEventBus.SessionEvent>()
+        val job = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined).launch {
+            SessionEventBus.events.collect { events.add(it) }
+        }
+        try {
+            manager.recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+                kind = SessionEventBus.EventKind.TOOL_EXECUTED,
+                sessionId = session.id,
+                agentName = "test",
+                summary = "test event"
+            ))
+            // Give time for the shared flow to deliver
+            Thread.sleep(100)
+            assertTrue(events.any { it.kind == SessionEventBus.EventKind.TOOL_EXECUTED })
+        } finally {
+            job.cancel()
+        }
+    }
+
+    @Test
+    fun `checkSessionIntegrity handles empty session gracefully`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        val result = manager.checkSessionIntegrity(session.id)
+        assertTrue(result) // empty session with just the create is clean
+    }
+
+    @Test
+    fun `multiple interruptions stack correctly`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.addMessage(session.id, Message("user", "task 1"))
+        manager.recordInterruptedTurn(
+            sessionId = session.id,
+            completedTools = listOf(InterruptedToolSummary("fs.write")),
+            interruptedTools = emptyList(),
+            hasPartialText = false,
+            hasPartialReasoning = false
+        )
+        manager.consumePendingRecovery(session.id)
+
+        manager.addMessage(session.id, Message("user", "task 2"))
+        manager.recordInterruptedTurn(
+            sessionId = session.id,
+            completedTools = listOf(InterruptedToolSummary("grep")),
+            interruptedTools = emptyList(),
+            hasPartialText = false,
+            hasPartialReasoning = false
+        )
+
+        val pending = findPendingRecovery(manager.getHistory(session.id))
+        assertNotNull(pending)
+        assertEquals("grep", pending!!.completedTools[0].name)
+        assertTrue(pending.pending)
     }
 
     // Mock LlmProvider for testing

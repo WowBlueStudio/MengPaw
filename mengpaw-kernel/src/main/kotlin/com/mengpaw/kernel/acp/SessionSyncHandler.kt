@@ -75,7 +75,7 @@ class SessionSyncHandler(
         // Count events from log file (line count = auto-increment sequence)
         val logFile = File(DataPaths.dialogArchiveDir(agentName), "${sessionKey}.event.log")
         val localCount = if (logFile.exists()) {
-            try { logFile.readLines().size } catch (_: Exception) { 0 }
+            try { logFile.useLines { it.count() } } catch (_: Exception) { 0 }
         } else 0
 
         return AcpResult(true, buildJsonObject {

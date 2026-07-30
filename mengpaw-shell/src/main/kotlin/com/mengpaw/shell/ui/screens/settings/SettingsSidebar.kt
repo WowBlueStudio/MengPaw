@@ -22,9 +22,11 @@ import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.shell.ui.localization.AppStrings
 
 @Composable
 fun SettingsSidebar(
+    strings: AppStrings,
     selected: Int,
     onSelect: (Int) -> Unit,
     expanded: Boolean
@@ -38,7 +40,7 @@ fun SettingsSidebar(
     ) {
         SidebarItem(
             number = "01",
-            title = "智能体设置",
+            title = strings.sidebarSettingsAgent,
             subtitle = null,
             selected = selected == 0,
             expanded = expanded,
@@ -47,7 +49,7 @@ fun SettingsSidebar(
         )
         SidebarItem(
             number = "02",
-            title = "框架设置",
+            title = strings.sidebarSettingsFramework,
             subtitle = null,
             selected = selected == 1,
             expanded = expanded,
@@ -55,7 +57,7 @@ fun SettingsSidebar(
         )
         SidebarItem(
             number = "03",
-            title = "系统设置",
+            title = strings.sidebarSettingsSystem,
             subtitle = null,
             selected = selected == 2,
             expanded = expanded,

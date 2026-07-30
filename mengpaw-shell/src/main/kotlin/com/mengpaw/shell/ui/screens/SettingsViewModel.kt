@@ -16,6 +16,20 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers; import kotlinx.coroutines.launch; import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
+
+private val appJson = Json { ignoreUnknownKeys = true; prettyPrint = true }
+
+@Serializable
+private data class SavedProviderJson(
+    val preset: String,
+    val apiKey: String,
+    val endpoint: String,
+    val model: String,
+    val balance: String = ""
+)
 
 /**
  * Preset LLM providers with known endpoints and models.
@@ -163,26 +177,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private fun loadSavedProviders() {
         if (!vault.isAvailable) return
         try {
-            val json = vault.retrieve(VAULT_KEY_PROVIDERS)
-            if (json.isNullOrBlank()) {
+            val rawJson = vault.retrieve(VAULT_KEY_PROVIDERS)
+            if (rawJson.isNullOrBlank()) {
                 // Migration: old single-key format → new multi-provider format
                 migrateLegacyKey()
                 return
             }
-            val arr = org.json.JSONArray(json)
-            val providers = mutableListOf<SavedProvider>()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                val preset = try {
-                    LlmProviderPreset.valueOf(obj.getString("preset"))
-                } catch (_: Exception) { LlmProviderPreset.CUSTOM }
-                providers.add(SavedProvider(
-                    preset = preset,
-                    apiKey = obj.optString("apiKey", ""),
-                    endpoint = obj.optString("endpoint", ""),
-                    model = obj.optString("model", ""),
-                    balance = obj.optString("balance", "")
-                ))
+            val jsonList = appJson.decodeFromString<List<SavedProviderJson>>(rawJson)
+            val providers = jsonList.map { p ->
+                SavedProvider(
+                    preset = try { LlmProviderPreset.valueOf(p.preset) } catch (_: Exception) { LlmProviderPreset.CUSTOM },
+                    apiKey = p.apiKey,
+                    endpoint = p.endpoint,
+                    model = p.model,
+                    balance = p.balance
+                )
             }
             if (providers.isNotEmpty()) {
                 _state.value = _state.value.copy(savedProviders = providers)
@@ -216,17 +225,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     /** Serialize and persist all saved providers to encrypted Vault. */
     private fun persistProviders(providers: List<SavedProvider>) {
         if (!vault.isAvailable) return
-        val arr = org.json.JSONArray()
-        providers.forEach { p ->
-            val obj = org.json.JSONObject()
-            obj.put("preset", p.preset.name)
-            obj.put("apiKey", p.apiKey)
-            obj.put("endpoint", p.endpoint)
-            obj.put("model", p.model)
-            obj.put("balance", p.balance)
-            arr.put(obj)
+        val jsonList = providers.map { p ->
+            SavedProviderJson(
+                preset = p.preset.name,
+                apiKey = p.apiKey,
+                endpoint = p.endpoint,
+                model = p.model,
+                balance = p.balance
+            )
         }
-        vault.store(VAULT_KEY_PROVIDERS, arr.toString())
+        vault.store(VAULT_KEY_PROVIDERS, appJson.encodeToString(ListSerializer(SavedProviderJson.serializer()), jsonList))
     }
 
     companion object {
