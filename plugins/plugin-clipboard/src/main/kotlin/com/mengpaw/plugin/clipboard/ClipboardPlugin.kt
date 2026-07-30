@@ -25,9 +25,7 @@ class ClipboardPlugin : Plugin {
         commands = listOf("clipboard.copy", "clipboard.paste", "clipboard.clear")
     )
 
-    override val uiButtons = listOf(
-        com.mengpaw.kernel.plugin.PluginUiButton("paste", "粘贴", "ContentPaste", com.mengpaw.kernel.plugin.ButtonPlacement.BOTTOM_SHEET, "clipboard.paste")
-    )
+    override val uiButtons = emptyList<com.mengpaw.kernel.plugin.PluginUiButton>()
 
     override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "copy" to ::copy, "paste" to ::paste, "clear" to ::clear

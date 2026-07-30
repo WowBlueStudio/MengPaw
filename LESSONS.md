@@ -4,6 +4,45 @@
 
 ---
 
+## 2026-07-30 — v0.19.1 UI 调整：标签行移入消息区 + 删除模式按钮行
+
+### 87. DropdownMenu 的 Popup 窗口与输入法冲突
+- 场景：@mention 下拉用 `DropdownMenu`，每次输入字母 → 输入法跳出去一次。
+- 根因：`DropdownMenu` 创建独立的 Popup 窗口，每次键盘弹出/收起争夺焦点。
+- 修复：移出输入栏 Box，改为内联 `Surface` + `Column`（不走 Popup 窗口），置于 Column 层级自然位于输入栏上方。
+- 教训：**Compose 中需要和 TextField 同时存在的下拉选择，绝不能用 DropdownMenu（Popup 窗口）。用内联 Surface 替代。**
+
+### 88. 输入栏顶部的 UI 元素必须约束在消息区宽度内
+- 场景：活跃标签行（AssistChip）是 Column 的直接子级，占满全宽。平板模式下左侧边栏展开 → 标签行覆盖侧边栏区域。
+- 根因：标签行在 Column 中和内容区（含侧边栏）平级，宽度不受 `msgWidth` 约束。
+- 修复：标签行移入消息区的 Box 内部，包裹在 `msgWidth` 约束下的 Column 中。
+- 教训：**输入栏上方的 UI 元素如果和侧边栏在同一个 Column 层级，必须约束宽度。放在消息区域内最安全。**
+
+### 89. 插件 UI 按钮只对 Agent 有用就不该暴露给人
+- 场景：`plugin-clipboard` 的 "粘贴" 按钮出现在底部弹窗插件工具区，但它只服务于 Agent 的内部剪贴板（`clipboard.paste`）。
+- 修复：`ClipboardPlugin.uiButtons = emptyList()`。
+- 教训：**`BOTTOM_SHEET` 按钮是给人点的，Agent 内部用的命令不要注册 UI 按钮。注册前问：这个人点下去有用吗？**
+
+### 90. 按钮行整体删除比逐个注释更干净
+- 场景：执行模式按钮行（`/Mission /Research /Translate /Silent`）从输入栏顶部删除，改用底部弹窗访问。
+- 方式：不保留注释掉的代码，整块 Row 删除。
+- 教训：**UI 组件禁用/废弃直接删代码。版本控制会保留历史，注释只是制造噪音。**
+
+### 本次改动统计
+
+```
+修改文件: 4 个
+  - MainScreen.kt       (标签行移入消息区 + 删除模式按钮行 + @mention 改为内联 Surface)
+  - InputComponents.kt   (无改动，ModeItem 仍被底部弹窗引用)
+  - PanelOrderStore.kt   (mission/goal 互换默认顺序)
+  - ClipboardPlugin.kt   (移除粘贴 UI 按钮)
+新增: 0
+删除代码: ~25 行
+编译: 待验证
+```
+
+---
+
 ## 2026-07-26 — v0.15.2 浏览器 Agent 控制深度重构
 
 ### 审计驱动的功能闭环

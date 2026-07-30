@@ -323,49 +323,83 @@ fun MainScreen(
                             },
                         contentAlignment = Alignment.TopCenter
                     ) {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxWidth(msgWidth).heightIn(max = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp),
-                            state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
-                            contentPadding = PaddingValues(vertical = ArcoSpacing.md)
-                        ) {
-                        items(displayedMessages, key = { it.stableId }) { message ->
-                            BubbleWrapper(
-                                message = message,
-                                viewModel = viewModel,
-                                onRetract = { inputText = it },
-                                onQuote = { quoteText -> inputText = "$quoteText\n$inputText" },
-                                pluginViewModel = pluginViewModel,
-                                onNavigateToPlugins = onNavigateToPlugins
-                            ) {
-                                when (message) {
-                                    is ChatMessageUi.User -> UserBubble(message.content)
-                                    is ChatMessageUi.Agent -> AgentBubble(message.content, displayAgentName,
-                                        executionMode = message.executionMode, agentRef = message.agentRef)
-                                    is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message, displayAgentName)
-                                    is ChatMessageUi.Suggestion -> PluginSuggestionCard(message.suggestion,
-                                        onInstall = { pluginViewModel.installPlugin(message.suggestion.pluginId) },
-                                        onViewDetail = onNavigateToPlugins)
-                                    else -> {}
+                        Column(Modifier.fillMaxWidth(msgWidth)) {
+                            // 消息列表 — 占据剩余空间
+                            Box(Modifier.weight(1f).fillMaxWidth()) {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize().heightIn(max = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp),
+                                    state = listState, verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm),
+                                    contentPadding = PaddingValues(vertical = ArcoSpacing.md)
+                                ) {
+                                items(displayedMessages, key = { it.stableId }) { message ->
+                                    BubbleWrapper(
+                                        message = message,
+                                        viewModel = viewModel,
+                                        onRetract = { inputText = it },
+                                        onQuote = { quoteText -> inputText = "$quoteText\n$inputText" },
+                                        pluginViewModel = pluginViewModel,
+                                        onNavigateToPlugins = onNavigateToPlugins
+                                    ) {
+                                        when (message) {
+                                            is ChatMessageUi.User -> UserBubble(message.content)
+                                            is ChatMessageUi.Agent -> AgentBubble(message.content, displayAgentName,
+                                                executionMode = message.executionMode, agentRef = message.agentRef)
+                                            is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message, displayAgentName)
+                                            is ChatMessageUi.Suggestion -> PluginSuggestionCard(message.suggestion,
+                                                onInstall = { pluginViewModel.installPlugin(message.suggestion.pluginId) },
+                                                onViewDetail = onNavigateToPlugins)
+                                            else -> {}
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
 
-                        // ── 待办列表 — 浮动在气泡层上方，有内容时弹出 ──
-                        val pendingTasks by viewModel.pendingTasks.collectAsState()
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = pendingTasks.isNotEmpty(),
-                            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(msgWidth)
-                                .padding(horizontal = ArcoSpacing.sm, vertical = ArcoSpacing.xs)
-                        ) {
-                            PendingTasksBar(
-                                tasks = pendingTasks,
-                                onRemove = { viewModel.removePendingTask(it) },
-                                onClearAll = { viewModel.clearPendingTasks() }
-                            )
-                        }
+                                    // ── 待办列表 — 浮动在气泡层上方，有内容时弹出 ──
+                                    val pendingTasks by viewModel.pendingTasks.collectAsState()
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = pendingTasks.isNotEmpty(),
+                                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                                            .padding(horizontal = ArcoSpacing.sm, vertical = ArcoSpacing.xs)
+                                    ) {
+                                        PendingTasksBar(
+                                            tasks = pendingTasks,
+                                            onRemove = { viewModel.removePendingTask(it) },
+                                            onClearAll = { viewModel.clearPendingTasks() }
+                                        )
+                                    }
+                                } // close inner Box wrapping LazyColumn
+
+                                // ── 活跃标签行（在输入栏上方，不影响侧边栏长度）──
+                                if (activeTags.isNotEmpty()) {
+                                    Row(
+                                        Modifier.fillMaxWidth()
+                                            .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.xs),
+                                        horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)
+                                    ) {
+                                        activeTags.forEach { tag ->
+                                            val chipLabel = when (tag) {
+                                                is InputTag.Mode -> tag.mode.prefix
+                                                is InputTag.AgentRef -> "@${tag.agentName}"
+                                            }
+                                            AssistChip(
+                                                onClick = {},
+                                                label = { Text(chipLabel, style = MaterialTheme.typography.labelSmall) },
+                                                trailingIcon = {
+                                                    Icon(Icons.Filled.Close, strings.tagDismiss,
+                                                        Modifier.size(14.dp).clickable { viewModel.removeTag(tag) })
+                                                },
+                                                shape = RoundedCornerShape(ArcoRadius.sm),
+                                                colors = AssistChipDefaults.assistChipColors(
+                                                    containerColor = ThemeColors.brandContainer,
+                                                    labelColor = ThemeColors.brand
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            } // close Column
                     } // close Box wrapping LazyColumn
 
                     // Persistent right sidebar (tablet only)
@@ -415,68 +449,58 @@ fun MainScreen(
                 }
             }
 
-            // ── Active tags row (above input) ──
-            if (activeTags.isNotEmpty()) {
-                Row(
-                    Modifier.fillMaxWidth()
-                        .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.xs),
-                    horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)
-                ) {
-                    activeTags.forEach { tag ->
-                        val chipLabel = when (tag) {
-                            is InputTag.Mode -> tag.mode.prefix
-                            is InputTag.AgentRef -> "@${tag.agentName}"
-                        }
-                        AssistChip(
-                            onClick = {},
-                            label = { Text(chipLabel, style = MaterialTheme.typography.labelSmall) },
-                            trailingIcon = {
-                                Icon(Icons.Filled.Close, strings.tagDismiss,
-                                    Modifier.size(14.dp).clickable { viewModel.removeTag(tag) })
-                            },
-                            shape = RoundedCornerShape(ArcoRadius.sm),
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = ThemeColors.brandContainer,
-                                labelColor = ThemeColors.brand
-                            )
-                        )
+            // ── @mention 内联下拉（不走 Popup，不干扰输入法）──
+            if (showMentionDropdown) {
+                val mentionAgents = remember(mentionQuery, viewModel.agentNamesForMention().size) {
+                    viewModel.agentNamesForMention().filter { (name, _) ->
+                        mentionQuery.isBlank() || name.contains(mentionQuery, ignoreCase = true)
                     }
                 }
-            }
-
-            // ── Execution mode buttons (above input bar) ──
-            Row(
-                Modifier.fillMaxWidth()
-                    .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.xs),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                listOf(
-                    ExecutionMode.MISSION to Icons.Outlined.AccountTree,
-                    ExecutionMode.RESEARCH to Icons.Outlined.TravelExplore,
-                    ExecutionMode.TRANSLATE to Icons.Outlined.Translate,
-                    ExecutionMode.SILENT to Icons.Outlined.NotificationsOff
-                ).forEach { (mode, icon) ->
-                    val isActive = activeTags.any { it is InputTag.Mode && it.mode == mode }
+                if (mentionAgents.isNotEmpty()) {
                     Surface(
-                        onClick = {
-                            val existing = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
-                            if (existing?.mode == mode) { viewModel.removeTag(existing) }
-                            else {
-                                existing?.let { viewModel.removeTag(it) }
-                                viewModel.addTag(InputTag.Mode(mode))
-                            }
-                        },
-                        shape = RoundedCornerShape(ArcoRadius.sm),
-                        color = if (isActive) ThemeColors.brand.copy(alpha = 0.12f) else ThemeColors.bgCardHigh
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(horizontal = ArcoSpacing.lg),
+                        shape = RoundedCornerShape(ArcoRadius.md),
+                        shadowElevation = 6.dp,
+                        color = ThemeColors.bgPrimary
                     ) {
-                        Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Icon(icon, null, Modifier.size(16.dp),
-                                tint = if (isActive) ThemeColors.brand else ThemeColors.textSecondary)
-                            Spacer(Modifier.width(4.dp))
-                            Text(mode.prefix, style = MaterialTheme.typography.labelSmall,
-                                color = if (isActive) ThemeColors.brand else ThemeColors.textSecondary,
-                                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal)
+                        Column(Modifier.padding(vertical = ArcoSpacing.xs)) {
+                            mentionAgents.take(6).forEach { (name, framework) ->
+                                Row(
+                                    Modifier.fillMaxWidth()
+                                        .clickable {
+                                            val current = inputText
+                                            val atIdx = current.lastIndexOf('@')
+                                            if (atIdx >= 0) {
+                                                val beforeAt = current.substring(0, atIdx)
+                                                val afterQuery = current.substring(atIdx + 1 + mentionQuery.length)
+                                                inputText = "$beforeAt@$name $afterQuery"
+                                            }
+                                            showMentionDropdown = false
+                                            viewModel.addTag(InputTag.AgentRef(name))
+                                            try { inputFocus.requestFocus() } catch (_: Exception) {}
+                                        }
+                                        .padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.sm),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(shape = CircleShape, color = ThemeColors.brandContainer,
+                                        modifier = Modifier.size(24.dp)) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(name.take(1), color = ThemeColors.brand,
+                                                fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        }
+                                    }
+                                    Spacer(Modifier.width(ArcoSpacing.sm))
+                                    Text("@$name", fontWeight = FontWeight.SemiBold,
+                                        style = MaterialTheme.typography.bodyMedium)
+                                    if (framework != null) {
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("· $framework",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = ThemeColors.textSecondary)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -614,62 +638,7 @@ fun MainScreen(
                     }
                 }
             } // close Surface (input bar)
-
-            // ── @mention dropdown ──
-            val mentionAgents = remember(mentionQuery, viewModel.agentNamesForMention().size) {
-                viewModel.agentNamesForMention().filter { (name, _) ->
-                    mentionQuery.isBlank() || name.contains(mentionQuery, ignoreCase = true)
-                }
-            }
-            if (showMentionDropdown) {
-                if (mentionAgents.isNotEmpty()) {
-                    DropdownMenu(
-                        expanded = true,
-                        onDismissRequest = { showMentionDropdown = false }
-                    ) {
-                        mentionAgents.take(6).forEach { (name, framework) ->
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("@$name", fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.bodyMedium)
-                                        if (framework != null) {
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("· $framework",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = ThemeColors.textSecondary)
-                                        }
-                                    }
-                                },
-                                onClick = {
-                                    // 替换 @query 为 @agentName
-                                    val current = inputText
-                                    val atIdx = current.lastIndexOf('@')
-                                    if (atIdx >= 0) {
-                                        val beforeAt = current.substring(0, atIdx)
-                                        val afterQuery = current.substring(atIdx + 1 + mentionQuery.length)
-                                        inputText = "$beforeAt@$name $afterQuery"
-                                    }
-                                    showMentionDropdown = false
-                                    // 添加 mention 标签
-                                    viewModel.addTag(InputTag.AgentRef(name))
-                                    try { inputFocus.requestFocus() } catch (_: Exception) {}
-                                },
-                                leadingIcon = {
-                                    Surface(shape = CircleShape, color = ThemeColors.brandContainer,
-                                        modifier = Modifier.size(24.dp)) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text(name.take(1), color = ThemeColors.brand,
-                                                fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        } // close mention anchor Box
+        } // close Box (input bar)
     } // close Column
 
     // ── Mission Monitor overlay ──
@@ -756,7 +725,7 @@ fun MainScreen(
                         }
                     }
                 } else {
-                    Text("暂无已激活插件。在插件管理中安装并启用。",
+                    Text("<空>",
                         style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                 }
                 Spacer(Modifier.height(ArcoSpacing.lg))

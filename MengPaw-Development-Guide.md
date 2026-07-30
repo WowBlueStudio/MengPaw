@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.19.0 | **更新**: 2026-07-30 | **架构**: 微内核(54文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1 | **代码审查**: v0.19.0全量审查修复(1xP0/10xP1/50+P2) + 4文件拆解(70KB→35KB以下)
+> **版本**: 0.19.1 | **更新**: 2026-07-30 | **架构**: 微内核(54文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1 | **代码审查**: v0.19.0全量审查修复(1xP0/10xP1/50+P2) + 4文件拆解(70KB→35KB以下)
 
 ---
 
@@ -291,6 +291,13 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 | `ui/AdaptiveLayout.kt` | WindowSizeClass 计算 |
 | `ui/localization/Strings.kt` | 中英双语注解 |
 | `service/` (4 文件) | ShellService, DreamWorker, EventReceiver, WakeReceiver |
+
+**v0.19.1 核心变更**:
+- **活跃标签行移入消息区**: 不再占全宽，不干扰左侧边栏长度
+- **执行模式按钮行删除**: 输入栏顶部 /Mission /Research /Translate /Silent 横排按钮移除，底部弹窗仍可访问
+- **@mention 菜单修复**: DropdownMenu（Popup 窗口→输入法闪烁）改为内联 Surface，消除 IME 冲突
+- **插件按钮清理**: clipboard 粘贴按钮从底部弹窗移除（Agent 内部命令不暴露给人）
+- **Mission/Goal 顺序互换**: 扩展底部弹窗中 Goal 居左
 
 **v0.8.0 核心变更**:
 - **AgentRuntime**: 所有 Agent 初始化(文件 I/O + Provider 创建 + LLM 调用)在 IO 线程, UI 只观察 StateFlow
@@ -1100,6 +1107,8 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **0.19.1** | 2026-07-30 | **UI 调整 — 标签行移入消息区 + 删除模式按钮行 + @mention 修复 + 插件按钮清理** — A) 活跃标签行从全宽 Column 移入消息区 Box，约束在 msgWidth 下，不再干扰左侧边栏长度 B) 输入栏顶部执行模式按钮整行删除（底部弹窗仍可访问） C) @mention 下拉从 DropdownMenu（Popup 窗口导致输入法闪烁）改为内联 Surface，不干扰键盘输入 D) plugin-clipboard 粘贴按钮从底部弹窗移除（Agent 内部命令对人无意义） E) 底部弹窗插件工具区无按钮时仅显示 "<空>"，不占按钮布局高度 F) Mission/Goal 互换顺序（Goal 居左） |
+| **0.19.0** | 2026-07-30 | **代码审查全量修复 + 四文件拆解重构** — A) 九维审查: 1xP0(DefaultCommandExecutor shell注入修复), 10xP1(原子写入/readLines OOM/循环依赖/JSON注入/事件日志), 50+P2/P3 B) 四文件拆解: AgentViewModel(70→35KB), MainScreen(65→35KB), AgentEngine(58→28KB), BrowserActivity(51→25KB) C) org.json→kotlinx.serialization 5文件25处迁移 D) 国际化: 107条字符串迁移, 7个TODO解决 E) 新增 24 项 kernel 测试 F) SectionHeader 去重, AgentExecutor硬编码移除, PromptEngine缓存修复 |
 | **0.18.4** | 2026-07-30 | **气泡精简 + 表格自适应 + API供应商表单重构** — A) 气泡中去掉 MengPaw 字样和进度条 B) 顶栏去掉进度条 C) 表格列宽改为自适应内容 (widthIn max=360dp) D) 斜杠命令按钮改为输入框顶部横排 E) API供应商编辑去掉 ProviderCard 预置模型选项, 改为 chip 选择+API Key/地址编辑+F) 收起按钮合并为"收起API供应商列表" G) 侧边栏与主内容区之间加 VerticalDivider 分界线 |
 | **0.18.3** | 2026-07-29 | **UI重构 + 暗色模式Arco规范 + 主题色安全加固** — A) 斜杠命令改为悬浮按钮排列于左侧边栏右侧, 无容器无阴影 B) 框架状态自动忙碌切换, 移除恢复自动切换按钮 C) 暗色模式按Arco Design规范全面调整 (bg-1~bg-5层级, text-1~text-4透明度体系) D) 主题色自定义仅亮色模式生效, 排除暗色模式泄露; AgentTheme 移除无效深色字段 E) 设置页重构: 框架设置→API供应商, 模型选择移入智能体设置, 供应商卡片支持模型下拉选择+API自动拉取 F) 侧边栏滑动关闭手势 G) Qwen→DashScope(dashiscope) H) 后台运行策略移至后台运行区排首位 |
 | **0.17.0** | 2026-07-27 | **持久会话 + 结构化压缩 + 工具裁剪** — 四框架对话上下文融合: A) Claude Code 模式: AgentEngine.conversationSessionId 持久复用 Session, LLM 每次请求看到完整历史而非孤立消息, 移除 "[上一任务已结束]" 上下文切割边界 B) QwenPaw 模式: SessionManager 五字段结构化摘要(Goal/Progress/KeyDecisions/NextSteps/CriticalContext), 压缩前归档原始消息到 dialog/YYYY-MM-DD.jsonl 零数据丢失 C) QwenPaw 模式: pruneToolResult 双阈值(≤3步30KB/>3步2KB), 完整输出存 tool_results/{uuid}.txt, 5天清理 D) OpenClaw 模式: engine.newConversation() 重置持久会话, UI newSession 联动 E) DataPaths +dialogArchiveDir/+toolResultsDir, SessionManager +agentName/+specificSessionId |
@@ -1169,4 +1178,4 @@ ShellService.start(this)   // startForeground + WakeLock
 
 ---
 
-*文档结束 · 最后更新: 2026-07-30 (v0.18.4) · 本版新增: 气泡精简 + 表格自适应 + API供应商表单重构*
+*文档结束 · 最后更新: 2026-07-30 (v0.19.1) · 本版新增: 标签行移入消息区 + 删除模式按钮行 + @mention 内联修复 + 插件按钮清理*
