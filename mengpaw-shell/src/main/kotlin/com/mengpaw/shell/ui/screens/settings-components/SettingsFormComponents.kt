@@ -73,7 +73,7 @@ fun InfoRow(label: String, value: String) {
 fun NavigationLink(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
     Surface(
         onClick = onClick, shape = RoundedCornerShape(ArcoRadius.lg),
-        color = ArcoColors.Gray1, modifier = Modifier.fillMaxWidth()
+        color = ThemeColors.bgCard, modifier = Modifier.fillMaxWidth()
     ) {
         Row(modifier = Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, tint = ThemeColors.brand, modifier = Modifier.size(22.dp))
@@ -82,7 +82,7 @@ fun NavigationLink(icon: androidx.compose.ui.graphics.vector.ImageVector, title:
                 Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = ThemeColors.brand)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
             }
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = ArcoColors.Gray5)
+            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = ThemeColors.textSecondary)
         }
     }
 }

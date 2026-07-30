@@ -4,6 +4,28 @@
 
 ---
 
+## 2026-07-30 — v0.19.3 暗色模式颜色修复 + WowBlue 标识补齐 + FlowRow 手机适配
+
+### 96. 暗色模式颜色必须用 ThemeColors，不用 ArcoColors 固定色
+- 场景：NavigationLink 背景用 ArcoColors.Gray1（近白色），"需安装插件"标签用 ArcoColors.Gray3/Gray6。
+- 后果：暗色模式下这些元素保持亮色，视觉突兀。
+- 修复：全部替换为 ThemeColors.bgCard / bgCardHigh / textSecondary。
+- 教训：**ArcoColors 是设计令牌，ThemeColors 才是主题感知色。UI 组件的背景/前景一律用 ThemeColors，只有特殊装饰色才用 ArcoColors。**
+
+### 97. FlowRow 替代 Row 解决手机溢出
+- 场景：框架设置的 Provider 预设 chip（8 个）用 Row 排列，手机宽度下溢出。
+- 修复：改为 FlowRow，Chip 超宽自动换行。
+- 教训：**横向排列的标签/chip/按钮组，只要数量不确定就用 FlowRow，不要赌宽度。**
+
+### 98. 是WowBlue原创就逐个标记，不要偷懒批量标
+- 场景：Plugin 列表用动态 isWowBlue = plugin.metadata.id in BUILTIN_PLUGIN_IDS 标记所有捆绑插件。
+- 修复：捆绑插件（memory-twin/framework/dev 等）自动带 WowBlue 徽标。
+- 教训：**动态标记比手写列表更准确，新增捆绑插件时无需改 UI 代码。**
+
+### 本次改动统计
+修改文件: 5 个 | 编译: BUILD SUCCESSFUL | 版本: 0.19.2 -> 0.19.3
+
+---
 ## 2026-07-30 — v0.19.2 全量审校：双层 Skills+Tools 架构 + FLEET 重命名 + WowBlue 标识
 
 ### 91. 系统提示词是 Agent 的"功能说明书"——必须覆盖所有架构变更

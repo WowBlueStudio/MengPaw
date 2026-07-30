@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.19.3 (2026-07-30) — 暗色模式修复 + WowBlue 标识补齐 + FlowRow 手机适配
+
+### 暗色模式修复
+- **NavigationLink**: 背景 ArcoColors.Gray1→ThemeColors.bgCard，箭头 Gray5→textSecondary
+- **"需安装插件"标签**: 背景 Gray3→bgCardHigh，文字 Gray6→textSecondary
+
+### UI 修复
+- **Provider 预设 Chip**: Row→FlowRow，手机宽度下自动换行，不再溢出
+
+### WowBlue 标识
+- **FLEET 模式**: LoopMode 卡片添加粉色 WowBlue 徽标
+- **捆绑插件**: 动态 isWowBlue 标记，memory-twin/framework/dev 等自动带徽标
+- **补齐标记**: agent.boost/browser-tools/self.trigger/self.avatar/self.theme 等
+
 ## v0.19.2 (2026-07-30) — 双层 Skills+Tools 架构 + FLEET 重命名 + WowBlue 标识
 
 ### 架构

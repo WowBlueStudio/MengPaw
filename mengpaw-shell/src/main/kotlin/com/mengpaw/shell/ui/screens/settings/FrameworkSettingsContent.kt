@@ -4,6 +4,8 @@
 package com.mengpaw.shell.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,6 +28,7 @@ import com.mengpaw.kernel.llm.CacheStrategy
 import com.mengpaw.design.components.SectionHeader
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun FrameworkSettingsContent(
     state: SettingsState,
     viewModel: SettingsViewModel,
@@ -74,7 +77,7 @@ fun FrameworkSettingsContent(
         // Provider preset chips
         Text(state.strings.frameworkProviderLabel, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
         Spacer(Modifier.height(4.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             LlmProviderPreset.entries.filter { it != LlmProviderPreset.CUSTOM && it != LlmProviderPreset.SELF_HOSTED }
                 .forEach { preset ->
                     Surface(
@@ -88,7 +91,7 @@ fun FrameworkSettingsContent(
                     }
                 }
         }
-        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf(LlmProviderPreset.SELF_HOSTED, LlmProviderPreset.CUSTOM).forEach { preset ->
                 Surface(
                     onClick = { viewModel.selectProvider(preset) },
@@ -171,8 +174,8 @@ fun FrameworkSettingsContent(
             Text(if (state.memoryBackend == "memory-plugin") state.strings.frameworkMemoryBackendDesc else state.memoryBackend,
                 style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
-        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
-            Text(state.strings.frameworkRequiresPlugin, Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
+        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh) {
+            Text(state.strings.frameworkRequiresPlugin, Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ThemeColors.textSecondary)
         }
     }
 
@@ -187,8 +190,8 @@ fun FrameworkSettingsContent(
             Text(if (state.contextStrategy == "default") state.strings.frameworkContextStrategyDesc else state.contextStrategy,
                 style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
-        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
-            Text(state.strings.frameworkRequiresPlugin, Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ArcoColors.Gray6)
+        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh) {
+            Text(state.strings.frameworkRequiresPlugin, Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ThemeColors.textSecondary)
         }
     }
 
