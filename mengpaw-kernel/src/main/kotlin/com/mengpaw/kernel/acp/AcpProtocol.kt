@@ -44,7 +44,9 @@ enum class AcpMessageType {
     SESSION_HEAD,           // 交换会话最新事件序列号
     SESSION_PULL,           // 请求 N 个最新的会话事件
     SESSION_DELTA,          // 传输会话事件增量
-    SESSION_ACK             // 确认接收会话事件
+    SESSION_ACK,            // 确认接收会话事件
+    // ── Memory Twin lifecycle ──
+    REVOKE                  // 孪生撤销/解绑（设备丢失/手动解绑）
 }
 
 /** ACP 消息。 */
@@ -175,6 +177,14 @@ data class AcpMessage(
                     put("deviceId", JsonPrimitive(deviceId))
                     put("verificationCode", JsonPrimitive(verificationCode))
                     put("signature", JsonPrimitive(signature))
+                }.toString())
+
+        /** REVOKE: broadcast twin unpair / device loss. */
+        fun revoke(from: String, to: String, revokedPeerId: String) =
+            AcpMessage(from, to, AcpMessageType.REVOKE.name,
+                kotlinx.serialization.json.buildJsonObject {
+                    put("revokedPeerId", JsonPrimitive(revokedPeerId))
+                    put("timestamp", JsonPrimitive(System.currentTimeMillis()))
                 }.toString())
     }
 }

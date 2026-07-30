@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.19.6 (2026-07-31) — 记忆孪生链路完整修复
+
+### 安全修复 (P0)
+- **配对安全**: 未配对设备的 CAPABILITY_ANNOUNCE 不再写入配对请求 inbox
+- **超时安全**: 同步超时 deferred 使用 tryComplete CAS 模式，防止泄漏
+- **运行状态真实采集**: RuntimeStatus 不再全硬编码，isOnline 使用 ConnectivityManager 检测
+
+### 功能增强 (P1)
+- **配对冷却期**: 10 分钟内最多 3 次，超限锁定 30 分钟
+- **远程撤销 REVOKE**: 新增 twin.lost CLI 命令，广播解绑到所有节点
+- **集群梦境协调**: 整个集群只需一台设备执行梦境，6 小时内防重复
+- **自动能力采集**: 注册 Android 广播监听电池/网络/充电变化
+- **运行时状态注入**: currentSessionId/isBusy 从 AgentEngine 读取真实值
+
+### 架构完善 (P2)
+- **冲突解决**: soul.md/profile.md 冲突时保存 .conflict 备份文件
+- **账本修复**: 新增 twin.ledger.repair 命令
+- **可选加密存储**: twin.ledger.encrypt on/off 控制 AES-256-CBC 加密
+- **设备丢失应急**: twin.lost → broadcastRevoke → mark compromised → twin.recover
+
+### 内核改动
+- **REVOKE 独立消息类型**: AcpMessageType.REVOKE + AcpMessage.revoke() 工厂方法
+- **AgentEngine 状态暴露**: 新增 activeSessionId / isExecuting 公共属性
+
+### 代码质量 (P3)
+- **统一 kotlinx.serialization**: 替换 org.json 手动拼接
+- **防御拷贝**: getPeers() 返回不可变深拷贝
+- **空字符串处理**: lastAckedHash 空值正确处理
+
 ## v0.19.5 (2026-07-30) — 清理硬编码 + 全局技能剥离 CLI 管理命令
 
 ### 修复

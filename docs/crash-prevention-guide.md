@@ -13,8 +13,7 @@
 4. [Android 生命周期](#4-android-生命周期)
 5. [Compose 陷阱](#5-compose-陷阱)
 6. [模块分层](#6-模块分层)
-7. [编译期陷阱](#7-编译期陷阱)
-8. [预览清单](#8-发布前预览清单)
+7. [发布前预览清单](#7-发布前预览清单)
 
 ---
 
@@ -303,48 +302,7 @@ Modifier.padding(start = 56.dp, end = 8.dp).padding(vertical = 4.dp)
 
 ---
 
-## 7. 编译期陷阱
-
-### 7.1 bulk replace 副作用
-
-**教训** (`v0.7.0`): `replace_all: true` 把 `ctx.context` → `ctx` 破坏所有 Android Context 引用。
-
-**原则**: 
-- 优先用精确匹配的 `replace_all: false`
-- 必须用 `replace_all: true` 时，匹配字符串要足够独特
-- 替换后立即编译验证
-
-### 7.2 Kotlin `_` 参数名限制
-
-Kotlin 2.0+ 中 `_` 在 suspend 函数参数中不被允许。用 `ec` 或 `ignored` 代替。
-
-### 7.3 Write 工具语义
-
-`Write` 是**全量覆盖**，不是追加。对已有文件的修改用 `Edit`。
-
-### 7.4 字符串插值 `$$` 陷阱
-
-```kotlin
-// ❌ 编译错误
-"$${"%.2f".format(value)}"
-
-// ✅ 正确
-"$" + "%.2f".format(value)
-```
-
-### 7.5 联合类型推断失败
-
-```kotlin
-// ❌ when 返回不同类型 → Kotlin 推断为 Any
-val result = when (mode) { A -> TypeA(); B -> TypeB() }
-
-// ✅ 在消费处再次用 when 分支
-val tokens = when (statRange) { 0 -> (r as Day).tokens; else -> (r as Week).tokens }
-```
-
----
-
-## 8. 发布前预览清单
+## 7. 发布前预览清单
 
 每次发布前逐项检查：
 

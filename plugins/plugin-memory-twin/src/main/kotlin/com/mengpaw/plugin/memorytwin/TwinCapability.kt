@@ -111,19 +111,28 @@ data class RuntimeStatus(
 class TwinCapabilityCollector(
     private val context: Context,
     private val deviceId: String,
-    private val deviceName: String
+    private val deviceName: String,
+    /** P0.4/P3.5: Version sourced from AgentEngine.CORE_VERSION at construction time. */
+    private val mengpawVersion: String = "unknown"
 ) {
     private val startTime = System.currentTimeMillis()
 
+    /**
+     * Collect full capability card.
+     * @param runtimeInjection Optional override for runtime state (isOnline auto-detected,
+     *   currentSessionId/isBusy injected from AgentEngine). Fixes P0.3/P1.5 hardcoded nulls.
+     */
     fun collect(
         llmProvider: LlmProvider? = null,
         pluginNames: List<String> = emptyList(),
-        grantedPermissions: List<String> = emptyList()
+        grantedPermissions: List<String> = emptyList(),
+        currentSessionId: String? = null,
+        isBusy: Boolean = false
     ): CapabilityCard {
         val hw = collectHardware()
         val model = collectModel(llmProvider)
         val sw = collectSoftware(pluginNames, grantedPermissions)
-        val runtime = collectRuntime()
+        val runtime = collectRuntime(currentSessionId, isBusy)
 
         return CapabilityCard(
             deviceId = deviceId,
@@ -273,7 +282,7 @@ class TwinCapabilityCollector(
         grantedPermissions: List<String>
     ): SoftwareProfile {
         return SoftwareProfile(
-            mengpawVersion = "0.12.12",
+            mengpawVersion = mengpawVersion, // P0.4: Real version injected at construction time
             installedPlugins = pluginNames,
             optionalCapabilities = buildList {
                 if (pluginNames.any { it.contains("browser") }) add("browser")
@@ -288,14 +297,20 @@ class TwinCapabilityCollector(
 
     // ── Runtime collection ────────────────────────────────────────
 
-    private fun collectRuntime(): RuntimeStatus {
+    private fun collectRuntime(currentSessionId: String? = null, isBusy: Boolean = false): RuntimeStatus {
         val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        // P0.3: Actually check network connectivity instead of hardcoding true
+        val online = try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val activeNetwork = cm?.activeNetworkInfo
+            activeNetwork?.isConnectedOrConnecting == true
+        } catch (_: Exception) { true } // default to online if check fails
         return RuntimeStatus(
-            isOnline = true,
+            isOnline = online,
             uptimeSeconds = (System.currentTimeMillis() - startTime) / 1000,
             lastSeenAt = System.currentTimeMillis(),
-            currentSessionId = null,
-            isBusy = false
+            currentSessionId = currentSessionId, // P1.5: Injected from AgentEngine
+            isBusy = isBusy // P1.5: Injected from AgentEngine
         )
     }
 
@@ -317,6 +332,47 @@ class TwinCapabilityCollector(
                 if (widthDp >= 600 || heightDp >= 600) FormFactor.TABLET
                 else FormFactor.PHONE
             }
+        }
+    }
+
+    // ── P1.4: Auto-collect on system state changes ─────────────────
+
+    companion object {
+        /**
+         * Register Android system broadcast receivers for auto-recollection
+         * when battery, connectivity, or charging state changes.
+         *
+         * @param context Application context
+         * @param onCardChange Callback invoked with the new CapabilityCard on any change
+         * @return The registered receiver (caller should keep reference to unregister)
+         */
+        fun registerAutoCollect(
+            context: Context,
+            onCardChange: (CapabilityCard) -> Unit
+        ): android.content.BroadcastReceiver {
+            val receiver = object : android.content.BroadcastReceiver() {
+                override fun onReceive(ctx: Context, intent: android.content.Intent?) {
+                    // Re-collect and emit on any matching system event
+                    try {
+                        val deviceId = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() }
+                            catch (_: Exception) { "device-${System.currentTimeMillis()}" }
+                        val deviceName = try { android.os.Build.MODEL } catch (_: Exception) { "Android" }
+                        val collector = TwinCapabilityCollector(ctx, deviceId, deviceName)
+                        val card = collector.collect()
+                        onCardChange(card)
+                    } catch (e: Exception) {
+                        com.mengpaw.kernel.error.ErrorCollector.report(e, "TwinCapability.autoCollect")
+                    }
+                }
+            }
+            val filter = android.content.IntentFilter().apply {
+                addAction(android.content.Intent.ACTION_BATTERY_CHANGED)
+                addAction(android.net.ConnectivityManager.CONNECTIVITY_ACTION)
+                addAction(android.content.Intent.ACTION_POWER_CONNECTED)
+                addAction(android.content.Intent.ACTION_POWER_DISCONNECTED)
+            }
+            context.registerReceiver(receiver, filter)
+            return receiver
         }
     }
 }

@@ -27,6 +27,7 @@ class TwinAcpHandler(
         AcpMessageType.TWIN_DELEGATE,
         AcpMessageType.PAIR_CHALLENGE,
         AcpMessageType.PAIR_CONFIRM,
+        AcpMessageType.REVOKE,
         AcpMessageType.HEARTBEAT
     )
 
@@ -51,6 +52,7 @@ class TwinAcpHandler(
                 AcpMessageType.TWIN_DELEGATE -> handleTwinDelegate(message)
                 AcpMessageType.PAIR_CHALLENGE -> handlePairChallenge(message)
                 AcpMessageType.PAIR_CONFIRM -> handlePairConfirm(message)
+                AcpMessageType.REVOKE -> handleRevoke(message)
                 AcpMessageType.HEARTBEAT -> handleHeartbeat(message)
                 else -> null
             }
@@ -104,12 +106,7 @@ class TwinAcpHandler(
             return AcpResult(true, "no_new_entries", "[]")
         }
 
-        // Respond with the entries as a LEDGER_BATCH
-        val entriesArray = entries.joinToString(",", "[", "]") {
-            com.mengpaw.kernel.acp.AcpMessage.ledgerBatch(it.deviceId, msg.from, "[]", it.hash, it.hash).let { _ -> "" }
-        }
-
-        // Rebuild entries into JSON array for the response
+        // Build entries into JSON array for the response
         val entryJsonList = buildJsonArray {
             entries.forEach { entry ->
                 add(buildJsonObject {
@@ -263,6 +260,14 @@ class TwinAcpHandler(
     private suspend fun handleHeartbeat(msg: AcpMessage): AcpResult {
         syncEngine.onHeartbeatReceived(msg.from)
         return AcpResult(true, "alive")
+    }
+
+    private suspend fun handleRevoke(msg: AcpMessage): AcpResult {
+        val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }
+        val revokedPeerId = payload?.get("revokedPeerId")?.jsonPrimitive?.content ?: msg.from
+        android.util.Log.w("MengPawTwin", "收到孪生解绑: from=${revokedPeerId}")
+        syncEngine.onRevokeReceived(revokedPeerId)
+        return AcpResult(true, "revoke_processed", "已处理 $revokedPeerId 的解绑请求")
     }
 
     private suspend fun handlePairConfirm(msg: AcpMessage): AcpResult {

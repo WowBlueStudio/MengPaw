@@ -88,6 +88,12 @@ class AgentEngine(
     /** Exposed for persistence in current_session.json — survives process death via disk save. */
     fun currentConversationId(): String? = conversationSessionId
 
+    /** Public access to the active session ID (for plugins like memory-twin to populate CapabilityCard.runtime.currentSessionId). */
+    val activeSessionId: String? get() = conversationSessionId
+
+    /** Whether the agent is currently executing a task (for CapabilityCard.runtime.isBusy). */
+    val isExecuting: Boolean get() = _state.value !is com.mengpaw.kernel.agent.AgentState.Idle
+
     // ── Integrity terminal latch (matching OpenClaw terminal latch pattern) ──
     // Once tripped, blocks further LLM calls until the session is repaired.
     @Volatile private var integrityFailed: Boolean = false

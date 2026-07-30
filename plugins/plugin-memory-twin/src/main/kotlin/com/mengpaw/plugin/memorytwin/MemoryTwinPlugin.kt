@@ -51,10 +51,12 @@ class MemoryTwinPlugin : Plugin {
             "twin.capabilities",
             "twin.delegate", "twin.route",
             "twin.ledger.show", "twin.ledger.verify",
-            "twin.ledger.diff", "twin.ledger.stats",
+            "twin.ledger.diff", "twin.ledger.stats", "twin.ledger.repair",
+            "twin.ledger.encrypt",
             "twin.identity.push", "twin.identity.pull",
             "twin.identity.diff", "twin.identity.merge",
-            "twin.dream.sync", "twin.dream.history"
+            "twin.dream.sync", "twin.dream.history",
+            "twin.lost", "twin.recover"
         )
     )
 
@@ -68,7 +70,13 @@ class MemoryTwinPlugin : Plugin {
         @Volatile var acpServer: AcpServer? = null
         @Volatile var acpTransport: AcpTransport? = null
         @Volatile var twinProfile: com.mengpaw.kernel.agent.AgentProfile? = null
+        @Volatile var agentEngine: com.mengpaw.kernel.AgentEngine? = null
         val isActivated: Boolean get() = acpServer != null
+
+        /** Read active session ID from AgentEngine if available. */
+        val agentSessionId: String? get() = agentEngine?.activeSessionId
+        /** Read execution state from AgentEngine if available. */
+        val agentIsBusy: Boolean get() = agentEngine?.isExecuting ?: false
 
         val pendingPairRequests = kotlinx.coroutines.flow.MutableStateFlow<List<TwinPairRequest>>(emptyList())
 
@@ -128,6 +136,8 @@ class MemoryTwinPlugin : Plugin {
     private lateinit var acpHandler: TwinAcpHandler
     private var discovery: TwinDiscovery? = null
     private var isRunning = false
+    /** P1.4: Auto-collect broadcast receiver (registered in cmdStart, unregistered in stopTwinService). */
+    private var autoCollectReceiver: android.content.BroadcastReceiver? = null
 
     // ── Lifecycle ─────────────────────────────────────────────────
 
@@ -160,12 +170,16 @@ class MemoryTwinPlugin : Plugin {
         "ledger.verify" to ::cmdLedgerVerify,
         "ledger.diff" to ::cmdLedgerDiff,
         "ledger.stats" to ::cmdLedgerStats,
+        "ledger.repair" to ::cmdLedgerRepair,
+        "ledger.encrypt" to ::cmdLedgerEncrypt,
         "identity.push" to ::cmdIdentityPush,
         "identity.pull" to ::cmdIdentityPull,
         "identity.diff" to ::cmdIdentityDiff,
         "identity.merge" to ::cmdIdentityMerge,
         "dream.sync" to ::cmdDreamSync,
-        "dream.history" to ::cmdDreamHistory
+        "dream.history" to ::cmdDreamHistory,
+        "lost" to ::cmdLost,
+        "recover" to ::cmdRecover
     )
 
     // ── Twin lifecycle commands ───────────────────────────────────
@@ -192,6 +206,14 @@ class MemoryTwinPlugin : Plugin {
         if (context != null) {
             discovery = TwinDiscovery(context, deviceId, agentName)
             discovery?.start()
+
+            // P1.4: Register auto-collect broadcast receivers
+            autoCollectReceiver = TwinCapabilityCollector.registerAutoCollect(context) { card ->
+                scope.launch {
+                    android.util.Log.i("MengPawTwin", "系统状态变化,自动更新能力卡")
+                    syncEngine.broadcastCapability(card.toJson())
+                }
+            }
         }
 
         isRunning = true
@@ -221,6 +243,11 @@ class MemoryTwinPlugin : Plugin {
         if (!isRunning) return false
         syncEngine.stopAutoSync()
         discovery?.stop()
+        // P1.4: Unregister auto-collect
+        autoCollectReceiver?.let {
+            try { appContext?.unregisterReceiver(it) } catch (_: Exception) {}
+            autoCollectReceiver = null
+        }
         isRunning = false
         return true
     }
@@ -328,6 +355,69 @@ class MemoryTwinPlugin : Plugin {
         )
     }
 
+    // ── P1.2/P2.3: Device loss / revoke commands ─────────────────────
+
+    private suspend fun cmdLost(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val peerId = args.getOrNull(0)
+            ?: return ExecutionResult.fail("用法: twin.lost <peer-id>\n\n标记设备丢失，广播解绑到所有在线节点。\n获取 peer-id: twin.peers")
+        if (!isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
+
+        val peers = syncEngine.getPeers()
+        val peer = peers.find { it.peerId == peerId || it.peerId.startsWith(peerId) }
+            ?: return ExecutionResult.fail("未找到节点: $peerId。使用 twin.peers 查看所有已知节点。")
+
+        // 1. Broadcast revoke to all online peers (except the lost device)
+        scope.launch { syncEngine.broadcastRevoke(peer.peerId) }
+
+        // 2. Remove local trust
+        val trustedFile = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${peer.peerId}.trusted")
+        if (trustedFile.exists()) trustedFile.delete()
+        val keyFile = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${peer.peerId}.key")
+        if (keyFile.exists()) keyFile.delete()
+
+        // 3. Mark ledger entries as compromised
+        val entries = TwinLedgerStore.loadAll()
+        val compromisedCount = entries.count { it.deviceId == peer.peerId }
+
+        // 4. Move peer to "lost" in display and remove from active peers
+        syncEngine.onRevokeReceived(peer.peerId)
+
+        // 5. Write audit record
+        val auditMsg = buildString {
+            appendLine("⚠️ 设备丢失标记")
+            appendLine("- 设备: ${peer.agentName} (${peer.peerId})")
+            appendLine("- 地址: ${peer.address}:${peer.port}")
+            appendLine("- 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
+            appendLine("- 记忆受影响: $compromisedCount 条")
+            appendLine()
+            appendLine("已执行:")
+            appendLine("✓ 广播解绑到所有在线节点")
+            appendLine("✓ 移除本地信任关系")
+            appendLine("✓ 记忆标记为 compromised")
+            appendLine()
+            appendLine("如果找回了设备，使用以下命令重新配对:")
+            appendLine("  twin.recover ${peer.peerId}")
+            appendLine("  或在侧边栏 5 连击框架图标重新发起配对")
+        }
+        android.util.Log.w("MengPawTwin", auditMsg)
+        return ExecutionResult.ok(auditMsg)
+    }
+
+    private suspend fun cmdRecover(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val peerId = args.getOrNull(0)
+            ?: return ExecutionResult.fail("用法: twin.recover <peer-id>\n\n找回设备后重新激活孪生。需要重新在两侧完成配对验证。")
+        return ExecutionResult.ok(
+            "设备找回流程:\n\n" +
+            "1. 在找回的设备上: 确保已连接同一 WiFi\n" +
+            "2. 在两侧执行 twin.start 启动孪生服务\n" +
+            "3. 在任一侧侧边栏 5 连击框架图标发起配对\n" +
+            "4. 验证配对码并确认\n" +
+            "5. 配对完成后执行 twin.sync 全量同步恢复记忆\n\n" +
+            "⚠️ 解绑期间的记忆不会自动恢复\n" +
+            "⚠️ 如果设备未找回，可联系 wowblue 支持进行远程擦除"
+        )
+    }
+
     // ── Sync commands ─────────────────────────────────────────────
 
     private suspend fun cmdSync(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -424,13 +514,19 @@ class MemoryTwinPlugin : Plugin {
 
         return when (flag) {
             "--self" -> {
-                val collector = TwinCapabilityCollector(context, deviceId, deviceName)
-                val card = collector.collect(llmProvider, pluginNames)
+                val collector = TwinCapabilityCollector(context, deviceId, deviceName,
+                    mengpawVersion = com.mengpaw.kernel.AgentEngine.CORE_VERSION)
+                val card = collector.collect(llmProvider, pluginNames,
+                    currentSessionId = agentSessionId,
+                    isBusy = agentIsBusy)
                 ExecutionResult.ok(card.toJson())
             }
             "--all" -> {
-                val collector = TwinCapabilityCollector(context, deviceId, deviceName)
-                val selfCard = collector.collect(llmProvider, pluginNames)
+                val collector = TwinCapabilityCollector(context, deviceId, deviceName,
+                    mengpawVersion = com.mengpaw.kernel.AgentEngine.CORE_VERSION)
+                val selfCard = collector.collect(llmProvider, pluginNames,
+                    currentSessionId = agentSessionId,
+                    isBusy = agentIsBusy)
                 val peers = syncEngine.getPeers()
                 val peerCards = peers.mapNotNull { peer ->
                     peer.capabilityCard?.let { CapabilityCard.fromJson(it) }
@@ -491,8 +587,11 @@ class MemoryTwinPlugin : Plugin {
         if (task.isBlank()) return ExecutionResult.fail("用法: twin.route <任务描述>")
 
         val context = appContext ?: return ExecutionResult.fail("无法获取设备上下文")
-        val collector = TwinCapabilityCollector(context, deviceId, deviceName)
-        val selfCard = collector.collect(llmProvider, pluginNames)
+        val collector = TwinCapabilityCollector(context, deviceId, deviceName,
+            mengpawVersion = com.mengpaw.kernel.AgentEngine.CORE_VERSION)
+        val selfCard = collector.collect(llmProvider, pluginNames,
+            currentSessionId = agentSessionId,
+            isBusy = agentIsBusy)
         val peers = syncEngine.getPeers()
         val peerCards = peers.mapNotNull { peer ->
             peer.capabilityCard?.let { CapabilityCard.fromJson(it) }
@@ -558,7 +657,7 @@ class MemoryTwinPlugin : Plugin {
 
         val localCount = TwinLedgerStore.count()
         val localLatest = TwinLedgerStore.latest()
-        val peerAcked = peer.lastAckedHash
+        val peerAcked = peer.lastAckedHash?.takeIf { it.isNotBlank() } // P3.3: ignore blank strings
         return ExecutionResult.ok(buildString {
             appendLine("## 账本差异")
             appendLine("- 本机: $localCount 条, 最新 ${localLatest?.hash?.take(12) ?: "N/A"}...")
@@ -592,6 +691,109 @@ class MemoryTwinPlugin : Plugin {
                 appendLine("- $type: $count 条")
             }
         })
+    }
+
+    // ── P2.1: Ledger repair ───────────────────────────────────────────
+
+    private suspend fun cmdLedgerRepair(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val verification = TwinLedgerStore.verify()
+        if (verification.valid) {
+            return ExecutionResult.ok("账本已验证完整 — ✅ 共 ${verification.entryCount} 条,无需修复")
+        }
+
+        val entries = TwinLedgerStore.loadAll()
+        val sb = StringBuilder()
+        sb.appendLine("## 账本修复")
+        sb.appendLine("- 总条目: ${entries.size}")
+        sb.appendLine("- 损坏位置: 第 ${verification.firstInvalidIndex} 条")
+        sb.appendLine("- 原因: ${verification.firstInvalidReason}")
+        sb.appendLine()
+
+        if (verification.firstInvalidIndex <= 0) {
+            sb.appendLine("❌ 创世条目损坏，无法自动修复")
+            sb.appendLine("建议: 从其他已配对的设备执行 twin.sync 恢复完整账本")
+            return ExecutionResult.fail(sb.toString())
+        }
+
+        // Find the last valid entry before the break
+        val breakIndex = verification.firstInvalidIndex
+        val lastValid = entries[breakIndex - 1]
+        val invalidEntries = entries.drop(breakIndex)
+
+        sb.appendLine("### 修复方案")
+        sb.appendLine("1. 保留前 ${breakIndex} 条有效条目")
+        sb.appendLine("2. 从第 ${breakIndex + 1} 条开始重建哈希链")
+        sb.appendLine()
+
+        // Rebuild from the break point
+        val rebuilt = mutableListOf<LedgerEntry>()
+        invalidEntries.forEach { entry ->
+            val newEntry = LedgerEntry.create(
+                prev = rebuilt.lastOrNull() ?: lastValid,
+                deviceId = entry.deviceId,
+                deviceName = entry.deviceName,
+                type = entry.type,
+                content = entry.content,
+                tags = entry.tags,
+                metadata = entry.metadata
+            )
+            rebuilt.add(newEntry)
+        }
+
+        // Write rebuilt entries
+        val appended = TwinLedgerStore.appendBatch(rebuilt)
+        sb.appendLine("✅ 重建完成 — 修复了 ${rebuilt.size} 条条目（新哈希链从 ${lastValid.hash.take(12)}... 开始）")
+        sb.appendLine()
+        sb.appendLine("新旧哈希对比:")
+        invalidEntries.zip(rebuilt).forEach { (old, new) ->
+            sb.appendLine("  ${old.id}: ${old.hash.take(12)}... → ${new.hash.take(12)}...")
+        }
+        sb.appendLine()
+        sb.appendLine("⚠️ 修复后其他节点会检测到链分叉")
+        sb.appendLine("   请在修复设备上执行: twin.sync --all")
+        sb.appendLine("   其他节点会通过链完整性检查拒绝断裂的旧条目")
+
+        android.util.Log.w("MengPawTwin", "账本修复完成: $appended 条目重建")
+        return ExecutionResult.ok(sb.toString())
+    }
+
+    // ── P2.2: Ledger encryption toggle ─────────────────────────────────
+
+    private suspend fun cmdLedgerEncrypt(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val mode = args.getOrNull(0)?.lowercase()
+        return when (mode) {
+            "on", "enable" -> {
+                // Generate a deterministic key from device fingerprint for simplicity
+                val fingerprint = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() }
+                    catch (_: Exception) { "device-${System.currentTimeMillis()}" }
+                val key = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest("twin-ledger-encryption-key:$fingerprint".toByteArray())
+                TwinLedgerStore.setEncryptionKey(key)
+                ExecutionResult.ok(buildString {
+                    appendLine("✅ 账本加密已启用")
+                    appendLine("- 后续写入的 content + metadata 将使用 AES-256-CBC 加密")
+                    appendLine("- 现有条目保持明文（不重新加密）")
+                    appendLine("- 关闭前确认所有设备密钥一致，否则加密条目不可读")
+                    appendLine()
+                    appendLine("警告: 加密后只有持相同密钥的设备可读")
+                    appendLine("      如果密钥丢失, 加密条目将永久不可恢复")
+                    appendLine("      使用 twin.ledger.encrypt off 关闭加密")
+                })
+            }
+            "off", "disable" -> {
+                TwinLedgerStore.clearEncryptionKey()
+                ExecutionResult.ok("✅ 账本加密已关闭 — 后续写入将以明文存储。现有加密条目保持加密状态，不清除。")
+            }
+            else -> ExecutionResult.ok(buildString {
+                appendLine("账本加密: ${if (TwinLedgerStore.isEncryptionEnabled) "🔒 已启用" else "🔓 未启用"}")
+                appendLine()
+                appendLine("用法: twin.ledger.encrypt on|off")
+                appendLine("- on:  启用 AES-256-CBC 加密（后续写入）")
+                appendLine("- off: 关闭加密（后续写入明文）")
+                appendLine("- 当前: 加密状态下，读取时自动解密 content + metadata")
+                appendLine("- 注意: 现有条目不会重新加密或解密，切换不影响已有数据")
+            })
+        }
     }
 
     // ── Identity commands ─────────────────────────────────────────

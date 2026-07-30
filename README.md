@@ -4,6 +4,24 @@
 
 > **Agent 通过内置 CLI 操控自身，API Key 是唯一安全禁区。**
 
+## Why MengPaw
+
+中国的数字生态是被切碎的——微信能发消息不能管文件，米家能控小米设备不认华为，各种 AI 能聊天但不能"活着"。用户不缺能力，缺的是**轮毂**。
+
+MengPaw 走微内核编排路线：不造轮子造轮毂，用插件把已有的碎片桥接成一个整体。
+
+```
+应用层：微信 / 钉钉 / 米家 / 飞书 / WPS / ...     ← 碎片，不替代
+Agent层：MengPaw 微内核 + 插件网格 + 记忆孪生    ← 轮毂，只做这个
+设备层：手机 / 电脑 / 平板 / 车载 / ...            ← 节点，越多越强
+```
+
+> **用碎片打败碎片化。** — 不是做一个更好的 App，是做 App 之间的那个东西。
+> **用户即开发者。** — 每个遇到碎片问题的人都能用 `plugin.create` 自建插件并分享。
+> **不在一个平台上替代其生态，而是在每个平台上桥接其已有的碎片。**
+>
+> 局域网点对点是**特征**不是妥协：数据不出局域网 = 隐私由物理定律保障，零服务器费用 = 给普通人的东西。
+
 ## 快速开始
 
 ```bash
@@ -99,14 +117,53 @@ Thought（思考） → Action（行动） → Observation（观察） → ... �
 ```
 
 Agent 通过 CLI 命令操控设备：
-- `fs.cat /path/to/file` — 读取文件
-- `net.curl https://api.example.com` — HTTP 请求
-- `memory.write "内容"` — 写入记忆
-- `skill.run 搜索` — 运行技能
-- `sys.battery` — 系统信息
-- `self.acp discover` — 发现对等设备
 
-### 支持的 LLM 提供商 (12)
+| 命名空间 | 示例命令 | 职责 |
+|---------|---------|------|
+| `fs` | `cat`, `ls`, `write`, `grep` | 文件系统 |
+| `net` | `curl`, `get`, `post` | HTTP 网络 |
+| `memory` | `ls`, `read`, `write`, `search` | 记忆系统 |
+| `sys` | `battery`, `cpu`, `display`, `wifi` | Android 系统 (39 命令) |
+| `skill` | `ls`, `run`, `enable` | 技能系统 |
+| `self` | `status`, `tools`, `search`, `time` | Agent 自省 |
+| `plugin` | `marketplace`, `install`, `search` | 插件管理 |
+| `twin` | `peers`, `sync`, `delegate`, `route` | 记忆孪生 |
+
+### 执行模式
+
+| 模式 | 说明 |
+|------|------|
+| **ReAct** | Thought → Action → Observation 标准循环 |
+| **Plan-Execute** | LLM 分解任务为 3-7 步，逐步执行 |
+| **Goal** | 单目标驱动 + LLM 自动评估完成度 |
+| **Fleet** | LLM 拆解子任务 → Worker 执行 → Verifier 验证 |
+
+## 构建要求
+
+- Android SDK 35 + JDK 17 + Gradle 8.12 (Wrapper 已包含)
+- AGP 8.7.3, Kotlin 2.0.21, Compose BOM 2024.12.01
+
+```bash
+# 微内核测试 (JVM, 秒级，无需模拟器)
+./gradlew :mengpaw-kernel:test
+
+# 编译
+./gradlew :mengpaw-shell:assembleDebug     # Shell APK
+./gradlew :mengpaw-browser:assembleDebug   # Browser APK
+```
+
+## 开发工具
+
+本项目由 AI 辅助开发，不同阶段使用的工具链：
+
+| 阶段 | 时间 | 编排工具 | 主力模型 |
+|------|------|---------|---------|
+| 早期 | 2026-07-12 ~ 07-15 | Reasonix | DeepSeek Flash |
+| 中期 | 2026-07-16 ~ 至今 | Claude Code | DeepSeek Pro |
+
+> 模型推理通过 DeepSeek API (`api.deepseek.com`)，配置见 `reasonix.toml`。
+
+## 支持的 LLM 提供商 (12)
 
 | 服务商 | Endpoint | 默认模型 |
 |--------|----------|---------|
@@ -121,31 +178,12 @@ Agent 通过 CLI 命令操控设备：
 | Self-Hosted | 自定义 | 自定义 |
 | Custom | 自定义 | 自定义 |
 
-## 构建要求
-
-- Android SDK 35
-- JDK 17
-- Gradle 8.12 (Wrapper 已包含)
-
-## 测试
-
-```bash
-./gradlew :mengpaw-kernel:test   # 微内核 JVM 测试 (秒级, 无需模拟器)
-```
-
-## 开发工具
-
-本项目由 AI 辅助开发，不同阶段使用的工具链：
-
-| 阶段 | 时间 | 编排工具 | 主力模型 | 说明 |
-|------|------|---------|---------|------|
-| 早期 | 2026-07-12 ~ 07-15 | [Reasonix](https://github.com/reasonix-com/reasonix) | DeepSeek Flash | 基础架构搭建、品牌重塑、CLI 系统 |
-| 中期 | 2026-07-16 ~ 至今 | [Claude Code](https://claude.ai/code) | DeepSeek Pro | 三审三校、架构重构、微内核拆分、安全加固 |
-
-> 模型推理通过 DeepSeek API (`api.deepseek.com`)，配置见 `reasonix.toml`。
-
 ## 许可证
 
 GNU Affero General Public License v3.0 (AGPL-3.0) — 详见 [LICENSE](LICENSE)
 
 > **核心要求**：如果你修改了本软件并作为网络服务运行，必须公开你的修改版源代码。
+
+## 贡献
+
+参见 [CONTRIBUTING.md](CONTRIBUTING.md) — 环境搭建、代码规范、构建命令。

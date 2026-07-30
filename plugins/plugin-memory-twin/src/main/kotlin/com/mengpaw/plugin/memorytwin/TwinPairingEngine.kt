@@ -107,6 +107,53 @@ object TwinPairingEngine {
         val error: String = ""
     )
 
+    // ── P1.1: Pairing cooldown / rate limiting ────────────────────────
+
+    /** Max pairing attempts within the window before locking. */
+    private const val MAX_ATTEMPTS = 3
+    /** Time window for counting attempts (milliseconds). */
+    private const val ATTEMPT_WINDOW_MS = 10 * 60 * 1000L // 10 minutes
+    /** Lock duration after exceeding max attempts (milliseconds). */
+    private const val LOCK_DURATION_MS = 30 * 60 * 1000L  // 30 minutes
+
+    /** PeerId → list of recent attempt timestamps (trimmed on each check). */
+    private val attemptHistory = mutableMapOf<String, MutableList<Long>>()
+    /** PeerId → when its lock expires (0 = not locked). */
+    private val lockExpiry = mutableMapOf<String, Long>()
+
+    /** Check if pairing is allowed for [peerId]; returns error message or null. */
+    private fun checkPairingCooldown(peerId: String): String? {
+        // Trim expired lock
+        val now = System.currentTimeMillis()
+        lockExpiry[peerId]?.let { expiry ->
+            if (now < expiry) {
+                val remainingMin = (expiry - now) / 60_000
+                return "配对冷却中 — 该设备在 $remainingMin 分钟后才可再次发起配对"
+            } else {
+                lockExpiry.remove(peerId)
+                attemptHistory.remove(peerId)
+            }
+        }
+        // Trim old attempts outside the window
+        val recent = attemptHistory.getOrPut(peerId) { mutableListOf() }
+        recent.removeAll { now - it > ATTEMPT_WINDOW_MS }
+        // Check limit
+        if (recent.size >= MAX_ATTEMPTS) {
+            lockExpiry[peerId] = now + LOCK_DURATION_MS
+            recent.clear()
+            return "配对请求过于频繁 — 该设备已被锁定 30 分钟（10 分钟内最多 3 次尝试）"
+        }
+        // Record this attempt
+        recent.add(now)
+        return null
+    }
+
+    /** Clear cooldown state for a peer (called on successful pairing). */
+    fun clearPairingCooldown(peerId: String) {
+        attemptHistory.remove(peerId)
+        lockExpiry.remove(peerId)
+    }
+
     // ── Public API ──────────────────────────────────────────────────
 
     /**
@@ -126,6 +173,13 @@ object TwinPairingEngine {
         capabilityCard: String,
         transport: AcpTransport
     ): PairingUiState {
+        // P1.1: Check cooldown before allowing a new pairing attempt
+        val cooldownError = checkPairingCooldown(peerId)
+        if (cooldownError != null) {
+            android.util.Log.w("MengPawTwin", "配对被冷却期阻止: peer=$peerId")
+            return PairingUiState(error = cooldownError)
+        }
+
         // Clean up any stale session for this peer
         sessions.values.removeAll { it.peerId == peerId }
 
@@ -181,6 +235,13 @@ object TwinPairingEngine {
         myFingerprint: String,
         transport: AcpTransport
     ): PairingUiState {
+        // P1.1: Check cooldown before responding to a pairing request
+        val cooldownError = checkPairingCooldown(peerId)
+        if (cooldownError != null) {
+            android.util.Log.w("MengPawTwin", "对方配对被冷却期阻止: peer=$peerId")
+            return PairingUiState(error = cooldownError)
+        }
+
         // Clean stale sessions for this peer
         sessions.values.removeAll { it.peerId == peerId && it.isInitiator }
 
@@ -307,6 +368,9 @@ object TwinPairingEngine {
 
         session.phase = PairingPhase.ESTABLISHED
 
+        // P1.1: Clear cooldown on successful pairing
+        clearPairingCooldown(session.peerId)
+
         android.util.Log.i("MengPawTwin", "配对完成: session=$sessionId peer=${session.peerId}")
         return PairingUiState(
             sessionId = sessionId,
@@ -356,6 +420,9 @@ object TwinPairingEngine {
         PromptFirewall.trustWithKey(peerId, session.peerFingerprint)
 
         session.phase = PairingPhase.ESTABLISHED
+
+        // P1.1: Clear cooldown on successful pairing
+        clearPairingCooldown(peerId)
 
         android.util.Log.i("MengPawTwin", "配对确认完成: peer=$peerId")
         return PairingUiState(

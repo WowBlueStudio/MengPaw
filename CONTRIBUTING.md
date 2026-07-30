@@ -8,10 +8,62 @@
 4. 推送到分支 (`git push origin feat/amazing-feature`)
 5. 创建 Pull Request
 
+## 环境搭建
+
+- JDK 17 (Amazon Corretto 17 推荐)
+- `JAVA_HOME` + `ANDROID_HOME` 环境变量
+- Android SDK 35 (platforms, build-tools, platform-tools, emulator)
+- 克隆 → `./gradlew :mengpaw-kernel:test` → `./gradlew :mengpaw-shell:assembleDebug`
+
+### 关键配置文件
+
+| 文件 | 说明 |
+|------|------|
+| `build.gradle.kts` (根) | AGP 8.7.3, Kotlin 2.0.21, Compose BOM 2024.12.01 |
+| `settings.gradle.kts` | 4 核心模块 + 23 插件模块 |
+| `mengpaw-kernel/build.gradle.kts` | JVM 模块, kotlinx-serialization, ktor, coroutines-core |
+| `mengpaw-core/build.gradle.kts` | Android Library, 依赖 kernel, security-crypto |
+| `mengpaw-shell/build.gradle.kts` | Compose, material-icons-extended, work-runtime, 4 捆绑插件 |
+| `mengpaw-browser/build.gradle.kts` | material-icons-core (轻量), version follows mengpaw.version |
+| `mengpaw-shell/.../AndroidManifest.xml` | 6 权限, MainActivity, ShellService (foregroundServiceType=dataSync) |
+| `mengpaw-browser/.../AndroidManifest.xml` | 2 权限, BrowserActivity (3 intent-filter) |
+
+### 主要依赖
+
+| 依赖 | 版本 | 位置 |
+|------|------|------|
+| Kotlin | 2.0.21 | kernel + core |
+| kotlinx-serialization-json | 1.7.3 | kernel |
+| kotlinx-coroutines | 1.9.0 | kernel / shell |
+| ktor-client (core+okhttp) | 3.0.3 | kernel |
+| security-crypto | 1.1.0-alpha06 | core |
+| Compose BOM | 2024.12.01 | shell / browser / design-system |
+| work-runtime-ktx | 2.10.0 | shell |
+
+### 构建命令
+
+```bash
+# 微内核测试 (JVM, 秒级)
+./gradlew :mengpaw-kernel:test
+
+# 全部编译
+./gradlew :mengpaw-shell:assembleDebug     # Shell APK
+./gradlew :mengpaw-browser:assembleDebug   # Browser APK
+./gradlew :mengpaw-shell:assembleRelease   # Shell Release (R8)
+
+# 清理
+./gradlew clean
+```
+
 ## 代码规范
 
-- Kotlin 代码风格遵循官方规范
-- 所有 UI 文字优先使用中文
+- 包命名：`com.mengpaw.{模块}.{功能}`
+- 类大驼峰，函数小驼峰
+- UI 文字全部中文（Strings.kt 本地化）
+- 注释中文
+- **禁止 `!!` 强制解包** — 用 `?.let {}` 或 `?: return` 替代
+- **所有文件 IO 必须 try/catch**
+- SPDX 版权头：所有 `.kt` / `.kts` 文件
 - 每个文件不超过 400 行
 - 单元测试覆盖核心逻辑
 

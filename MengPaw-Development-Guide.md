@@ -2,48 +2,15 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.19.1 | **更新**: 2026-07-30 | **架构**: 微内核(54文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1 | **代码审查**: v0.19.0全量审查修复(1xP0/10xP1/50+P2) + 4文件拆解(70KB→35KB以下)
+> **版本**: 0.19.6 | **更新**: 2026-07-30 | **架构**: 微内核(54文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1
 
 ---
 
 ## 1. 项目概述
 
-### 1.0 为什么是 MengPaw
+### 1.0 产品定位
 
-中国的数字生态是被切碎的。
-
-```
-微信    → 能发消息，不能管文件
-钉钉    → 能管审批，不能控设备
-米家    → 能控小米设备，不认华为
-小爱    → 能听懂指令，但不能跨 App 执行
-各种 AI → 能聊天，但不能"活着"
-```
-
-每一片单拿出来都有用，但片与片之间没有连接。用户生活在一片数字群岛中——能力不缺，缺的是把能力连起来的**轮毂**。
-
-两种路线：
-
-| 路线 | 做法 | 结果 |
-|------|------|------|
-| **再造一个平台** | 自己写 LLM + 自己写文件管理 + 自己写设备控制 + 自己写消息系统 | 第 N+1 个碎片 |
-| **微内核编排** | 不造轮子，造轮毂。用插件把已有的碎片桥接成一个整体 | 横切面 |
-
-MengPaw 走第二条路。核心理念有两条：
-
-> **Agent 通过内置 CLI 操控自身，API Key 是唯一安全禁区。**
-
-这是给 Agent 的行动自由。
-
-> **用碎片打败碎片化。**
-
-这是给 Agent 的存在意义——不是做一个更好的 App，是做 App 之间的那个东西。碎片化越严重，连接器本身越有价值。中国数字生态永远不会统一——微信不会和钉钉合并，小米不会和华为打通——但用户需要一个横跨所有碎片的 Agent 层。
-
-```
-应用层：微信 / 钉钉 / 米家 / 飞书 / WPS / ...     ← 碎片，不替代
-Agent层：MengPaw 微内核 + 插件网格 + 记忆孪生    ← 轮毂，只做这个
-设备层：手机 / 电脑 / 平板 / 车载 / ...            ← 节点，越多越强
-```
+微内核 + 插件架构的 Agent 框架。不造轮子造轮毂——通过插件把已有的碎片桥接成一个整体。核心理念：Agent 通过内置 CLI 操控自身，API Key 是唯一安全禁区。
 
 ### 1.1 架构定位
 
@@ -64,19 +31,6 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | 内置 Loop 模式 | Goal / Fleet / Fleet+ 三种模式直接内置在 AgentEngine，含 RubricGate 自动完成评估 |
 | Agent 推送 | `notify.message` / `notify.banner` — Agent 主动向用户推送消息和横幅 |
 
-### 1.2 成为贾维斯的三个维度
-
-市面上的"贾维斯"本质是带 tool calling 的聊天框。真正的贾维斯有三个维度：
-
-| 维度 | 含义 | MengPaw 现状 |
-|------|------|-------------|
-| **Continuity（连续性）** | Agent 不绑定一台设备，跨空间持续存在。回家问"今天涨了吗"，不需解释上下文 | ✅ 记忆孪生 + 身份文档同步 |
-| **Ubiquity（无处不在）** | 同时存在于手机、电脑、服务器，自主判断哪个节点适合什么任务 | ✅ ACP + 能力路由 + 孪生发现 |
-| **Agency（主动性）** | 不需要用户叫——自己判断什么需要做、什么需要汇报 | ⏳ Trigger 引擎 + NotifyBus 有雏形，守护态（哨兵模式）是下一步 |
-
-> 局域网点对点是**特征**，不是妥协。数据不出局域网意味着隐私由物理定律保障而非信任承诺，每个节点独立存活意味着没有单点故障，零服务器费用意味着这是给普通人的东西。
-
-适用场景：数字管家、自动化研究、RPA 替代、边缘 AI、设备网格、隐私第一的个人计算。
 
 ---
 
@@ -220,28 +174,6 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | **鸿蒙** | kernel 可用；鸿蒙分布式设备管理是 Android 米家 App 的超集——同一个 IoT 控制需求在鸿蒙上更干净；同一个能力在不同平台只是碎片形态不同 | UI 需 ArkUI 全部重写；分发模型不同（AppGallery，不能 sideload APK）；碎片生态还在生长 | 技术可行但等待碎片成熟更重要 |
 | **iOS** | kernel 能编译（Kotlin/Native + ktor Darwin engine） | ProcessBuilder 不可用（CLI 执行是 Agent 核心循环）；文件系统隔离（fs.* 无意义）；动态代码加载禁止（插件系统废掉）；后台限制极严 | 能编译≠产品有意义。这是哲学问题，不是技术问题 |
 
-#### 核心原则
-
-> **不在一个平台上替代其生态，而是在每个平台上桥接其已有的碎片。**
->
-> 碎片不只是应用。同一个用户需求在不同平台有不同的碎片形态。`plugin-iot` 在 Android 上调米家 API，在鸿蒙上调分布式设备 API——给 Agent 的命令始终是 `iot.control <device> <action>`，Agent 不关心底层是谁。**微内核的可移植性保证追着碎片走的能力，而不用被绑死在某个平台上等待碎片长大。**
-
-#### 设备网格：极轻接入
-
-每个设备不一定是 Android 手机——一块 ESP32、一个码表、一台实验室仪器，只要能发 HTTP，就能成为 MengPaw 网格的一个节点：
-
-```
-设备种类                    接入方式              代价
-─────────────────────    ───────────────     ──────────
-Android 手机             MCP over ACP        零代价，已在网格
-鸿蒙设备                  MCP over ACP        HTTP + JSON-RPC
-码表（自定义固件）         MCP over HTTP       30 行 endpoint
-体重秤（蓝牙→手机桥接）   插件桥接              手机当网关
-ESP32 传感器              MCP over WiFi       几十行 C
-手环（厂商 Health API）  插件桥接              手机当网关
-```
-
-MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆。任何能讲 MCP 的设备都能被 Agent 发现和调用——不需要 Gradle 模块，不需要 Android 权限，不需要 UI。
 
 ---
 
@@ -266,8 +198,6 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 | `namespace/` | 3 | SelfExecutor, ScreenshotManager, NotifyBus |
 | 根 | 4 | AgentEngine, DataPaths, KernelLog, KernelDispatchers |
 
-> **v0.17.0 新增**: `AgentEngine` 持久会话 (Claude Code 模式) — 多次 `run()` 复用同一 Session，LLM 看到完整对话历史；QwenPaw 风格结构化压缩 (Goal/Progress/KeyDecisions/NextSteps/CriticalContext) + 对话归档 (`dialog/YYYY-MM-DD.jsonl`) 保证零数据丢失；工具结果双阈值裁剪 (≤3步 30KB / 更早 2KB) + 文件外存。`SessionManager` 结构化摘要 + `agentName` 绑定。`DataPaths` 新增 `dialogArchiveDir` / `toolResultsDir`。
-> **v0.6.1 新增**: `GoalSession.kt` (GoalSession + RubricEvaluator + FleetSubtask), `NotifyBus.kt` (Agent→User 推送总线), SelfExecutor +5 命令
 
 ### 3.2 mengpaw-core（Android 适配层，6 文件）
 
@@ -292,54 +222,6 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 | `ui/localization/Strings.kt` | 中英双语注解 |
 | `service/` (4 文件) | ShellService, DreamWorker, EventReceiver, WakeReceiver |
 
-**v0.19.1 核心变更**:
-- **活跃标签行移入消息区**: 不再占全宽，不干扰左侧边栏长度
-- **执行模式按钮行删除**: 输入栏顶部 /Fleet /Research /Translate /Silent 横排按钮移除，底部弹窗仍可访问
-- **@mention 菜单修复**: DropdownMenu（Popup 窗口→输入法闪烁）改为内联 Surface，消除 IME 冲突
-- **插件按钮清理**: clipboard 粘贴按钮从底部弹窗移除（Agent 内部命令不暴露给人）
-- **Fleet/Goal 顺序互换**: 扩展底部弹窗中 Goal 居左
-
-**v0.8.0 核心变更**:
-- **AgentRuntime**: 所有 Agent 初始化(文件 I/O + Provider 创建 + LLM 调用)在 IO 线程, UI 只观察 StateFlow
-- **QwenPaw 初始化**: `安装→配置→用户发消息` 三阶段, 无静默自动启动
-- **会话持久化**: 30s 自动保存 + 退出保存 + 启动恢复, 思考链完整存储
-- **智能体管理**: 点击切换 / 长按名片 / 删除确认 / 添加框架
-- **输入优化**: Enter 发送 / Shift+Enter 换行 / 发送后聚焦
-
-**v0.10.0 核心变更**:
-- **框架协议插件**: mDNS 局域网注册/发现, framework.* 6 命令, 持续扫描, 指纹/Agent列表广播
-- **框架名片**: 长按查看名称/版本/地址/Agent列表/备注/信任, 可编辑
-- **亮/暗/跟随系统**: 三档主题切换, 跟随系统暗色模式
-- **扩展功能重构**: 文件提交区 (图片/文档/文件/拍照) + 执行模式区 (/Fleet /Research /Translate /Dream) + 插件工具区
-- **输入标签系统**: AssistChip 标签显示活跃模式, @agent 自动补全
-- **侧边栏交互**: 顶栏头像替代菜单图标, 全局右滑/左滑
-- **PAD悬浮窗移除**: 物理删除 plugin-pad 目录及所有引用
-- **Gemini 路由**: ip-api.com → 系统时区/语言判断, 默认走 Gitee
-
-**v0.11.0 核心变更**:
-- **Markdown 引擎重构**: commonmark-java AST 替代手写 ~300 行正则解析器, GFM 表格/删除线/嵌套列表
-- **线程优化**: MarkdownText Column+verticalScroll, AgentDocs→Dispatchers.IO
-- **视觉表格渲染**: cells<80→Compose 行列布局, ≥80→等宽文本
-
-**v0.11.3 核心变更**:
-- **嵌套滚动根除**: MarkdownText 新增 nestedScroll 参数, License/Attribution 不再闪退
-- **ShellService 崩溃修复**: deleteNotificationChannel SecurityException
-- **许可证/致谢独立页面**: 全文 res/raw 嵌入, Markdown 渲染
-- **ATTRIBUTIONS 更新**: 添加 commonmark-java 和 MarkLeaf 致谢
-
-**v0.9.1 核心变更**:
-- **品牌焕新**: 主题色 #165DFF→#0E4397 (深蓝)，辅助色 →#FC5185 (粉色)，ArcoColors 蓝色系/Pink 系列全面更新
-- **启动页**: 代码绘制 "WOW BLUE" 替换为品牌 "哇" 矢量图标 (ic_wowblue_icon.xml) + "WowBlue" 文字
-- **扩展功能重构**: 文件提交区 (图片/文档/文件/拍照，利用 Android 文件选择器) + 执行模式区 (/Fleet /Research /Translate /Dream) + 插件工具区
-- **输入标签系统**: AssistChip 标签显示活跃模式，× 清除，持久保留
-- **@agent 自动补全**: 输入 @ 弹出已创建 Agent 列表，替换文本 + 添加标签
-- **气泡标注**: Agent 回答头部显示 · /Fleet · N 步 或 · @agent 等标注
-
-**v0.8.4 核心变更**:
-- **会话管理增强**: 独立会话文件 (`sessions/{id}.json`) + `switchToSession()` 切换恢复 + `agent.sessions` 跨会话搜索 + 原子写入防损坏
-- **引擎可靠性**: 安全命令白名单 (19 个) 防循环误判 + 引擎状态重置防跨任务污染 + 异常时全面状态同步
-- **UI 升级**: 消息区自适应宽度 (平板 80%/手机 95%) + 思考完成自动定位 + 侧栏真实头像 + 框架通讯录持久化
-- **Markdown 增强**: 新增 Heading 块 + Agent 消息非等宽字体
 
 ### 3.4 mengpaw-browser（独立浏览器，30+ 文件）
 
@@ -356,8 +238,6 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 | `bridge/BrowserBridge.kt` | Java↔JS 双向桥 |
 | `plugin/` (3 文件) | BuiltinBrowserPlugin, BrowserPlugin, BrowserPluginRegistry |
 
-**v0.7.0 新特性**: 5标签预渲染(alpha可见性切换) + 会话持久化(杀进程恢复) + 收藏夹 +
-App横幅CSS屏蔽(30+选择器) + 平板标签栏白色主题 + 暗色模式自适应 + onTrimMemory内存保护
 
 ### 3.5 插件模块（23 个，plugins/ 目录）
 
@@ -619,23 +499,6 @@ MCP 在 MengPaw 中的定位不是"让 AI 调用工具的协议"，而是**让�
 
 MCP 协议极其简单——JSON-RPC + 三个原语（tool / resource / prompt）。好的协议都是极简的，HTTP 几个动词统治了互联网三十年。MCP 的三个原语足够让任何设备在 Agent 网格中自描述和互操作。
 
-#### 供应链安全
-
-MCP 规范已公开发布，本身是一个描述性的文档规范，不是一个二进制的闭源服务。一旦发布，任何国家都无法"封锁"一段文本。MengPaw 将 MCP 作为**一个可替换的桥接插件**而非核心协议：
-
-```
-MengPaw 核心                         外部协议
-──────────                         ──────────
-Plugin 接口 ← 稳定标准             MCP ← 一个可替换的桥接插件
-ACP 协议 ← 核心协议               MCP over ACP ← 一种桥接方式
-CLI 命名空间 ← Agent 的通用语言    未来可用其他协议填同一位置
-```
-
-**MengPaw 的护城河是 Plugin 接口 + ACP 协议 + CLI 命名空间。MCP 只是众多插件可以桥接的外部协议之一。** 如果 MCP 出现不可用的情况，Agent 仍可通过 `net.curl` 裸调、通过自定协议插件桥接、通过文件式通信互通——核心完全不受影响。
-
-#### 为什么很多人不理解 MCP
-
-多数人只看到"让 ChatGPT 调用 GitHub API"，看不到"让体重秤、码表、ESP32 传感器用同一种语言被 Agent 发现和对话"。前者是 demo，后者是 Agent 的感官系统。做聊天框的人不需要理解设备联邦。
 
 ### 4.8 记忆三轨制 (v0.15.0+)
 
@@ -695,7 +558,6 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 #### self — Agent 自省 (13)
 `status` | `config [key=value]` | `stats` | `version` | `avatar` | `theme` | `mcp` | `trigger` | `acp` | `tools [namespace]` | `time [format]` | `notify.message <text>` | `notify.banner <text> [--level]`
 
-> **v0.6.1 新增**: `tools` — 按命名空间列出所有可用命令；`time` — 获取当前时间 (支持 iso/date/time/timestamp)；`notify.message` — Agent 推送消息到聊天；`notify.banner` — Agent 推送横幅 (支持 info/success/warn/error)
 
 #### agent — 文档 + 内存 + 工作区 (27+)
 **文档 (3)**：`docs` | `cli` | `profile` | `soul` | `boost` | `boost.delete`
@@ -708,7 +570,6 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 
 **工作区文件 (6)**：`read <path>` | `write <path> <content>` | `ls [path]` | `rm <path>` | `mkdir <path>` | `output`
 
-> **v0.15.0 新增**: 三轨记忆完整命令族 (memory.keep/memory.mid/memory.project 及增删改查) | **v0.9.1 新增**: boost 创作加速器 | **v0.8.4 新增**: `sessions` 跨会话搜索
 
 #### plugin — 插件管理 (11 + 4)
 **内核 (11)**：`marketplace [--refresh]` | `search <query>` | `install <id>` | `uninstall <id>` | `list` | `info <id>` | `enable <id>` | `disable <id>` | `update <id>` | `upgrade --all` | `auto <wake\|sleep\|status\|sleep-idle>`
@@ -753,7 +614,6 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 #### fs — 文件系统 (10)
 `cat <path>` | `ls [path]` | `write <path> <content>` | `rm <path>` | `mkdir <path>` | `cp <src> <dst>` | `mv <src> <dst>` | `stat <path>` | `grep <pattern> [path] [--regex] [-i] [--context N]` | `glob <pattern> [path]`
 
-> **v0.6.1 新增**: `grep` — 按文本/正则搜索文件内容 (含上下文)；`glob` — 文件通配符模式匹配。参考 QwenPaw grep_search / glob_search 移植。
 
 #### net — 网络 (3)
 `curl <url>` | `get <url>` | `post <url> <body>`
@@ -764,7 +624,6 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 #### skill — 技能 (7)
 `ls` | `run <name>` | `enable <name>` | `disable <name>` | `info <name>` | `search <query>` | `create <name> <content>`
 
-> v0.6.1: 内置 4 个默认 Skills (make-skill / make-plan / guidance / source-index)，参考 QwenPaw 移植。首次运行自动播种，已有 skill 时跳过。
 
 #### clipboard — 剪贴板 (3)
 `copy <text>` | `paste` | `clear`
@@ -833,7 +692,6 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 
 命令 → ① SecurityPolicy.isAllowed()（白名单 + 黑名单 + 15 条危险模式）→ ② IntegrityGuard.validateCommand()（路径保护，接入 Pipeline 指令链）→ ③ 执行
 
-> v0.9.0: 移除所有 `globalEnabled`/`integrityEnabled`/`integrityCheckEnabled` 开关，保护始终生效。IntegrityGuard 之前从未实例化（NoOp 空实现），现已接入 AgentEngine → Pipeline。
 
 ### 6.2 Vault
 
@@ -841,7 +699,6 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 
 **容错机制**: 若 Keystore 不可用（部分 OEM 设备已知问题），重试一次后降级到 `InMemoryPreferences`——绝不以明文落盘。`isAvailable` 字段让调用方判断加密是否正常。
 
-**持久化改进** v0.6.1: `savedProviders` 以 JSON 数组加密存储在 `saved_providers_json` 键下，启动时自动恢复。旧版单 Key 格式自动迁移。`removeProvider()` 和 `resetToDefaults()` 同步持久化。
 
 ### 6.3 Sanitizer
 
@@ -923,59 +780,6 @@ GitHub Pages 托管 `plugins.json`，ETag 缓存 (5 分钟)，SHA256 校验。
 
 详细指南见 [PLUGIN_DEV_GUIDE.md](PLUGIN_DEV_GUIDE.md)。
 
-### 7.5 用户即开发者：生态飞轮
-
-SCRIPT 插件的设计——JSON 声明、零编译、Agent 自建——不只是方便开发者的功能，而是**把造碎片的权力交给用碎片的人**。
-
-#### 飞轮
-
-```
-用户遇到碎片 → plugin.create 解决 → plugin.share 分享 → 下一个用户受益
-                                                        ↓
-                                             他遇到另一个碎片 → 继续循环
-```
-
-这是维基百科的逻辑：不是靠官方雇佣大量编辑，而是每个遇到问题的人顺手解决，然后所有人受益。
-
-#### 具体例子
-
-一个骑行用户同时用体重秤、功率计、Strava、intervals.icu、TrainingPeaks——每个都很专业，每个之间都不说话。用户想知道"今天的功率体重比"，需要手动走 4-5 步：
-
-```
-传统方案：等某个 App 集成所有这些（永远不会发生）
-MengPaw方案：
-  ├─ plugin-weight    → 体重秤数据（BLE 桥接或手动语音输入，自动记录）
-  ├─ plugin-intervals → 训练数据 API
-  ├─ plugin-strava    → 户外记录
-  └─ 用户问一句 → Agent 跨插件计算 → "今天 FTP 体重比 4.2W/kg，比上周高 0.1。
-      体重降了 0.8kg，功率没掉——减重方向正确。"
-```
-
-#### 为什么是"用户即开发者"
-
-第一个遇到台灯控制需求的鸿蒙用户会写 plugin-iot 的鸿蒙实现。第一个用码表的骑行用户会写 plugin-cycling。官方不需要写"鸿蒙米家插件"、"骑行数据聚合插件"——**中国数字生态的碎片不会轮到官方来缝完，但用户缝自己遇到的碎片的能力已经内置了。**
-
-信任链确保安全：插件分享需 SHA256 校验 + 用户确认 + 来源标记。不是开源社群的"相信我"，是密码学的"没人能篡改我"。官方 → 信任框架 → 公网 → 拒绝未验证——四层信任，不依赖中心化代码审查。
-
-
-
----
-
-## 8. 开发路线图
-
-- **Phase 1 ✅**: CLI 引擎、3 内置命名空间 (30 命令)、三层安全拦截、会话管理 (含压缩)、LLM 接口 (含降级链)、Prefix Cache、记忆系统、Skill 系统
-- **Phase 2 ✅**: Chat UI、前台服务、插件市场 UI、设置 (12 Provider)、Markdown 渲染、BigBang 分词、R8 瘦身
-- **Phase 3 ✅**: 独立浏览器 v0.6.0、BrowserBridge 双向桥、45 操控命令、5 浏览器扩展插件
-- **Phase 4 ✅**: 微内核拆分 — kernel (44 文件, 纯 JVM) + core (6 文件, Android 适配)、25 插件生态、12 LLM Provider
-- **Phase 5 ✅**: 安全加固 (WebView/FsPlugin/NetPlugin/Vault/ACP/Sanitizer)、188 Bug 审计、Agent/UI 层深度修复
-- **Phase 6 ✅**: UI 全面重构 — iPad 双栏设置 + 侧栏交互升级 + Per-Agent 模型选择 + Token 统计 + 安全规则 + 设计系统合规 + Loop 模式 + 工作区文件 + 会话修复
-- **Phase 7 ⏳**: Device 扩展 — 守护态（哨兵模式）雏形：跨设备 heartbeat 监控 + 离线告警 + NotifyBus 推送；蓝牙/手环传感器桥接；眼镜-摄像头集成
-- **Phase 8 ⏳**: 桌面端 MVP — `mengpaw-desktop` 6 文件适配层 + Compose Multiplatform UI + 插件全复用 + 局域网孪生网格直接互通
-- **Phase 9 ⏳**: Agent 感官系统 — 手环（健康信号）+ 眼镜（视觉信号）+ 手机（计算中枢）三路融合；Code 扩展 (QuickJS/Python 沙箱)；守护态完整实现（文件完整性/网络异常/物理空间感知）
-- **Phase 10 ⏳**: 鸿蒙移植 — kernel + ACP + 插件层复用，鸿蒙分布式设备 API 桥接，ArkUI 重写；在线扩展市场开放
-
----
-
 ## 9. 构建与部署
 
 ### 9.1 环境要求
@@ -983,76 +787,10 @@ MengPaw方案：
 - Android SDK 35 + JDK 17 + Gradle 8.12
 - AGP 8.7.3, Kotlin 2.0.21, Compose BOM 2024.12.01
 
-### 9.1.1 编译性能优化 (v0.17.0)
-
-| 优化项 | 说明 |
-|--------|------|
-| `org.gradle.caching=true` | 本地构建缓存，增量编译 ~30-50% 加速 |
-| `org.gradle.configuration-cache=true` | 配置阶段缓存，跳过 30 模块重复解析 |
-| `org.gradle.jvmargs=-Xmx4096m -XX:+UseParallelGC` | 30 模块需 4GB+ 堆，ParallelGC 比 G1 更适合构建 |
-| `android.enableJetifier=false` | 全量 AndroidX，Jetifier 零开销 |
-| `android.nonTransitiveRClass=true` | R 类非传递，减少编译中间产物 |
-| `kotlin.daemon.jvmargs=-Xmx2048m` | Kotlin 编译独立内存池 |
-| 统一 Android 配置 | `build.gradle.kts` 根节点 `subprojects` 统一 compileSdk/minSdk/compileOptions，25 插件模块无需重复声明 |
-| Release 资源压缩 | Shell + Browser 均启用 `isShrinkResources=true` |
-| 版本联动 | Browser versionCode 跟随 `mengpaw.version` 公式计算 |
-
-### 9.2 主要依赖
-
-| 依赖 | 版本 | 位置 |
-|------|------|------|
-| Kotlin | 2.0.21 | kernel + core |
-| kotlinx-serialization-json | 1.7.3 | kernel |
-| kotlinx-coroutines | 1.9.0 | kernel (core) / android (shell) |
-| ktor-client (core+okhttp) | 3.0.3 | kernel |
-| security-crypto | 1.1.0-alpha06 | core |
-| Compose BOM | 2024.12.01 | shell / browser / design-system |
-| work-runtime-ktx | 2.10.0 | shell |
-
-### 9.3 构建命令
-
-```bash
-# 微内核测试 (JVM, 秒级)
-./gradlew :mengpaw-kernel:test
-
-# 全部编译
-./gradlew :mengpaw-shell:assembleDebug     # Shell APK
-./gradlew :mengpaw-browser:assembleDebug   # Browser APK
-./gradlew :mengpaw-shell:assembleRelease   # Shell Release (R8)
-
-# 清理
-./gradlew clean
-```
-
-### 9.4 发布流程
-
-详见 [RELEASE.md](RELEASE.md)。
-
 ---
 
-## 10. 项目交接
+## 10. 初始化流程
 
-### 10.1 环境搭建
-
-1. JDK 17 (Amazon Corretto 17 推荐)
-2. JAVA_HOME + ANDROID_HOME 环境变量
-3. Android SDK 35 (platforms, build-tools, platform-tools, emulator)
-4. 克隆 → `./gradlew :mengpaw-kernel:test` → `./gradlew :mengpaw-shell:assembleDebug`
-
-### 10.2 关键配置文件
-
-| 文件 | 说明 |
-|------|------|
-| `build.gradle.kts` (根) | AGP 8.7.3, Kotlin 2.0.21, Compose BOM 2024.12.01 |
-| `settings.gradle.kts` | 4 核心模块 + 23 插件模块 |
-| `mengpaw-kernel/build.gradle.kts` | JVM 模块, kotlinx-serialization, ktor, coroutines-core |
-| `mengpaw-core/build.gradle.kts` | Android Library, 依赖 kernel, security-crypto |
-| `mengpaw-shell/build.gradle.kts` | Compose, material-icons-extended, work-runtime, 4 捆绑插件, v0.15.2 |
-| `mengpaw-browser/build.gradle.kts` | material-icons-core (轻量), version follows mengpaw.version |
-| `mengpaw-shell/.../AndroidManifest.xml` | 6 权限, MainActivity, ShellService (foregroundServiceType=dataSync) |
-| `mengpaw-browser/.../AndroidManifest.xml` | 2 权限, BrowserActivity (3 intent-filter) |
-
-### 10.3 初始化流程 (v0.8.0 — QwenPaw 风格)
 
 ```kotlin
 // 1. 崩溃日志
@@ -1077,105 +815,7 @@ ShellService.start(this)   // startForeground + WakeLock
 //    用户发第一条消息 → Agent 调用 LLM
 ```
 
-**设计原则**: Agent 不自动启动。安装→配置→用户驱动。和 QwenPaw 一致。
+**设计原则**: Agent 不自动启动。安装→配置→用户驱动。
 
-### 10.4 代码规范
-
-- 包命名：`com.mengpaw.{模块}.{功能}`
-- 类大驼峰，函数小驼峰
-- UI 文字全部中文（Strings.kt 本地化）
-- 注释中文
-- 禁止 `!!` 强制解包
-- 所有文件 IO 必须 try/catch
-- SPDX 版权头：所有 `.kt` / `.kts` 文件
-
-### 10.5 已知问题
-
-| 问题 | 优先级 | 说明 |
-|------|--------|------|
-| Kernel 测试 5 个预存失败 | 低 | Sanitizer 断言过时 (4) + AgentEngine 语言断言 (1) |
-| proc 命令未实现 | 低 | SecurityPolicy 已拦截 |
-| ClipboardExecutor 内存存储 | 低 | Android 环境兼容 |
-| NotificationExecutor stub | 中 | 需 NotificationListenerService |
-| SelfPlugin 覆盖 kernel SelfExecutor | 低 | 4 个命令被插件版本覆盖，其余 10 个不受影响 |
-
-> v0.16.0: 内置插件版本号清空; BM25 命令检索上线; 循环模式 REACT 默认; 6 项性能优化完成
 
 ---
-
-## 附录 A: 版本历史
-
-| 版本 | 日期 | 变更 |
-|------|------|------|
-| **0.19.1** | 2026-07-30 | **UI 调整 — 标签行移入消息区 + 删除模式按钮行 + @mention 修复 + 插件按钮清理** — A) 活跃标签行从全宽 Column 移入消息区 Box，约束在 msgWidth 下，不再干扰左侧边栏长度 B) 输入栏顶部执行模式按钮整行删除（底部弹窗仍可访问） C) @mention 下拉从 DropdownMenu（Popup 窗口导致输入法闪烁）改为内联 Surface，不干扰键盘输入 D) plugin-clipboard 粘贴按钮从底部弹窗移除（Agent 内部命令对人无意义） E) 底部弹窗插件工具区无按钮时仅显示 "<空>"，不占按钮布局高度 F) Fleet/Goal 互换顺序（Goal 居左） |
-| **0.19.0** | 2026-07-30 | **代码审查全量修复 + 四文件拆解重构** — A) 九维审查: 1xP0(DefaultCommandExecutor shell注入修复), 10xP1(原子写入/readLines OOM/循环依赖/JSON注入/事件日志), 50+P2/P3 B) 四文件拆解: AgentViewModel(70→35KB), MainScreen(65→35KB), AgentEngine(58→28KB), BrowserActivity(51→25KB) C) org.json→kotlinx.serialization 5文件25处迁移 D) 国际化: 107条字符串迁移, 7个TODO解决 E) 新增 24 项 kernel 测试 F) SectionHeader 去重, AgentExecutor硬编码移除, PromptEngine缓存修复 |
-| **0.18.4** | 2026-07-30 | **气泡精简 + 表格自适应 + API供应商表单重构** — A) 气泡中去掉 MengPaw 字样和进度条 B) 顶栏去掉进度条 C) 表格列宽改为自适应内容 (widthIn max=360dp) D) 斜杠命令按钮改为输入框顶部横排 E) API供应商编辑去掉 ProviderCard 预置模型选项, 改为 chip 选择+API Key/地址编辑+F) 收起按钮合并为"收起API供应商列表" G) 侧边栏与主内容区之间加 VerticalDivider 分界线 |
-| **0.18.3** | 2026-07-29 | **UI重构 + 暗色模式Arco规范 + 主题色安全加固** — A) 斜杠命令改为悬浮按钮排列于左侧边栏右侧, 无容器无阴影 B) 框架状态自动忙碌切换, 移除恢复自动切换按钮 C) 暗色模式按Arco Design规范全面调整 (bg-1~bg-5层级, text-1~text-4透明度体系) D) 主题色自定义仅亮色模式生效, 排除暗色模式泄露; AgentTheme 移除无效深色字段 E) 设置页重构: 框架设置→API供应商, 模型选择移入智能体设置, 供应商卡片支持模型下拉选择+API自动拉取 F) 侧边栏滑动关闭手势 G) Qwen→DashScope(dashiscope) H) 后台运行策略移至后台运行区排首位 |
-| **0.17.0** | 2026-07-27 | **持久会话 + 结构化压缩 + 工具裁剪** — 四框架对话上下文融合: A) Claude Code 模式: AgentEngine.conversationSessionId 持久复用 Session, LLM 每次请求看到完整历史而非孤立消息, 移除 "[上一任务已结束]" 上下文切割边界 B) QwenPaw 模式: SessionManager 五字段结构化摘要(Goal/Progress/KeyDecisions/NextSteps/CriticalContext), 压缩前归档原始消息到 dialog/YYYY-MM-DD.jsonl 零数据丢失 C) QwenPaw 模式: pruneToolResult 双阈值(≤3步30KB/>3步2KB), 完整输出存 tool_results/{uuid}.txt, 5天清理 D) OpenClaw 模式: engine.newConversation() 重置持久会话, UI newSession 联动 E) DataPaths +dialogArchiveDir/+toolResultsDir, SessionManager +agentName/+specificSessionId |
-| **0.16.0** | 2026-07-27 | **三层自适应调度 + BM25 命令检索 + 6 项性能优化** — A: 循环模式重构 (QwenPaw 风格默认 REACT → 自动检测升级 GOAL/MISSION, Claude Code 风格复杂度评分, UI AssistChip 自动标注) B: BM25 命令搜索引擎 (self.search, ~50条内置命令双语同义词表, μs 级检索, bigram 分词, 插件激活/卸载自动联动) C: 插件关键词脚手架 (CommandKeywords 数据类, plugin.create 模板内置, plugin.audit 检查, plugin.keywords 查看) D: 6 项性能优化 (Prompt 缓存按文件粒度失效/中记忆批量合并/会话增量持久化/启动懒加载/协程池分离/GC 压力优化) E: 内置插件版本号清空 (随壳更新) |
-| **0.15.2** | 2026-07-26 | **6 审计问题修复** — 缓存失效(路径匹配) + 缓存key(检查前置) + Plan进度(中英双语边界) + 错误消息(LlmApiException) + 容器高度(Step编号/观察缺失) + 提示词(恢复插件发现示例) + MCP插件解耦BrowserBridge + 超时120s |
-| **0.15.0** | 2026-07-25 | **记忆孪生全链路重构 + 记忆三轨制** — A: 三层十二问审计 → 14 项全修 (心跳保活/QoS自适应/手动IP/配对指引/ACP就绪轮询/syncWithPeer返真值/命令命名空间修复/解绑UI/错误诊断/原子写入补全) B: 记忆架构重构 → 三轨制: 长期记忆(memory/memory.md, 仅三种来源, 注入系统提示词) + 中期记忆(memory/memory_{date}.md, 按日分片, 不注入提示词, 梦境按日压缩) + 项目记忆(memory/project_{name}_memory.md, 里程碑/闭环时总结, 可复用方法论) + agent.memory.keep/record/mid/project 命令族 |
-| **0.14.1** | 2026-07-24 | **验证反馈修复** — 底部栏 IconButton→pointerInput + 插件页 registerBuiltins 时序 + DexClassLoader 多类名降级 + 空会话清理 |
-| **0.13.0** | 2026-07-24 | **捆绑插件补齐 + 循环检测增强 + 会话去重 + 工具输出完整展示 + Claude Bridge 移除** — 10 插件捆绑启动 (net/fs/self/clipboard/notification/memory-twin 补齐) + 连续失败 5 次自动终止 + `restoreCurrentSession` 修复重复会话 + TraceStepItem 可展开完整输出 + 左侧栏手机模式背景修复 + `plugin.marketplace` 加入系统提示词 + hardkey Enter 双触发修复 + versionCode 公式修正 |
-| **0.12.12** | 2026-07-24 | 记忆孪生 (6 BUG 修复 + 5连击激活 + ACP P2P 配对 + 账本自动同步) + 开发文档重构 · 详见 `docs/lessons.md` |
-| **0.11.3** | 2026-07-23 | **嵌套滚动根除 + 视觉表格 + commonmark 引擎全覆盖** — MarkdownText nestedScroll 参数 + 表格 widthIn(min) 列宽 + Image/HtmlBlock/嵌套列表/TableBody AST 全量转换 + ShellService deleteChannel SecurityException |
-| **0.11.0** | 2026-07-23 | **线程架构优化 + commonmark AST 引擎** — P0: Column+verticalScroll 替代 LazyColumn, P1: AgentDocs→Dispatchers.IO, commonmark-java 替代手写解析器, 视觉表格渲染 |
-| **0.10.0** | 2026-07-23 | **框架协议插件 + 侧边栏交互 + 主题系统** — 框架发现插件 (mDNS 局域网注册/扫描/指纹) + 侧边栏头像打开 + 全局滑动手势 + 智能体名片重排 (工作区滚动) + 框架名片 (名称/版本/备注/Agent列表) + 亮/暗/跟随系统三档主题 + GeoRouter 系统时区判断 + 插件管理页精简 + PAD 插件移除 + 启动页品牌 Logo 替换 |
-| **0.9.1** | 2026-07-22 | **品牌焕新 + 扩展功能重构** — 主题色更新 (#0E4397/#FC5185) + 启动页品牌 Logo 替换 + 扩展面板三区重构 (文件提交/执行模式/插件工具) + `/Fleet` `/Research` `/Translate` `/Dream` 斜杠命令标签 + `@agent` 自动补全 + 气泡模式标注 + 面板图标自定义排序 |
-| **0.9.0** | 2026-07-22 | **安全强化 + 模板文件化** — 三大安全保护去除开关/强制启用 + IntegrityGuard 接入 Pipeline 指令链 (之前从未实例化) + MD 模板从 Kotlin 硬编码字符串改为 assets .md 文件 (7 个模板 ~350 行代码删除) + 智能体专属工具/技能 (全局池安装/Agent 自装/用户提供路径) + 设置页文案重构 (全局工具/智能体工具) + 废弃插件目录物理删除 |
-| **0.8.4** | 2026-07-22 | **会话管理增强** — 独立会话文件 + 切换恢复 (`switchToSession`) + 跨会话搜索 (`agent.sessions`) + 原子写入防损坏 + 引擎可靠性修复 (安全命令白名单/循环检测优化/状态重置) + UI 升级 (自适应宽度/自动定位/真实头像/Markdown Heading) + 构建统一版本号 (mengpaw.version) |
-| **0.8.0** | 2026-07-22 | **重大架构重构** — UI/运行时分离 (AgentRuntime) + QwenPaw 风格初始化 + 会话完整持久化 (30s 自动保存 + 思考链) + 智能体管理 (长按/删除/框架) + 输入优化 (Enter 发送/聚焦) + 20+ 崩溃/ANR 修复 + Android 13-17 全版本 + 5大国产 OEM 适配 + 系统提示词重构 |
-| **0.7.0** | 2026-07-22 | Android CLI 全功能 (11→38 命令) + 全类型 Skill 引擎 + CRON 触发器 + LIFETIME 心跳 + 会话持久化 + 智能体名片 + API 模型更新 + Boost 自动启动 |
-| **0.6.2** | 2026-07-21 | Agent 逻辑修复 — 14 Bug 修复: DreamEngine 参数混淆/大小写/单位错误/dreamLog 缺失; AgentDocManager 索引损坏/ID 解析/数据丢失; Goal 模式上下文丢失; snipStaleToolResults 不生效; Pipeline 缓存; DeepSeek-Chat 解析死循环; RubricGate 改进; API 模型更新 (8 Provider 至最新) |
-| **0.6.1** | 2026-07-21 | 内核功能补全 — Goal/Fleet/Fleet+ 内置模式 (RubricGate LLM 完成评估) + Agent→User 推送 (NotifyBus) + self 命名空间扩展 (+5 命令: tools/time/notify) + fs 扩展 (+grep/glob) + QwenPaw 4 Skills 移植 + API Key 持久化修复 + Provider 热更新 + Android 权限补全 (17 项) + Vault 安全加固 (绝不明文) + ProGuard Tink keep 规则 |
-| **0.6.0** | 2026-07-21 | UI 全面重构 — iPad 双栏设置 + 侧栏交互升级(左滑/长按多选/框架状态) + Per-Agent 模型选择 + Token 统计折线图 + 安全规则页 + WowBlue 启动动画 + 设计系统合规(硬编码色值清零) + 会话修复 + 通知栏常驻 |
-| **0.5.0** | 2026-07-21 | 微内核拆分 — kernel (44 文件, 纯 JVM) + core (6 文件, Android 适配) + 25 插件生态 |
-| **0.4.0** | 2026-07-21 | 安全加固 + 全项目修复 + 188 Bug 审计 + 89 项修复 + 模拟器验证零闪退 |
-| 0.3.x | 2026-07-20 | 25 插件生态 + 浏览器操控 + 多模态 + 12 LLM Provider + Fleet/Worker/Verifier + BrowserBridge |
-| 0.2.2 | 2026-07-19 | DataPaths 动态初始化 + 4 轮安全审计 + plugin-dev CLI |
-| 0.2.1 | 2026-07-19 | 多智能体 + 缓存优化 + Dream 模式 + Markdown/Emoji + BigBangPopup |
-| 0.2.0-alpha | 2026-07-16~17 | 微内核+插件架构 + ACP + MCP + 触发器引擎 + 深浅主题 |
-| 0.1.0-alpha | 2026-07-13 | CLI 引擎 + Chat UI + 独立浏览器 + R8 瘦身 |
-
-## 附录 B: 审校记录
-
-| 日期 | 审校项 | 结果 |
-|------|--------|------|
-| 2026-07-26 | v0.15.2 功能闭环审计 | PromptEngine 三层十二问审计 → 6 问题全修: 缓存失效(路径前缀) + 缓存key(检查前置+docCache非空守卫) + Plan进度(中英双语边界标记) + 错误消息(LlmApiException替双重bodyAsText) + 容器高度(Step编号恢复+观察缺失修复) + 提示词(恢复插件发现few-shot) + MCP插件BrowserBridge解耦(toolExecutor委托) + RemoteApi超时120s。编译通过, 测试通过。 |
-| 2026-07-25 | v0.15.0 记忆孪生全链路审计 | 三层十二问审计 → 14 问题全修: P0×6 (系统提示词/配对指引/ACP就绪/syncWithPeer/mDNS单点/命令命名空间), P1×6 (QoS/心跳/解绑UI/错误诊断/同步反馈/self.tools覆盖), P2×2 (协议版本/原子写入)。8 文件修改, 626 行新增, 编译通过, 测试通过。 |
-| 2026-07-21 | v0.6.0 设计系统合规 | 11 个 UI 文件硬编码色值清零, 全部替换为 ArcoColors token |
-| 2026-07-21 | v0.6.0 编译验证 | clean build 4m10s 通过, 15 文件修改, 编译问题 10 项已记录 |
-| 2026-07-21 | 微内核拆分验证 | kernel (44文件) + core (6文件) 编译通过, 25插件编译通过, 83/88 测试通过 |
-| 2026-07-21 | 开发文档全量重构 | 基于微内核架构重写，修正全部数据，移除 TV 模块 |
-| 2026-07-20 | v0.3.0 编译审查 | 7 个编译错误修复 |
-| 2026-07-20 | 模型切换审查 | 15 stale state bug, 9 修复 |
-| 2026-07-20 | 闪退根因审查 | 13 问题全修复 |
-| 2026-07-19 | Crash 漏洞四审四校 | DataPaths/IO/EventReceiver/HttpClient/状态串扰/!! 全部修复 |
-| 2026-07-23 | v0.11.3 全量审校 | ProGuard 规则修正 (kernel 包路径) + !! 清零 + 文件 IO/协程 try/catch 补全 + 文档命令计数修正 (self 14→13, agent 11→12, sys 39, plugin 10→11+auto, skill 4→7, inspector 4→6) + 僵尸目录清理 (agent-loop/agent-mission) |
-| 2026-07-24 | v0.12.12 记忆孪生 | 6 BUG 修复 (PluginManager版本/startListener/JSON转义/防火墙/inbox轮询/自动恢复) + 5连击激活 + ACP P2P 配对 + 账本自动同步 · 详见 `docs/lessons.md` |
-| 2026-07-24 | v0.13.0 全量审校 | 10 插件捆绑补齐 + 循环检测增强 (连续失败) + 会话去重 + 工具输出完整展示 + Claude Bridge 移除 + hardkey Enter 修复 + versionCode 公式修正 · 全部遗留问题已于 v0.14.0 ~ v0.15.2 解决 |
-
----
-
-## 附录 C: v0.12.12 核心经验
-
-### 分布式调试
-- 每轮调试: 改代码 → 构建 → 2台设备安装 → 双方激活 → 配对 → 查日志
-- `adb logcat -s MengPawTwin` 集中所有孪生日志, 一个 tag 看全链路
-- 先验证端口 (`curl`), 再验证消息, 最后验证 UI
-
-### 关键 BUG 模式
-1. **构造不完全**: `AcpHttpTransport()` 不监听, `startListener()` 必须显式调用
-2. **默认值 != 真实值**: `PluginManager("0.2.0")` 需注入 `CORE_VERSION`
-3. **手写 JSON 必出错**: 用 `org.json.JSONObject` 或序列化库
-4. **Compose 不感知文件系统**: inbox 文件需轮询检查
-5. **防火墙拦截自己的协议**: 信任建立类消息需绕过安全策略
-
-### 记忆孪生架构
-- `plugin-memory-twin` (10 文件, ~2100 行) — 首个 `AcpHandler` 实现
-- 哈希链账本 (SHA-256) + ACP P2P + inbox 文件式触发
-- 5连击隐藏手势 → 发起方弹窗 → 接收方弹窗 = 三重安全门槛
-
----
-
-*文档结束 · 最后更新: 2026-07-30 (v0.19.1) · 本版新增: 标签行移入消息区 + 删除模式按钮行 + @mention 内联修复 + 插件按钮清理*

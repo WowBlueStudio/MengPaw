@@ -8,6 +8,9 @@ import com.mengpaw.kernel.error.ErrorCollector
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import java.io.File
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * Persistence layer for the memory twin ledger.
@@ -32,6 +35,78 @@ object TwinLedgerStore {
     /** Ensure the store directory exists. */
     private fun ensureDir() { if (!ledgerDir.exists()) ledgerDir.mkdirs() }
 
+    // ── P2.2: Optional encryption ──────────────────────────────────────
+
+    /** AES key for content encryption (null = encryption disabled). */
+    @Volatile private var encryptionKey: SecretKeySpec? = null
+
+    /**
+     * Enable content encryption with the given AES key.
+     * Does NOT re-encrypt existing entries — only affects subsequent writes.
+     */
+    fun setEncryptionKey(key: ByteArray) {
+        encryptionKey = SecretKeySpec(key, "AES")
+    }
+
+    /** Disable encryption. Existing encrypted entries will be unreadable. */
+    fun clearEncryptionKey() {
+        encryptionKey = null
+    }
+
+    /** Whether encryption is currently enabled. */
+    val isEncryptionEnabled: Boolean get() = encryptionKey != null
+
+    /** Encrypt a single field value. Returns base64(IV + ciphertext). */
+    private fun encryptField(plaintext: String): String {
+        val key = encryptionKey ?: return plaintext
+        return try {
+            val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+            cipher.init(Cipher.ENCRYPT_MODE, key)
+            val iv = cipher.iv
+            val encrypted = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
+            java.util.Base64.getEncoder().encodeToString(iv + encrypted)
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "TwinLedgerStore.encryptField")
+            plaintext // Fallback to plaintext
+        }
+    }
+
+    /** Decrypt a field value. Returns plaintext. */
+    private fun decryptField(ciphertext: String): String {
+        val key = encryptionKey ?: return ciphertext
+        // Detect plaintext: base64-encrypted values start with a valid base64 block
+        // and are always longer than the original. Simple heuristic: if it's not
+        // valid base64 or too short, treat as plaintext.
+        if (ciphertext.length < 24) return ciphertext
+        return try {
+            val combined = java.util.Base64.getDecoder().decode(ciphertext)
+            if (combined.size < 17) return ciphertext
+            val iv = IvParameterSpec(combined, 0, 16)
+            val encrypted = combined.copyOfRange(16, combined.size)
+            val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+            cipher.init(Cipher.DECRYPT_MODE, key, iv)
+            String(cipher.doFinal(encrypted), Charsets.UTF_8)
+        } catch (_: Exception) { ciphertext /* Not encrypted or wrong key */ }
+    }
+
+    /** Encrypt content and metadata values of an entry (for append). */
+    private fun encryptEntry(entry: LedgerEntry): LedgerEntry {
+        val key = encryptionKey ?: return entry
+        return entry.copy(
+            content = encryptField(entry.content),
+            metadata = entry.metadata.mapValues { (_, v) -> encryptField(v) }
+        )
+    }
+
+    /** Decrypt content and metadata values of an entry (for read). */
+    private fun decryptEntry(entry: LedgerEntry): LedgerEntry {
+        val key = encryptionKey ?: return entry
+        return entry.copy(
+            content = decryptField(entry.content),
+            metadata = entry.metadata.mapValues { (_, v) -> decryptField(v) }
+        )
+    }
+
     // ── Read ──────────────────────────────────────────────────────────
 
     /** Load all entries as a list. For large ledgers, prefer streaming reads. */
@@ -41,6 +116,9 @@ object TwinLedgerStore {
             ledgerFile.readLines()
                 .filter { it.isNotBlank() }
                 .map { json.decodeFromString<LedgerEntry>(it) }
+                .let { entries ->
+                    if (encryptionKey != null) entries.map { decryptEntry(it) } else entries
+                }
         } catch (e: Exception) {
             ErrorCollector.report(e, "TwinLedgerStore.loadAll")
             emptyList()
@@ -54,6 +132,9 @@ object TwinLedgerStore {
             ledgerFile.readLines().takeLast(n)
                 .filter { it.isNotBlank() }
                 .map { json.decodeFromString<LedgerEntry>(it) }
+                .let { entries ->
+                    if (encryptionKey != null) entries.map { decryptEntry(it) } else entries
+                }
         } catch (e: Exception) {
             ErrorCollector.report(e, "TwinLedgerStore.loadTail")
             emptyList()
@@ -66,6 +147,7 @@ object TwinLedgerStore {
         return try {
             ledgerFile.readLines().lastOrNull { it.isNotBlank() }
                 ?.let { json.decodeFromString<LedgerEntry>(it) }
+                ?.let { if (encryptionKey != null) decryptEntry(it) else it }
         } catch (e: Exception) {
             ErrorCollector.report(e, "TwinLedgerStore.latest")
             null
@@ -127,11 +209,13 @@ object TwinLedgerStore {
     @Synchronized
     fun append(entry: LedgerEntry): Boolean {
         ensureDir()
+        // P2.2: Encrypt content before writing
+        val encrypted = if (encryptionKey != null) encryptEntry(entry) else entry
         // Content dedup: skip if hash already exists
         if (containsHash(entry.hash)) return false
 
         return try {
-            val line = json.encodeToString(entry) + "\n"
+            val line = json.encodeToString(encrypted) + "\n"
             // Atomic write: write tmp → rename
             val tmp = File(ledgerDir, "ledger.tmp")
             if (ledgerFile.exists()) {
@@ -164,12 +248,14 @@ object TwinLedgerStore {
             val existingHashes = existing.map { it.hash }.toSet()
             val newEntries = entries.filter { it.hash !in existingHashes }
             if (newEntries.isEmpty()) return 0
+            // P2.2: Encrypt new entries before writing
+            val encryptedEntries = if (encryptionKey != null) newEntries.map { encryptEntry(it) } else newEntries
 
             val tmp = File(ledgerDir, "ledger.tmp")
             if (ledgerFile.exists()) {
                 tmp.writeBytes(ledgerFile.readBytes())
             }
-            newEntries.forEach { entry ->
+            encryptedEntries.forEach { entry ->
                 tmp.appendText(json.encodeToString(entry) + "\n")
                 appended++
             }
