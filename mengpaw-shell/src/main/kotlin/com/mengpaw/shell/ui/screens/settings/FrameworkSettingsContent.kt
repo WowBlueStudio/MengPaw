@@ -162,11 +162,6 @@ fun FrameworkSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    NavigationLink(Icons.Outlined.Extension, state.strings.frameworkPluginManagement, state.strings.frameworkPluginManagementDesc) { onNavigateToPluginMarket() }
-    Spacer(Modifier.height(ArcoSpacing.lg))
-    HorizontalDivider(color = ThemeColors.border)
-    Spacer(Modifier.height(ArcoSpacing.lg))
-
     SectionHeader(state.strings.frameworkMemoryManagement)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -206,6 +201,9 @@ fun FrameworkSettingsContent(
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    NavigationLink(Icons.Outlined.Extension, state.strings.frameworkPluginManagement, state.strings.frameworkPluginManagementDesc) { onNavigateToPluginMarket() }
     Spacer(Modifier.height(ArcoSpacing.lg))
 
     FrameworkItemSection(state.strings.frameworkGlobalPlugins, Icons.Outlined.Extension, pluginItems)

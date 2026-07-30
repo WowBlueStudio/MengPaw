@@ -23,6 +23,7 @@ import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.design.components.MarkdownText
 import com.mengpaw.design.components.SectionHeader
 
 @Composable
@@ -32,10 +33,7 @@ fun AgentSettingsContent(
     activeEndpoint: String,
     activeModel: String,
     onSelectProvider: ((SavedProvider) -> Unit)?,
-    agentPluginItems: List<FrameworkItem> = emptyList(),
-    globalToolItems: List<FrameworkItem> = emptyList(),    // self.tools 索引 (只读)
-    agentToolItems: List<FrameworkItem> = emptyList(),     // Agent 分区工具
-    globalSkillItems: List<FrameworkItem> = emptyList(),   // 全局 Skills 池 (skill.ls)
+    agentToolItems: List<FrameworkItem> = emptyList(),     // Agent 专属工具
     agentSkillItems: List<FrameworkItem> = emptyList(),    // Agent 本地 Skills
     workspaceItems: List<FrameworkItem> = emptyList(),
     onRefreshWorkspace: (() -> Unit)? = null
@@ -346,53 +344,71 @@ fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── Tools: 全局工具索引 (只读, 无安装流程) ──
-    SectionHeader(state.strings.agentTools + " (${globalToolItems.size})")
-    Text(state.strings.agentInstallHelp, fontSize = 11.sp, color = ThemeColors.textSecondary,
-        lineHeight = 16.sp, modifier = Modifier.padding(bottom = ArcoSpacing.xs))
-    if (globalToolItems.isNotEmpty()) {
-        FrameworkItemSection("", Icons.Outlined.Terminal, globalToolItems)
-    } else {
-        Text(state.strings.agentNoTriggers, style = MaterialTheme.typography.bodySmall,
-            color = ThemeColors.textSecondary)
-    }
-
-    if (agentToolItems.isNotEmpty()) {
-        Spacer(Modifier.height(ArcoSpacing.md))
-        SectionHeader("分区工具 (${agentToolItems.size})")
-        FrameworkItemSection("", Icons.Outlined.Terminal, agentToolItems)
-    }
-
-    Spacer(Modifier.height(ArcoSpacing.lg))
+        Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── Skills: Agent 本地 + 全局池 ──
-    AgentItemsSection(
-        title = state.strings.agentSkills, icon = Icons.Outlined.AutoAwesome,
-        agentItems = agentSkillItems, globalPoolItems = globalSkillItems,
-        globalPoolLabel = state.strings.agentFromSkillPool,
-        installHelp = state.strings.agentInstallHelp
-    )
-
-    Spacer(Modifier.height(ArcoSpacing.lg))
-    HorizontalDivider(color = ThemeColors.border)
-    Spacer(Modifier.height(ArcoSpacing.lg))
-
-    // ── 全局 Skills 池索引 (只读) ──
-    SectionHeader(state.strings.agentSkillPool + " (${globalSkillItems.size})")
-    Text("全局 Skills 池中的可用项，使用 skill.pull <name> 拉取到当前 Agent。",
+    // ── Agent Tools: 该 Agent 专属工具（非全局共享）──
+    SectionHeader("智能体工具 (" + agentToolItems.size + ")")
+    Text("该 Agent 专属的命令工具，仅在当前 Agent 可用。全局命令通过 self.tools 查看。",
         fontSize = 11.sp, color = ThemeColors.textSecondary,
         modifier = Modifier.padding(bottom = ArcoSpacing.xs))
-    if (globalSkillItems.isNotEmpty()) {
-        // Global skills pool list with pull buttons
-        Column {
-            globalSkillItems.forEach { item ->
-                key(item.name) {
-                    Surface(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                        shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard) {
-                        Row(Modifier.padding(start = ArcoSpacing.md, end = ArcoSpacing.sm, top = ArcoSpacing.sm, bottom = ArcoSpacing.sm),
-                            verticalAlignment = Alignment.CenterVertically) {
+    if (agentToolItems.isNotEmpty()) {
+        agentToolItems.forEach { item ->
+            key(item.name) {
+                var expanded by remember { mutableStateOf(false) }
+                Surface(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).clickable(enabled = item.docMarkdown.isNotBlank()) { expanded = !expanded },
+                    shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard) {
+                    Column(Modifier.padding(ArcoSpacing.md)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Terminal, null, Modifier.size(16.dp), tint = ArcoColors.Blue6)
+                            Spacer(Modifier.width(ArcoSpacing.sm))
+                            Column(Modifier.weight(1f)) {
+                                Text(item.name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
+                                if (item.summary.isNotBlank())
+                                    Text(item.summary, fontSize = 12.sp, color = ThemeColors.textSecondary, maxLines = 1)
+                            }
+                            if (item.isWowBlue) {
+                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Pink6.copy(alpha = 0.1f)) {
+                                    Text("WowBlue", Modifier.padding(horizontal = 4.dp, vertical = 1.dp), fontSize = 9.sp, color = ArcoColors.Pink6)
+                                }
+                                Spacer(Modifier.width(4.dp))
+                            }
+                            if (item.docMarkdown.isNotBlank()) {
+                                Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp), tint = ThemeColors.textSecondary)
+                            }
+                        }
+                        AnimatedVisibility(visible = expanded) {
+                            if (item.docMarkdown.isNotBlank()) {
+                                MarkdownText(content = item.docMarkdown, modifier = Modifier.padding(top = ArcoSpacing.sm))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        Text("暂未配置专属工具。Agent 使用全局工具池（self.tools）中的命令。",
+            style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── Agent Skills: 动态列表，可展开查看 Markdown 内容 ──: 动态列表，可展开查看 Markdown 内容 ──
+    SectionHeader(state.strings.agentSkills + " (${agentSkillItems.size})")
+    Text("该 Agent 本地已加载的技能，Markdown 剧本格式。使用 skill.run <name> 执行。",
+        fontSize = 11.sp, color = ThemeColors.textSecondary,
+        modifier = Modifier.padding(bottom = ArcoSpacing.xs))
+    if (agentSkillItems.isNotEmpty()) {
+        agentSkillItems.forEach { item ->
+            key(item.name) {
+                var expanded by remember { mutableStateOf(false) }
+                Surface(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).clickable(enabled = item.docMarkdown.isNotBlank()) { expanded = !expanded },
+                    shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard) {
+                    Column(Modifier.padding(ArcoSpacing.md)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(16.dp), tint = ArcoColors.Blue6)
                             Spacer(Modifier.width(ArcoSpacing.sm))
                             Column(Modifier.weight(1f)) {
@@ -400,10 +416,19 @@ fun AgentSettingsContent(
                                 if (item.summary.isNotBlank())
                                     Text(item.summary, fontSize = 12.sp, color = ThemeColors.textSecondary, maxLines = 1)
                             }
-                            TextButton(onClick = {
-                                /* skill.pull via Agent CLI — user asks Agent in chat */
-                            }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
-                                Text("拉取", fontSize = 12.sp, color = ThemeColors.brand)
+                            if (item.isWowBlue) {
+                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Pink6.copy(alpha = 0.1f)) {
+                                    Text("WowBlue", Modifier.padding(horizontal = 4.dp, vertical = 1.dp), fontSize = 9.sp, color = ArcoColors.Pink6)
+                                }
+                                Spacer(Modifier.width(4.dp))
+                            }
+                            if (item.docMarkdown.isNotBlank()) {
+                                Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp), tint = ThemeColors.textSecondary)
+                            }
+                        }
+                        AnimatedVisibility(visible = expanded) {
+                            if (item.docMarkdown.isNotBlank()) {
+                                MarkdownText(content = item.docMarkdown, modifier = Modifier.padding(top = ArcoSpacing.sm))
                             }
                         }
                     }

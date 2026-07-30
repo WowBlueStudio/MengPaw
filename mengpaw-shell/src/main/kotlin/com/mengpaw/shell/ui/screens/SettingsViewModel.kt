@@ -140,7 +140,7 @@ data class SettingsState(
     val agentLanguageMode: AgentLanguageMode = AgentLanguageMode.FOLLOW_UI,
     val loopMode: LoopMode = LoopMode.REACT,
     // API section state
-    val apiSectionExpanded: Boolean = true,
+    val apiSectionExpanded: Boolean = false,
     val savedProviders: List<SavedProvider> = emptyList(),
     val isTesting: Boolean = false,
     val balance: String = ""

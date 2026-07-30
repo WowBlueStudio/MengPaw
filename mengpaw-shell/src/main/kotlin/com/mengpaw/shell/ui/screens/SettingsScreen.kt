@@ -127,8 +127,7 @@ fun SettingsScreen(
             ) {
                 when (selectedSection) {
                     0 -> AgentSettingsContent(state, viewModel, activeAgentEndpoint, activeAgentModel,
-                        onAgentSelectProvider, agentPluginItems, agentToolItems, agentSkillItems,
-                        toolItems, skillItems, workspaceItems, onRefreshWorkspace)
+                        onAgentSelectProvider, agentToolItems, agentSkillItems, workspaceItems, onRefreshWorkspace)
                     1 -> FrameworkSettingsContent(state, viewModel, onNavigateToPluginMarket, pluginItems, toolItems, skillItems)
                     2 -> SystemSettingsContent(onNavigateToLicense, onNavigateToAttribution, state, viewModel, onNavigateToPluginMarket)
                 }

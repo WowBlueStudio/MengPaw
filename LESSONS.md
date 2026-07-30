@@ -4,6 +4,22 @@
 
 ---
 
+## 2026-07-30 — v0.19.4 智能体设置页重构 + 五区块关系梳理
+
+### 99. 智能体设置页只放智能体专属内容，框架全局内容放框架设置
+- 场景：智能体设置页混入了全局工具索引（47条命令列表）和全局 Skills 池索引。
+- 修复：全部移除，智能体设置页只保留 Agent Skills（本地已拉取）和 Agent Tools（专属工具）。
+- 教训：**设置页的边界=数据的边界。全局 vs 专属的划分必须在 UI 层严格执行，否则用户分不清哪些是自己的、哪些是共享的。**
+
+### 100. 动态列表替代 FrameworkItemSection 更适合小数据量
+- 场景：Agent Skills 和 Agent Tools 数据量小（几个到十几个），用 FrameworkItemSection 太重。
+- 修复：改为内联 dynamic list + AnimatedVisibility 展开 Markdown，无文档的 item 不展开。
+- 教训：**小数据量的列表用内联 Composable 比通用组件更灵活。通用的 FrameworkItemSection 适合 50+ 条的大列表。**
+
+### 本次改动统计
+修改文件: 3 个 | 编译: BUILD SUCCESSFUL | 版本: 0.19.3 -> 0.19.4
+
+---
 ## 2026-07-30 — v0.19.3 暗色模式颜色修复 + WowBlue 标识补齐 + FlowRow 手机适配
 
 ### 96. 暗色模式颜色必须用 ThemeColors，不用 ArcoColors 固定色
