@@ -131,8 +131,62 @@ class PromptEngine {
         val soulDoc = cachedRead(agentName, "soul.md") { AgentDocs.readSoulDoc(it) }
         // Only LONG-TERM memory goes into system prompt
         val memoryDoc = cachedRead(agentName, "memory/memory.md") { AgentDocs.readLongTermMemory(it) }
+        // Read boost.md — if present, Agent hasn't completed first-run setup
+        val boostDoc = cachedRead(agentName, "boost.md") { AgentDocs.readBoostDoc(it) }
+        // Read HEARTBEAT.md — cron/heartbeat task rules. Non-empty = scheduled tasks configured.
+        val heartbeatDoc = cachedRead(agentName, "HEARTBEAT.md") { AgentDocs.readHeartbeatDoc(it) }
 
         val docsBlock = buildString {
+            // ── BOOTSTRAP: boost.md exists → inject first-run guidance ──
+            if (boostDoc.isNotBlank()) {
+                append(
+"""
+## 🚀 首次引导模式 — BOOST.md 存在
+
+你的工作区中有 boost.md 引导文件，说明你还没有完成初始化设置。
+
+1. 主动和用户打招呼，介绍自己
+2. 阅读 `agent.boost` 获取完整的引导步骤
+3. 引导用户完成四件事：身份（profile.md）、头像（self.avatar）、配色（self.theme）、灵魂准则（soul.md）
+4. 全部完成后执行 `agent.boost.delete` 自毁引导文件——你就不再是新人了
+
+如果用户说跳过或不需要，直接执行 agent.boost.delete 即可。
+
+"""
+                )
+            }
+            // ── HEARTBEAT: non-empty HEARTBEAT.md → inject cron/heartbeat guidance ──
+            if (heartbeatDoc.isNotBlank()) {
+                append(
+"""
+## ⏰ 定时任务 — HEARTBEAT.md 存在
+
+你的工作区中有 HEARTBEAT.md 定时任务规则文件。
+
+- 当 CRON 或 SCHEDULE 触发器触发时，阅读 HEARTBEAT.md 了解该做什么
+- 使用 `self.trigger` 管理触发器（添加/查看/删除）
+- 定时任务在后台执行，不要阻塞用户对话
+- 留空 HEARTBEAT.md = 跳过所有定时任务
+
+"""
+                )
+            }
+            // ── SKILLS 双层架构引导 ──
+            append(
+"""
+## 📋 Skills 双层池
+
+Skills 分为两层：
+- **全局池** (`/技能剧本/`): 所有 Agent 共享，通过 `skill.ls` 浏览
+- **本地池** (`Agent文档/{name}/skills/`): 当前 Agent 专属
+
+`skill.run <name>` **优先查本地，找不到再查全局池**。
+`skill.pull <name>` — 从全局池复制到本地。
+`skill.push <name>` — 从本地上传到全局池。
+`skill.create <name>` — 在本地创建新 Skill。
+
+"""
+            )
             append("\n## 你的操作手册（AGENTS.md）\n\n")
             append(agentsDoc)
             if (soulDoc.isNotBlank()) {

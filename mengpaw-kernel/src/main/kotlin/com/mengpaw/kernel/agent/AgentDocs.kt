@@ -35,7 +35,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 object AgentDocs {
 
     @Volatile
-    var bootstrapper: ((agentName: String) -> Unit)? = null
+    var bootstrapper: ((agentName: String, language: String) -> Unit)? = null
 
     /** Called when Agent modifies workspace docs — PromptEngine uses this to invalidate cache.
      *  @param agentName 被修改的 Agent 名称
@@ -44,13 +44,13 @@ object AgentDocs {
     var onDocChanged: ((agentName: String, filePath: String?) -> Unit)? = null
 
     /** Create default doc files for a new agent. */
-    fun bootstrap(agentName: String) {
+    fun bootstrap(agentName: String, language: String = "zh") {
         val dir = File(DataPaths.AGENTS, agentName)
         if (!dir.exists()) dir.mkdirs()
         if (File(dir, "soul.md").exists()) return
         // Ensure long-term memory directory exists
         File(dir, "memory").mkdirs()
-        bootstrapper?.invoke(agentName)
+        bootstrapper?.invoke(agentName, language)
     }
 
     // ── Document readers ──────────────────────────────────────────
@@ -379,6 +379,22 @@ object AgentDocs {
     fun deleteBoost(agentName: String): Boolean {
         val file = File(DataPaths.AGENTS, "$agentName/boost.md")
         return if (file.exists()) { file.delete() } else false
+    }
+
+    /** Read boost.md — first-run bootstrap guidance file. Empty string means no boost needed. */
+    fun readBoostDoc(agentName: String): String {
+        val file = File(DataPaths.AGENTS, "$agentName/boost.md")
+        return if (file.exists()) try { file.readText() } catch (e: Exception) {
+            ErrorCollector.report(e, "AgentDocs.readBoostDoc"); ""
+        } else ""
+    }
+
+    /** Read HEARTBEAT.md — cron/heartbeat task rules. Empty string means skip all scheduled tasks. */
+    fun readHeartbeatDoc(agentName: String): String {
+        val file = File(DataPaths.AGENTS, "$agentName/HEARTBEAT.md")
+        return if (file.exists()) try { file.readText() } catch (e: Exception) {
+            ErrorCollector.report(e, "AgentDocs.readHeartbeatDoc"); ""
+        } else ""
     }
 
     fun deleteDream(agentName: String): Boolean {

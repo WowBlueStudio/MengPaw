@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
         com.mengpaw.core.namespace.SysExecutor.setActivity(this)
         com.mengpaw.core.security.IntegrityGuard.globalInstance.init(this)
         com.mengpaw.core.AgentTemplates.init(this)
-        com.mengpaw.kernel.agent.AgentDocs.bootstrapper = { name -> com.mengpaw.core.AgentTemplates.bootstrapAgent(name) }
+        com.mengpaw.kernel.agent.AgentDocs.bootstrapper = { name, lang -> com.mengpaw.core.AgentTemplates.bootstrapAgent(name, lang) }
         KernelLog.setLogger(AndroidLogger())
         enableEdgeToEdge()
 
@@ -384,7 +384,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                     onNavigateToSettings = { showSettings = true; close() },
                     onClose = { close() },
                     activeAgent = activeAgent,
-                    onSwitchAgent = { name -> agentViewModel.switchAgent(name); close() },
+                    onSwitchAgent = { name, framework -> agentViewModel.switchAgent(name, framework); close() },
                     onCreateAgent = { name -> agentViewModel.createAgent(name); close() },
                     onCreateAgentWithDetails = { name, wsFolder, intro ->
                         agentViewModel.createAgentWithDetails(name, wsFolder, intro)
@@ -536,17 +536,17 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             FrameworkItem("plugin.upgrade --all", ItemCategory.BUILTIN, "升级全部插件", ""),
         )
         val sysTools = listOf(
-            FrameworkItem("sys.battery", ItemCategory.BUILTIN, "电量/充电状态/温度", ""),
-            FrameworkItem("sys.network", ItemCategory.BUILTIN, "网络类型/信号强度", ""),
-            FrameworkItem("sys.cpu", ItemCategory.BUILTIN, "CPU 使用率/核心数", ""),
-            FrameworkItem("sys.memory", ItemCategory.BUILTIN, "内存使用量", ""),
-            FrameworkItem("sys.storage", ItemCategory.BUILTIN, "存储空间使用情况", ""),
-            FrameworkItem("sys.display", ItemCategory.BUILTIN, "屏幕参数", ""),
-            FrameworkItem("sys.sensors", ItemCategory.BUILTIN, "传感器列表", ""),
-            FrameworkItem("sys.clipboard", ItemCategory.BUILTIN, "剪贴板内容", ""),
-            FrameworkItem("sys.location", ItemCategory.BUILTIN, "GPS 定位", ""),
-            FrameworkItem("sys.camera", ItemCategory.BUILTIN, "相机信息", ""),
-            FrameworkItem("sys.apps", ItemCategory.BUILTIN, "已安装应用列表", ""),
+            FrameworkItem("sys.battery", ItemCategory.BUILTIN, "电量/充电状态/温度", "", isWowBlue = true),
+            FrameworkItem("sys.network", ItemCategory.BUILTIN, "网络类型/信号强度", "", isWowBlue = true),
+            FrameworkItem("sys.cpu", ItemCategory.BUILTIN, "CPU 使用率/核心数", "", isWowBlue = true),
+            FrameworkItem("sys.memory", ItemCategory.BUILTIN, "内存使用量", "", isWowBlue = true),
+            FrameworkItem("sys.storage", ItemCategory.BUILTIN, "存储空间使用情况", "", isWowBlue = true),
+            FrameworkItem("sys.display", ItemCategory.BUILTIN, "屏幕参数", "", isWowBlue = true),
+            FrameworkItem("sys.sensors", ItemCategory.BUILTIN, "传感器列表", "", isWowBlue = true),
+            FrameworkItem("sys.clipboard", ItemCategory.BUILTIN, "剪贴板内容", "", isWowBlue = true),
+            FrameworkItem("sys.location", ItemCategory.BUILTIN, "GPS 定位", "", isWowBlue = true),
+            FrameworkItem("sys.camera", ItemCategory.BUILTIN, "相机信息", "", isWowBlue = true),
+            FrameworkItem("sys.apps", ItemCategory.BUILTIN, "已安装应用列表", "", isWowBlue = true),
         )
         val mcpTools = if (engine != null) try {
             com.mengpaw.kernel.mcp.McpServer(engine.getPluginManager())

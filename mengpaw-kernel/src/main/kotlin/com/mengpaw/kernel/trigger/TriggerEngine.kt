@@ -13,7 +13,7 @@ import java.io.File
 import java.util.Random
 
 /**
- * Trigger engine — CRON scheduler + lifetime "human-like" random triggers.
+ * Trigger engine — CRON scheduler + SCHEDULE "daily alarm" random triggers.
  *
  * ## How CRON works
  * 1. Android AlarmManager wakes the device every ~10 minutes (via WakeReceiver).
@@ -25,6 +25,14 @@ import java.util.Random
  *    set this to actually execute trigger actions.
  * 5. A "last fired minute" guard prevents double-firing within the same window.
  *
+ * ## How SCHEDULE works
+ * 1. Create a SCHEDULE trigger with: time window (e.g. 08:00-22:00), count (e.g. 3),
+ *    and min interval (e.g. 60min).
+ * 2. At start of each day, engine generates `count` random time slots within the window,
+ *    each at least `interval` minutes apart.
+ * 3. A background poll (30s) checks if current time falls within ±5 min of any unused slot.
+ * 4. When matched, fire once and mark slot used. All slots regenerate at midnight.
+ *
  * ## Persistence
  * Triggers are saved to {DataPaths.BASE}/triggers.json on every mutation
  * and reloaded in [load]. Call load() once at app startup.
@@ -32,11 +40,14 @@ import java.util.Random
 object TriggerEngine {
     private val triggers = mutableListOf<Trigger>()
     private val random = Random()
-    private var lifetimeJob: Job? = null
+    private var pollJob: Job? = null
     private var scope: CoroutineScope? = null
 
     /** Fuzzy window in minutes — CRON fires any time within [target, target+window]. */
     var cronFuzzyWindowMinutes: Int = 5
+
+    /** Fuzzy window in minutes — SCHEDULE fires any time within [slot, slot+window]. */
+    var scheduleFuzzyWindowMinutes: Int = 5
 
     // ── Data model ───────────────────────────────────────────────────
 
@@ -44,14 +55,15 @@ object TriggerEngine {
     data class Trigger(
         val id: String,
         val type: TriggerType,
-        val config: String,       // CRON: "min hour dom month dow"; LIFETIME: "HH:MM-HH:MM"
+        val config: String,       // CRON: "min hour dom month dow"
+                                  // SCHEDULE: "HH:MM-HH:MM,count=N,interval=M"
         val action: String,        // human-readable description of what to do
         val enabled: Boolean = true,
         val lastFired: Long = 0   // epoch millis of last fire
     )
 
     @Serializable
-    enum class TriggerType { CRON, LIFETIME }
+    enum class TriggerType { CRON, SCHEDULE }
 
     // ── Callbacks ────────────────────────────────────────────────────
 
@@ -128,8 +140,14 @@ object TriggerEngine {
         registerCronAlarm()
     }
 
-    fun addLifetime(id: String, timeRange: String, action: String) {
-        triggers.add(Trigger(id, TriggerType.LIFETIME, timeRange, action))
+    /**
+     * Add a SCHEDULE trigger with daily alarm slots.
+     * @param id Unique trigger ID
+     * @param config "HH:MM-HH:MM,count=N,interval=M" e.g. "08:00-22:00,count=3,interval=60"
+     * @param action Description of what to do when fired
+     */
+    fun addSchedule(id: String, config: String, action: String) {
+        triggers.add(Trigger(id, TriggerType.SCHEDULE, config, action))
         save()
     }
 
@@ -153,14 +171,10 @@ object TriggerEngine {
     }
 
     fun list(): List<Trigger> = triggers.toList()
-    fun clear() { triggers.clear(); lifetimeJob?.cancel(); save() }
+    fun clear() { triggers.clear(); pollJob?.cancel(); save() }
 
     // ── System wake & AlarmManager ───────────────────────────────────
 
-    /**
-     * Register a repeating system-level wake via AlarmManager.
-     * WakeReceiver receives the intent and calls onSystemWake().
-     */
     fun registerSystemWake(context: Any? /* android.content.Context */, intervalMinutes: Int = 10) {
         if (context == null) return
         try {
@@ -195,10 +209,6 @@ object TriggerEngine {
         }
     }
 
-    /**
-     * Register the next precise Cron alarm with Android AlarmManager.
-     * Finds the earliest upcoming CRON trigger and sets a one-shot RTC_WAKEUP alarm.
-     */
     fun registerCronAlarm() {
         val ctx = appContext ?: run {
             KernelLog.d("TriggerEngine", "Cron alarm skipped: no Context stored")
@@ -216,7 +226,6 @@ object TriggerEngine {
                     set(java.util.Calendar.MILLISECOND, 0)
                     if (parts[1] != "*") set(java.util.Calendar.HOUR_OF_DAY, parts[1].toIntOrNull() ?: get(java.util.Calendar.HOUR_OF_DAY))
                     if (parts[0] != "*") set(java.util.Calendar.MINUTE, parts[0].toIntOrNull() ?: get(java.util.Calendar.MINUTE))
-                    // If this target has already passed today, push to tomorrow
                     if (timeInMillis <= now.timeInMillis) add(java.util.Calendar.DAY_OF_MONTH, 1)
                 }
                 if (target.timeInMillis < nextTime) nextTime = target.timeInMillis
@@ -241,7 +250,6 @@ object TriggerEngine {
                     pendingIntentClass.getField("FLAG_IMMUTABLE").getInt(null) or
                     pendingIntentClass.getField("FLAG_UPDATE_CURRENT").getInt(null))
 
-            // Use setExact if available (API 19+), fallback to set
             try {
                 alarmManager?.javaClass?.getMethod("setExact",
                     Int::class.javaPrimitiveType, Long::class.javaPrimitiveType, pendingIntentClass)
@@ -264,25 +272,13 @@ object TriggerEngine {
     fun onSystemWake() {
         val now = System.currentTimeMillis()
         triggers.filter { it.enabled && it.type == TriggerType.CRON }.forEach { checkCron(it, now) }
-        triggers.filter { it.enabled && it.type == TriggerType.LIFETIME }.forEach { checkLifetime(it, now) }
+        triggers.filter { it.enabled && it.type == TriggerType.SCHEDULE }.forEach { checkSchedule(it, now) }
         onWake?.invoke()
-        // Re-register next Cron alarm (this one just fired or is close)
         registerCronAlarm()
     }
 
     // ── Internal: CRON matching with fuzzy window ────────────────────
 
-    /**
-     * Check if a CRON trigger should fire now.
-     *
-     * Uses a **fuzzy window**: matches if current minute falls within
-     * [targetMinute, targetMinute + cronFuzzyWindowMinutes]. This means
-     * a "0 9 * * *" trigger can fire anywhere from 9:00 to 9:05.
-     *
-     * The [lastFired] guard prevents re-firing within the same window:
-     * once fired, the trigger won't fire again until at least
-     * [cronFuzzyWindowMinutes] minutes have passed.
-     */
     private fun checkCron(t: Trigger, now: Long) {
         val parts = t.config.split(" ").take(5)
         if (parts.size < 5) return
@@ -292,9 +288,8 @@ object TriggerEngine {
         val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
         val day = cal.get(java.util.Calendar.DAY_OF_MONTH)
         val month = cal.get(java.util.Calendar.MONTH) + 1
-        val dow = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1 // Sunday=0
+        val dow = cal.get(java.util.Calendar.DAY_OF_WEEK) - 1
 
-        // Day/month/dow must match exactly
         fun matchDay(expr: String, actual: Int): Boolean =
             expr == "*" || expr.split(",").any { it == actual.toString() }
 
@@ -302,150 +297,146 @@ object TriggerEngine {
         if (!matchDay(parts[3], month)) return
         if (!matchDay(parts[4], dow)) return
 
-        // Hour must match exactly
         if (parts[1] != "*" && hour != (parts[1].toIntOrNull() ?: hour)) return
 
-        // Minute: fuzzy window [target, target+window]
         val targetMin = parts[0].toIntOrNull() ?: return
         val windowEnd = (targetMin + cronFuzzyWindowMinutes) % 60
 
         val inWindow = if (windowEnd > targetMin) {
             min in targetMin until windowEnd
         } else {
-            // Window wraps around the hour boundary (e.g., 58→63 = 58,59,0,1,2)
             min >= targetMin || min < windowEnd
         }
 
         if (!inWindow) return
 
-        // Guard: don't re-fire within the same window
         val msSinceLastFire = now - t.lastFired
         if (msSinceLastFire < cronFuzzyWindowMinutes * 60_000L) return
 
         fireTrigger(t)
     }
 
-    // ── Internal: LIFETIME heartbeat + pre-generated daily slots ─────
+    // ── Internal: SCHEDULE daily alarm slots ─────────────────────────
     //
-    // Design: each day, for each LIFETIME trigger, generate 1–3 random
-    // minute-precise time slots within the active window (e.g. 10:00–20:00).
-    // The poll loop (every 30s) checks if "now" falls within a ±2 min fuzzy
+    // Design: each day, for each SCHEDULE trigger, generate N random
+    // minute-precise time slots within the active window (e.g. 08:00–22:00),
+    // each at least `interval` minutes apart. Config format:
+    //   "HH:MM-HH:MM,count=N,interval=M"
+    // Defaults: window=08:00-22:00, count=3, interval=60
+    // The poll loop (every 30s) checks if "now" falls within a ±5 min fuzzy
     // window of any unused slot. When matched, fire once and mark the slot used.
     // Slots regenerate at midnight.
 
-    /** Pre-generated daily time slots: triggerId → list of "HH:MM" strings for today. */
     private val dailySlots = mutableMapOf<String, MutableList<String>>()
-
-    /** Already-fired slots today: triggerId → set of "HH:MM". */
     private val firedSlots = mutableMapOf<String, MutableSet<String>>()
-
-    /** Last day we generated slots for (day of year). */
     private var slotDay = -1
 
-    private val lifetimeFuzzyMinutes = 2 // ±2 min window for heartbeat match
+    private data class ScheduleConfig(
+        val windowStartMin: Int = 8 * 60,
+        val windowEndMin: Int = 22 * 60,
+        val count: Int = 3,
+        val minInterval: Int = 60
+    )
 
-    private fun checkLifetime(t: Trigger, now: Long) {
-        // Regenerate slots at start of a new day
-        val today = java.util.Calendar.getInstance().apply { timeInMillis = now }
-            .get(java.util.Calendar.DAY_OF_YEAR)
+    private fun parseScheduleConfig(config: String): ScheduleConfig {
+        val parts = config.split(",")
+        if (parts.isEmpty()) return ScheduleConfig()
+
+        val range = parts[0].split("-")
+        val windowStartMin = if (range.size == 2) {
+            val sh = range[0].split(":").getOrNull(0)?.toIntOrNull() ?: 8
+            val sm = range[0].split(":").getOrNull(1)?.toIntOrNull() ?: 0
+            sh * 60 + sm
+        } else 8 * 60
+
+        val windowEndMin = if (range.size == 2) {
+            val eh = range[1].split(":").getOrNull(0)?.toIntOrNull() ?: 22
+            val em = range[1].split(":").getOrNull(1)?.toIntOrNull() ?: 0
+            eh * 60 + em
+        } else 22 * 60
+
+        var count = 3
+        var minInterval = 60
+        for (i in 1 until parts.size) {
+            val kv = parts[i].split("=")
+            if (kv.size == 2) {
+                when (kv[0].trim().lowercase()) {
+                    "count" -> count = kv[1].toIntOrNull() ?: 3
+                    "interval" -> minInterval = kv[1].toIntOrNull() ?: 60
+                }
+            }
+        }
+
+        return ScheduleConfig(
+            windowStartMin = windowStartMin.coerceIn(0, 24 * 60 - 1),
+            windowEndMin = windowEndMin.coerceIn(1, 24 * 60),
+            count = count.coerceIn(1, 24),
+            minInterval = minInterval.coerceIn(15, 8 * 60)
+        )
+    }
+
+    private fun checkSchedule(t: Trigger, now: Long) {
+        val cal = java.util.Calendar.getInstance().apply { timeInMillis = now }
+        val today = cal.get(java.util.Calendar.DAY_OF_YEAR)
         if (today != slotDay) {
             dailySlots.clear()
             firedSlots.clear()
             slotDay = today
         }
 
-        // Ensure slots are generated for this trigger
         if (t.id !in dailySlots) {
-            dailySlots[t.id] = generateDailySlots(t.config).toMutableList()
+            dailySlots[t.id] = generateScheduleSlots(t.config).toMutableList()
             firedSlots[t.id] = mutableSetOf()
+            KernelLog.d("TriggerEngine", "Daily SCHEDULE [${t.id}] slots: ${dailySlots[t.id]}")
         }
 
-        val cal = java.util.Calendar.getInstance().apply { timeInMillis = now }
-        val currentMin = cal.get(java.util.Calendar.MINUTE)
-        val currentHour = cal.get(java.util.Calendar.HOUR_OF_DAY)
-        val currentKey = "${currentHour.toString().padStart(2, '0')}:${currentMin.toString().padStart(2, '0')}"
-        val prevMinKey = if (currentMin > 0)
-            "${currentHour.toString().padStart(2, '0')}:${(currentMin - 1).toString().padStart(2, '0')}"
-        else
-            "${(if (currentHour > 0) currentHour - 1 else 23).toString().padStart(2, '0')}:59"
-
+        val currentTotalMin = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
         val slots = dailySlots[t.id] ?: return
         val fired = firedSlots[t.id] ?: return
 
-        // Match: current minute falls within fuzzy window of any unused slot
         for (slot in slots) {
             if (slot in fired) continue
 
-            // Accept match if current time is within ±lifetimeFuzzyMinutes of the slot
             val slotParts = slot.split(":")
-            val slotH = slotParts[0].toInt()
-            val slotM = slotParts[1].toInt()
-
-            val slotTotalMin = slotH * 60 + slotM
-            val currentTotalMin = currentHour * 60 + currentMin
+            val slotTotalMin = slotParts[0].toInt() * 60 + slotParts[1].toInt()
 
             val diff = kotlin.math.abs(currentTotalMin - slotTotalMin)
-            // Handle day boundary wrap
             val diffWrap = kotlin.math.abs(currentTotalMin + 24 * 60 - slotTotalMin)
             val minDiff = minOf(diff, diffWrap)
 
-            if (minDiff <= lifetimeFuzzyMinutes) {
+            if (minDiff <= scheduleFuzzyWindowMinutes) {
                 fired.add(slot)
                 fireTrigger(t)
-                return // Only fire once per check
+                return
             }
         }
     }
 
-    /**
-     * Generate 1–3 random time slots (HH:MM) within the given time range.
-     * Slots are at least 30 minutes apart.
-     */
-    private fun generateDailySlots(config: String): List<String> {
-        val range = config.split("-")
-        if (range.size != 2) return emptyList()
-
-        val startParts = range[0].split(":")
-        val endParts = range[1].split(":")
-        val startH = startParts[0].toIntOrNull() ?: 10
-        val startM = startParts.getOrNull(1)?.toIntOrNull() ?: 0
-        val endH = endParts[0].toIntOrNull() ?: 20
-        val endM = endParts.getOrNull(1)?.toIntOrNull() ?: 0
-
-        val windowStartMin = startH * 60 + startM
-        val windowEndMin = endH * 60 + endM
-        if (windowEndMin <= windowStartMin) return emptyList()
-
-        // Generate 1–3 slots, each at least 30 min apart
-        val count = random.nextInt(1, 4) // 1, 2, or 3
-        val slots = mutableListOf<String>()
-        val attempts = count * 5 // up to 5 attempts per slot to avoid infinite loop
-
-        for (i in 0 until count) {
-            var tries = 0
-            while (tries < 5) {
-                val randMin = windowStartMin + random.nextInt(windowEndMin - windowStartMin)
-                val h = randMin / 60
-                val m = randMin % 60
-                val slot = "${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}"
-
-                // Ensure at least 30 min separation from other slots
-                val tooClose = slots.any { existing ->
-                    val eParts = existing.split(":")
-                    val eMin = eParts[0].toInt() * 60 + eParts[1].toInt()
-                    kotlin.math.abs(randMin - eMin) < 30
-                }
-
-                if (!tooClose) {
-                    slots.add(slot)
-                    break
-                }
-                tries++
-            }
+    private fun generateScheduleSlots(config: String): List<String> {
+        val cfg = parseScheduleConfig(config)
+        if (cfg.windowEndMin <= cfg.windowStartMin) return emptyList()
+        val available = cfg.windowEndMin - cfg.windowStartMin
+        val minRequired = cfg.count * cfg.minInterval
+        if (minRequired > available) {
+            val adjustedCount = (available / cfg.minInterval).coerceAtLeast(1)
+            KernelLog.w("TriggerEngine", "Schedule $config needs $minRequired min but only $available available, using count=$adjustedCount")
+            return generateScheduleSlots("${config.split(",")[0]},count=$adjustedCount,interval=${cfg.minInterval}")
         }
 
-        KernelLog.d("TriggerEngine", "Daily LIFETIME slots: ${slots.sorted()}")
-        return slots.sorted()
+        val slots = mutableListOf<Int>()
+        var attempt = 0
+        while (attempt < cfg.count * 20 && slots.size < cfg.count) {
+            val randMin = cfg.windowStartMin + random.nextInt(available)
+            val tooClose = slots.any { kotlin.math.abs(randMin - it) < cfg.minInterval }
+            if (!tooClose) {
+                slots.add(randMin)
+            }
+            attempt++
+        }
+
+        return slots.sorted().map { totalMin ->
+            "${(totalMin / 60).toString().padStart(2, '0')}:${(totalMin % 60).toString().padStart(2, '0')}"
+        }
     }
 
     // ── Internal: fire + background loop ─────────────────────────────
@@ -458,15 +449,10 @@ object TriggerEngine {
         onFire?.invoke(updated)
     }
 
-    /**
-     * Start the background polling loop for LIFETIME triggers.
-     * Also double-checks CRON triggers between AlarmManager wakeups.
-     * Call once at app startup.
-     */
     fun start(scope: CoroutineScope = CoroutineScope(Dispatchers.Default)) {
         this.scope = scope
-        lifetimeJob?.cancel()
-        lifetimeJob = scope.launch {
+        pollJob?.cancel()
+        pollJob = scope.launch {
             while (isActive) {
                 try {
                     val now = System.currentTimeMillis()
@@ -475,10 +461,9 @@ object TriggerEngine {
                     snapshot.filter { it.enabled }.forEach { trigger ->
                         when (trigger.type) {
                             TriggerType.CRON -> { checkCron(trigger, now); hasActiveJobs = true }
-                            TriggerType.LIFETIME -> { checkLifetime(trigger, now); hasActiveJobs = true }
+                            TriggerType.SCHEDULE -> { checkSchedule(trigger, now); hasActiveJobs = true }
                         }
                     }
-                    // 30s polling when triggers exist, 5min idle otherwise
                     delay(if (hasActiveJobs) 30_000L else 300_000L)
                 } catch (_: CancellationException) { break }
                 catch (e: Exception) {
@@ -489,16 +474,15 @@ object TriggerEngine {
         }
     }
 
-    fun stop() { lifetimeJob?.cancel(); lifetimeJob = null }
+    fun stop() { pollJob?.cancel(); pollJob = null }
 
-    /** Re-register Cron alarm after triggers change. Call from app layer when Context is ready. */
     fun refreshCronAlarm() {
         registerCronAlarm()
     }
 
-    // ── LIFETIME topic pool ──────────────────────────────────────────
+    // ── SCHEDULE topic pool ──────────────────────────────────────────
 
-    val LIFETIME_TOPICS = listOf(
+    val SCHEDULE_TOPICS = listOf(
         "随机和用户聊聊今天的天气怎么样",
         "根据最近的工作记录总结一下进展，问问用户有没有需要帮助的",
         "检查一下系统状态，看看有没有需要更新的插件",

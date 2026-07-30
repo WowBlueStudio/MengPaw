@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.19.2 (2026-07-30) — 双层 Skills+Tools 架构 + FLEET 重命名 + WowBlue 标识
+
+### 架构
+- **双层 Skills 池**: 全局池(/技能剧本/) + Agent本地(skills/{name}/)，skill.pull/push，skill.run 先查本地再查全局
+- **skill.rm**: 新增删除本地技能命令
+- **FLEET 模式**: Mission+ 重命名为 Fleet，新增独立 runWithFleet() 引擎方法
+- **SCHEDULE 触发器**: 从 LIFETIME 改名，支持可配 count/interval，±5min 抖动
+
+### UI
+- **WowBlue 标识**: 原创功能(sys.*/agent.dream/self.trigger等)加粉色WowBlue徽标
+- **CRON/SCHEDULE 对话框简化**: 去掉预设选项，纯输入+引导找Agent配置
+- **Agent 设置页**: Tools 只读索引，Skills 双层显示(本地+全局池)
+- **@mention 修复**: DropdownMenu→内联Surface，消除输入法闪烁
+- **全局 Skills 池**: 显示可用技能列表，每项带"拉取"按钮
+
+### 系统提示词
+- 📋 Skills 双层池引导(优先查本地)
+- 🚀 BOOST.md 首次引导注入
+- ⏰ HEARTBEAT.md 定时任务规则注入
+
+### 其他
+- 框架Agent首次访问自动bootstrap boost.md
+- 活跃标签行移入消息区，不干扰侧边栏
+- plugin-clipboard 粘贴按钮移除
+- 三层十二问审计修复
+
 ## v0.19.1 (2026-07-30) — UI 调整：标签行移入消息区 + 删除模式按钮行 + @mention 修复
 
 ### 布局调整

@@ -13,8 +13,8 @@ import java.io.File
  * to a read-only path, then copies them to agent workspaces on init.
  *
  * Three-path model:
- *   assets/agent-templates/zh/  → APK-bundled (immutable)
- *   {filesDir}/agent-templates/ → read-only extract (Agent cannot modify)
+ *   assets/agent-templates/{zh,en}/  → APK-bundled (immutable)
+ *   {filesDir}/agent-templates/{zh,en}/ → read-only extract (Agent cannot modify)
  *   {filesDir}/Agent文档/{name}/ → workspace (Agent can freely edit)
  *
  * ## Performance
@@ -25,66 +25,62 @@ import java.io.File
  *
  * ## Customization
  *
- * Edit the .md files under mengpaw-shell/src/main/assets/agent-templates/zh/,
+ * Edit the .md files under mengpaw-shell/src/main/assets/agent-templates/{zh,en}/,
  * then rebuild the APK. Templates are separated from source code.
  */
 object AgentTemplates {
-    private const val ASSET_PATH = "agent-templates/zh"
-    private var extracted = false
+    private val SUPPORTED_LANGS = listOf("zh", "en")
+    private val extracted = mutableSetOf<String>()
 
     /**
-     * Extract templates from APK assets to the read-only template directory.
-     * Called once at app startup. Safe to call repeatedly — subsequent calls
-     * are no-ops unless the APK was updated (new version code).
-     *
-     * @param context Android context for AssetManager access.
+     * Extract templates for all supported languages from APK assets.
+     * Called once at app startup. Safe to call repeatedly.
      */
     fun init(context: Context) {
-        if (extracted) return
-        val targetDir = File(DataPaths.AGENT_TEMPLATES)
-        if (!targetDir.exists()) targetDir.mkdirs()
+        for (lang in SUPPORTED_LANGS) {
+            if (lang in extracted) continue
+            val targetDir = File(DataPaths.AGENT_TEMPLATES, lang)
+            if (!targetDir.exists()) targetDir.mkdirs()
 
-        try {
-            val assetManager = context.assets
-            val fileList = assetManager.list(ASSET_PATH) ?: emptyArray()
-            if (fileList.isEmpty()) {
-                KernelLog.w("AgentTemplates", "No template files found in assets/$ASSET_PATH")
-                return
-            }
+            try {
+                val assetPath = "agent-templates/$lang"
+                val assetManager = context.assets
+                val fileList = assetManager.list(assetPath) ?: emptyArray()
+                if (fileList.isEmpty()) {
+                    KernelLog.w("AgentTemplates", "No template files found in assets/$assetPath")
+                    continue
+                }
 
-            for (filename in fileList) {
-                if (!filename.endsWith(".md")) continue
-                val targetFile = File(targetDir, filename)
-                // Only copy if target doesn't exist (preserves user's read-only copy
-                // across app restarts; overwrites on APK upgrade via version check)
-                if (!targetFile.exists()) {
-                    try {
-                        assetManager.open("$ASSET_PATH/$filename").use { input ->
-                            targetFile.writeBytes(input.readBytes())
+                for (filename in fileList) {
+                    if (!filename.endsWith(".md")) continue
+                    val targetFile = File(targetDir, filename)
+                    if (!targetFile.exists()) {
+                        try {
+                            assetManager.open("$assetPath/$filename").use { input ->
+                                targetFile.writeBytes(input.readBytes())
+                            }
+                        } catch (e: Exception) {
+                            KernelLog.w("AgentTemplates", "Failed to extract $lang/$filename: ${e.message}")
                         }
-                    } catch (e: Exception) {
-                        KernelLog.w("AgentTemplates", "Failed to extract $filename: ${e.message}")
                     }
                 }
+                extracted.add(lang)
+                KernelLog.i("AgentTemplates", "Extracted ${fileList.size} $lang template files to ${targetDir.absolutePath}")
+            } catch (e: Exception) {
+                KernelLog.w("AgentTemplates", "$lang template extraction failed: ${e.message}")
             }
-            extracted = true
-            KernelLog.i("AgentTemplates", "Extracted ${fileList.size} template files to ${targetDir.absolutePath}")
-        } catch (e: Exception) {
-            KernelLog.w("AgentTemplates", "Template extraction failed: ${e.message}")
         }
     }
 
     /**
      * Bootstrap a new agent's workspace by copying template .md files from the
-     * read-only template directory. Files that already exist in the workspace
-     * are skipped (preserves agent's customizations).
+     * read-only template directory for the specified language.
      *
-     * Uses atomic write (tmp → rename) for crash safety.
-     *
-     * @param agentName Agent workspace folder name.
+     * Falls back to zh if the requested language's templates don't exist.
      */
-    fun bootstrapAgent(agentName: String) {
-        val templateDir = File(DataPaths.AGENT_TEMPLATES)
+    fun bootstrapAgent(agentName: String, language: String = "zh") {
+        val lang = if (language in SUPPORTED_LANGS) language else "zh"
+        val templateDir = File(DataPaths.AGENT_TEMPLATES, lang)
         if (!templateDir.exists() || !templateDir.isDirectory) {
             KernelLog.w("AgentTemplates", "Template directory not found: ${templateDir.absolutePath}")
             return
@@ -113,12 +109,13 @@ object AgentTemplates {
         }
     }
 
-    /**
-     * Check if template directory exists and has been populated.
-     * Used as a fast-path check before bootstrap.
-     */
     fun isReady(): Boolean {
-        val dir = File(DataPaths.AGENT_TEMPLATES)
-        return dir.exists() && dir.isDirectory && (try { dir.listFiles()?.isNotEmpty() == true } catch (_: Exception) { false })
+        for (lang in SUPPORTED_LANGS) {
+            val dir = File(DataPaths.AGENT_TEMPLATES, lang)
+            if (dir.exists() && dir.isDirectory && (try { dir.listFiles()?.isNotEmpty() == true } catch (_: Exception) { false })) {
+                return true
+            }
+        }
+        return false
     }
 }

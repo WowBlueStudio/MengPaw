@@ -103,7 +103,7 @@ class AgentSessionFactory(
             sessions["MengPaw"] = createSession("MengPaw", null)
         }
         // Bootstrap workspace files if missing (safe: writeIfMissing won't overwrite existing).
-        com.mengpaw.kernel.agent.AgentDocs.bootstrap("MengPaw")
+        com.mengpaw.kernel.agent.AgentDocs.bootstrap("MengPaw", if (globalAgentLang == PromptEngine.AgentLanguage.CHINESE) "zh" else "en")
     }
 
     /** Create a new agent with the given name and optional framework. */
@@ -151,7 +151,7 @@ class AgentSessionFactory(
      * Auto-start a newly created agent: sends "启动" message so the agent reads
      * Boost.md from its workspace and proactively engages with the user.
      */
-    private fun autoStartAgent(agentName: String, workspaceFolder: String) {
+    fun autoStartAgent(agentName: String, workspaceFolder: String) {
         val session = sessions[agentName] ?: return
         bootstrappedAgents.add(agentName)
         // Read Boost.md content for the agent to process on startup

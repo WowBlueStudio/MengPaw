@@ -35,7 +35,8 @@ data class FrameworkItem(
     val name: String,
     val category: ItemCategory,
     val summary: String = "",
-    val docMarkdown: String = ""
+    val docMarkdown: String = "",
+    val isWowBlue: Boolean = false
 )
 
 /**

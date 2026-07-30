@@ -73,8 +73,16 @@ fun FrameworkItemSection(
                                 Text(item.name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
                                 if (item.summary.isNotBlank()) Text(item.summary, fontSize = 12.sp, color = ThemeColors.textSecondary, maxLines = 1)
                             }
+                            // Category badge
                             Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = cat.color.copy(alpha = 0.1f)) {
                                 Text(cat.label, Modifier.padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = cat.color)
+                            }
+                            // WowBlue badge for built-in features
+                            if (item.isWowBlue) {
+                                Spacer(Modifier.width(4.dp))
+                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Pink6.copy(alpha = 0.1f)) {
+                                    Text("WowBlue", Modifier.padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = ArcoColors.Pink6)
+                                }
                             }
                             Spacer(Modifier.width(4.dp))
                             Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp), tint = ThemeColors.textSecondary)
@@ -136,8 +144,16 @@ fun AgentItemsSection(
                                     Text(item.name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
                                     if (item.summary.isNotBlank()) Text(item.summary, fontSize = 12.sp, color = ThemeColors.textSecondary, maxLines = 1)
                                 }
+                                // Category badge
                                 Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = cat.color.copy(alpha = 0.1f)) {
                                     Text(cat.label, Modifier.padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = cat.color)
+                                }
+                                // WowBlue badge for built-in features
+                                if (item.isWowBlue) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Pink6.copy(alpha = 0.1f)) {
+                                        Text("WowBlue", Modifier.padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = ArcoColors.Pink6)
+                                    }
                                 }
                                 Spacer(Modifier.width(4.dp))
                                 Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp), tint = ThemeColors.textSecondary)
@@ -179,6 +195,12 @@ fun AgentItemsSection(
                                 }
                                 Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = item.category.color.copy(alpha = 0.1f)) {
                                     Text(item.category.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp), fontSize = 9.sp, color = item.category.color)
+                                }
+                                if (item.isWowBlue) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Pink6.copy(alpha = 0.1f)) {
+                                        Text("WowBlue", Modifier.padding(horizontal = 4.dp, vertical = 1.dp), fontSize = 9.sp, color = ArcoColors.Pink6)
+                                    }
                                 }
                             }
                         }

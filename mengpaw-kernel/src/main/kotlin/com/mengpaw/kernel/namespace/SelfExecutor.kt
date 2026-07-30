@@ -177,22 +177,22 @@ object SelfExecutor {
 
     private val TRIGGER_SUBCOMMANDS: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         "add" to { a, _ ->
-            if (a.size < 5) ExecutionResult.fail("Usage: self.trigger add <cron|lifetime> <id> <expr> <action>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+            if (a.size < 5) ExecutionResult.fail("Usage: self.trigger add <cron|schedule> <id> <config> <action>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
             else {
                 val engine = com.mengpaw.kernel.trigger.TriggerEngine
                 val type = a[1]; val id = a[2]; val expr = a[3]; val action = a.drop(4).joinToString(" ")
                 val ok = when (type) {
                     "cron" -> { engine.addCron(id, expr, action); engine.refreshCronAlarm(); true }
-                    "lifetime" -> { engine.addLifetime(id, expr, action); true }
+                    "schedule" -> { engine.addSchedule(id, expr, action); true }
                     else -> false
                 }
                 if (ok) ExecutionResult.ok("Trigger $id added.")
-                else ExecutionResult.fail("Type must be 'cron' or 'lifetime'", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+                else ExecutionResult.fail("Type must be 'cron' or 'schedule'", errorCode = ErrorCodes.ERR_INVALID_INPUT)
             }
         },
         "list" to { _, _ ->
             val triggers = com.mengpaw.kernel.trigger.TriggerEngine.list()
-            if (triggers.isEmpty()) ExecutionResult.ok("(No triggers)\n\n示例:\nself.trigger add cron morning-report 0 9 * * * 生成昨日摘要\nself.trigger add lifetime chat 10:00-20:00 随机聊天")
+            if (triggers.isEmpty()) ExecutionResult.ok("(No triggers)\n\n示例:\nself.trigger add cron morning-report 0 9 * * * 生成昨日摘要\nself.trigger add schedule daily-chat 08:00-22:00,count=3,interval=60 随机闲聊")
             else ExecutionResult.ok(triggers.joinToString("\n") { "${if (it.enabled) "✅" else "⛔"} ${it.id} [${it.type}] ${it.config} → ${it.action}" })
         },
         "remove" to { a, _ ->
@@ -200,7 +200,7 @@ object SelfExecutor {
             ExecutionResult.ok("Removed.")
         },
         "topics" to { _, _ ->
-            ExecutionResult.ok("## 真人感话题\n\n${com.mengpaw.kernel.trigger.TriggerEngine.LIFETIME_TOPICS.joinToString("\n") { "- $it" }}")
+            ExecutionResult.ok("## 真人感话题\n\n${com.mengpaw.kernel.trigger.TriggerEngine.SCHEDULE_TOPICS.joinToString("\n") { "- $it" }}")
         },
         "cron-wake" to { _, _ ->
             com.mengpaw.kernel.trigger.TriggerEngine.refreshCronAlarm()

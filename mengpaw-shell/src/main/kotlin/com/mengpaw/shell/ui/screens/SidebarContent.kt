@@ -108,7 +108,7 @@ fun SidebarContent(
     onNavigateToSettings: () -> Unit,
     onClose: () -> Unit,
     activeAgent: String = "MengPaw",
-    onSwitchAgent: (String) -> Unit = {},
+    onSwitchAgent: (String, String?) -> Unit = { _, _ -> },
     onCreateAgent: (String) -> Unit = {},
     // Extended create — passes name, workspace folder name, and intro
     onCreateAgentWithDetails: (name: String, workspaceFolder: String, intro: String) -> Unit = { name, _, _ -> onCreateAgent(name) },
@@ -167,7 +167,7 @@ fun SidebarContent(
             Row(
                 Modifier.fillMaxWidth()
                     .combinedClickable(
-                        onClick = { if (dirName != activeAgent) { onSwitchAgent(dirName); onClose() } },
+                        onClick = { if (dirName != activeAgent) { onSwitchAgent(dirName, null); onClose() } },
                         onLongClick = { cardAgentName = dirName }
                     )
                     .padding(vertical = ArcoSpacing.sm),
@@ -430,7 +430,7 @@ fun SidebarContent(
                         framework.agents.forEach { agentName ->
                             Row(
                                 Modifier.fillMaxWidth()
-                                    .clickable { onSwitchAgent(agentName) }
+                                    .clickable { onSwitchAgent(agentName, framework.name) }
                                     .padding(vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -518,7 +518,7 @@ fun SidebarContent(
             agentName = name,
             onDismiss = { cardAgentName = null },
             onSwitchTo = {
-                onSwitchAgent(name)
+                onSwitchAgent(name, null)
                 cardAgentName = null
             }
         )

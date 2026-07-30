@@ -628,6 +628,18 @@ class AgentEngine(
         maxRetriesPerSubtask: Int = 2, onStep: ((TraceStep) -> Unit)? = null
     ): String = missionModeExecutor.runWithMission(task, maxSubtasks, maxStepsPerSubtask, maxRetriesPerSubtask, onStep)
 
+    // ── Fleet Mode (reserved — delegates to Mission for now) ──────────
+
+    /**
+     * Fleet-mode: multi-agent fleet coordination for distributed execution.
+     * Currently delegates to [runWithMission]; will gain ACP-based cross-device
+     * task distribution, parallel worker dispatch, and fleet-level synthesis.
+     */
+    suspend fun runWithFleet(
+        task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
+        maxRetriesPerSubtask: Int = 2, onStep: ((TraceStep) -> Unit)? = null
+    ): String = runWithMission(task, maxSubtasks, maxStepsPerSubtask, maxRetriesPerSubtask, onStep)
+
     // ── Plan Mode (delegated to PlanModeExecutor) ─────────────────────
 
     /**

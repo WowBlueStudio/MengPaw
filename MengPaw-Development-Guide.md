@@ -51,7 +51,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 | 特征 | 说明 |
 |------|------|
-| 微内核 | `mengpaw-kernel` — 纯 Kotlin/JVM 模块，46 文件，零 Android 依赖，CLI/LLM/安全/会话/插件框架/Goal-Mission 模式全部可脱离 Android 测试 |
+| 微内核 | `mengpaw-kernel` — 纯 Kotlin/JVM 模块，46 文件，零 Android 依赖，CLI/LLM/安全/会话/插件框架/Goal-Fleet 模式全部可脱离 Android 测试 |
 | 适配层 | `mengpaw-core` — 仅 6 个源文件，提供 Android 桥接（Vault 加密存储 / IntegrityGuard / SysExecutor）。移植到新平台只需重写这 6 个文件 |
 | 插件同级 | 内置功能 (`sys`) 与外挂插件同等地位，均实现 `Plugin` 接口，均只依赖 kernel |
 | 零 Python | 纯 Kotlin，无 Python 运行时 |
@@ -61,7 +61,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | 插件市场 | GitHub Pages 托管 `plugins.json`，ETag 缓存，SHA256 校验 |
 | 记忆孪生 | v0.15.0 — 跨设备 Agent 记忆同步 + 哈希链账本 + 短码配对 + 心跳保活 + QoS 自适应 + 手动 IP 发现 (plugin-memory-twin v0.2) |
 | Agent 自我升级 | `plugin.marketplace` → `plugin.search` → `plugin.install` → 命令即可用 |
-| 内置 Loop 模式 | Goal / Mission / Mission+ 三种模式直接内置在 AgentEngine，含 RubricGate 自动完成评估 |
+| 内置 Loop 模式 | Goal / Fleet / Fleet+ 三种模式直接内置在 AgentEngine，含 RubricGate 自动完成评估 |
 | Agent 推送 | `notify.message` / `notify.banner` — Agent 主动向用户推送消息和横幅 |
 
 ### 1.2 成为贾维斯的三个维度
@@ -95,7 +95,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 ├──────────────────────────────────────────────────┤
 │  mengpaw-kernel (46 文件, 纯 Kotlin/JVM)          │  ← 微内核
 │  CLI · LLM · Session · Plugin · Security          │
-│  AgentEngine · Goal/Mission · MCP · ACP           │
+│  AgentEngine · Goal/Fleet · MCP · ACP           │
 │  NotifyBus · Error · Trigger · Namespace          │
 ├──────────────────────────────────────────────────┤
 │  plugins/ (25 模块, 同级, 均只依赖 kernel)         │  ← 插件层
@@ -178,7 +178,7 @@ AgentEngine 支持四种执行模式：
 | **ReAct** | `run()` | Thought → Action → Observation 标准模式，含循环检测和最大步数限制 |
 | **Plan-Execute** | `runWithPlan()` | LLM 分解任务为 3-7 步计划，逐步执行，每步独立 mini ReAct 循环 |
 | **Goal** | `runWithGoal()` | 单目标驱动 + RubricGate 自动完成评估（参考 QwenPaw GoalMode） |
-| **Mission** | `runWithMission()` | LLM 拆解子任务 → Worker 执行 → Verifier 验证（参考 QwenPaw MissionMode） |
+| **Fleet** | `runWithFleet()` | LLM 拆解子任务 → Worker 执行 → Verifier 验证（参考 QwenPaw FleetMode） |
 
 **Goal 模式架构**:
 ```
@@ -189,10 +189,10 @@ runWithGoal(task, maxTurns, maxTokens)
   └── RubricGate — LLM 评估 "目标完成了吗?" → YES=结束 / NO=继续
 ```
 
-**Mission 模式架构**:
+**Fleet 模式架构**:
 ```
-runWithMission(task, maxSubtasks, maxStepsPerSubtask)
-  ├── Phase 1: LLM 拆解 → List<MissionSubtask>
+runWithFleet(task, maxSubtasks, maxStepsPerSubtask)
+  ├── Phase 1: LLM 拆解 → List<FleetSubtask>
   ├── Phase 2: 每个子任务 → run() ReAct 独立执行
   ├── Phase 3: Verifier 验证每个子任务结果
   └── Phase 4: 最终报告 (verified/failed 统计)
@@ -259,7 +259,7 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 | `security/` | 4 | Sanitizer, SecurityPolicy, PromptFirewall, IntegrityProvider |
 | `mcp/` | 2 | McpServer, McpClient |
 | `acp/` | 7 | AcpProtocol, AcpServer, AcpCrypto, AcpTransport, DelegateHandler, McpOverAcpBridge, ShareMemoryHandler |
-| `mission/` | 1 | MissionMonitor |
+| `mission/` | 1 | FleetMonitor |
 | `error/` | 1 | ErrorCollector |
 | `extension/` | 1 | ManifestParser |
 | `trigger/` | 1 | TriggerEngine |
@@ -267,7 +267,7 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 | 根 | 4 | AgentEngine, DataPaths, KernelLog, KernelDispatchers |
 
 > **v0.17.0 新增**: `AgentEngine` 持久会话 (Claude Code 模式) — 多次 `run()` 复用同一 Session，LLM 看到完整对话历史；QwenPaw 风格结构化压缩 (Goal/Progress/KeyDecisions/NextSteps/CriticalContext) + 对话归档 (`dialog/YYYY-MM-DD.jsonl`) 保证零数据丢失；工具结果双阈值裁剪 (≤3步 30KB / 更早 2KB) + 文件外存。`SessionManager` 结构化摘要 + `agentName` 绑定。`DataPaths` 新增 `dialogArchiveDir` / `toolResultsDir`。
-> **v0.6.1 新增**: `GoalSession.kt` (GoalSession + RubricEvaluator + MissionSubtask), `NotifyBus.kt` (Agent→User 推送总线), SelfExecutor +5 命令
+> **v0.6.1 新增**: `GoalSession.kt` (GoalSession + RubricEvaluator + FleetSubtask), `NotifyBus.kt` (Agent→User 推送总线), SelfExecutor +5 命令
 
 ### 3.2 mengpaw-core（Android 适配层，6 文件）
 
@@ -287,17 +287,17 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 | `MainActivity.kt` | 入口 + 初始化 + 启动恢复配置 + 退出设置时 applyConfiguration |
 | `service/AgentRuntime.kt` | **NEW** UI/运行时分离 — 触发器桥接, 所有 IO 工作在此 |
 | `ui/screens/` (14 文件) | MainScreen, AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SidebarContent, SplashScreen |
-| `ui/components/` (5 文件) | BigBangPopup, MissionMonitorOverlay, TokenChart, TokenStatsCollector, NotifyBanner |
+| `ui/components/` (5 文件) | BigBangPopup, FleetMonitorOverlay, TokenChart, TokenStatsCollector, NotifyBanner |
 | `ui/AdaptiveLayout.kt` | WindowSizeClass 计算 |
 | `ui/localization/Strings.kt` | 中英双语注解 |
 | `service/` (4 文件) | ShellService, DreamWorker, EventReceiver, WakeReceiver |
 
 **v0.19.1 核心变更**:
 - **活跃标签行移入消息区**: 不再占全宽，不干扰左侧边栏长度
-- **执行模式按钮行删除**: 输入栏顶部 /Mission /Research /Translate /Silent 横排按钮移除，底部弹窗仍可访问
+- **执行模式按钮行删除**: 输入栏顶部 /Fleet /Research /Translate /Silent 横排按钮移除，底部弹窗仍可访问
 - **@mention 菜单修复**: DropdownMenu（Popup 窗口→输入法闪烁）改为内联 Surface，消除 IME 冲突
 - **插件按钮清理**: clipboard 粘贴按钮从底部弹窗移除（Agent 内部命令不暴露给人）
-- **Mission/Goal 顺序互换**: 扩展底部弹窗中 Goal 居左
+- **Fleet/Goal 顺序互换**: 扩展底部弹窗中 Goal 居左
 
 **v0.8.0 核心变更**:
 - **AgentRuntime**: 所有 Agent 初始化(文件 I/O + Provider 创建 + LLM 调用)在 IO 线程, UI 只观察 StateFlow
@@ -310,7 +310,7 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 - **框架协议插件**: mDNS 局域网注册/发现, framework.* 6 命令, 持续扫描, 指纹/Agent列表广播
 - **框架名片**: 长按查看名称/版本/地址/Agent列表/备注/信任, 可编辑
 - **亮/暗/跟随系统**: 三档主题切换, 跟随系统暗色模式
-- **扩展功能重构**: 文件提交区 (图片/文档/文件/拍照) + 执行模式区 (/Mission /Research /Translate /Dream) + 插件工具区
+- **扩展功能重构**: 文件提交区 (图片/文档/文件/拍照) + 执行模式区 (/Fleet /Research /Translate /Dream) + 插件工具区
 - **输入标签系统**: AssistChip 标签显示活跃模式, @agent 自动补全
 - **侧边栏交互**: 顶栏头像替代菜单图标, 全局右滑/左滑
 - **PAD悬浮窗移除**: 物理删除 plugin-pad 目录及所有引用
@@ -330,10 +330,10 @@ MCP JSON-RPC 是通用语言，ACP P2P 是加密通道，孪生是共享记忆�
 **v0.9.1 核心变更**:
 - **品牌焕新**: 主题色 #165DFF→#0E4397 (深蓝)，辅助色 →#FC5185 (粉色)，ArcoColors 蓝色系/Pink 系列全面更新
 - **启动页**: 代码绘制 "WOW BLUE" 替换为品牌 "哇" 矢量图标 (ic_wowblue_icon.xml) + "WowBlue" 文字
-- **扩展功能重构**: 文件提交区 (图片/文档/文件/拍照，利用 Android 文件选择器) + 执行模式区 (/Mission /Research /Translate /Dream) + 插件工具区
+- **扩展功能重构**: 文件提交区 (图片/文档/文件/拍照，利用 Android 文件选择器) + 执行模式区 (/Fleet /Research /Translate /Dream) + 插件工具区
 - **输入标签系统**: AssistChip 标签显示活跃模式，× 清除，持久保留
 - **@agent 自动补全**: 输入 @ 弹出已创建 Agent 列表，替换文本 + 添加标签
-- **气泡标注**: Agent 回答头部显示 · /Mission · N 步 或 · @agent 等标注
+- **气泡标注**: Agent 回答头部显示 · /Fleet · N 步 或 · @agent 等标注
 
 **v0.8.4 核心变更**:
 - **会话管理增强**: 独立会话文件 (`sessions/{id}.json`) + `switchToSession()` 切换恢复 + `agent.sessions` 跨会话搜索 + 原子写入防损坏
@@ -393,13 +393,13 @@ App横幅CSS屏蔽(30+选择器) + 平板标签栏白色主题 + 暗色模式自
 
 #### Agent 运行模式 (内置)
 
-> Goal / Mission / Mission+ 三种 Loop 模式已内置在 AgentEngine 中，不再作为独立插件。
+> Goal / Fleet / Fleet+ 三种 Loop 模式已内置在 AgentEngine 中，不再作为独立插件。
 
 | 模式 | 引擎方法 | 核心机制 |
 |------|---------|---------|
 | **Goal** | `AgentEngine.runWithGoal()` | GoalSession + 三层 Gate (GoalTurnGate/GoalBudgetGate/RubricGate) — LLM 自动评估完成度 |
-| **Mission** | `AgentEngine.runWithMission()` | LLM 拆解子任务 → Worker 独立 ReAct 执行 → Verifier 验证 |
-| **Mission+** | `runWithMission()` + ACP | Mission 模式 + 跨 ACP 框架/设备协调 |
+| **Fleet** | `AgentEngine.runWithFleet()` | LLM 拆解子任务 → Worker 独立 ReAct 执行 → Verifier 验证 |
+| **Fleet+** | `runWithFleet()` + ACP | Fleet 模式 + 跨 ACP 框架/设备协调 |
 
 #### 浏览器扩展 (5)
 
@@ -1107,7 +1107,7 @@ ShellService.start(this)   // startForeground + WakeLock
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| **0.19.1** | 2026-07-30 | **UI 调整 — 标签行移入消息区 + 删除模式按钮行 + @mention 修复 + 插件按钮清理** — A) 活跃标签行从全宽 Column 移入消息区 Box，约束在 msgWidth 下，不再干扰左侧边栏长度 B) 输入栏顶部执行模式按钮整行删除（底部弹窗仍可访问） C) @mention 下拉从 DropdownMenu（Popup 窗口导致输入法闪烁）改为内联 Surface，不干扰键盘输入 D) plugin-clipboard 粘贴按钮从底部弹窗移除（Agent 内部命令对人无意义） E) 底部弹窗插件工具区无按钮时仅显示 "<空>"，不占按钮布局高度 F) Mission/Goal 互换顺序（Goal 居左） |
+| **0.19.1** | 2026-07-30 | **UI 调整 — 标签行移入消息区 + 删除模式按钮行 + @mention 修复 + 插件按钮清理** — A) 活跃标签行从全宽 Column 移入消息区 Box，约束在 msgWidth 下，不再干扰左侧边栏长度 B) 输入栏顶部执行模式按钮整行删除（底部弹窗仍可访问） C) @mention 下拉从 DropdownMenu（Popup 窗口导致输入法闪烁）改为内联 Surface，不干扰键盘输入 D) plugin-clipboard 粘贴按钮从底部弹窗移除（Agent 内部命令对人无意义） E) 底部弹窗插件工具区无按钮时仅显示 "<空>"，不占按钮布局高度 F) Fleet/Goal 互换顺序（Goal 居左） |
 | **0.19.0** | 2026-07-30 | **代码审查全量修复 + 四文件拆解重构** — A) 九维审查: 1xP0(DefaultCommandExecutor shell注入修复), 10xP1(原子写入/readLines OOM/循环依赖/JSON注入/事件日志), 50+P2/P3 B) 四文件拆解: AgentViewModel(70→35KB), MainScreen(65→35KB), AgentEngine(58→28KB), BrowserActivity(51→25KB) C) org.json→kotlinx.serialization 5文件25处迁移 D) 国际化: 107条字符串迁移, 7个TODO解决 E) 新增 24 项 kernel 测试 F) SectionHeader 去重, AgentExecutor硬编码移除, PromptEngine缓存修复 |
 | **0.18.4** | 2026-07-30 | **气泡精简 + 表格自适应 + API供应商表单重构** — A) 气泡中去掉 MengPaw 字样和进度条 B) 顶栏去掉进度条 C) 表格列宽改为自适应内容 (widthIn max=360dp) D) 斜杠命令按钮改为输入框顶部横排 E) API供应商编辑去掉 ProviderCard 预置模型选项, 改为 chip 选择+API Key/地址编辑+F) 收起按钮合并为"收起API供应商列表" G) 侧边栏与主内容区之间加 VerticalDivider 分界线 |
 | **0.18.3** | 2026-07-29 | **UI重构 + 暗色模式Arco规范 + 主题色安全加固** — A) 斜杠命令改为悬浮按钮排列于左侧边栏右侧, 无容器无阴影 B) 框架状态自动忙碌切换, 移除恢复自动切换按钮 C) 暗色模式按Arco Design规范全面调整 (bg-1~bg-5层级, text-1~text-4透明度体系) D) 主题色自定义仅亮色模式生效, 排除暗色模式泄露; AgentTheme 移除无效深色字段 E) 设置页重构: 框架设置→API供应商, 模型选择移入智能体设置, 供应商卡片支持模型下拉选择+API自动拉取 F) 侧边栏滑动关闭手势 G) Qwen→DashScope(dashiscope) H) 后台运行策略移至后台运行区排首位 |
@@ -1121,17 +1121,17 @@ ShellService.start(this)   // startForeground + WakeLock
 | **0.11.3** | 2026-07-23 | **嵌套滚动根除 + 视觉表格 + commonmark 引擎全覆盖** — MarkdownText nestedScroll 参数 + 表格 widthIn(min) 列宽 + Image/HtmlBlock/嵌套列表/TableBody AST 全量转换 + ShellService deleteChannel SecurityException |
 | **0.11.0** | 2026-07-23 | **线程架构优化 + commonmark AST 引擎** — P0: Column+verticalScroll 替代 LazyColumn, P1: AgentDocs→Dispatchers.IO, commonmark-java 替代手写解析器, 视觉表格渲染 |
 | **0.10.0** | 2026-07-23 | **框架协议插件 + 侧边栏交互 + 主题系统** — 框架发现插件 (mDNS 局域网注册/扫描/指纹) + 侧边栏头像打开 + 全局滑动手势 + 智能体名片重排 (工作区滚动) + 框架名片 (名称/版本/备注/Agent列表) + 亮/暗/跟随系统三档主题 + GeoRouter 系统时区判断 + 插件管理页精简 + PAD 插件移除 + 启动页品牌 Logo 替换 |
-| **0.9.1** | 2026-07-22 | **品牌焕新 + 扩展功能重构** — 主题色更新 (#0E4397/#FC5185) + 启动页品牌 Logo 替换 + 扩展面板三区重构 (文件提交/执行模式/插件工具) + `/Mission` `/Research` `/Translate` `/Dream` 斜杠命令标签 + `@agent` 自动补全 + 气泡模式标注 + 面板图标自定义排序 |
+| **0.9.1** | 2026-07-22 | **品牌焕新 + 扩展功能重构** — 主题色更新 (#0E4397/#FC5185) + 启动页品牌 Logo 替换 + 扩展面板三区重构 (文件提交/执行模式/插件工具) + `/Fleet` `/Research` `/Translate` `/Dream` 斜杠命令标签 + `@agent` 自动补全 + 气泡模式标注 + 面板图标自定义排序 |
 | **0.9.0** | 2026-07-22 | **安全强化 + 模板文件化** — 三大安全保护去除开关/强制启用 + IntegrityGuard 接入 Pipeline 指令链 (之前从未实例化) + MD 模板从 Kotlin 硬编码字符串改为 assets .md 文件 (7 个模板 ~350 行代码删除) + 智能体专属工具/技能 (全局池安装/Agent 自装/用户提供路径) + 设置页文案重构 (全局工具/智能体工具) + 废弃插件目录物理删除 |
 | **0.8.4** | 2026-07-22 | **会话管理增强** — 独立会话文件 + 切换恢复 (`switchToSession`) + 跨会话搜索 (`agent.sessions`) + 原子写入防损坏 + 引擎可靠性修复 (安全命令白名单/循环检测优化/状态重置) + UI 升级 (自适应宽度/自动定位/真实头像/Markdown Heading) + 构建统一版本号 (mengpaw.version) |
 | **0.8.0** | 2026-07-22 | **重大架构重构** — UI/运行时分离 (AgentRuntime) + QwenPaw 风格初始化 + 会话完整持久化 (30s 自动保存 + 思考链) + 智能体管理 (长按/删除/框架) + 输入优化 (Enter 发送/聚焦) + 20+ 崩溃/ANR 修复 + Android 13-17 全版本 + 5大国产 OEM 适配 + 系统提示词重构 |
 | **0.7.0** | 2026-07-22 | Android CLI 全功能 (11→38 命令) + 全类型 Skill 引擎 + CRON 触发器 + LIFETIME 心跳 + 会话持久化 + 智能体名片 + API 模型更新 + Boost 自动启动 |
 | **0.6.2** | 2026-07-21 | Agent 逻辑修复 — 14 Bug 修复: DreamEngine 参数混淆/大小写/单位错误/dreamLog 缺失; AgentDocManager 索引损坏/ID 解析/数据丢失; Goal 模式上下文丢失; snipStaleToolResults 不生效; Pipeline 缓存; DeepSeek-Chat 解析死循环; RubricGate 改进; API 模型更新 (8 Provider 至最新) |
-| **0.6.1** | 2026-07-21 | 内核功能补全 — Goal/Mission/Mission+ 内置模式 (RubricGate LLM 完成评估) + Agent→User 推送 (NotifyBus) + self 命名空间扩展 (+5 命令: tools/time/notify) + fs 扩展 (+grep/glob) + QwenPaw 4 Skills 移植 + API Key 持久化修复 + Provider 热更新 + Android 权限补全 (17 项) + Vault 安全加固 (绝不明文) + ProGuard Tink keep 规则 |
+| **0.6.1** | 2026-07-21 | 内核功能补全 — Goal/Fleet/Fleet+ 内置模式 (RubricGate LLM 完成评估) + Agent→User 推送 (NotifyBus) + self 命名空间扩展 (+5 命令: tools/time/notify) + fs 扩展 (+grep/glob) + QwenPaw 4 Skills 移植 + API Key 持久化修复 + Provider 热更新 + Android 权限补全 (17 项) + Vault 安全加固 (绝不明文) + ProGuard Tink keep 规则 |
 | **0.6.0** | 2026-07-21 | UI 全面重构 — iPad 双栏设置 + 侧栏交互升级(左滑/长按多选/框架状态) + Per-Agent 模型选择 + Token 统计折线图 + 安全规则页 + WowBlue 启动动画 + 设计系统合规(硬编码色值清零) + 会话修复 + 通知栏常驻 |
 | **0.5.0** | 2026-07-21 | 微内核拆分 — kernel (44 文件, 纯 JVM) + core (6 文件, Android 适配) + 25 插件生态 |
 | **0.4.0** | 2026-07-21 | 安全加固 + 全项目修复 + 188 Bug 审计 + 89 项修复 + 模拟器验证零闪退 |
-| 0.3.x | 2026-07-20 | 25 插件生态 + 浏览器操控 + 多模态 + 12 LLM Provider + Mission/Worker/Verifier + BrowserBridge |
+| 0.3.x | 2026-07-20 | 25 插件生态 + 浏览器操控 + 多模态 + 12 LLM Provider + Fleet/Worker/Verifier + BrowserBridge |
 | 0.2.2 | 2026-07-19 | DataPaths 动态初始化 + 4 轮安全审计 + plugin-dev CLI |
 | 0.2.1 | 2026-07-19 | 多智能体 + 缓存优化 + Dream 模式 + Markdown/Emoji + BigBangPopup |
 | 0.2.0-alpha | 2026-07-16~17 | 微内核+插件架构 + ACP + MCP + 触发器引擎 + 深浅主题 |

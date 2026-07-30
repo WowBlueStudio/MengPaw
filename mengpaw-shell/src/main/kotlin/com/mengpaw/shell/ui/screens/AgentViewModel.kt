@@ -203,11 +203,22 @@ class AgentViewModel : ViewModel() {
     }
 
     /** Switch to a different agent. Stops old agent engine to prevent orphaned execution. */
-    fun switchAgent(name: String) {
+    fun switchAgent(name: String, framework: String? = null) {
         if (name == _activeAgentName) return
-        // Verify agent exists (directory on disk or existing session) before switching
         val agentDir = File(com.mengpaw.kernel.DataPaths.AGENTS, name)
-        if (!agentDir.exists() && !sessions.containsKey(name)) return
+        // Framework agent without local workspace: bootstrap with boost.md
+        if (!agentDir.exists() && !sessions.containsKey(name)) {
+            if (framework == null) return // local agent must have workspace on disk
+            agentDir.mkdirs()
+            com.mengpaw.kernel.agent.AgentDocs.bootstrap(name,
+                if (sessionFactory.globalAgentLang == com.mengpaw.kernel.llm.PromptEngine.AgentLanguage.CHINESE) "zh" else "en")
+            sessions[name] = sessionFactory.createSession(name, framework)
+            // Auto-start boost.md onboarding for first-time framework agent
+            sessionFactory.autoStartAgent(name, name)
+            _activeAgentName = name
+            bindActiveSession()
+            return
+        }
         stopAgent() // Stop old agent engine before switching
         // Reset old session state
         val old = sessions[_activeAgentName]
@@ -409,7 +420,7 @@ class AgentViewModel : ViewModel() {
                     // ── 显式斜杠命令结束, 以下为 loopMode 分发 ──
                     inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
                     inputTagManager.loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
-                    inputTagManager.loopMode == LoopMode.MISSION || inputTagManager.loopMode == LoopMode.MISSION_PLUS -> session.engine.runWithMission(task = finalTask, onStep = onStep)
+                    inputTagManager.loopMode == LoopMode.MISSION || inputTagManager.loopMode == LoopMode.FLEET -> session.engine.runWithFleet(task = finalTask, onStep = onStep)
                     else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
                 }
 
@@ -528,7 +539,7 @@ class AgentViewModel : ViewModel() {
     // ── Trigger task: silent background execution ────────────────────
 
     /**
-     * Called by TriggerEngine.onFire when a CRON/LIFETIME trigger fires.
+     * Called by TriggerEngine.onFire when a CRON/SCHEDULE trigger fires.
      */
     fun submitTriggerTask(trigger: com.mengpaw.kernel.trigger.TriggerEngine.Trigger) {
         val targetAgent = "MengPaw"
@@ -546,8 +557,8 @@ class AgentViewModel : ViewModel() {
             return
         }
 
-        // Minimal prompt — behavior governed by trigger.md workspace rules.
-        val prompt = "[触发器任务 · ${trigger.type}] ${trigger.action}\n(行为规范: workspace/trigger.md)"
+        // Minimal prompt — behavior governed by HEARTBEAT.md workspace rules.
+        val prompt = "[触发器任务 · ${trigger.type}] ${trigger.action}\n(行为规范: 阅读 HEARTBEAT.md 获取执行细则)"
 
         // Light system note so user knows something happened
         session.messages.value = session.messages.value + ChatMessageUi.System(

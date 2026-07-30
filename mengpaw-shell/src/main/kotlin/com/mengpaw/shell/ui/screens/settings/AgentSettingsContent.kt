@@ -33,10 +33,10 @@ fun AgentSettingsContent(
     activeModel: String,
     onSelectProvider: ((SavedProvider) -> Unit)?,
     agentPluginItems: List<FrameworkItem> = emptyList(),
-    agentToolItems: List<FrameworkItem> = emptyList(),
-    agentSkillItems: List<FrameworkItem> = emptyList(),
-    globalToolItems: List<FrameworkItem> = emptyList(),
-    globalSkillItems: List<FrameworkItem> = emptyList(),
+    globalToolItems: List<FrameworkItem> = emptyList(),    // self.tools 索引 (只读)
+    agentToolItems: List<FrameworkItem> = emptyList(),     // Agent 分区工具
+    globalSkillItems: List<FrameworkItem> = emptyList(),   // 全局 Skills 池 (skill.ls)
+    agentSkillItems: List<FrameworkItem> = emptyList(),    // Agent 本地 Skills
     workspaceItems: List<FrameworkItem> = emptyList(),
     onRefreshWorkspace: (() -> Unit)? = null
 ) {
@@ -83,7 +83,6 @@ fun AgentSettingsContent(
                         Column(Modifier.padding(start = ArcoSpacing.lg, end = ArcoSpacing.md, bottom = ArcoSpacing.sm)) {
                             Text(state.strings.agentSelectModel, style = MaterialTheme.typography.labelSmall,
                                 color = ThemeColors.textSecondary, modifier = Modifier.padding(bottom = 4.dp))
-                            // Preset models
                             saved.preset.models.forEach { model ->
                                 val selected = saved.model == model.name
                                 Row(Modifier.fillMaxWidth().clickable {
@@ -102,7 +101,6 @@ fun AgentSettingsContent(
                                     else if (model.type.contains("思维链")) Text("🧠", fontSize = 12.sp)
                                 }
                             }
-                            // API-fetched models (not in preset)
                             val extraModels = state.remoteModels.filter { rm -> saved.preset.models.none { it.name == rm } }
                             if (extraModels.isNotEmpty()) {
                                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
@@ -129,7 +127,6 @@ fun AgentSettingsContent(
                                         modifier = Modifier.padding(start = ArcoSpacing.sm))
                                 }
                             }
-                            // Refresh button
                             TextButton(onClick = {
                                 viewModel.selectProvider(saved.preset)
                                 viewModel.updateApiKey(saved.apiKey)
@@ -330,7 +327,7 @@ fun AgentSettingsContent(
         LifetimeTriggerDialog(
             onDismiss = { showAddLifetimeDialog = false },
             onConfirm = { id, timeRange, action ->
-                com.mengpaw.kernel.trigger.TriggerEngine.addLifetime(id, timeRange, action)
+                com.mengpaw.kernel.trigger.TriggerEngine.addSchedule(id, timeRange, action)
                 triggerVersion++
                 showAddLifetimeDialog = false
             }
@@ -341,28 +338,74 @@ fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    FrameworkItemSection(state.strings.agentPlugins, Icons.Outlined.Extension, agentPluginItems)
+    // ── Tools: 全局工具索引 (只读, 无安装流程) ──
+    SectionHeader(state.strings.agentTools + " (${globalToolItems.size})")
+    Text(state.strings.agentInstallHelp, fontSize = 11.sp, color = ThemeColors.textSecondary,
+        lineHeight = 16.sp, modifier = Modifier.padding(bottom = ArcoSpacing.xs))
+    if (globalToolItems.isNotEmpty()) {
+        FrameworkItemSection("", Icons.Outlined.Terminal, globalToolItems)
+    } else {
+        Text(state.strings.agentNoTriggers, style = MaterialTheme.typography.bodySmall,
+            color = ThemeColors.textSecondary)
+    }
+
+    if (agentToolItems.isNotEmpty()) {
+        Spacer(Modifier.height(ArcoSpacing.md))
+        SectionHeader("分区工具 (${agentToolItems.size})")
+        FrameworkItemSection("", Icons.Outlined.Terminal, agentToolItems)
+    }
+
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    AgentItemsSection(
-        title = state.strings.agentTools, icon = Icons.Outlined.Terminal,
-        agentItems = agentToolItems, globalPoolItems = globalToolItems,
-        globalPoolLabel = state.strings.agentFromGlobalPool,
-        installHelp = state.strings.agentInstallHelp
-    )
-
-    Spacer(Modifier.height(ArcoSpacing.lg))
-    HorizontalDivider(color = ThemeColors.border)
-    Spacer(Modifier.height(ArcoSpacing.lg))
-
+    // ── Skills: Agent 本地 + 全局池 ──
     AgentItemsSection(
         title = state.strings.agentSkills, icon = Icons.Outlined.AutoAwesome,
         agentItems = agentSkillItems, globalPoolItems = globalSkillItems,
         globalPoolLabel = state.strings.agentFromSkillPool,
         installHelp = state.strings.agentInstallHelp
     )
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // ── 全局 Skills 池索引 (只读) ──
+    SectionHeader(state.strings.agentSkillPool + " (${globalSkillItems.size})")
+    Text("全局 Skills 池中的可用项，使用 skill.pull <name> 拉取到当前 Agent。",
+        fontSize = 11.sp, color = ThemeColors.textSecondary,
+        modifier = Modifier.padding(bottom = ArcoSpacing.xs))
+    if (globalSkillItems.isNotEmpty()) {
+        // Global skills pool list with pull buttons
+        Column {
+            globalSkillItems.forEach { item ->
+                key(item.name) {
+                    Surface(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard) {
+                        Row(Modifier.padding(start = ArcoSpacing.md, end = ArcoSpacing.sm, top = ArcoSpacing.sm, bottom = ArcoSpacing.sm),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(16.dp), tint = ArcoColors.Blue6)
+                            Spacer(Modifier.width(ArcoSpacing.sm))
+                            Column(Modifier.weight(1f)) {
+                                Text(item.name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
+                                if (item.summary.isNotBlank())
+                                    Text(item.summary, fontSize = 12.sp, color = ThemeColors.textSecondary, maxLines = 1)
+                            }
+                            TextButton(onClick = {
+                                /* skill.pull via Agent CLI — user asks Agent in chat */
+                            }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
+                                Text("拉取", fontSize = 12.sp, color = ThemeColors.brand)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        Text(state.strings.agentNoTriggers, style = MaterialTheme.typography.bodySmall,
+            color = ThemeColors.textSecondary)
+    }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)

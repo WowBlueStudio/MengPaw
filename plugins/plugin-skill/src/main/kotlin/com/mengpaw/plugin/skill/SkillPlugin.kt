@@ -16,46 +16,48 @@ import java.io.File
 /**
  * Skill system plugin — provides skill.* CLI commands.
  *
- * ## Skill types
- * All skills are `.md` files with YAML frontmatter. The system supports:
- * - **Markdown 剧本型** — Agent reads the skill content and follows instructions
- * - **参数化型** — Skill content uses `{{key}}` placeholders; pass `key=value` via CLI
- * - **分类管理** — Skills grouped by category for filtering and discovery
+ * ## Two-tier skill storage
+ * - **Global pool** (`{BASE}/技能剧本/`): shared across all Agents, read-mostly.
+ * - **Agent local** (`{BASE}/Agent文档/{name}/skills/`): per-Agent partition.
+ *
+ * `skill.run` checks local first, falls back to global. `skill.create` writes to local.
+ * `skill.pull` copies from global to local; `skill.push` uploads from local to global.
  *
  * ## Commands
  * ```
- * skill.ls [--category <cat>]          列出技能（可按分类过滤）
- * skill.run <name> [key=value ...]      执行技能（支持参数替换）
- * skill.info <name>                    查看技能详情（元数据+内容预览）
- * skill.search <keyword>               按名称/描述搜索技能
- * skill.create <name> [options]        创建新技能模板
- * skill.enable <name>                  启用技能
- * skill.disable <name>                 停用技能
+ * skill.ls [--category <cat>] [--local]  列出技能（全局/本地，可按分类过滤）
+ * skill.run <name> [key=value ...]        执行技能（先查本地再查全局）
+ * skill.info <name>                       查看技能详情
+ * skill.search <keyword>                  按名称/描述搜索（全局+本地）
+ * skill.create <name> [options]           在 Agent 本地创建新技能
+ * skill.pull <name>                       从全局池复制到 Agent 本地
+ * skill.push <name>                       从 Agent 本地上传到全局池
+ * skill.rm <name>                         删除 Agent 本地技能
+ * skill.enable <name>                     启用技能
+ * skill.disable <name>                    停用技能
  * ```
  */
 class SkillPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "skill-plugin",
         name = "技能系统",
-        version = "", // 内置插件, 随 Shell APK 版本更新
+        version = "",
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "全类型 Skill 引擎 — Markdown 剧本 + 参数化 + 分类过滤 + 搜索 + 管理",
+        description = "双层 Skill 引擎 — 全局池+Agent本地，Markdown剧本+参数化+分类+搜索+管理",
         minCoreVersion = "0.6.2",
         commands = listOf(
             "skill.ls", "skill.run", "skill.info", "skill.search",
-            "skill.create", "skill.enable", "skill.disable"
+            "skill.create", "skill.rm", "skill.pull", "skill.push",
+            "skill.enable", "skill.disable"
         )
     )
 
     override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "ls" to ::ls, "run" to ::run, "info" to ::info, "search" to ::search,
-        "create" to ::create, "enable" to ::enable, "disable" to ::disable
+        "create" to ::create, "rm" to ::rm, "pull" to ::pull, "push" to ::push,
+        "enable" to ::enable, "disable" to ::disable
     )
-
-    // ═══════════════════════════════════════════════════════════════════
-    // Skill categories (used for filtering and discovery)
-    // ═══════════════════════════════════════════════════════════════════
 
     companion object {
         val CATEGORIES = mapOf(
@@ -66,14 +68,15 @@ class SkillPlugin : Plugin {
             "browser" to "浏览器 — 网页操控、数据采集、搜索",
             "general" to "通用 — 未分类的通用技能"
         )
-
-        /** Human-readable label for a category key. */
         fun categoryLabel(cat: String): String = CATEGORIES[cat] ?: cat
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-
     private var storageDir = com.mengpaw.kernel.DataPaths.SKILLS
+    private val globalDir: File get() = File(storageDir).also { it.mkdirs() }
+
+    /** Agent's local skills dir — `{AGENTS}/{name}/skills/`. */
+    private fun localDir(agentName: String): File =
+        File(com.mengpaw.kernel.DataPaths.agentSkillsDir(agentName)).also { it.mkdirs() }
 
     override suspend fun onInstall(ctx: PluginContext) {
         storageDir = "${ctx.storageDir}/skills"
@@ -81,11 +84,9 @@ class SkillPlugin : Plugin {
         seedDefaults()
     }
 
-    private val dir: File get() = File(storageDir).also { it.mkdirs() }
-
-    /** Seed missing default skills — only creates those not already present. */
+    /** Seed missing default skills into the global pool. */
     fun seedDefaults() {
-        val d = dir
+        val d = globalDir
         val existing = d.listFiles { f -> f.extension == "md" }?.map { it.nameWithoutExtension }?.toSet() ?: emptySet()
         DEFAULT_SKILLS.forEach { (name, content) ->
             if (name !in existing) {
@@ -99,29 +100,34 @@ class SkillPlugin : Plugin {
     // CLI Command implementations
     // ═══════════════════════════════════════════════════════════════════
 
-    /** List skills, optionally filtered by category. */
+    /** List skills. Without --local: show global pool. With --local: show Agent local. */
     private suspend fun ls(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         seedDefaults()
         var category: String? = null
-        val rest = mutableListOf<String>()
+        var localOnly = false
         var i = 0
         while (i < args.size) {
             when (args[i]) {
                 "--category", "-c" -> { if (i + 1 < args.size) category = args[++i] }
-                else -> rest.add(args[i])
+                "--local", "-l" -> localOnly = true
             }
             i++
         }
 
-        val skills = listSkills(category = category)
-        if (skills.isEmpty()) {
-            val hint = if (category != null) " (分类: $category)" else ""
-            return ExecutionResult.ok("(暂无技能$hint)\n\n使用 skill.create <name> 创建新技能。")
+        val skills = if (localOnly) {
+            listSkills(localDir(ctx.agentName ?: ""), category)
+        } else {
+            listSkills(globalDir, category)
         }
 
-        val catSummary = if (category != null) " [$category]" else ""
+        val poolLabel = if (localOnly) "本地" else "全局"
+        if (skills.isEmpty()) {
+            val hint = if (category != null) " (分类: $category)" else ""
+            return ExecutionResult.ok("(暂无${poolLabel}技能$hint)\n\n使用 skill.create <name> 创建新技能。")
+        }
+
         return ExecutionResult.ok(buildString {
-            appendLine("## 可用技能$catSummary (${skills.size})")
+            appendLine("## ${poolLabel}可用技能 (${skills.size})")
             appendLine()
             appendLine("| 状态 | 名称 | 分类 | 描述 |")
             appendLine("|------|------|------|------|")
@@ -134,133 +140,83 @@ class SkillPlugin : Plugin {
     }
 
     /**
-     * Run a skill, loading its content as a prompt for the Agent.
-     * Supports parameterized skills: `skill.run deploy target=prod env=staging`
-     * replaces `{{target}}` and `{{env}}` in the skill content.
+     * Run a skill. Checks Agent local first, then global pool.
      */
     private suspend fun run(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail(
-            "Usage: skill.run <name> [key=value ...]\n\n参数化 Skill 支持 {{key}} 占位符替换。",
-            errorCode = ErrorCodes.ERR_INVALID_INPUT
+            "Usage: skill.run <name> [key=value ...]", errorCode = ErrorCodes.ERR_INVALID_INPUT
         )
-
         val name = args[0]
-        val skill = getSkill(name)
-            ?: return ExecutionResult.fail("Skill not found: $name\n使用 skill.ls 查看可用技能。", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        var skill = parseSkill(File(localDir(ctx.agentName ?: ""), "$name.md"))
+        if (skill == null) skill = parseSkill(File(globalDir, "$name.md"))
+        if (skill == null) return ExecutionResult.fail(
+            "Skill not found: $name\n本地和全局池均未找到。使用 skill.ls 查看全局池。", errorCode = ErrorCodes.ERR_NOT_FOUND
+        )
         if (!skill.enabled) return ExecutionResult.fail(
-            "Skill disabled: $name\n使用 skill.enable $name 启用。",
-            errorCode = ErrorCodes.ERR_PERMISSION_DENIED
+            "Skill disabled: $name\n使用 skill.enable $name 启用。", errorCode = ErrorCodes.ERR_PERMISSION_DENIED
         )
 
-        // Parse key=value parameters from remaining args
         val params = mutableMapOf<String, String>()
         for (j in 1 until args.size) {
             val eq = args[j].indexOf('=')
-            if (eq > 0) {
-                params[args[j].substring(0, eq).trim()] = args[j].substring(eq + 1).trim()
-            }
+            if (eq > 0) params[args[j].substring(0, eq).trim()] = args[j].substring(eq + 1).trim()
         }
-
-        // Apply parameter substitution: {{key}} → value
         var content = skill.content
         params.forEach { (k, v) ->
             content = content.replace("{{$k}}", v)
             content = content.replace("{{${k.uppercase()}}}", v)
         }
-
-        // Report unused parameters (warnings only, don't block execution)
         val unusedPlaceholders = Regex("\\{\\{(.+?)}}").findAll(content).map { it.groupValues[1] }.toList()
         val header = buildString {
             appendLine("## Skill: ${skill.name}")
             appendLine("描述: ${skill.description}")
             appendLine("分类: ${skill.category}")
-            if (params.isNotEmpty()) {
-                appendLine("参数: ${params.entries.joinToString(", ") { "${it.key}=${it.value}" }}")
-            }
-            if (unusedPlaceholders.isNotEmpty()) {
-                appendLine("⚠ 未填参数: ${unusedPlaceholders.joinToString(", ")}")
-            }
-            appendLine()
-            appendLine("---")
-            appendLine()
+            if (params.isNotEmpty()) appendLine("参数: ${params.entries.joinToString(", ") { "${it.key}=${it.value}" }}")
+            if (unusedPlaceholders.isNotEmpty()) appendLine("⚠ 未填参数: ${unusedPlaceholders.joinToString(", ")}")
+            appendLine(); appendLine("---"); appendLine()
         }
-
         return ExecutionResult.ok(header + content)
     }
 
-    /** Show detailed info for a single skill. */
     private suspend fun info(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail(
-            "Usage: skill.info <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT
-        )
-        val skill = getSkill(args[0])
-            ?: return ExecutionResult.fail("Skill not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
-
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.info <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        var skill = parseSkill(File(localDir(ctx.agentName ?: ""), "${args[0]}.md"))
+        if (skill == null) skill = parseSkill(File(globalDir, "${args[0]}.md"))
+        if (skill == null) return ExecutionResult.fail("Skill not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
         val placeholders = Regex("\\{\\{(.+?)}}").findAll(skill.content).map { it.groupValues[1] }.toList()
         return ExecutionResult.ok(buildString {
-            appendLine("## ${skill.name}")
-            appendLine()
-            appendLine("| 属性 | 值 |")
-            appendLine("|------|-----|")
+            appendLine("## ${skill.name}"); appendLine()
+            appendLine("| 属性 | 值 |"); appendLine("|------|-----|")
             appendLine("| 名称 | ${skill.name} |")
             appendLine("| 描述 | ${skill.description} |")
             appendLine("| 分类 | ${skill.category} (${categoryLabel(skill.category)}) |")
             appendLine("| 状态 | ${if (skill.enabled) "已启用" else "已停用"} |")
-            if (placeholders.isNotEmpty()) {
-                appendLine("| 参数 | ${placeholders.joinToString(", ") { "`{{$it}}`" }} |")
-            }
-            appendLine()
-            appendLine("### 内容预览")
+            appendLine("| 位置 | ${if (File(localDir(ctx.agentName ?: ""), "${skill.name}.md").exists()) "Agent本地" else "全局池"} |")
+            if (placeholders.isNotEmpty()) appendLine("| 参数 | ${placeholders.joinToString(", ") { "`{{$it}}`" }} |")
+            appendLine(); appendLine("### 内容预览")
             appendLine(skill.content.take(500))
             if (skill.content.length > 500) appendLine("\n... (${skill.content.length - 500} 字符省略)")
-            if (placeholders.isNotEmpty()) {
-                appendLine()
-                appendLine("### 参数化调用示例")
-                appendLine("```")
-                appendLine("skill.run ${skill.name} ${placeholders.joinToString(" ") { "$it=<value>" }}")
-                appendLine("```")
-            }
         })
     }
 
-    /** Search skills by name or description. */
     private suspend fun search(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail(
-            "Usage: skill.search <keyword>", errorCode = ErrorCodes.ERR_INVALID_INPUT
-        )
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.search <keyword>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         seedDefaults()
         val q = args.joinToString(" ").lowercase()
-        val results = listSkills().filter {
-            it.name.lowercase().contains(q) || it.description.lowercase().contains(q)
-        }
-        if (results.isEmpty()) return ExecutionResult.ok("未找到匹配 '$q' 的技能。\n使用 skill.ls 查看全部。")
-
+        val global = listSkills(globalDir).filter { it.name.lowercase().contains(q) || it.description.lowercase().contains(q) }
+        val local = listSkills(localDir(ctx.agentName ?: "")).filter { it.name.lowercase().contains(q) || it.description.lowercase().contains(q) }
+        val localNames = local.map { it.name }.toSet()
+        if (global.isEmpty() && local.isEmpty()) return ExecutionResult.ok("未找到匹配 '$q' 的技能。\n使用 skill.ls 查看全局池。")
         return ExecutionResult.ok(buildString {
-            appendLine("## 搜索结果: '$q' (${results.size})")
-            appendLine()
-            results.forEach { s ->
-                appendLine("- **${s.name}** [${s.category}] — ${s.description}")
-            }
+            if (local.isNotEmpty()) { appendLine("## Agent 本地匹配 (${local.size})"); local.forEach { s -> appendLine("- **${s.name}** [${s.category}] — ${s.description}") }; appendLine() }
+            if (global.isNotEmpty()) { val f = global.filter { it.name !in localNames }; if (f.isNotEmpty()) { appendLine("## 全局池匹配 (${f.size})"); f.forEach { s -> appendLine("- **${s.name}** [${s.category}] — ${s.description}") }; appendLine(); appendLine("使用 skill.pull <name> 拉取到本地。") } }
         })
     }
 
-    /** Create a new skill template. */
     private suspend fun create(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail(
-            "Usage: skill.create <name> [--category <cat>] [--description <desc>]",
-            errorCode = ErrorCodes.ERR_INVALID_INPUT
-        )
-
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.create <name> [--category <cat>] [--description <desc>]", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val name = args[0]
-        // Validate name
-        if (!name.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
-            return ExecutionResult.fail(
-                "Skill 名称只能包含英文字母、数字、下划线和连字符。",
-                errorCode = ErrorCodes.ERR_INVALID_INPUT
-            )
-        }
-
-        // Parse options
+        if (!name.matches(Regex("^[a-zA-Z0-9_-]+$"))) return ExecutionResult.fail("Skill 名称只能包含英文字母、数字、下划线和连字符。", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         var category = "general"
         var description = ""
         var i = 1
@@ -268,591 +224,108 @@ class SkillPlugin : Plugin {
             when (args[i]) {
                 "--category", "-c" -> { if (i + 1 < args.size) { category = args[++i]; if (category !in CATEGORIES) category = "general" } }
                 "--description", "-d" -> { if (i + 1 < args.size) description = args[++i] }
-            }
-            i++
+            }; i++
         }
         if (description.isBlank()) description = "$name 技能"
-
-        val file = File(dir, "$name.md")
-        if (file.exists()) return ExecutionResult.fail(
-            "Skill 已存在: $name\n使用 skill.run $name 执行，或 skill.info $name 查看。",
-            errorCode = ErrorCodes.ERR_INTERNAL
-        )
-
+        val target = localDir(ctx.agentName ?: "")
+        val file = File(target, "$name.md")
+        if (file.exists()) return ExecutionResult.fail("本地 Skill 已存在: $name\n使用 skill.run $name 执行，或 skill.info $name 查看。", errorCode = ErrorCodes.ERR_INTERNAL)
         val template = buildSkillTemplate(name, category, description)
-        try {
+        return try {
             file.writeText(template)
-            return ExecutionResult.ok(buildString {
-                appendLine("✅ Skill '$name' 已创建。")
-                appendLine()
-                appendLine("| 属性 | 值 |")
-                appendLine("|------|-----|")
-                appendLine("| 分类 | $category |")
-                appendLine("| 路径 | ${file.absolutePath} |")
-                appendLine()
-                appendLine("使用 skill.info $name 查看并编辑完善。")
-            })
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "SkillPlugin.create")
-            return ExecutionResult.fail("创建失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
-        }
+            ExecutionResult.ok("✅ Skill '$name' 已创建到 Agent 本地。\n\n| 属性 | 值 |\n|------|-----|\n| 分类 | $category |\n| 路径 | ${file.absolutePath} |\n\n使用 skill.run $name 执行。使用 skill.push $name 上传到全局池。")
+        } catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.create"); ExecutionResult.fail("创建失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    private suspend fun rm(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.rm <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val name = args[0]
+        val file = File(localDir(ctx.agentName ?: ""), "$name.md")
+        if (!file.exists()) return ExecutionResult.fail("本地未找到 Skill: $name\n使用 skill.ls --local 查看本地技能。", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        return try { file.delete(); ExecutionResult.ok("Skill '$name' 已从本地删除。") }
+        catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.rm"); ExecutionResult.fail("删除失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    private suspend fun pull(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.pull <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val name = args[0]
+        val source = File(globalDir, "$name.md")
+        if (!source.exists()) return ExecutionResult.fail("全局池中未找到 Skill: $name\n使用 skill.ls 查看全局可用技能。", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        val targetDir = localDir(ctx.agentName ?: ""); val target = File(targetDir, "$name.md")
+        if (target.exists()) return ExecutionResult.ok("Skill '$name' 已在本地。使用 skill.run $name 执行。")
+        return try { source.copyTo(target, overwrite = false); ExecutionResult.ok("Skill '$name' 已从全局池拉取到本地。\n使用 skill.run $name 执行。") }
+        catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.pull"); ExecutionResult.fail("拉取失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
+    }
+
+    private suspend fun push(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.push <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val name = args[0]
+        val source = File(localDir(ctx.agentName ?: ""), "$name.md")
+        if (!source.exists()) return ExecutionResult.fail("本地未找到 Skill: $name\n使用 skill.ls --local 查看本地技能。", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        val target = File(globalDir, "$name.md"); val exists = target.exists()
+        return try { source.copyTo(target, overwrite = true); val msg = if (exists) "已覆盖" else "已上传"; ExecutionResult.ok("Skill '$name' $msg 到全局池。\n现在所有 Agent 都可通过 skill.run $name 使用。") }
+        catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.push"); ExecutionResult.fail("上传失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
     }
 
     private suspend fun enable(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail(
-            "Usage: skill.enable <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT
-        )
-        setEnabled(args[0], true)
-        return ExecutionResult.ok("Enabled: ${args[0]}")
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.enable <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        setEnabled(args[0], true); return ExecutionResult.ok("Enabled: ${args[0]}")
     }
 
     private suspend fun disable(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail(
-            "Usage: skill.disable <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT
-        )
-        setEnabled(args[0], false)
-        return ExecutionResult.ok("Disabled: ${args[0]}")
+        if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.disable <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        setEnabled(args[0], false); return ExecutionResult.ok("Disabled: ${args[0]}")
     }
 
     // ═══════════════════════════════════════════════════════════════════
     // Skill CRUD
     // ═══════════════════════════════════════════════════════════════════
 
-    fun listSkills(category: String? = null): List<SkillDef> {
-        val all = dir.listFiles { f -> f.extension == "md" }
-            ?.mapNotNull { parseSkill(it) }?.sortedBy { it.name } ?: emptyList()
+    private fun listSkills(dir: File, category: String? = null): List<SkillDef> {
+        val all = dir.listFiles { f -> f.extension == "md" }?.mapNotNull { parseSkill(it) }?.sortedBy { it.name } ?: emptyList()
         return if (category != null) all.filter { it.category == category } else all
     }
 
-    fun getSkill(name: String): SkillDef? {
-        val file = File(dir, "$name.md")
-        return if (file.exists()) parseSkill(file) else null
-    }
-
     fun setEnabled(name: String, enabled: Boolean): Boolean {
-        val skill = getSkill(name) ?: return false
-        val newContent = skill.rawText.replace(
-            Regex("(?m)^enabled:\\s*(true|false)"),
-            "enabled: $enabled"
-        )
-        return try {
-            File(dir, "$name.md").writeText(newContent)
-            true
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "SkillPlugin.setEnabled")
-            false
+        val global = File(globalDir, "$name.md")
+        if (global.exists()) {
+            val text = try { global.readText() } catch (_: Exception) { return false }
+            val newContent = text.replace(Regex("(?m)^enabled:\\s*(true|false)"), "enabled: $enabled")
+            return try { global.writeText(newContent); true } catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.setEnabled"); false }
         }
+        return false
     }
 
     private fun parseSkill(file: File): SkillDef? {
         if (!file.exists()) return null
-        val text = try { file.readText() } catch (e: Exception) {
-            ErrorCollector.report(e, "SkillPlugin.parseSkill"); return null
-        }
+        val text = try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.parseSkill"); return null }
         val fm = Regex("^---\\s*\n(.+?)\\n---", RegexOption.DOT_MATCHES_ALL).find(text.trimStart())
         val frontmatter = fm?.groupValues?.get(1) ?: ""
         val contentStart = fm?.range?.last?.plus(1) ?: 0
         val content = text.substring(contentStart).trim()
-        val props = frontmatter.lines().filter { it.isNotBlank() && it.contains(":") }.associate {
-            val idx = it.indexOf(":"); it.take(idx).trim() to it.drop(idx + 1).trim()
-        }
-        return SkillDef(
-            name = props["name"] ?: file.nameWithoutExtension,
-            description = props["description"] ?: "",
-            enabled = props["enabled"]?.toBooleanStrictOrNull() ?: true,
-            category = props["category"] ?: "general",
-            content = content,
-            rawText = text
-        )
+        val props = frontmatter.lines().filter { it.isNotBlank() && it.contains(":") }.associate { val idx = it.indexOf(":"); it.take(idx).trim() to it.drop(idx + 1).trim() }
+        return SkillDef(name = props["name"] ?: file.nameWithoutExtension, description = props["description"] ?: "", enabled = props["enabled"]?.toBooleanStrictOrNull() ?: true, category = props["category"] ?: "general", content = content, rawText = text)
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // Template generator
-    // ═══════════════════════════════════════════════════════════════════
-
     private fun buildSkillTemplate(name: String, category: String, description: String): String {
-        val sectionHints = when (category) {
-            "dev" -> """
-## 执行步骤
-1. 分析代码结构（使用 `agent.read` 查看相关文件）
-2. 执行开发任务
-3. 验证结果（编译/测试）
-4. 汇报完成情况
-
-## 注意事项
-- 修改前备份重要文件
-- 遵循项目代码规范
-""".trimIndent()
-            "office" -> """
-## 执行步骤
-1. 确认需求（文档类型、格式要求）
-2. 使用 `agent.write` 生成文档
-3. 检查输出质量
-4. 交付给用户确认
-
-## 模板参数
-使用 `{{参数名}}` 作为占位符，调用时传入 `skill.run $name 参数名=值`。
-""".trimIndent()
-            "browser" -> """
-## 执行步骤
-1. 使用浏览器命令打开目标页面
-2. 执行数据采集/操作
-3. 整理结果
-4. 保存或汇报
-
-## 浏览器命令参考
-使用 `agent.browser-tools` 查看完整浏览器操控命令。
-""".trimIndent()
-            "system" -> """
-## 执行步骤
-1. 使用 `self.status` / `sys.*` 获取系统状态
-2. 分析诊断信息
-3. 执行维护操作
-4. 记录结果到 `agent.memory.record`
-
-## 安全注意
-- 修改系统配置前需用户确认
-- 使用 `agent.audit` 可回溯所有操作
-""".trimIndent()
-            "meta" -> """
-## 执行步骤
-1. 分析当前会话或目标
-2. 制定 Skill 结构
-3. 使用 `skill.create` 或 `agent.write` 写入技能文件
-4. 使用 `skill.info` 验证
-
-## Skill 设计原则
-- 一个 Skill 只做一件事
-- 描述清晰、步骤可执行
-- 使用 `{{参数}}` 支持参数化
-""".trimIndent()
-            else -> """
-## 执行步骤
-1. 确认任务目标
-2. 使用 `self.tools` 确认可用命令
-3. 逐步执行
-4. 汇报结果
-""".trimIndent()
+        val hints = when (category) {
+            "dev" -> "## 执行步骤\n1. 分析代码结构\n2. 执行开发任务\n3. 验证结果\n4. 汇报完成情况"
+            "office" -> "## 执行步骤\n1. 确认需求\n2. 使用 agent.write 生成文档\n3. 检查输出质量\n4. 交付确认\n\n使用 {{param}} 占位符实现参数化。"
+            "browser" -> "## 执行步骤\n1. 打开目标页面\n2. 数据采集/操作\n3. 整理结果\n4. 保存或汇报"
+            "system" -> "## 执行步骤\n1. 使用 self.status 获取系统状态\n2. 分析诊断\n3. 执行维护\n4. 记录结果\n\n## 安全\n修改系统配置前需用户确认。"
+            "meta" -> "## 执行步骤\n1. 分析目标\n2. 制定 Skill 结构\n3. 使用 skill.create 或 agent.write 写入\n4. 使用 skill.info 验证"
+            else -> "## 执行步骤\n1. 确认任务目标\n2. 使用 self.tools 确认可用命令\n3. 逐步执行\n4. 汇报结果"
         }
-
-        return """---
-name: $name
-description: $description
-enabled: true
-category: $category
----
-# $name
-
-$sectionHints
-"""
+        return "---\nname: $name\ndescription: $description\nenabled: true\ncategory: $category\n---\n# $name\n\n$hints\n"
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// Data types
-// ═══════════════════════════════════════════════════════════════════════
-
-data class SkillDef(
-    val name: String,
-    val description: String,
-    val enabled: Boolean,
-    val category: String,
-    val content: String,
-    val rawText: String = ""
-)
-
-// ═══════════════════════════════════════════════════════════════════════
-// Default skills — adapted from QwenPaw
-// ═══════════════════════════════════════════════════════════════════════
+data class SkillDef(val name: String, val description: String, val enabled: Boolean, val category: String, val content: String, val rawText: String = "")
 
 private val DEFAULT_SKILLS = mapOf(
-    "make-skill" to """---
-name: make-skill
-description: 把当前工作流程沉淀为可复用的 Skill。触发词：「把这个变成 skill」「记住这个流程」「保存为技能」
-enabled: true
-category: meta
----
-# Make Skill — 会话沉淀为可复用技能
-
-把当前对话中的工作流、排错路径、配置步骤沉淀为 Skill。
-
-## 两阶段流程
-
-### Phase A：提出计划
-1. 从对话中提炼核心流程（最多 5 个关键步骤）
-2. 用自然语言向用户描述计划，等待确认
-
-### Phase B：执行创建
-1. 使用 `skill.create <name> --category <cat> --description <desc>` 创建技能模板
-2. 使用 `agent.write` 补充完整技能内容（路径为 skill.info 显示的路径）
-3. 使用 `skill.ls` 验证技能已创建
-""",
-
-    "make-plan" to """---
-name: make-plan
-description: 复杂任务分解；获取分步骤计划，由 Agent 自己逐步执行
-enabled: true
-category: meta
----
-# Make Plan — 任务拆解与执行计划
-
-当任务需要多步拆解、步骤之间有依赖关系时使用。
-
-## 执行流程
-
-### 1. 分析任务
-- 用 `self.tools` 确认有哪些可用命令
-- 用 `agent.memory` 查询相关经验
-
-### 2. 制定计划
-向用户输出执行计划表格：
-
-| 步骤 | 操作 | 预期结果 | 状态 |
-|------|------|---------|------|
-| 1 | ... | ... | ⬜ |
-| 2 | ... | ... | ⬜ |
-
-确认后开始执行，每步标记完成状态。
-
-### 3. 逐步执行
-每步执行完汇报结果，失败时分析原因调整计划。
-
-### 4. 完成汇报
-汇总完成情况，标记遗留问题。
-""",
-
-    "guidance" to """---
-name: guidance
-description: 用户询问安装、配置、功能使用、报错排查时触发
-enabled: true
-category: system
----
-# MengPaw 使用引导
-
-当用户询问安装、配置、功能使用、报错排查时使用。
-
-## 标准流程
-
-### 1. 确定问题类型
-| 关键词 | 查阅内容 |
-|--------|---------|
-| 安装、APK | `agent.memory search 安装` |
-| API Key、模型 | `agent.memory search API` |
-| 插件、命令 | `self.tools` → `plugin.list` |
-| 报错、闪退 | `agent.audit` |
-
-### 2. 查阅文档
-使用 `agent.memory [query]` 搜索已有记忆和文档。
-
-### 3. 如果本地无答案
-建议查看 https://github.com/WowBlueStudio/MengPaw
-""",
-
-    "source-index" to """---
-name: source-index
-description: 回答技术问题时快速定位要读的文档和源码路径
-enabled: true
-category: system
----
-# 文档与源码速查
-
-## 关键词 → 源码路径
-| 关键词 | 源码路径 |
-|--------|---------|
-| CLI、命令 | `mengpaw-kernel/.../cli/` |
-| LLM、模型 | `mengpaw-kernel/.../llm/` |
-| 安全 | `mengpaw-kernel/.../security/` |
-| 插件 | `mengpaw-kernel/.../plugin/` |
-| UI、设置 | `mengpaw-shell/.../ui/screens/` |
-| 浏览器 | `mengpaw-browser/.../` |
-| Skills | `技能剧本/` 目录 |
-
-## 约定
-- 先读文档（`agent.memory`），再读源码（`agent.read`）
-- `agent.cli` 返回完整 CLI 参考
-- 不确定时先 `agent.read` 查看目录/文件
-""",
-
-    "daily-summary" to """---
-name: daily-summary
-description: 每日工作总结模板；检查 memory.md 并生成当日进展汇报
-enabled: true
-category: office
----
-# 每日工作总结
-
-## 执行步骤
-
-1. 读取 `agent.memory` 查看近期记录
-2. 筛选今日相关条目
-3. 按以下模板生成汇报：
-
-```
-## {{date}} 工作总结
-
-### 已完成
-- ...
-
-### 进行中
-- ...
-
-### 待跟进
-- ...
-
-### 备注
-- ...
-```
-
-## 参数
-- `{{date}}` — 日期，默认今天（格式: YYYY-MM-DD）
-- `{{focus}}` — 可选的关注领域过滤
-""",
-
-    "plugin-auditor" to """---
-name: plugin-auditor
-description: 审查已安装插件状态，检查更新、安全风险、使用统计
-enabled: true
-category: system
----
-# 插件审查
-
-## 执行步骤
-
-1. `plugin.list` — 获取所有已安装插件
-2. 对每个 ACTIVE 插件执行 `plugin.info <id>`
-3. `plugin.marketplace --refresh` — 拉取最新市场索引
-4. 对每个插件执行 `plugin.update <id>` 检查更新
-5. 汇总报告：
-
-```
-## 插件审查报告
-
-| 插件 | 版本 | 状态 | 市场最新 | 安全风险 |
-|------|------|------|---------|---------|
-| ... | ... | ... | ... | ... |
-
-### 建议操作
-- 可更新: X 个
-- 可清理: Y 个
-- 风险项: Z 个
-```
-""",
-
-    // ── Plugin reference manuals (concise, Agent-readable via skill.run <name>) ──
-
-    "plugin-index" to """---
-name: plugin-index
-description: 插件命令总索引。先读这个找需要的插件说明书
-enabled: true
-category: system
----
-# 插件命令索引
-
-| 命名空间 | 用途 | 说明书 |
-|---------|------|--------|
-| self | Agent自省 | skill.run self |
-| agent | 文档记忆 | skill.run agent-system |
-| plugin | 插件管理 | skill.run plugin-system |
-| sys | Android系统 | skill.run android-system |
-| framework | 框架发现 | skill.run framework |
-| fs | 文件系统 | skill.run filesystem |
-| net | 网络请求 | skill.run network |
-| tavily | AI搜索 | skill.run tavily |
-| translate | 翻译 | skill.run translate |
-| hermes | 多智能体 | skill.run hermes |
-| render | 图像生成 | skill.run render |
-| comfy | ComfyUI | skill.run comfy |
-| browser | 浏览器操控 | skill.run browser-tools |
-| update | 自更新 | skill.run self-update |
-| workflow | 工作流 | skill.run workflow |
-| incubator | 孵化器 | skill.run incubator |
-
-## 执行模式（输入框 + 号选择）
-| 模式 | 用途 | 说明书 |
-|------|------|--------|
-| /Mission | 多智能体拆解 | skill.run execution-modes |
-| /Research | 深度调研 | skill.run execution-modes |
-| /Translate | 翻译 | skill.run execution-modes |
-| /Silent | 后台静默 | skill.run execution-modes |
-
-## 系统功能
-| 功能 | 用途 | 说明书 |
-|------|------|--------|
-| DreamEngine | 记忆整理归档 | skill.run dream-engine |
-""",
-
-    "tavily" to """---
-name: tavily
-description: Tavily AI搜索 — 结构化搜索+网页提取
-enabled: true
-category: general
----
-# Tavily AI搜索
-
-## 需要TAVILY_API_KEY（免费1000次/月，tavily.com获取）
-
-## 命令
-`tavily.search <query> [--max=N]` → AI摘要+结构化结果(标题/URL/片段)
-`tavily.extract <url>` → 提取网页全文(最多8000字符)
-
-先search找页面，再extract读内容。中文用中文搜更准。
-""",
-
-    "filesystem" to """---
-name: filesystem
-description: 文件系统操作 — 读写文件、目录管理、搜索内容
-enabled: true
-category: system
----
-# fs — 文件系统 (10命令)
-
-`ls [path]` `cat <path>` `write <path> <content>` `rm <path>` `mkdir <path>`
-`cp <src> <dst>` `mv <src> <dst>` `stat <path>`
-`grep <pattern> [--regex] [-i]` `glob <pattern>`
-
-常用: `agent.read <路径>` 读文件, `fs.grep 关键词 --regex` 搜索内容（需安装 fs 插件）
-⚠ rm不可恢复
-""",
-
-    "self" to """---
-name: self
-description: Agent自省 — 查看状态/配置/工具/推送消息
-enabled: true
-category: system
----
-# self — Agent自省 (13命令)
-
-黄金法则: 新任务先 `self.tools` 看能做什么；完成长任务 `self.notify.message` 通知用户
-
-`tools [ns]` `status` `config [k=v]` `version` `time [fmt]` `stats`
-`notify.message <text>` `notify.banner <text> [--level]`
-`avatar` `theme` `mcp` `trigger` `acp`
-""",
-
-    "plugin-system" to """---
-name: plugin-system
-description: 插件管理 — 发现/安装/启用插件扩展能力
-enabled: true
-category: system
----
-# plugin — 插件管理 (11命令)
-
-marketplace → search → install → list 是标准安装流程
-
-`marketplace [--refresh]` `search <q>` `install <id>` `uninstall <id>` `list`
-`info <id>` `enable <id>` `disable <id>` `update <id>` `upgrade --all`
-`auto <wake|sleep|status|sleep-idle>`
-
-安装后: `self.tools <新命名空间>` 看新命令
-""",
-
-    "hermes" to """---
-name: hermes
-description: 多智能体协作 — 发现/委派/团队共享
-enabled: true
-category: general
----
-# hermes — 多智能体 (6命令)
-
-`discover` `team` `delegate <agent> <task>` `ask <agent> <q>`
-`memo <content>` `role <agent> <role>`
-
-流程: discover → delegate → memo(共享发现) → team(看进度)
-""",
-
-    "self-update" to """---
-name: self-update
-description: MengPaw自更新 — 检查/下载/安装新版本
-enabled: true
-category: system
----
-# update — 自更新 (4命令)
-
-`update.check` → 检查新版本
-`update.download` → 下载APK
-`update.install` → 安装
-`update.auto` → 自动(WiFi下每小时一次)
-""",
-
-    "execution-modes" to """---
-name: execution-modes
-description: MengPaw 四种执行模式详解 — /Mission /Research /Translate /Silent。触发词：「执行模式」「怎么用斜杠命令」
-enabled: true
-category: system
----
-# MengPaw 执行模式
-
-用户可在输入框点 + 号，在「执行模式」区选择。Agent 收到带模式标签的任务后自动切换执行策略。
-
-## /Mission — 多智能体拆解执行
-**用途**: 复杂任务自动拆解为子任务，Worker 并行执行，Verifier 验证结果。
-**何时推荐给用户**:
-- 任务涉及多个独立步骤（如「调研A、B、C三个方向并对比」）
-- 用户说「帮我全面分析」「系统性地研究」
-**Agent 行为**: runWithMission() → LLM拆解 → 每个子任务独立ReAct → Verifier验证
-
-## /Research — 深度调研
-**用途**: 多轮搜索 + 交叉验证 + 结构化报告（需 Tavily 插件）。
-**何时推荐给用户**:
-- 「帮我深入研究」「写一份调研报告」
-- 需要多源验证的事实性问题
-**Agent 行为**: 提示词包装为深度研究指令 → 标准ReAct执行
-
-## /Translate — 翻译
-**用途**: 将输入内容翻译为中文（或目标语言）。
-**何时推荐给用户**:
-- 用户粘贴外文内容
-- 「翻译这段」
-**Agent 行为**: 提示词包装为翻译指令 → 标准ReAct执行
-
-## /Silent — 后台静默执行
-**用途**: 不阻塞对话的后台任务，完成后推送结果。
-**何时推荐给用户**:
-- 「帮我后台查一下」「静默整理」
-- 用户想继续对话但需要后台处理的事情
-**Agent 行为**: 独立协程直接调LLM → 不触发引擎状态 → 完成推System消息
-
-## Agent 主动推荐策略
-1. 用户描述复杂多步骤任务 → 建议 "/Mission 模式"
-2. 用户要求深入调研 → 建议 "/Research 模式"
-3. 用户粘贴外文 → 建议 "/Translate 或直接用 translate.auto"
-4. 用户想同时做两件事 → 建议 "/Silent 后台执行第二件事"
-""",
-
-    "dream-engine" to """---
-name: dream-engine
-description: DreamEngine 梦境模式 — 记忆自动整理/归档/标签/摘要。触发词：「梦境」「整理记忆」「归档」
-enabled: true
-category: system
----
-# DreamEngine — 记忆梦境整理
-
-DreamEngine 是 QwenPaw 梦境模式的 MengPaw 实现。在设备空闲/充电时自动触发，也可手动调用。
-
-## 功能
-- **自动标签**: 解析 memory.md 中的记忆，自动添加关键词标签
-- **交叉链接**: 发现相关记忆，建立 `[[引用]]` 链接
-- **归档**: 30天前的记忆自动移至 Memory.archive.md
-- **摘要**: 大量记忆自动压缩为摘要
-- **清理**: 删除3天前的旧截图，30天前的收件箱文件
-
-## 手动触发
-`agent.dream` → 执行梦境整理 → 返回统计
-`agent.cleanup` → 清理工作区（截图/临时文件）
-`agent.storage` → 查看存储使用量
-
-## 自动触发
-- 接通电源时（EventReceiver → DreamEngine.dream()）
-- ShellService 后台定期触发
-
-## Agent 何时建议用户使用
-- 用户说「整理一下记忆」「清理工作区」
-- 对话很长，Agent 可以主动: `agent.dream` 整理本轮对话的要点
-- 存储空间不足时建议: `agent.cleanup`
-
-## Agent 自己如何使用
-- 对话结束前: `agent.memory.record <关键信息>` 记录要点
-- 定期: `agent.dream` 整理归档
-- 需要回顾经验: `agent.memory <关键词>` 搜索记忆
-"""
+    "make-skill" to "---\nname: make-skill\ndescription: 把当前工作流程沉淀为可复用的 Skill\nenabled: true\ncategory: meta\n---\n# Make Skill\n\n把当前对话中的工作流沉淀为 Skill。\n\n1. 从对话中提炼核心流程\n2. 使用 skill.create <name> --category meta --description <desc> 创建\n3. 使用 agent.write 完善内容\n4. 使用 skill.ls 验证",
+    "make-plan" to "---\nname: make-plan\ndescription: 复杂任务分解；获取分步骤计划\nenabled: true\ncategory: meta\n---\n# Make Plan\n\n1. 用 self.tools 确认可用命令\n2. 制定计划表格\n3. 逐步执行\n4. 完成汇报",
+    "guidance" to "---\nname: guidance\ndescription: 用户询问安装、配置、功能使用、报错排查时触发\nenabled: true\ncategory: system\n---\n# MengPaw 使用引导\n\n确定问题类型→查阅文档→无答案时建议查看 GitHub。",
+    "plugin-index" to "---\nname: plugin-index\ndescription: 插件命令总索引\nenabled: true\ncategory: system\n---\n# 插件命令索引\n\nself/agent/plugin/sys 内置 + fs/net/tavily/hermes 等插件命名空间。\n使用 skill.run <name> 查看详细说明书。",
+    "execution-modes" to "---\nname: execution-modes\ndescription: 四种执行模式详解\nenabled: true\ncategory: system\n---\n# 执行模式\n\n/Mission /Research /Translate /Silent\n用户可在输入框点 + 号选择。"
 )
