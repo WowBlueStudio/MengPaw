@@ -580,14 +580,17 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                     try { it.readText().lines().firstOrNull()?.removePrefix("#")?.trim() ?: "" } catch (_: Exception) { "" }, "") }
                 ?: emptyList()
         } else emptyList()
-        val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
-        val skillPlugin = pm.get("skill-plugin")
-        val skillMgmt = if (skillPlugin != null && pm.status("skill-plugin") == com.mengpaw.kernel.plugin.PluginStatus.ACTIVE) {
-            skillPlugin.commands.keys.map { name -> FrameworkItem("⚙ skill.$name", ItemCategory.BUILTIN, "技能管理命令", "") }
-        } else emptyList()
-        skillItems = if (skillFiles.isEmpty() && skillMgmt.isEmpty())
+        skillItems = if (skillFiles.isEmpty())
             listOf(FrameworkItem("skill.ls", ItemCategory.BUILTIN, "列出可用技能的索引", ""))
-        else skillFiles + skillMgmt
+        else skillFiles
+
+
+
+
+
+
+
+
     }
 
     var workspaceItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
