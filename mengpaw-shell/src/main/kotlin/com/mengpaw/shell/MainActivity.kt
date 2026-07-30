@@ -494,8 +494,8 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
         pluginItems = if (installed.isEmpty()) builtins else installed + builtins
     }
 
-    // ── MengPaw CLI: static built-in command reference
-    val toolItems = remember(activeAgent) {
+    // ── CLI commands: built-in curated + dynamic plugin commands
+    val toolItems = remember(activeAgent, agentViewModel.activeNamespaces().hashCode()) {
         val engine = agentViewModel.activeEngine()
         val selfTools = listOf(
             FrameworkItem("self.status", ItemCategory.BUILTIN, "Agent 运行状态查询", ""),
@@ -554,7 +554,21 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             com.mengpaw.kernel.mcp.McpServer(engine.getPluginManager())
                 .listTools().map { FrameworkItem(it.name, ItemCategory.OFFICIAL, it.description, "") }
         } catch (_: Exception) { emptyList() } else emptyList()
-        selfTools + agentTools + pluginTools + sysTools + mcpTools
+        // Built-in curated lists
+        selfTools + agentTools + pluginTools + sysTools + mcpTools +
+        // Dynamic plugin commands from installed plugins
+        try {
+            val pm = engine?.getPluginManager()
+            if (pm != null) {
+                pm.listAll().filter { (_, status) -> status == com.mengpaw.kernel.plugin.PluginStatus.ACTIVE }
+                    .flatMap { (plugin, _) ->
+                        val ns = plugin.metadata.id.replace(Regex("-(plugin|ext)$"), "")
+                        plugin.commands.keys.map { cmd ->
+                            FrameworkItem(".", ItemCategory.OFFICIAL, plugin.metadata.description, "")
+                        }
+                    }
+            } else emptyList()
+        } catch (_: Exception) { emptyList() }
     }
 
     var skillItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
