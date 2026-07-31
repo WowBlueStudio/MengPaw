@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.21.0 (2026-07-31) — Agent 进化系统 + plugin-self 退役
+
+### 新增
+- **进化系统（内核内置）**：Agent 从失败中学习的能力，取代已退役的 self-plugin——钩子归系统、省察归 Agent、终极 KPI 是"问题不复现"：
+  - **失败钩子单点挂接**：`ErrorCollector.onReport` 回调，Pipeline/AgentEngine 全部失败（TOOL_CALL_FAILED / LOOP_DETECTED / AGENT_CRASH / failAudit）自动流入失败模式库，零调用点改动
+  - **失败模式库**：`{AGENTS}/{agent}/evolution/failures.jsonl` 持久化，同模式（命令+错误码）第 2 次起判定"复现"（repeatCount）
+  - **金字塔省察引导**：失败后下次 LLM 调用注入——轻失败一句提示+命令检索；复现失败四层自问（L1 事实 → L2 归因 → L3 用户视角 → L4 进化）+ 错误四分法处置（指令集/memory/soul.md/框架反馈），每会话限 3 次防刷屏
+  - **用户反应档案（用户分身）**：AgentViewModel 识别纠正信号与撤回动作 → reactions.md，供 L3 用户视角检索
+  - **绩效闭环**：`evolution.audit` 绩效报告 / `evolution.mark-corrected` 标记沉淀 / 会话开始注入未修正复现提醒
+- **evolution.\* 命令命名空间（5 条）**：audit（绩效报告）/ report（框架反馈落盘+NotifyBus 推送）/ learn.command（指令集丰富，封装 CommandSearch.registerOrUpdate）/ reactions / mark-corrected
+- **CLI.md 生成器 evolution 命令表** + BM25 命令索引 5 条（保留"自省"作为搜索同义词）
+
+### 修复
+- **AcpProtocolTest 硬编码断言过时**：删 22 类型数量断言（现 24 类型），改循环遍历 `AcpMessageType.entries`
+
+### 变更
+- **plugin-self 退役**：4 命令插件从构建/注册/文档/plugins.json 全部移除，`self` 完全归属内核 16 命令（此前插件同名命令经后写覆盖语义静默胜出，存在归属歧义）
+- **全仓"自省"→"进化"改名**：README / 开发指南 / CHANGELOG / skill 文档 / 设置页同步
+
+### 发行
+- Shell APK v0.21.0（versionCode 21000）
+- plugins.json 移除 self-plugin 条目
+- 测试：kernel 162/162 全绿（155 既有 + 7 新增进化测试）
+
 ## v0.20.2 (2026-07-31) — 插件开发工具能力边界文档植入
 
 ### 新增
@@ -625,7 +649,7 @@
 - **Provider 热更新**: `updateLlmProvider()` 支持设置页 Per-Agent 模型实时切换
 - 移除 `plugin-agent-loop` 和 `plugin-agent-mission` (模式已内置)
 
-### Agent 自省扩展 (self 命名空间)
+### Agent 进化扩展 (self 命名空间)
 - `self.tools [namespace]` — 按命名空间列出所有可用命令
 - `self.time [format]` — 获取当前时间 (支持 iso/date/time/timestamp)
 - `notify.message <text>` — Agent 主动推送消息到聊天
