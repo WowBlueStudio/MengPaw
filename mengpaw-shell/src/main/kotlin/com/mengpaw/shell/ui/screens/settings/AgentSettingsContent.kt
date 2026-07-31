@@ -36,7 +36,8 @@ fun AgentSettingsContent(
     agentToolItems: List<FrameworkItem> = emptyList(),     // Agent 专属工具
     agentSkillItems: List<FrameworkItem> = emptyList(),    // Agent 本地 Skills
     workspaceItems: List<FrameworkItem> = emptyList(),
-    onRefreshWorkspace: (() -> Unit)? = null
+    onRefreshWorkspace: (() -> Unit)? = null,
+    onDeleteWorkspaceFile: ((String) -> Unit)? = null      // 按文件名删除工作区文档（如 boost.md）
 ) {
     SectionHeader(state.strings.agentProviderModel)
     if (state.savedProviders.isEmpty()) {
@@ -348,8 +349,12 @@ fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── Agent Tools: 该 Agent 专属工具（非全局共享）──
-    SectionHeader("智能体工具 (" + agentToolItems.size + ")")
+    // ── Agent Tools: 该 Agent 专属工具（非全局共享）— 默认折叠 ──
+    var agentToolsExpanded by remember { mutableStateOf(false) }
+    SectionHeader(state.strings.agentTools, count = "(${agentToolItems.size})",
+        expanded = agentToolsExpanded, onToggle = { agentToolsExpanded = !agentToolsExpanded })
+    AnimatedVisibility(visible = agentToolsExpanded) {
+        Column {
     Text("该 Agent 专属的命令工具，仅在当前 Agent 可用。全局命令通过 self.tools 查看。",
         fontSize = 11.sp, color = ThemeColors.textSecondary,
         modifier = Modifier.padding(bottom = ArcoSpacing.xs))
@@ -391,13 +396,19 @@ fun AgentSettingsContent(
         Text("暂未配置专属工具。Agent 使用全局工具池（self.tools）中的命令。",
             style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
     }
+        }
+    }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    // ── Agent Skills: 动态列表，可展开查看 Markdown 内容 ──: 动态列表，可展开查看 Markdown 内容 ──
-    SectionHeader(state.strings.agentSkills + " (${agentSkillItems.size})")
+    // ── Agent Skills: 该 Agent 本地技能，动态列表 — 默认折叠 ──
+    var agentSkillsExpanded by remember { mutableStateOf(false) }
+    SectionHeader(state.strings.agentSkills, count = "(${agentSkillItems.size})",
+        expanded = agentSkillsExpanded, onToggle = { agentSkillsExpanded = !agentSkillsExpanded })
+    AnimatedVisibility(visible = agentSkillsExpanded) {
+        Column {
     Text("该 Agent 本地已加载的技能，Markdown 剧本格式。使用 skill.run <name> 执行。",
         fontSize = 11.sp, color = ThemeColors.textSecondary,
         modifier = Modifier.padding(bottom = ArcoSpacing.xs))
@@ -436,8 +447,10 @@ fun AgentSettingsContent(
             }
         }
     } else {
-        Text(state.strings.agentNoTriggers, style = MaterialTheme.typography.bodySmall,
+        Text(state.strings.agentNoSkills, style = MaterialTheme.typography.bodySmall,
             color = ThemeColors.textSecondary)
+    }
+        }
     }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
@@ -453,5 +466,67 @@ fun AgentSettingsContent(
             }
         }
     }
-    FrameworkItemSection("", Icons.Outlined.Description, workspaceItems)
+    if (workspaceItems.isEmpty()) {
+        Text("工作区暂无文档", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+    } else {
+        workspaceItems.forEach { item ->
+            key(item.name) {
+                var expanded by remember { mutableStateOf(false) }
+                var showDeleteConfirm by remember { mutableStateOf(false) }
+                // memory/ 聚合条目只读展示（含三重记忆目录），单文件条目可删除
+                val deletable = onDeleteWorkspaceFile != null && !item.name.startsWith("memory/")
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                        .clickable(enabled = item.docMarkdown.isNotBlank()) { expanded = !expanded },
+                    shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard
+                ) {
+                    Column(Modifier.padding(ArcoSpacing.md)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Description, null, Modifier.size(16.dp), tint = ArcoColors.Blue6)
+                            Spacer(Modifier.width(ArcoSpacing.sm))
+                            Column(Modifier.weight(1f)) {
+                                Text(item.name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
+                                if (item.summary.isNotBlank())
+                                    Text(item.summary, fontSize = 12.sp, color = ThemeColors.textSecondary, maxLines = 1)
+                            }
+                            if (item.isWowBlue) {
+                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Pink6.copy(alpha = 0.1f)) {
+                                    Text("WowBlue", Modifier.padding(horizontal = 4.dp, vertical = 1.dp), fontSize = 9.sp, color = ArcoColors.Pink6)
+                                }
+                                Spacer(Modifier.width(4.dp))
+                            }
+                            if (deletable) {
+                                IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.size(28.dp)) {
+                                    Icon(Icons.Outlined.Delete, state.strings.delete, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
+                                }
+                            }
+                            if (item.docMarkdown.isNotBlank()) {
+                                Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp), tint = ThemeColors.textSecondary)
+                            }
+                        }
+                        AnimatedVisibility(visible = expanded) {
+                            if (item.docMarkdown.isNotBlank()) {
+                                MarkdownText(content = item.docMarkdown.take(5000),
+                                    modifier = Modifier.padding(top = ArcoSpacing.sm).heightIn(max = 300.dp))
+                            }
+                        }
+                    }
+                }
+                if (showDeleteConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteConfirm = false },
+                        title = { Text("删除文档", fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
+                        text = { Text("确定删除 ${item.name}？此操作不可恢复。", fontSize = 13.sp, color = ThemeColors.textSecondary, lineHeight = 20.sp) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                onDeleteWorkspaceFile?.invoke(item.name)
+                                showDeleteConfirm = false
+                            }) { Text("删除", color = ArcoColors.Red6) }
+                        },
+                        dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") } }
+                    )
+                }
+            }
+        }
+    }
 }

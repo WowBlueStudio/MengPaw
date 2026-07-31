@@ -70,7 +70,8 @@ fun SettingsScreen(
     agentToolItems: List<FrameworkItem> = emptyList(),
     agentSkillItems: List<FrameworkItem> = emptyList(),
     workspaceItems: List<FrameworkItem> = emptyList(),
-    onRefreshWorkspace: (() -> Unit)? = null
+    onRefreshWorkspace: (() -> Unit)? = null,
+    onDeleteWorkspaceFile: ((String) -> Unit)? = null
 ) {
     val state by viewModel.state.collectAsState()
     val s = state.strings
@@ -127,7 +128,7 @@ fun SettingsScreen(
             ) {
                 when (selectedSection) {
                     0 -> AgentSettingsContent(state, viewModel, activeAgentEndpoint, activeAgentModel,
-                        onAgentSelectProvider, agentToolItems, agentSkillItems, workspaceItems, onRefreshWorkspace)
+                        onAgentSelectProvider, agentToolItems, agentSkillItems, workspaceItems, onRefreshWorkspace, onDeleteWorkspaceFile)
                     1 -> FrameworkSettingsContent(state, viewModel, onNavigateToPluginMarket, pluginItems, toolItems, skillItems)
                     2 -> SystemSettingsContent(onNavigateToLicense, onNavigateToAttribution, state, viewModel, onNavigateToPluginMarket)
                 }

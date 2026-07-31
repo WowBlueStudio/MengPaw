@@ -131,6 +131,7 @@ dependencies {
     implementation(project(":plugin-memory-twin"))
     implementation(project(":plugin-root"))
     implementation(project(":plugin-hermes"))
+    implementation(project(":plugin-agent-tools"))
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))

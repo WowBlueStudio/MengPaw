@@ -396,7 +396,8 @@ class PluginViewModel : ViewModel() {
             "browser-cdp-plugin" to "com.mengpaw.plugin.browsercdp.BrowserCdpPlugin",
             "browser-inspector-plugin" to "com.mengpaw.plugin.browserinspector.BrowserInspectorPlugin",
             "update-plugin" to "com.mengpaw.plugin.update.UpdatePlugin",
-            "memory-twin-plugin" to "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin"
+            "memory-twin-plugin" to "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin",
+            "root-plugin" to "com.mengpaw.plugin.root.RootPlugin"
         )
 
         /** Look up the class name for a builtin plugin by its ID. */

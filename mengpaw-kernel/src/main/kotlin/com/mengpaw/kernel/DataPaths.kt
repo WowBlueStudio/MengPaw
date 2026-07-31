@@ -88,9 +88,9 @@ object DataPaths {
 
     // ── Per-agent Skills & Tools partitions ─────────────────────────
     /** Agent's local skills directory — pulled from global pool or created locally. */
-    fun agentSkillsDir(agentName: String) = "$AGENTS/${safeAgentDir(agentName)}/skills"
+    fun agentSkillsDir(agentName: String) = "${safeAgentDir(agentName)}/skills"
     /** Agent's local tools directory — agent-specific CLI commands. */
-    fun agentToolsDir(agentName: String) = "$AGENTS/${safeAgentDir(agentName)}/tools"
+    fun agentToolsDir(agentName: String) = "${safeAgentDir(agentName)}/tools"
 
     // ── Two-tier memory ────────────────────────────────────────────
     /** Long-term memory file — injected into system prompt. Curated content only. */

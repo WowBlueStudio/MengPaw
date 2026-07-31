@@ -3,6 +3,7 @@
 
 package com.mengpaw.shell.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -206,15 +207,37 @@ fun FrameworkSettingsContent(
     NavigationLink(Icons.Outlined.Extension, state.strings.frameworkPluginManagement, state.strings.frameworkPluginManagementDesc) { onNavigateToPluginMarket() }
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    FrameworkItemSection(state.strings.frameworkGlobalPlugins, Icons.Outlined.Extension, pluginItems)
+    // 三个列表区块默认折叠 — 减少初始设置列表，点击 header 展开
+    var pluginsExpanded by remember { mutableStateOf(false) }
+    SectionHeader(state.strings.frameworkGlobalPlugins, count = "(${pluginItems.size})",
+        expanded = pluginsExpanded, onToggle = { pluginsExpanded = !pluginsExpanded })
+    AnimatedVisibility(visible = pluginsExpanded) {
+        Column {
+            FrameworkItemSection("", Icons.Outlined.Extension, pluginItems)
+        }
+    }
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    FrameworkItemSection(state.strings.frameworkGlobalTools, Icons.Outlined.Terminal, toolItems)
+    var toolsExpanded by remember { mutableStateOf(false) }
+    SectionHeader(state.strings.frameworkGlobalTools, count = "(${toolItems.size})",
+        expanded = toolsExpanded, onToggle = { toolsExpanded = !toolsExpanded })
+    AnimatedVisibility(visible = toolsExpanded) {
+        Column {
+            FrameworkItemSection("", Icons.Outlined.Terminal, toolItems)
+        }
+    }
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    FrameworkItemSection(state.strings.frameworkGlobalSkills, Icons.Outlined.AutoAwesome, skillItems)
+    var skillsExpanded by remember { mutableStateOf(false) }
+    SectionHeader(state.strings.frameworkGlobalSkills, count = "(${skillItems.size})",
+        expanded = skillsExpanded, onToggle = { skillsExpanded = !skillsExpanded })
+    AnimatedVisibility(visible = skillsExpanded) {
+        Column {
+            FrameworkItemSection("", Icons.Outlined.AutoAwesome, skillItems)
+        }
+    }
 }

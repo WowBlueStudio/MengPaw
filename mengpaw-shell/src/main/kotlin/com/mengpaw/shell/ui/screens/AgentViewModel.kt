@@ -199,20 +199,25 @@ class AgentViewModel : ViewModel() {
     fun activeEngine(): AgentEngine? = sessions[_activeAgentName]?.engine
 
     /**
-     * 部落收件箱轮询：每 5s 检查待处理部落任务数，
-     * 计数变化时刷新 system prompt（让 Agent 感知新任务）。
+     * 部落收件箱 + 命令集指纹轮询：每 5s 检查待处理部落任务数和
+     * Agent Tools 命令集目录指纹，变化时刷新 system prompt（让 Agent 感知新任务/新命令集）。
      * 由 MengPawApp 启动时调用一次。
      */
     fun startTribeInboxRefresh() {
         viewModelScope.launch {
             var last = -1
+            var lastToolsFp = -1L
             while (true) {
                 kotlinx.coroutines.delay(5000)
                 val n = try {
                     com.mengpaw.plugin.hermes.TribeInboxWatcher.pendingCount(_activeAgentName)
                 } catch (_: Exception) { 0 }
-                if (n != last) {
+                val fp = try {
+                    com.mengpaw.plugin.agenttools.AgentToolsSummary.fingerprint(_activeAgentName)
+                } catch (_: Exception) { 0L }
+                if (n != last || fp != lastToolsFp) {
                     last = n
+                    lastToolsFp = fp
                     try { activeEngine()?.refreshSystemPrompt() } catch (_: Exception) {}
                 }
             }

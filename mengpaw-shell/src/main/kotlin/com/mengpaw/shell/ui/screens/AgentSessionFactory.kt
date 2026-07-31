@@ -65,6 +65,8 @@ class AgentSessionFactory(
         }
         // Tribe inbox middleware: inject pending tribe task count into prompt
         val tribeMw = com.mengpaw.plugin.hermes.TribeInboxMiddleware
+        // Agent Tools middleware: inject registered command-set summaries (tools.import)
+        val agentToolsMw = com.mengpaw.plugin.agenttools.AgentToolsSummaryMiddleware
 
         // Post-call middleware: context folding + scroll eviction
         val postMw = PostCallMiddleware { response, step, totalChars, estimatedTokens ->
@@ -79,7 +81,7 @@ class AgentSessionFactory(
 
         val engine = AgentEngine(
             llmProvider = provider,
-            middleware = AgentMiddleware.chain(memoryMw, tribeMw),
+            middleware = AgentMiddleware.chain(memoryMw, tribeMw, agentToolsMw),
             postCallMiddleware = postMw,
             scrollContext = scroll,
             additionalNamespaces = mapOf("sys" to com.mengpaw.core.namespace.SysExecutor.commands)

@@ -4,6 +4,35 @@
 
 ---
 
+## 2026-07-31 — v0.20.0 Agent 命令集注册插件 + 设置页 UI 信息一致性
+
+### 104. Kotlin 注释里出现 `/*` 序列会开嵌套注释
+- 场景：KDoc 注释写 `tools/*.json`（路径通配），`/`+`*` 被 Kotlin 词法器识别为嵌套块注释开始，外层 `/**` 永不闭合，报"Unclosed comment"且错误位置在文件末尾，极难定位。
+- 修复：写成 `tools/{name}.json` 避免 `/*` 序列。
+- 教训：**代码注释里永远不要出现 `/*`（包括路径通配写法）**。遇到"文件末尾 Unclosed comment"先怀疑注释内容里的 `/*`。
+
+### 105. material-icons-core 只有约 50 个核心图标
+- 场景：`ExpandLess`/`ExpandMore` 在 SectionHeader 折叠头中使用，报 Unresolved——它们在 material-icons-**extended**（~10MB）里。
+- 修复：改用 core 集已有的 `KeyboardArrowUp`/`KeyboardArrowDown`。
+- 教训：**用 Material 图标前先确认在 core 集**（Add/Close/Delete/Arrow*/KeyboardArrow* 等基础图标才在 core）。
+
+### 106. Compose scope 扩展函数（weight 等）不要显式 import
+- 场景：`import androidx.compose.foundation.layout.weight` 报"access internal in file"——显式 import 解析到了 RowColumnParentData 的 internal 属性。
+- 修复：删除 import，在 `Row { }`/`Column { }` content lambda 内直接调用（scope receiver 自带）。
+- 教训：**RowScope/ColumnScope 的成员扩展（weight/align 等）在 scope 内可用，不要 import 顶层版本**。
+
+### 107. DataPaths.safeAgentDir 已含 $AGENTS/ 前缀
+- 场景：`agentSkillsDir = "$AGENTS/${safeAgentDir(name)}/skills"` 双重拼接 → 实际路径 `Agent文档/Agent文档/{name}/skills`。agentToolsDir 从未被引用所以 bug 一直没暴露；agentSkillsDir 靠 mkdirs 在错误路径"能用"。
+- 修复：`"${safeAgentDir(name)}/skills"`；老数据一次性懒迁移。
+- 教训：**safeAgentDir 返回完整路径（含 $AGENTS/），拼接子目录时不要再加前缀**。
+
+### 108. try-catch 作为语句时，try 块最后表达式不是函数返回值
+- 场景：`fun fetch(): Result<String> { try { ...; Result.success(x) } catch { return ... } }` 报 Missing return statement。
+- 修复：try 块末尾显式 `return Result.success(x)`（或把整个 try-catch 作为 `return try {...}` 表达式）。
+- 教训：**语句式 try-catch 需要每分支显式 return**。
+
+---
+
 ## 2026-07-30 — v0.19.5 清理全局技能硬编码 CLI 命令
 
 ### 103. Release 前必须验证改动是否真正打包进去了

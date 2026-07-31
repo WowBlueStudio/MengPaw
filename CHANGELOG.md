@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.20.0 (2026-07-31) — Agent 命令集注册 + 设置页 UI 信息一致性
+
+### 新增
+- **Agent Tools 命令集注册（新内置插件 plugin-agent-tools）**: Agent 通过 `tools.import <名称> <URL|JSON>` 导入外部 CLI 命令集（GitHub CLI / 飞书 CLI 等），`tools.ls` / `tools.remove` / `tools.search` 管理检索
+- **命令集摘要注入系统提示词**: 注册后紧凑摘要（每集 400/总 2000 字符截断）注入提示词，Agent 每次对话直接可见，无需遍历完整命令文档；≤5s 自动同步
+- **per-agent 存储**: `Agent文档/{agent}/tools/{name}.json`，命令集上限 20 个/Agent、单集 200 条命令、512KB 校验
+- **WowBlue 标识补齐**: 记忆孪生/部落协作/Agent 命令集/记忆三轨/双层技能池/mDNS 框架发现/插件开发链 7 个领先插件带粉标
+- **设置页五个列表区块默认折叠**: 全局插件/全局工具/全局技能/智能体工具/智能体技能，header 带条目计数与展开箭头
+- **工作区文件 memory 目录聚合**: 三重记忆（长期 memory.md / 中期 memory_{date}.md / 项目 project_{name}_memory.md）聚合条目，展开查看全部文档
+- **工作区文档删除**: 列表项可删除（含 boost.md，走内核删除语义），删除有确认对话框
+
+### 修复
+- **全局插件列表**: BUILTIN_PLUGIN_IDS 补全 12 个（漏 memory-twin/root/tribe），内置未安装插件兜底显示，列表打开设置页实时刷新（修复启动竞态）
+- **全局工具**: 动态插件命令显示真实命令名（原为 "." 占位）
+- **全局技能**: 只显示 /技能剧本/ 真实技能文件（删除 skill.ls 命令名混入，v0.19.5 原则完整落地）
+- **智能体工具**: 不再把全局工具冒充专属工具（LESSONS 99），改为显示 Agent 命令集注册
+- **智能体技能**: 显示 per-agent 本地技能（修复全局技能冒充），空态文案"暂无触发器"→ 正确的本地技能引导
+- **DataPaths 双重路径 bug**: agentSkillsDir/agentToolsDir 双重拼接 `Agent文档/Agent文档/`（safeAgentDir 已含前缀），修复 + 旧数据一次性懒迁移
+- **智能体工具标题**: 硬编码 → 双语资源"智能体工具(Agent Tools)"
+
+### 发行
+- Shell APK v0.20.0（versionCode 20000）
+- plugins.json 市场新增 tools-plugin（内置）
+- 22 个新单测（AgentToolsTest 全绿）
+
 ## v0.19.7 (2026-07-31) — 部落协作十特性全量上线
 
 ### 功能增强 (P1)

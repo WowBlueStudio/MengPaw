@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.mengpaw.core.AndroidLogger
 import com.mengpaw.core.DataPathsInitializer
 import com.mengpaw.design.theme.ArcoTheme
@@ -39,10 +40,44 @@ import com.mengpaw.shell.ui.localization.ChineseStrings
 import com.mengpaw.shell.ui.localization.EnglishStrings
 import com.mengpaw.shell.ui.screens.*
 
-/** Plugin IDs that are bundled with the shell APK (显示为"内置"分类). */
+/**
+ * Plugin IDs compiled into the shell APK (显示为"内置"分类).
+ * 必须与 mengpaw-shell/build.gradle.kts 中 implementation(project(":plugin-*")) 对齐:
+ * framework / memory / skill / dev / fs / net / self / clipboard / notification /
+ * memory-twin / root / hermes(Tribe).
+ */
 private val BUILTIN_PLUGIN_IDS = setOf(
-    "memory-plugin", "skill-plugin", "framework-plugin", "dev-plugin",
-    "fs-plugin", "net-plugin", "self-plugin", "clipboard-plugin", "notification-plugin"
+    "framework-plugin", "memory-plugin", "skill-plugin", "dev-plugin",
+    "fs-plugin", "net-plugin", "self-plugin", "clipboard-plugin", "notification-plugin",
+    "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin"
+)
+
+/**
+ * Plugins that lead similar functionality in other agent frameworks (WowBlue 原创标识).
+ * 判定标准: 领先于同类框架功能的原创插件 — 记忆三轨 / 记忆孪生 / 双层技能池 /
+ * mDNS 框架发现 / 插件开发工具链 / 部落协作. 基础能力(fs/net/self/clipboard/notification)
+ * 与系统级能力(root)不标.
+ */
+private val WOWBLUE_PLUGIN_IDS = setOf(
+    "memory-plugin", "memory-twin-plugin", "skill-plugin",
+    "framework-plugin", "dev-plugin", "tribe-plugin", "tools-plugin"
+)
+
+/** Builtin plugin display info (名称/描述), 用于内置但未安装时在全局插件列表兜底显示. */
+private val BUILTIN_PLUGIN_INFO = mapOf(
+    "framework-plugin" to ("框架发现" to "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理"),
+    "memory-plugin" to ("记忆系统" to "Markdown 持久化记忆系统，含 LRU 缓存和被动索引"),
+    "skill-plugin" to ("技能系统" to "可复用的 Agent 剧本系统（YAML+Markdown），含默认 Skill"),
+    "dev-plugin" to ("插件开发" to "插件开发工具链 — create/audit/share/examples"),
+    "fs-plugin" to ("文件系统" to "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob"),
+    "net-plugin" to ("网络请求" to "HTTP 请求：GET/POST，支持自定义 Header 和超时"),
+    "self-plugin" to ("Agent 自省" to "状态/配置/统计/版本/头像/主题等自省命令"),
+    "clipboard-plugin" to ("剪贴板" to "剪贴板操作：copy, paste, clear"),
+    "notification-plugin" to ("通知" to "通知发送与管理：send, list, dismiss"),
+    "memory-twin-plugin" to ("记忆孪生" to "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 心跳保活 + QoS自适应 + 手动IP发现"),
+    "root-plugin" to ("Root 权限" to "Root 权限管理 — su 命令执行/应用管理/文件系统/系统修改/备份恢复/审计日志"),
+    "tribe-plugin" to ("部落协作 (Tribe)" to "多 Agent 部落协作：LAN 自动组队、Kanban 委派、LLM 路由、任务模板、Fleet 并行、广播讨论、ACP 实时、心跳"),
+    "tools-plugin" to ("Agent 命令集" to "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用")
 )
 
 /**
@@ -195,6 +230,9 @@ class MainActivity : ComponentActivity() {
         PluginViewModel.registerPluginClass("notification-plugin", "com.mengpaw.plugin.notification.NotificationPlugin")
         PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
         PluginViewModel.registerPluginClass("memory-twin-plugin", "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin")
+        PluginViewModel.registerPluginClass("root-plugin", "com.mengpaw.plugin.root.RootPlugin")
+        PluginViewModel.registerPluginClass("tribe-plugin", "com.mengpaw.plugin.hermes.TribePlugin")
+        PluginViewModel.registerPluginClass("tools-plugin", "com.mengpaw.plugin.agenttools.AgentToolsPlugin")
 
         // ── 框架发现 (mDNS) ──
         try {
@@ -239,6 +277,7 @@ class MainActivity : ComponentActivity() {
                 "clipboard-plugin" to ClipboardPlugin(),
                 "notification-plugin" to NotificationPlugin(),
                 "memory-twin-plugin" to MemoryTwinPlugin(),
+                "tools-plugin" to com.mengpaw.plugin.agenttools.AgentToolsPlugin(),
             )
             for ((id, plugin) in bundled) {
                 try {
@@ -477,23 +516,38 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     val (agentEp, agentModel) = remember(activeAgent) { agentViewModel.agentConfig(activeAgent) }
     var workspaceVersion by remember { mutableIntStateOf(0) }
 
-    // Plugins: computed once, stored in mutable state for reactive updates
+    // Plugins: recomputed each time the settings screen opens (deferInit may finish later,
+    // and downloaded plugins land anytime — never trust a one-shot list)
     var pluginItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
-    LaunchedEffect(Dispatchers.IO) {
-        val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
-        val installed = pm.listAll().map { (plugin, status) ->
-            FrameworkItem(name = plugin.metadata.name, isWowBlue = plugin.metadata.id in BUILTIN_PLUGIN_IDS,
-                category = if (plugin.metadata.id in BUILTIN_PLUGIN_IDS) ItemCategory.BUILTIN else ItemCategory.OFFICIAL,
-                summary = plugin.metadata.description,
-                docMarkdown = "## ${plugin.metadata.name}\n\n${plugin.metadata.description}\n\nID: ${plugin.metadata.id}\n版本: ${plugin.metadata.version}\n状态: ${status.name}\n命令数: ${plugin.commands.size}")
+    LaunchedEffect(showSettings) {
+        if (!showSettings) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+            val installed = pm.listAll().map { (plugin, status) ->
+                FrameworkItem(name = plugin.metadata.name, isWowBlue = plugin.metadata.id in WOWBLUE_PLUGIN_IDS,
+                    category = if (plugin.metadata.id in BUILTIN_PLUGIN_IDS) ItemCategory.BUILTIN else ItemCategory.OFFICIAL,
+                    summary = plugin.metadata.description,
+                    docMarkdown = "## ${plugin.metadata.name}\n\n${plugin.metadata.description}\n\nID: ${plugin.metadata.id}\n版本: ${plugin.metadata.version}\n状态: ${status.name}\n命令数: ${plugin.commands.size}")
+            }
+            // Builtin plugins compiled into the APK but not yet installed — show them anyway,
+            // so new bundled plugins are never invisible in the global list
+            val missingBuiltins = BUILTIN_PLUGIN_IDS
+                .filter { id -> pm.get(id) == null }
+                .mapNotNull { id -> BUILTIN_PLUGIN_INFO[id]?.let { (name, desc) ->
+                    FrameworkItem(name = name, category = ItemCategory.BUILTIN, isWowBlue = id in WOWBLUE_PLUGIN_IDS,
+                        summary = "$desc — 内置，未安装",
+                        docMarkdown = "## $name\n\n$desc\n\nID: $id\n状态: 未安装（内置插件，可在插件市场激活）")
+                } }
+            // Kernel namespaces are not plugins but surface as builtin capabilities
+            val kernelNamespaces = listOf(
+                FrameworkItem("self (内置)", ItemCategory.BUILTIN, "Agent 自省 — 状态/配置/统计/版本/头像/主题/通知/时间", ""),
+                FrameworkItem("agent (内置)", ItemCategory.BUILTIN, "文档管理 — 记忆/CLI/档案/审计/梦境/存储", ""),
+                FrameworkItem("plugin (内置)", ItemCategory.BUILTIN, "插件管理 — 市场/搜索/安装/卸载/启停/升级", ""),
+                FrameworkItem("sys (内置)", ItemCategory.BUILTIN, "系统信息 — 电量/网络/CPU/存储/定位/剪贴板", ""),
+            )
+            val items = installed + missingBuiltins + kernelNamespaces
+            withContext(Dispatchers.Main) { pluginItems = items }
         }
-        val builtins = listOf(
-            FrameworkItem("self (内置)", ItemCategory.BUILTIN, "Agent 自省 — 状态/配置/统计/版本/头像/主题/通知/时间", ""),
-            FrameworkItem("agent (内置)", ItemCategory.BUILTIN, "文档管理 — 记忆/CLI/档案/审计/梦境/存储", ""),
-            FrameworkItem("plugin (内置)", ItemCategory.BUILTIN, "插件管理 — 市场/搜索/安装/卸载/启停/升级", ""),
-            FrameworkItem("sys (内置)", ItemCategory.BUILTIN, "系统信息 — 电量/网络/CPU/存储/定位/剪贴板", ""),
-        )
-        pluginItems = if (installed.isEmpty()) builtins else installed + builtins
     }
 
     // ── CLI commands: built-in curated + dynamic plugin commands
@@ -566,44 +620,116 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                     .flatMap { (plugin, _) ->
                         val ns = plugin.metadata.id.replace(Regex("-(plugin|ext)$"), "")
                         plugin.commands.keys.map { cmd ->
-                            FrameworkItem(".", ItemCategory.OFFICIAL, plugin.metadata.description, "")
+                            FrameworkItem("$ns.$cmd", ItemCategory.OFFICIAL, plugin.metadata.description, "")
                         }
                     }
             } else emptyList()
         } catch (_: Exception) { emptyList() }
     }
 
+    // Skills: only real Skill files under /技能剧本/ (CLI commands like skill.ls are Tools,
+    // not Skills — v0.19.5). Recomputed each time settings opens, because skill-plugin seeds
+    // defaults asynchronously at startup and a one-shot snapshot would stay stale forever
     var skillItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
-    LaunchedEffect(Dispatchers.IO) {
-        val skillsDir = java.io.File(com.mengpaw.kernel.DataPaths.SKILLS)
-        val skillFiles = if (skillsDir.exists()) {
-            skillsDir.listFiles()?.filter { it.extension == "md" }
-                ?.map { FrameworkItem(it.nameWithoutExtension, ItemCategory.BUILTIN,
-                    try { it.readText().lines().firstOrNull()?.removePrefix("#")?.trim() ?: "" } catch (_: Exception) { "" }, "") }
-                ?: emptyList()
-        } else emptyList()
-        skillItems = if (skillFiles.isEmpty())
-            listOf(FrameworkItem("skill.ls", ItemCategory.BUILTIN, "列出可用技能的索引", ""))
-        else skillFiles
+    LaunchedEffect(showSettings) {
+        if (!showSettings) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            val skillsDir = java.io.File(com.mengpaw.kernel.DataPaths.SKILLS)
+            val skillFiles = if (skillsDir.exists()) {
+                skillsDir.listFiles()?.filter { it.extension == "md" }
+                    ?.map { FrameworkItem(it.nameWithoutExtension, ItemCategory.BUILTIN,
+                        try { it.readText().lines().firstOrNull()?.removePrefix("#")?.trim() ?: "" } catch (_: Exception) { "" }, "") }
+                    ?: emptyList()
+            } else emptyList()
+            // Empty dir → empty list; the section renders its own "暂无条目" empty state.
+            // CLI management commands (skill.ls/skill.run/...) are Tools, not Skills.
+            withContext(Dispatchers.Main) { skillItems = skillFiles }
+        }
+    }
 
+    // Per-agent local skills: Agent文档/{agent}/skills/*.md — NOT the global /技能剧本/ pool.
+    // Global vs exclusive separation is enforced at the UI boundary (LESSONS 99).
+    var agentSkillItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
+    LaunchedEffect(showSettings, activeAgent) {
+        if (!showSettings) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            // 一次性迁移: DataPaths 双重路径 bug(v0.19.7 修复)前, 本地技能落在
+            // Agent文档/Agent文档/{agent}/skills 错误路径 — 迁到正确路径
+            try {
+                val legacy = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "Agent文档/Agent文档/$activeAgent/skills")
+                if (legacy.exists()) {
+                    val target = java.io.File(com.mengpaw.kernel.DataPaths.agentSkillsDir(activeAgent))
+                    if (target.listFiles().isNullOrEmpty()) legacy.copyRecursively(target, overwrite = false)
+                    legacy.deleteRecursively()
+                }
+            } catch (_: Exception) {}
+            val dir = java.io.File(com.mengpaw.kernel.DataPaths.agentSkillsDir(activeAgent))
+            val items = if (dir.exists()) {
+                dir.listFiles()?.filter { it.extension == "md" }?.sortedBy { it.name }
+                    ?.map { file ->
+                        val content = try { file.readText() } catch (_: Exception) { "" }
+                        FrameworkItem(name = file.nameWithoutExtension, category = ItemCategory.BUILTIN,
+                            summary = extractSummary(content), docMarkdown = content)
+                    } ?: emptyList()
+            } else emptyList()
+            withContext(Dispatchers.Main) { agentSkillItems = items }
+        }
+    }
 
-
-
-
-
-
-
+    // Agent 专属工具: Agent文档/{agent}/tools/*.json — 命令集注册清单（非全局共享，LESSONS 99）
+    var agentToolItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
+    LaunchedEffect(showSettings, activeAgent) {
+        if (!showSettings) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            val items = com.mengpaw.plugin.agenttools.AgentToolsStore.readAll(activeAgent).map { set ->
+                FrameworkItem(
+                    name = set.displayName.ifBlank { set.name },
+                    category = ItemCategory.CUSTOM,
+                    summary = "${set.commands.size} 条命令 · 来源: ${set.source.ifBlank { "手动粘贴" }}",
+                    docMarkdown = com.mengpaw.plugin.agenttools.AgentToolsStore.toMarkdown(set))
+            }
+            withContext(Dispatchers.Main) { agentToolItems = items }
+        }
     }
 
     var workspaceItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
     LaunchedEffect(activeAgent, workspaceVersion) {
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             val dir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, activeAgent)
-            val items = dir.listFiles()?.filter { it.extension == "md" }?.sortedBy { it.name }
-                ?.map { file ->
+            val items = buildList {
+                // 顶层 Markdown 文档（agents/soul/boost 等）
+                dir.listFiles { f -> f.isFile && f.extension == "md" }?.sortedBy { it.name }?.forEach { file ->
                     val content = try { file.readText() } catch (_: Exception) { "" }
-                    FrameworkItem(name = file.name, category = ItemCategory.BUILTIN, summary = extractSummary(content), docMarkdown = content)
-                } ?: emptyList()
+                    add(FrameworkItem(name = file.name, category = ItemCategory.BUILTIN,
+                        summary = extractSummary(content), docMarkdown = content))
+                }
+                // memory/ 记忆目录聚合条目 — 三重记忆: 长期 memory.md / 中期 memory_{date}.md / 项目 project_{name}_memory.md
+                val memoryDir = java.io.File(dir, "memory")
+                if (memoryDir.exists()) {
+                    val memoryFiles = memoryDir.listFiles { f -> f.isFile && f.extension == "md" }
+                        ?.sortedBy { it.name } ?: emptyList()
+                    if (memoryFiles.isNotEmpty()) {
+                        val longTerm = memoryFiles.count { it.name == "memory.md" }
+                        val midTerm = memoryFiles.count { it.name.startsWith("memory_") }
+                        val project = memoryFiles.count { it.name.startsWith("project_") }
+                        val doc = buildString {
+                            appendLine("## memory/ — 记忆目录（三重记忆）")
+                            appendLine()
+                            memoryFiles.forEach { f ->
+                                val content = try { f.readText() } catch (_: Exception) { "" }
+                                appendLine("### ${f.name}")
+                                appendLine(content.trim().take(1200).ifBlank { "（空文档）" })
+                                appendLine()
+                            }
+                        }
+                        add(FrameworkItem(
+                            name = "memory/（记忆目录）",
+                            category = ItemCategory.BUILTIN,
+                            summary = "长期 $longTerm · 中期 $midTerm · 项目 $project · 共 ${memoryFiles.size} 个文档",
+                            docMarkdown = doc))
+                    }
+                }
+            }
             kotlinx.coroutines.withContext(Dispatchers.Main) { workspaceItems = items }
         }
     }
@@ -624,11 +750,16 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             pluginItems = pluginItems,
             toolItems = toolItems,
             skillItems = skillItems,
-            agentPluginItems = pluginItems,
-            agentToolItems = toolItems,
-            agentSkillItems = skillItems,
+            agentToolItems = agentToolItems,
+            agentSkillItems = agentSkillItems,
             workspaceItems = workspaceItems,
-            onRefreshWorkspace = { workspaceVersion++ }
+            onRefreshWorkspace = { workspaceVersion++ },
+            onDeleteWorkspaceFile = { fileName ->
+                if (fileName.startsWith("memory/")) return@SettingsScreen  // 聚合条目只读
+                if (fileName == "boost.md") com.mengpaw.kernel.agent.AgentDocs.deleteBoost(activeAgent)
+                else java.io.File(java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, activeAgent), fileName).delete()
+                workspaceVersion++
+            }
         )
     }
     if (showPlugins) {

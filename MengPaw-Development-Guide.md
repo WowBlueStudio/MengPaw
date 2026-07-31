@@ -91,14 +91,15 @@ mengpaw-shell
   ├── mengpaw-kernel (微内核)
   ├── mengpaw-core (Android 适配)
   ├── mengpaw-design-system (主题)
-  └── 4 捆绑插件: memory / skill / framework / dev
+  └── 11 捆绑插件: memory / skill / framework / dev / fs / net / self / clipboard /
+      notification / memory-twin / agent-tools
 
 mengpaw-browser
   ├── mengpaw-kernel
   ├── mengpaw-core
   └── mengpaw-design-system
 
-plugins/ (23 模块)
+plugins/ (24 模块)
   └── mengpaw-kernel  ← 所有插件只依赖微内核（同级）
 ```
 
@@ -241,7 +242,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ### 3.5 插件模块（23 个，plugins/ 目录）
 
-#### 基础功能 (8)
+#### 基础功能 (9)
 
 | 模块 | 命名空间 | 命令 | 捆绑 |
 |------|---------|------|:--:|
@@ -253,6 +254,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | plugin-notification | notification | send, list, dismiss (3) | |
 | plugin-self | self | status, config, stats, version (4) | |
 | plugin-framework | framework | discover, peers, trust, untrust, info, ping (6) | ⭐ |
+| plugin-agent-tools | tools | import, ls, remove, search (4) | ⭐ |
 
 #### AI / 搜索 (4)
 
@@ -623,6 +625,16 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 
 #### skill — 技能 (7)
 `ls` | `run <name>` | `enable <name>` | `disable <name>` | `info <name>` | `search <query>` | `create <name> <content>`
+
+#### tools — 命令集注册 (4) (Agent Tools)
+`import <名称> <url|json>` | `ls` | `remove <名称>` | `search <关键词>`
+
+> Agent 导入外部 CLI 命令集（GitHub CLI / 飞书 CLI 等），注册 per-agent 索引。命令集 JSON 清单存 `Agent文档/{agent}/tools/{name}.json`，导入后紧凑摘要注入系统提示词（Agent 每次对话直接可见，无需遍历完整命令文档）。
+>
+> ```json
+> { "name": "gh", "displayName": "GitHub CLI", "source": "<url>",
+>   "commands": [{ "name": "gh pr list", "description": "...", "usage": "gh pr list [--state open]" }] }
+> ```
 
 
 #### clipboard — 剪贴板 (3)

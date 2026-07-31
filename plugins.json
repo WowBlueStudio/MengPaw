@@ -339,6 +339,22 @@
         "root.backup.list", "root.backup.save", "root.backup.restore",
         "root.audit"
       ]
+    },
+    {
+      "id": "tools-plugin",
+      "name": "Agent 命令集",
+      "version": "0.1.0",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用",
+      "status": "builtin",
+      "minCoreVersion": "0.17.0",
+      "commands": [
+        "tools.import",
+        "tools.ls",
+        "tools.remove",
+        "tools.search"
+      ]
     }
   ]
 }
