@@ -125,7 +125,6 @@ dependencies {
     implementation(project(":plugin-dev"))
     implementation(project(":plugin-fs"))
     implementation(project(":plugin-net"))
-    implementation(project(":plugin-self"))
     implementation(project(":plugin-clipboard"))
     implementation(project(":plugin-notification"))
     implementation(project(":plugin-memory-twin"))

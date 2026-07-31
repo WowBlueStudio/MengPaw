@@ -33,7 +33,6 @@ import com.mengpaw.plugin.memory.MemoryPlugin
 import com.mengpaw.plugin.memorytwin.MemoryTwinPlugin
 import com.mengpaw.plugin.net.NetPlugin
 import com.mengpaw.plugin.notification.NotificationPlugin
-import com.mengpaw.plugin.self.SelfPlugin
 import com.mengpaw.plugin.skill.SkillPlugin
 import com.mengpaw.shell.ui.localization.AppStrings
 import com.mengpaw.shell.ui.localization.ChineseStrings
@@ -43,12 +42,12 @@ import com.mengpaw.shell.ui.screens.*
 /**
  * Plugin IDs compiled into the shell APK (显示为"内置"分类).
  * 必须与 mengpaw-shell/build.gradle.kts 中 implementation(project(":plugin-*")) 对齐:
- * framework / memory / skill / dev / fs / net / self / clipboard / notification /
+ * framework / memory / skill / dev / fs / net / clipboard / notification /
  * memory-twin / root / hermes(Tribe).
  */
 private val BUILTIN_PLUGIN_IDS = setOf(
     "framework-plugin", "memory-plugin", "skill-plugin", "dev-plugin",
-    "fs-plugin", "net-plugin", "self-plugin", "clipboard-plugin", "notification-plugin",
+    "fs-plugin", "net-plugin", "clipboard-plugin", "notification-plugin",
     "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin"
 )
 
@@ -71,7 +70,6 @@ private val BUILTIN_PLUGIN_INFO = mapOf(
     "dev-plugin" to ("插件开发" to "插件开发工具链 — create/audit/share/examples"),
     "fs-plugin" to ("文件系统" to "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob"),
     "net-plugin" to ("网络请求" to "HTTP 请求：GET/POST，支持自定义 Header 和超时"),
-    "self-plugin" to ("Agent 自省" to "状态/配置/统计/版本/头像/主题等自省命令"),
     "clipboard-plugin" to ("剪贴板" to "剪贴板操作：copy, paste, clear"),
     "notification-plugin" to ("通知" to "通知发送与管理：send, list, dismiss"),
     "memory-twin-plugin" to ("记忆孪生" to "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 心跳保活 + QoS自适应 + 手动IP发现"),
@@ -225,7 +223,6 @@ class MainActivity : ComponentActivity() {
         PluginViewModel.registerPluginClass("memory-plugin", "com.mengpaw.plugin.memory.MemoryPlugin")
         PluginViewModel.registerPluginClass("framework-plugin", "com.mengpaw.plugin.framework.FrameworkPlugin")
         PluginViewModel.registerPluginClass("skill-plugin", "com.mengpaw.plugin.skill.SkillPlugin")
-        PluginViewModel.registerPluginClass("self-plugin", "com.mengpaw.plugin.self.SelfPlugin")
         PluginViewModel.registerPluginClass("clipboard-plugin", "com.mengpaw.plugin.clipboard.ClipboardPlugin")
         PluginViewModel.registerPluginClass("notification-plugin", "com.mengpaw.plugin.notification.NotificationPlugin")
         PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
@@ -273,7 +270,6 @@ class MainActivity : ComponentActivity() {
                 "dev-plugin" to DevPlugin(),
                 "fs-plugin" to FsPlugin(),
                 "net-plugin" to NetPlugin(),
-                "self-plugin" to SelfPlugin(),
                 "clipboard-plugin" to ClipboardPlugin(),
                 "notification-plugin" to NotificationPlugin(),
                 "memory-twin-plugin" to MemoryTwinPlugin(),
@@ -540,7 +536,8 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                 } }
             // Kernel namespaces are not plugins but surface as builtin capabilities
             val kernelNamespaces = listOf(
-                FrameworkItem("self (内置)", ItemCategory.BUILTIN, "Agent 自省 — 状态/配置/统计/版本/头像/主题/通知/时间", ""),
+                FrameworkItem("self (内置)", ItemCategory.BUILTIN, "Agent 进化 — 状态/配置/统计/版本/头像/主题/通知/时间", ""),
+    FrameworkItem("evolution (内置)", ItemCategory.BUILTIN, "Agent 进化 — 失败钩子/金字塔自问/错误四分法处置/绩效", ""),
                 FrameworkItem("agent (内置)", ItemCategory.BUILTIN, "文档管理 — 记忆/CLI/档案/审计/梦境/存储", ""),
                 FrameworkItem("plugin (内置)", ItemCategory.BUILTIN, "插件管理 — 市场/搜索/安装/卸载/启停/升级", ""),
                 FrameworkItem("sys (内置)", ItemCategory.BUILTIN, "系统信息 — 电量/网络/CPU/存储/定位/剪贴板", ""),

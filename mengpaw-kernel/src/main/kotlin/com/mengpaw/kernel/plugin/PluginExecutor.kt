@@ -31,12 +31,12 @@ class PluginExecutor(
     var onDownloadProgress: ((Long, Long) -> Unit)? = null
 ) {
     /** Plugins that should never be auto-suspended (core functionality). */
-    private val KEEP_AWAKE = setOf("self-plugin", "agent-plugin")
+    private val KEEP_AWAKE = setOf("agent-plugin")
 
     /** Plugins compiled into the APK — may not be uninstalled at runtime. */
     private val UNINSTALLABLE = setOf(
         "memory-plugin", "skill-plugin", "framework-plugin", "dev-plugin",
-        "fs-plugin", "net-plugin", "self-plugin", "clipboard-plugin",
+        "fs-plugin", "net-plugin", "clipboard-plugin",
         "notification-plugin", "memory-twin-plugin"
     )
 

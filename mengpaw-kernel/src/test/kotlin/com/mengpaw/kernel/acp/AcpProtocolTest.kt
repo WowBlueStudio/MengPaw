@@ -25,10 +25,9 @@ class AcpProtocolTest {
     // ── Message serialization round-trip ────────────────────────────
 
     @Test fun `round-trip all message types`() {
-        val types = AcpMessageType.entries
-        assertTrue("Should have 22 message types but has ${types.size}", types.size == 22)
-
-        for (type in types) {
+        // 遍历 AcpMessageType.entries 自动覆盖全部消息类型 —
+        // 新增协议类型无需同步维护数量断言
+        for (type in AcpMessageType.entries) {
             val msg = AcpMessage("test-from", "test-to", type.name, """{"test":true}""")
             val serialized = Json.encodeToString(AcpMessage.serializer(), msg)
             val deserialized = json.decodeFromString<AcpMessage>(serialized)

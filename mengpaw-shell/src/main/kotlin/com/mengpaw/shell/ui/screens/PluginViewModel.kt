@@ -377,7 +377,6 @@ class PluginViewModel : ViewModel() {
             "memory-plugin" to "com.mengpaw.plugin.memory.MemoryPlugin",
             "framework-plugin" to "com.mengpaw.plugin.framework.FrameworkPlugin",
             "skill-plugin" to "com.mengpaw.plugin.skill.SkillPlugin",
-            "self-plugin" to "com.mengpaw.plugin.self.SelfPlugin",
             "clipboard-plugin" to "com.mengpaw.plugin.clipboard.ClipboardPlugin",
             "notification-plugin" to "com.mengpaw.plugin.notification.NotificationPlugin",
             "tavily-plugin" to "com.mengpaw.plugin.tavily.TavilyPlugin",
