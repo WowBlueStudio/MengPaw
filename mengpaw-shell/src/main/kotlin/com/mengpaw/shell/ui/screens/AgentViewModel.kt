@@ -291,6 +291,8 @@ class AgentViewModel : ViewModel() {
         agentRef: String? = null
     ) {
         if (task.isBlank()) return
+        // ── Evolution: 用户纠正识别 (钩子归系统 → 用户反应档案, 用户分身数据源) ──
+        detectCorrection(task, agentRef)
         val session = activeSession()
         // Snapshot both state values atomically to avoid TOCTOU race
         val sessionRunning = session.isRunning.value
@@ -603,11 +605,54 @@ class AgentViewModel : ViewModel() {
 
     private val translator = com.mengpaw.kernel.llm.TranslateMiddleware()
 
+    // ── Evolution: 用户纠正识别 ─────────────────────────────────────────
+
+    /** 纠正信号词表 — 短消息(≤80 字) + 负向措辞 = 用户纠正/否定. */
+    private val CORRECTION_KEYWORDS = listOf(
+        "不对", "错了", "不是这个", "不是这样", "做错了", "理解错了", "说错了",
+        "重做", "重新做", "重新来", "再来一次", "再想想", "重新想",
+        "算了", "别这样", "停一下", "不对吧", "没听懂", "我说的不是"
+    )
+
+    /**
+     * 规则版纠正识别 — 命中后把"上一条 Agent 回复 + 用户纠正"切片写入用户反应档案,
+     * 供 Agent 在 L3 用户视角提问时检索(用户分身数据源)。
+     * 规则版先行; 后续可升级为 LLM 语义识别。
+     */
+    private fun detectCorrection(task: String, agentRef: String?) {
+        try {
+            if (task.length > 80) return
+            if (CORRECTION_KEYWORDS.none { task.contains(it) }) return
+            // 上下文切片: 最近一条 Agent 回复
+            val snippet = activeSession().messages.value.asReversed()
+                .firstNotNullOfOrNull { msg ->
+                    when (msg) {
+                        is ChatMessageUi.Agent -> msg.content
+                        is ChatMessageUi.AgentWithTrace -> msg.finalContent
+                        else -> null
+                    }
+                }?.take(200) ?: ""
+            com.mengpaw.kernel.evolution.EvolutionHook.recordCorrection(
+                agentName = agentRef ?: _activeAgentName,
+                correction = task.take(200),
+                contextSnippet = snippet,
+                task = task.take(300)
+            )
+        } catch (_: Exception) { /* 识别永不崩溃 */ }
+    }
+
     // ── Retract & Quote ─────────────────────────────────────────────────
 
     /** Retract the last user message: stop agent, remove user+agent msgs, return text to input. */
     fun retractLastUserMessage(): String? {
         stopAgent()
+        // ── Evolution: 撤回 = 用户否定上次回答, 记入用户反应档案 ──
+        com.mengpaw.kernel.evolution.EvolutionHook.recordCorrection(
+            agentName = _activeAgentName,
+            correction = "(用户撤回上一条消息)",
+            contextSnippet = "",
+            task = ""
+        )
         val msgs = activeSession().messages.value.toMutableList()
         // Find last user message
         val lastUserIdx = msgs.indexOfLast { it is ChatMessageUi.User }

@@ -77,7 +77,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 | 命名空间 | 源文件 | 命令数 | 职责 |
 |---------|--------|--------|------|
-| `self` | SelfExecutor.kt | 15 | Agent 自省 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/search/search.stats/time/notify.message/notify.banner) |
+| `self` | SelfExecutor.kt | 16 | Agent 进化 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/ports/search/search.stats/time/notify.message/notify.banner) |
 | `agent` | AgentExecutor.kt | 35 | 文档(6) + 记忆三轨(14) + 其他(5) + 会话(4) + 工作区文件(6) |
 | `plugin` | PluginExecutor + DevPlugin | 12 + 5 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade/auto/verify + create/audit/share/examples/keywords) |
 `framework` | FrameworkPlugin | 6 | 框架发现 (discover/peers/trust/untrust/info/ping) [↔ 同捆插件 plugin-framework] |
@@ -91,8 +91,9 @@ mengpaw-shell
   ├── mengpaw-kernel (微内核)
   ├── mengpaw-core (Android 适配)
   ├── mengpaw-design-system (主题)
-  └── 13 捆绑插件: memory / skill / framework / dev / fs / net / self / clipboard /
+  └── 12 捆绑插件: memory / skill / framework / dev / fs / net / clipboard /
       notification / memory-twin / root / hermes(tribe) / agent-tools
+      (self 进化为内核内置命名空间, 非插件)
 
 mengpaw-browser
   ├── mengpaw-kernel
@@ -254,7 +255,6 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | plugin-skill | skill | ls, run, enable, disable (4) | ⭐ |
 | plugin-clipboard | clipboard | copy, paste, clear (3) | ⭐ |
 | plugin-notification | notification | send, list, dismiss (3) | ⭐ |
-| plugin-self | self | status, config, stats, version (4) | ⭐ |
 | plugin-framework | framework | discover, peers, trust, untrust, info, ping (6) | ⭐ |
 | plugin-agent-tools | tools | import, ls, remove, search (4) | ⭐ |
 
@@ -573,8 +573,12 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 
 ### 5.1 内置命名空间（kernel）
 
-#### self — Agent 自省 (13)
-`status` | `config [key=value]` | `stats` | `version` | `avatar` | `theme` | `mcp` | `trigger` | `acp` | `tools [namespace]` | `time [format]` | `notify.message <text>` | `notify.banner <text> [--level]`
+#### self — Agent 进化 (16)
+`status` | `config [key=value]` | `stats` | `version` | `avatar` | `theme` | `mcp` | `trigger` | `acp` | `tools [namespace]` | `ports [--json]` | `search <query> [--top N]` | `search.stats` | `time [format]` | `notify.message <text>` | `notify.banner <text> [--level]`
+
+#### evolution — 进化系统 (5, 内核内置)
+`audit` | `report <描述>` | `learn.command <命令> <描述> [--keywords 词,词]` | `reactions` | `mark-corrected <id>`
+> 失败钩子归系统 (ErrorCollector.onReport): 命令失败/循环/崩溃自动写入失败模式库 (`{AGENTS}/{agent}/evolution/failures.jsonl`), 下次 LLM 调用注入金字塔省察引导 (L1 事实→L2 归因→L3 用户视角→L4 进化)。用户纠正 (shell 层识别) 写入用户反应档案 `reactions.md`。处置: 指令错→`learn.command`/`self.search`, 常识错→`agent.memory.keep`, 行为错→`agent.write soul.md`, 框架错→`report`。
 
 
 #### agent — 文档 + 内存 + 工作区 (27+)

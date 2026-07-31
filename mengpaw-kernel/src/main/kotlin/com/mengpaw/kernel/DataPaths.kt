@@ -112,6 +112,16 @@ object DataPaths {
             ?: emptyList()
     }
 
+    // ── Evolution (Agent 进化系统) ─────────────────────────────────
+    /** Evolution data dir — failures / user reactions / framework feedback. */
+    fun evolutionDir(agentName: String) = "${safeAgentDir(agentName)}/evolution"
+    /** Failure pattern store (JSON-lines). */
+    fun evolutionFailuresFile(agentName: String) = "${evolutionDir(agentName)}/failures.jsonl"
+    /** User reaction archive (用户分身数据源) — appended markdown. */
+    fun evolutionReactionsFile(agentName: String) = "${evolutionDir(agentName)}/reactions.md"
+    /** Framework feedback reports written by Agent (evolution.report). */
+    fun evolutionFeedbackDir(agentName: String) = "${evolutionDir(agentName)}/feedback"
+
     // ── Plugin-specific storage ───────────────────────────────────
 
     fun pluginDir(pluginId: String): String = "${PLUGIN_CACHE}/${pluginFolderName(pluginId)}"
@@ -122,7 +132,6 @@ object DataPaths {
         "net-plugin" -> "网络插件-net"
         "memory-plugin" -> "记忆系统插件-memory"
         "skill-plugin" -> "技能系统插件-skill"
-        "self-plugin" -> "自省插件-self"
         "ui-plugin" -> "界面操控插件-ui"
         "proc-plugin" -> "进程管理插件-proc"
         "clipboard-plugin" -> "剪贴板插件-clipboard"

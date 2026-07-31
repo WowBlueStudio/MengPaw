@@ -10,7 +10,7 @@ category: system
 
 | 命名空间 | 说明书 |
 |---------|--------|
-| `self` (13命令) — Agent自省 | `skill.run self` |
+| `self` (16命令) — Agent进化 | `skill.run self` |
 | `agent` (12命令) — 文档记忆 | `skill.run agent-system` |
 | `plugin` (11命令) — 插件管理 | `skill.run plugin-system` |
 | `sys` (39命令) — Android系统 | `skill.run android-system` |

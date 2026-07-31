@@ -13,7 +13,7 @@ object BuiltinCommandIndex {
 
     /** 构建完整命令索引并注册到 CommandSearch. 在 AgentEngine 初始化时调用一次. */
     fun buildAll() {
-        // ── self: Agent 自省 (13) ──
+        // ── self: Agent 进化 (16) ──
         idx("self.status", "查看 Agent 当前运行状态 (在线/空闲/版本)", "self.status",
             listOf("状态", "运行", "在线", "检查", "信息", "概况"),
             listOf("status", "state", "info", "health", "check", "running"))
@@ -53,6 +53,23 @@ object BuiltinCommandIndex {
         idx("notify.banner", "Agent 向用户显示顶部横幅通知 (4 秒消失)", "self.notify.banner <text> [--level info|success|warn|error]",
             listOf("横幅", "通知", "弹窗", "提示", "警告", "成功"),
             listOf("banner", "notify", "popup", "alert", "warning", "success"))
+
+        // ── evolution: Agent 进化 (从失败中学习) ──
+        idx("evolution.audit", "查看进化绩效: 失败分布/复现率/已沉淀教训", "evolution.audit",
+            listOf("进化", "绩效", "失败", "复盘", "教训", "复现", "自省"),
+            listOf("evolution", "audit", "failure", "lessons", "review", "repeat"))
+        idx("evolution.report", "发现框架缺陷时写技术反馈给开发者 (落盘+推送)", "evolution.report <描述>",
+            listOf("反馈", "缺陷", "Bug", "框架", "报错", "上报"),
+            listOf("report", "feedback", "bug", "framework", "issue"))
+        idx("evolution.learn.command", "把正确命令用法/同义词登记进指令集搜索索引", "evolution.learn.command <命令> <描述> [--keywords 词,词]",
+            listOf("指令", "命令", "学习", "关键词", "索引", "丰富"),
+            listOf("learn", "command", "keyword", "index"))
+        idx("evolution.reactions", "查看用户反应档案 (用户如何纠正过我 — 用户分身数据源)", "evolution.reactions",
+            listOf("用户", "反应", "纠正", "反馈", "档案", "偏好"),
+            listOf("reactions", "correction", "feedback", "user"))
+        idx("evolution.mark-corrected", "标记某条失败模式已沉淀修正 (绩效闭环)", "evolution.mark-corrected <failure-id>",
+            listOf("修正", "标记", "教训", "已沉淀", "完成"),
+            listOf("mark", "corrected", "fixed", "resolved"))
 
         // ── agent: 文档/记忆管理 ──
         idx("agent.docs", "列出 Agent 工作区的所有文档文件 (Soul/Agents/Memory/Boost/Profile)", "agent.docs",

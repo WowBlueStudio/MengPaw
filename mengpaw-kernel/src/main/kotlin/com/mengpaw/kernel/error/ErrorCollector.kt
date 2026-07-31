@@ -88,6 +88,13 @@ object ErrorCollector {
     private var originalUncaughtHandler: Thread.UncaughtExceptionHandler? = null
     private var initialized = false
 
+    /**
+     * 失败回调 — 进化系统钩子挂点(EvolutionHook)。
+     * 每次 report 成功后调用, 回调自身异常被吞掉, 不影响收集器。
+     */
+    @Volatile
+    var onReport: ((ErrorEntry) -> Unit)? = null
+
     // ── Initialization ──────────────────────────────────────────────────
 
     /**
@@ -166,6 +173,8 @@ object ErrorCollector {
             buffer.add(entry)
             // Append to disk
             appendToFile(entry)
+            // Evolution hook — 失败事件流入进化系统
+            try { onReport?.invoke(entry) } catch (_: Exception) { }
             id
         } catch (_: Exception) {
             "" // silently fail — collector must never crash

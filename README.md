@@ -65,12 +65,11 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS 双向桥)
 │   └── plugin/                 # 浏览器内置插件 (22 命令)
 │
-└── plugins/                    # 24 个功能插件 (同级，均只依赖 kernel)
+└── plugins/                    # 25 个功能插件 (同级，均只依赖 kernel)
     ├── plugin-fs/              # 文件系统 (10 命令)
     ├── plugin-net/             # HTTP 网络 (3 命令)
     ├── plugin-memory/          # 记忆三轨系统 (6 命令) ⭐💎
     ├── plugin-skill/           # 双层技能系统 (4 命令) ⭐💎
-    ├── plugin-self/            # Agent 自省 (4 命令)
     ├── plugin-clipboard/       # 剪贴板 (3 命令)
     ├── plugin-notification/    # 通知管理 (3 命令)
     ├── plugin-framework/       # mDNS 框架发现 (6 命令) ⭐💎
@@ -128,7 +127,7 @@ Agent 通过 CLI 命令操控设备：
 | `memory` | `ls`, `read`, `write`, `search` | 记忆系统 |
 | `sys` | `battery`, `cpu`, `display`, `wifi` | Android 系统 (39 命令) |
 | `skill` | `ls`, `run`, `enable` | 技能系统 |
-| `self` | `status`, `tools`, `search`, `time` | Agent 自省 |
+| `self` | `status`, `tools`, `search`, `time` | Agent 进化 |
 | `plugin` | `marketplace`, `install`, `search` | 插件管理 |
 | `twin` | `peers`, `sync`, `delegate`, `route` | 记忆孪生 |
 
@@ -154,6 +153,7 @@ Agent 通过 CLI 命令操控设备：
 | **技能系统** 💎 | `skill` | 双层技能池 — 全局池共享 + Agent 本地私有，skill.pull/push 按需拉取 |
 | **框架发现** 💎 | `framework` | mDNS 局域网框架发现 — 注册/扫描/指纹记录/信任管理，多设备自动组网 |
 | **插件开发链** 💎 | `dev` | 内置开发工具链 — plugin.create / audit / share 三步发布，用户即开发者 |
+| **进化** 💎 | `evolution` | Agent 从失败中学习 — 命令失误钩子（系统埋点）+ 金字塔四层自问 + 错误四分法处置（指令集/记忆/soul/框架反馈）+ 用户反应分身，问题不复现 |
 
 > 不造轮子造轮毂——这些能力不是替代生态，而是把碎片桥接成整体的原创设计。
 

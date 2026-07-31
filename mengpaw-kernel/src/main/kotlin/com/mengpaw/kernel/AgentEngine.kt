@@ -86,6 +86,12 @@ class AgentEngine(
     // so the LLM sees full conversation history across multiple user messages.
     @Volatile private var conversationSessionId: String? = null
 
+    // ── Evolution (Agent 进化系统) ─────────────────────────────────
+    /** 待注入的金字塔省察引导片段 (失败后生成, 下次 LLM 调用消费). */
+    @Volatile private var pendingGuideFragment: String? = null
+    /** 本会话已注入引导次数 (限流, 防刷屏). */
+    private var guideInjections = 0
+
     /** Exposed for persistence in current_session.json — survives process death via disk save. */
     fun currentConversationId(): String? = conversationSessionId
 
@@ -387,6 +393,11 @@ class AgentEngine(
     ): String {
         ErrorCollector.init()
 
+        // ── Evolution: 钩子归系统 + 绩效反馈注入 ──
+        com.mengpaw.kernel.evolution.EvolutionHook.install()
+        guideInjections = 0
+        pendingGuideFragment = com.mengpaw.kernel.evolution.EvolutionGuide.buildSessionBrief(agentName)
+
         // ── Persistent conversation (Claude Code pattern) ──
         // Reuse existing session across multiple user messages so the
         // LLM sees full conversation history, not just the current message.
@@ -536,6 +547,9 @@ class AgentEngine(
                         ErrorCollector.report(ErrorType.TOOL_CALL_FAILED, "AgentEngine",
                             "$commandLine → ${result.error}", sessionId = session.id, agentName = agentName,
                             metadata = mapOf("errorCode" to (result.errorCode ?: ""), "command" to commandLine))
+                        // 进化省察: 生成金字塔引导片段, 下次 LLM 调用注入 (轻/深分级)
+                        pendingGuideFragment = com.mengpaw.kernel.evolution.EvolutionGuide.buildFragment(
+                            agentName = agentName, command = commandLine, message = result.error ?: "")
                     } else {
                         consecutiveFailures = 0
                     }
@@ -726,6 +740,16 @@ class AgentEngine(
                     mutableMessages,
                 injectCacheAnnotations = true
             )
+        }
+
+        // ── Evolution 省察引导注入: 金字塔提问片段 (限流 MAX_INJECTIONS/会话) ──
+        val guide = pendingGuideFragment
+        if (guide != null && guideInjections < com.mengpaw.kernel.evolution.EvolutionGuide.MAX_INJECTIONS) {
+            guideInjections++
+            pendingGuideFragment = null
+            val mutable = nonSystemHistory.toMutableList()
+            mutable.add(0, mapOf("role" to "system", "content" to guide))
+            return llmRequestBuilder.buildMessages(mutable, injectCacheAnnotations = true)
         }
 
         return llmRequestBuilder.buildMessages(nonSystemHistory, injectCacheAnnotations = true)

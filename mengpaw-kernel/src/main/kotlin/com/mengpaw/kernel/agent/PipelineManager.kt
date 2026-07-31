@@ -56,6 +56,9 @@ class PipelineManager(
         // Built-in: self namespace (always available)
         registry.registerNamespace("self", SelfExecutor.commands)
 
+        // Built-in: evolution namespace (进化系统, always available)
+        registry.registerNamespace("evolution", com.mengpaw.kernel.evolution.EvolutionExecutor.commands)
+
         // Built-in: plugin namespace (always available)
         registry.registerNamespace("plugin", pluginExecutor.commands)
 
@@ -84,7 +87,7 @@ class PipelineManager(
 
     /** List all active CLI namespaces (built-in + plugins) for settings display. */
     fun getActiveNamespaces(): List<String> {
-        val namespaces = mutableSetOf("self", "agent", "plugin")
+        val namespaces = mutableSetOf("self", "evolution", "agent", "plugin")
         additionalNamespaces.keys.forEach { namespaces.add(it) }
         pluginManager.getActivePlugins().forEach { plugin ->
             val ns = plugin.metadata.id.removeSuffix("-plugin").removeSuffix("-ext")
