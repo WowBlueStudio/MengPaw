@@ -112,12 +112,53 @@ gh release create vX.Y.Z \
 
 ---
 
-## 7. 验证
+## 6.5 签名验证（v0.20.0 踩坑：keytool 会误报）
 
-- [ ] `gh release view vX.Y.Z` 确认 Release 存在
+产物名**带版本号**：`mengpaw-shell-vX.Y.Z-release.apk`（不是 mengpaw-shell-release.apk）。
+
+```bash
+# keytool 只检测 v1 签名，AGP 默认 v1+v2 → keytool 报"不是签名的 jar 文件"是误报！
+# 必须用 apksigner：
+/c/Users/a1138/Android/Sdk/build-tools/35.0.0/apksigner.bat verify --print-certs \
+    mengpaw-shell/build/outputs/apk/release/mengpaw-shell-vX.Y.Z-release.apk
+# 期望输出: Signer #1 certificate DN: CN=MengPaw, OU=Studio, O=WowBlue, ...
+```
+
+签名配置：`local.properties` 的 keystore 配置缺省时用空密码签名（jks 为无密码生成则成功）。**签名一致性决定 ADB 能否 -r 覆盖安装**。
+
+## 6.6 插件市场（plugins.json）
+
+- **plugins.json 随 git commit 自动发布**（GitHub Pages 托管），无需单独上传
+- 新插件（如 tools-plugin）加条目（status: builtin）+ 命令清单
+- 仅当有插件发布独立 AAR 时才需在 gh release 附 AAR
+
+## 6.7 测试（发布前）
+
+```bash
+./gradlew :plugin-agent-tools:testDebugUnitTest :mengpaw-kernel:test
+# 已知预存在失败: AcpProtocolTest round-trip（干净 master 也失败，与本次改动无关，不阻塞发布）
+# 出现 NEW 失败 → 必须修复才能发布
+```
+
+## 7. ADB 无线推送
+
+```bash
+adb connect <平板IP>:<端口>      # 例: 192.168.2.7:42455（端口每次可能变化，以用户提供为准）
+adb connect <手机IP>:<端口>      # 例: 192.168.2.9:38999
+adb -s <设备> install -r mengpaw-shell/build/outputs/apk/release/mengpaw-shell-vX.Y.Z-release.apk
+adb -s <设备> shell dumpsys package com.mengpaw.shell | grep versionName
+```
+
+签名不匹配（异机构建/Play 安装）→ `INSTALL_FAILED_UPDATE_INCOMPATIBLE` → 需 `adb uninstall` 后重装（丢数据）。
+
+## 8. 验证
+
+- [ ] `gh release view vX.Y.Z` 确认 Release 存在且 assets 含 APK、isDraft=false
 - [ ] 浏览器打开 `https://github.com/WowBlueStudio/MengPaw/releases/tag/vX.Y.Z`
 - [ ] APK 可下载
 - [ ] CHANGELOG 只包含当前版本内容
+- [ ] 设备 versionName == X.Y.Z
+- [ ] `git ls-remote gitee master` 与本地 HEAD 一致（gitee 显示 up-to-date 是正常现象）
 
 ---
 
