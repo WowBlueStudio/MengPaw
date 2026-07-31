@@ -11,7 +11,7 @@
 | `memory-twin-architecture.md` | 47 KB | 记忆孪生完整设计：数字孪生范式、五层架构、数据模型、同步协议、配对安全、能力路由、P0-P3 全部修复 | 修改孪生插件时 |
 | `MengPaw-Development-Guide.md` | 39 KB | 项目单一事实来源：架构总览、模块清单、CLI 参考、安全模型、插件开发 | 每次开发任务开始前 |
 | `code-review-9-dimensions.md` | 9 KB | v0.17.1 九维审查总结：可维护性/可读性/健壮性等 102 项发现与修复 | 做代码审查时参考 |
-| `tribe-vs-hermes-comparison.md` | 9 KB | Hermes vs Tribe 多智能体协作机制对比，含未实现待办 | 修改 hermes 插件时 |
+| `tribe-vs-hermes-comparison.md` | 9 KB | Hermes vs Tribe 多智能体协作机制对比，十特性已全量实现 | 修改 tribe 插件时 |
 | `crash-prevention-guide.md` | 10 KB | 30+ 闪退案例：进程保活/空安全/文件 IO/生命周期/Compose 陷阱 | 遇到闪退或做稳定性修复时 |
 | `lessons.md` | 9 KB | v0.16.0 开发经验：缓存设计、I/O 窗口、启动优化、模式重构、BM25 | 做架构决策或性能优化时 |
 

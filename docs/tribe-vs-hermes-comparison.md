@@ -146,10 +146,27 @@ Tribe 当前     ████        4/10   文件系统原型
 
 ## 五、演进路线建议
 
-### Phase 1 — 当前 (v0.1.1→v0.2.0)
+### Phase 1 — 当前 (v0.1.1→v0.3.0)
 - ✅ 文件系统协作 (team/discover/delegate/ask/memo/role)
 - ✅ ACP 跨设备消息（通过 browser-push 模式）
-- 🔜 重命名为 Tribe（部落协作）
+- ✅ 重命名为 Tribe（部落协作）
+- ✅ Kanban 看板状态机（PENDING→ASSIGNED→RUNNING→COMPLETED/FAILED/TIMED_OUT/CANCELLED）
+- ✅ 消息优先级 (P0 强制 / P1 期望 / P2 尽力)
+- ✅ ACP 实时推送委派（双模：文件+AUTO）
+- ✅ 委派超时 + 指数退避重试 (30s→60s→120s, 最多3次)
+- ✅ 结果收集（ACP RESULT 自动收集，CompletableDeferred 异步等待）
+- ✅ 在线检测（ACP Heartbeat 30s广播 + 120s超时清理）
+- ✅ 向后兼容（hermes.* → tribe.* 代理 + 弃用提示）
+- ✅ LAN 自动组队（tribe.discover --lan 同步 FrameworkPeerStore 成员）
+- ✅ 看板竖条可视化（框架通讯录条目右侧: 绿=完成/黄=排队/黄闪烁=执行/红=错误）
+- ✅ 任务模板（tribe.delegate --template summarize/translate/research/review/brainstorm/draft）
+- ✅ LLM 能力路由（tribe.route / --route，历史成功率 + 角色技能匹配）
+- ✅ 收件箱自动感知（Agent system prompt 注入待办提醒 + NotifyBus 用户通知）
+- ✅ Fleet 并行（tribe.fleet LLM 分解 → 并行委派 → LLM 合成）
+- ✅ 嵌套委派链（tribe.delegate --parent，最多 3 层 + 环形检测 + 结果沿链回传）
+- ✅ 共享记忆去重 + 自动压缩（SHA256 指纹 + 100 条自动 LLM 摘要）
+- ✅ 多人聊天 / 广播（tribe.chat + ACP TRIBE_CHAT + tribe.discuss 多 Agent 讨论）
+- ✅ 上下文裁剪传递（tribe.delegate --context，87% 压缩 + ref:// 引用）
 
 ### Phase 2 — 短期 (v0.3.0)
 - [ ] 引入消息优先级 (P0 必须 / P1 期望 / P2 尽力)

@@ -13,7 +13,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
@@ -304,7 +303,7 @@ class TwinSyncEngine(
                 // onEntriesReceived doesn't operate a stale deferred (CAS-safe).
                 val timeoutResult = TwinSyncResult(0, "同步超时 (15s)",
                     "对端未在规定时间内响应。检查: 1) 对端是否在线 2) ACP 端口 9876 是否互通 3) 防火墙是否拦截")
-                deferred.tryComplete(timeoutResult)
+                deferred.complete(timeoutResult) // complete() returns false if already done — safe
                 timeoutResult
             }
             pendingSyncs.remove(peerId)
@@ -378,7 +377,7 @@ class TwinSyncEngine(
             lastSyncAt = System.currentTimeMillis()
         )
         // Resolve pending sync deferred (CAS-safe: no-op if already completed by timeout)
-        pendingSyncs[fromPeerId]?.tryComplete(
+        pendingSyncs[fromPeerId]?.complete(
             TwinSyncResult(entries.size, null, null)
         )
         // Trigger memory.md rebuild from merged ledger
@@ -503,17 +502,15 @@ class TwinSyncEngine(
             inbox.mkdirs()
             val file = File(inbox, "twin_pair_${peerId.take(16)}.json")
             // P3.4 FIX: Use kotlinx.serialization instead of org.json
-            val jsonStr = Json.encodeToString(
-                buildJsonObject {
-                    put("peerId", peerId)
-                    put("deviceName", card?.deviceName ?: peerId.take(12))
-                    put("deviceModel", card?.deviceModel ?: "")
-                    put("agentName", card?.deviceName ?: "")
-                    put("receivedAt", System.currentTimeMillis())
-                    put("capabilityCard", cardJson)
-                    put("protocolVersion", card?.protocolVersion ?: "0.1")
-                }
-            )
+            val jsonStr = buildJsonObject {
+                put("peerId", peerId)
+                put("deviceName", card?.deviceName ?: peerId.take(12))
+                put("deviceModel", card?.deviceModel ?: "")
+                put("agentName", card?.deviceName ?: "")
+                put("receivedAt", System.currentTimeMillis())
+                put("capabilityCard", cardJson)
+                put("protocolVersion", card?.protocolVersion ?: "0.1")
+            }.toString()
             val tmp = File(inbox, "twin_pair_${peerId.take(16)}.tmp")
             tmp.writeText(jsonStr)
             tmp.renameTo(file)

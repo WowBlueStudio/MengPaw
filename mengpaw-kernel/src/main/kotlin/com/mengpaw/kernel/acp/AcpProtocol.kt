@@ -27,6 +27,7 @@ enum class AcpMessageType {
     SHARE_MEMORY,   // 共享记忆条目
     SHARE_SKILL,    // 共享技能定义
     HEARTBEAT,      // 存活检测
+    TRIBE_CHAT,     // 部落广播消息（tribe.chat 群聊）
     BROWSER_PUSH,           // 推送网页到对端
     BROWSER_PUSH_RESPONSE,  // 推送响应（接受/拒绝）
     // ── Memory Twin (记忆孪生) ──
@@ -65,6 +66,11 @@ data class AcpMessage(
         fun shareMemory(from: String, to: String, memoryId: String) = AcpMessage(from, to, AcpMessageType.SHARE_MEMORY.name, memoryId)
         fun shareSkill(from: String, to: String, skillName: String) = AcpMessage(from, to, AcpMessageType.SHARE_SKILL.name, skillName)
         fun heartbeat(from: String) = AcpMessage(from, "*", AcpMessageType.HEARTBEAT.name, ttl = 1)
+        fun tribeChat(from: String, to: String, message: String) =
+            AcpMessage(from, to, AcpMessageType.TRIBE_CHAT.name,
+                kotlinx.serialization.json.buildJsonObject {
+                    put("message", JsonPrimitive(message))
+                }.toString())
         fun browserPush(from: String, to: String, url: String, title: String = "") =
             // SECURITY: Use kotlinx.serialization to prevent JSON injection via URL/title
             AcpMessage(from, to, AcpMessageType.BROWSER_PUSH.name,

@@ -39,6 +39,9 @@ import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.agent.AgentProfile
+import com.mengpaw.shell.ui.components.KanbanStatusBar
+import com.mengpaw.shell.ui.components.TribeBarState
+import com.mengpaw.shell.ui.components.aggregateTribeBarState
 import com.mengpaw.shell.ui.localization.AppStrings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -311,6 +314,18 @@ fun SidebarContent(
             mutableStateListOf<FrameworkContact>().also { it.addAll(contacts) }
         }
 
+        // ── 部落看板竖条状态：每 5s 轮询 Kanban 快照，按框架聚合 ──
+        val tribeBarStates = remember { mutableStateMapOf<String, TribeBarState>() }
+        LaunchedEffect(Unit) {
+            while (true) {
+                val tasks = com.mengpaw.plugin.hermes.TribeKanbanBoard().snapshotStatuses()
+                frameworks.forEach { fw ->
+                    tribeBarStates[fw.name] = aggregateTribeBarState(fw.agents.toSet(), tasks)
+                }
+                delay(5000)
+            }
+        }
+
         if (frameworks.isEmpty()) {
             Text(strings.sidebarNoFriends, style = MaterialTheme.typography.bodySmall,
                 color = ThemeColors.textSecondary, modifier = Modifier.padding(vertical = ArcoSpacing.sm))
@@ -423,6 +438,9 @@ fun SidebarContent(
                                 style = MaterialTheme.typography.labelSmall, color = FrameworkStatus.OFFLINE.indicatorColor, fontSize = 9.sp)
                         }
                     }
+                    // 部落看板竖条（绿=完成/黄=排队/黄闪烁=执行/红=错误）
+                    Spacer(Modifier.width(4.dp))
+                    KanbanStatusBar(tribeBarStates[framework.name] ?: TribeBarState.GREEN)
                 }
 
                 AnimatedVisibility(visible = expanded) {

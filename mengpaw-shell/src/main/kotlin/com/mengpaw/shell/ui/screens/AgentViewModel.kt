@@ -178,6 +178,8 @@ class AgentViewModel : ViewModel() {
             session.engine.setAgentLanguage(agentLang)
             session.engine.configureCacheStrategy(endpoint)
         }
+        // Inject provider into TribePlugin for LLM routing (tribe.route / fleet)
+        try { com.mengpaw.plugin.hermes.TribePlugin.llmProvider = provider } catch (_: Exception) {}
         bindActiveSession()
     }
 
@@ -195,6 +197,27 @@ class AgentViewModel : ViewModel() {
 
     /** Get the active agent's engine (for plugin/tool access). */
     fun activeEngine(): AgentEngine? = sessions[_activeAgentName]?.engine
+
+    /**
+     * 部落收件箱轮询：每 5s 检查待处理部落任务数，
+     * 计数变化时刷新 system prompt（让 Agent 感知新任务）。
+     * 由 MengPawApp 启动时调用一次。
+     */
+    fun startTribeInboxRefresh() {
+        viewModelScope.launch {
+            var last = -1
+            while (true) {
+                kotlinx.coroutines.delay(5000)
+                val n = try {
+                    com.mengpaw.plugin.hermes.TribeInboxWatcher.pendingCount(_activeAgentName)
+                } catch (_: Exception) { 0 }
+                if (n != last) {
+                    last = n
+                    try { activeEngine()?.refreshSystemPrompt() } catch (_: Exception) {}
+                }
+            }
+        }
+    }
 
     /** Get (endpoint, model) for an agent. */
     fun agentConfig(name: String): Pair<String, String> {

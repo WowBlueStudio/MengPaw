@@ -130,6 +130,7 @@ dependencies {
     implementation(project(":plugin-notification"))
     implementation(project(":plugin-memory-twin"))
     implementation(project(":plugin-root"))
+    implementation(project(":plugin-hermes"))
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))

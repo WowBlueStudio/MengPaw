@@ -182,17 +182,17 @@
       "commands": ["render.models", "render.generate", "render.status", "render.preview"]
     },
     {
-      "id": "hermes-plugin",
-      "name": "多 Agent 协作 (部落)",
-      "version": "0.2.0",
+      "id": "tribe-plugin",
+      "name": "部落协作 (Tribe)",
+      "version": "0.5.0",
       "type": "native",
       "author": "MengPaw",
-      "description": "多 Agent 对话协作：发现、委派、组队、共享记忆。部落协作重命名讨论见 docs/tribe-vs-hermes-comparison.md",
+      "description": "多 Agent 部落协作：LAN 自动组队、Kanban 委派（优先级+超时+嵌套链）、LLM 路由、任务模板、Fleet 并行、广播讨论、记忆去重压缩、上下文裁剪、ACP 实时、心跳",
       "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-hermes.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-hermes.aar",
+      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.5.0/plugin-tribe.aar",
+      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.5.0/plugin-tribe.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["hermes.discover", "hermes.team", "hermes.delegate", "hermes.ask", "hermes.memo", "hermes.role"]
+      "commands": ["tribe.start", "tribe.stop", "tribe.status", "tribe.team", "tribe.discover", "tribe.delegate", "tribe.ask", "tribe.memo", "tribe.role", "tribe.template", "tribe.route", "tribe.fleet", "tribe.chat", "tribe.discuss", "tribe.task.list", "tribe.task.show", "tribe.task.cancel", "tribe.task.retry", "tribe.task.done", "tribe.peers", "tribe.ping", "tribe.cleanup"]
     },
     {
       "id": "workflow-plugin",

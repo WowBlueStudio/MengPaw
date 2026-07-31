@@ -348,6 +348,8 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     // ── Wire triggers once at startup ──
     LaunchedEffect(Unit) {
         com.mengpaw.shell.service.AgentRuntime.wireTriggers(agentViewModel)
+        // Tribe inbox polling: refresh system prompt when new tribe tasks arrive
+        agentViewModel.startTribeInboxRefresh()
     }
 
     // Sync loop mode from settings

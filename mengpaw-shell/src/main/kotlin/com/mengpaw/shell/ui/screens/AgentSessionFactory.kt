@@ -63,6 +63,8 @@ class AgentSessionFactory(
                 "$prompt\n\n## 智能体身份\n\n$soul"
             } else prompt
         }
+        // Tribe inbox middleware: inject pending tribe task count into prompt
+        val tribeMw = com.mengpaw.plugin.hermes.TribeInboxMiddleware
 
         // Post-call middleware: context folding + scroll eviction
         val postMw = PostCallMiddleware { response, step, totalChars, estimatedTokens ->
@@ -77,7 +79,7 @@ class AgentSessionFactory(
 
         val engine = AgentEngine(
             llmProvider = provider,
-            middleware = memoryMw,
+            middleware = AgentMiddleware.chain(memoryMw, tribeMw),
             postCallMiddleware = postMw,
             scrollContext = scroll,
             additionalNamespaces = mapOf("sys" to com.mengpaw.core.namespace.SysExecutor.commands)
@@ -87,6 +89,11 @@ class AgentSessionFactory(
             it.setAgentLanguage(globalAgentLang)
             it.configureCacheStrategy(globalEndpoint)
         }
+
+        // Inject provider into TribePlugin for LLM routing (tribe.route / fleet)
+        try {
+            com.mengpaw.plugin.hermes.TribePlugin.llmProvider = provider
+        } catch (_: Exception) {}
 
         val msgs = MutableStateFlow<List<ChatMessageUi>>(
             if (globalApiKey.isBlank())

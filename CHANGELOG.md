@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.19.7 (2026-07-31) — 部落协作十特性全量上线
+
+### 功能增强 (P1)
+- **Tribe 重命名**: HermesPlugin 升级为 TribePlugin（部落协作），hermes.* 命令向后兼容
+- **Kanban 看板状态机**: 任务全生命周期（PENDING→ASSIGNED→RUNNING→COMPLETED/FAILED/TIMED_OUT/CANCELLED），JSON 持久化
+- **ACP 实时委派**: 双模委派（文件/AUTO），优先级 P0/P1/P2，指数退避重试（30s→60s→120s）
+- **心跳检测**: 30s 心跳广播 + 120s 对端超时清理，tribe.peers/ping 在线检测
+- **LAN 自动组队**: tribe.discover --lan 同步 FrameworkPeerStore 局域网框架成员
+- **看板竖条可视化**: 框架通讯录条目右侧竖条（绿=完成/黄=排队/黄闪烁=执行/红=错误）
+- **任务模板**: tribe.delegate --template（summarize/translate/research/review/brainstorm/draft）
+- **LLM 能力路由**: tribe.route / --route 基于角色+历史成功率智能分配
+- **收件箱自动感知**: Agent system prompt 注入待办提醒 + NotifyBus 用户通知
+- **Fleet 并行**: tribe.fleet LLM 分解→并行委派→LLM 合成
+- **嵌套委派链**: --parent 最多 3 层 + 环形检测 + 结果沿链回传（tribe.task.done）
+- **共享记忆去重+压缩**: SHA256 指纹 + 100 条自动 LLM 摘要
+- **多人聊天/广播**: tribe.chat（ACP TRIBE_CHAT）+ tribe.discuss 多 Agent 讨论
+- **上下文裁剪传递**: --context 裁剪对话上下文附带（ref:// 引用）
+
+### 内核改动
+- **TRIBE_CHAT 消息类型**: AcpMessageType + AcpMessage.tribeChat() 工厂
+- **AgentEngine middleware 可变**: setMiddleware() + 无副作用 refreshSystemPrompt()
+- **AcpServer**: sendViaTransport() + DELEGATE 分发不 break + delegate() 清理
+
+### 架构完善 (P2)
+- **TribeAcpHandler**: onDelegate inbox 写入修复（接收方目录）
+- **Companion Object DI**: llmProvider/acpServer 注入（参照 MemoryTwinPlugin）
+- **插件依赖**: shell→plugin-hermes, plugin-hermes→plugin-framework
+
 ## v0.19.6 (2026-07-31) — 记忆孪生链路完整修复
 
 ### 安全修复 (P0)

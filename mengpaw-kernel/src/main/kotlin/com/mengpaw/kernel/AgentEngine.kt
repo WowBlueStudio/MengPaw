@@ -6,6 +6,7 @@ package com.mengpaw.kernel
 import com.mengpaw.kernel.agent.AgentDocManager
 import com.mengpaw.kernel.agent.AgentExecutor
 import com.mengpaw.kernel.agent.AgentMiddleware
+import com.mengpaw.kernel.AgentState
 import com.mengpaw.kernel.agent.MemoryRecord
 import com.mengpaw.kernel.agent.PostCallMiddleware
 import com.mengpaw.kernel.agent.ScrollContextManager
@@ -32,7 +33,7 @@ class AgentEngine(
     private val sessionManager: SessionManager = SessionManager(),
     private val promptEngine: PromptEngine = PromptEngine(),
     private val agentDocManager: AgentDocManager = AgentDocManager(),
-    private val middleware: AgentMiddleware = AgentMiddleware.NoOp,
+    @Volatile private var middleware: AgentMiddleware = AgentMiddleware.NoOp,
     private val postCallMiddleware: PostCallMiddleware = PostCallMiddleware.NoOp,
     val scrollContext: ScrollContextManager? = null,
     private val checkpointManager: CheckpointManager = CheckpointManager(),
@@ -92,7 +93,7 @@ class AgentEngine(
     val activeSessionId: String? get() = conversationSessionId
 
     /** Whether the agent is currently executing a task (for CapabilityCard.runtime.isBusy). */
-    val isExecuting: Boolean get() = _state.value !is com.mengpaw.kernel.agent.AgentState.Idle
+    val isExecuting: Boolean get() = _state.value !is AgentState.Idle
 
     // ── Integrity terminal latch (matching OpenClaw terminal latch pattern) ──
     // Once tripped, blocks further LLM calls until the session is repaired.
@@ -336,9 +337,23 @@ class AgentEngine(
     private fun rebuildSystemPrompt() {
         consecutiveCompacts = 0; compactStuck = false
         promptEngine.resetLoopDetection()
+        refreshSystemPrompt()
+    }
+
+    /**
+     * 仅重算 system prompt（经 middleware 处理），不重置循环检测/compact 状态。
+     * 可高频调用（如部落 inbox 状态变化时刷新提醒段落）。
+     */
+    fun refreshSystemPrompt() {
         val base = promptEngine.buildSystemPrompt(lang = agentLanguage, agentName = agentName, framework = framework, modelName = modelName)
         val processed = middleware.onSystemPrompt(base, agentName)
         llmRequestBuilder.updateSystemPrompt(processed)
+    }
+
+    /** 运行时替换 middleware（如部落收件箱提醒），并立即刷新 system prompt。 */
+    fun setMiddleware(mw: AgentMiddleware) {
+        middleware = mw
+        refreshSystemPrompt()
     }
 
     data class TraceStep(val step: Int, val thought: String, val action: String?, val observation: String?)

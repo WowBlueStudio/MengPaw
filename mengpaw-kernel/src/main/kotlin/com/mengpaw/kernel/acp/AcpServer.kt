@@ -95,12 +95,6 @@ class AcpServer(
         val peer = peers[peerId]
             ?: return AcpResult(false, "Peer not found: $peerId")
         val msg = AcpMessage.delegate(profile.agentId, peerId, task)
-        handlers.forEach { handler ->
-            if (AcpMessageType.DELEGATE in handler.supportedTypes) {
-                val result = handler.handle(msg, this)
-                if (result != null) return result
-            }
-        }
         val sent = transports.any { it.send(msg) }
         return if (sent) AcpResult(true, "Task delegated to $peerId")
         else AcpResult(false, "No transport available to reach $peerId")
@@ -119,6 +113,14 @@ class AcpServer(
         transports.forEach { it.send(msg) }
         return AcpResult(true, "Skill $skillName shared with $peerId")
     }
+
+    /**
+     * Send an ACP message directly via transport, bypassing local handler dispatch.
+     * Used by plugins (e.g. Tribe) that manage their own message lifecycle
+     * and don't want local handlers to intercept outgoing messages.
+     */
+    suspend fun sendViaTransport(msg: AcpMessage): Boolean =
+        transports.any { it.send(msg) }
 
     suspend fun handleMessage(raw: String): AcpResult {
         return try {
@@ -157,6 +159,7 @@ class AcpServer(
                 AcpResult(true, msg.payload, msg.from)
             }
             AcpMessageType.DELEGATE, AcpMessageType.SHARE_MEMORY, AcpMessageType.SHARE_SKILL,
+            AcpMessageType.TRIBE_CHAT,
             AcpMessageType.BROWSER_PUSH -> {
                 if (type == AcpMessageType.BROWSER_PUSH) {
                     if (!PromptFirewall.isTrusted(msg.from)) {
@@ -172,14 +175,15 @@ class AcpServer(
                 for (handler in handlers) {
                     if (type in handler.supportedTypes) {
                         val result = handler.handle(msg, this)
-                        if (result != null) { customResult = result; break }
+                        if (result != null) { customResult = result } // 不 break — 允许所有 handler 依次处理
                     }
                 }
                 customResult ?: AcpResult(true, "ack", msg.type)
             }
             // Memory Twin ledger sync — requires trusted peer (P0 fix: auth check)
             AcpMessageType.LEDGER_HEAD, AcpMessageType.LEDGER_PULL,
-            AcpMessageType.LEDGER_BATCH, AcpMessageType.LEDGER_ACK -> {
+            AcpMessageType.LEDGER_BATCH, AcpMessageType.LEDGER_ACK,
+            AcpMessageType.REVOKE -> {
                 // SECURITY: Only trusted (paired) devices can access ledger data
                 if (!PromptFirewall.isTrusted(msg.from)) {
                     return AcpResult(false, "auth_required",
