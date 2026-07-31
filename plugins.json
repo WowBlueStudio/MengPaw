@@ -219,7 +219,8 @@
         "dev.plugin.audit",
         "dev.plugin.share",
         "dev.plugin.examples",
-        "dev.plugin.keywords"
+        "dev.plugin.keywords",
+        "dev.plugin.guide"
       ],
       "checksum": "sha256:cc9624579d54b57f20dc725d4ce9c7cd91cc5d74321b968d47c5494e576ede0c",
       "size": 25389,

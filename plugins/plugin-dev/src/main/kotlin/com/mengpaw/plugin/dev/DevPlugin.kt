@@ -32,7 +32,13 @@ class DevPlugin : Plugin {
         "plugin.share"   to ::share,
         "plugin.examples" to ::examples,
         "plugin.keywords" to ::keywords,
+        "plugin.guide"   to ::guide,
     )
+
+    /** 安装即写入能力边界文档 (用户可读), 保持随插件分发. */
+    override suspend fun onInstall(context: com.mengpaw.kernel.plugin.PluginContext) {
+        PluginDevGuide.ensureWritten()
+    }
 
     // ── plugin.create ────────────────────────────────────────────────
 
@@ -311,6 +317,24 @@ class DevPlugin : Plugin {
                 appendLine()
             }
             appendLine("提示: 修改 plugin.json 后重新激活以更新关键词.")
+        })
+    }
+
+    // ── plugin.guide ──────────────────────────────────────────────────
+
+    /** 查看插件开发工具能力边界文档. 同时落盘到 插件文档/ 供用户阅读. */
+    private suspend fun guide(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val path = PluginDevGuide.ensureWritten()
+        return ExecutionResult.ok(buildString {
+            appendLine("=== 插件开发工具 · 能力边界 ===")
+            appendLine()
+            append(PluginDevGuide.CONTENT)
+            appendLine()
+            if (path.isNotBlank()) {
+                appendLine("---")
+                appendLine("📄 文档已写入: $path（用户可在文件管理器阅读）")
+                appendLine("更新时机: 安装/升级 dev-plugin 时或本命令执行时自动刷新")
+            }
         })
     }
 

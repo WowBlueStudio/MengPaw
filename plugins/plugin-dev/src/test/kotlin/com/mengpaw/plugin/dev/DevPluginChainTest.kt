@@ -106,4 +106,18 @@ class DevPluginChainTest {
         assertTrue(ex.success)
         assertTrue(ex.output.contains("MengPaw"))
     }
+
+    @Test
+    fun `guide command returns capability doc and writes file`() = runBlocking {
+        val guide = run("plugin.guide", emptyList())
+        assertTrue(guide.success)
+        assertTrue("应包含能力边界标题: ${guide.output.take(100)}", guide.output.contains("能力边界"))
+        assertTrue("应包含命令清单", guide.output.contains("dev.plugin.create"))
+        assertTrue("应包含审计规则", guide.output.contains("🔴"))
+        assertTrue("应包含端口说明", guide.output.contains("9876"))
+
+        val written = PluginDevGuide.targetFile
+        assertTrue("文档应落盘: $written", written.exists())
+        assertTrue("落盘内容应完整", written.readText().contains("MengPaw 插件开发工具"))
+    }
 }

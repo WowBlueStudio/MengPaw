@@ -592,8 +592,8 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 #### plugin — 插件管理 (12 + 5)
 **内核 (12)**：`marketplace [--refresh]` | `search <query>` | `install <id>` | `uninstall <id>` | `list [--ports]` | `info <id>` | `enable <id>` | `disable <id>` | `update <id>` | `upgrade --all` | `auto <wake\|sleep\|status\|sleep-idle>` | `verify <id>`
 
-**dev 插件扩展 (5)**：`create --type script|native --name <name> [--author <作者>] [--desc <描述>]` | `audit --target <id>` | `share --plugin <id> --to <target>` | `examples` | `keywords --target <id>`
-> dev 插件的命令实际注册为 `dev.plugin.create` / `dev.plugin.audit` / `dev.plugin.share` / `dev.plugin.examples` / `dev.plugin.keywords`，因为 PluginManager 根据插件 ID (`dev-plugin`) 自动派生命名空间 `dev`。`plugin.create` 在 CLI 文档中出现时均指 `dev.plugin.create`。
+**dev 插件扩展 (6)**：`create --type script|native --name <name> [--author <作者>] [--desc <描述>]` | `audit --target <id>` | `share --plugin <id> --to <target>` | `examples` | `keywords --target <id>` | `guide`
+> dev 插件的命令实际注册为 `dev.plugin.create` / `dev.plugin.audit` / `dev.plugin.share` / `dev.plugin.examples` / `dev.plugin.keywords` / `dev.plugin.guide`，因为 PluginManager 根据插件 ID (`dev-plugin`) 自动派生命名空间 `dev`。`plugin.create` 在 CLI 文档中出现时均指 `dev.plugin.create`。`dev.plugin.guide` 输出能力边界文档并落盘 `插件文档/plugin-dev-guide.md` 供用户阅读。
 
 #### sys — Android 系统 (39 命令，通过 Android 适配层注入)
 

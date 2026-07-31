@@ -230,6 +230,7 @@ typealias CommandHandler = suspend (List<String>, ExecutionContext) -> Execution
 | `dev.plugin.share --plugin <插件ID> --to <框架>` | 分享给指定框架（审计不过拒绝） |
 | `dev.plugin.examples` | 查看内嵌参考示例（文件/网络插件） |
 | `dev.plugin.keywords --target <插件ID>` | 查看命令 BM25 检索关键词 |
+| `dev.plugin.guide` | 查看插件开发工具能力边界文档（自动落盘 `插件文档/plugin-dev-guide.md` 供用户阅读） |
 
 > 命令键 `plugin.create` 注册为 `dev.plugin.create` 的机制：DevPlugin 的 commands map 键为 `plugin.create`，PluginManager 按插件 id `dev-plugin` 派生命名空间 `dev`，注册时拼接为 `dev.plugin.create`。
 
