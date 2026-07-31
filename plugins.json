@@ -6,7 +6,7 @@
     {
       "id": "framework-plugin",
       "name": "框架发现",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理",
@@ -22,12 +22,12 @@
       ],
       "checksum": "sha256:378b5e4d598cb40be53a2e8a914f704cc2728094da21bc4da891c9ad7d985f79",
       "size": 42745,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "fs-plugin",
       "name": "文件系统",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob",
@@ -47,12 +47,12 @@
       ],
       "checksum": "sha256:045a11a35c8201eb7d845afbc57a671c4d8c89db894af72dc25e36962c878e0a",
       "size": 25854,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "net-plugin",
       "name": "网络请求",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "HTTP 请求：GET/POST，支持自定义 Header 和超时",
@@ -65,12 +65,12 @@
       ],
       "checksum": "sha256:db85170462c2d6c6a9dc64b4b1b6a19f87cdc3b5670f21ff0c8ac97772f50486",
       "size": 17741,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "memory-plugin",
       "name": "记忆系统",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "Markdown 持久化记忆系统，含 LRU 缓存和被动索引",
@@ -86,12 +86,12 @@
       ],
       "checksum": "sha256:d4131cf16bc791d530ba2411b70bfbe9b5bd22069892d1c0ecba55ecfa5d4366",
       "size": 20798,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "memory-twin-plugin",
       "name": "记忆孪生",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 心跳保活 + QoS自适应 + 手动IP发现",
@@ -124,12 +124,12 @@
       ],
       "checksum": "sha256:f0b941ac85d0108bd82b8949f64344b296c12d2d1452e1c445ca7aa57291939a",
       "size": 278497,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "skill-plugin",
       "name": "技能系统",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "可复用的 Agent 剧本系统（YAML+Markdown），含 3 个默认 Skill",
@@ -143,12 +143,12 @@
       ],
       "checksum": "sha256:6d9d4ca20ab11094548e2edc58f76a27fbffd224e89ae727f05456b9e2092893",
       "size": 71759,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "self-plugin",
       "name": "Agent 自省",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 自身状态查询和配置管理",
@@ -164,12 +164,12 @@
       ],
       "checksum": "sha256:27c2b46cdbe76568eb0b797054addd49c4085bf2f558b9926af0a20deb19f428",
       "size": 8897,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "clipboard-plugin",
       "name": "剪贴板",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "系统剪贴板读写操作",
@@ -182,12 +182,12 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "notification-plugin",
       "name": "通知管理",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "系统通知发送和管理",
@@ -203,12 +203,12 @@
       ],
       "checksum": "sha256:3faa8944f73aaf9a7e35550c82112709fff3cff5feb1c70fe6af7df7d40f5df3",
       "size": 10565,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "dev-plugin",
       "name": "插件开发工具",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "创建、审计、分享自建插件 — Agent 可自主扩展 MengPaw 功能",
@@ -222,14 +222,14 @@
         "dev.plugin.keywords",
         "dev.plugin.guide"
       ],
-      "checksum": "sha256:cc9624579d54b57f20dc725d4ce9c7cd91cc5d74321b968d47c5494e576ede0c",
-      "size": 25389,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "checksum": "sha256:791e4af691eaf797a6c97f7cc92a37379e42885e19887132726fc0ed8597a376",
+      "size": 30823,
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "update-plugin",
       "name": "自动更新",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "WiFi 环境自动检测更新，冷启动检查，去轮询CoroutineScope泄漏，GitHub→Gitee→ghproxy 三级回退",
@@ -250,12 +250,12 @@
       ],
       "checksum": "sha256:8cca801352cbbc25130e78ce77d7e4db09f13c47878db868a671464758f6a994",
       "size": 29416,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "translate-plugin",
       "name": "翻译引擎",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "多语言翻译：Google 翻译集成 + 语种自动检测（自动识别源语言）",
@@ -271,12 +271,12 @@
       ],
       "checksum": "sha256:abda168326e715e876455d099f2550ec7a3c969c2552504f71db648f8e89a833",
       "size": 21566,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "error-report-plugin",
       "name": "错误上报",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "官方错误收集与上报：error.bridge JSON桥接 + error.upload WiFi自动上传，序列化重写",
@@ -298,12 +298,12 @@
       ],
       "checksum": "sha256:2ab06b3ab95883d947e769d1513256896c3e17657089ebc27a4eec382bbd9f23",
       "size": 28602,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "tavily-plugin",
       "name": "AI 搜索",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "Tavily AI 优化搜索引擎 — 结构化搜索结果 + 网页内容提取，错误消息含 API Key 获取链接",
@@ -317,12 +317,12 @@
       ],
       "checksum": "sha256:a30aad3506f37d9346dc087fc6e2ed2dc54131ace77025aae5f8c730ce65f069",
       "size": 14367,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "render-plugin",
       "name": "API 生图引擎",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "多后端 API 生图：GPT Image (原DALL-E) / Replicate / Stability，模型更新至 2026.07",
@@ -338,12 +338,12 @@
       ],
       "checksum": "sha256:0203b1e149e098ea24b76093ee002079baf498e99e8dab3f12c3a736c59924c3",
       "size": 24873,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "tribe-plugin",
       "name": "部落协作 (Tribe)",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "多 Agent 部落协作：LAN 自动组队、Kanban 委派（优先级+超时+嵌套链）、LLM 路由、任务模板、Fleet 并行、广播讨论、记忆去重压缩、上下文裁剪、ACP 实时、心跳。对应模块 plugin-hermes（随 APK 捆绑，含 hermes.* 兼容命令）",
@@ -375,12 +375,12 @@
       ],
       "checksum": "sha256:1a9edab8e0ba2eeb8bcf88cd6e02591aee5f02cec3937bdbe1e6caf065271c77",
       "size": 263914,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "workflow-plugin",
       "name": "工作流引擎",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "DAG 工作流编排：CommandExecutor 真实执行 + 条件分支 + 变量引用 + workflow.delete 删除",
@@ -397,12 +397,12 @@
       ],
       "checksum": "sha256:59f2856e88b8ae4697c475c2ed43a980d6a8a156da798429e266db5ef7508e0a",
       "size": 20863,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "incubator-plugin",
       "name": "Agent 孵化器",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 市场方向演进：agent.market / install / share，隐私清理，SHA256校验，三级回退下载",
@@ -418,12 +418,12 @@
       ],
       "checksum": "sha256:2050c2c0c3a5d200c0b0b01515da3c20e1197cc1280a2713121ad07cdc2cc1b3",
       "size": 16349,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "comfy-plugin",
       "name": "ComfyUI 工作流",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "ComfyUI 工作流搭建：节点编排/JSON 导出/API 执行/MP浏览器预览，错误消息含 CORS 排查指引",
@@ -443,12 +443,12 @@
       ],
       "checksum": "sha256:f777b336906cc9c011aa4d2760c094e1e541283f422238e2757a0072a1824363",
       "size": 24618,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "browser-push-plugin",
       "name": "跨设备推送",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 跨设备推送网页，基于 ACP 协议",
@@ -464,12 +464,12 @@
       ],
       "checksum": "sha256:281fc1b3f774d39fb55d86fb92079661a5fe7fb6a8bbdd390e731c4b01b6c748",
       "size": 16951,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "browser-search-plugin",
       "name": "搜索分析",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "搜索管道重写：search.fetch 网页直读 → search.clean 去噪 → search.md 生成正文（文本块/表格识别） → search.outputs 历史管理 → search.clear 清理",
@@ -489,12 +489,12 @@
       ],
       "checksum": "sha256:1da4598a051abaab8477ed893f7a93420abd044d66393d1ad4430d0e5045aeb5",
       "size": 7794,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "browser-mcp-plugin",
       "name": "浏览器 MCP",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取/调用（MP浏览器专用）",
@@ -509,12 +509,12 @@
       ],
       "checksum": "sha256:d0cd2ac2d10a59903ecfc7ed677fa426697e2017f233ca4bc76616ef16fb7f04",
       "size": 10741,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "browser-cdp-plugin",
       "name": "CDP 调试",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "Chrome DevTools Protocol 调试支持。已从市场下架（保留源码），仅 debug 构建可用",
@@ -528,12 +528,12 @@
       ],
       "checksum": "sha256:69ee9fd15c574b4a99e4b529d1630a47e2ffade397f48b3837efb2de9ace8f83",
       "size": 6419,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "browser-inspector-plugin",
       "name": "网页开发套件",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "元素选择器+批注：悬停高亮、点击选择、添加备注、导出元素地图",
@@ -551,7 +551,7 @@
       ],
       "checksum": "sha256:270454c1ed501cd79e2319c610f33c8f92d8387af57ea1017b1b05d66af5ff24",
       "size": 13589,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "agent-mission-plugin",
@@ -587,7 +587,7 @@
     {
       "id": "root-plugin",
       "name": "Root 权限",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "Root 权限管理 — su 命令执行/应用管理/完整文件系统/系统修改/备份恢复/审计日志",
@@ -617,12 +617,12 @@
       ],
       "checksum": "sha256:2ddedb03be3bf8b09afc1a15942721cbe5be50f47c79c54b8ec9e685f70363a9",
       "size": 43137,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
       "id": "tools-plugin",
       "name": "Agent 命令集",
-      "version": "0.20.1",
+      "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用",
@@ -636,7 +636,7 @@
       ],
       "checksum": "sha256:e3918b07c6caa5420e65a70777817b4da281e70e9d629a730a103ac2cfe54985",
       "size": 35102,
-      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
+      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     }
   ]
 }

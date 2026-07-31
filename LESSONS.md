@@ -4,6 +4,15 @@
 
 ---
 
+## 2026-07-31 — v0.20.2 插件开发工具能力边界文档植入
+
+### 112. Kotlin 三引号字符串不能用于 const val
+- 场景：PluginDevGuide.CONTENT 声明为 `const val CONTENT: String = """..."""`，编译报 "Const 'val' initializer should be a constant value"——const val 初始化器只接受字面量（单引号字符串/数字/枚举），三引号 raw string 不允许。
+- 修复：改普通 `val CONTENT`。
+- 教训：**const val 用单引号字面量；大段多行文本（raw string）用普通 val**。
+
+---
+
 ## 2026-07-31 — v0.20.1 插件开发工具升级 + Agent 端口感知
 
 ### 108. Windows PowerShell 5.1 无 BOM UTF-8 脚本含中文会按 GBK 误读

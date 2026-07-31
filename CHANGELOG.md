@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.20.2 (2026-07-31) — 插件开发工具能力边界文档植入
+
+### 新增
+- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节
+- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）
+- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入
+- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘
+
+### 修复
+- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val
+
+### 发行
+- Shell APK v0.20.2（versionCode 20002）
+- plugins.json dev-plugin 命令 5→6 条
+- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）
+
 ## v0.20.1 (2026-07-31) — 插件开发工具升级 + Agent 端口感知
 
 ### 新增
