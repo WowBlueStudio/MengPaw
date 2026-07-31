@@ -16,22 +16,21 @@ import com.mengpaw.kernel.plugin.*
 import kotlinx.coroutines.*
 
 /**
- * Memory Twin Plugin — cross-device Agent memory synchronization.
+ * Memory Twin Plugin — cross-device Agent workspace synchronization.
  *
  * Implements the [Plugin] interface to contribute `twin.*` CLI commands
- * to the MengPaw framework. Uses hash-chain ledger + ACP P2P protocol
- * for distributed, tamper-evident memory synchronization.
+ * to the MengPaw framework. v0.22.0: 哈希链账本 → 工作区文件同步 —
+ * 同步整个 {agent}/ 工作区文档 (soul.md → memory/), manifest 比对 +
+ * 差异传输 + LWW 冲突备份。
  *
  * ## Architecture
- * - [TwinLedger] / [TwinLedgerStore] — hash chain data model & persistence
- * - [TwinSyncEngine] — sync state machine (HEAD→PULL→BATCH→ACK) + heartbeat + QoS
+ * - [TwinWorkspace] — 同步范围/清单/冲突落盘 (替代账本)
+ * - [TwinSyncEngine] — sync state machine (WS_MANIFEST→WS_PULL) + heartbeat + QoS
  * - [TwinAcpHandler] — ACP message handler (first AcpHandler implementation)
  * - [TwinDiscovery] — Android NSD LAN peer discovery
  * - [TwinPairingEngine] — short-code verification pairing protocol
  * - [TwinCapabilityCollector] — device capability card generation
  * - [TwinRouter] — capability-aware task routing
- * - [TwinIdentity] — soul/profile identity doc sync
- * - [TwinDreamSync] — dream event ledger integration
  */
 class MemoryTwinPlugin : Plugin {
 
@@ -41,7 +40,7 @@ class MemoryTwinPlugin : Plugin {
         version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 能力感知路由 + 心跳保活",
+        description = "跨设备工作区同步 — ACP P2P 文件同步 + 能力感知路由 + 心跳保活",
         minCoreVersion = "0.12.0",
         commands = listOf(
             "twin.start", "twin.stop", "twin.status",
@@ -50,12 +49,6 @@ class MemoryTwinPlugin : Plugin {
             "twin.sync", "twin.sync.auto", "twin.sync.qos",
             "twin.capabilities",
             "twin.delegate", "twin.route",
-            "twin.ledger.show", "twin.ledger.verify",
-            "twin.ledger.diff", "twin.ledger.stats", "twin.ledger.repair",
-            "twin.ledger.encrypt",
-            "twin.identity.push", "twin.identity.pull",
-            "twin.identity.diff", "twin.identity.merge",
-            "twin.dream.sync", "twin.dream.history",
             "twin.lost", "twin.recover"
         )
     )
@@ -71,6 +64,8 @@ class MemoryTwinPlugin : Plugin {
         @Volatile var acpTransport: AcpTransport? = null
         @Volatile var twinProfile: com.mengpaw.kernel.agent.AgentProfile? = null
         @Volatile var agentEngine: com.mengpaw.kernel.AgentEngine? = null
+        /** MainActivity 激活时创建的 engine — cmdStart 复用, 避免双引擎 (v0.22.0 债务修复)。 */
+        @Volatile var activeEngine: TwinSyncEngine? = null
         val isActivated: Boolean get() = acpServer != null
 
         /** Read active session ID from AgentEngine if available. */
@@ -166,18 +161,6 @@ class MemoryTwinPlugin : Plugin {
         "capabilities" to ::cmdCapabilities,
         "delegate" to ::cmdDelegate,
         "route" to ::cmdRoute,
-        "ledger.show" to ::cmdLedgerShow,
-        "ledger.verify" to ::cmdLedgerVerify,
-        "ledger.diff" to ::cmdLedgerDiff,
-        "ledger.stats" to ::cmdLedgerStats,
-        "ledger.repair" to ::cmdLedgerRepair,
-        "ledger.encrypt" to ::cmdLedgerEncrypt,
-        "identity.push" to ::cmdIdentityPush,
-        "identity.pull" to ::cmdIdentityPull,
-        "identity.diff" to ::cmdIdentityDiff,
-        "identity.merge" to ::cmdIdentityMerge,
-        "dream.sync" to ::cmdDreamSync,
-        "dream.history" to ::cmdDreamHistory,
         "lost" to ::cmdLost,
         "recover" to ::cmdRecover
     )
@@ -194,16 +177,23 @@ class MemoryTwinPlugin : Plugin {
             "ACP 传输层未初始化。请检查 ACP 服务状态: self.acp status"
         )
 
-        syncEngine = TwinSyncEngine(
-            serverSupplier = { acpServer }, transportSupplier = { acpTransport },
-            agentName = agentName, deviceId = deviceId, deviceName = deviceName
-        )
-        acpHandler = TwinAcpHandler(syncEngine)
-        server.registerHandler(acpHandler)
-        TwinIdentity.snapshot(agentName)
+        // 复用 MainActivity 激活时创建的 engine (双引擎债务修复, v0.22.0)
+        val reused = activeEngine
+        if (reused != null && reused != syncEngine) {
+            syncEngine = reused
+            acpHandler = TwinAcpHandler(syncEngine)
+        }
+        if (!::syncEngine.isInitialized) {
+            syncEngine = TwinSyncEngine(
+                serverSupplier = { acpServer }, transportSupplier = { acpTransport },
+                agentName = agentName, deviceId = deviceId, deviceName = deviceName
+            )
+            acpHandler = TwinAcpHandler(syncEngine)
+            server.registerHandler(acpHandler)
+        }
 
         val context = appContext
-        if (context != null) {
+        if (context != null && discovery == null) {
             discovery = TwinDiscovery(context, deviceId, agentName)
             discovery?.start()
 
@@ -217,7 +207,7 @@ class MemoryTwinPlugin : Plugin {
         }
 
         isRunning = true
-        syncEngine.startAutoSync()
+        if (reused == null) syncEngine.startAutoSync()
 
         return ExecutionResult.ok(buildString {
             appendLine("孪生服务已启动")
@@ -256,13 +246,12 @@ class MemoryTwinPlugin : Plugin {
         if (!isRunning) return ExecutionResult.ok("孪生服务: 未启动。使用 twin.start 启动。")
 
         val state = syncEngine.syncState.value
-        val stats = TwinLedgerStore.stats()
         return ExecutionResult.ok(buildString {
             appendLine("## 孪生状态")
             appendLine("- 服务: 运行中")
             appendLine("- 设备: $deviceName")
             appendLine("- 指纹: ${deviceId.take(16)}...")
-            appendLine("- 协议版本: 0.2")
+            appendLine("- 协议版本: 0.2 (工作区文件同步)")
             appendLine("- 同步阶段: ${state.phase}")
             appendLine("- 在线节点: ${state.onlinePeers}/${state.totalPeers}")
             appendLine("- QoS: ${syncEngine.qosLevel.name}")
@@ -270,12 +259,9 @@ class MemoryTwinPlugin : Plugin {
                 if (state.lastSyncAt > 0) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
                     .format(java.util.Date(state.lastSyncAt)) else "从未"
             }")
-            if (state.lastEntriesReceived > 0) {
-                appendLine("- 上次接收: ${state.lastEntriesReceived} 条")
+            if (state.lastFilesReceived > 0 || state.lastConflicts > 0) {
+                appendLine("- 上次接收: ${state.lastFilesReceived} 个文件, 冲突 ${state.lastConflicts}")
             }
-            appendLine("- 账本条目: ${stats.totalEntries}")
-            appendLine("- 账本验证: ${if (stats.verified) "✅ 完整" else "❌ 损坏"}")
-            appendLine("- 来源设备: ${stats.devices.keys.joinToString()}")
         })
     }
 
@@ -298,7 +284,7 @@ class MemoryTwinPlugin : Plugin {
                 val lastSeen = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
                     .format(java.util.Date(p.lastSeen))
                 val onlineIcon = if (p.online) "🟢" else "⚫"
-                val syncState = if (p.lastAckedHash != null) "已同步" else "待同步"
+                val syncState = if (p.lastSyncAt > 0) "已同步" else "待同步"
                 appendLine("| ${p.peerId.take(8)}... | ${p.agentName} | ${p.address}:${p.port} | $onlineIcon | $syncState |")
             }
         })
@@ -375,25 +361,19 @@ class MemoryTwinPlugin : Plugin {
         val keyFile = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${peer.peerId}.key")
         if (keyFile.exists()) keyFile.delete()
 
-        // 3. Mark ledger entries as compromised
-        val entries = TwinLedgerStore.loadAll()
-        val compromisedCount = entries.count { it.deviceId == peer.peerId }
-
-        // 4. Move peer to "lost" in display and remove from active peers
+        // 3. Move peer to "lost" in display and remove from active peers
         syncEngine.onRevokeReceived(peer.peerId)
 
-        // 5. Write audit record
+        // 4. Write audit record
         val auditMsg = buildString {
             appendLine("⚠️ 设备丢失标记")
             appendLine("- 设备: ${peer.agentName} (${peer.peerId})")
             appendLine("- 地址: ${peer.address}:${peer.port}")
             appendLine("- 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}")
-            appendLine("- 记忆受影响: $compromisedCount 条")
             appendLine()
             appendLine("已执行:")
             appendLine("✓ 广播解绑到所有在线节点")
             appendLine("✓ 移除本地信任关系")
-            appendLine("✓ 记忆标记为 compromised")
             appendLine()
             appendLine("如果找回了设备，使用以下命令重新配对:")
             appendLine("  twin.recover ${peer.peerId}")
@@ -428,9 +408,14 @@ class MemoryTwinPlugin : Plugin {
             syncEngine.syncWithPeer(peerId)
         } else {
             val results = syncEngine.syncWithAllPeers()
-            if (results.isEmpty()) TwinSyncResult(0, "无在线节点可同步", "使用 twin.peers 查看节点列表，确保对端在线")
-            else if (results.all { it.entriesReceived == 0 && it.error != null }) results.first()
-            else TwinSyncResult(results.sumOf { it.entriesReceived }, null, null)
+            if (results.isEmpty()) TwinSyncResult(0, 0, 0, "无在线节点可同步", "使用 twin.peers 查看节点列表，确保对端在线")
+            else if (results.all { it.filesReceived == 0 && it.error != null }) results.first()
+            else TwinSyncResult(
+                results.sumOf { it.filesReceived },
+                results.sumOf { it.filesSent },
+                results.sumOf { it.conflicts },
+                null, null
+            )
         }
 
         if (result.error != null) {
@@ -441,11 +426,13 @@ class MemoryTwinPlugin : Plugin {
         }
         return ExecutionResult.ok(buildString {
             appendLine("同步完成")
-            if (result.entriesReceived > 0) {
-                appendLine("- 接收条目: ${result.entriesReceived}")
-                appendLine("- 使用 twin.ledger.stats 查看更新后的统计")
+            if (result.filesReceived > 0 || result.conflicts > 0) {
+                appendLine("- 接收文件: ${result.filesReceived}")
+                appendLine("- 发送文件: ${result.filesSent}")
+                appendLine("- 冲突 (已存 .conflict 备份): ${result.conflicts}")
+                appendLine("- 使用 twin.status 查看详情")
             } else {
-                appendLine("- 无新条目 (已是最新)")
+                appendLine("- 无差异文件 (工作区已一致)")
             }
         })
     }
@@ -601,253 +588,4 @@ class MemoryTwinPlugin : Plugin {
         return ExecutionResult.ok(analysis.summary)
     }
 
-    // ── Ledger commands ───────────────────────────────────────────
-
-    private suspend fun cmdLedgerShow(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val limit = args.getOrNull(0)?.toIntOrNull() ?: 20
-        val entries = TwinLedgerStore.loadTail(limit)
-        if (entries.isEmpty()) return ExecutionResult.ok("(账本为空)")
-
-        return ExecutionResult.ok(buildString {
-            appendLine("# 记忆账本 (最近 $limit 条)")
-            appendLine()
-            entries.reversed().forEach { entry ->
-                val date = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
-                    .format(java.util.Date(entry.timestamp))
-                val typeIcon = when (entry.type) {
-                    EntryType.MEMORY -> "📝"
-                    EntryType.DREAM -> "🌙"
-                    EntryType.SOUL_UPDATE -> "🧠"
-                    EntryType.PROFILE_UPDATE -> "👤"
-                    EntryType.IDENTITY_SYNC -> "🔗"
-                    EntryType.CAPABILITY_UPDATE -> "📊"
-                }
-                appendLine("### $typeIcon ${entry.id}")
-                appendLine("- 时间: $date | 设备: ${entry.deviceName} | 类型: ${entry.type}")
-                appendLine("- 哈希: ${entry.hash.take(12)}...")
-                appendLine("- 内容: ${entry.content.take(200)}")
-                appendLine()
-            }
-        })
-    }
-
-    private suspend fun cmdLedgerVerify(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val result = TwinLedgerStore.verify()
-        return ExecutionResult.ok(buildString {
-            appendLine("## 账本完整性验证")
-            appendLine("- 总条目: ${result.entryCount}")
-            appendLine("- 验证结果: ${if (result.valid) "✅ 完整" else "❌ 损坏"}")
-            if (!result.valid) {
-                appendLine("- 损坏位置: 第 ${result.firstInvalidIndex} 条")
-                appendLine("- 原因: ${result.firstInvalidReason}")
-                appendLine("- 建议: 从其他已配对设备执行 twin.sync 恢复数据")
-            }
-            appendLine("- 创世哈希: ${result.genesisHash?.take(16) ?: "N/A"}...")
-            appendLine("- 最新哈希: ${result.latestHash?.take(16) ?: "N/A"}...")
-            appendLine("- 来源设备: ${result.devices.joinToString()}")
-        })
-    }
-
-    private suspend fun cmdLedgerDiff(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val peerId = args.getOrNull(0)
-            ?: return ExecutionResult.fail("用法: twin.ledger.diff <peer-id>")
-        val peers = syncEngine.getPeers()
-        val peer = peers.find { it.peerId == peerId || it.peerId.startsWith(peerId) }
-            ?: return ExecutionResult.fail("未找到节点: $peerId")
-
-        val localCount = TwinLedgerStore.count()
-        val localLatest = TwinLedgerStore.latest()
-        val peerAcked = peer.lastAckedHash?.takeIf { it.isNotBlank() } // P3.3: ignore blank strings
-        return ExecutionResult.ok(buildString {
-            appendLine("## 账本差异")
-            appendLine("- 本机: $localCount 条, 最新 ${localLatest?.hash?.take(12) ?: "N/A"}...")
-            appendLine("- ${peer.agentName}: ACK=${peerAcked?.take(12) ?: "无"}...")
-            if (peerAcked != null && localLatest != null && peerAcked != localLatest.hash) {
-                appendLine("- 状态: 🔄 有未同步条目")
-                appendLine("- 建议: twin.sync $peerId")
-            } else if (peerAcked != null && localLatest != null) {
-                appendLine("- 状态: ✅ 已同步")
-            } else {
-                appendLine("- 状态: ⚠️ 无法判断, 请手动同步: twin.sync $peerId")
-            }
-        })
-    }
-
-    private suspend fun cmdLedgerStats(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val stats = TwinLedgerStore.stats()
-        return ExecutionResult.ok(buildString {
-            appendLine("## 账本统计")
-            appendLine("- 总条目: ${stats.totalEntries}")
-            appendLine("- 文件大小: ${"%.1f".format(stats.fileSizeBytes / 1024.0)} KB")
-            appendLine("- 验证状态: ${if (stats.verified) "✅" else "❌"}")
-            appendLine()
-            appendLine("### 设备分布")
-            stats.devices.forEach { (device, count) ->
-                appendLine("- $device: $count 条")
-            }
-            appendLine()
-            appendLine("### 类型分布")
-            stats.typeDistribution.forEach { (type, count) ->
-                appendLine("- $type: $count 条")
-            }
-        })
-    }
-
-    // ── P2.1: Ledger repair ───────────────────────────────────────────
-
-    private suspend fun cmdLedgerRepair(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val verification = TwinLedgerStore.verify()
-        if (verification.valid) {
-            return ExecutionResult.ok("账本已验证完整 — ✅ 共 ${verification.entryCount} 条,无需修复")
-        }
-
-        val entries = TwinLedgerStore.loadAll()
-        val sb = StringBuilder()
-        sb.appendLine("## 账本修复")
-        sb.appendLine("- 总条目: ${entries.size}")
-        sb.appendLine("- 损坏位置: 第 ${verification.firstInvalidIndex} 条")
-        sb.appendLine("- 原因: ${verification.firstInvalidReason}")
-        sb.appendLine()
-
-        if (verification.firstInvalidIndex <= 0) {
-            sb.appendLine("❌ 创世条目损坏，无法自动修复")
-            sb.appendLine("建议: 从其他已配对的设备执行 twin.sync 恢复完整账本")
-            return ExecutionResult.fail(sb.toString())
-        }
-
-        // Find the last valid entry before the break
-        val breakIndex = verification.firstInvalidIndex
-        val lastValid = entries[breakIndex - 1]
-        val invalidEntries = entries.drop(breakIndex)
-
-        sb.appendLine("### 修复方案")
-        sb.appendLine("1. 保留前 ${breakIndex} 条有效条目")
-        sb.appendLine("2. 从第 ${breakIndex + 1} 条开始重建哈希链")
-        sb.appendLine()
-
-        // Rebuild from the break point
-        val rebuilt = mutableListOf<LedgerEntry>()
-        invalidEntries.forEach { entry ->
-            val newEntry = LedgerEntry.create(
-                prev = rebuilt.lastOrNull() ?: lastValid,
-                deviceId = entry.deviceId,
-                deviceName = entry.deviceName,
-                type = entry.type,
-                content = entry.content,
-                tags = entry.tags,
-                metadata = entry.metadata
-            )
-            rebuilt.add(newEntry)
-        }
-
-        // Write rebuilt entries
-        val appended = TwinLedgerStore.appendBatch(rebuilt)
-        sb.appendLine("✅ 重建完成 — 修复了 ${rebuilt.size} 条条目（新哈希链从 ${lastValid.hash.take(12)}... 开始）")
-        sb.appendLine()
-        sb.appendLine("新旧哈希对比:")
-        invalidEntries.zip(rebuilt).forEach { (old, new) ->
-            sb.appendLine("  ${old.id}: ${old.hash.take(12)}... → ${new.hash.take(12)}...")
-        }
-        sb.appendLine()
-        sb.appendLine("⚠️ 修复后其他节点会检测到链分叉")
-        sb.appendLine("   请在修复设备上执行: twin.sync --all")
-        sb.appendLine("   其他节点会通过链完整性检查拒绝断裂的旧条目")
-
-        android.util.Log.w("MengPawTwin", "账本修复完成: $appended 条目重建")
-        return ExecutionResult.ok(sb.toString())
-    }
-
-    // ── P2.2: Ledger encryption toggle ─────────────────────────────────
-
-    private suspend fun cmdLedgerEncrypt(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val mode = args.getOrNull(0)?.lowercase()
-        return when (mode) {
-            "on", "enable" -> {
-                // Generate a deterministic key from device fingerprint for simplicity
-                val fingerprint = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() }
-                    catch (_: Exception) { "device-${System.currentTimeMillis()}" }
-                val key = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest("twin-ledger-encryption-key:$fingerprint".toByteArray())
-                TwinLedgerStore.setEncryptionKey(key)
-                ExecutionResult.ok(buildString {
-                    appendLine("✅ 账本加密已启用")
-                    appendLine("- 后续写入的 content + metadata 将使用 AES-256-CBC 加密")
-                    appendLine("- 现有条目保持明文（不重新加密）")
-                    appendLine("- 关闭前确认所有设备密钥一致，否则加密条目不可读")
-                    appendLine()
-                    appendLine("警告: 加密后只有持相同密钥的设备可读")
-                    appendLine("      如果密钥丢失, 加密条目将永久不可恢复")
-                    appendLine("      使用 twin.ledger.encrypt off 关闭加密")
-                })
-            }
-            "off", "disable" -> {
-                TwinLedgerStore.clearEncryptionKey()
-                ExecutionResult.ok("✅ 账本加密已关闭 — 后续写入将以明文存储。现有加密条目保持加密状态，不清除。")
-            }
-            else -> ExecutionResult.ok(buildString {
-                appendLine("账本加密: ${if (TwinLedgerStore.isEncryptionEnabled) "🔒 已启用" else "🔓 未启用"}")
-                appendLine()
-                appendLine("用法: twin.ledger.encrypt on|off")
-                appendLine("- on:  启用 AES-256-CBC 加密（后续写入）")
-                appendLine("- off: 关闭加密（后续写入明文）")
-                appendLine("- 当前: 加密状态下，读取时自动解密 content + metadata")
-                appendLine("- 注意: 现有条目不会重新加密或解密，切换不影响已有数据")
-            })
-        }
-    }
-
-    // ── Identity commands ─────────────────────────────────────────
-
-    private suspend fun cmdIdentityPush(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (!isRunning) return ExecutionResult.fail("孪生服务未启动")
-        val entries = TwinIdentity.pushIdentityDocs(agentName, deviceId, deviceName)
-        if (entries.isEmpty()) return ExecutionResult.ok("无身份文档变更")
-        return ExecutionResult.ok("身份文档已推送 — ${entries.size} 条账本条目\n下次同步时自动传播到所有节点")
-    }
-
-    private suspend fun cmdIdentityPull(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val peerId = args.getOrNull(0)
-        return if (peerId != null) {
-            syncEngine.syncWithPeer(peerId)
-            ExecutionResult.ok("已从 $peerId 拉取身份文档")
-        } else {
-            syncEngine.syncWithAllPeers()
-            ExecutionResult.ok("已从所有节点拉取")
-        }
-    }
-
-    private suspend fun cmdIdentityDiff(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val peerId = args.getOrNull(0)
-            ?: return ExecutionResult.fail("用法: twin.identity.diff <peer-id>")
-        val peers = syncEngine.getPeers()
-        val peer = peers.find { it.peerId == peerId || it.peerId.startsWith(peerId) }
-        val diff = TwinIdentity.diffIdentityDocs(agentName, peer?.capabilityCard)
-        return ExecutionResult.ok(diff)
-    }
-
-    private suspend fun cmdIdentityMerge(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val peerId = args.getOrNull(0)
-            ?: return ExecutionResult.fail("用法: twin.identity.merge <peer-id>")
-        return ExecutionResult.ok(
-            "⚠️ 身份文档合并需要人工审查。\n" +
-            "在侧边栏 → 孪生管理 → 身份同步 → 查看差异 → 确认合并。"
-        )
-    }
-
-    // ── Dream commands ────────────────────────────────────────────
-
-    private suspend fun cmdDreamSync(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (!isRunning) return ExecutionResult.fail("孪生服务未启动")
-        val dreamEntries = TwinLedgerStore.byType(EntryType.DREAM)
-        if (dreamEntries.isEmpty()) return ExecutionResult.ok("(无梦境记录需要同步)")
-
-        syncEngine.syncWithAllPeers()
-        return ExecutionResult.ok("梦境同步已触发 — ${dreamEntries.size} 条记录")
-    }
-
-    private suspend fun cmdDreamHistory(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val limit = args.getOrNull(0)?.toIntOrNull() ?: 10
-        val history = TwinDreamSync.getDreamHistory(limit)
-        return ExecutionResult.ok(history)
-    }
 }

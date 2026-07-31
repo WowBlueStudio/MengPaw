@@ -181,14 +181,13 @@ class AcpServer(
                 }
                 customResult ?: AcpResult(true, "ack", msg.type)
             }
-            // Memory Twin ledger sync — requires trusted peer (P0 fix: auth check)
-            AcpMessageType.LEDGER_HEAD, AcpMessageType.LEDGER_PULL,
-            AcpMessageType.LEDGER_BATCH, AcpMessageType.LEDGER_ACK,
+            // Memory Twin workspace sync — requires trusted peer (P0 fix: auth check)
+            AcpMessageType.WS_MANIFEST, AcpMessageType.WS_PULL,
             AcpMessageType.REVOKE -> {
-                // SECURITY: Only trusted (paired) devices can access ledger data
+                // SECURITY: Only trusted (paired) devices can access workspace data
                 if (!PromptFirewall.isTrusted(msg.from)) {
                     return AcpResult(false, "auth_required",
-                        "Ledger sync requires paired trust. Complete twin pairing first.")
+                        "Workspace sync requires paired trust. Complete twin pairing first.")
                 }
                 var customResult: AcpResult? = null
                 for (handler in handlers) {

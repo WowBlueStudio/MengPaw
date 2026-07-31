@@ -3,15 +3,17 @@
 
 package com.mengpaw.plugin.memorytwin
 
+import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.acp.*
 import com.mengpaw.kernel.error.ErrorCollector
 import kotlinx.serialization.json.*
+import java.io.File
 
 /**
  * ACP message handler for Memory Twin protocol messages.
  *
  * This is the first concrete implementation of the [AcpHandler] interface
- * defined in the kernel. It handles all 6 Memory Twin message types and
+ * defined in the kernel. It handles Memory Twin message types and
  * delegates business logic to [TwinSyncEngine].
  */
 class TwinAcpHandler(
@@ -19,10 +21,8 @@ class TwinAcpHandler(
 ) : AcpHandler {
 
     override val supportedTypes: List<AcpMessageType> = listOf(
-        AcpMessageType.LEDGER_HEAD,
-        AcpMessageType.LEDGER_PULL,
-        AcpMessageType.LEDGER_BATCH,
-        AcpMessageType.LEDGER_ACK,
+        AcpMessageType.WS_MANIFEST,
+        AcpMessageType.WS_PULL,
         AcpMessageType.CAPABILITY_ANNOUNCE,
         AcpMessageType.TWIN_DELEGATE,
         AcpMessageType.PAIR_CHALLENGE,
@@ -44,10 +44,8 @@ class TwinAcpHandler(
 
         return try {
             when (type) {
-                AcpMessageType.LEDGER_HEAD -> handleLedgerHead(message, server)
-                AcpMessageType.LEDGER_PULL -> handleLedgerPull(message, server)
-                AcpMessageType.LEDGER_BATCH -> handleLedgerBatch(message, server)
-                AcpMessageType.LEDGER_ACK -> handleLedgerAck(message)
+                AcpMessageType.WS_MANIFEST -> handleWsManifest(message, server)
+                AcpMessageType.WS_PULL -> handleWsPull(message, server)
                 AcpMessageType.CAPABILITY_ANNOUNCE -> handleCapabilityAnnounce(message)
                 AcpMessageType.TWIN_DELEGATE -> handleTwinDelegate(message)
                 AcpMessageType.PAIR_CHALLENGE -> handlePairChallenge(message)
@@ -64,143 +62,71 @@ class TwinAcpHandler(
 
     // ── Message handlers ───────────────────────────────────────────
 
-    private suspend fun handleLedgerHead(msg: AcpMessage, server: AcpServer): AcpResult {
+    /**
+     * WS_MANIFEST: 收到对端工作区清单 → 与本机比对:
+     * - send: 本机有、对端没有或哈希不同的文件内容 (对端需要)
+     * - request: 本机没有、对端有的文件路径 (对端返回给本机)
+     * 响应 data: {"send": {relPath: content}, "request": [relPath, ...]}
+     */
+    private suspend fun handleWsManifest(msg: AcpMessage, server: AcpServer): AcpResult {
         val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }
-        val latestHash = payload?.get("latestHash")?.jsonPrimitive?.content ?: ""
-        val entryCount = payload?.get("entryCount")?.jsonPrimitive?.int ?: 0
+            ?: return AcpResult(false, "invalid_manifest")
+        val peerFiles = payload["files"]?.jsonObject ?: return AcpResult(false, "no_files")
 
-        val localLatest = TwinLedgerStore.latest()
-        val localCount = TwinLedgerStore.count()
-        val localHash = localLatest?.hash ?: ""
+        val agentName = syncEngine.agentName
+        val localManifest = TwinWorkspace.buildManifest(agentName)
 
-        return if (localHash == latestHash) {
-            // Already in sync
-            AcpResult(true, "in_sync", localHash)
-        } else if (localCount > entryCount) {
-            // We have more entries — tell them to pull from us
-            AcpResult(true, "ahead", buildJsonObject {
-                put("myHash", localHash)
-                put("myCount", localCount)
-            }.toString())
-        } else {
-            // They have more entries — we should pull
-            AcpResult(true, "behind", buildJsonObject {
-                put("myHash", localHash)
-                put("myCount", localCount)
-            }.toString())
+        // 解析对端清单 (哈希截断为 16 字符防超长 payload)
+        val peerHashes = mutableMapOf<String, String>()
+        for ((relPath, meta) in peerFiles.entries) {
+            val hash = meta.jsonObject["hash"]?.jsonPrimitive?.content ?: ""
+            if (hash.isNotBlank()) peerHashes[relPath] = hash
         }
+
+        // send: 本机有、对端缺失或不同的文件内容
+        val send = buildJsonObject {
+            localManifest.forEach { (relPath, entry) ->
+                val peerHash = peerHashes[relPath]
+                if (peerHash == null || peerHash != entry.hash) {
+                    val content = try {
+                        File(DataPaths.AGENTS, "$agentName/$relPath").readText()
+                    } catch (_: Exception) { return@forEach }
+                    put(relPath, JsonPrimitive(content))
+                }
+            }
+        }
+        // request: 本机没有但对端有的文件
+        val request = buildJsonArray {
+            peerHashes.keys.forEach { relPath ->
+                if (relPath !in localManifest) add(JsonPrimitive(relPath))
+            }
+        }
+
+        return AcpResult(true, "ws_manifest_${peerHashes.size}", buildJsonObject {
+            put("send", send)
+            put("request", request)
+        }.toString())
     }
 
-    private suspend fun handleLedgerPull(msg: AcpMessage, server: AcpServer): AcpResult {
+    /** WS_PULL: 对端请求指定文件 → 响应 data: {"files": {relPath: content}} */
+    private suspend fun handleWsPull(msg: AcpMessage, server: AcpServer): AcpResult {
         val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }
-        val sinceHash = payload?.get("sinceHash")?.jsonPrimitive?.content ?: ""
-        val maxCount = payload?.get("maxCount")?.jsonPrimitive?.int ?: 100
+            ?: return AcpResult(false, "invalid_pull")
+        val paths = payload["paths"]?.jsonArray ?: return AcpResult(false, "no_paths")
+        val agentName = syncEngine.agentName
 
-        val entries = if (sinceHash.isEmpty() || sinceHash == "null") {
-            TwinLedgerStore.loadAll().take(maxCount)
-        } else {
-            TwinLedgerStore.sinceHash(sinceHash).take(maxCount)
-        }
-
-        if (entries.isEmpty()) {
-            return AcpResult(true, "no_new_entries", "[]")
-        }
-
-        // Build entries into JSON array for the response
-        val entryJsonList = buildJsonArray {
-            entries.forEach { entry ->
-                add(buildJsonObject {
-                    put("id", entry.id)
-                    put("prevHash", entry.prevHash ?: "null")
-                    put("hash", entry.hash)
-                    put("deviceId", entry.deviceId)
-                    put("deviceName", entry.deviceName)
-                    put("timestamp", entry.timestamp)
-                    put("type", entry.type.name)
-                    put("content", entry.content)
-                    put("tags", buildJsonArray { entry.tags.forEach { add(it) } })
-                    put("metadata", buildJsonObject {
-                        entry.metadata.forEach { (k, v) -> put(k, v) }
-                    })
-                })
+        val files = buildJsonObject {
+            paths.forEach { path ->
+                val relPath = path.jsonPrimitive?.content ?: return@forEach
+                val f = File(DataPaths.AGENTS, "$agentName/$relPath")
+                if (f.exists() && f.isFile) {
+                    try { put(relPath, JsonPrimitive(f.readText())) } catch (_: Exception) {}
+                }
             }
         }
-
-        val rangeStart = entries.first().hash
-        val rangeEnd = entries.last().hash
-
-        // Send response as LEDGER_BATCH via server
-        val batchMsg = AcpMessage.ledgerBatch(
-            msg.from, msg.to, entryJsonList.toString(), rangeStart, rangeEnd
-        )
-        // server.send would be called by caller; we return the data
-
-        return AcpResult(true, "entries_${entries.size}", entryJsonList.toString())
-    }
-
-    private suspend fun handleLedgerBatch(msg: AcpMessage, server: AcpServer): AcpResult {
-        val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }
-            ?: return AcpResult(false, "invalid_payload")
-        val entriesArray = payload["entries"]?.jsonArray ?: return AcpResult(false, "no_entries")
-
-        val entries = entriesArray.mapNotNull { element ->
-            try {
-                val obj = element.jsonObject
-                LedgerEntry(
-                    id = obj["id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
-                    prevHash = obj["prevHash"]?.jsonPrimitive?.content?.let { if (it == "null") null else it },
-                    hash = obj["hash"]?.jsonPrimitive?.content ?: return@mapNotNull null,
-                    deviceId = obj["deviceId"]?.jsonPrimitive?.content ?: "",
-                    deviceName = obj["deviceName"]?.jsonPrimitive?.content ?: "",
-                    timestamp = obj["timestamp"]?.jsonPrimitive?.long ?: 0L,
-                    type = try { EntryType.valueOf(obj["type"]?.jsonPrimitive?.content ?: "MEMORY") } catch (_: Exception) { EntryType.MEMORY },
-                    content = obj["content"]?.jsonPrimitive?.content ?: "",
-                    tags = obj["tags"]?.jsonArray?.mapNotNull { it.jsonPrimitive?.content } ?: emptyList(),
-                    metadata = obj["metadata"]?.jsonObject?.entries?.associate { (k, v) -> k to (v.jsonPrimitive?.content ?: v.toString()) } ?: emptyMap()
-                )
-            } catch (e: Exception) {
-                ErrorCollector.report(e, "TwinAcpHandler.parseEntry")
-                null
-            }
-        }
-
-        if (entries.isEmpty()) return AcpResult(false, "no_valid_entries")
-
-        // Verify chain integrity of received entries (internal)
-        for (i in 1 until entries.size) {
-            val expectedHash = LedgerEntry.sha256(entries[i].preimage())
-            if (entries[i].hash != expectedHash) {
-                return AcpResult(false, "entry_${i}_hash_mismatch")
-            }
-            if (entries[i].prevHash != entries[i - 1].hash) {
-                return AcpResult(false, "entry_${i}_chain_break")
-            }
-        }
-
-        // P0 FIX: Verify cross-chain continuity — first entry must link to our local chain
-        val localLatest = TwinLedgerStore.latest()
-        if (localLatest != null) {
-            val firstPrevHash = entries[0].prevHash
-            if (firstPrevHash != null && firstPrevHash != localLatest.hash) {
-                return AcpResult(false, "chain_fork",
-                    "Cross-chain discontinuity: batch starts at $firstPrevHash but local head is ${localLatest.hash}")
-            }
-        }
-
-        // Merge into local ledger
-        val appended = TwinLedgerStore.appendBatch(entries)
-
-        // Trigger post-sync hooks
-        syncEngine.onEntriesReceived(msg.from, entries)
-
-        return AcpResult(true, "merged_$appended", entries.lastOrNull()?.hash ?: "")
-    }
-
-    private suspend fun handleLedgerAck(msg: AcpMessage): AcpResult {
-        val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }
-        val receivedHash = payload?.get("receivedHash")?.jsonPrimitive?.content ?: ""
-        syncEngine.onAckReceived(msg.from, receivedHash)
-        return AcpResult(true, "ack_received", receivedHash)
+        return AcpResult(true, "ws_pull_${paths.size}", buildJsonObject {
+            put("files", files)
+        }.toString())
     }
 
     private suspend fun handleCapabilityAnnounce(msg: AcpMessage): AcpResult {

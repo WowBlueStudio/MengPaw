@@ -78,11 +78,8 @@ object DataPaths {
         java.io.File(OUTPUT).mkdirs()
     }
 
-    // ── Memory Twin ────────────────────────────────────────────────
-    val TWIN_LEDGER get() = "$AGENTS/twin/ledger"
-    val TWIN_PEERS get() = "$AGENTS/twin/peers"
+    // ── Memory Twin (v0.22.0: 工作区文件同步, 账本与独立梦境目录已移除) ──
     val TWIN_AUDIT get() = "$AGENTS/twin/audit.log"
-    val TWIN_DREAMS get() = "$AGENTS/twin/dreams"
 
     // ── Per-agent Skills & Tools partitions ─────────────────────────
     /** Agent's local skills directory — pulled from global pool or created locally. */

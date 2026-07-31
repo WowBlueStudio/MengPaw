@@ -31,11 +31,9 @@ enum class AcpMessageType {
     TRIBE_CHAT,     // 部落广播消息（tribe.chat 群聊）
     BROWSER_PUSH,           // 推送网页到对端
     BROWSER_PUSH_RESPONSE,  // 推送响应（接受/拒绝）
-    // ── Memory Twin (记忆孪生) ──
-    LEDGER_HEAD,            // 交换账本头部（最新哈希 + 条目数）
-    LEDGER_PULL,            // 请求 since-hash 之后的条目
-    LEDGER_BATCH,           // 批量传输账本条目
-    LEDGER_ACK,             // 确认接收并验证通过
+    // ── Memory Twin (记忆孪生, 工作区文件同步 v0.22.0) ──
+    WS_MANIFEST,            // 交换工作区文件清单 (manifest 比对 → 收敛差异)
+    WS_PULL,                // 请求缺失/变更的文件内容
     CAPABILITY_ANNOUNCE,    // 宣告设备能力卡
     TWIN_DELEGATE,          // 孪生任务委派（带能力需求）
     PAIR_CHALLENGE,         // 配对挑战（接收方响应, 携带 nonce+指纹）
@@ -86,37 +84,15 @@ data class AcpMessage(
                     put("reason", JsonPrimitive(reason))
                 }.toString())
 
-        // ── Memory Twin factory methods ──────────────────────────────
+        // ── Memory Twin factory methods (工作区文件同步) ──────────────
 
-        fun ledgerHead(from: String, to: String, latestHash: String, entryCount: Int) =
-            AcpMessage(from, to, AcpMessageType.LEDGER_HEAD.name,
-                kotlinx.serialization.json.buildJsonObject {
-                    put("latestHash", JsonPrimitive(latestHash))
-                    put("entryCount", JsonPrimitive(entryCount))
-                }.toString())
+        /** WS_MANIFEST: 本机工作区文件清单 {relPath: {hash, mtime}} — 对端比对后经响应返回差异。 */
+        fun wsManifest(from: String, to: String, manifest: String) =
+            AcpMessage(from, to, AcpMessageType.WS_MANIFEST.name, manifest)
 
-        fun ledgerPull(from: String, to: String, sinceHash: String, maxCount: Int = 100) =
-            AcpMessage(from, to, AcpMessageType.LEDGER_PULL.name,
-                kotlinx.serialization.json.buildJsonObject {
-                    put("sinceHash", JsonPrimitive(sinceHash))
-                    put("maxCount", JsonPrimitive(maxCount))
-                }.toString())
-
-        fun ledgerBatch(from: String, to: String, entries: String, rangeStart: String, rangeEnd: String) =
-            AcpMessage(from, to, AcpMessageType.LEDGER_BATCH.name,
-                // entries is already a serialized JSON array — embed directly
-                buildJsonObject {
-                    put("entries", Json.parseToJsonElement(entries))
-                    put("rangeStart", JsonPrimitive(rangeStart))
-                    put("rangeEnd", JsonPrimitive(rangeEnd))
-                }.toString())
-
-        fun ledgerAck(from: String, to: String, receivedHash: String, verified: Boolean = true) =
-            AcpMessage(from, to, AcpMessageType.LEDGER_ACK.name,
-                kotlinx.serialization.json.buildJsonObject {
-                    put("receivedHash", JsonPrimitive(receivedHash))
-                    put("verified", JsonPrimitive(verified))
-                }.toString())
+        /** WS_PULL: 请求指定路径的文件内容。 */
+        fun wsPull(from: String, to: String, paths: String) =
+            AcpMessage(from, to, AcpMessageType.WS_PULL.name, paths)
 
         fun capabilityAnnounce(from: String, to: String, capabilityCard: String, nonce: String = "") =
             AcpMessage(from, to, AcpMessageType.CAPABILITY_ANNOUNCE.name,
@@ -219,6 +195,13 @@ data class AcpResult(
  */
 interface AcpTransport {
     suspend fun send(message: AcpMessage): Boolean
+
+    /**
+     * 请求-响应发送: 发给指定 peer 并等待 HTTP 响应体 (含 data)。
+     * 默认实现无响应返回 null — 支持请求-响应的传输层覆写。
+     */
+    suspend fun sendForResult(message: AcpMessage, toPeerId: String, timeoutMs: Long = 15_000L): AcpResult? = null
+
     suspend fun receive(): AcpMessage?
     fun isConnected(): Boolean
     fun close()

@@ -14,27 +14,33 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import java.io.File
 
 /**
  * Memory Twin sync engine — the central orchestrator for twin synchronization.
  *
- * Manages the full sync lifecycle:
+ * Manages the full sync lifecycle (v0.22.0, 账本 → 工作区文件同步):
  *   1. Discovery (via TwinDiscovery, which feeds peer addresses)
- *   2. Head exchange (LEDGER_HEAD)
- *   3. Pull missing entries (LEDGER_PULL → LEDGER_BATCH)
- *   4. Verify & merge
- *   5. Ack (LEDGER_ACK)
+ *   2. WS_MANIFEST exchange (工作区文件清单 {relPath: hash})
+ *   3. Diff → WS_PULL (差异文件内容)
+ *   4. LWW apply with .conflict backup (TwinWorkspace)
  *
- * Also handles: heartbeat monitoring, QoS enforcement, dream event propagation,
- * identity doc sync, capability card updates, and task delegation intake.
+ * Also handles: heartbeat monitoring, QoS enforcement, capability card
+ * updates, and task delegation intake.
  */
 class TwinSyncEngine(
     private val serverSupplier: () -> AcpServer?,
     private val transportSupplier: () -> AcpTransport?,
-    private val agentName: String,
+    val agentName: String,
     private val deviceId: String,
     private val deviceName: String
 ) {
@@ -46,12 +52,10 @@ class TwinSyncEngine(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var autoSyncJob: Job? = null
     private var heartbeatJob: Job? = null
+    private val json = Json { ignoreUnknownKeys = true }
 
-    /** Known peers with their latest ledger hash. */
+    /** Known peers. */
     private val peers = mutableMapOf<String, TwinPeerInfo>()
-
-    /** Pending sync completions — resolved when BATCH response arrives. */
-    private val pendingSyncs = mutableMapOf<String, CompletableDeferred<TwinSyncResult>>()
 
     /** QoS level: WIFI (full), MOBILE (key only), METERED (manual only). */
     @Volatile var qosLevel: QosLevel = QosLevel.WIFI
@@ -63,48 +67,6 @@ class TwinSyncEngine(
     @Volatile var currentSessionId: String? = null
     /** Whether this agent is currently executing a task. */
     @Volatile var isBusy: Boolean = false
-
-    // ── P1.3: Dream coordinator ───────────────────────────────────────
-
-    /** Timestamp of the most recent DREAM entry from any peer (epoch ms, 0 = never). */
-    @Volatile private var lastClusterDreamTimestamp: Long = 0L
-    /** Which device ran the most recent cluster dream. */
-    @Volatile private var lastClusterDreamDevice: String = ""
-    /** Minimum gap between cluster-triggered dreams (hours). */
-    private val DREAM_COOLDOWN_HOURS = 6L
-
-    /**
-     * Check if the local device should trigger a dream pass.
-     * Returns true only if no other peer has run a dream recently.
-     */
-    fun shouldRunLocalDream(): Boolean {
-        val now = System.currentTimeMillis()
-        if (lastClusterDreamTimestamp > 0) {
-            val elapsedHours = (now - lastClusterDreamTimestamp) / 3_600_000
-            if (elapsedHours < DREAM_COOLDOWN_HOURS) {
-                android.util.Log.i("MengPawTwin",
-                    "集群梦境协调: 跳过 — ${lastClusterDreamDevice} 已在 ${elapsedHours}h 前执行梦境")
-                return false
-            }
-        }
-        return true
-    }
-
-    /**
-     * Called when a local dream completes — records it as the cluster's
-     * latest dream so other peers don't redundantly trigger.
-     */
-    fun onLocalDreamCompleted(deviceName: String) {
-        lastClusterDreamTimestamp = System.currentTimeMillis()
-        lastClusterDreamDevice = deviceName
-    }
-
-    /** Get cluster dream status for info display. */
-    fun dreamCoordinatorStatus(): String {
-        if (lastClusterDreamTimestamp == 0L) return "集群尚未执行过梦境"
-        val ago = (System.currentTimeMillis() - lastClusterDreamTimestamp) / 3_600_000
-        return "上次梦境: ${ago}h 前 (由 $lastClusterDreamDevice)"
-    }
 
     // ── Public API ──────────────────────────────────────────────────
 
@@ -237,7 +199,6 @@ class TwinSyncEngine(
             lastSeen = System.currentTimeMillis(), online = true
         )
         peers[peerId] = peer
-        persistPeerInfo()
         return peer
     }
 
@@ -254,24 +215,26 @@ class TwinSyncEngine(
             it.lastSyncAt = System.currentTimeMillis()
             it.online = true
         }
-        persistPeerInfo()
         // Inject post-pairing guidance into agent workspace
         scope.launch { injectPairingGuidance(peerId) }
     }
 
     /**
-     * Execute a full sync cycle with a specific peer.
-     * Returns a [TwinSyncResult] with actual sync outcome — no more silent failures.
+     * Execute a full sync cycle with a specific peer (v0.22.0 工作区文件同步):
+     * 1. WS_MANIFEST: 发本机清单, 响应 = 对端给我们的文件 (send) + 对端缺的文件列表 (request)
+     * 2. WS_PULL: 请求我们缺的文件内容
+     * 3. TwinWorkspace LWW 落盘 (冲突 → .conflict 备份)
      */
     suspend fun syncWithPeer(peerId: String): TwinSyncResult {
         val server = serverSupplier()
-        if (server == null) return TwinSyncResult(0, "ACP 服务未启动", "请先执行 self.acp start")
+        if (server == null) return TwinSyncResult(0, 0, 0, "ACP 服务未启动", "请先执行 self.acp start")
         val transport = transportSupplier()
-        if (transport == null) return TwinSyncResult(0, "ACP 传输层未初始化", null)
+        if (transport == null) return TwinSyncResult(0, 0, 0, "ACP 传输层未初始化", null)
 
         return try {
             val peer = peers[peerId]
-            if (peer == null) return TwinSyncResult(0, "节点未发现", "请确认对端设备在同一网络且已启动孪生服务。也可用 twin.peer.add <ip> 手动添加。")
+            if (peer == null) return TwinSyncResult(0, 0, 0, "节点未发现",
+                "请确认对端设备在同一网络且已启动孪生服务。也可用 twin.peer.add <ip> 手动添加。")
 
             // Register peer in ACP server so transport can reach it
             server.registerPeer(PeerAgent(
@@ -280,49 +243,91 @@ class TwinSyncEngine(
                 capabilities = listOf("memory-twin/0.1")
             ))
 
-            // Step 1: Exchange ledger heads
-            val localLatest = TwinLedgerStore.latest()
-            val headMsg = AcpMessage.ledgerHead(
-                deviceId, peerId,
-                localLatest?.hash ?: "",
-                TwinLedgerStore.count()
-            )
-            transport.send(headMsg)
-
-            // Step 2: Request missing entries
-            val localHash = localLatest?.hash ?: ""
-            val pullMsg = AcpMessage.ledgerPull(deviceId, peerId, localHash, 100)
-            transport.send(pullMsg)
-
-            // Step 3: Wait for BATCH response (or timeout)
-            val deferred = CompletableDeferred<TwinSyncResult>()
-            pendingSyncs[peerId] = deferred
-            val result = withTimeoutOrNull(15_000L) {
-                deferred.await()
-            } ?: run {
-                // P0.2 FIX: Try-complete the deferred with timeout result so late
-                // onEntriesReceived doesn't operate a stale deferred (CAS-safe).
-                val timeoutResult = TwinSyncResult(0, "同步超时 (15s)",
+            // Step 1: 交换清单 — 请求-响应一轮完成 (响应体解析修复见 AcpTransport.sendForResult)
+            val myManifest = TwinWorkspace.buildManifest(agentName)
+            val manifestMsg = AcpMessage.wsManifest(deviceId, peerId, buildJsonObject {
+                put("files", buildJsonObject {
+                    myManifest.forEach { (relPath, entry) ->
+                        put(relPath, buildJsonObject {
+                            put("hash", JsonPrimitive(entry.hash.take(16)))
+                            put("mtime", JsonPrimitive(entry.mtime))
+                        })
+                    }
+                })
+            }.toString())
+            val manifestResp = transport.sendForResult(manifestMsg, peerId, 20_000)
+            if (manifestResp == null) {
+                return TwinSyncResult(0, 0, 0, "同步超时 (20s)",
                     "对端未在规定时间内响应。检查: 1) 对端是否在线 2) ACP 端口 ${Ports.ACP} 是否互通 3) 防火墙是否拦截")
-                deferred.complete(timeoutResult) // complete() returns false if already done — safe
-                timeoutResult
             }
-            pendingSyncs.remove(peerId)
-            result
+            if (!manifestResp.success) {
+                return TwinSyncResult(0, 0, 0, manifestResp.message, null)
+            }
+
+            val respObj = try { json.parseToJsonElement(manifestResp.data).jsonObject } catch (e: Exception) {
+                return TwinSyncResult(0, 0, 0, "清单响应解析失败: ${e.message}", null)
+            }
+
+            // 接收对端文件 (对端 → 本机)
+            var received = 0; var conflicts = 0
+            respObj["send"]?.jsonObject?.forEach { (relPath, value) ->
+                val fileObj = value.jsonObject
+                val content = fileObj["content"]?.jsonPrimitive?.content ?: ""
+                val mtime = fileObj["mtime"]?.jsonPrimitive?.long ?: System.currentTimeMillis()
+                val r = TwinWorkspace.applyWorkspaceFile(agentName, relPath, content, peer.agentName, mtime)
+                when (r) {
+                    "applied" -> received++
+                    "conflict" -> conflicts++
+                }
+            }
+
+            // Step 2: 拉取我们缺的文件 (本机 → 对端)
+            val requestPaths = respObj["request"]?.jsonArray?.mapNotNull { it.jsonPrimitive?.content } ?: emptyList()
+            if (requestPaths.isNotEmpty()) {
+                val pullMsg = AcpMessage.wsPull(deviceId, peerId, buildJsonObject {
+                    put("paths", buildJsonArray { requestPaths.forEach { add(JsonPrimitive(it)) } })
+                }.toString())
+                val pullResp = transport.sendForResult(pullMsg, peerId, 20_000)
+                if (pullResp != null && pullResp.success) {
+                    try {
+                        val filesObj = json.parseToJsonElement(pullResp.data).jsonObject["files"]?.jsonObject
+                        filesObj?.forEach { (relPath, content) ->
+                            val r = TwinWorkspace.applyWorkspaceFile(agentName, relPath, content.jsonPrimitive.content,
+                                peer.agentName, System.currentTimeMillis())
+                            when (r) {
+                                "applied" -> received++
+                                "conflict" -> conflicts++
+                            }
+                        }
+                    } catch (e: Exception) {
+                        ErrorCollector.report(e, "TwinSyncEngine.wsPull.parse")
+                    }
+                }
+            }
+
+            // 更新对端状态
+            peers[peerId]?.let {
+                it.lastSyncAt = System.currentTimeMillis()
+                it.online = true
+            }
+            _syncState.value = _syncState.value.copy(
+                lastFilesReceived = received,
+                lastConflicts = conflicts,
+                lastSyncAt = System.currentTimeMillis()
+            )
+            TwinSyncResult(received, requestPaths.size, conflicts, null, null)
         } catch (e: CancellationException) {
-            pendingSyncs.remove(peerId)
             throw e
         } catch (e: Exception) {
-            pendingSyncs.remove(peerId)
             ErrorCollector.report(e, "TwinSyncEngine.syncWithPeer($peerId)")
-            TwinSyncResult(0, "同步异常: ${e.message}", "请重试。若持续失败，检查对端 ACP 状态和网络连通性。")
+            TwinSyncResult(0, 0, 0, "同步异常: ${e.message}", "请重试。若持续失败，检查对端 ACP 状态和网络连通性。")
         }
     }
 
     /** Sync with all known online peers. */
     suspend fun syncWithAllPeers(): List<TwinSyncResult> {
         if (qosLevel == QosLevel.METERED) {
-            return listOf(TwinSyncResult(0, "按流量计费模式下已暂停自动同步", "使用 twin.sync 手动触发"))
+            return listOf(TwinSyncResult(0, 0, 0, "按流量计费模式下已暂停自动同步", "使用 twin.sync 手动触发"))
         }
         val online = peers.values.filter { it.online }
         _syncState.value = _syncState.value.copy(
@@ -332,7 +337,7 @@ class TwinSyncEngine(
         online.forEach { peer ->
             val result = syncWithPeer(peer.peerId)
             results.add(result)
-            if (result.entriesReceived > 0) {
+            if (result.filesReceived > 0 || result.conflicts > 0) {
                 _syncState.value = _syncState.value.copy(
                     completedPeers = _syncState.value.completedPeers + 1
                 )
@@ -371,39 +376,7 @@ class TwinSyncEngine(
 
     // ── Event hooks (called by TwinAcpHandler) ─────────────────────
 
-    /** Called when new entries are received and merged into the local ledger. */
-    fun onEntriesReceived(fromPeerId: String, entries: List<LedgerEntry>) {
-        _syncState.value = _syncState.value.copy(
-            lastEntriesReceived = entries.size,
-            lastSyncAt = System.currentTimeMillis()
-        )
-        // Resolve pending sync deferred (CAS-safe: no-op if already completed by timeout)
-        pendingSyncs[fromPeerId]?.complete(
-            TwinSyncResult(entries.size, null, null)
-        )
-        // Trigger memory.md rebuild from merged ledger
-        scope.launch { rebuildMemoryDoc() }
-        // P1.3: Propagate dream entries & update cluster dream coordinator
-        entries.filter { it.type == EntryType.DREAM }.forEach { entry ->
-            lastClusterDreamTimestamp = maxOf(lastClusterDreamTimestamp, entry.timestamp)
-            lastClusterDreamDevice = entry.deviceName
-            scope.launch { applyDreamEntry(entry) }
-        }
-        // Apply identity updates
-        entries.filter { it.type == EntryType.SOUL_UPDATE || it.type == EntryType.PROFILE_UPDATE }
-            .forEach { entry ->
-                scope.launch { applyIdentityUpdate(entry) }
-            }
-    }
-
-    /** Called when a peer acknowledges our entries. */
-    fun onAckReceived(peerId: String, hash: String) {
-        peers[peerId]?.let {
-            it.lastAckedHash = hash
-            it.lastSyncAt = System.currentTimeMillis()
-            it.online = true
-        }
-    }
+    // v0.22.0: 同步结果由 syncWithPeer 请求-响应直接返回 — 无需异步事件钩子
 
     // ── P1.2/P2.3: Revoke handling ─────────────────────────────────
 
@@ -419,11 +392,8 @@ class TwinSyncEngine(
             val keyFile = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "$peerId.key")
             if (keyFile.exists()) keyFile.delete()
         } catch (_: Exception) {}
-        // 3. Mark this peer's ledger entries as compromised
-        val entries = TwinLedgerStore.loadAll()
-        val compromisedIds = entries.filter { it.deviceId == peerId }.map { it.hash }.toSet()
-        android.util.Log.w("MengPawTwin",
-            "孪生解绑: peer=$peerId, 共 ${compromisedIds.size} 条记忆标记为 compromised")
+        // 3. (v0.22.0) 账本已移除 — 工作区文档由各设备本地持有, 解绑不标记
+        android.util.Log.w("MengPawTwin", "孪生解绑: peer=$peerId")
         // 4. Write audit log
         try {
             val auditFile = java.io.File(com.mengpaw.kernel.DataPaths.TWIN_AUDIT)
@@ -431,7 +401,7 @@ class TwinSyncEngine(
             auditFile.appendText(
                 java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
                     .format(java.util.Date()) +
-                " | REVOKE | peer=$peerId | entries=${compromisedIds.size}\n"
+                " | REVOKE | peer=$peerId\n"
             )
         } catch (_: Exception) {}
         // 5. Remove peer from peer list
@@ -518,7 +488,6 @@ class TwinSyncEngine(
         } catch (e: Exception) {
             ErrorCollector.report(e, "TwinSyncEngine.onCapability")
         }
-        persistPeerInfo()
     }
 
     /** Called when a peer delegates a task. */
@@ -569,8 +538,7 @@ class TwinSyncEngine(
                 appendLine("## 常用命令")
                 appendLine("- `twin.status` — 查看孪生状态和同步阶段")
                 appendLine("- `twin.peers` — 查看所有已发现节点")
-                appendLine("- `twin.ledger.stats` — 查看账本统计和来源分布")
-                appendLine("- `twin.ledger.verify` — 验证记忆链完整性")
+                appendLine("- `twin.sync` — 手动触发工作区同步 (接收/发送/冲突数)")
                 appendLine("- `twin.delegate <peer> <task>` — 委派任务到对端")
                 appendLine("- `twin.capabilities --all` — 对比所有节点能力")
                 appendLine("- `twin.sync` — 手动触发全量同步")
@@ -588,170 +556,6 @@ class TwinSyncEngine(
         }
     }
 
-    /** Rebuild the agent's memory.md from the merged ledger. */
-    private suspend fun rebuildMemoryDoc() {
-        try {
-            val entries = TwinLedgerStore.loadAll().filter { it.type == EntryType.MEMORY }
-            val doc = buildString {
-                appendLine("---")
-                appendLine("# 记忆索引 (孪生同步)")
-                appendLine()
-                appendLine("> 索引更新: ${java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).format(java.util.Date())}")
-                appendLine("> 总条目: ${entries.size} | 来源设备: ${entries.map { it.deviceName }.distinct().joinToString()}")
-                appendLine()
-                appendLine("| ID | 日期 | 设备 | 标题 | 关键词 |")
-                appendLine("|----|------|------|------|--------|")
-                entries.forEach { entry ->
-                    val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(entry.timestamp))
-                    val title = entry.content.take(60).replace("\n", " ").replace("|", "\\|").replace("\r", "")
-                    val tags = entry.tags.joinToString(", ") { it.replace("|", "\\|") }
-                    val safeDeviceName = entry.deviceName.replace("|", "\\|")
-                    appendLine("| ${entry.id} | $date | $safeDeviceName | $title | $tags |")
-                }
-                appendLine()
-                appendLine("---")
-                appendLine()
-                entries.forEach { entry ->
-                    appendLine("## ${entry.id}: ${entry.content.take(60).replace("\n", " ")}")
-                    appendLine("- **日期**: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(entry.timestamp))}")
-                    appendLine("- **设备**: ${entry.deviceName}")
-                    appendLine("- **关键词**: ${entry.tags.joinToString(", ")}")
-                    appendLine("- **内容**: ${entry.content}")
-                    appendLine()
-                    appendLine("---")
-                    appendLine()
-                }
-            }
-            // Write to long-term memory (injected into system prompt)
-            val memFile = File(DataPaths.longTermMemoryFile(agentName))
-            memFile.parentFile?.mkdirs()
-            val tmp = File(memFile.parentFile, "memory.tmp")
-            tmp.writeText(doc)
-            if (memFile.exists()) memFile.delete()
-            tmp.renameTo(memFile)
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "TwinSyncEngine.rebuildMemoryDoc")
-        }
-    }
-
-    /** Apply a dream entry to DREAM.md — atomic write to prevent corruption. */
-    private fun applyDreamEntry(entry: LedgerEntry) {
-        try {
-            val dreamDir = File(DataPaths.TWIN_DREAMS)
-            if (!dreamDir.exists()) dreamDir.mkdirs()
-            val dreamFile = File(dreamDir, "DREAM.md")
-            val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(entry.timestamp))
-            val dreamContent = buildString {
-                if (!dreamFile.exists()) {
-                    appendLine("# $agentName · 孪生梦境记录 (同步)")
-                }
-                appendLine()
-                appendLine("---")
-                appendLine("## $timestamp · 来自 ${entry.deviceName}")
-                appendLine()
-                appendLine(entry.content)
-                appendLine()
-            }
-            val existing = if (dreamFile.exists()) try { dreamFile.readText() } catch (_: Exception) { "" } else ""
-            // Atomic write
-            val tmp = File(dreamDir, "DREAM.tmp")
-            tmp.writeText(dreamContent + existing)
-            if (dreamFile.exists()) dreamFile.delete()
-            tmp.renameTo(dreamFile)
-            if (tmp.exists()) try { tmp.delete() } catch (_: Exception) {}
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "TwinSyncEngine.applyDreamEntry")
-        }
-    }
-
-    /** Apply identity document update from a twin peer. */
-    private fun applyIdentityUpdate(entry: LedgerEntry) {
-        try {
-            val docType = when (entry.type) {
-                EntryType.SOUL_UPDATE -> "soul.md"
-                EntryType.PROFILE_UPDATE -> "profile.md"
-                else -> return
-            }
-            val docFile = File(DataPaths.AGENTS, "$agentName/$docType")
-
-            // P2.1: Conflict detection — if local is newer AND content differs, save .conflict backup
-            if (docFile.exists() && docFile.lastModified() > entry.timestamp) {
-                val localContent = try { docFile.readText() } catch (_: Exception) { "" }
-                if (localContent != entry.content) {
-                    // Content diverged — save peer version as .conflict instead of overwriting
-                    val dateStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
-                        .format(java.util.Date())
-                    val conflictFile = File(docFile.parent, "$docType.conflict.$dateStamp.from_${entry.deviceName}")
-                    conflictFile.writeText(entry.content)
-                    android.util.Log.w("MengPawTwin",
-                        "身份文档冲突: $docType — 本地更新晚于 ${entry.deviceName} 的同步,已保存 .conflict 备份")
-                    // Write audit
-                    val auditFile = File(DataPaths.TWIN_AUDIT)
-                    auditFile.parentFile?.mkdirs()
-                    auditFile.appendText(
-                        "${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())} | " +
-                        "IDENTITY_CONFLICT | from=${entry.deviceId}(${entry.deviceName}) | type=$docType | saved=${conflictFile.name}\n"
-                    )
-                    // Inject notification to agent inbox
-                    try {
-                        val inboxNote = File(DataPaths.AGENTS, "$agentName/inbox/identity_conflict_${System.currentTimeMillis()}.md")
-                        inboxNote.parentFile?.mkdirs()
-                        inboxNote.writeText(
-                            "⚠️ 身份文档冲突 — $docType\n\n" +
-                            "本地版本和来自 ${entry.deviceName} 的同步版本存在差异。\n" +
-                            "已保存对端版本到: ${conflictFile.name}\n\n" +
-                            "手动解决后可用 twin.identity.push 推送最终版本到所有节点。\n"
-                        )
-                    } catch (_: Exception) {}
-                    return // Keep local version, don't overwrite
-                }
-            }
-
-            // Normal case: overwrite with received content
-            val tmp = File(docFile.parent, "$docType.tmp")
-            tmp.writeText(entry.content)
-            if (docFile.exists()) docFile.delete()
-            tmp.renameTo(docFile)
-
-            val auditFile = File(DataPaths.TWIN_AUDIT)
-            auditFile.parentFile?.mkdirs()
-            auditFile.appendText(
-                "${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())} | " +
-                "IDENTITY_SYNC | from=${entry.deviceId}(${entry.deviceName}) | type=$docType\n"
-            )
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "TwinSyncEngine.applyIdentityUpdate")
-        }
-    }
-
-    /** Persist peer info to disk using proper JSON serialization. */
-    private fun persistPeerInfo() {
-        try {
-            val dir = File(DataPaths.TWIN_PEERS)
-            if (!dir.exists()) dir.mkdirs()
-            val file = File(dir, "peers.json")
-            val jsonArray = org.json.JSONArray()
-            peers.values.forEach { peer ->
-                val obj = org.json.JSONObject().apply {
-                    put("peerId", peer.peerId)
-                    put("agentName", peer.agentName)
-                    put("address", peer.address)
-                    put("port", peer.port)
-                    put("lastAckedHash", peer.lastAckedHash ?: "")
-                    put("lastSeen", peer.lastSeen)
-                    put("lastSyncAt", peer.lastSyncAt)
-                    put("online", peer.online)
-                }
-                jsonArray.put(obj)
-            }
-            val tmp = File(dir, "peers.tmp")
-            tmp.writeText(jsonArray.toString(2))
-            if (file.exists()) file.delete()
-            tmp.renameTo(file)
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "TwinSyncEngine.persistPeerInfo")
-        }
-    }
 }
 
 // ── Supporting types ──────────────────────────────────────────────────
@@ -764,7 +568,6 @@ data class TwinPeerInfo(
     var port: Int = Ports.ACP,
     var lastSeen: Long = System.currentTimeMillis(),
     var lastSyncAt: Long = 0L,
-    var lastAckedHash: String? = null,
     var capabilityCard: String? = null,
     var online: Boolean = true
 )
@@ -778,13 +581,16 @@ data class TwinSyncState(
     val totalPeers: Int = 0,
     val onlinePeers: Int = 0,
     val completedPeers: Int = 0,
-    val lastEntriesReceived: Int = 0,
+    val lastFilesReceived: Int = 0,
+    val lastConflicts: Int = 0,
     val lastSyncAt: Long = 0L
 )
 
 /** Concrete sync result — no more silent "return 0". */
 data class TwinSyncResult(
-    val entriesReceived: Int,
+    val filesReceived: Int,
+    val filesSent: Int,
+    val conflicts: Int,
     val error: String?,
     val suggestion: String?
 )

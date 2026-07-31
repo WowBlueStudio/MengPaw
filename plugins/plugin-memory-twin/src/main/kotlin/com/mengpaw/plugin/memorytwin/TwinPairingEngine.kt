@@ -491,7 +491,9 @@ object TwinPairingEngine {
     /** Compute a signature for PAIR_CONFIRM verification. */
     private fun computeSignature(myFp: String, peerFp: String): String {
         val sorted = listOf(myFp, peerFp).sorted()
-        return LedgerEntry.sha256("pair_confirm:${sorted[0]}|${sorted[1]}")
+        return java.security.MessageDigest.getInstance("SHA-256")
+            .digest("pair_confirm:${sorted[0]}|${sorted[1]}".toByteArray())
+            .joinToString("") { "%02x".format(it) }
     }
 
     /** Auto-cleanup stale sessions after 120 seconds. */

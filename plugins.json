@@ -89,17 +89,7 @@
         "twin.sync.qos",
         "twin.capabilities",
         "twin.delegate",
-        "twin.route",
-        "twin.ledger.show",
-        "twin.ledger.verify",
-        "twin.ledger.diff",
-        "twin.ledger.stats",
-        "twin.identity.push",
-        "twin.identity.pull",
-        "twin.identity.diff",
-        "twin.identity.merge",
-        "twin.dream.sync",
-        "twin.dream.history"
+        "twin.route"
       ],
       "checksum": "sha256:f0b941ac85d0108bd82b8949f64344b296c12d2d1452e1c445ca7aa57291939a",
       "size": 278497,

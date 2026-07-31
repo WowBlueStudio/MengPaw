@@ -75,10 +75,10 @@ class AcpProtocolTest {
         assertTrue(result.message.contains("memory_shared"))
     }
 
-    @Test fun `LEDGER_BATCH blocked for untrusted peer`() {
+    @Test fun `WS_PULL blocked for untrusted peer`() {
         ensureDataPaths()
         val server = AcpServer(AgentProfile(), sharedSecret = "test")
-        val msg = AcpMessage.ledgerBatch("untrusted", "*", "[]", "hash1", "hash2")
+        val msg = AcpMessage.wsPull("untrusted", "*", """{"paths":["soul.md"]}""")
 
         val result = runBlocking { server.handleMessage(Json.encodeToString(AcpMessage.serializer(), msg)) }
         assertFalse(result.success)

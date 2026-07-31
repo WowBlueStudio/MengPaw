@@ -6,6 +6,9 @@ package com.mengpaw.kernel.acp
 import com.mengpaw.kernel.ports.Ports
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -50,33 +53,88 @@ class AcpHttpTransport(
         var sent = false
         peers.forEach { peer ->
             try {
-                val url = URL("http://${peer.address}:${peer.port}/acp")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.doOutput = true
-                conn.connectTimeout = 3000
-                conn.readTimeout = 3000
-                // Encryption: if peer supports it, encrypt; otherwise plaintext
-                val plainBody = json.encodeToString(AcpMessage.serializer(), message)
-                val body = if (AcpCrypto.supportsEncryption(peer.agentId)) {
-                    conn.setRequestProperty("X-MengPaw-Encrypt", "AES-256-CBC")
-                    AcpCrypto.encrypt(peer.agentId, plainBody)
-                } else plainBody
-
-                OutputStreamWriter(conn.outputStream).use { it.write(body) }
-                val code = conn.responseCode
-                // Check if peer responded with encryption support
-                conn.getHeaderField("X-MengPaw-Encrypt")?.let {
-                    AcpCrypto.markEncryptionCapable(peer.agentId)
-                }
-                conn.disconnect()
-                if (code in 200..299) sent = true
+                postMessage(message, peer.address, peer.port, peer.agentId)
+                sent = true
             } catch (e: Exception) {
                 // Peer unreachable — will be cleaned up by timeout
             }
         }
         return sent
+    }
+
+    /**
+     * 请求-响应发送 (v0.22.0): 发给指定 peer, 读取并解析 HTTP 响应体。
+     * 修复历史缺陷 — 原 send() 只读 responseCode 丢弃响应体, 导致账本条目
+     * 永远回不到请求方, 孪生同步端到端不可达。
+     */
+    override suspend fun sendForResult(
+        message: AcpMessage,
+        toPeerId: String,
+        timeoutMs: Long
+    ): AcpResult? {
+        val peer = server.getPeers().firstOrNull { it.agentId == toPeerId }
+            ?: server.getPeers().firstOrNull { it.agentId.startsWith(toPeerId) }
+            ?: return null
+        return try {
+            val (respBody, encrypted) = withTimeoutOrNull(timeoutMs) {
+                postMessage(message, peer.address, peer.port, peer.agentId, readTimeoutMs = 15_000)
+            } ?: return AcpResult(false, "request_timeout")
+            if (respBody.isNullOrBlank()) return null
+            val plain = if (encrypted) AcpCrypto.decrypt(peer.agentId, respBody) else respBody
+            parseResponse(plain)
+        } catch (e: Exception) {
+            AcpResult(false, "transport_error: ${e.message}")
+        }
+    }
+
+    /** POST 一条消息, 返回响应体文本 + 是否加密。 */
+    private fun postMessage(
+        message: AcpMessage, address: String, port: Int, peerId: String,
+        readTimeoutMs: Int = 3000
+    ): Pair<String?, Boolean> {
+        val url = URL("http://$address:$port/acp")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.doOutput = true
+        conn.connectTimeout = 3000
+        conn.readTimeout = readTimeoutMs
+        try {
+            // Encryption: if peer supports it, encrypt; otherwise plaintext
+            val plainBody = json.encodeToString(AcpMessage.serializer(), message)
+            val body = if (AcpCrypto.supportsEncryption(peerId)) {
+                conn.setRequestProperty("X-MengPaw-Encrypt", "AES-256-CBC")
+                AcpCrypto.encrypt(peerId, plainBody)
+            } else plainBody
+
+            OutputStreamWriter(conn.outputStream).use { it.write(body) }
+            val code = conn.responseCode
+            // Check if peer responded with encryption support
+            conn.getHeaderField("X-MengPaw-Encrypt")?.let {
+                AcpCrypto.markEncryptionCapable(peerId)
+            }
+            if (code !in 200..299) return null to false
+            // FIX (v0.22.0): 读取响应体 — 对端处理结果在 JSON body 的 data 字段
+            val respBody = conn.inputStream.bufferedReader().use { it.readText() }
+            return respBody to (conn.getHeaderField("X-MengPaw-Encrypt") == "AES-256-CBC")
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** 解析 {success, result, data} JSON 响应。 */
+    private fun parseResponse(body: String): AcpResult? {
+        return try {
+            val obj = json.parseToJsonElement(body).jsonObject
+            val data = obj["data"]?.jsonPrimitive?.content ?: ""
+            AcpResult(
+                success = obj["success"]?.jsonPrimitive?.boolean ?: false,
+                message = obj["result"]?.jsonPrimitive?.content ?: "",
+                data = data
+            )
+        } catch (e: Exception) {
+            AcpResult(false, "invalid_response")
+        }
     }
 
     override suspend fun receive(): AcpMessage? {

@@ -70,7 +70,7 @@ private val BUILTIN_PLUGIN_INFO = mapOf(
     "net-plugin" to ("网络请求" to "HTTP 请求：GET/POST，支持自定义 Header 和超时"),
     "clipboard-plugin" to ("剪贴板" to "剪贴板操作：copy, paste, clear"),
     "notification-plugin" to ("通知" to "通知发送与管理：send, list, dismiss"),
-    "memory-twin-plugin" to ("记忆孪生" to "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 心跳保活 + QoS自适应 + 手动IP发现"),
+    "memory-twin-plugin" to ("记忆孪生" to "跨设备工作区同步 — ACP P2P 文件同步 + 心跳保活 + QoS自适应 + 手动IP发现"),
     "root-plugin" to ("Root 权限" to "Root 权限管理 — su 命令执行/应用管理/文件系统/系统修改/备份恢复/审计日志"),
     "tribe-plugin" to ("部落协作 (Tribe)" to "多 Agent 部落协作：LAN 自动组队、Kanban 委派、LLM 路由、任务模板、Fleet 并行、广播讨论、ACP 实时、心跳"),
     "tools-plugin" to ("Agent 命令集" to "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用")
@@ -804,6 +804,8 @@ private suspend fun startAcpForTwin(ctx: android.content.Context, agentName: Str
         com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpServer = server
         com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpTransport = transport
         com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.twinProfile = profile
+        // 注入 engine 供 twin.start 复用 (双引擎债务修复, v0.22.0)
+        com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.activeEngine = syncEngine
         // 标记已激活, 下次启动自动恢复
         java.io.File(ctx.filesDir, "twin_activated").writeText(agentName)
         android.util.Log.i("MengPawTwin", "孪生服务已启动 (${frameworkPeers.size} 个节点)")
