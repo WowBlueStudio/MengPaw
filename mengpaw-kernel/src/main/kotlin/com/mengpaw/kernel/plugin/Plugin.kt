@@ -41,6 +41,8 @@ data class PluginMetadata(
     val maxCoreVersion: String = "99.99.99",
     val dependencies: List<String> = emptyList(),
     val commands: List<String> = emptyList(),
+    /** 插件运行所需/占用的端口 (1-65535). 安装时由 PluginManager 做冲突检测. 空列表 = 不占用. */
+    val ports: List<Int> = emptyList(),
     val downloadUrl: String = "",
     val checksum: String = "",
     val sizeBytes: Long = 0,

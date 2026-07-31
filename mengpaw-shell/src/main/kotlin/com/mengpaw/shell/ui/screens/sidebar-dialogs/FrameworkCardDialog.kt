@@ -119,7 +119,7 @@ fun FrameworkCardDialog(
                 if (addr.isNotBlank()) {
                     Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Language, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
-                        Spacer(Modifier.width(6.dp)); Text("${addr}:${peer?.port ?: 9876}", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
+                        Spacer(Modifier.width(6.dp)); Text("${addr}:${peer?.port ?: com.mengpaw.kernel.ports.Ports.ACP}", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
                     }
                     Spacer(Modifier.height(4.dp))
                 }

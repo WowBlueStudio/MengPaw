@@ -70,7 +70,7 @@ class DevPlugin : Plugin {
                     appendLine("  \"version\": \"0.1.0\",")
                     appendLine("  \"type\": \"SCRIPT\",")
                     appendLine("  \"author\": \"${a["author"] ?: "Agent-Unknown"}\",")
-                    appendLine("  \"description\": \"${a["desc"] ?: ""}\",")
+                    appendLine("  \"description\": \"${a["desc"] ?: "示例插件 — 请编辑此描述"}\",")
                     appendLine("  \"commands\": {")
                     appendLine("    \"hello\": {")
                     appendLine("      \"shell\": \"echo 'Hello from $name!'\",")
@@ -265,6 +265,19 @@ class DevPlugin : Plugin {
         // Keyword check
         if (!code.contains("commandKeywords") && !code.contains("CommandKeywords"))
             issues.add("[检索] 🟡 缺少 commandKeywords — 建议添加中英文同义词以提升 self.search 可发现性")
+
+        // Port check — 声明端口不能与内核保留端口 (ACP 9876) 冲突
+        if (code.contains("ports = listOf(")) {
+            val declared = Regex("ports\\s*=\\s*listOf\\s*\\(([^)]*)\\)")
+                .find(code)?.groupValues?.get(1) ?: ""
+            if (declared.contains("9876"))
+                issues.add("[端口] 🔴 声明端口 9876 与内核 ACP 保留端口冲突 — 安装会被 PluginManager 拒绝")
+            Regex("\\d{1,5}").findAll(declared).forEach { m ->
+                val p = m.value.toInt()
+                if (p !in 1..65535)
+                    issues.add("[端口] 🟡 端口声明 $p 超出有效范围 (1-65535)")
+            }
+        }
 
         return issues
     }
@@ -474,6 +487,7 @@ class {CLS}Plugin : Plugin {
         type = PluginType.NATIVE, author = "", description = "",
         permissions = emptyList(),
         minCoreVersion = "0.2.0",
+        ports = emptyList(), // 声明插件占用的端口 (如 listOf(8xxx)) — 与内核保留端口冲突会被拒绝安装
         commands = listOf("{NS}.example"),
         commandKeywords = mapOf(
             "example" to CommandKeywords(
@@ -492,8 +506,10 @@ class {CLS}Plugin : Plugin {
     }
 
     private fun resolvePath(path: String, ctx: ExecutionContext): String {
-        val f = File(path)
-        return if (f.isAbsolute) f.absolutePath else File(ctx.workDir, path).absolutePath
+        return try {
+            val f = File(path)
+            if (f.isAbsolute) f.absolutePath else File(ctx.workDir, path).absolutePath
+        } catch (e: Exception) { path }
     }
     private fun formatSize(bytes: Long): String = when {
         bytes < 1024 -> "${'$'}bytes B"

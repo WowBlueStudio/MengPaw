@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.19.6 | **更新**: 2026-07-30 | **架构**: 微内核(54文件) + AgentRuntime + 25插件(内置版随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1
+> **版本**: 0.20.0 | **更新**: 2026-07-31 | **架构**: 微内核(54文件) + AgentRuntime + 26插件模块(13捆绑随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1
 
 ---
 
@@ -79,7 +79,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 |---------|--------|--------|------|
 | `self` | SelfExecutor.kt | 15 | Agent 自省 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/search/search.stats/time/notify.message/notify.banner) |
 | `agent` | AgentExecutor.kt | 35 | 文档(6) + 记忆三轨(14) + 其他(5) + 会话(4) + 工作区文件(6) |
-| `plugin` | PluginExecutor + DevPlugin | 11 + 4 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade/auto + create/audit/share/examples) |
+| `plugin` | PluginExecutor + DevPlugin | 12 + 5 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade/auto/verify + create/audit/share/examples/keywords) |
 `framework` | FrameworkPlugin | 6 | 框架发现 (discover/peers/trust/untrust/info/ping) [↔ 同捆插件 plugin-framework] |
 
 > `sys` 命名空间 (39 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。
@@ -91,15 +91,15 @@ mengpaw-shell
   ├── mengpaw-kernel (微内核)
   ├── mengpaw-core (Android 适配)
   ├── mengpaw-design-system (主题)
-  └── 11 捆绑插件: memory / skill / framework / dev / fs / net / self / clipboard /
-      notification / memory-twin / agent-tools
+  └── 13 捆绑插件: memory / skill / framework / dev / fs / net / self / clipboard /
+      notification / memory-twin / root / hermes(tribe) / agent-tools
 
 mengpaw-browser
   ├── mengpaw-kernel
   ├── mengpaw-core
   └── mengpaw-design-system
 
-plugins/ (24 模块)
+plugins/ (26 模块)
   └── mengpaw-kernel  ← 所有插件只依赖微内核（同级）
 ```
 
@@ -240,19 +240,21 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `plugin/` (3 文件) | BuiltinBrowserPlugin, BrowserPlugin, BrowserPluginRegistry |
 
 
-### 3.5 插件模块（23 个，plugins/ 目录）
+### 3.5 插件模块（26 个，plugins/ 目录，按 settings.gradle.kts 为准）
+
+> 插件数统一口径：**26 模块**（settings.gradle.kts:29-54）| **13 捆绑**（mengpaw-shell 打包）| **plugins.json 28 条目**（12 builtin + 14 remote + 2 embedded）
 
 #### 基础功能 (9)
 
 | 模块 | 命名空间 | 命令 | 捆绑 |
 |------|---------|------|:--:|
-| plugin-fs | fs | cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob (10) | |
-| plugin-net | net | curl, get, post (3) | |
+| plugin-fs | fs | cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob (10) | ⭐ |
+| plugin-net | net | curl, get, post (3) | ⭐ |
 | plugin-memory | memory | ls, read, write, rm, search, stats (6) | ⭐ |
 | plugin-skill | skill | ls, run, enable, disable (4) | ⭐ |
-| plugin-clipboard | clipboard | copy, paste, clear (3) | |
-| plugin-notification | notification | send, list, dismiss (3) | |
-| plugin-self | self | status, config, stats, version (4) | |
+| plugin-clipboard | clipboard | copy, paste, clear (3) | ⭐ |
+| plugin-notification | notification | send, list, dismiss (3) | ⭐ |
+| plugin-self | self | status, config, stats, version (4) | ⭐ |
 | plugin-framework | framework | discover, peers, trust, untrust, info, ping (6) | ⭐ |
 | plugin-agent-tools | tools | import, ls, remove, search (4) | ⭐ |
 
@@ -297,11 +299,25 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 | 模块 | 命名空间 | 命令 | 捆绑 |
 |------|---------|------|:--:|
-| plugin-dev | plugin | create, audit, share, examples (4) | ⭐ |
+| plugin-dev | dev.plugin | create, audit, share, examples, keywords (5) | ⭐ |
 | plugin-error-report | error | list, show, clear, export, status, upload (6) | |
 | plugin-update | update | check, download, install, auto (4) | |
 
-> ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载
+#### 系统权限 (1)
+
+| 模块 | 命名空间 | 命令 | 捆绑 |
+|------|---------|------|:--:|
+| plugin-root | root | status, exec, apps.*, fs.*, backup.* | ⭐ |
+
+#### 记忆孪生 (1)
+
+| 模块 | 命名空间 | 命令 | 捆绑 |
+|------|---------|------|:--:|
+| plugin-memory-twin | twin | peer.add, start, sync, status, capability (24 条) | ⭐ |
+
+> ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载（13 个：framework/fs/net/memory/skill/clipboard/notification/self/dev/root/hermes(tribe)/memory-twin/agent-tools）
+>
+> plugin-hermes 模块实际实现为 `TribePlugin`（id=tribe-plugin，注册 tribe.* 22 条 + hermes.* 兼容命令），plugins.json 中对应 `tribe-plugin` 条目。
 
 ### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.2)
 
@@ -573,11 +589,11 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 **工作区文件 (6)**：`read <path>` | `write <path> <content>` | `ls [path]` | `rm <path>` | `mkdir <path>` | `output`
 
 
-#### plugin — 插件管理 (11 + 4)
-**内核 (11)**：`marketplace [--refresh]` | `search <query>` | `install <id>` | `uninstall <id>` | `list` | `info <id>` | `enable <id>` | `disable <id>` | `update <id>` | `upgrade --all` | `auto <wake\|sleep\|status\|sleep-idle>`
+#### plugin — 插件管理 (12 + 5)
+**内核 (12)**：`marketplace [--refresh]` | `search <query>` | `install <id>` | `uninstall <id>` | `list [--ports]` | `info <id>` | `enable <id>` | `disable <id>` | `update <id>` | `upgrade --all` | `auto <wake\|sleep\|status\|sleep-idle>` | `verify <id>`
 
-**dev 插件扩展 (4)**：`create --type script|jar --name <name>` | `audit <id>` | `share <id> --to <target>` | `examples`
-> dev 插件的命令实际注册为 `dev.plugin.create` / `dev.plugin.audit` / `dev.plugin.share` / `dev.plugin.examples`，因为 PluginManager 根据插件 ID (`dev-plugin`) 自动派生命名空间 `dev`。
+**dev 插件扩展 (5)**：`create --type script|native --name <name> [--author <作者>] [--desc <描述>]` | `audit --target <id>` | `share --plugin <id> --to <target>` | `examples` | `keywords --target <id>`
+> dev 插件的命令实际注册为 `dev.plugin.create` / `dev.plugin.audit` / `dev.plugin.share` / `dev.plugin.examples` / `dev.plugin.keywords`，因为 PluginManager 根据插件 ID (`dev-plugin`) 自动派生命名空间 `dev`。`plugin.create` 在 CLI 文档中出现时均指 `dev.plugin.create`。
 
 #### sys — Android 系统 (39 命令，通过 Android 适配层注入)
 
@@ -776,9 +792,10 @@ interface Plugin {
 
 | 类型 | 复杂度 | 适用场景 |
 |------|--------|---------|
-| **SCRIPT** | 低 | JSON 声明即用，Agent 可自建 |
-| **JAR** | 中 | Kotlin 逻辑，有状态，需编译 |
-| **AAR** | 高 | 完整 Android 库，含资源/UI |
+| **NATIVE** | 中 | 编译型（产物 JAR/AAR），Kotlin 逻辑、有状态，需编译 |
+| **SCRIPT** | 低 | JSON 声明即用，Agent 可零代码自建 |
+
+> JAR/AAR 统一归为 NATIVE（内核 `PluginType` 权威枚举只有 `{NATIVE, SCRIPT}`）。
 
 ### 7.3 市场发布
 
@@ -786,9 +803,14 @@ GitHub Pages 托管 `plugins.json`，ETag 缓存 (5 分钟)，SHA256 校验。
 
 信任链：官方 → 信任框架 (SHA256 + 确认) → 公网 (SHA256 + 确认 + 来源标记) → 未验证 (拒绝)
 
+仓库工具链（见 [PLUGIN_DEV_GUIDE.md](PLUGIN_DEV_GUIDE.md) §5.3）：
+- `scripts/build-plugins.ps1` — 批量构建插件 AAR，自动回写 plugins.json 的 checksum/size/changelog
+- `scripts/validate-plugins.ps1` — 校验 plugins.json（字段/命名空间/checksum 与 AAR 一致性）
+- 插件 AAR 发布用独立 tag `plugins-vX.Y.Z`；`.claude/skills/plugin-dev.md` 为插件开发/发布 skill
+
 ### 7.4 开发流程
 
-`plugin.create` → `plugin.audit` → `plugin.share`，通过 dev-plugin（捆绑在 Shell 中）即可完成。
+`dev.plugin.create --type script|native` → `dev.plugin.audit --target <id>` → `dev.plugin.keywords --target <id>` → `dev.plugin.share --plugin <id> --to <框架>`，通过 dev-plugin（捆绑在 Shell 中）即可完成。
 
 详细指南见 [PLUGIN_DEV_GUIDE.md](PLUGIN_DEV_GUIDE.md)。
 
@@ -798,6 +820,13 @@ GitHub Pages 托管 `plugins.json`，ETag 缓存 (5 分钟)，SHA256 校验。
 
 - Android SDK 35 + JDK 17 + Gradle 8.12
 - AGP 8.7.3, Kotlin 2.0.21, Compose BOM 2024.12.01
+
+### 9.2 插件构建工具链
+
+- `scripts/build-plugins.ps1` — 模块列表动态派生自 settings.gradle.kts（26 模块），逐模块 assembleRelease，产物复制到 `releases/plugins/plugin-<name>-<version>-release.aar`，自动回写 plugins.json 的 checksum/size/changelog（remote 条目）
+- `scripts/update-plugins-json.py` — JSON 写回（规避 PowerShell 5.1 的 ConvertTo-Json 中文转义缺陷）
+- `scripts/validate-plugins.ps1` — 只读校验：结构/id 唯一/字段完整/SemVer/URL 与 checksum 一致性/与代码交叉校验（namespaceFor 派生规则、shell 捆绑 vs plugins.json builtin 对应）
+- 插件 AAR 发布 tag：`plugins-vX.Y.Z`（独立于版本 tag `vX.Y.Z`）
 
 ---
 

@@ -105,8 +105,8 @@ class ComfyPlugin : Plugin {
     }
 
     private suspend fun run(a: List<String>, c: ExecutionContext): ExecutionResult {
-        if (a.size < 2) return ExecutionResult.fail("Usage: comfy.run <wf> [api-url=http://localhost:8188]\n⚠️ 执行前确认参数已参考社区公开信息设置", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val url = a.find { it.startsWith("api-url=") }?.removePrefix("api-url=") ?: "http://localhost:8188"
+        if (a.size < 2) return ExecutionResult.fail("Usage: comfy.run <wf> [api-url=http://localhost:${com.mengpaw.kernel.ports.Ports.COMFYUI}]\n⚠️ 执行前确认参数已参考社区公开信息设置", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val url = a.find { it.startsWith("api-url=") }?.removePrefix("api-url=") ?: "http://localhost:${com.mengpaw.kernel.ports.Ports.COMFYUI}"
         val f = File(wfDir, "${a[0]}.json")
         if (!f.exists()) return ExecutionResult.fail("Not found: ${a[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
         return try {

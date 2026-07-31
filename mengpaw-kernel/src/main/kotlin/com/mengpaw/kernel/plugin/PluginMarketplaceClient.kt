@@ -36,6 +36,8 @@ data class MarketplaceEntry(
     val dependencies: List<String> = emptyList(),
     val permissions: List<String> = emptyList(),
     val commands: List<String> = emptyList(),
+    /** 插件声明占用的端口 (1-65535) — 与 PluginMetadata.ports 对应. */
+    val ports: List<Int> = emptyList(),
     /** "builtin" = compiled into APK, no download needed. "remote" = downloadable from marketplace. */
     val status: String = "remote",
     /** Release notes for the current version (markdown). */
@@ -377,6 +379,7 @@ class PluginMarketplaceClient(
         dependencies = obj["dependencies"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
         permissions = obj["permissions"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
         commands = obj["commands"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
+        ports = obj["ports"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content.toIntOrNull()?.takeIf { p -> p in 1..65535 } } ?: emptyList(),
         status = obj["status"]?.jsonPrimitive?.content ?: "remote",
         changelog = obj["changelog"]?.jsonPrimitive?.content ?: ""
     )

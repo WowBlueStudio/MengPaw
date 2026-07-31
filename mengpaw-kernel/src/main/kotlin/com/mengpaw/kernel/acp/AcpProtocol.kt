@@ -3,6 +3,7 @@
 
 package com.mengpaw.kernel.acp
 
+import com.mengpaw.kernel.ports.Ports
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -200,7 +201,7 @@ data class PeerAgent(
     val agentId: String,
     val agentName: String,
     val address: String,
-    val port: Int = 9876,
+    val port: Int = Ports.ACP,
     val capabilities: List<String> = emptyList(),
     val lastSeen: Long = System.currentTimeMillis()
 )

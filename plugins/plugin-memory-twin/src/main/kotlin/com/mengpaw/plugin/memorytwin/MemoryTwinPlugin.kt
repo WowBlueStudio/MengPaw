@@ -328,7 +328,7 @@ class MemoryTwinPlugin : Plugin {
         if (!isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
         val address = args.getOrNull(0)
             ?: return ExecutionResult.fail("用法: twin.peer.add <ip> [port] [name]")
-        val port = args.getOrNull(1)?.toIntOrNull() ?: 9876
+        val port = args.getOrNull(1)?.toIntOrNull() ?: com.mengpaw.kernel.ports.Ports.ACP
         val name = args.getOrNull(2)
         val peer = syncEngine.addManualPeer(address, port, name)
         return ExecutionResult.ok(buildString {
@@ -578,7 +578,7 @@ class MemoryTwinPlugin : Plugin {
         return if (sent) {
             ExecutionResult.ok("任务已委派到 ${peer.agentName} ($peerId) — 使用 twin.status 查看状态")
         } else {
-            ExecutionResult.fail("发送失败: 对端 ${peer.address}:${peer.port} 不可达。\n检查: 1) 对端是否在线 2) 网络是否互通 3) 防火墙是否拦截端口 9876")
+            ExecutionResult.fail("发送失败: 对端 ${peer.address}:${peer.port} 不可达。\n检查: 1) 对端是否在线 2) 网络是否互通 3) 防火墙是否拦截端口 ${com.mengpaw.kernel.ports.Ports.ACP}")
         }
     }
 

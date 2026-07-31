@@ -1,137 +1,260 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
   "version": 5,
-  "updated": "2026-07-28T12:00:00Z",
+  "updated": "2026-07-31",
   "plugins": [
     {
       "id": "framework-plugin",
       "name": "框架发现",
-      "version": "",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理",
       "status": "builtin",
       "minCoreVersion": "0.9.1",
-      "commands": ["framework.discover", "framework.peers", "framework.trust", "framework.untrust", "framework.info", "framework.ping"]
+      "commands": [
+        "framework.discover",
+        "framework.peers",
+        "framework.trust",
+        "framework.untrust",
+        "framework.info",
+        "framework.ping"
+      ],
+      "checksum": "sha256:378b5e4d598cb40be53a2e8a914f704cc2728094da21bc4da891c9ad7d985f79",
+      "size": 42745,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "fs-plugin",
       "name": "文件系统",
-      "version": "",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob",
       "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": ["fs.cat", "fs.ls", "fs.write", "fs.rm", "fs.mkdir", "fs.cp", "fs.mv", "fs.stat", "fs.grep", "fs.glob"]
+      "commands": [
+        "fs.cat",
+        "fs.ls",
+        "fs.write",
+        "fs.rm",
+        "fs.mkdir",
+        "fs.cp",
+        "fs.mv",
+        "fs.stat",
+        "fs.grep",
+        "fs.glob"
+      ],
+      "checksum": "sha256:045a11a35c8201eb7d845afbc57a671c4d8c89db894af72dc25e36962c878e0a",
+      "size": 25854,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "net-plugin",
       "name": "网络请求",
-      "version": "",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "HTTP 请求：GET/POST，支持自定义 Header 和超时",
       "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": ["net.get", "net.post", "net.status"]
+      "commands": [
+        "net.get",
+        "net.post",
+        "net.status"
+      ],
+      "checksum": "sha256:db85170462c2d6c6a9dc64b4b1b6a19f87cdc3b5670f21ff0c8ac97772f50486",
+      "size": 17741,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "memory-plugin",
       "name": "记忆系统",
-      "version": "",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "Markdown 持久化记忆系统，含 LRU 缓存和被动索引",
       "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": ["memory.ls", "memory.read", "memory.write", "memory.rm", "memory.search", "memory.stats"]
+      "commands": [
+        "memory.ls",
+        "memory.read",
+        "memory.write",
+        "memory.rm",
+        "memory.search",
+        "memory.stats"
+      ],
+      "checksum": "sha256:d4131cf16bc791d530ba2411b70bfbe9b5bd22069892d1c0ecba55ecfa5d4366",
+      "size": 20798,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "memory-twin-plugin",
       "name": "记忆孪生",
-      "version": "",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 心跳保活 + QoS自适应 + 手动IP发现",
       "status": "builtin",
       "minCoreVersion": "0.15.0",
-      "commands": ["twin.start", "twin.stop", "twin.status", "twin.peers", "twin.peer.info", "twin.pair", "twin.unpair", "twin.sync", "twin.sync.auto", "twin.sync.qos", "twin.capabilities", "twin.delegate", "twin.route", "twin.ledger.show", "twin.ledger.verify", "twin.ledger.diff", "twin.ledger.stats", "twin.identity.push", "twin.identity.pull", "twin.identity.diff", "twin.identity.merge", "twin.dream.sync", "twin.dream.history"]
+      "commands": [
+        "twin.start",
+        "twin.stop",
+        "twin.status",
+        "twin.peers",
+        "twin.peer.info",
+        "twin.pair",
+        "twin.unpair",
+        "twin.sync",
+        "twin.sync.auto",
+        "twin.sync.qos",
+        "twin.capabilities",
+        "twin.delegate",
+        "twin.route",
+        "twin.ledger.show",
+        "twin.ledger.verify",
+        "twin.ledger.diff",
+        "twin.ledger.stats",
+        "twin.identity.push",
+        "twin.identity.pull",
+        "twin.identity.diff",
+        "twin.identity.merge",
+        "twin.dream.sync",
+        "twin.dream.history"
+      ],
+      "checksum": "sha256:f0b941ac85d0108bd82b8949f64344b296c12d2d1452e1c445ca7aa57291939a",
+      "size": 278497,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "skill-plugin",
       "name": "技能系统",
-      "version": "",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "可复用的 Agent 剧本系统（YAML+Markdown），含 3 个默认 Skill",
       "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": ["skill.ls", "skill.run", "skill.enable", "skill.disable"]
+      "commands": [
+        "skill.ls",
+        "skill.run",
+        "skill.enable",
+        "skill.disable"
+      ],
+      "checksum": "sha256:6d9d4ca20ab11094548e2edc58f76a27fbffd224e89ae727f05456b9e2092893",
+      "size": 71759,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "self-plugin",
       "name": "Agent 自省",
-      "version": "",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 自身状态查询和配置管理",
       "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": ["self.status", "self.config", "self.stats", "self.version", "self.avatar", "self.theme"]
+      "commands": [
+        "self.status",
+        "self.config",
+        "self.stats",
+        "self.version",
+        "self.avatar",
+        "self.theme"
+      ],
+      "checksum": "sha256:27c2b46cdbe76568eb0b797054addd49c4085bf2f558b9926af0a20deb19f428",
+      "size": 8897,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "clipboard-plugin",
       "name": "剪贴板",
-      "version": "",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "系统剪贴板读写操作",
       "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": ["clipboard.copy", "clipboard.paste", "clipboard.clear"]
+      "commands": [
+        "clipboard.copy",
+        "clipboard.paste",
+        "clipboard.clear"
+      ],
+      "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
+      "size": 7262,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "notification-plugin",
       "name": "通知管理",
-      "version": "",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "系统通知发送和管理",
       "status": "builtin",
-      "permissions": ["POST_NOTIFICATIONS"],
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ],
       "minCoreVersion": "0.2.0",
-      "commands": ["notification.send", "notification.list", "notification.dismiss"]
+      "commands": [
+        "notification.send",
+        "notification.list",
+        "notification.dismiss"
+      ],
+      "checksum": "sha256:3faa8944f73aaf9a7e35550c82112709fff3cff5feb1c70fe6af7df7d40f5df3",
+      "size": 10565,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "dev-plugin",
       "name": "插件开发工具",
-      "version": "",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
-      "description": "创建、审计、构建、分享自建插件 — Agent 可自主扩展 MengPaw 功能",
+      "description": "创建、审计、分享自建插件 — Agent 可自主扩展 MengPaw 功能",
       "status": "builtin",
       "minCoreVersion": "0.2.0",
-      "commands": ["plugin.create", "plugin.audit", "plugin.share", "plugin.examples"]
+      "commands": [
+        "dev.plugin.create",
+        "dev.plugin.audit",
+        "dev.plugin.share",
+        "dev.plugin.examples",
+        "dev.plugin.keywords"
+      ],
+      "checksum": "sha256:cc9624579d54b57f20dc725d4ce9c7cd91cc5d74321b968d47c5494e576ede0c",
+      "size": 25389,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "update-plugin",
       "name": "自动更新",
-      "version": "0.2.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "WiFi 环境自动检测更新，冷启动检查，去轮询CoroutineScope泄漏，GitHub→Gitee→ghproxy 三级回退",
       "status": "remote",
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-update.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-update.aar",
-      "permissions": ["INTERNET", "ACCESS_NETWORK_STATE", "REQUEST_INSTALL_PACKAGES"],
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "REQUEST_INSTALL_PACKAGES"
+      ],
       "minCoreVersion": "0.8.0",
-      "commands": ["update.check", "update.download", "update.install", "update.auto"]
+      "commands": [
+        "update.check",
+        "update.download",
+        "update.install",
+        "update.auto"
+      ],
+      "checksum": "sha256:8cca801352cbbc25130e78ce77d7e4db09f13c47878db868a671464758f6a994",
+      "size": 29416,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "translate-plugin",
       "name": "翻译引擎",
-      "version": "0.1.1",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "多语言翻译：Google 翻译集成 + 语种自动检测（自动识别源语言）",
@@ -139,26 +262,47 @@
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-translate.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-translate.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["translate.text", "translate.auto", "translate.langs", "translate.setup"]
+      "commands": [
+        "translate.text",
+        "translate.auto",
+        "translate.langs",
+        "translate.setup"
+      ],
+      "checksum": "sha256:abda168326e715e876455d099f2550ec7a3c969c2552504f71db648f8e89a833",
+      "size": 21566,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "error-report-plugin",
       "name": "错误上报",
-      "version": "0.2.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "官方错误收集与上报：error.bridge JSON桥接 + error.upload WiFi自动上传，序列化重写",
       "status": "remote",
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-error-report.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-error-report.aar",
-      "permissions": ["INTERNET", "ACCESS_NETWORK_STATE"],
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ],
       "minCoreVersion": "0.8.0",
-      "commands": ["error.list", "error.show", "error.clear", "error.export", "error.status", "error.upload"]
+      "commands": [
+        "error.list",
+        "error.show",
+        "error.clear",
+        "error.export",
+        "error.status",
+        "error.upload"
+      ],
+      "checksum": "sha256:2ab06b3ab95883d947e769d1513256896c3e17657089ebc27a4eec382bbd9f23",
+      "size": 28602,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "tavily-plugin",
       "name": "AI 搜索",
-      "version": "0.2.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "Tavily AI 优化搜索引擎 — 结构化搜索结果 + 网页内容提取，错误消息含 API Key 获取链接",
@@ -166,12 +310,18 @@
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-tavily.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-tavily.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["tavily.search", "tavily.extract"]
+      "commands": [
+        "tavily.search",
+        "tavily.extract"
+      ],
+      "checksum": "sha256:a30aad3506f37d9346dc087fc6e2ed2dc54131ace77025aae5f8c730ce65f069",
+      "size": 14367,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "render-plugin",
       "name": "API 生图引擎",
-      "version": "0.2.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "多后端 API 生图：GPT Image (原DALL-E) / Replicate / Stability，模型更新至 2026.07",
@@ -179,25 +329,57 @@
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-render.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-render.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["render.models", "render.generate", "render.status", "render.preview"]
+      "commands": [
+        "render.models",
+        "render.generate",
+        "render.status",
+        "render.preview"
+      ],
+      "checksum": "sha256:0203b1e149e098ea24b76093ee002079baf498e99e8dab3f12c3a736c59924c3",
+      "size": 24873,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "tribe-plugin",
       "name": "部落协作 (Tribe)",
-      "version": "0.5.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
-      "description": "多 Agent 部落协作：LAN 自动组队、Kanban 委派（优先级+超时+嵌套链）、LLM 路由、任务模板、Fleet 并行、广播讨论、记忆去重压缩、上下文裁剪、ACP 实时、心跳",
-      "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.5.0/plugin-tribe.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.5.0/plugin-tribe.aar",
+      "description": "多 Agent 部落协作：LAN 自动组队、Kanban 委派（优先级+超时+嵌套链）、LLM 路由、任务模板、Fleet 并行、广播讨论、记忆去重压缩、上下文裁剪、ACP 实时、心跳。对应模块 plugin-hermes（随 APK 捆绑，含 hermes.* 兼容命令）",
+      "status": "builtin",
       "minCoreVersion": "0.8.0",
-      "commands": ["tribe.start", "tribe.stop", "tribe.status", "tribe.team", "tribe.discover", "tribe.delegate", "tribe.ask", "tribe.memo", "tribe.role", "tribe.template", "tribe.route", "tribe.fleet", "tribe.chat", "tribe.discuss", "tribe.task.list", "tribe.task.show", "tribe.task.cancel", "tribe.task.retry", "tribe.task.done", "tribe.peers", "tribe.ping", "tribe.cleanup"]
+      "commands": [
+        "tribe.start",
+        "tribe.stop",
+        "tribe.status",
+        "tribe.team",
+        "tribe.discover",
+        "tribe.delegate",
+        "tribe.ask",
+        "tribe.memo",
+        "tribe.role",
+        "tribe.template",
+        "tribe.route",
+        "tribe.fleet",
+        "tribe.chat",
+        "tribe.discuss",
+        "tribe.task.list",
+        "tribe.task.show",
+        "tribe.task.cancel",
+        "tribe.task.retry",
+        "tribe.task.done",
+        "tribe.peers",
+        "tribe.ping",
+        "tribe.cleanup"
+      ],
+      "checksum": "sha256:1a9edab8e0ba2eeb8bcf88cd6e02591aee5f02cec3937bdbe1e6caf065271c77",
+      "size": 263914,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "workflow-plugin",
       "name": "工作流引擎",
-      "version": "0.2.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "DAG 工作流编排：CommandExecutor 真实执行 + 条件分支 + 变量引用 + workflow.delete 删除",
@@ -205,12 +387,21 @@
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-workflow.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-workflow.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["workflow.run", "workflow.define", "workflow.list", "workflow.status", "workflow.delete"]
+      "commands": [
+        "workflow.run",
+        "workflow.define",
+        "workflow.list",
+        "workflow.status",
+        "workflow.delete"
+      ],
+      "checksum": "sha256:59f2856e88b8ae4697c475c2ed43a980d6a8a156da798429e266db5ef7508e0a",
+      "size": 20863,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "incubator-plugin",
       "name": "Agent 孵化器",
-      "version": "0.2.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 市场方向演进：agent.market / install / share，隐私清理，SHA256校验，三级回退下载",
@@ -218,12 +409,20 @@
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-incubator.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-incubator.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["incubator.spawn", "incubator.list", "incubator.terminate", "incubator.inbox"]
+      "commands": [
+        "incubator.spawn",
+        "incubator.list",
+        "incubator.terminate",
+        "incubator.inbox"
+      ],
+      "checksum": "sha256:2050c2c0c3a5d200c0b0b01515da3c20e1197cc1280a2713121ad07cdc2cc1b3",
+      "size": 16349,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "comfy-plugin",
       "name": "ComfyUI 工作流",
-      "version": "0.2.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "ComfyUI 工作流搭建：节点编排/JSON 导出/API 执行/MP浏览器预览，错误消息含 CORS 排查指引",
@@ -231,12 +430,24 @@
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-comfy.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-comfy.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["comfy.nodes", "comfy.workflow", "comfy.run", "comfy.preview", "comfy.export"]
+      "ports": [
+        8188
+      ],
+      "commands": [
+        "comfy.nodes",
+        "comfy.workflow",
+        "comfy.run",
+        "comfy.preview",
+        "comfy.export"
+      ],
+      "checksum": "sha256:f777b336906cc9c011aa4d2760c094e1e541283f422238e2757a0072a1824363",
+      "size": 24618,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "browser-push-plugin",
       "name": "跨设备推送",
-      "version": "0.1.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 跨设备推送网页，基于 ACP 协议",
@@ -244,12 +455,20 @@
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-push.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-push.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["browser.push", "browser.push.pending", "browser.push.accept", "browser.push.reject"]
+      "commands": [
+        "browser.push",
+        "browser.push.pending",
+        "browser.push.accept",
+        "browser.push.reject"
+      ],
+      "checksum": "sha256:281fc1b3f774d39fb55d86fb92079661a5fe7fb6a8bbdd390e731c4b01b6c748",
+      "size": 16951,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "browser-search-plugin",
       "name": "搜索分析",
-      "version": "0.2.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "搜索管道重写：search.fetch 网页直读 → search.clean 去噪 → search.md 生成正文（文本块/表格识别） → search.outputs 历史管理 → search.clear 清理",
@@ -257,12 +476,24 @@
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-search.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-search.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["search.extract", "search.summary", "search.engines", "search.clean", "search.md", "search.fetch", "search.outputs", "search.clear"]
+      "commands": [
+        "search.extract",
+        "search.summary",
+        "search.engines",
+        "search.clean",
+        "search.md",
+        "search.fetch",
+        "search.outputs",
+        "search.clear"
+      ],
+      "checksum": "sha256:1da4598a051abaab8477ed893f7a93420abd044d66393d1ad4430d0e5045aeb5",
+      "size": 7794,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "browser-mcp-plugin",
       "name": "浏览器 MCP",
-      "version": "0.2.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取/调用（MP浏览器专用）",
@@ -270,25 +501,38 @@
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-mcp.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-mcp.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["browser.mcp.tools", "browser.mcp.status", "browser.mcp.invoke"]
+      "commands": [
+        "browser.mcp.tools",
+        "browser.mcp.status",
+        "browser.mcp.invoke"
+      ],
+      "checksum": "sha256:d0cd2ac2d10a59903ecfc7ed677fa426697e2017f233ca4bc76616ef16fb7f04",
+      "size": 10741,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "browser-cdp-plugin",
       "name": "CDP 调试",
-      "version": "0.1.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "Chrome DevTools Protocol 调试支持。已从市场下架（保留源码），仅 debug 构建可用",
-      "status": "remote",
+      "status": "deprecated",
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-cdp.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-cdp.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["cdp.enable", "cdp.status"]
+      "commands": [
+        "cdp.enable",
+        "cdp.status"
+      ],
+      "checksum": "sha256:69ee9fd15c574b4a99e4b529d1630a47e2ffade397f48b3837efb2de9ace8f83",
+      "size": 6419,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "browser-inspector-plugin",
       "name": "网页开发套件",
-      "version": "0.1.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "元素选择器+批注：悬停高亮、点击选择、添加备注、导出元素地图",
@@ -296,7 +540,17 @@
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-inspector.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-inspector.aar",
       "minCoreVersion": "0.8.0",
-      "commands": ["inspector.start", "inspector.stop", "inspector.select", "inspector.annotate", "inspector.list", "inspector.export"]
+      "commands": [
+        "inspector.start",
+        "inspector.stop",
+        "inspector.select",
+        "inspector.annotate",
+        "inspector.list",
+        "inspector.export"
+      ],
+      "checksum": "sha256:270454c1ed501cd79e2319c610f33c8f92d8387af57ea1017b1b05d66af5ff24",
+      "size": 13589,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "agent-mission-plugin",
@@ -307,7 +561,11 @@
       "description": "Mission 模式已嵌入 AgentEngine.runWithMission()，内置功能",
       "status": "embedded",
       "minCoreVersion": "0.2.3",
-      "commands": ["mission.start", "mission.status", "mission.stop"]
+      "commands": [
+        "mission.start",
+        "mission.status",
+        "mission.stop"
+      ]
     },
     {
       "id": "agent-loop-plugin",
@@ -318,12 +576,17 @@
       "description": "Goal 模式已嵌入 AgentEngine.run()，内置功能",
       "status": "embedded",
       "minCoreVersion": "0.2.3",
-      "commands": ["loop.start", "loop.status", "loop.stop", "loop.config"]
+      "commands": [
+        "loop.start",
+        "loop.status",
+        "loop.stop",
+        "loop.config"
+      ]
     },
     {
       "id": "root-plugin",
       "name": "Root 权限",
-      "version": "",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "Root 权限管理 — su 命令执行/应用管理/完整文件系统/系统修改/备份恢复/审计日志",
@@ -332,18 +595,33 @@
       "minCoreVersion": "0.15.0",
       "commands": [
         "root.status",
-        "root.exec", "root.shell",
-        "root.apps.list", "root.apps.freeze", "root.apps.unfreeze", "root.apps.uninstall", "root.apps.data",
-        "root.fs.ls", "root.fs.cat", "root.fs.write", "root.fs.stat",
-        "root.system.props", "root.system.setprop", "root.system.hosts",
-        "root.backup.list", "root.backup.save", "root.backup.restore",
+        "root.exec",
+        "root.shell",
+        "root.apps.list",
+        "root.apps.freeze",
+        "root.apps.unfreeze",
+        "root.apps.uninstall",
+        "root.apps.data",
+        "root.fs.ls",
+        "root.fs.cat",
+        "root.fs.write",
+        "root.fs.stat",
+        "root.system.props",
+        "root.system.setprop",
+        "root.system.hosts",
+        "root.backup.list",
+        "root.backup.save",
+        "root.backup.restore",
         "root.audit"
-      ]
+      ],
+      "checksum": "sha256:2ddedb03be3bf8b09afc1a15942721cbe5be50f47c79c54b8ec9e685f70363a9",
+      "size": 43137,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     },
     {
       "id": "tools-plugin",
       "name": "Agent 命令集",
-      "version": "0.1.0",
+      "version": "0.20.1",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用",
@@ -354,7 +632,10 @@
         "tools.ls",
         "tools.remove",
         "tools.search"
-      ]
+      ],
+      "checksum": "sha256:e3918b07c6caa5420e65a70777817b4da281e70e9d629a730a103ac2cfe54985",
+      "size": 35102,
+      "changelog": "### 新增\n- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）\n- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段\n- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（98"
     }
   ]
 }

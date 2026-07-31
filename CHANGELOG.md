@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.20.1 (2026-07-31) — 插件开发工具升级 + Agent 端口感知
+
+### 新增
+- **Ports.kt 端口单一事实源**: `mengpaw-kernel/.../ports/Ports.kt` 集中定义 7 个端口（9876 ACP / 9877 LLM / 9878 Office MCP / 8188 ComfyUI / 18789 OpenClaw / 8080 QwenPaw / 9528 collab-cli），替换 ≥17 处散落魔法数字（kernel/shell/plugins 三侧）
+- **self.ports 命令**: Agent 可一键查询本机监听（ACP）与外部服务默认端口表，支持 `--json` 结构化输出；系统提示词新增「网络端口」章节（中英双语占位符注入），CLI.md 新增端口参考段
+- **PluginMetadata.ports 端口声明**: 插件可声明占用端口，PluginManager.install 冲突检测拒绝同端口插件；市场协议 plugins.json 支持 `ports` 字段（comfy 条目示范 [8188]）；DevPlugin 模板含 ports 声明、audit 新增端口检查（9876 保留端口 🔴 / 越界 🟡）
+- **插件开发工具链**: `scripts/build-plugins.ps1` 重写（模块列表动态派生自 settings.gradle.kts，26 模块零遗漏；产物 `releases/plugins/plugin-<name>-<version>-release.aar` 先清空再复制）+ `scripts/update-plugins-json.py`（checksum/size/changelog 回写，规避 PS5.1 中文转义）+ `scripts/validate-plugins.ps1`（结构/字段/SemVer/URL/checksum 与 AAR 实际比对/与代码交叉校验/端口检查）
+- **plugin-dev skill**: `.claude/skills/plugin-dev.md` 插件开发发布全流程（创建→审计→构建→plugins-v tag 发布），与 release skill 分工
+- **DevPlugin 骨架审计通过**: SCRIPT 骨架默认 description、NATIVE 模板 resolvePath try/catch（骨架生成后可直接通过 audit）；DevPluginChainTest 5 个链路测试（create→audit→端口冲突→examples）
+
+### 修复
+- **文档与代码对齐**: PLUGIN_DEV_GUIDE.md / 主指南 / CONTRIBUTING 统一为 v0.20.0 口径——插件类型 NATIVE/SCRIPT（删虚构 JAR/AAR）、删虚构 plugin.build/test/publish、命令前缀 dev.plugin.*（含 keywords）、插件数统一（26 模块 / 13 捆绑 / plugins.json 28 条目）、安全规则对照 audit 实际检查项
+- **plugins.json 状态修正**: tribe-plugin remote→builtin（模块已随 APK 打包）、browser-cdp-plugin remote→deprecated（已下架）、dev-plugin 命令 4 条→5 条（dev.plugin.* 前缀 + keywords）、comfy 补 ports [8188]
+- **CLI.md 过期插件表**: 删已删模块（ui/proc/vision/audio/pad），按实际 28 条目重列（内置/远程/嵌入三组）
+- **DevPlugin 模板审计缺陷**: SCRIPT 骨架缺 description（空串触发 🔴）、NATIVE 模板 File 无 try/catch
+
+### 发行
+- Shell APK v0.20.1（versionCode 20001）
+- plugins.json 新增 ports 字段协议（向后兼容）
+- 测试：kernel 154/155（AcpProtocolTest round-trip 已知预存在失败）+ plugin-dev 5/5 全绿
+
 ## v0.20.0 (2026-07-31) — Agent 命令集注册 + 设置页 UI 信息一致性
 
 ### 新增

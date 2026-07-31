@@ -62,7 +62,26 @@ git push gitee master && git push gitee vX.Y.Z       # Gitee 镜像
 
 - gitee 显示 "Everything up-to-date" 是正常现象（第一次 push 已成功）
 - 验证：`git ls-remote gitee master` 与本地 HEAD 一致
-- **plugins.json 随 commit 发布**：GitHub Pages 托管的市场索引自动更新（无需单独上传；仅当有插件发布独立 AAR 时才需 gh release 附 AAR）
+- **plugins.json 随 commit 发布**：GitHub Pages 托管的市场索引自动更新（无需单独上传）
+
+## 4.1 插件 AAR 发布（独立 tag，仅当插件有变更时）
+
+```bash
+# 构建 26 插件 AAR + 回写 plugins.json (checksum/size/changelog)
+powershell -ExecutionPolicy Bypass -File scripts/build-plugins.ps1
+# 校验 plugins.json 全绿（含 checksum 与 AAR 实际 SHA256 比对）
+powershell -ExecutionPolicy Bypass -File scripts/validate-plugins.ps1
+# 若改动了 plugins.json 的命令/状态/字段 → 随版本 commit 一并提交
+git add plugins.json && git commit -m "chore: 更新 plugins.json（插件 AAR 发布）"
+# 独立 tag（与版本 tag 分离；downloadUrl 指向此 tag 的 assets）
+git tag plugins-vX.Y.Z && git push origin plugins-vX.Y.Z && git push gitee plugins-vX.Y.Z
+# 上传 AAR 到插件 tag（remote 插件的 downloadUrl 指向这些 assets）
+gh release create plugins-vX.Y.Z releases/plugins/*.aar \
+    --title "Plugin AARs vX.Y.Z" --notes "插件 AAR 批量发布 vX.Y.Z"
+```
+
+- 插件 AAR 全流程详见 `.claude/skills/plugin-dev.md`（引用本节 push/gh 操作，不重复）
+- 构建脚本模块列表动态派生自 settings.gradle.kts——新增插件模块后无需改脚本
 
 ## 5. GitHub Release
 
@@ -89,6 +108,7 @@ adb -s <设备> shell dumpsys package com.mengpaw.shell | grep versionName
 ## 7. 验证清单（全部通过才算发布完成）
 
 - [ ] `gh release view vX.Y.Z` 存在且 APK 已上传
+- [ ] （若发布了插件）`gh release view plugins-vX.Y.Z` 存在且 assets 含全部 AAR
 - [ ] 浏览器可下载 APK（github.com/WowBlueStudio/MengPaw/releases/tag/vX.Y.Z）
 - [ ] 两台设备 versionName == X.Y.Z
 - [ ] plugins.json 已含新插件条目（GitHub Pages 生效）

@@ -3,6 +3,7 @@
 
 package com.mengpaw.kernel.acp
 
+import com.mengpaw.kernel.ports.Ports
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.Json
 import java.io.BufferedReader
@@ -28,11 +29,11 @@ import java.net.*
  *
  * ## Message Exchange
  * Simple HTTP POST to peer's IP:port with JSON body.
- * Each device runs a lightweight HTTP listener on port 9876.
+ * Each device runs a lightweight HTTP listener on the ACP port (Ports.ACP).
  */
 class AcpHttpTransport(
     private val server: AcpServer,
-    private val port: Int = 9876
+    private val port: Int = Ports.ACP
 ) : AcpTransport {
     private var serverSocket: ServerSocket? = null
     private var running = false

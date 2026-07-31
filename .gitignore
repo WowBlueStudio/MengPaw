@@ -42,3 +42,6 @@ docs/memory-twin-architecture.md
 *.bak
 legal/
 mengpaw-plugins/
+
+# Build artifacts (plugin AARs collected by build-plugins.ps1)
+releases/

@@ -7,6 +7,7 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.ports.Ports
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -35,7 +36,7 @@ class TwinDiscovery(
     private val context: Context,
     private val deviceId: String,
     private val agentName: String,
-    private val port: Int = 9876
+    private val port: Int = Ports.ACP
 ) {
     private var nsdManager: NsdManager? = null
     private var registrationListener: NsdManager.RegistrationListener? = null
@@ -59,7 +60,7 @@ class TwinDiscovery(
                 try {
                     val peerId = serviceInfo.attributes["deviceId"]?.let { String(it) } ?: return
                     val peerName = serviceInfo.attributes["agentName"]?.let { String(it) } ?: "Unknown"
-                    val peerPort = serviceInfo.port.takeIf { it > 0 } ?: 9876
+                    val peerPort = serviceInfo.port.takeIf { it > 0 } ?: Ports.ACP
                     val host = serviceInfo.host?.hostAddress ?: return
 
                     val existing = peers.find { it.peerId == peerId }

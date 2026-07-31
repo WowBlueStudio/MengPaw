@@ -7,6 +7,7 @@ import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.error.ErrorCollector
+import kotlinx.serialization.json.put
 
 /**
  * Self-introspection namespace - allows Agent to query its own state.
@@ -19,7 +20,7 @@ object AcpHolder {
     // via AcpServer(profile, port, derivedSecret) for production use with twin pairing.
     val server = com.mengpaw.kernel.acp.AcpServer(
         com.mengpaw.kernel.agent.AgentProfile(),
-        port = 9876,
+        port = com.mengpaw.kernel.ports.Ports.ACP,
         sharedSecret = "acp-default-require-derive-key-for-production"
     )
     var transport: com.mengpaw.kernel.acp.AcpHttpTransport? = null
@@ -40,6 +41,7 @@ object SelfExecutor {
         "trigger" to ::triggerCmd,
         "acp" to ::acpCmd,
         "tools" to ::toolsCmd,
+        "ports" to ::portsCmd,
         "search" to ::searchCmd,
         "search.stats" to ::searchStatsCmd,
         "time" to ::timeCmd,
@@ -100,7 +102,7 @@ object SelfExecutor {
             AcpHolder.transport = transport
             AcpHolder.server.registerTransport(transport)
             transport.startListener()
-            ExecutionResult.ok("ACP 已启动，端口 9876。其他设备可通过 self.acp discover 发现本设备。")
+            ExecutionResult.ok("ACP 已启动，端口 ${com.mengpaw.kernel.ports.Ports.ACP}。其他设备可通过 self.acp discover 发现本设备。")
         },
         "stop" to { _, _ ->
             AcpHolder.transport?.close()
@@ -320,6 +322,35 @@ object SelfExecutor {
             }
             if (ns == null) appendLine("\nTip: self.tools <namespace> to filter.")
         })
+    }
+
+    // ── Ports (网络端口/接口一览) ────────────────────────────────────
+
+    /** 端口/网络接口一览 — 单一事实源 Ports.kt。Usage: self.ports [--json] */
+    private suspend fun portsCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val jsonMode = args.contains("--json")
+        if (jsonMode) {
+            // 结构化输出 — 供 Agent 程序化消费
+            val json = kotlinx.serialization.json.buildJsonObject {
+                put("listening", kotlinx.serialization.json.buildJsonArray {
+                    com.mengpaw.kernel.ports.Ports.ALL.filter { it.direction == com.mengpaw.kernel.ports.Ports.Direction.INBOUND }.forEach {
+                        add(kotlinx.serialization.json.buildJsonObject {
+                            put("port", it.port); put("protocol", it.protocol); put("owner", it.owner); put("purpose", it.purpose)
+                        })
+                    }
+                })
+                put("outboundDefaults", kotlinx.serialization.json.buildJsonArray {
+                    com.mengpaw.kernel.ports.Ports.ALL.filter { it.direction == com.mengpaw.kernel.ports.Ports.Direction.OUTBOUND }.forEach {
+                        add(kotlinx.serialization.json.buildJsonObject {
+                            put("port", it.port); put("protocol", it.protocol); put("owner", it.owner)
+                            put("purpose", it.purpose); put("configurable", it.configurable); put("configVia", it.configVia)
+                        })
+                    }
+                })
+            }
+            return ExecutionResult.ok(json.toString())
+        }
+        return ExecutionResult.ok(com.mengpaw.kernel.ports.Ports.describe("zh"))
     }
 
     // ── Command Search (BM25 + 同义词表) ──────────────────────────────

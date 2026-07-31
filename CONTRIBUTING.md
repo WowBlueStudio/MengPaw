@@ -20,10 +20,10 @@
 | 文件 | 说明 |
 |------|------|
 | `build.gradle.kts` (根) | AGP 8.7.3, Kotlin 2.0.21, Compose BOM 2024.12.01 |
-| `settings.gradle.kts` | 4 核心模块 + 23 插件模块 |
+| `settings.gradle.kts` | 4 核心模块 + 26 插件模块 |
 | `mengpaw-kernel/build.gradle.kts` | JVM 模块, kotlinx-serialization, ktor, coroutines-core |
 | `mengpaw-core/build.gradle.kts` | Android Library, 依赖 kernel, security-crypto |
-| `mengpaw-shell/build.gradle.kts` | Compose, material-icons-extended, work-runtime, 4 捆绑插件 |
+| `mengpaw-shell/build.gradle.kts` | Compose, material-icons-extended, work-runtime, 13 捆绑插件 (framework/memory/skill/dev/fs/net/self/clipboard/notification/memory-twin/root/hermes/agent-tools) |
 | `mengpaw-browser/build.gradle.kts` | material-icons-core (轻量), version follows mengpaw.version |
 | `mengpaw-shell/.../AndroidManifest.xml` | 6 权限, MainActivity, ShellService (foregroundServiceType=dataSync) |
 | `mengpaw-browser/.../AndroidManifest.xml` | 2 权限, BrowserActivity (3 intent-filter) |
@@ -46,10 +46,19 @@
 # 微内核测试 (JVM, 秒级)
 ./gradlew :mengpaw-kernel:test
 
+# 插件开发工具链测试 (JVM)
+./gradlew :plugin-dev:testDebugUnitTest
+
 # 全部编译
 ./gradlew :mengpaw-shell:assembleDebug     # Shell APK
 ./gradlew :mengpaw-browser:assembleDebug   # Browser APK
 ./gradlew :mengpaw-shell:assembleRelease   # Shell Release (R8)
+
+# 插件批量构建 (26 模块 AAR + plugins.json 回写)
+powershell -File scripts/build-plugins.ps1
+
+# plugins.json 校验 (只读)
+powershell -File scripts/validate-plugins.ps1
 
 # 清理
 ./gradlew clean

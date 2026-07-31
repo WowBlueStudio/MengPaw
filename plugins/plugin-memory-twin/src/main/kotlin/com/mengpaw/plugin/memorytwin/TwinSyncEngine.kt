@@ -9,6 +9,7 @@ import android.net.NetworkCapabilities
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.acp.*
 import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.ports.Ports
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -226,7 +227,7 @@ class TwinSyncEngine(
     }
 
     /** Manually add a peer by IP address (for networks where mDNS fails). */
-    fun addManualPeer(address: String, port: Int = 9876, name: String? = null): TwinPeerInfo {
+    fun addManualPeer(address: String, port: Int = Ports.ACP, name: String? = null): TwinPeerInfo {
         val peerId = name ?: "manual-${address.replace(".", "-")}"
         // Clean up old manual entry for this address
         peers.values.removeAll { it.address == address && it.peerId.startsWith("manual-") }
@@ -302,7 +303,7 @@ class TwinSyncEngine(
                 // P0.2 FIX: Try-complete the deferred with timeout result so late
                 // onEntriesReceived doesn't operate a stale deferred (CAS-safe).
                 val timeoutResult = TwinSyncResult(0, "同步超时 (15s)",
-                    "对端未在规定时间内响应。检查: 1) 对端是否在线 2) ACP 端口 9876 是否互通 3) 防火墙是否拦截")
+                    "对端未在规定时间内响应。检查: 1) 对端是否在线 2) ACP 端口 ${Ports.ACP} 是否互通 3) 防火墙是否拦截")
                 deferred.complete(timeoutResult) // complete() returns false if already done — safe
                 timeoutResult
             }
@@ -475,7 +476,7 @@ class TwinSyncEngine(
             peers[peerId] = TwinPeerInfo(
                 peerId = peerId,
                 agentName = card?.deviceName ?: peerId.take(12),
-                address = "", port = 9876,
+                address = "", port = Ports.ACP,
                 lastSeen = System.currentTimeMillis(), online = true,
                 capabilityCard = cardJson
             )
@@ -760,7 +761,7 @@ data class TwinPeerInfo(
     val peerId: String,
     var agentName: String,
     var address: String,
-    var port: Int = 9876,
+    var port: Int = Ports.ACP,
     var lastSeen: Long = System.currentTimeMillis(),
     var lastSyncAt: Long = 0L,
     var lastAckedHash: String? = null,

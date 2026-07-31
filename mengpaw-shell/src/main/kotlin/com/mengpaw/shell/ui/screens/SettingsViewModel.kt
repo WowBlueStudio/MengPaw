@@ -76,7 +76,7 @@ enum class LlmProviderPreset(
             ModelInfo("qwen3.7-max", "Qwen托管"), ModelInfo("gpt-5.4-mini", "OpenAI托管"),
             ModelInfo("kimi-k3", "Kimi托管"), ModelInfo("glm-5.2", "GLM托管"),
             ModelInfo("grok-4.5", "Grok托管"), ModelInfo("(更多模型见API返回)", "提示"))),
-    SELF_HOSTED("Self-Hosted (自建)", "http://192.168.1.100:9877/v1/chat/completions", "local-model", "",
+    SELF_HOSTED("Self-Hosted (自建)", "http://192.168.1.100:${com.mengpaw.kernel.ports.Ports.LLM_SELF}/v1/chat/completions", "local-model", "",
         listOf(ModelInfo("local-model", "Chat"), ModelInfo("qwen2.5:7b", "Chat"), ModelInfo("llama3.1:8b", "Chat"))),
     CUSTOM("Custom", "", "", "", emptyList());
 }

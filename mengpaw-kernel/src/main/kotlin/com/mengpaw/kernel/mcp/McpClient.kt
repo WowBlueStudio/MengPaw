@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.mcp
 
 import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.ports.Ports
 
 import kotlinx.serialization.json.*
 
@@ -38,25 +39,25 @@ object McpClient {
         "qwenpaw" to McpConnectionConfig(
             name = "QwenPaw",
             transport = "http",
-            url = "http://localhost:9877/mcp",
+            url = "http://localhost:${Ports.LLM_SELF}/mcp",
             description = "通义千问 Agent 框架 — 中文 AI 助手"
         ),
         "office-word" to McpConnectionConfig(
             name = "Microsoft Word",
             transport = "http",
-            url = "http://localhost:9878/mcp/word",
+            url = "http://localhost:${Ports.OFFICE_MCP}/mcp/word",
             description = "Word 文档编辑 — 创建/修改/格式化 .docx"
         ),
         "office-excel" to McpConnectionConfig(
             name = "Microsoft Excel",
             transport = "http",
-            url = "http://localhost:9878/mcp/excel",
+            url = "http://localhost:${Ports.OFFICE_MCP}/mcp/excel",
             description = "Excel 表格操作 — 数据读写/公式/图表"
         ),
         "office-ppt" to McpConnectionConfig(
             name = "Microsoft PowerPoint",
             transport = "http",
-            url = "http://localhost:9878/mcp/ppt",
+            url = "http://localhost:${Ports.OFFICE_MCP}/mcp/ppt",
             description = "PPT 演示文稿 — 创建/编辑/排版"
         )
     )

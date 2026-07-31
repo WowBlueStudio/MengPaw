@@ -8,6 +8,7 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import com.mengpaw.kernel.KernelLog
+import com.mengpaw.kernel.ports.Ports
 import kotlinx.coroutines.*
 
 /**
@@ -19,7 +20,7 @@ import kotlinx.coroutines.*
 class FrameworkDiscovery(private val context: Context) {
     companion object {
         const val SERVICE_TYPE = "_mengpaw._tcp"
-        const val SERVICE_PORT = 9876
+        const val SERVICE_PORT = Ports.ACP
 
         @Volatile var instance: FrameworkDiscovery? = null
     }

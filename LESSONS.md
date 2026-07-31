@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-07-31 — v0.20.1 插件开发工具升级 + Agent 端口感知
+
+### 108. Windows PowerShell 5.1 无 BOM UTF-8 脚本含中文会按 GBK 误读
+- 场景：validate-plugins.ps1 含中文 Write-Host/注释，PS 5.1 按系统 ANSI（GBK）解析无 BOM 的 UTF-8 文件，中文字节序列吞掉后续引号/括号，报出指向正则 `[a-z0-9-]` 的诡异解析错误（Missing ] at end of attribute）。
+- 修复：ps1 脚本内容全部改英文（ASCII 安全）。
+- 教训：**给 PS 5.1 写脚本要么纯 ASCII，要么带 UTF-8 BOM**。Write 工具写 UTF-8 无 BOM → 脚本内不要用中文（注释也不要）。
+
+### 109. Kotlin 三引号 raw string 里 `$` 无法转义——占位符不能用 `$` 前缀
+- 场景：CHINESE_PROMPT 里写 `$PORTS_TABLE` 占位符，Kotlin 编译报 "Unresolved reference 'PORTS_TABLE'"；改成 `\$PORTS_TABLE` 后三引号 raw string 不处理转义，`\$` 是字面两字符，replace 匹配不到。
+- 修复：占位符改 `__PORTS_TABLE__`（无 `$`）。
+- 教训：**raw string (""") 中不能出现任何 `$` 序列（含转义），模板占位符用 `__NAME__` 风格**。
+
+### 110. DevPlugin.audit 恒 success——🔴 只在报告文本里
+- 场景：DevPluginChainTest 断言 `audit.success == false` 期望端口冲突失败，但 audit 命令永远返回 ExecutionResult.ok（🔴 项列在输出文本，真正阻断在 share 内部重审）。
+- 修复：断言改为检查 output 含 "🔴" + 端口号。
+- 教训：**审计类命令的语义是"输出报告"而非"执行结果"——先读实现再写断言**。
+
+### 111. 骨架模板要能通过自家审计
+- 场景：DevPlugin create 生成的 SCRIPT 骨架 description 默认为空串（auditScript 检查 `"description": ""` → 🔴）、NATIVE 模板含 File 无 try/catch（auditKotlin → 🔴）。生成的骨架自己过不了审计，"按文档操作能跑通"落空。
+- 修复：骨架默认 description 非空、resolvePath 包 try/catch。
+- 教训：**生成器产出的模板必须通过自己的校验器**——加链路测试锁死。
+
+---
+
 ## 2026-07-31 — v0.20.0 Agent 命令集注册插件 + 设置页 UI 信息一致性
 
 ### 104. Kotlin 注释里出现 `/*` 序列会开嵌套注释

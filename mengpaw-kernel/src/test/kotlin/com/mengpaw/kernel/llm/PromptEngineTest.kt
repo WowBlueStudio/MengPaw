@@ -93,4 +93,25 @@ class PromptEngineTest {
         repeat(10) { assertFalse(engine.detectLoop("agent.memory test")) }
         repeat(10) { assertFalse(engine.detectLoop("self.version")) }
     }
+
+    @Test
+    fun `system prompt contains network ports section with all ports`() {
+        val prompt = engine.buildSystemPrompt()
+        assertTrue("提示词应含网络端口章节", prompt.contains("## 网络端口"))
+        assertTrue("提示词应含本机监听表", prompt.contains("本机监听"))
+        assertTrue("提示词应含外部服务默认端口表", prompt.contains("外部服务默认端口"))
+        com.mengpaw.kernel.ports.Ports.ALL.forEach {
+            assertTrue("提示词缺少端口 ${it.port}", prompt.contains("${it.port}"))
+        }
+        // 占位符必须被替换, 不得泄漏到提示词
+        assertFalse(prompt.contains("__PORTS_TABLE__"))
+    }
+
+    @Test
+    fun `english system prompt contains network ports section`() {
+        val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH)
+        assertTrue(prompt.contains("## Network Ports"))
+        assertTrue(prompt.contains("Locally listened"))
+        assertFalse(prompt.contains("__PORTS_TABLE__"))
+    }
 }

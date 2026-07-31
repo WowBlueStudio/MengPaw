@@ -785,8 +785,8 @@ private suspend fun startAcpForTwin(ctx: android.content.Context, agentName: Str
         val sharedSecret = java.security.MessageDigest.getInstance("SHA-256")
             .digest("twin:$deviceFingerprint:$agentName".toByteArray())
             .joinToString("") { "%02x".format(it) }
-        val server = com.mengpaw.kernel.acp.AcpServer(profile, 9876, sharedSecret)
-        val transport = com.mengpaw.kernel.acp.AcpHttpTransport(server, 9876)
+        val server = com.mengpaw.kernel.acp.AcpServer(profile, com.mengpaw.kernel.ports.Ports.ACP, sharedSecret)
+        val transport = com.mengpaw.kernel.acp.AcpHttpTransport(server, com.mengpaw.kernel.ports.Ports.ACP)
         server.registerTransport(transport)
 
         // 注册 TwinAcpHandler — 处理 CAPABILITY_ANNOUNCE 等孪生消息

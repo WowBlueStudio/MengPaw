@@ -92,6 +92,20 @@ class PluginManager(
             // Cyclic dependency detection
             checkCyclicDeps(id, plugin.metadata.dependencies)
 
+            // Port conflict detection — 插件声明端口与已安装/激活插件冲突时拒绝安装
+            val declaredPorts = plugin.metadata.ports.filter { it in 1..65535 }
+            if (declaredPorts.isNotEmpty()) {
+                val conflict = plugins.entries.firstOrNull { (_, other) ->
+                    other.metadata.ports.filter { it in 1..65535 }.any { it in declaredPorts }
+                }
+                if (conflict != null) {
+                    val clash = declaredPorts.first { it in conflict.value.metadata.ports }
+                    return Result.failure(IllegalStateException(
+                        "Plugin '$id' declares port $clash, already occupied by '${conflict.key}'"
+                    ))
+                }
+            }
+
             plugins[id] = plugin
             statuses[id] = PluginStatus.INSTALLED
         }

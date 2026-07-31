@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.acp
 
 import com.mengpaw.kernel.agent.AgentProfile
+import com.mengpaw.kernel.ports.Ports
 import com.mengpaw.kernel.security.PromptFirewall
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -24,7 +25,7 @@ private fun java.io.File.atomicWriteText(text: String) {
 
 class AcpServer(
     private val profile: AgentProfile,
-    private val port: Int = 9876,
+    private val port: Int = Ports.ACP,
     /** Shared secret for peer authentication. Must be set to enable secure pairing.
      *  Use AcpCrypto.deriveKey() to generate this from paired device fingerprints. */
     private val sharedSecret: String,

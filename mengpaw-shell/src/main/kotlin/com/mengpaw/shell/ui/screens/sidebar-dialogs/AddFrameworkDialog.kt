@@ -53,7 +53,7 @@ fun AddFrameworkDialog(onDismiss: () -> Unit) {
         "custom" to "自定义协议"
     )
     val typeLabels = mapOf(
-        "mengpaw" to "MengPaw · ACP · 端口 9876 · mDNS 自动发现 · 双向实时",
+        "mengpaw" to "MengPaw · ACP · 端口 ${com.mengpaw.kernel.ports.Ports.ACP} · mDNS 自动发现 · 双向实时",
         "claude-code" to "Claude Code · MCP · JSON-RPC · 手动配置 · 单向实时",
         "trea-ide" to "Trea IDE · MCP · JSON-RPC · 手动配置 · 单向实时",
         "trea-work" to "Trea Work · MCP · JSON-RPC · 云端执行 · 单向实时",
@@ -61,13 +61,13 @@ fun AddFrameworkDialog(onDismiss: () -> Unit) {
         "opencode" to "OpenCode · MCP · JSON-RPC · 手动配置 · 单向实时",
         "reasonix" to "Reasonix · MCP · JSON-RPC · MCP 插件 · 单向实时",
         "workbuddy" to "Workbuddy · MCP · JSON-RPC · MCP 连接器 · 单向实时",
-        "openclaw" to "OpenClaw · WebSocket · 端口 18789 · 手动配置 · 单向实时",
-        "qclaw" to "Qclaw · WebSocket · 端口 18789 · OpenClaw 衍生 · 单向实时",
+        "openclaw" to "OpenClaw · WebSocket · 端口 ${com.mengpaw.kernel.ports.Ports.OPENCLAW_WS} · 手动配置 · 单向实时",
+        "qclaw" to "Qclaw · WebSocket · 端口 ${com.mengpaw.kernel.ports.Ports.OPENCLAW_WS} · OpenClaw 衍生 · 单向实时",
         "hermes" to "Hermes · WebSocket · Gateway 模式 · 单向实时",
         "codex" to "Codex · Unix Socket · 本地进程 · 单向实时",
         "qwenpaw" to "QwenPaw · REST · FastAPI HTTP · 手动配置 · 单向轮询",
         "coze" to "Coze · REST · 云端 API · 单向轮询",
-        "collab-cli" to "collab-cli · FILE · 文件系统共享 · UDP 广播 :9528 · 双向 · MIT 开源",
+        "collab-cli" to "collab-cli · FILE · 文件系统共享 · UDP 广播 :${com.mengpaw.kernel.ports.Ports.COLLAB_UDP} · 双向 · MIT 开源",
         "kimi-desktop" to "Kimi Desktop · 协议待验证 · Electron 桌面应用",
         "custom" to "自定义框架 · 手动配置协议和端口"
     )

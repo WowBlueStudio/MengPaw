@@ -213,7 +213,7 @@ fun createWebView(
                         "}})()", null)
                 }
                 // ComfyUI theme following: inject MengPaw theme colors
-                if (u.contains(":8188") || u.contains("comfyui", ignoreCase = true) || u.contains("comfy", ignoreCase = true)) {
+                if (u.contains(":${com.mengpaw.kernel.ports.Ports.COMFYUI}") || u.contains("comfyui", ignoreCase = true) || u.contains("comfy", ignoreCase = true)) {
                     val theme = BrowserThemeConfig.load(ctx)
                     val primary = "#" + java.lang.Long.toHexString(theme.primary).takeLast(6).uppercase()
                     evaluateJavascript("""

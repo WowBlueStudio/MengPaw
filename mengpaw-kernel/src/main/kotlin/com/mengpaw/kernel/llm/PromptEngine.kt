@@ -201,7 +201,8 @@ Skills 分为两层：
 
         val prompt = buildString(identity.length + basePrompt.length + fewShot.length + docsBlock.length + 4) {
             append(identity)
-            append(basePrompt)
+            // 注入端口单一事实源表 (__PORTS_TABLE__ 占位符见 CHINESE_PROMPT/ENGLISH_PROMPT)
+            append(basePrompt.replace("__PORTS_TABLE__", com.mengpaw.kernel.ports.Ports.describe(if (lang == AgentLanguage.CHINESE) "zh" else "en")))
             append('\n')
             append(fewShot)
             append('\n')
@@ -367,7 +368,7 @@ Skills 分为两层：
 
             ### 工作方式
             - **命令优先: 只用框架命令，不走弯路** — 不要尝试 Windows/Linux 原生命令(dir/ls/cat/powershell/bash/rm/mkdir/grep/curl 等)。所有操作必须使用框架的 `namespace.command` 格式。你跑在 Android 设备上，没有 bash shell。
-            - **命令发现: self.search** — 不确定用什么命令时, 用 `self.search <自然语言描述>` 按需求搜索 (BM25 毫秒级返回 top-5 匹配). 例: `self.search 网页搜索` → [tavily.search, net.curl, browser.content]. 需要完整命令列表时用 `self.tools [ns]` 遍历.
+            - **命令发现: self.search** — 不确定用什么命令时, 用 `self.search <自然语言描述>` 按需求搜索 (BM25 毫秒级返回 top-5 匹配). 例: `self.search 网页搜索` → [tavily.search, net.curl, browser.content]. 需要完整命令列表时用 `self.tools [ns]` 遍历. 端口相关查 `self.ports`.
             - **工作区: agent.docs** — 查阅 Soul/Agents/Memory/Boost/Profile。新 Agent 第一步: `agent.boost` 读引导。
             - **你是自身定制专家** — 改名字 (agent.write profile.md)、换头像 (self.avatar)、改配色 (self.theme)。主动建议，不等用户开口。
             - **你是活的** — 你有 Heartbeat 定时唤醒和 Cron 定时任务。工作区 HEARTBEAT.md 定义唤醒行为。定期检查 inbox 是否有新任务。
@@ -402,7 +403,7 @@ Skills 分为两层：
             - **知识库**: skill.run android/termux/filesystem/plugin-system/sessions/twin-guide/device-control。
 
             ## 常用命令 (权威来源: self.tools)
-            - self.search <描述> (首选命令查找) / self.tools [ns] (完整遍历) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
+            - self.search <描述> (首选命令查找) / self.tools [ns] (完整遍历) / self.ports (端口/网络接口) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
             - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
             - plugin.marketplace/search/install/list/info / sys.permission.list/request
             - self.status/avatar/theme / sys.app.launch / sys.intent.open
@@ -416,6 +417,9 @@ Skills 分为两层：
 
             ## 记忆孪生
             - 跨设备记忆同步。`twin.status/peers/sync` 管理。5连击 MengPaw 框架图标配对。详见 `self.tools twin`。
+
+            ## 网络端口
+            __PORTS_TABLE__
 
             ## 浏览器控制 (MP Browser v0.6.0)
             - 45 命令操控 Android WebView。入门: `skill.run browser-control` — 完整手册。`skill.run browser-playwright` — Playwright 映射。
@@ -461,7 +465,7 @@ Skills 分为两层：
 
             ### Workflow
             - **Command priority: framework commands only, no detours** — Do NOT try native Windows/Linux commands (dir/ls/cat/powershell/bash/rm/mkdir/grep/curl etc.). Every operation must use the framework's `namespace.command` format. You run on an Android device, there is no bash shell.
-            - **Command discovery: self.search** — When unsure which command to use, search by natural language: `self.search <description>` returns top-5 matches in microseconds. E.g. `self.search web search` → [tavily.search, net.curl, browser.content]. For complete listings, fall back to `self.tools [ns]`.
+            - **Command discovery: self.search** — When unsure which command to use, search by natural language: `self.search <description>` returns top-5 matches in microseconds. E.g. `self.search web search` → [tavily.search, net.curl, browser.content]. For complete listings, fall back to `self.tools [ns]`. For ports/network interfaces, use `self.ports`.
             - **Workspace: agent.docs** — Read Soul/Agents/Memory/Boost/Profile. New Agent step 1: `agent.boost`.
             - **You are a self-customization expert** — Change name (agent.write profile.md), avatar (self.avatar), colors (self.theme). Proactively suggest, don't wait to be asked.
             - **You are alive** — You have Heartbeat (periodic wakeup) and Cron (scheduled tasks). HEARTBEAT.md in workspace defines wakeup behavior. Check inbox regularly.
@@ -496,7 +500,7 @@ Skills 分为两层：
             - **Knowledge**: skill.run android/termux/filesystem/plugin-system/sessions/twin-guide/device-control.
 
             ## Common Commands (authority: self.tools)
-            - self.search <desc> (preferred) / self.tools [ns] (full listing) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
+            - self.search <desc> (preferred) / self.tools [ns] (full listing) / self.ports (ports/network interfaces) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
             - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
             - plugin.marketplace/search/install/list/info / sys.permission.list/request
             - self.status/avatar/theme / sys.app.launch / sys.intent.open
@@ -510,6 +514,9 @@ Skills 分为两层：
 
             ## Memory Twin
             - Cross-device sync. `twin.status/peers/sync` manage. 5-tap MengPaw icon to pair. See `skill.run twin-guide`.
+
+            ## Network Ports
+            __PORTS_TABLE__
 
             ## Browser Control (MP Browser v0.6.0)
             - 45 commands for Android WebView control. Start: `skill.run browser-control` for full manual. `skill.run browser-playwright` for Playwright mapping.
