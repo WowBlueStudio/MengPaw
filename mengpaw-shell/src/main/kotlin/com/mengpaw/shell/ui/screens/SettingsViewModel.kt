@@ -132,7 +132,7 @@ data class SettingsState(
     val commandTimeoutSec: Int = 60,
     val timezone: String = java.util.TimeZone.getDefault().id,
     val contextStrategy: String = "default",
-    val memoryBackend: String = "memory-plugin",
+    val memoryBackend: String = "builtin",
     val themeMode: ThemeMode = ThemeMode.LIGHT,
     val showApiKey: Boolean = false,
     val backgroundMode: BackgroundMode = BackgroundMode.NOTIFICATION,

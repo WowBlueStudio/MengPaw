@@ -90,13 +90,15 @@ object AgentDocs {
      *   2. Agent self-judges as important/reusable
      *   3. Dream mode reorganization output
      */
-    fun appendLongTermMemory(agentName: String, entry: String) {
+    fun appendLongTermMemory(agentName: String, entry: String) =
+        appendLongTermMemory(agentName, entry, defaultMemoryTimestamp())
+
+    /** 指定标题的长期记忆写入 (供 agent.memory.write 使用, 标题=ID)。 */
+    fun appendLongTermMemory(agentName: String, entry: String, title: String) {
         try {
             val file = File(DataPaths.longTermMemoryFile(agentName))
             file.parentFile?.mkdirs()
-            val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",
-                java.util.Locale.getDefault()).format(java.util.Date())
-            val line = "\n## $timestamp\n\n$entry\n"
+            val line = "\n## $title\n\n$entry\n"
             val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "readExisting: ${e.message}"); "" } else ""
             val tmp = File(file.parentFile, "memory.tmp")
             tmp.writeText(existing + line)
@@ -106,6 +108,9 @@ object AgentDocs {
             onDocChanged?.invoke(agentName, file.absolutePath)
         } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup2: ${e.message}") }
     }
+
+    private fun defaultMemoryTimestamp(): String =
+        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
 
     /** Search long-term memory by keywords. */
     fun searchLongTermMemory(agentName: String, keywords: List<String>): String {
@@ -349,6 +354,7 @@ object AgentDocs {
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, "${file.name}.tmp")
         tmp.writeText(content)
+        file.delete() // Windows: renameTo fails if target exists (同 appendLongTermMemory 的处理)
         tmp.renameTo(file)
         if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "writeAtomic.cleanup: ${e.message}") } }
     }

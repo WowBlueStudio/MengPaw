@@ -42,7 +42,9 @@ object PromptFirewall {
         "clipboard.copy", "clipboard.paste", "clipboard.clear",
         "notification.send", "notification.dismiss",
         "self.config", "self.theme", "self.avatar",
-        "memory.write", "memory.rm",
+        "agent.memory.keep", "agent.memory.write", "agent.memory.rm", "agent.memory.edit",
+        "agent.memory.mid.delete", "agent.memory.mid.rm", "agent.memory.mid.edit",
+        "agent.memory.project.save", "agent.memory.project.delete", "agent.memory.project.rm", "agent.memory.project.edit",
         "skill.enable", "skill.disable"
     )
 
@@ -54,7 +56,8 @@ object PromptFirewall {
         "render.generate",           // API生图 (不写本地)
         "fs.cat", "fs.ls", "fs.stat",// 只读文件
         "self.status", "self.stats", "self.version", "sys.*",  // 只读系统信息
-        "memory.ls", "memory.read", "memory.search",  // 只读记忆
+        "agent.memory", "agent.memory.read", "agent.memory.search", "agent.memory.stats",
+        "agent.memory.mid", "agent.memory.project",  // 只读记忆
         "skill.ls", "skill.run",     // 只读/运行技能
         "plugin.list", "plugin.info" // 只读插件信息
     )
@@ -168,7 +171,7 @@ object PromptFirewall {
 
 ### ✅ Guest 可执行
 - 对话记录 (agent.memory.record)
-- 读取查询 (fs.cat/ls, self.status/stats, memory.ls/read, sys.*)
+- 读取查询 (fs.cat/ls, self.status/stats, agent.memory/read/search/stats, sys.*)
 - 简单生成 (render.generate — API 调用，不写本地文件)
 - 团队共享记忆 (hermes.memo)
 

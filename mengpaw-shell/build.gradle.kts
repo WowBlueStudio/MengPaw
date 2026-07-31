@@ -120,7 +120,6 @@ dependencies {
 
     // Bundled plugins (pre-installed in base APK)
     implementation(project(":plugin-framework"))
-    implementation(project(":plugin-memory"))
     implementation(project(":plugin-skill"))
     implementation(project(":plugin-dev"))
     implementation(project(":plugin-fs"))

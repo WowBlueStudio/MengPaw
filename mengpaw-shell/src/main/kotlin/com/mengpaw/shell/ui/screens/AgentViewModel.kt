@@ -806,7 +806,7 @@ class AgentViewModel : ViewModel() {
         val knownPlugins = mapOf(
             "fs" to PluginSuggestion("fs", "fs-plugin", "File System", "文件系统操作：cat, ls, write, rm 等", "fs.${match.value.substringAfter("$namespace.").take(20)}"),
             "net" to PluginSuggestion("net", "net-plugin", "Network", "HTTP 网络请求：curl, get, post", "net.*"),
-            "memory" to PluginSuggestion("memory", "memory-plugin", "Memory System", "Markdown 持久化记忆系统", "memory.*"),
+            "memory" to PluginSuggestion("memory", "agent.memory", "Memory System", "三轨记忆 (内核): keep/record/read/search/stats/write", "agent.memory.*"),
             "skill" to PluginSuggestion("skill", "skill-plugin", "Skill System", "可复用的 Agent 剧本系统", "skill.*"),
             "ui" to PluginSuggestion("ui", "ui-plugin", "UI Automation", "界面操控：click, swipe, input 等", "ui.*"),
             "proc" to PluginSuggestion("proc", "proc-plugin", "Process Management", "进程管理：ps, kill, exec", "proc.*"),

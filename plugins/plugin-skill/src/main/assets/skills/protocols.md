@@ -158,7 +158,7 @@ MengPaw ── 读写共享目录 ──→ 其他 Agent
 
 当 Agent 需要与其他框架通信时：
 
-1. **先查协议**: `agent.memory read protocols` 或 `skill.run protocols`
+1. **先查协议**: `skill.run protocols`
 2. **确认对方类型**: 侧边栏通讯录中查看协议标签（ACP/MCP/WS/REST/FILE/?）
 3. **匹配能力**:
    - 需要双向对话 → ACP / FILE

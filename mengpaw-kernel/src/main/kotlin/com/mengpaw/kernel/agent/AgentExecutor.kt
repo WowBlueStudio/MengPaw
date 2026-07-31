@@ -23,6 +23,10 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         "memory" to ::memory,
         "memory.record" to ::memoryRecord,
         "memory.keep" to ::memoryKeep,
+        "memory.read" to ::memoryRead,
+        "memory.search" to ::memorySearch,
+        "memory.stats" to ::memoryStats,
+        "memory.write" to ::memoryWrite,
         "memory.mid" to ::memoryMid,
         "memory.project" to ::memoryProject,
         "memory.project.save" to ::memoryProjectSave,
@@ -104,6 +108,104 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             appendLine()
             appendLine("当前长期记忆总数: ${AgentDocs.readLongTermMemory(agentName(ctx)).lines().count { it.startsWith("## ") }} 条")
         })
+    }
+
+    /** Read a single memory entry by ID across all three tracks (long/mid/project). */
+    private suspend fun memoryRead(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val id = args.joinToString(" ").trim()
+        if (id.isEmpty()) return ExecutionResult.fail(buildString {
+            appendLine("用法: agent.memory.read <id>")
+            appendLine("按 ID 读取一条记忆 (跨长期/中期/项目三轨)。")
+            appendLine("条目 ID 是时间戳, 先 agent.memory / agent.memory.mid / agent.memory.project 查看。")
+        })
+        val agent = agentName(ctx)
+        val tracks = buildList {
+            add(DataPaths.longTermMemoryFile(agent) to "长期记忆")
+            AgentDocs.listMidTermDates(agent).forEach { add(DataPaths.midTermMemoryFile(agent, it) to "中期记忆 · $it") }
+            DataPaths.projectMemoryFiles(agent).forEach { add(DataPaths.projectMemoryFile(agent, it) to "项目记忆 · $it") }
+        }
+        for ((path, label) in tracks) {
+            val count = AgentDocs.countMatchingEntries(path, id)
+            if (count > 1) return ExecutionResult.fail(
+                "匹配到 $count 条, ID 不够精确。请用完整时间戳 (含时分), 如 \"2026-07-25 14:30\"。")
+            if (count == 1) {
+                val text = java.io.File(path).readText()
+                val entry = text.split(Regex("(?=## )")).filter { it.trimStart().startsWith("## $id") }.first()
+                return ExecutionResult.ok("## $label\n\n${entry.trim()}")
+            }
+        }
+        return ExecutionResult.fail(
+            "未找到条目: $id\n提示: 条目 ID 是时间戳 (如 \"2026-07-25 14:30\"), 用 agent.memory / agent.memory.mid / agent.memory.project 查看。")
+    }
+
+    /** Search memory across tracks by keywords. Usage: agent.memory.search <query> [--track long|mid|project] */
+    private suspend fun memorySearch(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val trackIdx = args.indexOf("--track")
+        val query = (if (trackIdx >= 0) args.take(trackIdx) else args).joinToString(" ").trim()
+        if (query.isEmpty()) return ExecutionResult.fail(
+            "用法: agent.memory.search <关键词> [--track long|mid|project]\n默认跨三轨搜索 (长期/中期/项目记忆)。")
+        val keywords = query.split(Regex("\\s+")).filter { it.isNotBlank() }
+        val track = if (trackIdx >= 0 && trackIdx + 1 < args.size) args[trackIdx + 1] else "all"
+        val agent = agentName(ctx)
+        return when (track) {
+            "long" -> ExecutionResult.ok(AgentDocs.searchLongTermMemory(agent, keywords).ifBlank { "(长期记忆无匹配)" })
+            "mid" -> ExecutionResult.ok(AgentDocs.searchMidTermMemory(agent, keywords).ifBlank { "(中期记忆无匹配)" })
+            "project" -> ExecutionResult.ok(AgentDocs.searchProjectMemory(agent, keywords).ifBlank { "(项目记忆无匹配)" })
+            else -> {
+                val sections = listOf(
+                    AgentDocs.searchLongTermMemory(agent, keywords),
+                    AgentDocs.searchMidTermMemory(agent, keywords),
+                    AgentDocs.searchProjectMemory(agent, keywords)
+                ).filter { it.isNotBlank() }
+                if (sections.isEmpty()) ExecutionResult.ok("(三轨记忆均无匹配: $query)")
+                else ExecutionResult.ok(sections.joinToString("\n\n") { it.trim() })
+            }
+        }
+    }
+
+    /** Memory statistics across all three tracks. */
+    private suspend fun memoryStats(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val agent = agentName(ctx)
+        val longCount = AgentDocs.readLongTermMemory(agent).lines().count { it.startsWith("## ") }
+        val mid = AgentDocs.midTermStats(agent)
+        val midCount = mid.values.sum()
+        val projects = DataPaths.projectMemoryFiles(agent)
+        return ExecutionResult.ok(buildString {
+            appendLine("## 记忆统计")
+            appendLine("- 长期记忆: $longCount 条 (注入系统提示词)")
+            appendLine("- 中期记忆: $midCount 条 (${mid.size} 个日期分片)")
+            mid.entries.sortedByDescending { it.key }.take(5).forEach { (d, c) ->
+                appendLine("    $d: $c 条")
+            }
+            appendLine("- 项目记忆: ${projects.size} 个项目")
+            projects.take(10).forEach { appendLine("    $it") }
+        })
+    }
+
+    /** Write a long-term memory entry with a specified ID (updates if exists). */
+    private suspend fun memoryWrite(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.size < 2) return ExecutionResult.fail(buildString {
+            appendLine("用法: agent.memory.write <id> <内容>")
+            appendLine("按指定 ID 写一条长期记忆 (已存在则更新)。ID 建议用时间戳或短标题。")
+        })
+        val id = args[0].trim()
+        val content = args.drop(1).joinToString(" ").trim()
+        if (content.isEmpty()) return ExecutionResult.fail("内容不能为空。用法: agent.memory.write <id> <内容>")
+        val agent = agentName(ctx)
+        val ltf = DataPaths.longTermMemoryFile(agent)
+        val count = AgentDocs.countMatchingEntries(ltf, id)
+        return when {
+            count > 1 -> ExecutionResult.fail("匹配到 $count 条, ID 不够精确, 无法更新。请用完整时间戳。")
+            count == 1 -> {
+                if (AgentDocs.editLongTermEntry(agent, id, content) == 1)
+                    ExecutionResult.ok("已更新长期记忆条目: $id ✅")
+                else ExecutionResult.fail("更新失败 (写入错误)")
+            }
+            else -> {
+                AgentDocs.appendLongTermMemory(agent, content, id)
+                ExecutionResult.ok("已写入长期记忆: $id ✅\n此内容将在下次对话中出现在系统提示词中")
+            }
+        }
     }
 
     /** Show mid-term memory — dated files, not in prompt. */

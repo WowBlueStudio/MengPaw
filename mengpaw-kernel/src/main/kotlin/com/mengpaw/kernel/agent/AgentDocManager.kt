@@ -335,7 +335,6 @@ class AgentDocManager(
             appendLine("| framework-plugin | framework.* | 外部框架接入/发现 |")
             appendLine("| fs-plugin | fs.* | 文件系统 |")
             appendLine("| net-plugin | net.* | 网络请求 |")
-            appendLine("| memory-plugin | memory.* | 记忆系统 |")
             appendLine("| memory-twin-plugin | twin.* | 记忆孪生/跨设备同步 |")
             appendLine("| skill-plugin | skill.* | 技能系统 |")
             appendLine("| clipboard-plugin | clipboard.* | 剪贴板 |")
@@ -550,6 +549,10 @@ class AgentDocManager(
             Triple("docs", "agent.docs", "列出所有文档"),
             Triple("memory", "agent.memory", "查看记忆索引"),
             Triple("memory.record", "agent.memory.record <content>", "手动记录"),
+            Triple("memory.read", "agent.memory.read <id>", "按 ID 读一条记忆 (三轨)"),
+            Triple("memory.search", "agent.memory.search <keywords>", "跨轨搜索记忆"),
+            Triple("memory.stats", "agent.memory.stats", "记忆统计"),
+            Triple("memory.write", "agent.memory.write <id> <content>", "按 ID 写长期记忆"),
             Triple("cli", "agent.cli", "查看 CLI 命令参考"),
             Triple("profile", "agent.profile", "查看 Agent 档案"),
             Triple("soul", "agent.soul", "查看 Agent 灵魂设定"),
@@ -560,7 +563,7 @@ class AgentDocManager(
         val BROWSER_TOOLS_MD = """
 # MP浏览器 插件开发能力 (Browser Plugin API) v0.6.0
 
-> Agent 可以通过 `memory.read browser-tools` 查询浏览器插件开发接口。
+> Agent 可以通过 `agent.cli` 查看此参考 (BROWSER TOOLS 段), 或 `skill.run browser-control` 加载完整手册。
 > 完整使用手册请加载 Skills: `skill.run browser-control`
 
 ## 核心命令 (v0.6.0 共 45 命令)

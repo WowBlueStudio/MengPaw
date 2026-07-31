@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.20.0 | **更新**: 2026-07-31 | **架构**: 微内核(54文件) + AgentRuntime + 26插件模块(13捆绑随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1
+> **版本**: 0.20.0 | **更新**: 2026-07-31 | **架构**: 微内核(54文件) + AgentRuntime + 25插件模块(12捆绑随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1
 
 ---
 
@@ -78,7 +78,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | 命名空间 | 源文件 | 命令数 | 职责 |
 |---------|--------|--------|------|
 | `self` | SelfExecutor.kt | 16 | Agent 进化 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/ports/search/search.stats/time/notify.message/notify.banner) |
-| `agent` | AgentExecutor.kt | 35 | 文档(6) + 记忆三轨(14) + 其他(5) + 会话(4) + 工作区文件(6) |
+| `agent` | AgentExecutor.kt | 39 | 文档(6) + 记忆三轨(18) + 其他(5) + 会话(4) + 工作区文件(6) |
 | `plugin` | PluginExecutor + DevPlugin | 12 + 5 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade/auto/verify + create/audit/share/examples/keywords) |
 `framework` | FrameworkPlugin | 6 | 框架发现 (discover/peers/trust/untrust/info/ping) [↔ 同捆插件 plugin-framework] |
 
@@ -91,16 +91,16 @@ mengpaw-shell
   ├── mengpaw-kernel (微内核)
   ├── mengpaw-core (Android 适配)
   ├── mengpaw-design-system (主题)
-  └── 12 捆绑插件: memory / skill / framework / dev / fs / net / clipboard /
+  └── 11 捆绑插件: skill / framework / dev / fs / net / clipboard /
       notification / memory-twin / root / hermes(tribe) / agent-tools
-      (self 进化为内核内置命名空间, 非插件)
+      (self 与 memory 已融入内核, 非插件)
 
 mengpaw-browser
   ├── mengpaw-kernel
   ├── mengpaw-core
   └── mengpaw-design-system
 
-plugins/ (26 模块)
+plugins/ (25 模块)
   └── mengpaw-kernel  ← 所有插件只依赖微内核（同级）
 ```
 
@@ -243,7 +243,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ### 3.5 插件模块（26 个，plugins/ 目录，按 settings.gradle.kts 为准）
 
-> 插件数统一口径：**26 模块**（settings.gradle.kts:29-54）| **13 捆绑**（mengpaw-shell 打包）| **plugins.json 28 条目**（12 builtin + 14 remote + 2 embedded）
+> 插件数统一口径：**25 模块**（settings.gradle.kts:29-53）| **12 捆绑**（mengpaw-shell 打包）| **plugins.json 26 条目**（11 builtin + 13 remote + 2 embedded）
 
 #### 基础功能 (9)
 
@@ -251,7 +251,6 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 |------|---------|------|:--:|
 | plugin-fs | fs | cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob (10) | ⭐ |
 | plugin-net | net | curl, get, post (3) | ⭐ |
-| plugin-memory | memory | ls, read, write, rm, search, stats (6) | ⭐ |
 | plugin-skill | skill | ls, run, enable, disable (4) | ⭐ |
 | plugin-clipboard | clipboard | copy, paste, clear (3) | ⭐ |
 | plugin-notification | notification | send, list, dismiss (3) | ⭐ |
@@ -315,7 +314,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 |------|---------|------|:--:|
 | plugin-memory-twin | twin | peer.add, start, sync, status, capability (24 条) | ⭐ |
 
-> ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载（13 个：framework/fs/net/memory/skill/clipboard/notification/self/dev/root/hermes(tribe)/memory-twin/agent-tools）
+> ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载（11 个：framework/fs/net/skill/clipboard/notification/dev/root/hermes(tribe)/memory-twin/agent-tools；self 与 memory 已融入内核 agent.* 命名空间）
 >
 > plugin-hermes 模块实际实现为 `TribePlugin`（id=tribe-plugin，注册 tribe.* 22 条 + hermes.* 兼容命令），plugins.json 中对应 `tribe-plugin` 条目。
 
@@ -504,9 +503,9 @@ Agent CLI → SelfExecutor.notifyMessage/notifyBanner
 
 ### 4.6 被动索引系统
 
-Agent 通过 memory 命令按需加载文档：
-- `memory read cli-reference` — CLI 完整参考
-- `memory read tool-index` — 命令快速索引
+Agent 通过内核命令按需加载文档：
+- `agent.cli` — CLI 完整参考 (含 browser-tools 段)
+- `agent.docs` — 列出所有 Agent 文档
 - `skill.ls` + `skill.run <name>` — 先索引再加载具体 Skill
 
 ### 4.7 MCP 协议：通用设备语言
@@ -584,7 +583,7 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 #### agent — 文档 + 内存 + 工作区 (27+)
 **文档 (3)**：`docs` | `cli` | `profile` | `soul` | `boost` | `boost.delete`
 
-**记忆三轨 (13)**：`memory` (看长期) | `memory.keep <内容>` (写长期) | `memory.rm <时间戳>` | `memory.edit <时间戳> <内容>` | `memory.mid [日期]` (看中期) | `memory.record <内容>` (写中期) | `memory.mid.delete <日期>` | `memory.mid.rm <日期> <时间戳>` | `memory.mid.edit <日期> <时间戳> <内容>` | `memory.project [名称]` (看项目) | `memory.project.save <名称> <内容>` | `memory.project.rm <名称> <时间戳>` | `memory.project.edit <名称> <时间戳> <内容>` | `memory.project.delete <名称>`
+**记忆三轨 (18)**：`memory` (看长期) | `memory.keep <内容>` (写长期) | `memory.write <id> <内容>` (指定 ID 写/更新) | `memory.read <id>` (按 ID 读单条) | `memory.search <关键词> [--track long|mid|project]` (跨轨搜索) | `memory.stats` (统计) | `memory.rm <时间戳>` | `memory.edit <时间戳> <内容>` | `memory.mid [日期]` (看中期) | `memory.record <内容>` (写中期) | `memory.mid.delete <日期>` | `memory.mid.rm <日期> <时间戳>` | `memory.mid.edit <日期> <时间戳> <内容>` | `memory.project [名称]` (看项目) | `memory.project.save <名称> <内容>` | `memory.project.rm <名称> <时间戳>` | `memory.project.edit <名称> <时间戳> <内容>` | `memory.project.delete <名称>`
 
 **其他 (5+)**：`audit` | `browser-tools` | `dream` | `cleanup` | `storage`
 
@@ -639,9 +638,6 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 
 #### net — 网络 (3)
 `curl <url>` | `get <url>` | `post <url> <body>`
-
-#### memory — 记忆 (6)
-`ls` | `read <id>` | `write <id> <content>` | `rm <id>` | `search <query>` | `stats`
 
 #### skill — 技能 (7)
 `ls` | `run <name>` | `enable <name>` | `disable <name>` | `info <name>` | `search <query>` | `create <name> <content>`

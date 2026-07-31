@@ -374,7 +374,6 @@ class PluginViewModel : ViewModel() {
         private val BUILTIN_CLASSES = mapOf(
             "fs-plugin" to "com.mengpaw.plugin.fs.FsPlugin",
             "net-plugin" to "com.mengpaw.plugin.net.NetPlugin",
-            "memory-plugin" to "com.mengpaw.plugin.memory.MemoryPlugin",
             "framework-plugin" to "com.mengpaw.plugin.framework.FrameworkPlugin",
             "skill-plugin" to "com.mengpaw.plugin.skill.SkillPlugin",
             "clipboard-plugin" to "com.mengpaw.plugin.clipboard.ClipboardPlugin",

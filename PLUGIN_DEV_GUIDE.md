@@ -155,7 +155,7 @@ class MyPlugin : Plugin {
 | 命名空间 | 来源 | 状态 |
 |---------|------|--------|
 | `self`, `plugin`, `agent`, `sys` | 内核内置 | ✅ 始终可用 |
-| `framework`, `fs`, `net`, `memory`, `skill`, `self`, `clipboard`, `notification`, `dev`, `root`, `twin`, `tools` | 内置插件（随 APK 预装） | ✅ 已占用 |
+| `framework`, `fs`, `net`, `skill`, `clipboard`, `notification`, `dev`, `root`, `twin`, `tools` | 内置插件（随 APK 预装） | ✅ 已占用 |
 | `browser`, `tavily`, `tribe`(hermes 兼容), `comfy`, `render`, `translate`, `workflow`, `incubator`, `error-report`, `update` | 远程插件（按需安装） | ✅ 已占用 |
 | `agent-mission`, `agent-loop` | 嵌入插件（UI 绑定） | ✅ 已占用 |
 

@@ -85,7 +85,7 @@ class SecurityPolicyTest {
     @Test
     fun `normal commands pass for any namespace`() {
         assertTrue(policy.isAllowed("ui.click 100 200"))
-        assertTrue(policy.isAllowed("memory.ls"))
+        assertTrue(policy.isAllowed("agent.memory.search 记忆"))
         assertTrue(policy.isAllowed("skill.run test"))
         assertTrue(policy.isAllowed("net.curl https://example.com"))
     }

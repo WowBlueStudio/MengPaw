@@ -29,7 +29,6 @@ import com.mengpaw.plugin.clipboard.ClipboardPlugin
 import com.mengpaw.plugin.dev.DevPlugin
 import com.mengpaw.plugin.framework.FrameworkPlugin
 import com.mengpaw.plugin.fs.FsPlugin
-import com.mengpaw.plugin.memory.MemoryPlugin
 import com.mengpaw.plugin.memorytwin.MemoryTwinPlugin
 import com.mengpaw.plugin.net.NetPlugin
 import com.mengpaw.plugin.notification.NotificationPlugin
@@ -42,11 +41,11 @@ import com.mengpaw.shell.ui.screens.*
 /**
  * Plugin IDs compiled into the shell APK (显示为"内置"分类).
  * 必须与 mengpaw-shell/build.gradle.kts 中 implementation(project(":plugin-*")) 对齐:
- * framework / memory / skill / dev / fs / net / clipboard / notification /
- * memory-twin / root / hermes(Tribe).
+ * framework / skill / dev / fs / net / clipboard / notification /
+ * memory-twin / root / hermes(Tribe). (memory 已融入内核 agent.memory.*)
  */
 private val BUILTIN_PLUGIN_IDS = setOf(
-    "framework-plugin", "memory-plugin", "skill-plugin", "dev-plugin",
+    "framework-plugin", "skill-plugin", "dev-plugin",
     "fs-plugin", "net-plugin", "clipboard-plugin", "notification-plugin",
     "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin"
 )
@@ -58,14 +57,13 @@ private val BUILTIN_PLUGIN_IDS = setOf(
  * 与系统级能力(root)不标.
  */
 private val WOWBLUE_PLUGIN_IDS = setOf(
-    "memory-plugin", "memory-twin-plugin", "skill-plugin",
+    "memory-twin-plugin", "skill-plugin",
     "framework-plugin", "dev-plugin", "tribe-plugin", "tools-plugin"
 )
 
 /** Builtin plugin display info (名称/描述), 用于内置但未安装时在全局插件列表兜底显示. */
 private val BUILTIN_PLUGIN_INFO = mapOf(
     "framework-plugin" to ("框架发现" to "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理"),
-    "memory-plugin" to ("记忆系统" to "Markdown 持久化记忆系统，含 LRU 缓存和被动索引"),
     "skill-plugin" to ("技能系统" to "可复用的 Agent 剧本系统（YAML+Markdown），含默认 Skill"),
     "dev-plugin" to ("插件开发" to "插件开发工具链 — create/audit/share/examples"),
     "fs-plugin" to ("文件系统" to "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob"),
@@ -220,7 +218,6 @@ class MainActivity : ComponentActivity() {
         // ── PluginViewModel 类注册 ──
         PluginViewModel.registerPluginClass("fs-plugin", "com.mengpaw.plugin.fs.FsPlugin")
         PluginViewModel.registerPluginClass("net-plugin", "com.mengpaw.plugin.net.NetPlugin")
-        PluginViewModel.registerPluginClass("memory-plugin", "com.mengpaw.plugin.memory.MemoryPlugin")
         PluginViewModel.registerPluginClass("framework-plugin", "com.mengpaw.plugin.framework.FrameworkPlugin")
         PluginViewModel.registerPluginClass("skill-plugin", "com.mengpaw.plugin.skill.SkillPlugin")
         PluginViewModel.registerPluginClass("clipboard-plugin", "com.mengpaw.plugin.clipboard.ClipboardPlugin")
@@ -265,7 +262,6 @@ class MainActivity : ComponentActivity() {
             val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
             val bundled: List<Pair<String, com.mengpaw.kernel.plugin.Plugin>> = listOf(
                 "framework-plugin" to FrameworkPlugin(),
-                "memory-plugin" to MemoryPlugin(),
                 "skill-plugin" to SkillPlugin(),
                 "dev-plugin" to DevPlugin(),
                 "fs-plugin" to FsPlugin(),

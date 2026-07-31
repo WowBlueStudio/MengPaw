@@ -28,10 +28,10 @@ category: system
 
 ### 2. 查阅文档
 
-使用 `agent.memory [query]` 搜索已有记忆和文档：
-- CLI 参考：`agent.memory read cli-reference`
-- 工具索引：`agent.memory read tool-index`
-- 开发指南：`agent.memory search <关键词>`
+使用 `agent.memory.search <关键词>` 搜索已有记忆，`agent.cli` 查看 CLI 参考：
+- CLI 参考：`agent.cli`
+- 记忆检索：`agent.memory.search <关键词>`
+- 文档清单：`agent.docs`
 
 ### 3. 如果本地无答案
 

@@ -88,6 +88,12 @@ object DreamEngine {
         // Dream analyzes mid-term memory to produce long-term insights
         val midTerm = AgentDocs.readMidTermMemory(agentName)
         if (midTerm.isNotBlank()) parts.add("## 中期记忆 (今日)\n${midTerm.take(800)}")
+        // 任务记忆 (系统管道: 自动任务记录 + 孪生同步落点) — 让 Dream 看到 Agent 近期干了什么
+        val taskMem = File(agentsDir, "$agentName/memory.md")
+        if (taskMem.exists()) {
+            val t = try { taskMem.readText() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.buildContext"); "" }
+            if (t.isNotBlank()) parts.add("## 任务记忆 (自动记录)\n${t.take(800)}")
+        }
         val longTerm = AgentDocs.readLongTermMemory(agentName)
         if (longTerm.isNotBlank()) parts.add("## 长期记忆 (已有)\n${longTerm.take(400)}")
         // FIX: Use lowercase "profile.md" consistent with AgentDocManager/AgentDocs

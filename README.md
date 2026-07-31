@@ -68,7 +68,6 @@ mengpaw/
 └── plugins/                    # 25 个功能插件 (同级，均只依赖 kernel)
     ├── plugin-fs/              # 文件系统 (10 命令)
     ├── plugin-net/             # HTTP 网络 (3 命令)
-    ├── plugin-memory/          # 记忆三轨系统 (6 命令) ⭐💎
     ├── plugin-skill/           # 双层技能系统 (4 命令) ⭐💎
     ├── plugin-clipboard/       # 剪贴板 (3 命令)
     ├── plugin-notification/    # 通知管理 (3 命令)
@@ -124,7 +123,6 @@ Agent 通过 CLI 命令操控设备：
 |---------|---------|------|
 | `fs` | `cat`, `ls`, `write`, `grep` | 文件系统 |
 | `net` | `curl`, `get`, `post` | HTTP 网络 |
-| `memory` | `ls`, `read`, `write`, `search` | 记忆系统 |
 | `sys` | `battery`, `cpu`, `display`, `wifi` | Android 系统 (39 命令) |
 | `skill` | `ls`, `run`, `enable` | 技能系统 |
 | `self` | `status`, `tools`, `search`, `time` | Agent 进化 |
@@ -149,7 +147,7 @@ Agent 通过 CLI 命令操控设备：
 | **记忆孪生** 💎 | `twin` | 跨设备记忆同步 — 哈希链账本 + ACP P2P 加密通道 + 短码配对 + 心跳保活 + QoS 自适应，同类框架无此能力 |
 | **部落协作** 💎 | `tribe` | 多 Agent 编队 — LAN 自动组队 + Kanban 委派（优先级/超时/嵌套链）+ LLM 能力路由 + 广播讨论 + 心跳检测 |
 | **Agent 命令集** 💎 | `tools` | 导入外部 CLI 命令集（GitHub CLI / 飞书 CLI 等）注册 per-agent 索引，紧凑摘要注入系统提示词，快速调用无需遍历文档 |
-| **记忆系统** 💎 | `memory` | 记忆三轨制 — 长期/中期/项目记忆分层，梦境模式按日压缩提炼，只注入长期记忆防提示词膨胀降智 |
+| **记忆系统** 💎 | `agent.memory` | 记忆三轨制（内核）— 长期/中期/项目分层 + 跨轨搜索/统计/按 ID 读写，梦境模式按日压缩提炼，只注入长期记忆防提示词膨胀降智 |
 | **技能系统** 💎 | `skill` | 双层技能池 — 全局池共享 + Agent 本地私有，skill.pull/push 按需拉取 |
 | **框架发现** 💎 | `framework` | mDNS 局域网框架发现 — 注册/扫描/指纹记录/信任管理，多设备自动组网 |
 | **插件开发链** 💎 | `dev` | 内置开发工具链 — plugin.create / audit / share 三步发布，用户即开发者 |

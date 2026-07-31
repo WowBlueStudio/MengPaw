@@ -8,7 +8,7 @@ category: browser
 
 本文档描述 MengPaw 浏览器插件系统的接口与数据类型，供开发者编写自定义浏览器插件使用。
 
-> 此文档替代 `plugin-index.md` 中失效的 `memory read browser-tools` 链接指向的内容。
+> 此文档替代 `plugin-index.md` 中失效的 `memory read browser-tools` 链接指向的内容（现可通过 `agent.cli` 的 BROWSER TOOLS 段查看）。
 
 ## 一、BrowserPlugin 接口
 

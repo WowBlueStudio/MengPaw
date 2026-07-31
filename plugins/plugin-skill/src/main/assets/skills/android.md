@@ -107,8 +107,7 @@ MengPaw 数据目录 (`{BASE}` = `Context.filesDir`):
 
 ```
 {filesDir}/
-├── Agent文档/{name}/     ← 工作区 (Agent 可读写删)
-├── 记忆数据/              ← memory-plugin 存储
+├── Agent文档/{name}/     ← 工作区 (Agent 可读写删, 含 memory/ 三轨记忆)
 ├── 技能剧本/              ← skill 文件
 ├── 会话检查点/            ← 会话持久化
 ├── 插件仓库/              ← 下载的插件 JAR

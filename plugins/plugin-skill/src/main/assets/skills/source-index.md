@@ -31,7 +31,7 @@ category: system
 | 技能、skill、剧本 | agent.memory | `plugins/plugin-skill/.../SkillPlugin.kt` |
 | 文件系统、fs、读写 | agent.memory | `plugins/plugin-fs/.../FsPlugin.kt` |
 | 网络、HTTP、curl | agent.memory | `plugins/plugin-net/.../NetPlugin.kt` |
-| 记忆、memory、存储 | agent.memory | `plugins/plugin-memory/.../MemoryPlugin.kt` |
+| 记忆、memory、存储 | agent.memory | `mengpaw-kernel/.../agent/AgentDocs.kt` + `AgentExecutor.kt` |
 | 翻译、translate、语言 | — | `mengpaw-kernel/.../llm/TranslateMiddleware.kt` |
 
 ## 模块速查

@@ -17,7 +17,7 @@ import com.mengpaw.kernel.plugin.PluginStatus
  * ## Agent CLI Integration
  *
  * Agent can query available browser capabilities via:
- *   memory.read browser-tools
+ *   agent.cli (BROWSER TOOLS 段) / skill.run browser-control
  *
  * Or directly via CLI:
  *   plugin.info <browser-plugin-id>
@@ -93,7 +93,7 @@ object BrowserPluginRegistry {
 
     /**
      * Generate a CLI-readable capabilities document.
-     * Agent can read this via `memory.read browser-tools` to understand
+     * Agent can read this via `agent.cli` (BROWSER TOOLS 段) to understand
      * what browser hooks are available for plugin development.
      */
     fun getCapabilities(): String = """

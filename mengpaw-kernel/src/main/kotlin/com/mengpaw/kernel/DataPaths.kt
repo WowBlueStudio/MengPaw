@@ -12,7 +12,6 @@ package com.mengpaw.kernel
  *
  * Directory structure:
  *   {BASE}/
- *   ├── 记忆数据/              ← memory-plugin data
  *   ├── 技能剧本/              ← skill-plugin data
  *   ├── 会话检查点/            ← session checkpoints
  *   ├── 截图存档/              ← UI screenshots
@@ -35,7 +34,6 @@ object DataPaths {
     }
 
     val CONFIG get() = "$BASE/配置"
-    val MEMORIES get() = "$BASE/记忆数据"
     val SKILLS get() = "$BASE/技能剧本"
     val CHECKPOINTS get() = "$BASE/会话检查点"
     val SCREENSHOTS get() = "$BASE/截图存档"
@@ -130,7 +128,6 @@ object DataPaths {
     fun pluginFolderName(pluginId: String): String = when (pluginId) {
         "fs-plugin" -> "文件系统插件-fs"
         "net-plugin" -> "网络插件-net"
-        "memory-plugin" -> "记忆系统插件-memory"
         "skill-plugin" -> "技能系统插件-skill"
         "ui-plugin" -> "界面操控插件-ui"
         "proc-plugin" -> "进程管理插件-proc"

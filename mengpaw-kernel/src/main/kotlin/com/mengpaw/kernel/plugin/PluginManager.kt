@@ -242,8 +242,8 @@ class PluginManager(
     // ── Private helpers ───────────────────────────────────────────────────
 
     /**
-     * Derive namespace from plugin id. E.g. "fs-plugin" → "fs", "memory-plugin" → "memory",
-     * "memory-twin-plugin" → "twin".
+     * Derive namespace from plugin id. E.g. "fs-plugin" → "fs",
+     * "memory-twin-plugin" → "twin". (memory-plugin 已融入内核 agent.memory.*)
      */
     private fun namespaceFor(id: String): String {
         val base = id.removeSuffix("-plugin").removeSuffix("-ext")

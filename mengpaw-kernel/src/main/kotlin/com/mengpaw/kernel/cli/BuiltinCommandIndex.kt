@@ -99,6 +99,18 @@ object BuiltinCommandIndex {
         idx("agent.memory.record", "记录对话摘要到中期记忆 (按日分片, 不注入提示词)", "agent.memory.record <内容>",
             listOf("记录", "中期", "摘要", "对话", "日志", "临时", "日记"),
             listOf("record", "mid-term", "summary", "log", "note", "daily", "journal"))
+        idx("agent.memory.read", "按 ID 读取一条记忆 (跨长期/中期/项目三轨)", "agent.memory.read <id>",
+            listOf("读", "读取", "条目", "时间戳", "单条", "Read"),
+            listOf("read", "entry", "timestamp", "single", "fetch"))
+        idx("agent.memory.search", "跨轨搜索记忆 (长期/中期/项目, 默认全轨)", "agent.memory.search <关键词> [--track long|mid|project]",
+            listOf("搜索", "检索", "查找", "关键词", "查询", "Search"),
+            listOf("search", "query", "find", "keyword", "lookup"))
+        idx("agent.memory.stats", "记忆统计 (三轨条数/日期分布/项目数)", "agent.memory.stats",
+            listOf("统计", "数量", "概览", "报告", "Stats"),
+            listOf("stats", "count", "overview", "report", "summary"))
+        idx("agent.memory.write", "按指定 ID 写长期记忆 (已存在则更新)", "agent.memory.write <id> <内容>",
+            listOf("写入", "指定", "更新", "标题", "Write", "存储"),
+            listOf("write", "update", "store", "title", "create"))
         idx("agent.memory.mid", "查看/搜索中期记忆 (按日期分片, 需要时查阅)", "agent.memory.mid [日期|关键词]",
             listOf("中期", "记忆", "日", "历史", "查阅", "过往", "回顾"),
             listOf("mid", "history", "daily", "review", "past", "query"))

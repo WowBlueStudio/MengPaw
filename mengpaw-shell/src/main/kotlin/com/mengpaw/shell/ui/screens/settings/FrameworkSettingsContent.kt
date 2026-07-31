@@ -167,7 +167,7 @@ fun FrameworkSettingsContent(
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(state.strings.frameworkMemoryBackend, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text(if (state.memoryBackend == "memory-plugin") state.strings.frameworkMemoryBackendDesc else state.memoryBackend,
+            Text(if (state.memoryBackend == "builtin") state.strings.frameworkMemoryBackendDesc else state.memoryBackend,
                 style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh) {
