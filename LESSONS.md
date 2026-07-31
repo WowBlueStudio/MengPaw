@@ -4,6 +4,20 @@
 
 ---
 
+## 2026-07-31 — v0.21.1 记忆系统融入内核 + 任务记忆接入 Dream
+
+### 116. Windows 上 renameTo 目标存在即失败——writeAtomic 漏 file.delete()
+- 场景：新记忆命令测试 `write updates existing entry` 失败——editEntry 返回 1 但文件内容未变。`AgentDocs.writeAtomic` 用 `tmp.renameTo(file)`,Windows 上目标存在时 renameTo 返回 false(静默失败);同文件 `appendLongTermMemory` 有 `file.delete()` 注释("Windows: renameTo fails if target exists"),writeAtomic 漏了这一步。
+- 修复：writeAtomic 在 renameTo 前补 `file.delete()`。
+- 教训：**Windows renameTo 不覆盖, 原子写必须显式删除目标; 既有代码的同类处理注释是线索**。editEntry/deleteEntry 此前零测试覆盖, 该 bug 长期潜伏, 由新命令测试暴露。
+
+### 117. when-with-subject 分支不能直接写比较表达式
+- 场景：`return when (val count = ...) { > 1 -> ... }` 报语法错误; 改 `count > 1 ->` 后报 "Logical expression in when-with-subject. The branch will be matched by comparing the result of the logical expression with the subject" (Int vs Boolean)。
+- 修复：不用 subject, 先声明 `val count`, 再 `when { count > 1 -> ... }`。
+- 教训：**when (subject) 的分支是"值与 subject 比较"语义, 要写条件就放弃 subject 形式**。
+
+---
+
 ## 2026-07-31 — v0.21.0 Agent 进化系统 + plugin-self 退役
 
 ### 113. CommandRegistry 后写覆盖——插件与内核同名命令, 插件静默胜出

@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.21.1 (2026-07-31) — 记忆系统融入内核 + 任务记忆接入 Dream
+
+### 新增
+- **记忆查询能力并入内核 `agent.memory`**(18 条,原 14 + 新 4):
+  - `agent.memory.read <id>` — 按 ID 跨三轨(长期/中期/项目)读单条,歧义检测复用 countMatchingEntries
+  - `agent.memory.search <关键词> [--track long|mid|project]` — 跨轨搜索,复用 AgentDocs 三轨 search API(此前零调用者的库函数首次接线)
+  - `agent.memory.stats` — 三轨统计(长期条数/中期日期分布/项目数)
+  - `agent.memory.write <id> <内容>` — 指定 ID 写长期(已存在则更新,AgentDocs.appendLongTermMemory 新增 title 参数)
+- **任务记忆接入 Dream 管道**: DreamEngine.buildContext 新增"任务记忆"输入段(读 `{agent}/memory.md` 系统管道)——梦境分析从"中期+长期"扩为"中期+任务+长期",任务记忆首次进入 LLM 视野(生产端不变:memory-twin 重建落点与 Incubator 统计兼容)
+- CLI.md 生成器/BM25 索引新增 4 条命令
+
+### 退役
+- **plugin-memory 退役**(构建/注册/plugins.json/_artifacts.json/设置页/文档 20+ 处同步):`memory.*` 6 命令独立库并入内核——审计确认零程序化依赖(Tribe 走 ACP、DreamEngine 走三轨、memory-twin 独立包),memories 目录弃用(实际未启用,坏引导的 browser-tools 文档引用改写为 `agent.cli`/`skill.run`)
+- 内置插件 12 → 11,plugins.json 28 → 26 条目,捆绑口径同步
+
+### 修复
+- **AgentDocs.writeAtomic Windows 覆盖 bug**: `tmp.renameTo(file)` 在目标存在时失败(Windows),editEntry/deleteEntry 静默失效——同文件 appendLongTermMemory 有 `file.delete()` 注释处理,writeAtomic 漏掉;由新测试暴露(生产 Android 不受影响)
+
+### 发行
+- Shell APK v0.21.1(versionCode 21001)
+- plugins.json 移除 memory-plugin 条目(11 builtin)
+- 测试: kernel 169/169 全绿(162 既有 + 7 新增记忆命令测试)
+
 ## v0.21.0 (2026-07-31) — Agent 进化系统 + plugin-self 退役
 
 ### 新增
