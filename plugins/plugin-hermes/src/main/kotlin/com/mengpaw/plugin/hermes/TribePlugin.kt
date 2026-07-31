@@ -397,7 +397,7 @@ class TribePlugin : Plugin {
 $taskDesc
 
 ## 响应方式
-完成后将结果写入 Memory.md 并通过 tribe.memo 通知。
+完成后将结果写入 memory/ 目录（中期记忆）并通过 tribe.memo 通知。
 """.trimIndent())
             ExecutionResult.ok("✅ 任务已委派给 ${member.name}（文件模式）。任务ID: ${task.id}")
         } catch (e: Exception) {

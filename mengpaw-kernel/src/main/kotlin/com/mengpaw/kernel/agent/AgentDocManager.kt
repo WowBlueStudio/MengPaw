@@ -18,10 +18,8 @@ import java.util.Locale
  *   ├── Agents.md      # Security rules (system, read-only)
  *   ├── Soul.md        # Style & execution mode
  *   ├── Profile.md     # Identity & relationships
- *   ├── Memory.md      # Task records + auto-index
- *   ├── Memory.archive.md  # Archived old memories
- *   ├── CLI.md         # Auto-generated command reference
- *   └── memory.idx     # Binary index for fast search
+ *   ├── memory/        # Single-track memory: memory.md (long) + memory_{date}.md (mid) + project_*_memory.md
+ *   └── CLI.md         # Auto-generated command reference
  */
 class AgentDocManager(
     private val agentId: String = "agent-001",
@@ -30,11 +28,6 @@ class AgentDocManager(
     @Volatile var pluginManager: PluginManager? = null
 ) {
     private val agentDir: File get() = File(baseDir, agentId)
-
-    // Memory constraints
-    private val maxMemories = 50
-    private val maxMemoryLines = 200
-    private val archiveThreshold = 40
 
     // ── Initialization ────────────────────────────────────────────────
 
@@ -66,78 +59,6 @@ class AgentDocManager(
     fun getDocPath(docType: AgentDocType): String = file(docType).absolutePath
 
     fun listDocs(): List<String> = AgentDocType.entries.map { it.name.lowercase() + ".md" }
-
-    // ── Memory management ─────────────────────────────────────────────
-
-    /**
-     * Append a memory record and rebuild the index.
-     * Called automatically by AgentEngine after each task.
-     */
-    fun updateMemory(entry: MemoryRecord) {
-        val memFile = file(AgentDocType.MEMORY)
-        val content = if (memFile.exists()) try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.updateMemory"); "" } else ""
-
-        // Build new entry
-        val entryMd = """
-## ${entry.id}: ${entry.title}
-- **日期**: ${entry.date}
-- **关键词**: ${entry.keywords.joinToString(", ")}
-- **内容**: ${entry.content.take(maxMemoryLines * 80)}
-
----
-""".trimIndent()
-
-        // FIX: Preserve existing records when inserting new entry after index section.
-        // split("---", limit=3) gives at most 3 parts; parts[2] holds all existing records.
-        // Previous code used parts.drop(3) which was always empty → DATA LOSS on every insert.
-        val parts = content.split("---", limit = 3)
-        val newContent = if (parts.size >= 3) {
-            parts[0] + "---" + parts[1] + "---\n\n" + entryMd + parts[2]
-        } else {
-            content + "\n" + entryMd
-        }
-
-        try { memFile.atomicWriteText(newContent) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.updateMemory"); return }
-        rebuildIndex()
-        enforceLimits()
-    }
-
-    /** Search memories by keyword (index-only, does NOT load full content into context). */
-    fun searchMemory(query: String): List<MemoryRecord> {
-        val q = query.lowercase()
-        val memFile = file(AgentDocType.MEMORY)
-        if (!memFile.exists()) return emptyList()
-
-        val text = try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.searchMemory"); "" }
-        val records = parseMemoryRecords(text)
-        return records.filter {
-            it.title.lowercase().contains(q) ||
-            it.keywords.any { k -> k.lowercase().contains(q) }
-        }.map { it.copy(content = it.content.take(200) + "...") } // Truncate for passive query
-    }
-
-    /** Get memory statistics without loading content. */
-    fun getMemoryStats(): Pair<Int, Long> {
-        val memFile = file(AgentDocType.MEMORY)
-        if (!memFile.exists()) return 0 to 0L
-        val records = parseMemoryRecords(try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.getMemoryStats"); "" })
-        return records.size to memFile.length()
-    }
-
-    /** Get only the memory index (titles + keywords), not full content. */
-    fun getMemoryIndex(): String {
-        val memFile = file(AgentDocType.MEMORY)
-        if (!memFile.exists()) return "(No memories)"
-        val records = parseMemoryRecords(try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.getMemoryIndex"); "" })
-        if (records.isEmpty()) return "(No memories)"
-        return buildString {
-            appendLine("| ID | 日期 | 标题 | 关键词 |")
-            appendLine("|----|------|------|--------|")
-            records.forEach { r ->
-                appendLine("| ${r.id} | ${r.date} | ${r.title} | ${r.keywords.take(3).joinToString(", ")} |")
-            }
-        }
-    }
 
     // ── CLI reference ─────────────────────────────────────────────────
 
@@ -423,100 +344,6 @@ class AgentDocManager(
         this.delete()
         tmp.renameTo(this)
         if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
-    }
-
-    private fun rebuildIndex() {
-        val memFile = file(AgentDocType.MEMORY)
-        if (!memFile.exists()) return
-        val text = try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.rebuildIndex"); "" }
-        val records = parseMemoryRecords(text)
-        val idx = buildString {
-            appendLine("# 记忆索引")
-            appendLine()
-            appendLine("> 索引更新: ${SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())}")
-            appendLine("> 总条目: ${records.size} | 总大小: ${memFile.length() / 1024}KB | 上限: $maxMemories 条")
-            appendLine()
-            appendLine("| ID | 日期 | 标题 | 关键词 |")
-            appendLine("|----|------|------|--------|")
-            records.forEach { r ->
-                appendLine("| ${r.id} | ${r.date} | ${r.title} | ${r.keywords.take(3).joinToString(", ")} |")
-            }
-        }
-        // Replace the index section (between first --- and second ---)
-        val newText = text.replaceFirst(
-            Regex("---\\n[\\s\\S]*?---"),
-            "---\n$idx\n---"
-        )
-        try { memFile.atomicWriteText(newText) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.rebuildIndex") }
-    }
-
-    private fun enforceLimits() {
-        val memFile = file(AgentDocType.MEMORY)
-        if (!memFile.exists()) return
-        val records = parseMemoryRecords(try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.enforceLimits"); "" })
-        if (records.size > maxMemories) {
-            // Archive oldest 10 entries (sorted by ID desc = newest first, so takeLast = oldest)
-            val toArchive = records.takeLast(10)
-            val archiveFile = File(agentDir, "Memory.archive.md")
-            val archiveContent = toArchive.joinToString("\n---\n") { r ->
-                "## ${r.id}: ${r.title}\n日期: ${r.date}\n关键词: ${r.keywords.joinToString(", ")}\n\n${r.content}"
-            }
-            try { archiveFile.appendText("\n---\n$archiveContent") } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.enforceLimits") }
-
-            // Rebuild with proper index section (preserving format that rebuildIndex expects)
-            val remaining = records.dropLast(10)
-            val idxSection = buildString {
-                appendLine("# 记忆索引")
-                appendLine()
-                appendLine("> 索引更新: ${SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())}")
-                appendLine("> 总条目: ${remaining.size} | 总大小: ${memFile.length() / 1024}KB | 上限: $maxMemories 条")
-                appendLine()
-                appendLine("| ID | 日期 | 标题 | 关键词 |")
-                appendLine("|----|------|------|--------|")
-                remaining.forEach { r ->
-                    appendLine("| ${r.id} | ${r.date} | ${r.title} | ${r.keywords.take(3).joinToString(", ")} |")
-                }
-            }
-            val recordsSection = remaining.joinToString("\n") { r ->
-                """
-## ${r.id}: ${r.title}
-- **日期**: ${r.date}
-- **关键词**: ${r.keywords.joinToString(", ")}
-- **内容**: ${r.content.take(maxMemoryLines * 80)}
-
----
-""".trimIndent()
-            }
-            // Preserve the two-section format: index between --- markers, records after
-            val newText = "---\n$idxSection\n---\n\n$recordsSection"
-            try { memFile.atomicWriteText(newText) } catch (e: Exception) { ErrorCollector.report(e, "AgentDocManager.enforceLimits") }
-        }
-    }
-
-    private fun parseMemoryRecords(text: String): List<MemoryRecord> {
-        val records = mutableListOf<MemoryRecord>()
-        // FIX: Use findAll to properly capture the actual ID from each section header.
-        // The previous split() approach lost the captured group and reconstructed fake IDs.
-        val headerPattern = Regex("## (mem-\\d+):\\s*(.+?)(?=\n-|$)", RegexOption.MULTILINE)
-        val matches = headerPattern.findAll(text).toList()
-        if (matches.isEmpty()) return records
-
-        for (i in matches.indices) {
-            val match = matches[i]
-            val id = match.groupValues[1].trim()
-            val title = match.groupValues[2].trim()
-            // Extract section content: from this header to the next header (or end of text)
-            val sectionStart = match.range.last + 1
-            val sectionEnd = if (i + 1 < matches.size) matches[i + 1].range.first else text.length
-            val section = text.substring(sectionStart, sectionEnd)
-
-            val date = Regex("日期[:\\s]*([^\n]+)").find(section)?.groupValues?.get(1)?.trim() ?: ""
-            val keywords = Regex("关键词[:\\s]*([^\n]+)").find(section)?.groupValues?.get(1)
-                ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
-            val content = section.substringAfter("内容:").take(500).trim()
-            records.add(MemoryRecord(id, date, title, keywords, content))
-        }
-        return records.sortedByDescending { it.id }
     }
 
     // ── Default document templates ────────────────────────────────────

@@ -4,10 +4,10 @@
 package com.mengpaw.kernel
 
 import com.mengpaw.kernel.agent.AgentDocManager
+import com.mengpaw.kernel.agent.AgentDocs
 import com.mengpaw.kernel.agent.AgentExecutor
 import com.mengpaw.kernel.agent.AgentMiddleware
 import com.mengpaw.kernel.AgentState
-import com.mengpaw.kernel.agent.MemoryRecord
 import com.mengpaw.kernel.agent.PostCallMiddleware
 import com.mengpaw.kernel.agent.ScrollContextManager
 import com.mengpaw.kernel.cli.*
@@ -756,14 +756,9 @@ class AgentEngine(
     }
 
     private fun recordTaskMemory(task: String, result: String) {
+        // 单轨记忆 (v0.22.0): 任务记忆写入三轨中期 memory_{date}.md (梦境读中期的输入面)
         try {
-            val entry = MemoryRecord(
-                id = "mem-${System.currentTimeMillis().toString().takeLast(6)}",
-                date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date()),
-                title = task.take(60),
-                keywords = task.split(" ").filter { it.length > 1 }.take(5),
-                content = result.take(500))
-            agentDocManager.updateMemory(entry)
+            AgentDocs.appendMidTermMemory(agentName, "任务: ${task.take(60)}\n结果: ${result.take(500)}")
         } catch (e: Exception) {
             KernelLog.w("AgentEngine", "Failed to record task memory: ${e.message}")
         }

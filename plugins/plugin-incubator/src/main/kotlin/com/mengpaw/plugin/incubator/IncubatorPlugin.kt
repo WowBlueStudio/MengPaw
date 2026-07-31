@@ -74,7 +74,7 @@ $skills
 
 ## 通信
 - 接收任务: inbox/ 目录
-- 报告结果: 写入 Memory.md
+- 报告结果: 写入 memory/ 目录 (中期记忆)
 - 团队协作: hermes.memo 共享记忆
 """.trimIndent())
 
@@ -105,7 +105,12 @@ $skills
             val name = Regex("名称:\\s*(.+)").find(soul)?.groupValues?.get(1)?.trim() ?: dir.name
             val role = Regex("角色:\\s*(.+)").find(soul)?.groupValues?.get(1)?.trim() ?: "未设定"
             val inbox = File(dir, "inbox").listFiles()?.size ?: 0
-            val completed = File(dir, "Memory.md").let { if (it.exists()) try { it.readText().lines().count { l -> l.startsWith("## mem-") } } catch (e: Exception) { ErrorCollector.report(e, "IncubatorPlugin.list"); 0 } else 0 }
+            // v0.22.0 单轨: 任务记忆进中期分片 (memory/memory_*.md), 统计 `## ` 条目
+            val completed = try {
+                File(dir, "memory").listFiles()
+                    ?.filter { it.name.startsWith("memory_") && it.name.endsWith(".md") }
+                    ?.sumOf { it.readLines().count { l -> l.startsWith("## ") } } ?: 0
+            } catch (e: Exception) { ErrorCollector.report(e, "IncubatorPlugin.list"); 0 }
             ChildAgent(dir.name, name, role, if (inbox > 0) "busy ($inbox pending)" else "idle", completed)
         }?.sortedBy { it.name } ?: emptyList()
 

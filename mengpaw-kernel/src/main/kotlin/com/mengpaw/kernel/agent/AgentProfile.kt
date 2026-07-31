@@ -101,18 +101,6 @@ enum class AgentDocType {
     AGENTS,     // Security behavior rules (system-written, Agent read-only)
     SOUL,       // Agent style and execution mode (user-editable)
     PROFILE,    // Relationship settings (user-editable)
-    MEMORY,     // Task records with auto-index (system-managed)
     BOOST,      // First-run bootstrap ritual (Agent reads on first wake)
     CLI         // Framework + plugin command reference (auto-generated)
 }
-
-/**
- * A single memory record in the agent's Memory.md.
- */
-data class MemoryRecord(
-    val id: String,
-    val date: String,
-    val title: String,
-    val keywords: List<String>,
-    val content: String
-)
