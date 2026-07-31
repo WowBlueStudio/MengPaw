@@ -78,8 +78,8 @@ class DreamWorker(
         var ran = 0
         for (dir in agentDirs) {
             val name = dir.name
-            // Skip if dream ran within last 6 hours
-            val dreamFile = File(dir, "DREAM.md")
+            // Skip if dream ran within last 6 hours (节流文件跟随梦境产物 {date}_dream.md)
+            val dreamFile = File(dir, "${java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())}_dream.md")
             if (dreamFile.exists() &&
                 System.currentTimeMillis() - dreamFile.lastModified() < 6 * 3600 * 1000L) continue
 

@@ -13,8 +13,9 @@ import java.util.*
 
 /**
  * Dream mode engine — two concerns:
- * 1. **Dream pass** (LLM): analyze Scroll headlines + memory + profile → terse DREAM.md findings
- * 2. **Workspace cleanup** (file-only): archive old memories, trim screenshots, prune temp files
+ * 1. **Dream pass** (LLM): analyze Scroll headlines + memory + profile → terse {date}_dream.md findings
+ * 2. **Dream organize** (file-only): 读 memory/ → 备份 memory/backup/ → 提炼 {date}_dream.md → 到期删除已整理分片
+ * 3. **Workspace cleanup** (file-only): trim screenshots, prune temp files
  *
  * Inspired by QwenPaw's proactive mode (Apache 2.0), adapted for Android.
  */
@@ -86,14 +87,9 @@ object DreamEngine {
             if (headlines.isNotEmpty()) parts.add("## 近期对话\n" + headlines.joinToString("\n") { "  - [${it.id}] ${it.headline}" })
         }
         // Dream analyzes mid-term memory to produce long-term insights
+        // 单轨 (v0.22.0): 任务记忆已并入中期 (recordTaskMemory → appendMidTermMemory), 无需旁轨段
         val midTerm = AgentDocs.readMidTermMemory(agentName)
         if (midTerm.isNotBlank()) parts.add("## 中期记忆 (今日)\n${midTerm.take(800)}")
-        // 任务记忆 (系统管道: 自动任务记录 + 孪生同步落点) — 让 Dream 看到 Agent 近期干了什么
-        val taskMem = File(agentsDir, "$agentName/memory.md")
-        if (taskMem.exists()) {
-            val t = try { taskMem.readText() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.buildContext"); "" }
-            if (t.isNotBlank()) parts.add("## 任务记忆 (自动记录)\n${t.take(800)}")
-        }
         val longTerm = AgentDocs.readLongTermMemory(agentName)
         if (longTerm.isNotBlank()) parts.add("## 长期记忆 (已有)\n${longTerm.take(400)}")
         // FIX: Use lowercase "profile.md" consistent with AgentDocManager/AgentDocs
@@ -104,17 +100,25 @@ object DreamEngine {
         return if (combined.length > MAX_CONTEXT_CHARS) combined.take(MAX_CONTEXT_CHARS) else combined
     }
 
+    /** 梦境产物文件名: {date}_dream.md (工作区根, 随孪生工作区同步传播) */
+    private fun dreamFileName(): String = "${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())}_dream.md"
+
+    /** 写入 {agent}/{date}_dream.md — 新条目前置, 同日多次梦境追加到同一文件 */
     private fun writeDreamMd(agentName: String, content: String) {
         try {
             val dir = File(agentsDir, agentName); if (!dir.exists()) dir.mkdirs()
             val entry = "\n---\n## ${DATE_FMT.format(Date())}\n\n$content\n"
-            val file = File(dir, "DREAM.md")
+            val file = File(dir, dreamFileName())
             val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.writeDreamMd"); "" } else "# $agentName · 梦境记录\n"
             file.writeText(entry + existing)
         } catch (e: Exception) {
             ErrorCollector.report(e, "DreamEngine.writeDreamMd")
         }
     }
+
+    /** 梦境产物是否已存在 (DreamWorker 节流检查用) */
+    fun hasTodayDream(agentName: String): Boolean =
+        File(agentsDir, "$agentName/${dreamFileName()}").exists()
 
     // ── Workspace Cleanup (existing) ─────────────────────────────────
 
@@ -165,58 +169,64 @@ object DreamEngine {
     data class MemResult(val memoriesReviewed: Int, val tagsAdded: Int,
                          val linksFound: Int, val archived: Int, val summarized: Int)
 
-    /** File-based memory organization — reads mid-term, writes insights to long-term. */
+    /** 备份保留期限: 30 天 */
+    private const val BACKUP_RETENTION_DAYS = 30L
+
+    /**
+     * 梦境整理 (单轨 v0.22.0) — 四步管道:
+     * 1. 读取 memory/ 全部中期分片 (memory_{date}.md)
+     * 2. 备份到 memory/backup/
+     * 3. 提炼 → 产出 {agent}/{date}_dream.md
+     * 4. 到期删除: 已整理分片从 memory/ 移除; backup/ 中 30 天前的备份删除
+     */
     fun dream(agentId: String): MemResult {
-        // Read from mid-term memory (dated files) for analysis
         val midDir = File(DataPaths.midTermMemoryDir(agentId))
         if (!midDir.exists()) return MemResult(0, 0, 0, 0, 0)
-        // Collect today's mid-term entries for analysis
-        val todayContent = AgentDocs.readMidTermMemory(agentId)
-        if (todayContent.isBlank()) return MemResult(0, 0, 0, 0, 0)
-        // Long-term memory for archive reference
-        val memFile = File(DataPaths.longTermMemoryFile(agentId))
-        memFile.parentFile?.mkdirs()
-        val archiveFile = File(midDir, "archive.md")
-        if (!memFile.exists()) return MemResult(0, 0, 0, 0, 0)
-        val records = parseMemories(try { memFile.readText() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream"); "" })
-        val reviewed = records.size
-        var tagsAdded = 0; var linksFound = 0; var archived = 0; var summarized = 0
+        val dateFiles = midDir.listFiles()
+            ?.filter { it.name.startsWith("memory_") && it.name.endsWith(".md") }
+            ?.sorted()
+            ?: emptyList()
+        if (dateFiles.isEmpty()) return MemResult(0, 0, 0, 0, 0)
 
-        // NOTE: Auto-tagging is deferred — requires modifying MemoryRecord objects
-        // and persisting them back to the memory file. Tracked for future implementation.
-        val underTagged = records.count { it.tags.size < 3 }
-        if (underTagged > 0) {
-            KernelLog.w("DreamEngine", "$underTagged records have < 3 tags (auto-tagging not yet implemented)")
-        }
+        val backupDir = File(midDir, "backup")
+        try { backupDir.mkdirs() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream.mkdir") }
+        val reviewed = dateFiles.size
+        var archived = 0
 
-        // Cross-link
-        for (i in records.indices) {
-            for (j in i + 1 until records.size) {
-                if (records[i].keywords().intersect(records[j].keywords()).size >= 2) linksFound++
+        // 1+2+3: 读分片 → 备份 → 汇总提炼内容
+        val digest = buildString {
+            appendLine("# 梦境整理 · ${DATE_FMT.format(Date())}")
+            appendLine()
+            appendLine("> 来源: ${dateFiles.size} 个中期分片 | 已备份到 memory/backup/")
+            appendLine()
+            dateFiles.forEach { f ->
+                val content = try { f.readText() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream.read"); "" }
+                if (content.isBlank()) { f.delete(); return@forEach }
+                // 备份
+                try { f.copyTo(File(backupDir, f.name), overwrite = true) } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream.backup") }
+                archived++
+                // 提炼: 分片摘录进梦境文档
+                appendLine("## ${f.name}")
+                appendLine()
+                appendLine(content.trim().take(2000))
+                appendLine()
+                // 4a: 已整理分片从 memory/ 删除
+                f.delete()
             }
         }
 
-        // Archive >30d old
-        val cutoff = System.currentTimeMillis() - 30L * 24 * 3600 * 1000
-        val old = records.filter { it.timestamp < cutoff }
-        if (old.isNotEmpty()) {
-            val arc = buildString {
-                appendLine("# 归档 — ${DATE_FMT.format(Date())}")
-                old.forEach { r ->
-                    appendLine("## ${r.id}: ${r.title}")
-                    appendLine("- 日期: ${r.date} | 标签: ${r.tags.joinToString()}")
-                    appendLine("\n${r.content}\n\n---\n")
-                }
-            }
-            try { archiveFile.appendText("\n$arc") } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream") }
-            archived = old.size; summarized = old.size
-        }
+        if (digest.isNotBlank()) writeDreamMd(agentId, digest)
 
-        // FIX: Write dream event to log so dreamStats/dreamHistory work
-        val result = MemResult(reviewed, tagsAdded, linksFound, archived, summarized)
+        // 4b: backup/ 中 30 天前的备份到期删除
+        val cutoff = System.currentTimeMillis() - BACKUP_RETENTION_DAYS * 24 * 3600 * 1000
+        try {
+            backupDir.listFiles()?.forEach { if (it.lastModified() < cutoff) it.delete() }
+        } catch (_: Exception) { /* best-effort */ }
+
+        val result = MemResult(reviewed, 0, 0, archived, 0)
         try {
             if (!dreamLog.exists()) dreamLog.parentFile?.mkdirs()
-            dreamLog.appendText("${DATE_FMT.format(Date())} | agent=$agentId | reviewed=$reviewed tags=$tagsAdded links=$linksFound archived=$archived\n")
+            dreamLog.appendText("${DATE_FMT.format(Date())} | agent=$agentId | reviewed=$reviewed archived=$archived (→ memory/backup/)\n")
         } catch (_: Exception) { /* best-effort log */ }
         return result
     }
@@ -228,26 +238,6 @@ object DreamEngine {
     }
 
     // ── Internal ─────────────────────────────────────────────────────
-
-    private data class DreamRecord(val id: String, val date: String, val title: String,
-                                    val content: String, val tags: List<String>, val timestamp: Long) {
-        fun keywords(): Set<String> = content.split(Regex("[\\s，。！？,.!?]+"))
-            .filter { it.length in 2..10 }.toSet()
-    }
-
-    private fun parseMemories(text: String): List<DreamRecord> {
-        val pattern = Regex(
-            """##\s+(mem-\d+):\s*(.+?)\n\s*-\s*日期:\s*(.+?)\n\s*-\s*关键词:\s*(.*?)\n\s*-\s*内容:\s*(.+?)(?=\n##\s|\n#+\s|\z)""",
-            setOf(RegexOption.DOT_MATCHES_ALL))
-        return pattern.findAll(text).mapNotNull { m ->
-            try {
-                DreamRecord(m.groupValues[1].trim(), m.groupValues[3].trim(), m.groupValues[2].trim(),
-                    m.groupValues[5].trim().take(500),
-                    m.groupValues[4].split(",", "，").map { it.trim() }.filter { it.isNotBlank() },
-                    try { SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(m.groupValues[3].trim())?.time ?: 0L } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.parseMemories"); 0L })
-            } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.parseMemories"); null }
-        }.toList()
-    }
 
     private fun dirSize(dir: File): Long {
         if (!dir.exists()) return 0

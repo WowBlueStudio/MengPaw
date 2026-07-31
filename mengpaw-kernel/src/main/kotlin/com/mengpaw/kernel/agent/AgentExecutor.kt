@@ -619,11 +619,9 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         val cleanup = com.mengpaw.kernel.agent.DreamEngine.cleanupWorkspace()
         return ExecutionResult.ok("""
 梦境完成:
-- 翻阅记忆: ${result.memoriesReviewed} 条
-- 自动标签: ${result.tagsAdded} 个
-- 交叉链接: ${result.linksFound} 组
-- 归档(30天+): ${result.archived} 条 → Memory.archive.md (原文永久保留)
-- 生成摘要: ${result.summarized} 条
+- 翻阅记忆: ${result.memoriesReviewed} 个中期分片
+- 已备份: ${result.archived} 个 → memory/backup/ (30天后自动清理)
+- 提炼产物: {date}_dream.md (工作区根)
 - 清理临时文件: ${cleanup.filesDeleted} 个, 释放 ${cleanup.bytesFreed / 1024}KB
 """.trimIndent())
     }

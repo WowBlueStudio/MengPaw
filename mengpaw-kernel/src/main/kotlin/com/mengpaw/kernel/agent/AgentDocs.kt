@@ -403,11 +403,6 @@ object AgentDocs {
         } else ""
     }
 
-    fun deleteDream(agentName: String): Boolean {
-        val file = File(DataPaths.AGENTS, "$agentName/DREAM.md")
-        return if (file.exists()) { file.delete() } else false
-    }
-
     // ── Legacy compatibility (delegates to long-term for prompt injection) ──
 
     /** @deprecated Use [readLongTermMemory] for system prompts. */
