@@ -318,24 +318,24 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 >
 > plugin-hermes 模块实际实现为 `TribePlugin`（id=tribe-plugin，注册 tribe.* 22 条 + hermes.* 兼容命令），plugins.json 中对应 `tribe-plugin` 条目。
 
-### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.2)
+### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0)
 
-11 文件, ~3000 行。基于 ACP 协议 + 哈希链账本 + 短码配对 + 心跳保活 + QoS 自适应。
+8 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起, 哈希链账本已移除) + 短码配对 + 心跳保活 + QoS 自适应。
+
+**设计**: 孪生 = 同步整个 `{agent}/` 工作区文档, 保持跨设备一致。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/HEARTBEAT/{date}_dream.md) + `memory/` 全部; **排除**: CLI.md (Android 操作指南)、inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。
 
 #### 组件
 
 | 文件 | 职责 |
 |------|------|
-| `MemoryTwinPlugin.kt` | 插件入口, 24 条 `twin.*` CLI 命令注册 |
-| `TwinLedger.kt` / `TwinLedgerStore.kt` | SHA-256 哈希链账本数据模型和持久化 (JSON Lines) |
-| `TwinSyncEngine.kt` | 同步状态机 (HEAD→PULL→BATCH→ACK) + 心跳保活 + QoS 自适应 |
-| `TwinAcpHandler.kt` | `AcpHandler` 实现 — 处理 9 种孪生 ACP 消息类型 |
+| `MemoryTwinPlugin.kt` | 插件入口, 16 条 `twin.*` CLI 命令注册 |
+| `TwinWorkspace.kt` | 同步范围/清单 (SHA-256 + mtime)/冲突落盘 (LWW + .conflict 备份) |
+| `TwinSyncEngine.kt` | 同步流程 (WS_MANIFEST→WS_PULL) + 心跳保活 + QoS 自适应 |
+| `TwinAcpHandler.kt` | `AcpHandler` 实现 — 处理 8 种孪生 ACP 消息类型 |
 | `TwinDiscovery.kt` | Android NSD (mDNS) 局域网自动发现 |
 | `TwinPairingEngine.kt` | 短码验证配对协议 (4 步: ANNOUNCE→CHALLENGE→VERIFY→CONFIRM) |
 | `TwinCapability.kt` | `CapabilityCard` + `TwinCapabilityCollector` — 设备能力采集与协议版本协商 |
 | `TwinRouter.kt` | 能力感知任务路由 |
-| `TwinIdentity.kt` | soul/profile 身份文档同步 |
-| `TwinDreamSync.kt` | 梦境事件账本集成 |
 
 #### 配对流程 (UI 隐藏, 5 连击触发)
 
@@ -349,25 +349,28 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
   → 自动注入配对指引到工作区 inbox
 ```
 
-#### 同步协议
+#### 同步协议 (工作区文件同步, 请求-响应)
 
 ```
 设备 A                          设备 B
-  │  LEDGER_HEAD ──────────────→ │  交换账本头部
-  │ ←────────────── LEDGER_HEAD │
-  │  LEDGER_PULL ──────────────→ │  请求缺失条目
-  │ ←──────────── LEDGER_BATCH  │  批量返回 (含跨链验证)
-  │  LEDGER_ACK ───────────────→ │  确认收妥
+  │  WS_MANIFEST (文件清单) ────→ │  比对本地工作区
+  │ ←── {send: 对端缺的文件,     │  request: 本机缺的路径
+  │      request: 本机缺的路径}  │
+  │  WS_PULL (缺失路径列表) ───→ │  读取文件内容
+  │ ←── {files: {relPath: 内容}} │
+  │  → LWW 落盘 (冲突 → .conflict 备份 + 审计)
   │                               │
   │  [每 30s 双向 HEARTBEAT]      │  心跳保活, 90s 无响应→离线
 ```
+
+> 历史缺陷修复 (v0.22.0): 旧账本链路因 `AcpTransport.send()` 丢弃 HTTP 响应体而**从未跑通** (LEDGER_BATCH 回不到请求方)。新增 `sendForResult()` 解析响应体, 工作区同步端到端可达。
 
 #### QoS 自适应
 
 | 网络类型 | 同步间隔 | 内容 |
 |---------|:--:|------|
-| WiFi / Ethernet | 60s | 全量: 账本 + 身份 + 梦境 |
-| 移动网络 (非计费) | 300s | 仅 MEMORY 类型条目 |
+| WiFi / Ethernet | 60s | 全量工作区文档同步 |
+| 移动网络 (非计费) | 300s | 全量工作区文档同步 (间隔更长) |
 | 按流量计费 | 暂停 | 仅 `twin.sync` 手动触发 |
 
 #### 发现机制 (双通道)
@@ -377,7 +380,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | mDNS 自动发现 | `TwinDiscovery` — `_mengpaw-twin._tcp` | 同 WiFi, 多播可达 |
 | 手动 IP 添加 | `twin.peer.add <ip> [port] [name]` | 多播隔离, 跨网段, 不同频段 |
 
-#### 核心 CLI 命令 (24 条)
+#### 核心 CLI 命令 (16 条)
 
 ```bash
 # 生命周期
@@ -389,25 +392,21 @@ twin.peers / twin.peer.info <id> / twin.peer.add <ip> [port] [name]
 # 配对 (CLI 不可执行, 引导至 5 连击)
 twin.pair / twin.unpair
 
-# 同步
+# 同步 (工作区文件同步结果: 接收/发送/冲突数)
 twin.sync [peer] / twin.sync.auto on|off / twin.sync.qos wifi|mobile|metered
 
 # 能力与路由
 twin.capabilities [--self|--all|<peer>] / twin.delegate <peer> <task> / twin.route <task>
 
-# 账本
-twin.ledger.show [limit] / twin.ledger.verify / twin.ledger.diff <peer> / twin.ledger.stats
-
-# 身份文档
-twin.identity.push / twin.identity.pull [peer] / twin.identity.diff <peer> / twin.identity.merge <peer>
-
-# 梦境
-twin.dream.sync / twin.dream.history [limit]
+# 设备丢失
+twin.lost <peer> / twin.recover <peer>
 ```
+
+> v0.22.0 移除: `twin.ledger.*` (6 条, 账本删除) / `twin.identity.*` (4 条, 身份文档随工作区自动同步) / `twin.dream.*` (2 条, 梦境产物 {date}_dream.md 随工作区同步传播)。
 
 #### 系统提示词集成
 
-中英文系统提示词含完整的记忆孪生使用指南 (11 项): 功能概述 / 状态检查 / 节点发现 / 手动同步 / 任务委派 / 能力对比 / 路由推荐 / 账本审计 / 配对方式 / 启动前提 / 解绑方式。
+中英文系统提示词含完整的记忆孪生使用指南: 功能概述 / 状态检查 / 节点发现 / 手动同步 / 任务委派 / 能力对比 / 路由推荐 / 配对方式 / 启动前提 / 解绑方式。
 
 ### 3.6 构建配置
 
@@ -758,10 +757,10 @@ Fail-secure 完整性守护：启动时校验 APK 签名，检测篡改→安全
 - **配对意向指向性**: 5 连击特定框架图标 = 对特定设备的显式配对意图, 确认弹窗含目标设备名
 
 #### 数据安全
-- **账本防盗**: 未配对设备无法访问 `LEDGER_HEAD/PULL/BATCH/ACK` (AcpServer 鉴权)
-- **跨链验证**: 接收账本条目前检查 `entries[0].prevHash == localLatest.hash`
-- **原子写入**: 所有账本、梦境、身份文档使用 `tmp → rename` 原子写入, 防崩溃损坏
-- **内容去重**: 相同哈希的条目自动跳过, 幂等安全
+- **工作区防盗**: 未配对设备无法访问 `WS_MANIFEST/WS_PULL` (AcpServer 鉴权)
+- **哈希校验**: manifest 每文件 SHA-256, 哈希不同的文件才传输
+- **原子写入**: 所有同步文件使用 `tmp → rename` 原子写入, 防崩溃损坏
+- **冲突保护**: 本地较新且内容不同 → `.conflict` 备份 + 审计 + inbox 提示, 不覆盖
 
 #### 运行时安全
 - **频率限制**: CAPABILITY_ANNOUNCE 同 peerId 30 秒内最多 1 次弹窗
