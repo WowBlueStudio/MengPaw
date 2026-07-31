@@ -65,18 +65,21 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS 双向桥)
 │   └── plugin/                 # 浏览器内置插件 (22 命令)
 │
-└── plugins/                    # 23 个功能插件 (同级，均只依赖 kernel)
+└── plugins/                    # 24 个功能插件 (同级，均只依赖 kernel)
     ├── plugin-fs/              # 文件系统 (10 命令)
     ├── plugin-net/             # HTTP 网络 (3 命令)
-    ├── plugin-memory/          # 记忆系统 (6 命令) ⭐
-    ├── plugin-skill/           # 技能系统 (4 命令) ⭐
+    ├── plugin-memory/          # 记忆三轨系统 (6 命令) ⭐💎
+    ├── plugin-skill/           # 双层技能系统 (4 命令) ⭐💎
     ├── plugin-self/            # Agent 自省 (4 命令)
     ├── plugin-clipboard/       # 剪贴板 (3 命令)
     ├── plugin-notification/    # 通知管理 (3 命令)
-
-    ├── plugin-dev/             # 插件开发工具 ⭐
+    ├── plugin-framework/       # mDNS 框架发现 (6 命令) ⭐💎
+    ├── plugin-memory-twin/     # 记忆孪生 (24 命令) ⭐💎
+    ├── plugin-agent-tools/     # Agent 命令集 (4 命令) ⭐💎
+    ├── plugin-root/            # Root 权限 (17 命令)
+    ├── plugin-hermes/          # 部落协作 Tribe 💎
+    ├── plugin-dev/             # 插件开发工具链 ⭐💎
     ├── plugin-tavily/          # AI 搜索
-    ├── plugin-hermes/          # 多智能体协作
     ├── plugin-workflow/        # DAG 工作流引擎
     ├── plugin-incubator/       # 子 Agent 孵化器
     ├── plugin-render/          # 图像生成
@@ -91,7 +94,7 @@ mengpaw/
     └── plugin-browser-inspector/ # 元素检查器
 ```
 
-> ⭐ = 捆绑在 Shell APK 中
+> ⭐ = 捆绑在 Shell APK 中 · 💎 = WowBlue 原创（领先同类框架，见下节）
 
 ## 架构
 
@@ -104,7 +107,7 @@ mengpaw/
 │  mengpaw-kernel (46 文件)      │  ← 微内核 (纯 Kotlin/JVM)
 │  零 Android 依赖 · 可 JVM 测试  │
 ├────────────────────────────────┤
-│  23 插件 (同级 · 只依赖 kernel)  │  ← 插件层
+│  24 插件 (同级 · 只依赖 kernel)  │  ← 插件层
 └────────────────────────────────┘
 ```
 
@@ -137,6 +140,22 @@ Agent 通过 CLI 命令操控设备：
 | **Plan-Execute** | LLM 分解任务为 3-7 步，逐步执行 |
 | **Goal** | 单目标驱动 + LLM 自动评估完成度 |
 | **Fleet** | LLM 拆解子任务 → Worker 执行 → Verifier 验证 |
+
+## WowBlue 原创插件
+
+领先于同类 Agent 框架的原创功能（设置页与插件市场显示粉色 WowBlue 徽标）：
+
+| 插件 | 命名空间 | 领先之处 |
+|------|---------|---------|
+| **记忆孪生** 💎 | `twin` | 跨设备记忆同步 — 哈希链账本 + ACP P2P 加密通道 + 短码配对 + 心跳保活 + QoS 自适应，同类框架无此能力 |
+| **部落协作** 💎 | `tribe` | 多 Agent 编队 — LAN 自动组队 + Kanban 委派（优先级/超时/嵌套链）+ LLM 能力路由 + 广播讨论 + 心跳检测 |
+| **Agent 命令集** 💎 | `tools` | 导入外部 CLI 命令集（GitHub CLI / 飞书 CLI 等）注册 per-agent 索引，紧凑摘要注入系统提示词，快速调用无需遍历文档 |
+| **记忆系统** 💎 | `memory` | 记忆三轨制 — 长期/中期/项目记忆分层，梦境模式按日压缩提炼，只注入长期记忆防提示词膨胀降智 |
+| **技能系统** 💎 | `skill` | 双层技能池 — 全局池共享 + Agent 本地私有，skill.pull/push 按需拉取 |
+| **框架发现** 💎 | `framework` | mDNS 局域网框架发现 — 注册/扫描/指纹记录/信任管理，多设备自动组网 |
+| **插件开发链** 💎 | `dev` | 内置开发工具链 — plugin.create / audit / share 三步发布，用户即开发者 |
+
+> 不造轮子造轮毂——这些能力不是替代生态，而是把碎片桥接成整体的原创设计。
 
 ## 构建要求
 
