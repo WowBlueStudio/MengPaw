@@ -21,6 +21,12 @@ class AgentMemoryExecutor {
     /** Resolve the effective agent name, falling back to default. */
     private fun agentName(ctx: ExecutionContext) = ctx.agentName ?: "agent"
 
+    /**
+     * 火种模式 (scope="swarm") 的 worker 是零待命临时执行体——
+     * 禁止写记忆, 防止并行 worker 向 Agent 三轨记忆注入噪音。
+     */
+    private fun swarmWriteBlocked(ctx: ExecutionContext): Boolean = ctx.scope == "swarm"
+
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         "memory" to ::memory,
         "memory.record" to ::memoryRecord,
@@ -65,6 +71,7 @@ class AgentMemoryExecutor {
     }
 
     private suspend fun memoryRecord(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (swarmWriteBlocked(ctx)) return ExecutionResult.ok("⛔ 火种模式 worker 不写记忆 (零待命临时执行体, 结果由协调器汇总)")
         if (args.isEmpty()) return ExecutionResult.fail("用法: agent.memory.record <内容>\n记录到中期记忆 (按日分片), 不会注入系统提示词。用 agent.memory.keep 升级到长期记忆。", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val content = args.joinToString(" ")
         AgentDocs.appendMidTermMemory(agentName(ctx), content)
@@ -76,6 +83,7 @@ class AgentMemoryExecutor {
 
     /** Promote important info from mid-term to long-term memory. */
     private suspend fun memoryKeep(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (swarmWriteBlocked(ctx)) return ExecutionResult.ok("⛔ 火种模式 worker 不写记忆 (零待命临时执行体, 结果由协调器汇总)")
         if (args.isEmpty()) return ExecutionResult.fail("用法: agent.memory.keep <内容>\n将重要信息写入长期记忆 (注入系统提示词)", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val content = args.joinToString(" ")
         AgentDocs.appendLongTermMemory(agentName(ctx), content)
@@ -161,6 +169,7 @@ class AgentMemoryExecutor {
 
     /** Write a long-term memory entry with a specified ID (updates if exists). */
     private suspend fun memoryWrite(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (swarmWriteBlocked(ctx)) return ExecutionResult.ok("⛔ 火种模式 worker 不写记忆 (零待命临时执行体, 结果由协调器汇总)")
         if (args.size < 2) return ExecutionResult.fail(buildString {
             appendLine("用法: agent.memory.write <id> <内容>")
             appendLine("按指定 ID 写一条长期记忆 (已存在则更新)。ID 建议用时间戳或短标题。")
@@ -251,6 +260,7 @@ class AgentMemoryExecutor {
 
     /** Save a project milestone/closing report. */
     private suspend fun memoryProjectSave(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (swarmWriteBlocked(ctx)) return ExecutionResult.ok("⛔ 火种模式 worker 不写记忆 (零待命临时执行体, 结果由协调器汇总)")
         if (args.size < 2) return ExecutionResult.fail(
             "用法: agent.memory.project.save <项目名> <总结内容>\n" +
             "在项目里程碑或闭环后总结经验, 形成可复用的项目完成模式。"

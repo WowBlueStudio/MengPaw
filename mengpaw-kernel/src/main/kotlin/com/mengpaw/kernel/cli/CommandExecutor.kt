@@ -34,13 +34,17 @@ data class ExecutionResult(
 
 /**
  * Context carrying metadata for command execution.
+ *
+ * @param scope lifecycle scope: "agent" (default) / "framework" / "system" / "swarm".
+ *        "swarm" = 火种模式 worker 会话 — 零待命临时执行体, 屏蔽记忆写入 (防并行噪音污染三轨记忆).
  */
 data class ExecutionContext(
     val sessionId: String,
     val userId: String = "agent",
     val workDir: String = com.mengpaw.kernel.DataPaths.BASE,
     val environment: Map<String, String> = emptyMap(),
-    val agentName: String? = null
+    val agentName: String? = null,
+    val scope: String = "agent"
 )
 
 /**

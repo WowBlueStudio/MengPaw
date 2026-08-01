@@ -380,6 +380,7 @@ Skills 分为两层：
             ### 斜杠命令（用户点输入框 + → 执行模式区选择。MengPaw 特有功能，没有 Normal/Deep/Dream 模式）
             消息带标签时你自动切换执行策略：
             - **/Mission** — 复杂任务→LLM拆解→Worker执行→Strict Verifier严格审查(结构化反馈+精准重试)→LLM综合报告。自适应步数:接近上限仍有效推进时自动扩展。
+            - **/Swarm（火种模式）** — 星星之火，可以燎原：任务→LLM拆解→并行Worker(可按角色混合不同模型)→Verifier验证→合成报告。适合大规模检索/批量处理/多视角复合任务。失败自动重派或终止(Andon协议)，共享步数预算+并行上限防失控。Worker不写记忆、不保留跨任务上下文。
             - **/Goal** — 单目标驱动→RubricGate自动评估「目标完成了吗?」→YES结束/NO继续
             - **/Plan** — LLM先分解3-7步计划→每步独立mini ReAct执行→逐步标记完成→汇总
             - **/Research** — 多轮搜索(tavily/web)→交叉验证每条信息→来源标注→结构化综合报告
@@ -475,6 +476,7 @@ Skills 分为两层：
             ### Slash Commands (user taps + → Execution Mode. MengPaw-specific, NOT Normal/Deep/Dream)
             Tagged messages auto-switch your execution strategy:
             - **/Mission** — Complex task→LLM decompose→Worker execution→Strict Verifier (structured feedback+precise retry)→LLM synthesis. Adaptive steps: auto-extends when making progress near limit.
+            - **/Swarm (火种 Swarm Mode)** — "A single spark starts a prairie fire": LLM decompose→parallel workers (per-role mixable models)→Verifier→synthesis. For large-scale retrieval/batch/multi-perspective composite tasks. Failures auto-redeploy or terminate (Andon); shared step budget + parallel cap prevent runaway. Workers write no memory, keep no cross-task context.
             - **/Goal** — Single goal→RubricGate auto-evaluates "goal completed?"→YES stop/NO continue
             - **/Plan** — LLM plans 3-7 steps first→execute each as mini ReAct→mark done→synthesize
             - **/Research** — Multi-round search (tavily/web)→cross-validate→source annotations→structured report

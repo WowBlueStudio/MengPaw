@@ -103,6 +103,7 @@ enum class LoopMode(val label: String, val desc: String) {
     REACT("React 模式", "标准问答，灵活高效"),
     GOAL("Goal 模式", "单目标驱动，完成即停"),
     MISSION("Mission 模式", "建立临时子 Agent 分解任务链，逐步执行"),
+    SWARM("火种模式", "星星之火，可以燎原：并行 Worker 协作，可按角色混合模型"),
     FLEET("Fleet 模式", "多 Agent 编队协同，跨设备分布式执行复杂任务")
 }
 

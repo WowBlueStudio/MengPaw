@@ -451,6 +451,7 @@ class AgentViewModel : ViewModel() {
                     inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
                     inputTagManager.loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
                     inputTagManager.loopMode == LoopMode.MISSION || inputTagManager.loopMode == LoopMode.FLEET -> session.engine.runWithFleet(task = finalTask, onStep = onStep)
+                    inputTagManager.loopMode == LoopMode.SWARM -> session.engine.runWithSwarm(task = finalTask, onStep = onStep)
                     else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
                 }
 
