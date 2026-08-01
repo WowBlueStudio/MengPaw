@@ -63,6 +63,7 @@ class ReasonixConnectorPlugin : Plugin, FrameworkAdapter {
     @Volatile private var connectedHost: String = ""
 
     override suspend fun connect(target: FrameworkTarget): Result<Unit> = withContext(Dispatchers.IO) {
+        transport?.disconnect() // 重复 connect 先释放旧 session, 防泄漏
         val cfg = ConnectorConfigStore.read(PLUGIN_ID)
         if (cfg.user.isBlank()) {
             return@withContext Result.failure(IllegalStateException(

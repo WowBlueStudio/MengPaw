@@ -136,28 +136,35 @@ class SshTransport(
      * 用 exec channel (ChannelExec) 承载: stdin 写流 = getOutputStream(),
      * stdout 读流 = getInputStream()。
      */
-    fun openInteractive(command: String): Result<InteractiveChannel> = try {
+    fun openInteractive(command: String): Result<InteractiveChannel> {
         val s = session ?: return Result.failure(IllegalStateException("SSH 未连接 — 先执行 connect"))
         val ch = s.openChannel("exec") as ChannelExec
         ch.setCommand(command)
         val remoteOut = ch.inputStream
         val localOut = ch.outputStream
-        ch.connect(15_000)
-        val reader = BufferedReader(InputStreamReader(remoteOut, Charsets.UTF_8))
-        val queue = LinkedBlockingQueue<String>()
-        val readerThread = Thread {
+        return try {
             try {
-                while (true) {
-                    val line = reader.readLine() ?: break
-                    queue.offer(line)
-                }
-            } catch (_: Exception) {}
+                ch.connect(15_000)
+            } catch (e: Exception) {
+                ch.disconnect() // connect 失败也释放 channel, 不泄漏
+                return Result.failure(e)
+            }
+            val reader = BufferedReader(InputStreamReader(remoteOut, Charsets.UTF_8))
+            val queue = LinkedBlockingQueue<String>()
+            val readerThread = Thread {
+                try {
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        queue.offer(line)
+                    }
+                } catch (_: Exception) {}
+            }
+            readerThread.isDaemon = true
+            readerThread.start()
+            Result.success(InteractiveChannel(ch, localOut, queue, readerThread))
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        readerThread.isDaemon = true
-        readerThread.start()
-        Result.success(InteractiveChannel(ch, localOut, queue, readerThread))
-    } catch (e: Exception) {
-        Result.failure(e)
     }
 
     fun disconnect() {

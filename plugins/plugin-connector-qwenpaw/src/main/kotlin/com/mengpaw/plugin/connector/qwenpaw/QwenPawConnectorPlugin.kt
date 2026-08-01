@@ -85,6 +85,10 @@ class QwenPawConnectorPlugin : Plugin, FrameworkAdapter {
     @Volatile private var connectedHost: String = ""
 
     override suspend fun connect(target: FrameworkTarget): Result<Unit> = withContext(Dispatchers.IO) {
+        transport?.disconnect() // 重复 connect 先释放旧 SSH session, 防泄漏
+        acp?.close()
+        transport = null
+        acp = null
         val cfg = ConnectorConfigStore.read(PLUGIN_ID)
         when (cfg.channel) {
             "rest" -> {
@@ -289,6 +293,7 @@ class QwenPawConnectorPlugin : Plugin, FrameworkAdapter {
     private class AcpOverSsh(private val ch: InteractiveChannel) {
         private val idCounter = AtomicInteger(1)
         private val pending = ConcurrentHashMap<Int, CompletableFuture<JSONObject>>()
+        // 读取线程写 / prompt() 清与读 — synchronized 保证线程安全 (StringBuilder 非线程安全)
         private val textBuffer = StringBuilder()
 
         init {
@@ -313,9 +318,13 @@ class QwenPawConnectorPlugin : Plugin, FrameworkAdapter {
             val event = evt.optJSONObject("params")?.optJSONObject("event") ?: return
             if (event.optString("type") == "agent_message_chunk") {
                 val content = event.optJSONArray("content") ?: return
+                val chunk = StringBuilder()
                 for (i in 0 until content.length()) {
                     val part = content.getJSONObject(i)
-                    if (part.optString("type") == "text") textBuffer.append(part.optString("text"))
+                    if (part.optString("type") == "text") chunk.append(part.optString("text"))
+                }
+                if (chunk.isNotEmpty()) {
+                    synchronized(textBuffer) { textBuffer.append(chunk) }
                 }
             }
         }
@@ -342,11 +351,12 @@ class QwenPawConnectorPlugin : Plugin, FrameworkAdapter {
         fun prompt(text: String): Result<String> {
             val sessionId = sessionIdHolder
             if (sessionId == null) return Result.failure(IllegalStateException("ACP 会话未建立 (new_session 失败)"))
-            textBuffer.setLength(0)
+            synchronized(textBuffer) { textBuffer.setLength(0) }
             val params = JSONObject().put("session_id", sessionId)
                 .put("prompt", JSONArray().put(JSONObject().put("type", "text").put("text", text)))
             val result = call("prompt", params, 300_000)
-            return result.map { textBuffer.toString().trim() }
+            val collected = synchronized(textBuffer) { textBuffer.toString() }
+            return result.map { collected.trim() }
         }
 
         private var sessionIdHolder: String? = null

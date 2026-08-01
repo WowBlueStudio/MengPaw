@@ -79,16 +79,19 @@ object ConnectorConfigStore {
         } catch (_: Exception) {}
     }
 
-    /** 脱敏配置摘要 (密码/口令显示 ****)。 */
+    /** 脱敏配置摘要 (密码/口令/token 显示 ****, 无 !! 断言)。 */
     fun describe(pluginId: String, cfg: ConnectorConfig): String = buildString {
+        val password = cfg.password
+        val keyPassphrase = cfg.keyPassphrase
+        val token = cfg.token
         appendLine("SSH 主机配置: ${cfg.user.ifBlank { "未配置" }}@:${cfg.sshPort}")
         appendLine("认证: ${when {
-            !cfg.password.isNullOrBlank() -> "密码 (${"*".repeat(cfg.password!!.length)})"
-            !cfg.keyPath.isNullOrBlank() -> "PEM 密钥: ${cfg.keyPath}${if (!cfg.keyPassphrase.isNullOrBlank()) " (口令 ${"*".repeat(cfg.keyPassphrase!!.length)})" else ""}"
+            !password.isNullOrBlank() -> "密码 (${"*".repeat(password.length)})"
+            !cfg.keyPath.isNullOrBlank() -> "PEM 密钥: ${cfg.keyPath}${if (!keyPassphrase.isNullOrBlank()) " (口令 ${"*".repeat(keyPassphrase.length)})" else ""}"
             else -> "未配置 (需 --password 或 --key-path)"
         }}")
         appendLine("通道: ${cfg.channel}${if (cfg.channel == "rest") " (agent-id: ${cfg.agentId})" else ""}")
-        if (!cfg.token.isNullOrBlank()) appendLine("REST Token: ${"*".repeat(cfg.token!!.length)}")
+        if (!token.isNullOrBlank()) appendLine("REST Token: ${"*".repeat(token.length)}")
         appendLine("CLI 路径: ${cfg.cliPath ?: "PATH 查找"}")
         appendLine("⚠️ 凭据明文存于本机 配置/$pluginId-connector.json — 仅限个人局域网使用")
     }
