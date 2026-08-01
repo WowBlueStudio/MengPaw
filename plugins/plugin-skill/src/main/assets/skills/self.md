@@ -1,10 +1,10 @@
 ---
 name: self
-description: Agent进化命令参考 — 查看状态、配置、工具列表，向用户推送消息
+description: Agent自我管理命令参考 — 查看状态、配置、工具列表，向用户推送消息
 enabled: true
 category: system
 ---
-# self — Agent进化 (16命令)
+# self — Agent自我管理 (16命令)
 
 ## 最常用
 | 命令 | 说明 |

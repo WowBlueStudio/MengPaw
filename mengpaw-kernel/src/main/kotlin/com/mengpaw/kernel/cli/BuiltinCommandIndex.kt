@@ -13,7 +13,7 @@ object BuiltinCommandIndex {
 
     /** 构建完整命令索引并注册到 CommandSearch. 在 AgentEngine 初始化时调用一次. */
     fun buildAll() {
-        // ── self: Agent 进化 (16) ──
+        // ── self: Agent 自我管理 (16) ──
         idx("self.status", "查看 Agent 当前运行状态 (在线/空闲/版本)", "self.status",
             listOf("状态", "运行", "在线", "检查", "信息", "概况"),
             listOf("status", "state", "info", "health", "check", "running"))
@@ -219,9 +219,12 @@ object BuiltinCommandIndex {
         idx("framework.peers", "列出所有已知框架节点 (含信任状态和在线状态)", "framework.peers",
             listOf("节点", "对等", "框架", "列表", "已发现", "在线"),
             listOf("peers", "nodes", "list", "known", "online", "discovered"))
-        idx("framework.trust", "信任指定框架节点 (允许任务委派和记忆共享)", "framework.trust <peer>",
-            listOf("信任", "授权", "允许", "框架", "节点", "配对"),
-            listOf("trust", "authorize", "allow", "peer", "pair", "accept"))
+        idx("framework.add", "手动添加框架节点 (mDNS 发现不可用时)", "framework.add <name> <address> [port] [--type <type>]",
+            listOf("添加", "手动", "节点", "IP", "地址", "通讯录"),
+            listOf("add", "manual", "node", "peer", "address", "contact"))
+        idx("framework.trust", "信任指定框架节点 (允许任务委派和记忆共享, 需 --yes 确认)", "framework.trust <fingerprint> [--yes]",
+            listOf("信任", "授权", "允许", "框架", "节点", "配对", "确认"),
+            listOf("trust", "authorize", "allow", "peer", "pair", "accept", "confirm"))
         idx("framework.untrust", "取消信任指定框架节点", "framework.untrust <peer>",
             listOf("取消", "信任", "撤销", "移除", "断开"),
             listOf("untrust", "revoke", "remove", "disconnect", "block"))
@@ -231,6 +234,18 @@ object BuiltinCommandIndex {
         idx("framework.ping", "测试与指定框架节点的网络连通性", "framework.ping <peer>",
             listOf("Ping", "连通", "测试", "网络", "延迟"),
             listOf("ping", "test", "network", "latency", "check"))
+        idx("framework.connect", "通过连接器插件连接外部框架节点 (OpenClaw/QwenPaw 等)", "framework.connect <peer-name>",
+            listOf("连接", "外部", "框架", "OpenClaw", "QwenPaw", "连接器", "适配器"),
+            listOf("connect", "external", "framework", "adapter", "connector"))
+        idx("framework.call", "调用已连接外部框架的工具 (翻译成远端协议)", "framework.call <peer-name> <tool> [jsonArgs]",
+            listOf("调用", "工具", "委派", "外部", "连接", "执行"),
+            listOf("call", "tool", "invoke", "remote", "execute", "delegate"))
+        idx("framework.disconnect", "断开与外部框架节点的连接", "framework.disconnect <peer-name>",
+            listOf("断开", "连接", "外部", "取消"),
+            listOf("disconnect", "close", "stop", "detach"))
+        idx("framework.adapters", "列出已注册的连接器及其在线状态", "framework.adapters",
+            listOf("连接器", "适配器", "列表", "在线", "MCP网关"),
+            listOf("adapters", "connectors", "list", "gateway", "status"))
     }
 
     // ── 便捷注册 ─────────────────────────────────────────────────────

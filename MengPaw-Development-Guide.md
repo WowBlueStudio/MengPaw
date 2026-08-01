@@ -77,12 +77,13 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 | 命名空间 | 源文件 | 命令数 | 职责 |
 |---------|--------|--------|------|
-| `self` | SelfExecutor.kt | 16 | Agent 进化 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/ports/search/search.stats/time/notify.message/notify.banner) |
+| `self` | SelfExecutor.kt | 16 | Agent 自我管理 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/ports/search/search.stats/time/notify.message/notify.banner) |
 | `agent` | AgentExecutor.kt | 39 | 文档(6) + 记忆三轨(18) + 其他(5) + 会话(4) + 工作区文件(6) |
 | `plugin` | PluginExecutor + DevPlugin | 12 + 6 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade/auto/verify + create/audit/share/examples/keywords/guide) |
-`framework` | FrameworkPlugin | 6 | 框架发现 (discover/peers/trust/untrust/info/ping) [↔ 同捆插件 plugin-framework] |
+| `framework` | FrameworkPlugin | 11 | 框架通信 (discover/add/peers/trust/untrust/info/ping/connect/call/disconnect/adapters) [↔ 同捆插件 plugin-framework] |
+| `evolution` | EvolutionExecutor.kt | 5 | 智能体进化 (audit/report/learn.command/reactions/mark-corrected) [↔ 同捆插件 plugin-evolution 提供默认实现] |
 
-> `sys` 命名空间 (40 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。
+> `sys` 命名空间 (40 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。`evolution` 命名空间在内核注册 (PipelineManager)，默认实现由同捆插件 plugin-evolution 注册为 EvolutionProvider SPI。
 
 ### 2.4 依赖关系
 
@@ -91,8 +92,8 @@ mengpaw-shell
   ├── mengpaw-kernel (微内核)
   ├── mengpaw-core (Android 适配)
   ├── mengpaw-design-system (主题)
-  └── 11 捆绑插件: skill / framework / dev / fs / net / clipboard /
-      notification / memory-twin / root / hermes(tribe) / agent-tools
+  └── 12 捆绑插件: skill / framework / dev / fs / net / clipboard /
+      memory-twin / root / hermes(tribe) / agent-tools / dream / evolution
       (self 与 memory 已融入内核, 非插件)
 
 mengpaw-browser
@@ -100,7 +101,7 @@ mengpaw-browser
   ├── mengpaw-core
   └── mengpaw-design-system
 
-plugins/ (19 模块)
+plugins/ (21 模块)
   └── mengpaw-kernel  ← 所有插件只依赖微内核（同级）
 ```
 
@@ -241,9 +242,9 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `plugin/` (3 文件) | BuiltinBrowserPlugin, BrowserPlugin, BrowserPluginRegistry |
 
 
-### 3.5 插件模块（20 个，plugins/ 目录，按 settings.gradle.kts 为准）
+### 3.5 插件模块（21 个，plugins/ 目录，按 settings.gradle.kts 为准）
 
-> 插件数统一口径：**20 模块**（settings.gradle.kts:29-48）| **11 捆绑**（mengpaw-shell 打包）| **plugins.json 24 条目**（11 builtin + 11 remote + 2 embedded）
+> 插件数统一口径：**21 模块**（settings.gradle.kts:29-49）| **12 捆绑**（mengpaw-shell 打包）| **plugins.json 25 条目**（12 builtin + 11 remote + 2 embedded）
 
 #### 基础功能 (6)
 
@@ -317,7 +318,15 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 > **plugin-dream 是内置默认实现, 不能直接移除** (UNINSTALLABLE 白名单锁定)。作用: 把梦境实现显式注册为 DreamProvider SPI — 第三方插件可实现 `kernel.agent.DreamProvider` 接口, onInstall 注册自己的实现 (后注册者胜, 输入组装/LLM 提炼/文件整理可整体定制), 卸载后回退内核默认。
 
-> ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载（11 个：framework/fs/net/skill/clipboard/dev/root/hermes(tribe)/memory-twin/agent-tools/dream；self 与 memory 已融入内核 agent.* 命名空间）
+#### 智能体进化 (1, 内置不可移除)
+
+| 模块 | 命名空间 | 命令 | 捆绑 |
+|------|---------|------|:--:|
+| plugin-evolution | — (evolution.* 在内核) | — | ⭐ |
+
+> **plugin-evolution 是内置默认实现, 不能直接移除** (UNINSTALLABLE 白名单锁定)。作用: 把进化实现显式注册为 EvolutionProvider SPI — 第三方插件可实现 `kernel.evolution.EvolutionProvider` 接口, onInstall 注册自己的实现 (后注册者胜, 失败记录/省察引导/处置命令可整体定制), 卸载后回退内核默认。evolution.* 命令本身在内核命名空间注册 (PipelineManager)，与梦境模式 agent.dream 同模式。
+
+> ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载（12 个：framework/fs/net/skill/clipboard/dev/root/hermes(tribe)/memory-twin/agent-tools/dream/evolution；self 与 memory 已融入内核 agent.* 命名空间）
 >
 > plugin-hermes 模块实际实现为 `TribePlugin`（id=tribe-plugin，注册 tribe.* 22 条 + hermes.* 兼容命令），plugins.json 中对应 `tribe-plugin` 条目。
 
@@ -584,12 +593,12 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 ### 5.1 内置命名空间（kernel）
 
-#### self — Agent 进化 (16)
+#### self — Agent 自我管理 (16)
 `status` | `config [key=value]` | `stats` | `version` | `avatar` | `theme` | `mcp` | `trigger` | `acp` | `tools [namespace]` | `ports [--json]` | `search <query> [--top N]` | `search.stats` | `time [format]` | `notify.message <text>` | `notify.banner <text> [--level]`
 
-#### evolution — 进化系统 (5, 内核内置)
+#### evolution — 进化系统 (5, 内核注册, 提供者由同捆插件 plugin-evolution 提供)
 `audit` | `report <描述>` | `learn.command <命令> <描述> [--keywords 词,词]` | `reactions` | `mark-corrected <id>`
-> 失败钩子归系统 (ErrorCollector.onReport): 命令失败/循环/崩溃自动写入失败模式库 (`{AGENTS}/{agent}/evolution/failures.jsonl`), 下次 LLM 调用注入金字塔省察引导 (L1 事实→L2 归因→L3 用户视角→L4 进化)。用户纠正 (shell 层识别) 写入用户反应档案 `reactions.md`。处置: 指令错→`learn.command`/`self.search`, 常识错→`agent.memory.keep`, 行为错→`agent.write soul.md`, 框架错→`report`。
+> 失败钩子归系统 (ErrorCollector.onReport): 命令失败/循环/崩溃自动写入失败模式库 (`{AGENTS}/{agent}/evolution/failures.jsonl`), 下次 LLM 调用注入金字塔省察引导 (L1 事实→L2 归因→L3 用户视角→L4 进化)。用户纠正 (shell 层识别) 写入用户反应档案 `reactions.md`。处置: 指令错→`learn.command`/`self.search`, 常识错→`agent.memory.keep`, 行为错→`agent.write soul.md`, 框架错→`report`。实现经 EvolutionProvider SPI 可替换 (同捆插件 plugin-evolution 注册内核默认, 第三方覆盖后卸载回退)。
 
 
 #### agent — 文档 + 内存 + 工作区 (27+)

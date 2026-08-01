@@ -391,7 +391,8 @@ class PluginViewModel : ViewModel() {
             "update-plugin" to "com.mengpaw.plugin.update.UpdatePlugin",
             "memory-twin-plugin" to "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin",
             "root-plugin" to "com.mengpaw.plugin.root.RootPlugin",
-            "dream-plugin" to "com.mengpaw.plugin.dream.DreamPlugin"
+            "dream-plugin" to "com.mengpaw.plugin.dream.DreamPlugin",
+            "evolution-plugin" to "com.mengpaw.plugin.evolution.EvolutionPlugin"
         )
 
         /** Look up the class name for a builtin plugin by its ID. */

@@ -1,7 +1,7 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
-  "version": 5,
-  "updated": "2026-07-31",
+  "version": 6,
+  "updated": "2026-08-01",
   "plugins": [
     {
       "id": "dream-plugin",
@@ -16,6 +16,20 @@
       "checksum": "",
       "size": 0,
       "changelog": "### 新增\n- **梦境模式 SPI 化**: 内核 DreamProvider 接口 + 注册表; 内置默认实现注册为 dream-plugin (不可移除)。\n- 第三方插件可实现 DreamProvider 在 onInstall 时注册覆盖 (后注册者胜), 卸载后回退内核默认。"
+    },
+    {
+      "id": "evolution-plugin",
+      "name": "智能体进化",
+      "version": "",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "智能体进化内置默认实现 — 失败模式库/省察引导/用户反应档案/框架反馈。不可移除; 第三方可实现 EvolutionProvider 覆盖",
+      "status": "builtin",
+      "minCoreVersion": "0.2.0",
+      "commands": [],
+      "checksum": "",
+      "size": 0,
+      "changelog": "### 新增\n- **智能体进化 SPI 化**: 内核 EvolutionProvider 接口 + 注册表; 内置默认实现注册为 evolution-plugin (不可移除)。\n- 第三方插件可实现 EvolutionProvider 在 onInstall 时注册覆盖 (后注册者胜), 卸载后回退内核默认。"
     },
     {
       "id": "framework-plugin",

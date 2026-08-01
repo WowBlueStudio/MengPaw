@@ -130,6 +130,7 @@ dependencies {
     implementation(project(":plugin-hermes"))
     implementation(project(":plugin-agent-tools"))
     implementation(project(":plugin-dream"))
+    implementation(project(":plugin-evolution"))
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))

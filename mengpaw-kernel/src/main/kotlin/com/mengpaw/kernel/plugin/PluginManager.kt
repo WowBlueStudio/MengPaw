@@ -119,35 +119,61 @@ class PluginManager(
 
     /**
      * Activate an installed plugin: register its commands into the CLI registry.
+     *
+     * 生命周期对称: 禁用 (DISABLED) 后重新激活时先重跑 onInstall —
+     * 对应 deactivate 已调用 onUninstall, 提供者型插件 (dream/evolution/framework) 依赖
+     * onInstall 恢复提供者注册与网关。首装路径 (install → activate) 不重复 onInstall。
+     * 回调在锁外执行 (suspend function), 与 install/uninstall 同模式。
      */
-    fun activate(id: String): Result<Unit> = synchronized(this) {
-        val plugin = plugins[id]
-            ?: return Result.failure(NoSuchElementException("Plugin not found: $id"))
-        val status = statuses[id]
-        if (status != PluginStatus.INSTALLED && status != PluginStatus.DISABLED) {
-            return Result.failure(IllegalStateException("Plugin '$id' is not in installable state: $status"))
+    suspend fun activate(id: String): Result<Unit> {
+        val needsOnInstall: Boolean
+        val plugin = synchronized(this) {
+            val p = plugins[id]
+                ?: return Result.failure(NoSuchElementException("Plugin not found: $id"))
+            val status = statuses[id]
+            if (status != PluginStatus.INSTALLED && status != PluginStatus.DISABLED) {
+                return Result.failure(IllegalStateException("Plugin '$id' is not in installable state: $status"))
+            }
+            needsOnInstall = (status == PluginStatus.DISABLED)
+            p
         }
-
-        registerCommands(id, plugin)
-        statuses[id] = PluginStatus.ACTIVE
-        // 联动命令搜索索引: 插件激活后注册其命令到 BM25 索引
-        registerSearchIndex(id, plugin)
-        return Result.success(Unit)
+        if (needsOnInstall) {
+            try { plugin.onInstall(DefaultPluginContext(id, coreVersion)) } catch (e: Exception) {
+                KernelLog.w("PluginManager", "onInstall failed for $id: ${e.message}")
+            }
+        }
+        return synchronized(this) {
+            registerCommands(id, plugin)
+            statuses[id] = PluginStatus.ACTIVE
+            // 联动命令搜索索引: 插件激活后注册其命令到 BM25 索引
+            registerSearchIndex(id, plugin)
+            Result.success(Unit)
+        }
     }
 
     /**
      * Deactivate a plugin: unregister its commands but keep it installed.
+     *
+     * 生命周期对称: 禁用时调用 onUninstall — 提供者型插件 (dream/evolution/framework)
+     * 的提供者注册与网关 (MCP/发现) 随禁用停用, 重新启用时 activate 重跑 onInstall 恢复。
      */
-    fun deactivate(id: String): Result<Unit> = synchronized(this) {
-        val plugin = plugins[id]
-            ?: return Result.failure(NoSuchElementException("Plugin not found: $id"))
-        if (statuses[id] != PluginStatus.ACTIVE) {
-            return Result.failure(IllegalStateException("Plugin '$id' is not active"))
+    suspend fun deactivate(id: String): Result<Unit> {
+        val plugin = synchronized(this) {
+            val p = plugins[id]
+                ?: return Result.failure(NoSuchElementException("Plugin not found: $id"))
+            if (statuses[id] != PluginStatus.ACTIVE) {
+                return Result.failure(IllegalStateException("Plugin '$id' is not active"))
+            }
+            unregisterCommands(id, p)
+            p
         }
-
-        unregisterCommands(id, plugin)
-        statuses[id] = PluginStatus.DISABLED
-        return Result.success(Unit)
+        try { plugin.onUninstall() } catch (e: Exception) {
+            KernelLog.w("PluginManager", "onUninstall failed for $id: ${e.message}")
+        }
+        return synchronized(this) {
+            statuses[id] = PluginStatus.DISABLED
+            Result.success(Unit)
+        }
     }
 
     /**

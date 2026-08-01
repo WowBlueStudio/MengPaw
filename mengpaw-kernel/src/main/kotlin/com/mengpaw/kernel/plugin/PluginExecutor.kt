@@ -37,7 +37,7 @@ class PluginExecutor(
     private val UNINSTALLABLE = setOf(
         "skill-plugin", "framework-plugin", "dev-plugin",
         "fs-plugin", "net-plugin", "clipboard-plugin",
-        "memory-twin-plugin", "dream-plugin"
+        "memory-twin-plugin", "dream-plugin", "evolution-plugin"
     )
 
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(

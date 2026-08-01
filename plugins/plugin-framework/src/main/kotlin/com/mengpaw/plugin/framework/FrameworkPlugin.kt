@@ -11,9 +11,10 @@ import com.mengpaw.kernel.plugin.*
  * 框架发现插件 — 局域网 mDNS 注册 / 扫描 / 指纹管理。
  *
  * CLI 命令 (framework.*):
- *   discover — 立即扫描局域网
+ *   discover [--wait] — 启动局域网扫描 (默认异步, --wait 同步等待 3s)
+ *   add <name> <address> [port] [--type <type>] — 手动添加节点
  *   peers    — 列出已知框架
- *   trust <fingerprint> — 信任框架
+ *   trust <fingerprint> [--yes] — 信任框架 (需 --yes 确认)
  *   untrust <fingerprint> — 移除信任
  *   info <fingerprint> — 框架详情
  *   ping <fingerprint> — 存活检测
@@ -29,7 +30,7 @@ class FrameworkPlugin : Plugin {
         description = "框架通信协议插件 — mDNS 发现/信任/通讯录 + 本机 MCP 网关 (9881) + 连接器分派 (OpenClaw/QwenPaw 等)",
         minCoreVersion = "0.9.1",
         commands = listOf(
-            "framework.discover", "framework.peers",
+            "framework.discover", "framework.add", "framework.peers",
             "framework.trust", "framework.untrust",
             "framework.info", "framework.ping",
             "framework.connect", "framework.call",
@@ -39,6 +40,7 @@ class FrameworkPlugin : Plugin {
 
     override val commands: Map<String, CommandHandler> = mapOf(
         "discover" to { args, ctx -> handleDiscover(args, ctx) },
+        "add" to { args, ctx -> handleAdd(args, ctx) },
         "peers" to { args, ctx -> handlePeers(args, ctx) },
         "trust" to { args, ctx -> handleTrust(args, ctx) },
         "untrust" to { args, ctx -> handleUntrust(args, ctx) },
@@ -139,10 +141,17 @@ class FrameworkPlugin : Plugin {
 
     private suspend fun handleDiscover(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         discovery?.startDiscovery()
-        // 等待 3s 让 mDNS 解析完成
+        // 默认异步: 立即返回, 让 Agent 稍后用 peers 查看; --wait 保持同步等 3s
+        if (!args.contains("--wait")) {
+            return ExecutionResult.ok(
+                "🔍 mDNS 扫描已启动 (约 3 秒完成) — 稍后执行 framework.peers 查看结果, 或 framework.discover --wait 同步等待。\n" +
+                "未发现时检查: 同一 WiFi / 防火墙; 或用 framework.add <名称> <IP> <端口> 手动添加节点。"
+            )
+        }
         kotlinx.coroutines.delay(3000)
         val peers = FrameworkPeerStore.loadAll()
-        if (peers.isEmpty()) return ExecutionResult.ok("未发现局域网框架。请确保其他设备已启动 MengPaw 并在同一 WiFi。")
+        if (peers.isEmpty()) return ExecutionResult.ok(
+            "未发现局域网框架。请确保其他设备已启动 MengPaw 并在同一 WiFi; 或手动添加: framework.add <名称> <IP> <端口>。")
         val sb = StringBuilder("发现 ${peers.size} 个框架：\n\n")
         peers.forEach { p ->
             val online = if (p.lastSeen > System.currentTimeMillis() - 120_000) "🟢" else "⚫"
@@ -153,6 +162,50 @@ class FrameworkPlugin : Plugin {
             sb.appendLine()
         }
         return ExecutionResult.ok(sb.toString().trimEnd())
+    }
+
+    /**
+     * 手动添加框架节点 — mDNS 发现不可用时的替代通道 (信任后同样可委派)。
+     * Usage: framework.add <name> <address> [port] [--type <frameworkType>]
+     */
+    private suspend fun handleAdd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.size < 2) return ExecutionResult.fail(
+            "用法: framework.add <name> <address> [port] [--type <frameworkType>]\n" +
+            "例: framework.add 书房手机 192.168.1.5 9876\n" +
+            "    framework.add qwen-node 192.168.1.8 --type qwenpaw",
+            errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_INVALID_INPUT)
+        val name = args[0]
+        val address = args[1]
+        val typeIdx = args.indexOf("--type")
+        val frameworkType = if (typeIdx >= 0 && typeIdx + 1 < args.size) args[typeIdx + 1] else "mengpaw"
+        // 显式端口 = 位置 2 (跳过 --type 及其值)
+        val explicitPort = args.getOrNull(2)?.toIntOrNull()
+        val defaultPort = FrameworkPeerStore.FRAMEWORK_TYPES[frameworkType]?.takeIf { it > 0 }
+            ?: com.mengpaw.kernel.ports.Ports.ACP
+        val port = explicitPort ?: defaultPort
+        if (port !in 1..65535) return ExecutionResult.fail(
+            "非法端口: $port (1-65535)", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_INVALID_INPUT)
+        val fingerprint = FrameworkPeerStore.computeFingerprint(name, "$address:$port")
+        val existing = FrameworkPeerStore.findByFingerprint(fingerprint)
+        if (existing != null) {
+            return ExecutionResult.fail("节点已存在: ${existing.name} (${existing.address}:${existing.port})\n" +
+                "如地址/端口有变, 请先 framework.untrust $fingerprint 再重新添加")
+        }
+        val peer = FrameworkPeerStore.FrameworkPeer(
+            fingerprint = fingerprint,
+            name = name,
+            version = "手动添加",
+            frameworkName = "MengPaw",
+            address = address,
+            port = port,
+            frameworkType = frameworkType,
+            lastSeen = System.currentTimeMillis()
+        )
+        FrameworkPeerStore.save(peer)
+        return ExecutionResult.ok(
+            "已添加框架节点: $name (${address}:${port}, 类型 $frameworkType)\n" +
+            "指纹: $fingerprint\n" +
+            "下一步: framework.trust $fingerprint --yes 信任后即可 framework.connect $name 委派任务。")
     }
 
     private suspend fun handlePeers(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -170,11 +223,18 @@ class FrameworkPlugin : Plugin {
     }
 
     private suspend fun handleTrust(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val fp = args.firstOrNull() ?: return ExecutionResult.fail("用法: framework.trust <fingerprint>")
+        val fp = args.firstOrNull() ?: return ExecutionResult.fail("用法: framework.trust <fingerprint> [--yes]")
         val peer = FrameworkPeerStore.findByFingerprint(fp)
-            ?: return ExecutionResult.fail("未找到指纹为 $fp 的框架")
+            ?: return ExecutionResult.fail("未找到指纹为 $fp 的框架 (用 framework.discover / framework.peers 查看)")
+        if (peer.trusted) return ExecutionResult.ok("${peer.name} 已在信任列表")
+        // 二次确认: 信任 = GUEST → TRUSTED 全量放行 (委派/记忆共享/工具调用), 需显式 --yes
+        if (!args.contains("--yes")) {
+            return ExecutionResult.fail(
+                "⚠️ 信任 ${peer.name} (${peer.address}:${peer.port}, ${peer.frameworkType}) 将放行: 任务委派 / 记忆共享 / 工具调用。\n" +
+                "信任状态未改变。确认请执行: framework.trust $fp --yes")
+        }
         FrameworkPeerStore.save(peer.copy(trusted = true))
-        return ExecutionResult.ok("已信任框架: ${peer.name} ($fp)")
+        return ExecutionResult.ok("已信任框架: ${peer.name} ($fp) — 可 framework.connect ${peer.name} 或 framework.call ${peer.name} <tool> 委派任务")
     }
 
     private suspend fun handleUntrust(args: List<String>, ctx: ExecutionContext): ExecutionResult {

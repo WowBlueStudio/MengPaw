@@ -65,12 +65,12 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS 双向桥)
 │   └── plugin/                 # 浏览器内置插件 (22 命令)
 │
-└── plugins/                    # 20 个功能插件 (同级，均只依赖 kernel)
+└── plugins/                    # 21 个功能插件 (同级，均只依赖 kernel)
     ├── plugin-fs/              # 文件系统 (5 命令)
     ├── plugin-net/             # HTTP 网络 (3 命令)
     ├── plugin-skill/           # 双层技能系统 (4 命令) ⭐💎
     ├── plugin-clipboard/       # 剪贴板 (3 命令)
-    ├── plugin-framework/       # 框架通信协议 (10 命令) ⭐💎
+    ├── plugin-framework/       # 框架通信协议 (11 命令) ⭐💎
     ├── plugin-memory-twin/     # 记忆孪生 (16 命令) ⭐💎
     ├── plugin-agent-tools/     # Agent 命令集 (4 命令) ⭐💎
     ├── plugin-root/            # Root 权限 (17 命令)
@@ -100,7 +100,7 @@ mengpaw/
 │  mengpaw-kernel (46 文件)      │  ← 微内核 (纯 Kotlin/JVM)
 │  零 Android 依赖 · 可 JVM 测试  │
 ├────────────────────────────────┤
-│  24 插件 (同级 · 只依赖 kernel)  │  ← 插件层
+│  25 插件 (同级 · 只依赖 kernel)  │  ← 插件层
 └────────────────────────────────┘
 ```
 
@@ -120,7 +120,8 @@ Agent 通过 CLI 命令操控设备：
 | `net` | `curl`, `get`, `post` | HTTP 网络 |
 | `sys` | `battery`, `cpu`, `display`, `wifi` | Android 系统 (39 命令) |
 | `skill` | `ls`, `run`, `enable` | 技能系统 |
-| `self` | `status`, `tools`, `search`, `time` | Agent 进化 |
+| `self` | `status`, `tools`, `search`, `time` | Agent 自我管理 |
+| `evolution` | `audit`, `report`, `learn.command`, `mark-corrected` | 智能体进化 (失败学习) |
 | `plugin` | `marketplace`, `install`, `search` | 插件管理 |
 | `twin` | `peers`, `sync`, `delegate`, `route` | 记忆孪生 |
 

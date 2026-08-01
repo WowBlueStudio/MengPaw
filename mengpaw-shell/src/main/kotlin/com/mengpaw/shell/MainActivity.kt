@@ -47,7 +47,7 @@ private val BUILTIN_PLUGIN_IDS = setOf(
     "framework-plugin", "skill-plugin", "dev-plugin",
     "fs-plugin", "net-plugin", "clipboard-plugin",
     "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin",
-    "dream-plugin"
+    "dream-plugin", "evolution-plugin"
 )
 
 /**
@@ -73,7 +73,8 @@ private val BUILTIN_PLUGIN_INFO = mapOf(
     "root-plugin" to ("Root 权限" to "Root 权限管理 — su 命令执行/应用管理/文件系统/系统修改/备份恢复/审计日志"),
     "tribe-plugin" to ("部落协作 (Tribe)" to "多 Agent 部落协作：LAN 自动组队、Kanban 委派、LLM 路由、任务模板、Fleet 并行、广播讨论、ACP 实时、心跳"),
     "tools-plugin" to ("Agent 命令集" to "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用"),
-    "dream-plugin" to ("梦境模式" to "梦境模式内置默认实现 (不可移除) — 记忆整理管道; 第三方可实现 DreamProvider 覆盖")
+    "dream-plugin" to ("梦境模式" to "梦境模式内置默认实现 (不可移除) — 记忆整理管道; 第三方可实现 DreamProvider 覆盖"),
+    "evolution-plugin" to ("智能体进化" to "智能体进化内置默认实现 (不可移除) — 失败模式库/省察引导/框架反馈; 第三方可实现 EvolutionProvider 覆盖")
 )
 
 /**
@@ -272,6 +273,7 @@ class MainActivity : ComponentActivity() {
         PluginViewModel.registerPluginClass("tribe-plugin", "com.mengpaw.plugin.hermes.TribePlugin")
         PluginViewModel.registerPluginClass("tools-plugin", "com.mengpaw.plugin.agenttools.AgentToolsPlugin")
         PluginViewModel.registerPluginClass("dream-plugin", "com.mengpaw.plugin.dream.DreamPlugin")
+        PluginViewModel.registerPluginClass("evolution-plugin", "com.mengpaw.plugin.evolution.EvolutionPlugin")
 
         // ── 插件 Context 注入 (error-report / update 是 remote 插件, 反射设置静态字段, 未安装时静默跳过) ──
         try {
@@ -328,6 +330,7 @@ class MainActivity : ComponentActivity() {
                 "memory-twin-plugin" to MemoryTwinPlugin(),
                 "tools-plugin" to com.mengpaw.plugin.agenttools.AgentToolsPlugin(),
                 "dream-plugin" to com.mengpaw.plugin.dream.DreamPlugin(),
+                "evolution-plugin" to com.mengpaw.plugin.evolution.EvolutionPlugin(),
             )
             for ((id, plugin) in bundled) {
                 try {
@@ -497,7 +500,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                             android.util.Log.i("MengPawTwin", "install结果: ${installResult.isSuccess}")
                             installResult.fold(
                                 onSuccess = {
-                                    pm.activate(plugin.metadata.id).fold(
+                                    kotlinx.coroutines.runBlocking { pm.activate(plugin.metadata.id) }.fold(
                                         onSuccess = {
                                             android.util.Log.i("MengPawTwin", "插件激活成功")
                                             (ctx as? androidx.activity.ComponentActivity)?.lifecycleScope?.launch(Dispatchers.IO) {
@@ -513,7 +516,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                                 },
                                 onFailure = { e ->
                                     android.util.Log.e("MengPawTwin", "安装失败: ${e.message}", e)
-                                    pm.activate(plugin.metadata.id).fold(
+                                    kotlinx.coroutines.runBlocking { pm.activate(plugin.metadata.id) }.fold(
                                         onSuccess = {
                                             android.util.Log.i("MengPawTwin", "二次激活成功")
                                             (ctx as? androidx.activity.ComponentActivity)?.lifecycleScope?.launch(Dispatchers.IO) {
@@ -590,7 +593,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                 } }
             // Kernel namespaces are not plugins but surface as builtin capabilities
             val kernelNamespaces = listOf(
-                FrameworkItem("self (内置)", ItemCategory.BUILTIN, "Agent 进化 — 状态/配置/统计/版本/头像/主题/通知/时间", ""),
+                FrameworkItem("self (内置)", ItemCategory.BUILTIN, "Agent 自我管理 — 状态/配置/统计/版本/头像/主题/通知/时间", ""),
     FrameworkItem("evolution (内置)", ItemCategory.BUILTIN, "Agent 进化 — 失败钩子/金字塔自问/错误四分法处置/绩效", ""),
                 FrameworkItem("agent (内置)", ItemCategory.BUILTIN, "文档管理 — 记忆/CLI/档案/审计/梦境/存储", ""),
                 FrameworkItem("plugin (内置)", ItemCategory.BUILTIN, "插件管理 — 市场/搜索/安装/卸载/启停/升级", ""),

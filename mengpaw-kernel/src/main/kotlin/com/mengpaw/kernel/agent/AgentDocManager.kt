@@ -76,7 +76,7 @@ class AgentDocManager(
             // ── Built-in Commands ──
             appendLine("## 内置命令 (始终可用)")
             appendLine()
-            appendLine("### self — Agent 进化")
+            appendLine("### self — Agent 自我管理")
             appendLine("| 命令 | 用法 | 说明 | 权限 |")
             appendLine("|------|------|------|------|")
             appendLine("| self.status | self status | 运行状态 | 无 |")
@@ -126,6 +126,7 @@ class AgentDocManager(
             appendLine("| agent.memory | agent.memory [关键词] | 记忆索引/搜索 |")
             appendLine("| agent.audit | agent.audit [条数] | 命令审计日志 |")
             appendLine("| agent.profile | agent.profile | 身份档案 |")
+            appendLine("| agent.dream | agent.dream | 梦境整理 — 中期记忆提炼为结构化洞察 (dream-plugin) |")
             appendLine("| agent.browser-tools | agent.browser-tools | MP浏览器扩展能力 |")
             appendLine()
 
@@ -263,6 +264,8 @@ class AgentDocManager(
             appendLine("| dev-plugin | dev.plugin.* | 插件开发工具 (create/audit/share) |")
             appendLine("| root-plugin | root.* | Root 权限 (最高权限) |")
             appendLine("| tools-plugin | tools.* | Agent 命令集 (import/ls/remove/search) |")
+            appendLine("| dream-plugin | agent.dream | 梦境模式 — 记忆整理管道 (中期→长期) |")
+            appendLine("| evolution-plugin | evolution.* | 智能体进化 — 失败模式库/省察引导/框架反馈 |")
             appendLine()
             appendLine("### 远程/按需安装")
             appendLine()

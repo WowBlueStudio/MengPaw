@@ -10,11 +10,11 @@ category: system
 
 | 命名空间 | 说明书 |
 |---------|--------|
-| `self` (16命令) — Agent进化 | `skill.run self` |
+| `self` (16命令) — Agent自我管理 | `skill.run self` |
 | `agent` (12命令) — 文档记忆 | `skill.run agent-system` |
 | `plugin` (11命令) — 插件管理 | `skill.run plugin-system` |
 | `sys` (39命令) — Android系统 | `skill.run android-system` |
-| `framework` (6命令) — 框架发现 | `skill.run framework` |
+| `framework` (11命令) — 框架通信 | `skill.run framework` |
 
 ## 功能插件
 

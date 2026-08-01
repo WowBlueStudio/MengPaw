@@ -56,6 +56,7 @@ data class UserReaction(
  * - 内存环形缓冲最近 50 条失败记录(全局, 按 agent 字段过滤)。
  * - JSON-lines 持久化到 `{AGENTS}/{agent}/evolution/failures.jsonl`(按 agent 分文件)。
  * - 用户反应以追加式 Markdown 落盘 `reactions.md`, 供 Agent 直接读取。
+ * - 所有写入使用原子操作 (tmp + rename, 全项目写入铁律), 防崩溃损坏。
  * - 所有方法线程安全且永不抛异常。
  *
  * ## 失败模式匹配(绩效核心)
@@ -152,7 +153,7 @@ object EvolutionStore {
                 appendLine("- 上下文: ${contextSnippet.take(400)}")
                 appendLine("- 任务: ${task.take(300)}")
             }
-            file.appendText(block + "\n")
+            atomicAppend(file, block + "\n")
         } catch (_: Exception) { /* 存储必须永不崩溃 */ }
     }
 
@@ -226,7 +227,7 @@ object EvolutionStore {
         try {
             val file = failuresFile(agent)
             file.parentFile?.mkdirs()
-            file.appendText(json.encodeToString(entry) + "\n")
+            atomicAppend(file, json.encodeToString(entry) + "\n")
         } catch (_: Exception) { }
     }
 
@@ -236,7 +237,27 @@ object EvolutionStore {
             val file = failuresFile(agent)
             file.parentFile?.mkdirs()
             val lines = buffer.toList().filter { it.agentName == agent }
-            file.writeText(lines.joinToString("\n") { json.encodeToString(it) } + if (lines.isEmpty()) "" else "\n")
+            atomicWrite(file, lines.joinToString("\n") { json.encodeToString(it) } + if (lines.isEmpty()) "" else "\n")
         } catch (_: Exception) { }
+    }
+
+    // ── 原子写入 (tmp + rename, 防崩溃损坏 — 全项目写入铁律) ───────
+
+    /** 原子追加: 读原内容 → tmp 全量写 → rename 替换。 */
+    private fun atomicAppend(file: File, content: String) {
+        val old = if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
+        atomicWrite(file, old + content)
+    }
+
+    /** 原子写入: tmp + rename, 失败时清理残留 tmp。 */
+    private fun atomicWrite(file: File, content: String) {
+        val tmp = File(file.parentFile, "${file.name}.tmp")
+        tmp.writeText(content)
+        if (!tmp.renameTo(file)) {
+            // rename 失败(如 Windows 目标被占用): 尝试删除目标后重试一次
+            try { file.delete() } catch (_: Exception) {}
+            if (!tmp.renameTo(file)) { tmp.delete() }
+        }
+        if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
     }
 }
