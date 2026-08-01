@@ -49,6 +49,7 @@ class AgentEngine(
     private val goalModeExecutor = GoalModeExecutor(this)
     private val missionModeExecutor = MissionModeExecutor(this)
     private val planModeExecutor = PlanModeExecutor(this, pipelineManager, sessionManager, promptEngine)
+    private val swarmModeExecutor = SwarmModeExecutor(this)
     var integrityProvider: IntegrityProvider = NoOpIntegrityProvider
         set(value) {
             field = value
@@ -210,6 +211,19 @@ class AgentEngine(
 
     /** Expose the current LLM provider for delegation to sub-executors. */
     internal fun getLlmProvider(): LlmProvider = llmProvider
+
+    /** Expose sub-managers for delegation to sub-executors (swarm/mission/plan). */
+    internal fun getSessionManager(): SessionManager = sessionManager
+
+    internal fun getPipelineManager(): PipelineManager = pipelineManager
+
+    internal fun getPromptEngine(): PromptEngine = promptEngine
+
+    /**
+     * Attach the current coroutine job so stop() can cancel a running swarm.
+     * Swarm workers bypass runReActLoop, so runningJob would not attach itself.
+     */
+    internal fun attachRunningJob(job: Job?) { runningJob = job }
 
     /** Update agent state flow (used by sub-executors for progress reporting). */
     internal fun updateAgentState(state: AgentState) { _state.value = state }
@@ -663,17 +677,44 @@ class AgentEngine(
         maxRetriesPerSubtask: Int = 2, onStep: ((TraceStep) -> Unit)? = null
     ): String = missionModeExecutor.runWithMission(task, maxSubtasks, maxStepsPerSubtask, maxRetriesPerSubtask, onStep)
 
-    // ── Fleet Mode (reserved — delegates to Mission for now) ──────────
+    // ── 火种模式 (Swarm Mode) — 规划器拆解 → 并行 Worker → Verifier → 合成器 ──
 
     /**
-     * Fleet-mode: multi-agent fleet coordination for distributed execution.
-     * Currently delegates to [runWithMission]; will gain ACP-based cross-device
-     * task distribution, parallel worker dispatch, and fleet-level synthesis.
+     * 火种模式 (Swarm Mode): "星星之火，可以燎原" — 一个任务点燃众多 Worker 的燎原之势。
+     *
+     * 混合模型: [roles] 按角色注入 LlmProvider (planner/worker/verifier/synthesizer 可异模型),
+     * 缺省回退引擎主 provider。JIT 看板三闸门: [maxTotalSteps] 总预算 + [maxParallel] WIP 并行
+     * + [maxStepsPerSubtask] 单任务。Andon 失败协议: worker FAIL → 协调器决策 (重派/终止)。
+     * 零待命 Worker: 独立 Session (scope="swarm") 用完即销毁, 不污染主会话与记忆。
+     */
+    suspend fun runWithSwarm(
+        task: String,
+        roles: Map<String, LlmProvider> = emptyMap(),
+        maxSubtasks: Int = 5,
+        maxParallel: Int = 4,
+        maxStepsPerSubtask: Int = 12,
+        maxRetriesPerSubtask: Int = 2,
+        maxTotalSteps: Int = maxSubtasks * maxStepsPerSubtask,
+        onStep: ((TraceStep) -> Unit)? = null
+    ): String = swarmModeExecutor.runWithSwarm(
+        task, roles, maxSubtasks, maxParallel, maxStepsPerSubtask,
+        maxRetriesPerSubtask, maxTotalSteps, onStep
+    )
+
+    // ── Fleet Mode (转发到火种模式) ─────────────────────────────────
+
+    /**
+     * Fleet-mode: 多 Agent 并行编队协调 (v0.25+: 转发到 runWithSwarm, 默认单模型)。
+     * 报告头为 "## 火种模式:"。
      */
     suspend fun runWithFleet(
         task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
         maxRetriesPerSubtask: Int = 2, onStep: ((TraceStep) -> Unit)? = null
-    ): String = runWithMission(task, maxSubtasks, maxStepsPerSubtask, maxRetriesPerSubtask, onStep)
+    ): String = runWithSwarm(
+        task = task, maxSubtasks = maxSubtasks, maxParallel = 4,
+        maxStepsPerSubtask = maxStepsPerSubtask, maxRetriesPerSubtask = maxRetriesPerSubtask,
+        maxTotalSteps = maxSubtasks * maxStepsPerSubtask, onStep = onStep
+    )
 
     // ── Plan Mode (delegated to PlanModeExecutor) ─────────────────────
 
