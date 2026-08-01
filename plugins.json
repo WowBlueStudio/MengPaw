@@ -1,6 +1,6 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
-  "version": 6,
+  "version": 7,
   "updated": "2026-08-01",
   "plugins": [
     {
@@ -521,17 +521,71 @@
     },
     {
       "id": "connector-qwenpaw-plugin",
-      "name": "QwenPaw 连接器",
+      "name": "QwenPaw 通讯",
+      "version": "0.2.0",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "QwenPaw/Coze 通讯连接器 — REST (8088) 直连 + SSH ACP 双通道, 经 framework.connect/call 委派任务",
+      "status": "remote",
+      "minCoreVersion": "0.20.0",
+      "commands": [
+        "connector-qwenpaw.config",
+        "connector-qwenpaw.info"
+      ],
+      "checksum": "",
+      "size": 0,
+      "changelog": "### 重写\n- **QwenPaw 通讯连接器 v0.2.0**: 真实协议重写 (v0.1.0 为参考实现, 端点不存在)。\n- REST 通道 (默认): `qwenpaw app` — POST /api/console/chat (8088, X-Agent-Id, SSE 流); SSH ACP 通道 (实验性): `qwenpaw acp` stdio JSON-RPC。\n- 配置: connector-qwenpaw.config --channel rest|ssh-acp / --user / --password / --key-path。\n- 上游: agentscope-ai/QwenPaw (Apache-2.0)。"
+    },
+    {
+      "id": "connector-claude-code-plugin",
+      "name": "Claude Code 通讯",
       "version": "0.1.0",
       "type": "native",
       "author": "MengPaw",
-      "description": "QwenPaw/Coze 框架连接器 — REST (8080) 对接, 经 framework.connect/call 调用",
+      "description": "Claude Code 通讯连接器 — SSH 执行 claude CLI (headless), 经 framework.connect/call 委派任务到 PC",
       "status": "remote",
       "minCoreVersion": "0.20.0",
-      "commands": [],
+      "commands": [
+        "connector-claude-code.config",
+        "connector-claude-code.info"
+      ],
       "checksum": "",
       "size": 0,
-      "changelog": "### 新增\n- **QwenPaw 连接器**: 实现内核 FrameworkAdapter SPI, 经 REST (8080) 对接 QwenPaw/Coze。\n- 安装后自动注册 — `framework.adapters` 可见, `framework.connect <peer>` 即可对接。"
+      "changelog": "### 新增\n- **Claude Code 通讯连接器**: SSH 执行 claude CLI (headless) 对接 PC — 工具 run/version。\n- 配置: connector-claude-code.config --user/--password/--key-path。\n- 上游: Anthropic Claude Code 闭源商业 CLI (仅互操作调用, 不复制代码); jsch (MIT) 提供 SSH。"
+    },
+    {
+      "id": "connector-reasonix-plugin",
+      "name": "Reasonix 通讯",
+      "version": "0.1.0",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "Reasonix 通讯连接器 — SSH 执行 reasonix CLI, 经 framework.connect/call 委派任务到 PC",
+      "status": "remote",
+      "minCoreVersion": "0.20.0",
+      "commands": [
+        "connector-reasonix.config",
+        "connector-reasonix.info"
+      ],
+      "checksum": "",
+      "size": 0,
+      "changelog": "### 新增\n- **Reasonix 通讯连接器**: SSH 执行 reasonix CLI (DeepSeek-Reasonix, MIT) — 工具 run/version。\n- 配置: connector-reasonix.config --user/--password/--key-path。\n- 上游: esengine/DeepSeek-Reasonix (MIT 许可)。"
+    },
+    {
+      "id": "connector-trae-plugin",
+      "name": "TREA IDE 通讯",
+      "version": "0.1.0",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "TREA IDE 通讯连接器 — SSH 执行 trae-cli, 经 framework.connect/call 委派任务到 PC",
+      "status": "remote",
+      "minCoreVersion": "0.20.0",
+      "commands": [
+        "connector-trae.config",
+        "connector-trae.info"
+      ],
+      "checksum": "",
+      "size": 0,
+      "changelog": "### 新增\n- **TREA IDE 通讯连接器**: SSH 执行 trae-cli (bytedance/trae-agent, MIT) — 工具 run/show-config。\n- 配置: connector-trae.config --user/--password/--key-path。\n- 上游: bytedance/trae-agent (MIT 许可)。"
     }
   ]
 }

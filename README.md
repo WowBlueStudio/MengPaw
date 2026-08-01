@@ -65,7 +65,7 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS 双向桥)
 │   └── plugin/                 # 浏览器内置插件 (22 命令)
 │
-└── plugins/                    # 21 个功能插件 (同级，均只依赖 kernel)
+└── plugins/                    # 21 个捆绑功能插件 + plugin-connector-* 外置连接器 (同级，均只依赖 kernel)
     ├── plugin-fs/              # 文件系统 (5 命令)
     ├── plugin-net/             # HTTP 网络 (3 命令)
     ├── plugin-skill/           # 双层技能系统 (4 命令) ⭐💎
@@ -100,7 +100,7 @@ mengpaw/
 │  mengpaw-kernel (46 文件)      │  ← 微内核 (纯 Kotlin/JVM)
 │  零 Android 依赖 · 可 JVM 测试  │
 ├────────────────────────────────┤
-│  25 插件 (同级 · 只依赖 kernel)  │  ← 插件层
+│  28 插件 (同级 · 只依赖 kernel)  │  ← 插件层
 └────────────────────────────────┘
 ```
 

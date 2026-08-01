@@ -37,8 +37,8 @@ object Ports {
     /** OpenClaw/Qclaw WebSocket — 外部框架默认端口. */
     const val OPENCLAW_WS = 18789
 
-    /** QwenPaw/Coze REST — 外部框架默认端口. */
-    const val QWENPAW_REST = 8080
+    /** QwenPaw/Coze REST — 外部框架默认端口 (qwenpaw app 官方默认 8088). */
+    const val QWENPAW_REST = 8088
 
     /** collab-cli UDP 广播 — 外部工具发现默认端口. */
     const val COLLAB_UDP = 9528

@@ -242,9 +242,9 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `plugin/` (3 文件) | BuiltinBrowserPlugin, BrowserPlugin, BrowserPluginRegistry |
 
 
-### 3.5 插件模块（21 个，plugins/ 目录，按 settings.gradle.kts 为准）
+### 3.5 插件模块（26 个，plugins/ 目录，按 settings.gradle.kts 为准）
 
-> 插件数统一口径：**21 模块**（settings.gradle.kts:29-49）| **12 捆绑**（mengpaw-shell 打包）| **plugins.json 25 条目**（12 builtin + 11 remote + 2 embedded）
+> 插件数统一口径：**26 模块**（settings.gradle.kts:29-54，含 5 个外部连接器）| **12 捆绑**（mengpaw-shell 打包）| **plugins.json 28 条目**（12 builtin + 14 remote + 2 embedded）
 
 #### 基础功能 (6)
 
@@ -329,6 +329,26 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 > ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载（12 个：framework/fs/net/skill/clipboard/dev/root/hermes(tribe)/memory-twin/agent-tools/dream/evolution；self 与 memory 已融入内核 agent.* 命名空间）
 >
 > plugin-hermes 模块实际实现为 `TribePlugin`（id=tribe-plugin，注册 tribe.* 22 条 + hermes.* 兼容命令），plugins.json 中对应 `tribe-plugin` 条目。
+
+#### 外部连接器（外部分发, 不捆绑 APK, 经插件市场手动安装）
+
+> 5 个模块 (settings.gradle.kts:50-54): plugin-connector-common (共享库) + 4 个连接器插件。
+> 连接器实现内核 `spi.FrameworkAdapter` (frameworkName/connect/callTool/isOnline), onInstall 注册进
+> FrameworkAdapterRegistry — plugin-framework 的 `framework.connect/call` 按通讯录类型自动分派。
+> 使用链路: `framework.add <名称> <IP> [端口] --type <类型>` → `framework.connect <名称>` → `framework.call <名称> <工具> {"参数":"值"}`。
+> 凭据经 `<ns>.config` 命令配置 (SSH 用户/密码或 PEM 密钥, 原子写入 {CONFIG}/)。默认通道 SSH
+> (PC 需启用 Windows 自带 OpenSSH Server, 手机 → PC 零额外安装); QwenPaw 另支持 REST 直连。
+
+| 模块 | 框架类型 (--type) | 通道 | callTool 工具 | 上游 (许可) |
+|------|------|------|------|------|
+| plugin-connector-common | — (共享库) | jsch SSH + 交互式通道 + 配置原子存储 | — | jsch (MIT) |
+| plugin-connector-claude-code | claude-code | SSH → `claude -p` | run, version | Anthropic Claude Code (闭源商业 CLI, 仅互操作调用) |
+| plugin-connector-reasonix | reasonix | SSH → `reasonix run` | run, version | esengine/DeepSeek-Reasonix (MIT) |
+| plugin-connector-trae | trea-ide | SSH → `trae-cli run` | run, show-config | bytedance/trae-agent (MIT) |
+| plugin-connector-qwenpaw | qwenpaw | REST 8088 + SSH ACP | chat, acp-prompt | agentscope-ai/QwenPaw (Apache-2.0) |
+
+> 外置语义: 不入 BUILTIN 列表/不捆绑 APK, plugins.json status=remote, 用户手动 plugin.install;
+> 入主构建仅为可编译验证。QwenPaw SSH ACP 通道为实验性 (stdio JSON-RPC)。
 
 ### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0)
 
