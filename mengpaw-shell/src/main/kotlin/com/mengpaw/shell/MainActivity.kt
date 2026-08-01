@@ -25,57 +25,10 @@ import com.mengpaw.core.AndroidLogger
 import com.mengpaw.core.DataPathsInitializer
 import com.mengpaw.design.theme.ArcoTheme
 import com.mengpaw.kernel.KernelLog
-import com.mengpaw.plugin.clipboard.ClipboardPlugin
-import com.mengpaw.plugin.dev.DevPlugin
-import com.mengpaw.plugin.framework.FrameworkPlugin
-import com.mengpaw.plugin.fs.FsPlugin
-import com.mengpaw.plugin.memorytwin.MemoryTwinPlugin
-import com.mengpaw.plugin.net.NetPlugin
-import com.mengpaw.plugin.skill.SkillPlugin
 import com.mengpaw.shell.ui.localization.AppStrings
 import com.mengpaw.shell.ui.localization.ChineseStrings
 import com.mengpaw.shell.ui.localization.EnglishStrings
 import com.mengpaw.shell.ui.screens.*
-
-/**
- * Plugin IDs compiled into the shell APK (显示为"内置"分类).
- * 必须与 mengpaw-shell/build.gradle.kts 中 implementation(project(":plugin-*")) 对齐:
- * framework / skill / dev / fs / net / clipboard /
- * memory-twin / root / hermes(Tribe). (memory 已融入内核 agent.memory.*)
- */
-private val BUILTIN_PLUGIN_IDS = setOf(
-    "framework-plugin", "skill-plugin", "dev-plugin",
-    "fs-plugin", "net-plugin", "clipboard-plugin",
-    "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin",
-    "dream-plugin", "evolution-plugin"
-)
-
-/**
- * Plugins that lead similar functionality in other agent frameworks (WowBlue 原创标识).
- * 判定标准: 领先于同类框架功能的原创插件 — 记忆三轨 / 记忆孪生 / 双层技能池 /
- * mDNS 框架发现 / 插件开发工具链 / 部落协作. 基础能力(fs/net/self/clipboard)
- * 与系统级能力(root)不标.
- */
-private val WOWBLUE_PLUGIN_IDS = setOf(
-    "memory-twin-plugin", "skill-plugin",
-    "framework-plugin", "dev-plugin", "tribe-plugin", "tools-plugin"
-)
-
-/** Builtin plugin display info (名称/描述), 用于内置但未安装时在全局插件列表兜底显示. */
-private val BUILTIN_PLUGIN_INFO = mapOf(
-    "framework-plugin" to ("框架发现" to "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理"),
-    "skill-plugin" to ("技能系统" to "可复用的 Agent 剧本系统（YAML+Markdown），含默认 Skill"),
-    "dev-plugin" to ("插件开发" to "插件开发工具链 — create/audit/share/examples"),
-    "fs-plugin" to ("文件系统" to "文件系统增量操作：cp, mv, stat, grep, glob (读写用内核 agent.read/write/ls/rm/mkdir)"),
-    "net-plugin" to ("网络请求" to "HTTP 请求：GET/POST，支持自定义 Header 和超时"),
-    "clipboard-plugin" to ("剪贴板" to "剪贴板操作：copy, paste, clear"),
-    "memory-twin-plugin" to ("记忆孪生" to "跨设备工作区同步 — ACP P2P 文件同步 + 心跳保活 + QoS自适应 + 手动IP发现"),
-    "root-plugin" to ("Root 权限" to "Root 权限管理 — su 命令执行/应用管理/文件系统/系统修改/备份恢复/审计日志"),
-    "tribe-plugin" to ("部落协作 (Tribe)" to "多 Agent 部落协作：LAN 自动组队、Kanban 委派、LLM 路由、任务模板、Fleet 并行、广播讨论、ACP 实时、心跳"),
-    "tools-plugin" to ("Agent 命令集" to "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用"),
-    "dream-plugin" to ("梦境模式" to "梦境模式内置默认实现 (不可移除) — 记忆整理管道; 第三方可实现 DreamProvider 覆盖"),
-    "evolution-plugin" to ("智能体进化" to "智能体进化内置默认实现 (不可移除) — 失败模式库/省察引导/框架反馈; 第三方可实现 EvolutionProvider 覆盖")
-)
 
 /**
  * Extract a human-readable summary from a markdown file.
@@ -261,19 +214,8 @@ class MainActivity : ComponentActivity() {
         // ── Token 统计 ──
         try { com.mengpaw.shell.ui.components.TokenStatsCollector.load() } catch (_: Exception) {}
 
-        // ── PluginViewModel 类注册 ──
-        PluginViewModel.registerPluginClass("fs-plugin", "com.mengpaw.plugin.fs.FsPlugin")
-        PluginViewModel.registerPluginClass("net-plugin", "com.mengpaw.plugin.net.NetPlugin")
-        PluginViewModel.registerPluginClass("framework-plugin", "com.mengpaw.plugin.framework.FrameworkPlugin")
-        PluginViewModel.registerPluginClass("skill-plugin", "com.mengpaw.plugin.skill.SkillPlugin")
-        PluginViewModel.registerPluginClass("clipboard-plugin", "com.mengpaw.plugin.clipboard.ClipboardPlugin")
-        PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
-        PluginViewModel.registerPluginClass("memory-twin-plugin", "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin")
-        PluginViewModel.registerPluginClass("root-plugin", "com.mengpaw.plugin.root.RootPlugin")
-        PluginViewModel.registerPluginClass("tribe-plugin", "com.mengpaw.plugin.hermes.TribePlugin")
-        PluginViewModel.registerPluginClass("tools-plugin", "com.mengpaw.plugin.agenttools.AgentToolsPlugin")
-        PluginViewModel.registerPluginClass("dream-plugin", "com.mengpaw.plugin.dream.DreamPlugin")
-        PluginViewModel.registerPluginClass("evolution-plugin", "com.mengpaw.plugin.evolution.EvolutionPlugin")
+        // ── PluginViewModel 类注册 (装配清单见 PluginRegistrar) ──
+        PluginRegistrar.registerPluginClasses()
 
         // ── 插件 Context 注入 (error-report / update 是 remote 插件, 反射设置静态字段, 未安装时静默跳过) ──
         try {
@@ -317,38 +259,8 @@ class MainActivity : ComponentActivity() {
         // ── 系统事件接收器 ──
         try { com.mengpaw.shell.service.EventReceiver.register(this@MainActivity) } catch (_: Exception) {}
 
-        // ── 捆绑插件自动安装 ──
-        try {
-            val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
-            val bundled: List<Pair<String, com.mengpaw.kernel.plugin.Plugin>> = listOf(
-                "framework-plugin" to FrameworkPlugin(),
-                "skill-plugin" to SkillPlugin(),
-                "dev-plugin" to DevPlugin(),
-                "fs-plugin" to FsPlugin(),
-                "net-plugin" to NetPlugin(),
-                "clipboard-plugin" to ClipboardPlugin(),
-                "memory-twin-plugin" to MemoryTwinPlugin(),
-                "tools-plugin" to com.mengpaw.plugin.agenttools.AgentToolsPlugin(),
-                "dream-plugin" to com.mengpaw.plugin.dream.DreamPlugin(),
-                "evolution-plugin" to com.mengpaw.plugin.evolution.EvolutionPlugin(),
-            )
-            for ((id, plugin) in bundled) {
-                try {
-                    if (pm.get(id) == null) {
-                        pm.install(plugin).fold(
-                            onSuccess = {
-                                pm.activate(id).fold(
-                                    onSuccess = { android.util.Log.i("MengPaw", "Bundled plugin $id installed + activated") },
-                                    onFailure = { android.util.Log.w("MengPaw", "Bundled plugin $id installed but activate failed: ${it.message}", it) }
-                                )
-                            },
-                            onFailure = { android.util.Log.w("MengPaw", "Bundled plugin $id install failed: ${it.message}", it) }
-                        )
-                    } else { android.util.Log.d("MengPaw", "Bundled plugin $id already installed, skipping") }
-                } catch (e: Exception) { android.util.Log.w("MengPaw", "Auto-install $id panicked: ${e.message}", e) }
-            }
-            android.util.Log.i("MengPaw", "Bundled auto-install done: ${pm.count()} installed, ${pm.activeCount()} active")
-        } catch (_: Exception) {}
+        // ── 捆绑插件自动安装 (装配清单见 PluginRegistrar) ──
+        PluginRegistrar.autoInstallBundled()
 
         // ── 处理外部 URL ──
         try { handleOpenUrl(launchIntent) } catch (_: Exception) {}
@@ -577,17 +489,17 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
         withContext(Dispatchers.IO) {
             val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
             val installed = pm.listAll().map { (plugin, status) ->
-                FrameworkItem(name = plugin.metadata.name, isWowBlue = plugin.metadata.id in WOWBLUE_PLUGIN_IDS,
-                    category = if (plugin.metadata.id in BUILTIN_PLUGIN_IDS) ItemCategory.BUILTIN else ItemCategory.OFFICIAL,
+                FrameworkItem(name = plugin.metadata.name, isWowBlue = plugin.metadata.id in PluginRegistrar.WOWBLUE_PLUGIN_IDS,
+                    category = if (plugin.metadata.id in PluginRegistrar.BUILTIN_PLUGIN_IDS) ItemCategory.BUILTIN else ItemCategory.OFFICIAL,
                     summary = plugin.metadata.description,
                     docMarkdown = "## ${plugin.metadata.name}\n\n${plugin.metadata.description}\n\nID: ${plugin.metadata.id}\n版本: ${plugin.metadata.version}\n状态: ${status.name}\n命令数: ${plugin.commands.size}")
             }
             // Builtin plugins compiled into the APK but not yet installed — show them anyway,
             // so new bundled plugins are never invisible in the global list
-            val missingBuiltins = BUILTIN_PLUGIN_IDS
+            val missingBuiltins = PluginRegistrar.BUILTIN_PLUGIN_IDS
                 .filter { id -> pm.get(id) == null }
-                .mapNotNull { id -> BUILTIN_PLUGIN_INFO[id]?.let { (name, desc) ->
-                    FrameworkItem(name = name, category = ItemCategory.BUILTIN, isWowBlue = id in WOWBLUE_PLUGIN_IDS,
+                .mapNotNull { id -> PluginRegistrar.BUILTIN_PLUGIN_INFO[id]?.let { (name, desc) ->
+                    FrameworkItem(name = name, category = ItemCategory.BUILTIN, isWowBlue = id in PluginRegistrar.WOWBLUE_PLUGIN_IDS,
                         summary = "$desc — 内置，未安装",
                         docMarkdown = "## $name\n\n$desc\n\nID: $id\n状态: 未安装（内置插件，可在插件市场激活）")
                 } }
