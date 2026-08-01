@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Commercial
+
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
