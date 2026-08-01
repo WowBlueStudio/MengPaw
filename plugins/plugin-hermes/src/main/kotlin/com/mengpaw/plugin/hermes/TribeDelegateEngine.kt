@@ -152,7 +152,9 @@ class TribeDelegateEngine(
         try {
             val inboxDir = File(DataPaths.AGENTS, "$targetAgentId/inbox").also { it.mkdirs() }
             val taskFile = File(inboxDir, "tribe_task_${System.currentTimeMillis()}.md")
-            taskFile.writeText("""
+            // 原子写 (tmp + rename) — 防崩溃留下半写文件被收件箱 watcher 误读
+            val tmp = File(inboxDir, "${taskFile.name}.tmp")
+            tmp.writeText("""
 # 部落委派任务
 - 来自: ${task.fromAgent}
 - 任务ID: ${task.id}
@@ -167,6 +169,8 @@ ${if (task.description.isNotEmpty()) "\n$task.description" else ""}
 ## 响应方式
 完成后通过 `tribe.memo` 通知，或等待 ACP RESULT 自动收集。
 """.trimIndent())
+            tmp.renameTo(taskFile)
+            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
         } catch (e: Exception) {
             ErrorCollector.report(e, "TribeDelegateEngine.writeToInbox")
         }
@@ -183,7 +187,8 @@ ${if (task.description.isNotEmpty()) "\n$task.description" else ""}
 
         if (!timedOut.canRetry()) {
             return ExecutionResult.fail(
-                "任务超时: ${task.title}。已重试 ${timedOut.retryCount}/${task.maxRetries} 次。",
+                "任务超时: ${task.title}。已重试 ${timedOut.retryCount}/${task.maxRetries} 次。\n" +
+                "建议: `tribe.status` 查看对端在线状态, `tribe.task.list` 查看任务详情, `tribe.task.retry <id>` 手动重试。",
                 errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_TIMEOUT)
         }
 

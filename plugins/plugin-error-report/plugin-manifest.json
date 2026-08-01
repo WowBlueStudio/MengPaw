@@ -1,1 +1,0 @@
-{"id":"error-report-plugin","name":"错误上报","version":"0.2.0","type":"native","author":"MengPaw","description":"官方错误收集与上报，WiFi下自动上传。安装即同意帮助改进框架和插件。","minCoreVersion":"0.8.0","permissions":["INTERNET","ACCESS_NETWORK_STATE"],"commands":["error.list","error.show","error.clear","error.export","error.status","error.upload"]}

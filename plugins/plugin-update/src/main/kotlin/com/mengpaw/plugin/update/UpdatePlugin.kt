@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit
  */
 class UpdatePlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "update-plugin", name = "自动更新", version = "0.2.0",
+        id = "update-plugin", name = "自动更新", version = "0.20.2",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "WiFi 环境自动检测更新，可选自动下载安装。检查 GitHub Releases。",
         permissions = listOf("INTERNET", "ACCESS_NETWORK_STATE", "REQUEST_INSTALL_PACKAGES"),
@@ -58,7 +58,6 @@ class UpdatePlugin : Plugin {
     private val client = HttpClient(OkHttp) {
         engine { config { connectTimeout(15, TimeUnit.SECONDS); readTimeout(30, TimeUnit.SECONDS) } }
     }
-    private var appContext: Context? = null
     private var autoCheckEnabled = false
     private var autoDownloadEnabled = false
     private var lastCheckTime = 0L
@@ -75,10 +74,8 @@ class UpdatePlugin : Plugin {
     // ── Lifecycle ───────────────────────────────────────────────────────
 
     override suspend fun onInstall(ctx: PluginContext) {
-        try {
-            appContext = Class.forName("com.mengpaw.shell.MainActivity")
-                .getMethod("getAppContext").invoke(null) as? Context
-        } catch (_: Exception) { }
+        // Android context 由 Shell MainActivity.deferInit 注入 (companion.appContext)
+        // 注入前安装则 install/auto 暂不可用, check/download 不受影响
         loadConfig()
         if (autoCheckEnabled) scheduleAutoCheck()
         ctx.log("自动更新插件已激活。${if (autoCheckEnabled) "WiFi 自动扫描已启用。" else ""}")
@@ -424,6 +421,9 @@ class UpdatePlugin : Plugin {
     }
 
     companion object {
+        /** Android Context — 由 Shell MainActivity.deferInit 注入 (替代失效的 getAppContext 反射)。 */
+        @Volatile var appContext: Context? = null
+
         private const val GITHUB_API_URL = "https://api.github.com/repos/WowBlueStudio/MengPaw/releases/latest"
         private const val GITEE_API_URL = "https://gitee.com/api/v5/repos/WowBlueStudio/MengPaw/releases/latest"
         private const val GHPROXY_API_URL = "https://ghproxy.com/$GITHUB_API_URL"

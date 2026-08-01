@@ -45,7 +45,7 @@ class ErrorReportPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "error-report-plugin",
         name = "错误上报",
-        version = "0.2.0",
+        version = "0.20.2",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "官方错误收集与上报。安装即同意帮助改进框架和插件。WiFi下自动上传到Gitee/GitHub。",
@@ -72,7 +72,6 @@ class ErrorReportPlugin : Plugin {
         }
     }
 
-    private var appContext: Context? = null
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var uploadJob: Job? = null
@@ -88,14 +87,8 @@ class ErrorReportPlugin : Plugin {
     // ── Lifecycle ───────────────────────────────────────────────────────
 
     override suspend fun onInstall(ctx: PluginContext) {
-        // Initialize Android context from core
-        try {
-            appContext = Class.forName("com.mengpaw.shell.MainActivity")
-                .getMethod("getAppContext")
-                .invoke(null) as? Context
-        } catch (_: Exception) {
-            // Context unavailable — upload features disabled, local collection still works
-        }
+        // Android context 由 Shell MainActivity.deferInit 注入 (companion.appContext)
+        // 注入前安装则上传功能暂禁用, 本地收集不受影响
 
         // Check version for auto-clean
         checkAndCleanOnUpdate()
@@ -402,5 +395,8 @@ class ErrorReportPlugin : Plugin {
 
     companion object {
         private const val KEY_LAST_VERSION = "error_last_version"
+
+        /** Android Context — 由 Shell MainActivity.deferInit 注入 (替代失效的 getAppContext 反射)。 */
+        @Volatile var appContext: Context? = null
     }
 }

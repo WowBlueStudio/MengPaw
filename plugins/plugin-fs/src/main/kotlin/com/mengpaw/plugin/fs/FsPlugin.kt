@@ -35,15 +35,10 @@ class FsPlugin : Plugin {
         description = "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat",
         permissions = emptyList(),
         minCoreVersion = "0.2.0",
-        commands = listOf("fs.cat", "fs.ls", "fs.write", "fs.rm", "fs.mkdir", "fs.cp", "fs.mv", "fs.stat", "fs.grep", "fs.glob")
+        commands = listOf("fs.cp", "fs.mv", "fs.stat", "fs.grep", "fs.glob")
     )
 
     override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
-        "cat" to ::cat,
-        "ls" to ::ls,
-        "write" to ::write,
-        "rm" to ::rm,
-        "mkdir" to ::mkdir,
         "cp" to ::cp,
         "mv" to ::mv,
         "stat" to ::stat,
@@ -56,75 +51,6 @@ class FsPlugin : Plugin {
     }
 
     // ── Command handlers ──────────────────────────────────────────────
-
-    private suspend fun cat(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs cat <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val resolved = resolveSafe(args[0], ctx)
-        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
-        val file = resolved.file
-        if (!file.exists()) return ExecutionResult.fail("File not found: ${file.name}", errorCode = ErrorCodes.ERR_NOT_FOUND)
-        if (!file.canRead()) return ExecutionResult.fail("Permission denied", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
-        return try {
-            if (file.length() > MAX_READ_SIZE) {
-                return ExecutionResult.fail("File too large: ${formatSize(file.length())} (max ${formatSize(MAX_READ_SIZE)})",
-                    errorCode = ErrorCodes.ERR_INVALID_INPUT)
-            }
-            ExecutionResult.ok(file.readText())
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "FsPlugin.cat")
-            ExecutionResult.fail("Read error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
-        }
-    }
-
-    private suspend fun ls(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val path = if (args.isNotEmpty()) args[0] else "."
-        val resolved = resolveSafe(path, ctx)
-        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
-        val dir = resolved.file
-        if (!dir.isDirectory) return ExecutionResult.fail("Not a directory", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val listing = dir.listFiles()
-            ?.sortedWith(compareBy<File> { it.isFile }.thenBy { it.name })
-            ?.joinToString("\n") { file ->
-                val type = if (file.isDirectory) "d" else "-"
-                val suffix = if (file.isDirectory) "/" else ""
-                "$type ${file.name}$suffix (${formatSize(file.length())})"
-            } ?: ""
-        return ExecutionResult.ok(listing.ifEmpty { "(empty directory)" })
-    }
-
-    private suspend fun write(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.size < 2) return ExecutionResult.fail("Usage: fs write <path> <content>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val resolved = resolveSafe(args[0], ctx)
-        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
-        val content = args.drop(1).joinToString(" ")
-        val file = resolved.file
-        file.parentFile?.mkdirs()
-        return try {
-            file.writeText(content)
-            ExecutionResult.ok("Written ${content.length} bytes")
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "FsPlugin.write")
-            ExecutionResult.fail("Write error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
-        }
-    }
-
-    private suspend fun rm(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs rm <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val resolved = resolveSafe(args[0], ctx)
-        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
-        val file = resolved.file
-        if (!file.exists()) return ExecutionResult.fail("Not found", errorCode = ErrorCodes.ERR_NOT_FOUND)
-        file.deleteRecursively()
-        return ExecutionResult.ok("Deleted")
-    }
-
-    private suspend fun mkdir(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: fs mkdir <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val resolved = resolveSafe(args[0], ctx)
-        if (resolved.isFailure) return ExecutionResult.fail(resolved.error, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
-        resolved.file.mkdirs()
-        return ExecutionResult.ok("Created directory")
-    }
 
     private suspend fun cp(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.size < 2) return ExecutionResult.fail("Usage: fs cp <source> <dest>", errorCode = ErrorCodes.ERR_INVALID_INPUT)

@@ -125,11 +125,11 @@ dependencies {
     implementation(project(":plugin-fs"))
     implementation(project(":plugin-net"))
     implementation(project(":plugin-clipboard"))
-    implementation(project(":plugin-notification"))
     implementation(project(":plugin-memory-twin"))
     implementation(project(":plugin-root"))
     implementation(project(":plugin-hermes"))
     implementation(project(":plugin-agent-tools"))
+    implementation(project(":plugin-dream"))
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))

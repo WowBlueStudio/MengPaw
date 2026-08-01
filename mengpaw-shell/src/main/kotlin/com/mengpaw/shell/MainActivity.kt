@@ -31,7 +31,6 @@ import com.mengpaw.plugin.framework.FrameworkPlugin
 import com.mengpaw.plugin.fs.FsPlugin
 import com.mengpaw.plugin.memorytwin.MemoryTwinPlugin
 import com.mengpaw.plugin.net.NetPlugin
-import com.mengpaw.plugin.notification.NotificationPlugin
 import com.mengpaw.plugin.skill.SkillPlugin
 import com.mengpaw.shell.ui.localization.AppStrings
 import com.mengpaw.shell.ui.localization.ChineseStrings
@@ -41,19 +40,20 @@ import com.mengpaw.shell.ui.screens.*
 /**
  * Plugin IDs compiled into the shell APK (显示为"内置"分类).
  * 必须与 mengpaw-shell/build.gradle.kts 中 implementation(project(":plugin-*")) 对齐:
- * framework / skill / dev / fs / net / clipboard / notification /
+ * framework / skill / dev / fs / net / clipboard /
  * memory-twin / root / hermes(Tribe). (memory 已融入内核 agent.memory.*)
  */
 private val BUILTIN_PLUGIN_IDS = setOf(
     "framework-plugin", "skill-plugin", "dev-plugin",
-    "fs-plugin", "net-plugin", "clipboard-plugin", "notification-plugin",
-    "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin"
+    "fs-plugin", "net-plugin", "clipboard-plugin",
+    "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin",
+    "dream-plugin"
 )
 
 /**
  * Plugins that lead similar functionality in other agent frameworks (WowBlue 原创标识).
  * 判定标准: 领先于同类框架功能的原创插件 — 记忆三轨 / 记忆孪生 / 双层技能池 /
- * mDNS 框架发现 / 插件开发工具链 / 部落协作. 基础能力(fs/net/self/clipboard/notification)
+ * mDNS 框架发现 / 插件开发工具链 / 部落协作. 基础能力(fs/net/self/clipboard)
  * 与系统级能力(root)不标.
  */
 private val WOWBLUE_PLUGIN_IDS = setOf(
@@ -66,14 +66,14 @@ private val BUILTIN_PLUGIN_INFO = mapOf(
     "framework-plugin" to ("框架发现" to "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理"),
     "skill-plugin" to ("技能系统" to "可复用的 Agent 剧本系统（YAML+Markdown），含默认 Skill"),
     "dev-plugin" to ("插件开发" to "插件开发工具链 — create/audit/share/examples"),
-    "fs-plugin" to ("文件系统" to "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob"),
+    "fs-plugin" to ("文件系统" to "文件系统增量操作：cp, mv, stat, grep, glob (读写用内核 agent.read/write/ls/rm/mkdir)"),
     "net-plugin" to ("网络请求" to "HTTP 请求：GET/POST，支持自定义 Header 和超时"),
     "clipboard-plugin" to ("剪贴板" to "剪贴板操作：copy, paste, clear"),
-    "notification-plugin" to ("通知" to "通知发送与管理：send, list, dismiss"),
     "memory-twin-plugin" to ("记忆孪生" to "跨设备工作区同步 — ACP P2P 文件同步 + 心跳保活 + QoS自适应 + 手动IP发现"),
     "root-plugin" to ("Root 权限" to "Root 权限管理 — su 命令执行/应用管理/文件系统/系统修改/备份恢复/审计日志"),
     "tribe-plugin" to ("部落协作 (Tribe)" to "多 Agent 部落协作：LAN 自动组队、Kanban 委派、LLM 路由、任务模板、Fleet 并行、广播讨论、ACP 实时、心跳"),
-    "tools-plugin" to ("Agent 命令集" to "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用")
+    "tools-plugin" to ("Agent 命令集" to "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用"),
+    "dream-plugin" to ("梦境模式" to "梦境模式内置默认实现 (不可移除) — 记忆整理管道; 第三方可实现 DreamProvider 覆盖")
 )
 
 /**
@@ -102,6 +102,8 @@ private fun extractSummary(markdown: String): String {
 
 class MainActivity : ComponentActivity() {
     private val settingsViewModel by viewModels<SettingsViewModel>()
+    // 与 Compose 内 viewModel() 同实例 (同一 ViewModelStore), 用于浏览器提炼任务触发
+    private val agentViewModel by viewModels<com.mengpaw.shell.ui.screens.AgentViewModel>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -191,6 +193,11 @@ class MainActivity : ComponentActivity() {
         if (intent?.action == "com.mengpaw.action.OPEN_URL") {
             val url = intent.getStringExtra("url")
             if (url != null) {
+                // mode=extract: 浏览器「提炼网页要点」→ 任务脚本 + 直接触发 Agent
+                if (intent.getStringExtra("mode") == "extract") {
+                    handleBrowserExtract(url, intent.getStringExtra("title") ?: url)
+                    return
+                }
                 try {
                     val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
                     inbox.mkdirs()
@@ -201,6 +208,44 @@ class MainActivity : ComponentActivity() {
                     if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
                 } catch (_: Exception) {}
             }
+        }
+    }
+
+    /**
+     * 浏览器网页提炼请求 — 写任务脚本到 inbox 并直接触发 Agent。
+     * 触发失败时任务文件留档, 由 Agent 轮询 inbox 兜底; 成功后删除防重复执行。
+     */
+    private fun handleBrowserExtract(url: String, title: String) {
+        val taskId = System.currentTimeMillis().toString()
+        val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
+        val taskFile = java.io.File(inbox, "browser_extract_$taskId.md")
+        try {
+            inbox.mkdirs()
+            taskFile.writeText(buildString {
+                appendLine("# 浏览器网页提炼任务")
+                appendLine("- 类型: browser-extract")
+                appendLine("- URL: $url")
+                appendLine("- 标题: $title")
+                appendLine("- 请求时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}")
+                appendLine("- 回传文件: browser_return_$taskId.md")
+                appendLine()
+                appendLine("## 任务")
+                appendLine("抓取该网页转成 Markdown, 用 LLM 提炼核心要点, 写回传文件供浏览器预览。")
+                appendLine()
+                appendLine("## 执行步骤")
+                appendLine("1. 若 search 命令不可用, 先执行: plugin.install browser-search-plugin")
+                appendLine("2. search.md $url --name article_$taskId — 抓取(内部) + 转 Markdown 保存, 记住返回的文件路径")
+                appendLine("3. agent.read <第2步返回的md路径>      — 阅读全文")
+                appendLine("4. 提炼要点: 一句话总结 + 3~6 条核心要点 + 1 条关键数据或引用")
+                appendLine("5. 写回传文件: agent.write ${inbox.absolutePath}/browser_return_$taskId.md")
+                appendLine("   格式: # 标题 / [原文链接](URL) / ## 核心要点 (列表) / ## 总结 (一段话)")
+                appendLine("6. agent.rm ${taskFile.absolutePath}   — 删除本任务文件, 防止重复执行")
+                appendLine("7. Final Answer 告知用户: 提炼完成, 浏览器将自动弹出预览")
+            })
+            // 直接触发; 任务文件保留到 Agent 执行完成 (脚本步骤 8 由 agent.rm 删除, 防重复执行)
+            agentViewModel.submitBrowserExtract(url, taskId)
+        } catch (e: Exception) {
+            android.util.Log.w("MengPaw", "handleBrowserExtract failed: ${e.message}", e)
         }
     }
 
@@ -221,12 +266,22 @@ class MainActivity : ComponentActivity() {
         PluginViewModel.registerPluginClass("framework-plugin", "com.mengpaw.plugin.framework.FrameworkPlugin")
         PluginViewModel.registerPluginClass("skill-plugin", "com.mengpaw.plugin.skill.SkillPlugin")
         PluginViewModel.registerPluginClass("clipboard-plugin", "com.mengpaw.plugin.clipboard.ClipboardPlugin")
-        PluginViewModel.registerPluginClass("notification-plugin", "com.mengpaw.plugin.notification.NotificationPlugin")
         PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
         PluginViewModel.registerPluginClass("memory-twin-plugin", "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin")
         PluginViewModel.registerPluginClass("root-plugin", "com.mengpaw.plugin.root.RootPlugin")
         PluginViewModel.registerPluginClass("tribe-plugin", "com.mengpaw.plugin.hermes.TribePlugin")
         PluginViewModel.registerPluginClass("tools-plugin", "com.mengpaw.plugin.agenttools.AgentToolsPlugin")
+        PluginViewModel.registerPluginClass("dream-plugin", "com.mengpaw.plugin.dream.DreamPlugin")
+
+        // ── 插件 Context 注入 (error-report / update 是 remote 插件, 反射设置静态字段, 未安装时静默跳过) ──
+        try {
+            Class.forName("com.mengpaw.plugin.errorreport.ErrorReportPlugin")
+                .getField("appContext").set(null, this@MainActivity)
+        } catch (_: Exception) {}
+        try {
+            Class.forName("com.mengpaw.plugin.update.UpdatePlugin")
+                .getField("appContext").set(null, this@MainActivity)
+        } catch (_: Exception) {}
 
         // ── 框架发现 (mDNS) ──
         try {
@@ -254,6 +309,9 @@ class MainActivity : ComponentActivity() {
         // ── 前台服务 ──
         try { com.mengpaw.shell.service.ShellService.start(this@MainActivity) } catch (_: Exception) {}
 
+        // ── 浏览器回传监视 (幂等, 与 ShellService 双保险) ──
+        try { com.mengpaw.shell.service.BrowserReturnWatcher.start(this@MainActivity) } catch (_: Exception) {}
+
         // ── 系统事件接收器 ──
         try { com.mengpaw.shell.service.EventReceiver.register(this@MainActivity) } catch (_: Exception) {}
 
@@ -267,9 +325,9 @@ class MainActivity : ComponentActivity() {
                 "fs-plugin" to FsPlugin(),
                 "net-plugin" to NetPlugin(),
                 "clipboard-plugin" to ClipboardPlugin(),
-                "notification-plugin" to NotificationPlugin(),
                 "memory-twin-plugin" to MemoryTwinPlugin(),
                 "tools-plugin" to com.mengpaw.plugin.agenttools.AgentToolsPlugin(),
+                "dream-plugin" to com.mengpaw.plugin.dream.DreamPlugin(),
             )
             for ((id, plugin) in bundled) {
                 try {
@@ -789,6 +847,24 @@ private suspend fun startAcpForTwin(ctx: android.content.Context, agentName: Str
             deviceName = android.os.Build.MODEL ?: "Android")
         val handler = com.mengpaw.plugin.memorytwin.TwinAcpHandler(syncEngine)
         server.registerHandler(handler)
+
+        // ── MCP-over-ACP 桥 (协议升级: 远程 MCP 调用走配对加密通道) ──
+        try {
+            val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+            val mcpServer = com.mengpaw.kernel.mcp.McpServer(pm)
+            // 反射注册 browser-mcp provider (remote 插件, 未安装时跳过) — 暴露 6 个浏览器 MCP 工具
+            try {
+                val pluginCls = Class.forName("com.mengpaw.plugin.browsermcp.BrowserMcpPlugin")
+                val provider = pluginCls.getDeclaredConstructor().newInstance()
+                    as com.mengpaw.kernel.mcp.McpToolProvider
+                mcpServer.registerToolProvider(provider)
+            } catch (_: Exception) {}
+            server.enableMcpBridge(mcpServer)
+            android.util.Log.i("MengPawTwin", "MCP-over-ACP 桥已启用")
+        } catch (e: Exception) {
+            android.util.Log.w("MengPawTwin", "MCP 桥启用失败: ${e.message}")
+        }
+
         syncEngine.startAutoSync()  // 启动自动同步 (每60秒)
         // 加载 mDNS 发现的框架节点作为同步目标
         val frameworkPeers = com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll()

@@ -9,6 +9,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
+import java.net.InetAddress
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -108,6 +109,38 @@ object AgentToolsStore {
         }
     }
 
+    /**
+     * SSRF 防护 (与 plugin-net 同模式): 仅 http/https、拒绝内网/回环/云元数据。
+     * 返回 null 表示通过, 否则返回拒绝原因。
+     */
+    private fun validateUrl(rawUrl: String): String? {
+        val uri = try {
+            val u = java.net.URI(rawUrl)
+            if (!u.isAbsolute) return "Only absolute URLs are allowed"
+            u
+        } catch (e: Exception) {
+            return "Invalid URL: ${e.message}"
+        }
+        val scheme = uri.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return "Blocked scheme '$scheme': only http/https are allowed"
+        val host = uri.host ?: return "URL has no host"
+        return try {
+            val addr = InetAddress.getByName(host)
+            if (isBlockedAddress(addr)) "Blocked internal address: $host (${addr.hostAddress})" else null
+        } catch (e: Exception) {
+            "Cannot resolve host: $host"
+        }
+    }
+
+    private fun isBlockedAddress(addr: InetAddress): Boolean {
+        if (addr.isLoopbackAddress || addr.isLinkLocalAddress || addr.isSiteLocalAddress || addr.isAnyLocalAddress) return true
+        val ip = addr.hostAddress ?: return false
+        if (ip == "169.254.169.254") return true  // AWS / GCP metadata
+        if (ip == "100.100.100.200") return true  // Alibaba Cloud metadata
+        if (ip == "::ffff:127.0.0.1") return true
+        return false
+    }
+
     // ── URL 拉取 ─────────────────────────────────────────────────────
 
     /**
@@ -118,6 +151,8 @@ object AgentToolsStore {
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
             return Result.failure(IllegalArgumentException("仅支持 http/https URL"))
         }
+        val ssrfError = validateUrl(url)
+        if (ssrfError != null) return Result.failure(IllegalArgumentException(ssrfError))
         try {
             val conn = URL(url).openConnection() as HttpURLConnection
             conn.requestMethod = "GET"

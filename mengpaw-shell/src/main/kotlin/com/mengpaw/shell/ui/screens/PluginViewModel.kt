@@ -377,12 +377,9 @@ class PluginViewModel : ViewModel() {
             "framework-plugin" to "com.mengpaw.plugin.framework.FrameworkPlugin",
             "skill-plugin" to "com.mengpaw.plugin.skill.SkillPlugin",
             "clipboard-plugin" to "com.mengpaw.plugin.clipboard.ClipboardPlugin",
-            "notification-plugin" to "com.mengpaw.plugin.notification.NotificationPlugin",
             "tavily-plugin" to "com.mengpaw.plugin.tavily.TavilyPlugin",
             "tribe-plugin" to "com.mengpaw.plugin.hermes.TribePlugin",
             "hermes-plugin" to "com.mengpaw.plugin.hermes.TribePlugin",
-            "workflow-plugin" to "com.mengpaw.plugin.workflow.WorkflowPlugin",
-            "incubator-plugin" to "com.mengpaw.plugin.incubator.IncubatorPlugin",
             "render-plugin" to "com.mengpaw.plugin.render.RenderPlugin",
             "comfy-plugin" to "com.mengpaw.plugin.comfy.ComfyPlugin",
             "translate-plugin" to "com.mengpaw.plugin.translate.TranslatePlugin",
@@ -391,11 +388,10 @@ class PluginViewModel : ViewModel() {
             "browser-push-plugin" to "com.mengpaw.plugin.browserpush.BrowserPushPlugin",
             "browser-search-plugin" to "com.mengpaw.plugin.browsersearch.BrowserSearchPlugin",
             "browser-mcp-plugin" to "com.mengpaw.plugin.browsermcp.BrowserMcpPlugin",
-            "browser-cdp-plugin" to "com.mengpaw.plugin.browsercdp.BrowserCdpPlugin",
-            "browser-inspector-plugin" to "com.mengpaw.plugin.browserinspector.BrowserInspectorPlugin",
             "update-plugin" to "com.mengpaw.plugin.update.UpdatePlugin",
             "memory-twin-plugin" to "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin",
-            "root-plugin" to "com.mengpaw.plugin.root.RootPlugin"
+            "root-plugin" to "com.mengpaw.plugin.root.RootPlugin",
+            "dream-plugin" to "com.mengpaw.plugin.dream.DreamPlugin"
         )
 
         /** Look up the class name for a builtin plugin by its ID. */

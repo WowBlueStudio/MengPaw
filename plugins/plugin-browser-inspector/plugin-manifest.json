@@ -1,1 +1,0 @@
-{"id":"browser-inspector-plugin","name":"网页开发套件","version":"0.1.0","type":"native","author":"MengPaw","description":"元素选择器+批注：悬停高亮、点击选择、添加备注、导出元素地图","minCoreVersion":"0.8.0","commands":["inspector.start","inspector.stop","inspector.select","inspector.annotate","inspector.list","inspector.export"]}

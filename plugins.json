@@ -4,6 +4,20 @@
   "updated": "2026-07-31",
   "plugins": [
     {
+      "id": "dream-plugin",
+      "name": "梦境模式",
+      "version": "",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "梦境模式内置默认实现 — 记忆整理管道 (读→备份→{date}_dream.md→到期删除)。不可移除; 第三方可实现 DreamProvider 覆盖",
+      "status": "builtin",
+      "minCoreVersion": "0.2.0",
+      "commands": [],
+      "checksum": "",
+      "size": 0,
+      "changelog": "### 新增\n- **梦境模式 SPI 化**: 内核 DreamProvider 接口 + 注册表; 内置默认实现注册为 dream-plugin (不可移除)。\n- 第三方插件可实现 DreamProvider 在 onInstall 时注册覆盖 (后注册者胜), 卸载后回退内核默认。"
+    },
+    {
       "id": "framework-plugin",
       "name": "框架发现",
       "version": "0.20.2",
@@ -30,15 +44,10 @@
       "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
-      "description": "文件系统操作：cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob",
+      "description": "文件系统增量操作：cp, mv, stat, grep, glob (读写用内核 agent.read/write/ls/rm/mkdir)",
       "status": "builtin",
       "minCoreVersion": "0.2.0",
       "commands": [
-        "fs.cat",
-        "fs.ls",
-        "fs.write",
-        "fs.rm",
-        "fs.mkdir",
         "fs.cp",
         "fs.mv",
         "fs.stat",
@@ -82,6 +91,7 @@
         "twin.status",
         "twin.peers",
         "twin.peer.info",
+        "twin.peer.add",
         "twin.pair",
         "twin.unpair",
         "twin.sync",
@@ -89,7 +99,9 @@
         "twin.sync.qos",
         "twin.capabilities",
         "twin.delegate",
-        "twin.route"
+        "twin.route",
+        "twin.lost",
+        "twin.recover"
       ],
       "checksum": "sha256:f0b941ac85d0108bd82b8949f64344b296c12d2d1452e1c445ca7aa57291939a",
       "size": 278497,
@@ -130,27 +142,6 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
-    },
-    {
-      "id": "notification-plugin",
-      "name": "通知管理",
-      "version": "0.20.2",
-      "type": "native",
-      "author": "MengPaw",
-      "description": "系统通知发送和管理",
-      "status": "builtin",
-      "permissions": [
-        "POST_NOTIFICATIONS"
-      ],
-      "minCoreVersion": "0.2.0",
-      "commands": [
-        "notification.send",
-        "notification.list",
-        "notification.dismiss"
-      ],
-      "checksum": "sha256:3faa8944f73aaf9a7e35550c82112709fff3cff5feb1c70fe6af7df7d40f5df3",
-      "size": 10565,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
@@ -326,49 +317,6 @@
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
-      "id": "workflow-plugin",
-      "name": "工作流引擎",
-      "version": "0.20.2",
-      "type": "native",
-      "author": "MengPaw",
-      "description": "DAG 工作流编排：CommandExecutor 真实执行 + 条件分支 + 变量引用 + workflow.delete 删除",
-      "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-workflow.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-workflow.aar",
-      "minCoreVersion": "0.8.0",
-      "commands": [
-        "workflow.run",
-        "workflow.define",
-        "workflow.list",
-        "workflow.status",
-        "workflow.delete"
-      ],
-      "checksum": "sha256:59f2856e88b8ae4697c475c2ed43a980d6a8a156da798429e266db5ef7508e0a",
-      "size": 20863,
-      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
-    },
-    {
-      "id": "incubator-plugin",
-      "name": "Agent 孵化器",
-      "version": "0.20.2",
-      "type": "native",
-      "author": "MengPaw",
-      "description": "Agent 市场方向演进：agent.market / install / share，隐私清理，SHA256校验，三级回退下载",
-      "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-incubator.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-incubator.aar",
-      "minCoreVersion": "0.8.0",
-      "commands": [
-        "incubator.spawn",
-        "incubator.list",
-        "incubator.terminate",
-        "incubator.inbox"
-      ],
-      "checksum": "sha256:2050c2c0c3a5d200c0b0b01515da3c20e1197cc1280a2713121ad07cdc2cc1b3",
-      "size": 16349,
-      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
-    },
-    {
       "id": "comfy-plugin",
       "name": "ComfyUI 工作流",
       "version": "0.20.2",
@@ -416,11 +364,11 @@
     },
     {
       "id": "browser-search-plugin",
-      "name": "搜索分析",
+      "name": "网页转档",
       "version": "0.20.2",
       "type": "native",
       "author": "MengPaw",
-      "description": "搜索管道重写：search.fetch 网页直读 → search.clean 去噪 → search.md 生成正文（文本块/表格识别） → search.outputs 历史管理 → search.clear 清理",
+      "description": "网页转 Markdown 管道：clean 提取正文 → md 生成文档 → outputs/clear 输出管理；网页抓取复用 net.curl，高质量搜索用 tavily",
       "status": "remote",
       "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-search.aar",
       "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-search.aar",
@@ -431,7 +379,6 @@
         "search.engines",
         "search.clean",
         "search.md",
-        "search.fetch",
         "search.outputs",
         "search.clear"
       ],
@@ -457,48 +404,6 @@
       ],
       "checksum": "sha256:d0cd2ac2d10a59903ecfc7ed677fa426697e2017f233ca4bc76616ef16fb7f04",
       "size": 10741,
-      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
-    },
-    {
-      "id": "browser-cdp-plugin",
-      "name": "CDP 调试",
-      "version": "0.20.2",
-      "type": "native",
-      "author": "MengPaw",
-      "description": "Chrome DevTools Protocol 调试支持。已从市场下架（保留源码），仅 debug 构建可用",
-      "status": "deprecated",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-cdp.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-cdp.aar",
-      "minCoreVersion": "0.8.0",
-      "commands": [
-        "cdp.enable",
-        "cdp.status"
-      ],
-      "checksum": "sha256:69ee9fd15c574b4a99e4b529d1630a47e2ffade397f48b3837efb2de9ace8f83",
-      "size": 6419,
-      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
-    },
-    {
-      "id": "browser-inspector-plugin",
-      "name": "网页开发套件",
-      "version": "0.20.2",
-      "type": "native",
-      "author": "MengPaw",
-      "description": "元素选择器+批注：悬停高亮、点击选择、添加备注、导出元素地图",
-      "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-inspector.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-inspector.aar",
-      "minCoreVersion": "0.8.0",
-      "commands": [
-        "inspector.start",
-        "inspector.stop",
-        "inspector.select",
-        "inspector.annotate",
-        "inspector.list",
-        "inspector.export"
-      ],
-      "checksum": "sha256:270454c1ed501cd79e2319c610f33c8f92d8387af57ea1017b1b05d66af5ff24",
-      "size": 13589,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
@@ -585,6 +490,34 @@
       "checksum": "sha256:e3918b07c6caa5420e65a70777817b4da281e70e9d629a730a103ac2cfe54985",
       "size": 35102,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
+    },
+    {
+      "id": "connector-openclaw-plugin",
+      "name": "OpenClaw 连接器",
+      "version": "0.1.0",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "OpenClaw 框架连接器 — WebSocket (18789) 对接, 经 framework.connect/call 调用",
+      "status": "remote",
+      "minCoreVersion": "0.20.0",
+      "commands": [],
+      "checksum": "",
+      "size": 0,
+      "changelog": "### 新增\n- **OpenClaw 连接器**: 实现内核 FrameworkAdapter SPI, 经 WebSocket 对接 OpenClaw (18789)。\n- 安装后自动注册 — `framework.adapters` 可见, `framework.connect <peer>` 即可对接。"
+    },
+    {
+      "id": "connector-qwenpaw-plugin",
+      "name": "QwenPaw 连接器",
+      "version": "0.1.0",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "QwenPaw/Coze 框架连接器 — REST (8080) 对接, 经 framework.connect/call 调用",
+      "status": "remote",
+      "minCoreVersion": "0.20.0",
+      "commands": [],
+      "checksum": "",
+      "size": 0,
+      "changelog": "### 新增\n- **QwenPaw 连接器**: 实现内核 FrameworkAdapter SPI, 经 REST (8080) 对接 QwenPaw/Coze。\n- 安装后自动注册 — `framework.adapters` 可见, `framework.connect <peer>` 即可对接。"
     }
   ]
 }

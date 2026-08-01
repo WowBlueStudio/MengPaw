@@ -1,1 +1,0 @@
-{"id":"browser-push-plugin","name":"跨设备推送","version":"0.1.0","type":"native","author":"MengPaw","description":"Agent 跨设备推送网页，基于 ACP 协议。TRUSTED 设备自动接受，GUEST 设备需手动授权。","minCoreVersion":"0.8.0","commands":["browser.push","browser.push.pending","browser.push.accept","browser.push.reject"]}

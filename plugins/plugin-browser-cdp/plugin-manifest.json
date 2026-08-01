@@ -1,1 +1,0 @@
-{"id":"browser-cdp-plugin","name":"CDP 调试","version":"0.1.0","type":"native","author":"MengPaw","description":"Chrome DevTools Protocol 调试支持，仅 debug 构建，仅 localhost。","minCoreVersion":"0.8.0","commands":["cdp.enable","cdp.status"]}
