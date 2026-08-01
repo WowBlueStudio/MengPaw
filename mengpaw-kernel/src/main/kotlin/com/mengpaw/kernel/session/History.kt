@@ -57,9 +57,13 @@ class SessionManager {
     /**
      * Create a new session for a given task.
      *
-     * @param scope the lifecycle scope: "agent" (default), "framework", "system"
+     * @param scope the lifecycle scope: "agent" (default), "framework", "system", "swarm"
      * @param agentId the agent handling this session (defaults to [agentName])
+     *
+     * Synchronized: parallel workers (swarm mode) create sessions concurrently;
+     * the CAS-style map update would otherwise lose sessions silently.
      */
+    @Synchronized
     fun createSession(
         task: String,
         metadata: Map<String, String> = emptyMap(),
@@ -586,6 +590,8 @@ $conversationText
     /**
      * Delete a specific session.
      */
+    /** Synchronized: parallel swarm workers delete sessions concurrently (same CAS-race as createSession). */
+    @Synchronized
     fun deleteSession(id: String) {
         _sessions.value = _sessions.value - id
         if (_activeSessionId.value == id) {
