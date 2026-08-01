@@ -514,7 +514,7 @@
       "description": "OpenClaw 框架连接器 — WebSocket (18789) 对接, 经 framework.connect/call 调用",
       "status": "remote",
       "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-openclaw.aar",
-      "mirrorUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-openclaw.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-openclaw.aar",
       "minCoreVersion": "0.20.0",
       "commands": [],
       "checksum": "sha256:a1d06fba2135525754d6cb601b31533fc18b67399ceb8ad25adef1da12055b35",
@@ -530,7 +530,7 @@
       "description": "QwenPaw/Coze 通讯连接器 — REST (8088) 直连 + SSH ACP 双通道, 经 framework.connect/call 委派任务",
       "status": "remote",
       "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-qwenpaw.aar",
-      "mirrorUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-qwenpaw.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-qwenpaw.aar",
       "minCoreVersion": "0.20.0",
       "commands": [
         "connector-qwenpaw.config",
@@ -549,7 +549,7 @@
       "description": "Claude Code 通讯连接器 — SSH 执行 claude CLI (headless), 经 framework.connect/call 委派任务到 PC",
       "status": "remote",
       "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-claude-code.aar",
-      "mirrorUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-claude-code.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-claude-code.aar",
       "minCoreVersion": "0.20.0",
       "commands": [
         "connector-claude-code.config",
@@ -568,7 +568,7 @@
       "description": "Reasonix 通讯连接器 — SSH 执行 reasonix CLI, 经 framework.connect/call 委派任务到 PC",
       "status": "remote",
       "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-reasonix.aar",
-      "mirrorUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-reasonix.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-reasonix.aar",
       "minCoreVersion": "0.20.0",
       "commands": [
         "connector-reasonix.config",
@@ -587,7 +587,7 @@
       "description": "TREA IDE 通讯连接器 — SSH 执行 trae-cli, 经 framework.connect/call 委派任务到 PC",
       "status": "remote",
       "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-trae.aar",
-      "mirrorUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-trae.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-trae.aar",
       "minCoreVersion": "0.20.0",
       "commands": [
         "connector-trae.config",
