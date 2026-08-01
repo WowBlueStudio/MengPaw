@@ -53,6 +53,35 @@ internal object AppExecutor {
         }
     }
 
+    /**
+     * 前台唤醒 MP 浏览器 (Agent 用 — 唤起后浏览器侧 MCP server 自动上线, 设备内 MCP 通道就绪)。
+     * 带 url 时经 OPEN_URL 通道打开 (浏览器 onNewIntent 处理), 不带则只唤醒。
+     */
+    suspend fun browserOpen(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        val app = SysExecutor.appContext ?: return ExecutionResult.fail("SysExecutor not initialized")
+        val url = args.firstOrNull()
+        return try {
+            val intent = if (url != null && (url.startsWith("http://") || url.startsWith("https://"))) {
+                Intent("com.mengpaw.action.OPEN_URL").apply {
+                    setClassName("com.mengpaw.browser", "com.mengpaw.browser.BrowserActivity")
+                    putExtra("url", url)
+                }
+            } else {
+                app.packageManager.getLaunchIntentForPackage("com.mengpaw.browser")
+                    ?: return ExecutionResult.fail("MP 浏览器未安装 (com.mengpaw.browser)", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_NOT_FOUND)
+            }
+            intent.addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            )
+            app.startActivity(intent)
+            ExecutionResult.ok("MP 浏览器已唤醒" + (url?.let { ": $it" } ?: ""))
+        } catch (e: Exception) {
+            ExecutionResult.fail("唤醒失败: ${e.message}")
+        }
+    }
+
     suspend fun appUninstall(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val app = SysExecutor.appContext ?: return ExecutionResult.fail("SysExecutor not initialized")
         val pkg = args.firstOrNull() ?: return ExecutionResult.fail("Usage: sys.app.uninstall <package>")

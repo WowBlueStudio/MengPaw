@@ -636,7 +636,11 @@ fun SidebarContent(
         if (twinPairingState.phase == com.mengpaw.plugin.memorytwin.TwinPairingEngine.PairingPhase.ESTABLISHED) {
             showTwinVerifyDialog = false
             com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext?.let { ctx ->
-                android.widget.Toast.makeText(ctx, "🧠 记忆孪生配对成功！", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(
+                    ctx,
+                    "🧠 记忆孪生配对成功！执行 twin.sync 立即同步工作区",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
             }
         }
     }

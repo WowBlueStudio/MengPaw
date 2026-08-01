@@ -111,21 +111,9 @@ class BrowserActivity : ComponentActivity() {
         // Bind shared PluginManager to BrowserPluginRegistry for active-state filtering
         com.mengpaw.browser.plugin.BrowserPluginRegistry.pluginManager =
             com.mengpaw.kernel.plugin.PluginManager.globalInstance
-        // Bind WebView + tool executor to BrowserMcpPlugin (via reflection, plugin is optional)
-        try {
-            val clazz = Class.forName("com.mengpaw.plugin.browsermcp.BrowserMcpPlugin")
-            val wvField = clazz.getDeclaredField("webViewProvider")
-            wvField.isAccessible = true
-            wvField.set(null, { -> webViewMapRef.values.firstOrNull() } as kotlin.jvm.functions.Function0<*>)
-            // Tool executor: delegates to instance method
-            val self = this
-            val executor: (String, Map<String, String>) -> String = { toolName, args ->
-                self.executeMcpTool(toolName, args)
-            }
-            val exField = clazz.getDeclaredField("toolExecutor")
-            exField.isAccessible = true
-            exField.set(null, executor)
-        } catch (_: Exception) { /* plugin not installed, skip */ }
+        // 设备内 MCP 桥: 启动本地 HTTP server (127.0.0.1:9880), Shell 进程经它调 MCP 工具
+        // (废弃旧反射静态字段绑定 — 插件类在 Shell 进程, 浏览器进程赋值互不可见)
+        com.mengpaw.browser.mcp.McpHttpServer.start { tool, args -> runMcpTool(tool, args) }
         // Bind Quick Click toggle and screenshot settings to BuiltinBrowserPlugin
         val prefs = BrowserPrefs(this)
         com.mengpaw.browser.plugin.BuiltinBrowserPlugin.quickClickEnabled = { prefs.quickClickEnabled }
@@ -145,7 +133,30 @@ class BrowserActivity : ComponentActivity() {
         }
     }
 
-    /** MCP tool executor called by BrowserMcpPlugin via toolExecutor delegate. */
+    /**
+     * MCP 工具入口 (HTTP server 线程调用)。WebView 操作必须在主线程 —
+     * 非主线程调用时 post 到主线程并同步等待结果 (navigate 最坏阻塞 ~10s, 超时保护 25s)。
+     */
+    private fun runMcpTool(toolName: String, args: Map<String, String>): String {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            return executeMcpTool(toolName, args)
+        }
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var result = """{"ok":false,"error":"timeout"}"""
+        runOnUiThread {
+            try {
+                result = executeMcpTool(toolName, args)
+            } catch (e: Exception) {
+                result = """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
+            } finally {
+                latch.countDown()
+            }
+        }
+        latch.await(25, java.util.concurrent.TimeUnit.SECONDS)
+        return result
+    }
+
+    /** MCP tool executor — 直接操作 WebView (必须在主线程调用)。 */
     private fun executeMcpTool(toolName: String, args: Map<String, String>): String {
         val wv = webViewMapRef.values.firstOrNull()
             ?: return """{"ok":false,"error":"WebView not available"}"""
@@ -177,6 +188,58 @@ class BrowserActivity : ComponentActivity() {
             }
         } catch (e: Exception) {
             """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
+        }
+    }
+
+    /**
+     * 发送 URL (或网页提炼请求) 给 Shell 的 MengPaw Agent。
+     * extract=true 时加 mode=extract + title, Shell 会直接触发 Agent 提炼并回传。
+     * internal: 顶层 BrowserApp 回调经 (ctx as? BrowserActivity) 调用。
+     */
+    internal fun sendToAgent(url: String, title: String, extract: Boolean) {
+        val intent = Intent("com.mengpaw.action.OPEN_URL").apply {
+            setClassName("com.mengpaw.shell", "com.mengpaw.shell.MainActivity")
+            putExtra("url", url)
+            if (extract) {
+                putExtra("mode", "extract")
+                putExtra("title", title.ifBlank { url })
+            }
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            )
+        }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            Toast.makeText(this, "MengPaw 未安装", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** 读取 OPEN_MD 的 md 内容 (extra 或 FileProvider URI)。 */
+    private fun readMdUri(uriString: String?): String? {
+        if (uriString.isNullOrBlank()) return null
+        return try {
+            val resolver = contentResolver
+            val input = resolver.openInputStream(android.net.Uri.parse(uriString)) ?: return null
+            input.bufferedReader().use { it.readText().take(500_000) }
+        } catch (_: Exception) { null }
+    }
+
+    /** 处理浏览器 APK 收到的外部 Intent (OPEN_URL 重复打开 / OPEN_MD 提炼回传)。 */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        when (intent.action) {
+            "com.mengpaw.action.OPEN_URL" -> onOpenUrl?.invoke(extractUrl(intent))
+            "com.mengpaw.action.OPEN_MD" -> {
+                val md = intent.getStringExtra("md") ?: readMdUri(intent.getStringExtra("mdUri")) ?: return
+                onOpenMd?.invoke(intent.getStringExtra("title") ?: "", intent.getStringExtra("url") ?: "", md)
+            }
+            android.content.Intent.ACTION_VIEW -> {
+                val md = checkMdFile(intent)
+                if (md != null) onOpenMd?.invoke("", "", md)
+            }
         }
     }
 
@@ -213,9 +276,15 @@ class BrowserActivity : ComponentActivity() {
     internal var webViewMapRef: MutableMap<Int, WebView> = mutableMapOf()
     /** System back key callback set by Compose. */
     internal var onSystemBack: (() -> Unit)? = null
+    /** OPEN_URL 热路径回调 (重复打开时由 onNewIntent 触发)。 */
+    internal var onOpenUrl: ((String?) -> Unit)? = null
+    /** OPEN_MD 提炼回传回调: (title, url, md) → 弹 Markdown 预览。 */
+    internal var onOpenMd: ((String, String, String) -> Unit)? = null
 
     override fun onDestroy() {
         super.onDestroy()
+        // 设备内 MCP 桥停止
+        com.mengpaw.browser.mcp.McpHttpServer.stop()
         // CRITICAL: Destroy all WebViews to free native renderer memory
         webViewMapRef.values.forEach { wv ->
             try { wv.stopLoading(); wv.destroy() } catch (_: Exception) { }
@@ -353,11 +422,6 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
             }
         }
     }
-    DisposableEffect(Unit) {
-        (ctx as? BrowserActivity)?.onSystemBack = handleBack
-        onDispose { (ctx as? BrowserActivity)?.onSystemBack = null }
-    }
-
     val navigate = { input: String ->
         val final = smartNavigate(input, searchEngine)
         if (final.isNotBlank()) {
@@ -370,6 +434,21 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
 
     val updateTab = { id: Int, update: (TabState) -> TabState ->
         tabs = tabs.map { if (it.id == id) update(it) else it }
+    }
+
+    DisposableEffect(Unit) {
+        val activity = ctx as? BrowserActivity
+        activity?.onSystemBack = handleBack
+        activity?.onOpenUrl = { url -> if (url != null) navigate(url) }
+        activity?.onOpenMd = { title, url, md ->
+            mdContent = md
+            showMdViewer = true
+        }
+        onDispose {
+            activity?.onSystemBack = null
+            activity?.onOpenUrl = null
+            activity?.onOpenMd = null
+        }
     }
 
     Scaffold(
@@ -422,22 +501,8 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                         }
                         ctx.startActivity(Intent.createChooser(intent, "分享到"))
                     },
-                    onSendToAgent = { url ->
-                        val intent = Intent("com.mengpaw.action.OPEN_URL").apply {
-                            setClassName("com.mengpaw.shell", "com.mengpaw.shell.MainActivity")
-                            putExtra("url", url)
-                            addFlags(
-                                Intent.FLAG_ACTIVITY_NEW_TASK or
-                                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                    Intent.FLAG_ACTIVITY_SINGLE_TOP
-                            )
-                        }
-                        try {
-                            ctx.startActivity(intent)
-                        } catch (_: Exception) {
-                            Toast.makeText(ctx, "MengPaw 未安装", Toast.LENGTH_SHORT).show()
-                        }
-                    },
+                    onSendToAgent = { url -> (ctx as? BrowserActivity)?.sendToAgent(url, activeTab.title, extract = false) },
+                    onExtractToAgent = { url, title -> (ctx as? BrowserActivity)?.sendToAgent(url, title, extract = true) },
                     onShowSettings = { showSettings = true },
                     onShowAgentSettings = { showAgentSettings = true }
                 )

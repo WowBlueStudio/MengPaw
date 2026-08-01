@@ -10,16 +10,20 @@ import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.mcp.McpTool
 import com.mengpaw.kernel.mcp.McpToolProvider
 import com.mengpaw.kernel.plugin.Plugin
-import com.mengpaw.kernel.plugin.PluginContext
 import com.mengpaw.kernel.plugin.PluginMetadata
 import com.mengpaw.kernel.plugin.PluginType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Exposes browser capabilities as MCP (Model Context Protocol) tools.
  *
- * External MCP clients can discover and invoke browser tools:
- * - tools/list → sees browser_navigate, browser_screenshot, browser_click, etc.
- * - tools/call → invokes the tool with parameters
+ * 设备内通道: Shell 进程 ↔ 浏览器进程经 HTTP 桥 (127.0.0.1:9880, Ports.BROWSER_MCP)。
+ * 浏览器侧 McpHttpServer 处理 /health 与 /mcp; 本插件是 HTTP client。
+ * (废弃旧反射静态字段绑定 — 跨进程字段赋值互不可见, 通道从未真正工作)
  *
  * ## Design reference (MIT-licensed):
  * native-devtools-mcp: MCP tool provider pattern for browser automation
@@ -28,10 +32,10 @@ class BrowserMcpPlugin : Plugin, McpToolProvider {
     override val metadata = PluginMetadata(
         id = "browser-mcp-plugin",
         name = "浏览器 MCP",
-        version = "0.2.0",
+        version = "0.20.2",
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取/执行脚本",
+        description = "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取/执行脚本 (设备内 HTTP 桥)",
         permissions = emptyList(),
         minCoreVersion = "0.2.3",
         commands = listOf("browser.mcp.tools", "browser.mcp.status", "browser.mcp.invoke")
@@ -44,25 +48,50 @@ class BrowserMcpPlugin : Plugin, McpToolProvider {
     )
 
     companion object {
-        /** WebView provider set by BrowserActivity on initialization. */
+        /** 设备内 MCP 桥地址 (浏览器侧 McpHttpServer 监听 127.0.0.1). */
+        @Volatile
+        var serverUrl: String = "http://127.0.0.1:${com.mengpaw.kernel.ports.Ports.BROWSER_MCP}"
+
+        // ── 兼容保留 (旧反射绑定机制已废弃, 字段不再被赋值, 仅作 fallback) ──
         @JvmField
         var webViewProvider: (() -> WebView?)? = null
 
-        /**
-         * Tool executor delegate — set by BrowserActivity to bridge plugin ↔ browser.
-         * Accepts (toolName, args) and returns JSON result string.
-         */
         @JvmField
         var toolExecutor: ((String, Map<String, String>) -> String)? = null
-
-        /** Execute a named MCP tool with JSON args, returning JSON result. */
-        fun executeTool(toolName: String, args: Map<String, String>): String {
-            return toolExecutor?.invoke(toolName, args)
-                ?: """{"ok":false,"error":"Tool executor not available — activate in MP Browser"}"""
-        }
     }
 
+    // ── HTTP client (复用 McpClient.callHttp 的 HttpURLConnection 先例, 零新依赖) ──
+
+    private fun httpGet(url: String, timeoutMs: Int = 2000): String? = try {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.connectTimeout = timeoutMs
+        conn.readTimeout = timeoutMs
+        conn.requestMethod = "GET"
+        if (conn.responseCode in 200..299) conn.inputStream.bufferedReader().readText() else null
+    } catch (_: Exception) { null }
+
+    private fun httpPost(url: String, body: String, timeoutMs: Int = 30_000): String? = try {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.connectTimeout = timeoutMs
+        conn.readTimeout = timeoutMs
+        conn.requestMethod = "POST"
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+        if (conn.responseCode in 200..299) conn.inputStream.bufferedReader().readText() else null
+    } catch (_: Exception) { null }
+
     // ── McpToolProvider ─────────────────────────────────────────────────
+
+    /** tools/call 支持: 经设备内 HTTP 桥调浏览器 (供内核 McpServer 聚合时使用)。 */
+    override fun callTool(name: String, arguments: Map<String, String>): Result<String> = try {
+        val body = JSONObject().put("tool", name).put("args", JSONObject(arguments)).toString()
+        val result = httpPost("$serverUrl/mcp", body)
+            ?: return Result.failure(IllegalStateException("浏览器 MCP 服务未启动 — 打开 MP 浏览器"))
+        Result.success(result)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
 
     override fun getTools(): List<McpTool> = listOf(
         McpTool("browser_navigate", "Navigate to a URL",
@@ -105,9 +134,19 @@ class BrowserMcpPlugin : Plugin, McpToolProvider {
     }
 
     private suspend fun status(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val available = webViewProvider?.invoke() != null
-        val statusText = if (available) "就绪" else "WebView 未绑定 — 请在 MP 浏览器中激活此插件"
-        return ExecutionResult.ok("浏览器 MCP 服务状态: $statusText\n已注册 ${getTools().size} 个工具。")
+        val health = withContext(Dispatchers.IO) { httpGet("$serverUrl/health", 2000) }
+        return if (health != null) {
+            ExecutionResult.ok(
+                "浏览器 MCP 服务: 在线 ($serverUrl)\n" +
+                "已注册 ${getTools().size} 个工具。\n" +
+                "使用 `browser.mcp.invoke <工具名> <JSON参数>` 调用。"
+            )
+        } else {
+            ExecutionResult.ok(
+                "浏览器 MCP 服务: 离线 — 打开 MP 浏览器即自动启动 ($serverUrl)\n" +
+                "已注册 ${getTools().size} 个工具 (待浏览器在线后可用)。"
+            )
+        }
     }
 
     /** Invoke a named MCP tool with JSON arguments and return the result. */
@@ -119,7 +158,7 @@ class BrowserMcpPlugin : Plugin, McpToolProvider {
         val toolName = args[0]
         val jsonArgs = if (args.size > 1) {
             try {
-                val json = org.json.JSONObject(args.drop(1).joinToString(" "))
+                val json = JSONObject(args.drop(1).joinToString(" "))
                 val map = mutableMapOf<String, String>()
                 for (key in json.keys()) {
                     map[key] = json.optString(key, "")
@@ -130,7 +169,18 @@ class BrowserMcpPlugin : Plugin, McpToolProvider {
             }
         } else emptyMap()
 
-        val result = executeTool(toolName, jsonArgs)
-        return ExecutionResult.ok(result)
+        // 主通道: 设备内 HTTP 桥 → 浏览器 McpHttpServer → WebView
+        val body = JSONObject()
+            .put("tool", toolName)
+            .put("args", JSONObject(jsonArgs))
+            .toString()
+        val result = withContext(Dispatchers.IO) { httpPost("$serverUrl/mcp", body) }
+        return if (result != null) {
+            ExecutionResult.ok(result)
+        } else {
+            ExecutionResult.ok(
+                """{"ok":false,"error":"浏览器 MCP 服务未启动 — 打开 MP 浏览器即自动启动 ($serverUrl)"}"""
+            )
+        }
     }
 }

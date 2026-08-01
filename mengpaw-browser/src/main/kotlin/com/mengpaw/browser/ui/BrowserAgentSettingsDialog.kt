@@ -37,6 +37,23 @@ fun BrowserAgentSettingsDialog(
         title = { Text("智能体协同设置") },
         text = {
             LazyColumn {
+                // Section: MCP bridge status (设备内 MCP 通道)
+                item {
+                    val mcpOnline = com.mengpaw.browser.mcp.McpHttpServer.isRunning
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("设备内 MCP 桥", fontWeight = FontWeight.Medium)
+                            Text("Shell 经 127.0.0.1:${com.mengpaw.kernel.ports.Ports.BROWSER_MCP} 调用浏览器 MCP 工具", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                        }
+                        Text(
+                            if (mcpOnline) "● 运行中" else "○ 未运行",
+                            color = if (mcpOnline) ThemeColors.primary else ThemeColors.textSecondary,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                }
+                item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
+
                 // Section: Quick Click (experimental)
                 item {
                     Text("🧪 实验性功能", style = MaterialTheme.typography.labelLarge, color = ThemeColors.brand, fontWeight = FontWeight.Bold)

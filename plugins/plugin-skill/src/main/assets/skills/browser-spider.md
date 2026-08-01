@@ -1,206 +1,49 @@
 ---
 name: browser-spider
-description: 网页抓取工作流指南 — 导航、提取、解析、分页、去重、持久化
+description: 网页抓取工作流 — 唤醒、导航、提取、转档、分页、去重、持久化 (经 MCP + search.*)
 enabled: true
 category: browser
 ---
-# 网页抓取工作流指南
+# 网页抓取工作流
 
-## 标准爬取流水线
+> 通道: `sys.browser.open` 唤醒 / `browser.mcp.*` 提取 / `search.md` 转档。主手册: `skill.run browser-control`。
 
-```
-[导航] → [内容提取] → [数据解析] → [分页] → [去重] → [持久化]
-```
-
-## 一、页面导航
-
-### 基本导航
-```
-browser.open "https://example.com"
-browser.wait.nav 10000
-```
-
-### 设置视口与 UA（反检测）
-```
-browser.viewport 360x740                 # 模拟移动端
-browser.userAgent "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 ..."
-```
-
-### Cookie 管理（维持登录态）
-```
-browser.cookies.set "session=abc123" ".target-site.com"
-browser.open "https://target-site.com/dashboard"
-```
-
-## 二、内容提取
-
-### 提取纯文本
-```
-let $title = browser.text "h1.article-title"
-let $body = browser.text "div.article-content"
-```
-
-### 提取属性
-```
-let $imgUrl = browser.attr "img.cover" "src"
-let $linkUrl = browser.attr "a.read-more" "href"
-```
-
-### 批量提取（通过 eval）
-```
-let $items = browser.eval "JSON.stringify(
-  Array.from(document.querySelectorAll('.item')).map(el => ({
-    title: el.querySelector('.title')?.innerText,
-    link: el.querySelector('a')?.href,
-    price: el.querySelector('.price')?.innerText
-  }))
-)"
-```
-
-## 三、数据解析
-
-### JSON-LD（结构化数据）
-```
-browser.eval "JSON.stringify(
-  Array.from(document.querySelectorAll('script[type=\"application/ld+json\"]'))
-    .map(s => JSON.parse(s.textContent))
-)"
-```
-
-### 微数据 (Microdata)
-```
-browser.eval "JSON.stringify(
-  Array.from(document.querySelectorAll('[itemscope]')).map(el => ({
-    type: el.getAttribute('itemtype'),
-    props: Array.from(el.querySelectorAll('[itemprop]')).map(p => ({
-      name: p.getAttribute('itemprop'),
-      value: p.getAttribute('content') || p.innerText
-    }))
-  }))
-)"
-```
-
-### HTML 表格解析
-```
-browser.eval "JSON.stringify(
-  Array.from(document.querySelectorAll('table')).map(table => ({
-    headers: Array.from(table.querySelectorAll('th')).map(th => th.innerText),
-    rows: Array.from(table.querySelectorAll('tr')).map(
-      tr => Array.from(tr.querySelectorAll('td')).map(td => td.innerText)
-    ).filter(r => r.length > 0)
-  }))
-)"
-```
-
-## 四、分页处理
-
-### 1. 「下一页」按钮
-```
-for (let $page = 1; $page <= 10; $page++) {
-  browser.wait.selector ".item" 5000
-  # 提取当前页数据...
-  browser.click "a.next-page"
-  browser.wait.nav 8000
-}
-```
-
-### 2. 无限滚动（触发加载）
-```
-for (let $i = 0; $i < 20; $i++) {
-  browser.scroll 1000
-  browser.wait 1500
-  let $newContent = browser.eval "document.querySelectorAll('.item').length"
-  # 监测是否还有新内容加载
-}
-```
-
-### 3. URL 参数分页
-```
-for (let $p = 1; $p <= 50; $p++) {
-  browser.nav "https://example.com/list?page=$p"
-  browser.wait.selector ".item"
-  # 提取数据...
-}
-```
-
-## 五、去重策略
+## 完整流程
 
 ```
-# 使用内存集合记录已访问 URL
-let $visited = browser.eval "JSON.parse(localStorage.getItem('crawled_urls') || '[]')"
-let $newLinks = browser.eval "JSON.stringify(
-  Array.from(document.querySelectorAll('a[href]'))
-    .map(a => a.href)
-    .filter(h => !$visited.includes(h))
-)"
-# 处理新链接后更新 visited 列表
-browser.eval "localStorage.setItem('crawled_urls', JSON.stringify([...new Set([...$visited, ...$newLinks])]))"
+# 1. 唤醒并打开
+sys.browser.open https://example.com/list
+
+# 2. 提取页面结构
+browser.mcp.invoke browser_extract {}
+
+# 3. 转档保存 (供后续阅读/提炼)
+search.md https://example.com/list --name list_1
+
+# 4. 列表页提取链接 → 逐条转档
+browser.mcp.invoke browser_eval {"script":"JSON.stringify(Array.from(document.querySelectorAll('a')).map(a=>a.href).filter(h=>h.includes('/article/')))"}
+→ 对每个 URL: search.md <url> --name article_N
+
+# 5. 分页
+browser.mcp.invoke browser_eval {"script":"var n=document.querySelector('.next');if(n){n.click();'next'}"}
 ```
 
-## 六、持久化
+## 抓取策略选择
 
-### 存储到文件
-```
-# 方式 1：浏览器内暂存后 eval 导出
-browser.eval "localStorage.setItem('scraped_data', JSON.stringify(allData))"
-fs.write "scraped_data.json" (browser.eval "localStorage.getItem('scraped_data')")
+| 场景 | 通道 | 原因 |
+|------|------|------|
+| 需登录/JS 渲染/反爬强的页面 | MCP (浏览器) | 真实浏览器环境, 带 cookie/JS |
+| 静态页面/批量抓取 | `search.md` / `net.curl` | 快, 不占浏览器, 可并发 |
+| 高质量搜索 | `tavily.search` | 结构化结果, 免解析 |
 
-# 方式 2：逐批追加
-fs.append "results.txt" $extractedData + "\n---\n"
-```
+## 去重与持久化
 
-## 七、站点的爬取模式
+- 转档产物在 `SEARCH_OUTPUTS` (`search.outputs` 查看), 文件名带时间戳
+- 抓取前 `search.outputs` 查重, 避免重复转档
+- 关键资料提炼后 `agent.memory.keep` 沉淀
 
-### 1. Sitemap 驱动
-```
-browser.open "https://example.com/sitemap.xml"
-let $urls = browser.eval "JSON.stringify(
-  Array.from(document.querySelectorAll('loc')).map(l => l.textContent)
-)"
-# 遍历 $urls 逐一访问
-```
+## 反爬应对
 
-### 2. 文章列表页
-```
-browser.open "https://blog.example.com"
-browser.wait.selector "article"
-let $articles = browser.eval "JSON.stringify(
-  Array.from(document.querySelectorAll('article')).map(a => ({
-    url: a.querySelector('a')?.href,
-    title: a.querySelector('h2')?.innerText,
-    summary: a.querySelector('p.summary')?.innerText
-  }))
-)"
-```
-
-### 3. 登录墙内容
-```
-browser.open "https://example.com/login"
-browser.type "#email" "user@example.com"
-browser.type "#password" "secret"
-browser.click "#login-btn"
-browser.wait.nav
-browser.nav "https://example.com/restricted-content"
-```
-
-## 八、频率控制与反反爬
-
-```
-# 每次请求间等待，模拟人类行为
-browser.wait (2000 + Math.random() * 3000)
-browser.scroll (100 + Math.random() * 500)
-browser.wait (500 + Math.random() * 1000)
-
-# 随机 User-Agent 轮换
-browser.userAgent $randomUA
-```
-
-## 九、错误恢复
-
-```
-对于爬取过程中的失败：
-1. 捕获 browser.wait.selector 超时 → 跳过当前项
-2. 捕获 browser.wait.nav 超时 → browser.tab.close → 新标签页重试
-3. 遇到 CAPTCHA → browser.screenshot → 通知用户手动处理
-4. 保持已提取数据的阶段性持久化，避免全量重爬
-```
+- 403/验证码 → 换浏览器通道 (MCP) 重试
+- 限流 → 逐条间隔 + `search.md` 分步
+- 需要登录 → 浏览器会话天然带登录态 (browser_navigate 登录后保持)

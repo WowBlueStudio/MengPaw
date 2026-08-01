@@ -114,4 +114,20 @@ class PromptEngineTest {
         assertTrue(prompt.contains("Locally listened"))
         assertFalse(prompt.contains("__PORTS_TABLE__"))
     }
+
+    @Test
+    fun `zh prompt mentions browser extract pipeline and search commands`() {
+        val prompt = engine.buildSystemPrompt()
+        assertTrue("提示词应教 Agent 处理 browser_extract_* 任务", prompt.contains("browser_extract_*.md"))
+        assertTrue("提示词应说明 browser_return_* 是交换文件", prompt.contains("browser_return_*.md"))
+        assertTrue("提示词应列 search 管道命令", prompt.contains("search.clean"))
+    }
+
+    @Test
+    fun `en prompt mentions browser extract pipeline and search commands`() {
+        val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH)
+        assertTrue("英文提示词应教 Agent 处理 browser_extract_* 任务", prompt.contains("browser_extract_*.md"))
+        assertTrue("英文提示词应说明 browser_return_* 是交换文件", prompt.contains("browser_return_*.md"))
+        assertTrue("英文提示词应列 search 管道命令", prompt.contains("search.clean"))
+    }
 }

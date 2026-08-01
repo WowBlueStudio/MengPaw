@@ -386,64 +386,40 @@ class AgentDocManager(
             Triple("browser-tools", "agent.browser-tools", "MP浏览器插件开发能力")
         )
 
-        /** Browser plugin development capabilities — readable by Agent via CLI. */
+        /** 浏览器协作能力 — readable by Agent via CLI (v0.22.1 重写: 真实三通道, 移除未接线的 45 命令手册). */
         val BROWSER_TOOLS_MD = """
-# MP浏览器 插件开发能力 (Browser Plugin API) v0.6.0
+# MP浏览器 协作能力 (v0.22.1)
 
-> Agent 可以通过 `agent.cli` 查看此参考 (BROWSER TOOLS 段), 或 `skill.run browser-control` 加载完整手册。
-> 完整使用手册请加载 Skills: `skill.run browser-control`
+> 浏览器是独立 APK。Agent 可用的三通道: 唤醒打开 / MCP 工具 / 网页转档。
+> 完整手册: `skill.run browser-control`。
 
-## 核心命令 (v0.6.0 共 45 命令)
+## 1. 前台唤醒与打开
+- `sys.browser.open [url]` — 唤起 MP 浏览器到前台; 带 url 同时打开。唤起后 MCP 桥自动启动。
 
-### 导航 (5): browser.open, browser.nav, browser.back, browser.forward, browser.url, browser.title
-### 交互 (4): browser.click, browser.type, browser.scroll, browser.select
-### 表单 (3): browser.submit, browser.check, browser.uncheck
-### 查询 (4): browser.attr, browser.text, browser.visible, browser.enabled
-### 等待 (3): browser.wait <ms>, browser.wait.selector <css>, browser.wait.nav [ms]
-### 标签页 (6): browser.tabs, browser.tab, browser.tab.open, browser.tab.close, browser.tab.all, browser.preload
-### 效率 (4): browser.batch, browser.q, browser.inject, browser.diff
-### 截图 (3): browser.screenshot, browser.screenshot.element <sel>, browser.screenshot.full [maxH]
-### 快速点击 (2): browser.coord.click <x> <y>, browser.coord.scroll <y>
-### 存储 (3): browser.cookies, browser.cookies.set, browser.cookies.clear
-### Web存储 (1): browser.storage <local|session> <get|set|clear> [key] [value]
-### 配置 (3): browser.viewport <w> <h>, browser.userAgent [ua], browser.version
-### 执行 (1): browser.eval <js>
-### 对话框 (2): browser.dialog.accept, browser.dialog.dismiss
+## 2. 浏览器 MCP 工具 (设备内 HTTP 桥 127.0.0.1:9880, 打开浏览器即自动启用)
+- `browser.mcp.status` — 检查桥在线/离线
+- `browser.mcp.tools` — 列出 6 个工具及参数
+- `browser.mcp.invoke <工具> <JSON参数>` — 调用:
+  - `browser_navigate` {"url": "..."} — 导航
+  - `browser_screenshot` {} — 当前页截图
+  - `browser_click` {"selector": "css"} — 点击元素
+  - `browser_type` {"selector": "css", "text": "..."} — 输入文本
+  - `browser_extract` {} — 提取页面结构 (标题/链接/表单/文本)
+  - `browser_eval` {"script": "js"} — 执行任意 JS
 
-## 可用的浏览器钩子
+## 3. 网页转档与提炼 (不依赖浏览器在线)
+- `search.md <url> [--name x]` — 抓取转 Markdown 存 SEARCH_OUTPUTS
+- `search.clean <url|路径> [--save]` — 提取正文去噪
+- `search.outputs` / `search.clear` — 输出管理
+- 浏览器菜单「提炼网页要点」→ Agent 处理 → 自动回传浏览器预览
 
-| 钩子 | 触发时机 | 用途 |
-|------|---------|------|
-| onPageStarted(url) | 页面开始加载 | 监听导航事件 |
-| onPageFinished(url, title) | 页面加载完成 | 注入 JS/CSS |
-| shouldIntercept(request) | 每个资源请求 | 广告拦截、请求修改 |
-| injectScript(url) | 每页加载后 | Tampermonkey 风格用户脚本 |
-| injectStyle(url) | 每页加载后 | 暗黑模式、自定义样式 |
-| menuItems() | 浏览器菜单打开时 | 添加自定义菜单项 |
-| onLongPress(element) | 长按页面元素 | 图片/视频/二维码处理 |
-
-## 如何开发浏览器插件
-
-1. 实现 BrowserPlugin 接口（继承 Plugin + 浏览器钩子）
-2. 实现 commands map 提供 CLI 命令
-3. 注册到 BrowserPluginRegistry.register(plugin)
-4. 打包为 .jar，上传到插件市场
-
-## 示例：视频下载插件
-```
-plugin.install video-downloader
-→ 长按视频 → 菜单出现 "下载视频" → 调用 video.download
-```
-
-## 已安装的浏览器插件
-查询方法: `plugin.list` 查看 browser- 前缀的插件
+## 浏览器插件开发 (Browser Plugin API, 面向插件作者)
+- 钩子: onPageStarted / onPageFinished / shouldIntercept / injectScript / injectStyle / menuItems / onLongPress
+- 流程: 实现 BrowserPlugin 接口 → BrowserPluginRegistry.register(plugin) → 打包发布
+- 已安装浏览器插件: `plugin.list` 查看 browser- 前缀
 
 ## Agent Skills
-- `skill.run browser-control` — 完整浏览器控制手册 (45 命令)
-- `skill.run browser-playwright` — Playwright API 映射参考
-- `skill.run browser-spider` — 爬虫工作流指南
-- `skill.run browser-form` — 表单自动化指南
-- `skill.run browser-debug` — 调试与排障指南
+- `skill.run browser-control` — 完整协作手册
 """.trimIndent()
     }
 }

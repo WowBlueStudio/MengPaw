@@ -1,1 +1,0 @@
-{"id":"browser-mcp-plugin","name":"浏览器 MCP","version":"0.2.0","type":"native","author":"MengPaw","description":"【MP浏览器专用】将 MengPaw 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取/执行脚本","minCoreVersion":"0.8.0","commands":["browser.mcp.tools","browser.mcp.status","browser.mcp.invoke"]}

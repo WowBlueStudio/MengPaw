@@ -141,9 +141,9 @@ object BuiltinCommandIndex {
         idx("agent.audit", "对工作区执行 7 类安全检查 (危险命令/强制解包/IO 无 try/catch/明文 HTTP)", "agent.audit",
             listOf("审计", "安全", "检查", "审查", "扫描", "漏洞", "Audit"),
             listOf("audit", "security", "check", "review", "scan", "vulnerability"))
-        idx("agent.browser-tools", "查看浏览器操控命令的完整参考 (45 命令)", "agent.browser-tools",
-            listOf("浏览器", "WebView", "操控", "命令", "Browser"),
-            listOf("browser", "WebView", "tools", "commands", "control"))
+        idx("agent.browser-tools", "查看浏览器协作能力参考 (唤醒 sys.browser.open / MCP 工具 browser.mcp.* / 网页转档 search.*)", "agent.browser-tools",
+            listOf("浏览器", "WebView", "操控", "MCP", "转档", "Browser"),
+            listOf("browser", "WebView", "tools", "mcp", "commands", "control"))
         idx("agent.dream", "触发梦境模式: 分析中期记忆 → 提炼洞察 → 写入长期记忆", "agent.dream",
             listOf("梦境", "整理", "压缩", "归档", "分析", "回顾", "Dream", "记忆管理"),
             listOf("dream", "compress", "archive", "analyze", "review", "organize", "memory"))

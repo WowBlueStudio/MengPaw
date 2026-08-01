@@ -71,6 +71,9 @@ class ShellService : Service() {
             return
         }
 
+        // Browser 回传监视 (幂等; UI 存活期间由 MainActivity 驱动, 服务兜底)
+        try { BrowserReturnWatcher.start(this) } catch (_: Exception) {}
+
         // Acquire partial WakeLock to keep CPU running during agent tasks.
         // Released in onDestroy(). Timeout prevents battery drain if something goes wrong.
         try {
@@ -102,6 +105,7 @@ class ShellService : Service() {
         }
         wakeLock = null
 
+        BrowserReturnWatcher.stop()
         powerReceiver?.let { unregisterReceiver(it) }
         EventReceiver.unregister(this)
         super.onDestroy()

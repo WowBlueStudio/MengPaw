@@ -35,6 +35,11 @@
                 <action android:name="com.mengpaw.action.OPEN_URL" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- Markdown 提炼回传 (Shell → 浏览器预览) -->
+            <intent-filter>
+                <action android:name="com.mengpaw.action.OPEN_MD" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
             <!-- Open Markdown files -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

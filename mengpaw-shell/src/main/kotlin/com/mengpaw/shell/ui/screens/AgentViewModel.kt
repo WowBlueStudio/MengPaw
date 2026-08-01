@@ -601,6 +601,31 @@ class AgentViewModel : ViewModel() {
         }
     }
 
+    // ── Browser extract task: 网页转 Markdown 提炼 ─────────────────────
+
+    /**
+     * 浏览器「提炼网页要点」请求 — 后台静默执行。
+     * 任务脚本已在 inbox (browser_extract_<taskId>.md), 提示词引用该文件;
+     * 会话忙碌时 submitTask 自动入 pending 队列。
+     */
+    fun submitBrowserExtract(url: String, taskId: String) {
+        val targetAgent = "MengPaw"
+        val session = sessions.getOrPut(targetAgent) { sessionFactory.createSession(targetAgent, null) }
+
+        // Light system note so user knows something happened
+        session.messages.value = session.messages.value + ChatMessageUi.System(
+            "🌐 正在提炼网页要点: ${url.take(40)}..."
+        )
+
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(200)
+            submitTask(
+                "[浏览器网页提炼任务 · $taskId]\n任务脚本: agent.read ${com.mengpaw.kernel.DataPaths.AGENT_INBOX}/browser_extract_$taskId.md\n按脚本步骤执行, 完成后删除该任务文件。",
+                maxSteps = 20
+            )
+        }
+    }
+
     // ── Translation middleware (auto for US models) ────────────────────
 
     private val translator = com.mengpaw.kernel.llm.TranslateMiddleware()
@@ -811,7 +836,6 @@ class AgentViewModel : ViewModel() {
             "ui" to PluginSuggestion("ui", "ui-plugin", "UI Automation", "界面操控：click, swipe, input 等", "ui.*"),
             "proc" to PluginSuggestion("proc", "proc-plugin", "Process Management", "进程管理：ps, kill, exec", "proc.*"),
             "clipboard" to PluginSuggestion("clipboard", "clipboard-plugin", "Clipboard", "剪贴板操作", "clipboard.*"),
-            "notification" to PluginSuggestion("notification", "notification-plugin", "Notification", "通知管理", "notification.*"),
         )
 
         return knownPlugins[namespace]

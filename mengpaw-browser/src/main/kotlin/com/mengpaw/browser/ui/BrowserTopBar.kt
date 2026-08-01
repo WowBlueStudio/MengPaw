@@ -72,6 +72,7 @@ fun BrowserTopBar(
     onShowPasswords: () -> Unit,
     onShare: (String) -> Unit,
     onSendToAgent: (String) -> Unit,
+    onExtractToAgent: (String, String) -> Unit,
     onShowSettings: () -> Unit,
     onShowAgentSettings: () -> Unit,
     modifier: Modifier = Modifier
@@ -317,6 +318,14 @@ fun BrowserTopBar(
                                 leadingIcon = { Icon(Icons.Default.Send, null) },
                                 onClick = {
                                     onSendToAgent(activeTab.url)
+                                    menuExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("提炼网页要点") },
+                                leadingIcon = { Icon(Icons.Default.AutoAwesome, null) },
+                                onClick = {
+                                    onExtractToAgent(activeTab.url, activeTab.title)
                                     menuExpanded = false
                                 }
                             )

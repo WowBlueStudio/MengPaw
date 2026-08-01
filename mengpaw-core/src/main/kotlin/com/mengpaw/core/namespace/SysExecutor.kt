@@ -131,6 +131,7 @@ object SysExecutor {
         "app.launch" to AppExecutor::appLaunch,
         "app.uninstall" to AppExecutor::appUninstall,
         "app.info" to AppExecutor::appInfo,
+        "browser.open" to AppExecutor::browserOpen,
         // ── Clipboard ──
         "clipboard" to ClipboardIntentExecutor::clipboard,
         "clipboard.set" to ClipboardIntentExecutor::clipboardSet,
