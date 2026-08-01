@@ -1,0 +1,29 @@
+# 自动同步到 Gitee 镜像仓库
+#
+# 前置条件（一次性配置）：
+# 1. Gitee 私人令牌（Settings → 私人令牌，勾选 projects 权限）— 与连接器仓库同一令牌即可
+# 2. 把令牌添加为本仓库 GitHub Secret：仓库 Settings → Secrets and variables → Actions → 新建 GITEE_TOKEN
+#
+# 之后每次 push 到 master 即自动全量镜像到 Gitee（取代手动 git push gitee master）。
+
+name: Sync to Gitee
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Mirror to Gitee
+        uses: wearerequired/git-mirror-action@v1
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        with:
+          source-branch: "master"
+          target-repo: "https://gitee.com/WowBlueStudio/MengPaw.git"
