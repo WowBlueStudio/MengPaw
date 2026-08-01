@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.20.0 | **更新**: 2026-07-31 | **架构**: 微内核(54文件) + AgentRuntime + 25插件模块(12捆绑随壳更新) + 三轨记忆 + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.1
+> **版本**: 0.22.0 | **更新**: 2026-08-01 | **架构**: 微内核(70文件) + AgentRuntime + 23插件模块(11捆绑随壳更新) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.6.0
 
 ---
 
@@ -79,10 +79,10 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 |---------|--------|--------|------|
 | `self` | SelfExecutor.kt | 16 | Agent 进化 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/ports/search/search.stats/time/notify.message/notify.banner) |
 | `agent` | AgentExecutor.kt | 39 | 文档(6) + 记忆三轨(18) + 其他(5) + 会话(4) + 工作区文件(6) |
-| `plugin` | PluginExecutor + DevPlugin | 12 + 5 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade/auto/verify + create/audit/share/examples/keywords) |
+| `plugin` | PluginExecutor + DevPlugin | 12 + 6 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade/auto/verify + create/audit/share/examples/keywords/guide) |
 `framework` | FrameworkPlugin | 6 | 框架发现 (discover/peers/trust/untrust/info/ping) [↔ 同捆插件 plugin-framework] |
 
-> `sys` 命名空间 (39 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。
+> `sys` 命名空间 (40 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。
 
 ### 2.4 依赖关系
 
@@ -100,7 +100,7 @@ mengpaw-browser
   ├── mengpaw-core
   └── mengpaw-design-system
 
-plugins/ (25 模块)
+plugins/ (19 模块)
   └── mengpaw-kernel  ← 所有插件只依赖微内核（同级）
 ```
 
@@ -181,7 +181,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ## 3. 模块详解
 
-### 3.1 mengpaw-kernel（微内核，46 文件）
+### 3.1 mengpaw-kernel（微内核，70 文件）
 
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|
@@ -241,20 +241,19 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `plugin/` (3 文件) | BuiltinBrowserPlugin, BrowserPlugin, BrowserPluginRegistry |
 
 
-### 3.5 插件模块（26 个，plugins/ 目录，按 settings.gradle.kts 为准）
+### 3.5 插件模块（20 个，plugins/ 目录，按 settings.gradle.kts 为准）
 
-> 插件数统一口径：**25 模块**（settings.gradle.kts:29-53）| **12 捆绑**（mengpaw-shell 打包）| **plugins.json 26 条目**（11 builtin + 13 remote + 2 embedded）
+> 插件数统一口径：**20 模块**（settings.gradle.kts:29-48）| **11 捆绑**（mengpaw-shell 打包）| **plugins.json 24 条目**（11 builtin + 11 remote + 2 embedded）
 
-#### 基础功能 (9)
+#### 基础功能 (6)
 
 | 模块 | 命名空间 | 命令 | 捆绑 |
 |------|---------|------|:--:|
-| plugin-fs | fs | cat, ls, write, rm, mkdir, cp, mv, stat, grep, glob (10) | ⭐ |
+| plugin-fs | fs | cp, mv, stat, grep, glob (5) | ⭐ |
 | plugin-net | net | curl, get, post (3) | ⭐ |
 | plugin-skill | skill | ls, run, enable, disable (4) | ⭐ |
 | plugin-clipboard | clipboard | copy, paste, clear (3) | ⭐ |
-| plugin-notification | notification | send, list, dismiss (3) | ⭐ |
-| plugin-framework | framework | discover, peers, trust, untrust, info, ping (6) | ⭐ |
+| plugin-framework | framework | discover, peers, trust, untrust, info, ping, connect, call, disconnect, adapters (10) | ⭐ |
 | plugin-agent-tools | tools | import, ls, remove, search (4) | ⭐ |
 
 #### AI / 搜索 (4)
@@ -266,13 +265,11 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | plugin-comfy | comfy | nodes, workflow, run, preview, export (5) |
 | plugin-translate | translate | text, auto, langs, setup (4) |
 
-#### 多智能体 (3)
+#### 多智能体 (1)
 
 | 模块 | 命名空间 | 命令 |
 |------|---------|------|
 | plugin-hermes | hermes | team, discover, delegate, ask, memo, role (6) |
-| plugin-workflow | workflow | run, define, list, status (4) |
-| plugin-incubator | incubator | spawn, list, terminate, inbox (4) |
 
 #### Agent 运行模式 (内置)
 
@@ -284,21 +281,19 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | **Fleet** | `AgentEngine.runWithFleet()` | LLM 拆解子任务 → Worker 独立 ReAct 执行 → Verifier 验证 |
 | **Fleet+** | `runWithFleet()` + ACP | Fleet 模式 + 跨 ACP 框架/设备协调 |
 
-#### 浏览器扩展 (5)
+#### 浏览器扩展 (3)
 
 | 模块 | 命名空间 | 命令 |
 |------|---------|------|
 | plugin-browser-push | browser.push | push, push.pending, push.accept, push.reject (4) |
-| plugin-browser-search | search | extract, summary, engines (3) |
-| plugin-browser-mcp | browser.mcp | tools, status (2) |
-| plugin-browser-cdp | cdp | enable, status (2) |
-| plugin-browser-inspector | inspector | start, stop, select, inspect (4) |
+| plugin-browser-search | search | extract, summary, engines, clean, md, outputs, clear (7) |
+| plugin-browser-mcp | browser.mcp | tools, status, invoke (3) |
 
 #### 工具链 (3)
 
 | 模块 | 命名空间 | 命令 | 捆绑 |
 |------|---------|------|:--:|
-| plugin-dev | dev.plugin | create, audit, share, examples, keywords (5) | ⭐ |
+| plugin-dev | dev.plugin | create, audit, share, examples, keywords, guide (6) | ⭐ |
 | plugin-error-report | error | list, show, clear, export, status, upload (6) | |
 | plugin-update | update | check, download, install, auto (4) | |
 
@@ -312,9 +307,17 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 | 模块 | 命名空间 | 命令 | 捆绑 |
 |------|---------|------|:--:|
-| plugin-memory-twin | twin | peer.add, start, sync, status, capability (24 条) | ⭐ |
+| plugin-memory-twin | twin | start, stop, status, peers, peer.info, peer.add, pair, unpair, sync, sync.auto, sync.qos, capabilities, delegate, route, lost, recover (16 条) | ⭐ |
 
-> ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载（11 个：framework/fs/net/skill/clipboard/notification/dev/root/hermes(tribe)/memory-twin/agent-tools；self 与 memory 已融入内核 agent.* 命名空间）
+#### 梦境模式 (1, 内置不可移除)
+
+| 模块 | 命名空间 | 命令 | 捆绑 |
+|------|---------|------|:--:|
+| plugin-dream | — (agent.dream 在内核) | — | ⭐ |
+
+> **plugin-dream 是内置默认实现, 不能直接移除** (UNINSTALLABLE 白名单锁定)。作用: 把梦境实现显式注册为 DreamProvider SPI — 第三方插件可实现 `kernel.agent.DreamProvider` 接口, onInstall 注册自己的实现 (后注册者胜, 输入组装/LLM 提炼/文件整理可整体定制), 卸载后回退内核默认。
+
+> ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载（11 个：framework/fs/net/skill/clipboard/dev/root/hermes(tribe)/memory-twin/agent-tools/dream；self 与 memory 已融入内核 agent.* 命名空间）
 >
 > plugin-hermes 模块实际实现为 `TribePlugin`（id=tribe-plugin，注册 tribe.* 22 条 + hermes.* 兼容命令），plugins.json 中对应 `tribe-plugin` 条目。
 
@@ -515,10 +518,20 @@ MCP 在 MengPaw 中的定位不是"让 AI 调用工具的协议"，而是**让�
 
 MCP 协议极其简单——JSON-RPC + 三个原语（tool / resource / prompt）。好的协议都是极简的，HTTP 几个动词统治了互联网三十年。MCP 的三个原语足够让任何设备在 Agent 网格中自描述和互操作。
 
+#### 双轨通信 (v0.22.1+)
 
-### 4.8 记忆三轨制 (v0.15.0+)
+| 轨道 | 通道 | 说明 |
+|---|---|---|
+| 本机轨 | 标准 MCP `127.0.0.1:9881` (plugin-framework 网关) | 任何 MCP 客户端直连, tools/call 真实执行插件命令 |
+| 远程轨 | MCP over ACP `:9876` (配对+加密) | 跨设备调用, requestId 请求-响应一轮完成 |
+| 框架轨 | 连接器插件 (内核 FrameworkAdapter SPI) | 非 MengPaw 框架 (OpenClaw WS / QwenPaw REST) |
 
-MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细节保留在按日分片的中期记忆中，由梦境模式按日压缩提炼。
+协议分层: 内核 = 协议核心 (ACP + MCP + SPI, 无具体框架); plugin-framework = 内置协议插件 (发现/信任/网关/分派); connector-* = 外部分发连接器。**接入指南见 [PROTOCOL.md](PROTOCOL.md)**。
+
+
+### 4.8 记忆三轨制 (v0.15.0+, 单轨 v0.22.0)
+
+MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目录持有全部记忆——旁轨 `memory.md` 轨道已删除，任务记忆 (自动任务记录) 并入三轨中期。会话不是记忆形式——会话中的细节保留在按日分片的中期记忆中，由梦境模式按日压缩提炼。
 
 ```
 长期记忆 (memory/memory.md)
@@ -563,7 +576,7 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 - 中期记忆可频繁读写, 旧文件可归档清理——不计入提示词 token 消耗
 - 项目记忆是"可复用模式库"——不是日志, 是提炼过的方法论
 - 所有写入使用原子操作 (tmp → rename), 防崩溃损坏
-- 梦境模式 (`agent.dream`) 桥接中期→长期: 分析今日中期记忆, 产出结构化洞察
+- 梦境模式 (`agent.dream`) 桥接中期→长期: 分析今日中期记忆, 产出结构化洞察——管道 (v0.22.0): 读全部中期分片 → 复制 `memory/backup/` → 提炼 `{agent}/{date}_dream.md` (同日多次追加) → 删除已整理分片 → 30 天前备份自动清理
 
 ---
 
@@ -597,7 +610,7 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 **dev 插件扩展 (6)**：`create --type script|native --name <name> [--author <作者>] [--desc <描述>]` | `audit --target <id>` | `share --plugin <id> --to <target>` | `examples` | `keywords --target <id>` | `guide`
 > dev 插件的命令实际注册为 `dev.plugin.create` / `dev.plugin.audit` / `dev.plugin.share` / `dev.plugin.examples` / `dev.plugin.keywords` / `dev.plugin.guide`，因为 PluginManager 根据插件 ID (`dev-plugin`) 自动派生命名空间 `dev`。`plugin.create` 在 CLI 文档中出现时均指 `dev.plugin.create`。`dev.plugin.guide` 输出能力边界文档并落盘 `插件文档/plugin-dev-guide.md` 供用户阅读。
 
-#### sys — Android 系统 (39 命令，通过 Android 适配层注入)
+#### sys — Android 系统 (40 命令，通过 Android 适配层注入)
 
 **设备信息 (1)**: `device` (型号/厂商/SDK/架构)
 
@@ -615,7 +628,7 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 
 **相机 (1)**: `camera` (需权限)
 
-**应用 (4)**: `apps` (需权限) | `app.launch <pkg>` | `app.uninstall <pkg>` | `app.info <pkg>`
+**应用 (5)**: `apps` (需权限) | `app.launch <pkg>` | `app.uninstall <pkg>` | `app.info <pkg>` | `browser.open [url]` (前台唤醒 MP 浏览器, 带 url 同时打开)
 
 **剪贴板 (2)**: `clipboard` | `clipboard.set <text>`
 
@@ -631,8 +644,9 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 
 格式 `namespace.command arg1 arg2 "arg with spaces" --flag value`
 
-#### fs — 文件系统 (10)
-`cat <path>` | `ls [path]` | `write <path> <content>` | `rm <path>` | `mkdir <path>` | `cp <src> <dst>` | `mv <src> <dst>` | `stat <path>` | `grep <pattern> [path] [--regex] [-i] [--context N]` | `glob <pattern> [path]`
+#### fs — 文件系统 (5)
+`cp <src> <dst>` | `mv <src> <dst>` | `stat <path>` | `grep <pattern> [path] [--regex] [-i] [--context N]` | `glob <pattern> [path]`
+> 读/写/列/删/建目录用内核 `agent.read/write/ls/rm/mkdir`(工作区文件命令, 与 fs 沙箱同界)
 
 
 #### net — 网络 (3)
@@ -655,20 +669,11 @@ MengPaw 使用三层记忆架构。会话不是记忆形式——会话中的细
 #### clipboard — 剪贴板 (3)
 `copy <text>` | `paste` | `clear`
 
-#### notification — 通知 (3)
-`send --title "T" --content "C"` | `list` | `dismiss <id|--all>`
-
 #### tavily — AI 搜索 (2)
 `search <query>` | `extract <url>`
 
 #### hermes — 多智能体 (6)
 `team` | `discover` | `delegate <agent> <task>` | `ask <agent> <question>` | `memo <content>` | `role <agent> <role>`
-
-#### workflow — 工作流 (4)
-`run <id>` | `define <json>` | `list` | `status <id>`
-
-#### incubator — 孵化器 (4)
-`spawn <config>` | `list` | `terminate <id>` | `inbox`
 
 #### render — 图像生成 (4)
 `models` | `generate <prompt>` | `status <job-id>` | `preview <job-id>`

@@ -65,31 +65,26 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS 双向桥)
 │   └── plugin/                 # 浏览器内置插件 (22 命令)
 │
-└── plugins/                    # 25 个功能插件 (同级，均只依赖 kernel)
-    ├── plugin-fs/              # 文件系统 (10 命令)
+└── plugins/                    # 20 个功能插件 (同级，均只依赖 kernel)
+    ├── plugin-fs/              # 文件系统 (5 命令)
     ├── plugin-net/             # HTTP 网络 (3 命令)
     ├── plugin-skill/           # 双层技能系统 (4 命令) ⭐💎
     ├── plugin-clipboard/       # 剪贴板 (3 命令)
-    ├── plugin-notification/    # 通知管理 (3 命令)
-    ├── plugin-framework/       # mDNS 框架发现 (6 命令) ⭐💎
+    ├── plugin-framework/       # 框架通信协议 (10 命令) ⭐💎
     ├── plugin-memory-twin/     # 记忆孪生 (16 命令) ⭐💎
     ├── plugin-agent-tools/     # Agent 命令集 (4 命令) ⭐💎
     ├── plugin-root/            # Root 权限 (17 命令)
     ├── plugin-hermes/          # 部落协作 Tribe 💎
+    ├── plugin-dream/           # 梦境模式 (内置不可移除, SPI 可替换) ⭐
     ├── plugin-dev/             # 插件开发工具链 ⭐💎
     ├── plugin-tavily/          # AI 搜索
-    ├── plugin-workflow/        # DAG 工作流引擎
-    ├── plugin-incubator/       # 子 Agent 孵化器
     ├── plugin-render/          # 图像生成
     ├── plugin-comfy/           # ComfyUI 集成
     ├── plugin-translate/       # 翻译
     ├── plugin-error-report/    # 错误上报
     ├── plugin-update/          # 自动更新
     ├── plugin-browser-push/    # 跨设备推送
-    ├── plugin-browser-search/  # 搜索分析
-    ├── plugin-browser-mcp/     # 浏览器 MCP
-    ├── plugin-browser-cdp/     # Chrome DevTools
-    └── plugin-browser-inspector/ # 元素检查器
+    └── plugin-browser-search/  # 网页转档
 ```
 
 > ⭐ = 捆绑在 Shell APK 中 · 💎 = WowBlue 原创（领先同类框架，见下节）
