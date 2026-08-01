@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.25.0 (开发中) — 火种模式（Swarm Mode）
+## v0.25.0 (2026-08-02) — 火种模式（Swarm Mode）
 
 ### 新增
 - **火种模式（Swarm）**: `AgentEngine.runWithSwarm()` — 规划器拆解 → 并行 Worker（`roles` 按角色混合不同模型）→ Verifier 验证 → 合成器输出。命名释义"星星之火，可以燎原"。设计文档见 [docs/swarm-design.md](docs/swarm-design.md)
@@ -18,6 +18,9 @@
 
 ### 测试
 - `SwarmModeExecutorTest` 12 用例: 混合模型角色分发 / 并行时序 / 会话隔离回归锚点 / 预算闸停线 / Andon 重派与终止 / Fleet 兼容 / 缺省回退 / SwarmBudget / 拆解兜底 / 记忆屏蔽
+
+### 发行
+- Shell APK v0.25.0 (versionCode 25000)
 
 ## v0.24.0 (2026-08-01) — 双许可 + 连接器拆分独立仓库 + 插件市场接线
 
