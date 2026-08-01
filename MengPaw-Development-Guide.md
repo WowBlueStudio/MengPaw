@@ -25,7 +25,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | 多通道 | AIDL（系统集成）/ Unix Socket（Termux）/ HTTP（调试） |
 | 独立浏览器 | `mengpaw-browser` v0.7.1，Intent 互通，45 条浏览器操控命令 |
 | 多模型 | 12 LLM Provider — OpenAI / DeepSeek / Kimi / GLM / Qwen / Grok / 火山引擎 / OpenModel / Self-Hosted / 自定义 |
-| 插件市场 | GitHub Pages 托管 `plugins.json`，ETag 缓存，SHA256 校验 |
+| 插件市场 | raw 直读 `plugins.json`（GitHub raw / Gitee raw 双源），ETag 缓存，SHA256 校验 |
 | 记忆孪生 | v0.15.0 — 跨设备 Agent 记忆同步 + 哈希链账本 + 短码配对 + 心跳保活 + QoS 自适应 + 手动 IP 发现 (plugin-memory-twin v0.2) |
 | Agent 自我升级 | `plugin.marketplace` → `plugin.search` → `plugin.install` → 命令即可用 |
 | 内置 Loop 模式 | Goal / Fleet / Fleet+ 三种模式直接内置在 AgentEngine，含 RubricGate 自动完成评估 |
@@ -834,12 +834,12 @@ interface Plugin {
 
 ### 7.3 市场发布
 
-GitHub Pages 托管 `plugins.json`，ETag 缓存 (5 分钟)，SHA256 校验。
+客户端直读 `plugins.json`（raw.githubusercontent.com 全球 / gitee.com/raw 国内，GeoRouter 选择），ETag 缓存 (5 分钟)，SHA256 校验。**发布即生效**——push 到 GitHub master 后 GitHub 侧立即可用；Gitee 侧依赖镜像同步（`.github/workflows/gitee-sync.yml`，需配置 GITEE_TOKEN secret），镜像滞后期间国内用户看到旧索引。
 
 信任链：官方 → 信任框架 (SHA256 + 确认) → 公网 (SHA256 + 确认 + 来源标记) → 未验证 (拒绝)
 
 仓库工具链（见 [PLUGIN_DEV_GUIDE.md](PLUGIN_DEV_GUIDE.md) §5.3）：
-- `scripts/build-plugins.ps1` — 批量构建插件 AAR，自动回写 plugins.json 的 checksum/size/changelog
+- `scripts/build-plugins.ps1` — 批量构建插件 AAR，自动回写 plugins.json 的 checksum/size/changelog（remote 条目不动，含连接器条目）
 - `scripts/validate-plugins.ps1` — 校验 plugins.json（字段/命名空间/checksum 与 AAR 一致性）
 - 插件 AAR 发布用独立 tag `plugins-vX.Y.Z`；`.claude/skills/plugin-dev.md` 为插件开发/发布 skill
 

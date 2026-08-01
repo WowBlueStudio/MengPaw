@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.24.0 (2026-08-01) — 双许可 + 连接器拆分独立仓库 + 插件市场接线
+
+### 新增
+- **双许可**: 社区版 AGPL-3.0 免费 + 商业授权（闭源分发/白标/嵌入/不公开修改源码的服务化部署需购买），见 COMMERCIAL-LICENSE.md；SPDX 头全量更新为 `AGPL-3.0-or-later OR LicenseRef-Commercial`
+- **贡献政策**: 主仓库仅接受 Bug 报告与功能请求（Issue 模板），暂不接受 PR；连接器仓库社区开放贡献
+- **连接器拆分**: 5 个连接器模块移至独立仓库 [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)（MIT 许可，独立构建，内核依赖 JitPack 构件）
+- **插件市场接线**: 5 条连接器条目补齐 downloadUrl/checksum/size，指向 mengpaw-connectors release plugins-v0.1.0（openclaw 首次正式发布）；校验 8 错→3 错
+- **Gitee 自动同步**: 主仓库 + 连接器仓库均新增 gitee-sync workflow（git-mirror-action）
+
+### 修复
+- 文档: 「GitHub Pages 托管 plugins.json」修正为 raw 直读双源（GitHub raw / Gitee raw）；补 2 个历史缺失 SPDX 头的文件
+
+### 重构
+- settings.gradle.kts 模块 26→21（连接器移出）；开发文档新增 §11 许可证与商业
+
+### 发行
+- Shell APK v0.24.0 (versionCode 24000)
+
 ## v0.23.0 (2026-08-01) — 智能体进化 SPI + 外置连接器 ×4 + 大文件拆分
 
 ### 新增
