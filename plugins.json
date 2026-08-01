@@ -513,10 +513,12 @@
       "author": "MengPaw",
       "description": "OpenClaw 框架连接器 — WebSocket (18789) 对接, 经 framework.connect/call 调用",
       "status": "remote",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-openclaw.aar",
+      "mirrorUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-openclaw.aar",
       "minCoreVersion": "0.20.0",
       "commands": [],
-      "checksum": "",
-      "size": 0,
+      "checksum": "sha256:a1d06fba2135525754d6cb601b31533fc18b67399ceb8ad25adef1da12055b35",
+      "size": 12507,
       "changelog": "### 新增\n- **OpenClaw 连接器**: 实现内核 FrameworkAdapter SPI, 经 WebSocket 对接 OpenClaw (18789)。\n- 安装后自动注册 — `framework.adapters` 可见, `framework.connect <peer>` 即可对接。"
     },
     {
@@ -527,13 +529,15 @@
       "author": "MengPaw",
       "description": "QwenPaw/Coze 通讯连接器 — REST (8088) 直连 + SSH ACP 双通道, 经 framework.connect/call 委派任务",
       "status": "remote",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-qwenpaw.aar",
+      "mirrorUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-qwenpaw.aar",
       "minCoreVersion": "0.20.0",
       "commands": [
         "connector-qwenpaw.config",
         "connector-qwenpaw.info"
       ],
-      "checksum": "",
-      "size": 0,
+      "checksum": "sha256:35508f1b234df25be1193c6625f0cc55f47952e56aaed62d2ba5a5f9d32958bf",
+      "size": 25122,
       "changelog": "### 重写\n- **QwenPaw 通讯连接器 v0.2.0**: 真实协议重写 (v0.1.0 为参考实现, 端点不存在)。\n- REST 通道 (默认): `qwenpaw app` — POST /api/console/chat (8088, X-Agent-Id, SSE 流); SSH ACP 通道 (实验性): `qwenpaw acp` stdio JSON-RPC。\n- 配置: connector-qwenpaw.config --channel rest|ssh-acp / --user / --password / --key-path。\n- 上游: agentscope-ai/QwenPaw (Apache-2.0)。"
     },
     {
@@ -544,13 +548,15 @@
       "author": "MengPaw",
       "description": "Claude Code 通讯连接器 — SSH 执行 claude CLI (headless), 经 framework.connect/call 委派任务到 PC",
       "status": "remote",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-claude-code.aar",
+      "mirrorUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-claude-code.aar",
       "minCoreVersion": "0.20.0",
       "commands": [
         "connector-claude-code.config",
         "connector-claude-code.info"
       ],
-      "checksum": "",
-      "size": 0,
+      "checksum": "sha256:ea8226fa0ea926f70a892f6af178f8b61ac98682d591e54e2054af45a9f23930",
+      "size": 16257,
       "changelog": "### 新增\n- **Claude Code 通讯连接器**: SSH 执行 claude CLI (headless) 对接 PC — 工具 run/version。\n- 配置: connector-claude-code.config --user/--password/--key-path。\n- 上游: Anthropic Claude Code 闭源商业 CLI (仅互操作调用, 不复制代码); jsch (MIT) 提供 SSH。"
     },
     {
@@ -561,13 +567,15 @@
       "author": "MengPaw",
       "description": "Reasonix 通讯连接器 — SSH 执行 reasonix CLI, 经 framework.connect/call 委派任务到 PC",
       "status": "remote",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-reasonix.aar",
+      "mirrorUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-reasonix.aar",
       "minCoreVersion": "0.20.0",
       "commands": [
         "connector-reasonix.config",
         "connector-reasonix.info"
       ],
-      "checksum": "",
-      "size": 0,
+      "checksum": "sha256:dbcde92047aaaee096d2c9fe1c018ade680a6d9052e4d27f3fa6abd7d156d450",
+      "size": 15657,
       "changelog": "### 新增\n- **Reasonix 通讯连接器**: SSH 执行 reasonix CLI (DeepSeek-Reasonix, MIT) — 工具 run/version。\n- 配置: connector-reasonix.config --user/--password/--key-path。\n- 上游: esengine/DeepSeek-Reasonix (MIT 许可)。"
     },
     {
@@ -578,13 +586,15 @@
       "author": "MengPaw",
       "description": "TREA IDE 通讯连接器 — SSH 执行 trae-cli, 经 framework.connect/call 委派任务到 PC",
       "status": "remote",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-trae.aar",
+      "mirrorUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-trae.aar",
       "minCoreVersion": "0.20.0",
       "commands": [
         "connector-trae.config",
         "connector-trae.info"
       ],
-      "checksum": "",
-      "size": 0,
+      "checksum": "sha256:fe199cb56769525e5ef2e8ef49bc0ef11efcf2bbdb2c839db13099104efef8b1",
+      "size": 16232,
       "changelog": "### 新增\n- **TREA IDE 通讯连接器**: SSH 执行 trae-cli (bytedance/trae-agent, MIT) — 工具 run/show-config。\n- 配置: connector-trae.config --user/--password/--key-path。\n- 上游: bytedance/trae-agent (MIT 许可)。"
     }
   ]
