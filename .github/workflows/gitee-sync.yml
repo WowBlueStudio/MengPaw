@@ -1,9 +1,10 @@
-# 自动同步到 Gitee 镜像仓库
+# 自动同步到 Gitee 镜像仓库（SSH 方式）
 #
 # 前置条件（一次性配置）：
-# 1. Gitee 私人令牌（Settings → 私人令牌，勾选 projects 权限）— 与连接器仓库同一令牌即可
-# 2. 把令牌添加为本仓库 GitHub Secret：仓库 Settings → Secrets and variables → Actions → 新建 GITEE_TOKEN
+# 1. Gitee 账号已添加 SSH 公钥（本机 ~/.ssh/gitee_wowblue.pub）
+# 2. 私钥添加为本仓库 GitHub Secret：仓库 Settings → Secrets and variables → Actions → 新建 GITEE_SSH_KEY
 #
+# 说明：Gitee 私人令牌只能调 API、不能做 git 认证（与 GitHub PAT 不同），故用 SSH 推送。
 # 之后每次 push 到 master 即自动全量镜像到 Gitee（取代手动 git push gitee master）。
 
 name: Sync to Gitee
@@ -20,10 +21,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Mirror to Gitee
-        uses: wearerequired/git-mirror-action@v1
+      - name: Mirror to Gitee (SSH)
         env:
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-        with:
-          source-branch: "master"
-          target-repo: "https://gitee.com/WowBlueStudio/MengPaw.git"
+          GITEE_SSH_KEY: ${{ secrets.GITEE_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$GITEE_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -t rsa gitee.com >> ~/.ssh/known_hosts 2>/dev/null || true
+          git remote add gitee git@gitee.com:wowbluestudio/MengPaw.git
+          git push -f gitee HEAD:master
