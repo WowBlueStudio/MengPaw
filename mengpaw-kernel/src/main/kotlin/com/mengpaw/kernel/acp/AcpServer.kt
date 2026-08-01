@@ -7,6 +7,7 @@ import com.mengpaw.kernel.agent.AgentProfile
 import com.mengpaw.kernel.ports.Ports
 import com.mengpaw.kernel.security.PromptFirewall
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -151,8 +152,14 @@ class AcpServer(
             }
             AcpMessageType.BROWSER_PUSH_RESPONSE -> AcpResult(true, "ack", msg.type)
             AcpMessageType.DISCOVER -> {
-                val peer = PeerAgent(profile.agentId, profile.agentName, "local", port,
-                    listOf("acp/1.0", "mcp/1.0"))
+                // 版本协商 (v0.22.1): payload 可为 {"protocols":["acp/1.0","acp/1.1","mcp/1.0"]};
+                // 旧格式 (空 payload) 按 acp/1.0 降级, 向后兼容。
+                val protocols = try {
+                    val obj = kotlinx.serialization.json.Json.parseToJsonElement(msg.payload).jsonObject
+                    obj["protocols"]?.jsonArray?.map { it.jsonPrimitive.content }
+                        ?: listOf("acp/1.0")
+                } catch (_: Exception) { listOf("acp/1.0") }
+                val peer = PeerAgent(profile.agentId, profile.agentName, "local", port, protocols)
                 peers[msg.from] = peer
                 AcpResult(true, profile.agentName, profile.agentId)
             }

@@ -22,16 +22,18 @@ class FrameworkPlugin : Plugin {
 
     override val metadata = PluginMetadata(
         id = "framework-plugin",
-        name = "框架发现",
+        name = "框架通信",
         version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理",
+        description = "框架通信协议插件 — mDNS 发现/信任/通讯录 + 本机 MCP 网关 (9881) + 连接器分派 (OpenClaw/QwenPaw 等)",
         minCoreVersion = "0.9.1",
         commands = listOf(
             "framework.discover", "framework.peers",
             "framework.trust", "framework.untrust",
-            "framework.info", "framework.ping"
+            "framework.info", "framework.ping",
+            "framework.connect", "framework.call",
+            "framework.disconnect", "framework.adapters"
         )
     )
 
@@ -41,15 +43,96 @@ class FrameworkPlugin : Plugin {
         "trust" to { args, ctx -> handleTrust(args, ctx) },
         "untrust" to { args, ctx -> handleUntrust(args, ctx) },
         "info" to { args, ctx -> handleInfo(args, ctx) },
-        "ping" to { args, ctx -> handlePing(args, ctx) }
+        "ping" to { args, ctx -> handlePing(args, ctx) },
+        "connect" to { args, ctx -> handleConnect(args, ctx) },
+        "call" to { args, ctx -> handleCall(args, ctx) },
+        "disconnect" to { args, ctx -> handleDisconnect(args, ctx) },
+        "adapters" to { args, ctx -> handleAdapters(args, ctx) }
     )
 
     private val discovery get() = FrameworkDiscovery.instance
 
-    override suspend fun onInstall(ctx: PluginContext) {}
+    override suspend fun onInstall(ctx: PluginContext) {
+        // 本机标准 MCP 网关 (9881) — 任何 MCP client 直连 MengPaw 工具
+        McpGateway.start()
+    }
     override suspend fun onUninstall() {
+        McpGateway.stop()
         discovery?.stopDiscovery()
         discovery?.unregister()
+    }
+
+    // ── 连接器分派 (协议升级: 非 MengPaw 框架经 SPI 适配器接入) ──────
+
+    private suspend fun handleConnect(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val peerName = args.firstOrNull()
+            ?: return ExecutionResult.fail("用法: framework.connect <peer-name>", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_INVALID_INPUT)
+        val peer = FrameworkPeerStore.loadAll().find { it.name == peerName }
+            ?: return ExecutionResult.fail("通讯录中无此节点: $peerName")
+        val adapter = com.mengpaw.kernel.spi.FrameworkAdapterRegistry.find(peer.frameworkType)
+            ?: return ExecutionResult.fail(
+                "框架类型 '${peer.frameworkType}' 无连接器 — 请安装对应连接器插件 (plugin.search connector)",
+                errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_NOT_FOUND
+            )
+        val target = com.mengpaw.kernel.spi.FrameworkTarget(
+            name = peer.name, type = peer.frameworkType,
+            address = peer.address.split(":").firstOrNull() ?: peer.address,
+            port = peer.port
+        )
+        return adapter.connect(target).fold(
+            onSuccess = { ExecutionResult.ok("已连接 ${peer.frameworkType} 节点: ${peer.name} (${peer.address})") },
+            onFailure = { ExecutionResult.fail("连接失败: ${it.message}") }
+        )
+    }
+
+    private suspend fun handleCall(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.size < 2) return ExecutionResult.fail(
+            "用法: framework.call <peer-name> <tool> [jsonArgs]", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_INVALID_INPUT)
+        val peerName = args[0]
+        val tool = args[1]
+        val peer = FrameworkPeerStore.loadAll().find { it.name == peerName }
+            ?: return ExecutionResult.fail("通讯录中无此节点: $peerName")
+        val adapter = com.mengpaw.kernel.spi.FrameworkAdapterRegistry.find(peer.frameworkType)
+            ?: return ExecutionResult.fail("框架类型 '${peer.frameworkType}' 无连接器")
+        if (!adapter.isOnline()) return ExecutionResult.fail("连接器未在线 — 先执行 framework.connect $peerName")
+        val jsonArgs = if (args.size > 2) {
+            try {
+                val json = org.json.JSONObject(args.drop(2).joinToString(" "))
+                val map = mutableMapOf<String, String>()
+                for (key in json.keys()) { map[key] = json.optString(key, "") }
+                map
+            } catch (_: Exception) { emptyMap() }
+        } else emptyMap()
+        return adapter.callTool(tool, jsonArgs).fold(
+            onSuccess = { ExecutionResult.ok(it) },
+            onFailure = { ExecutionResult.fail("调用失败: ${it.message}") }
+        )
+    }
+
+    private suspend fun handleDisconnect(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val peerName = args.firstOrNull()
+            ?: return ExecutionResult.fail("用法: framework.disconnect <peer-name>", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_INVALID_INPUT)
+        val peer = FrameworkPeerStore.loadAll().find { it.name == peerName }
+        val adapter = peer?.let { com.mengpaw.kernel.spi.FrameworkAdapterRegistry.find(it.frameworkType) }
+        adapter?.disconnect()
+        return ExecutionResult.ok("已断开: $peerName")
+    }
+
+    private suspend fun handleAdapters(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val adapters = com.mengpaw.kernel.spi.FrameworkAdapterRegistry.list()
+        val gatewayStatus = if (McpGateway.isRunning) "运行中 (127.0.0.1:${com.mengpaw.kernel.ports.Ports.MCP_LOCAL})" else "未运行"
+        val sb = StringBuilder()
+        sb.append("## 框架通信协议\n")
+        sb.append("- 本机 MCP 网关: $gatewayStatus\n")
+        sb.append("- 已注册连接器: ${adapters.size}\n\n")
+        if (adapters.isEmpty()) {
+            sb.append("> 无连接器插件 — 安装后自动注册 (plugin.search connector)\n")
+        } else {
+            adapters.forEach { a ->
+                sb.append("- ${a.frameworkName}: ${if (a.isOnline()) "在线" else "离线"}\n")
+            }
+        }
+        return ExecutionResult.ok(sb.toString())
     }
 
     // ── CLI handlers ──

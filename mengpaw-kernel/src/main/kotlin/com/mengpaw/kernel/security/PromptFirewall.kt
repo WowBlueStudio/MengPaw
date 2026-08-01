@@ -35,12 +35,11 @@ object PromptFirewall {
 
     /** Commands BLOCKED for GUEST peers. */
     private val GUEST_BLOCKED = setOf(
-        "fs.write", "fs.rm", "fs.mkdir", "fs.mv", "fs.cp",
+        "fs.mv", "fs.cp",
         "proc.exec", "proc.kill",
         "plugin.install", "plugin.uninstall", "plugin.enable", "plugin.disable",
         "ui.click", "ui.swipe", "ui.input", "ui.screenshot", "ui.back", "ui.home",
         "clipboard.copy", "clipboard.paste", "clipboard.clear",
-        "notification.send", "notification.dismiss",
         "self.config", "self.theme", "self.avatar",
         "agent.memory.keep", "agent.memory.write", "agent.memory.rm", "agent.memory.edit",
         "agent.memory.mid.delete", "agent.memory.mid.rm", "agent.memory.mid.edit",
@@ -54,7 +53,7 @@ object PromptFirewall {
         "agent.audit",               // 查看审计
         "hermes.memo",               // 团队共享记忆
         "render.generate",           // API生图 (不写本地)
-        "fs.cat", "fs.ls", "fs.stat",// 只读文件
+        "agent.read", "agent.ls", "fs.stat",// 只读文件 (fs.cat/ls 已并入 agent.*)
         "self.status", "self.stats", "self.version", "sys.*",  // 只读系统信息
         "agent.memory", "agent.memory.read", "agent.memory.search", "agent.memory.stats",
         "agent.memory.mid", "agent.memory.project",  // 只读记忆

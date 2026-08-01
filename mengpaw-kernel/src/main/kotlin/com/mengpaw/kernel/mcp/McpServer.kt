@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.mcp
 
 import com.mengpaw.kernel.plugin.PluginManager
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 
 /**
@@ -66,6 +67,7 @@ class McpServer(private val pluginManager: PluginManager) {
             val id = req["id"]?.jsonPrimitive?.content
             when (method) {
                 "tools/list" -> ok(id, toolsListJson())
+                "tools/call" -> runBlocking { callTool(id, req["params"]?.jsonObject ?: JsonObject(emptyMap())) }
                 "resources/list" -> ok(id, resourcesListJson())
                 "prompts/list" -> ok(id, promptsListJson())
                 "prompts/get" -> {
@@ -76,6 +78,44 @@ class McpServer(private val pluginManager: PluginManager) {
                 else -> err(id, "Unknown method: $method")
             }
         } catch (e: Exception) { err(null, "Parse error: ${e.message}") }
+    }
+
+    /**
+     * tools/call — 执行插件命令或 provider 工具。
+     * 工具名 `ns.cmd` 匹配 active 插件的命令; 否则尝试 McpToolProvider.callTool。
+     * 插件命令直接调 CommandHandler (与 AgentEngine 同款执行语义, 不走进程级 DefaultCommandExecutor)。
+     */
+    private suspend fun callTool(id: String?, params: JsonObject): String {
+        val name = params["name"]?.jsonPrimitive?.content ?: return err(id, "Missing tool name")
+        val arguments = params["arguments"]?.jsonObject
+            ?.mapValues { it.value.jsonPrimitive.content } ?: emptyMap()
+
+        // 1. 插件命令: ns.cmd
+        val dot = name.indexOf('.')
+        if (dot > 0) {
+            val ns = name.substring(0, dot)
+            val cmd = name.substring(dot + 1)
+            val plugin = pluginManager.getActivePlugins().find { p ->
+                p.metadata.id.removeSuffix("-plugin").removeSuffix("-ext") == ns
+            }
+            val handler = plugin?.commands?.get(cmd)
+            if (handler != null) {
+                val ctx = com.mengpaw.kernel.cli.ExecutionContext(sessionId = "mcp", userId = "mcp")
+                val result = handler(arguments.values.toList(), ctx)
+                val text = if (result.success) result.output else result.error ?: "Unknown error"
+                return ok(id, """{"content":[{"type":"text","text":${JsonPrimitive(text).toString()}}],"isError":${!result.success}}""")
+            }
+        }
+
+        // 2. Provider 工具
+        for (p in toolProviders) {
+            val tool = p.getTools().find { it.name == name } ?: continue
+            return p.callTool(name, arguments).fold(
+                onSuccess = { ok(id, """{"content":[{"type":"text","text":${JsonPrimitive(it).toString()}}]}""") },
+                onFailure = { err(id, it.message ?: "Tool call failed") }
+            )
+        }
+        return err(id, "Tool not found: $name")
     }
 
     private fun ok(id: String?, result: String) = """{"jsonrpc":"2.0","id":$id,"result":$result}"""
@@ -105,6 +145,10 @@ data class McpPromptArgument(val name: String, val description: String = "", val
 
 interface McpToolProvider {
     fun getTools(): List<McpTool>
+
+    /** 执行工具 (tools/call 支持)。默认不可调用 — provider 按需覆写。 */
+    fun callTool(name: String, arguments: Map<String, String>): Result<String> =
+        Result.failure(IllegalStateException("Tool $name is not callable"))
 }
 interface McpResourceProvider {
     fun getResources(): List<McpResource>

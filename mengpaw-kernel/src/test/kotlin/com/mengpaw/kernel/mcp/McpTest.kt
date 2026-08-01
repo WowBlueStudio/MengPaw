@@ -3,7 +3,14 @@
 
 package com.mengpaw.kernel.mcp
 
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.plugin.Plugin
+import com.mengpaw.kernel.plugin.PluginContext
 import com.mengpaw.kernel.plugin.PluginManager
+import com.mengpaw.kernel.plugin.PluginMetadata
+import com.mengpaw.kernel.plugin.PluginUiButton
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -61,5 +68,62 @@ class McpTest {
         assertTrue("Should have qwenpaw preset", presets.containsKey("qwenpaw"))
         assertEquals("openclaw", presets["openclaw"]?.command)
         assertEquals("stdio", presets["openclaw"]?.transport)
+    }
+
+    // ── tools/call (v0.22.1 新增) ──────────────────────────────────────
+
+    private fun testPlugin(): Plugin = object : Plugin {
+        override val metadata = PluginMetadata(
+            id = "echo-plugin", name = "echo", version = "1.0.0",
+            author = "test", minCoreVersion = "0.2.0"
+        )
+        private val hiHandler: com.mengpaw.kernel.plugin.CommandHandler = { args, _ ->
+            ExecutionResult.ok("hello ${args.firstOrNull() ?: "world"}")
+        }
+        override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
+            "hi" to hiHandler
+        )
+        override val uiButtons: List<PluginUiButton> = emptyList()
+        override suspend fun onInstall(context: PluginContext) {}
+        override suspend fun onUninstall() {}
+        override suspend fun onUpgrade(newVersion: String) {}
+    }
+
+    @Test fun `tools call executes plugin command`() = runBlocking {
+        val pm = PluginManager("0.20.0")
+        assertTrue(pm.install(testPlugin()).isSuccess)
+        assertTrue(pm.activate("echo-plugin").isSuccess)
+        val server = McpServer(pm)
+        val response = server.handleRequest(
+            """{"jsonrpc":"2.0","method":"tools/call","params":{"name":"echo.hi","arguments":{"name":"mcp"}},"id":9}"""
+        )
+        assertTrue("应执行插件命令: $response", response.contains("hello mcp"))
+        assertFalse("不应报错: $response", response.contains("error"))
+    }
+
+    @Test fun `tools call unknown tool returns error`() = runBlocking {
+        val pm = PluginManager("0.20.0")
+        assertTrue(pm.install(testPlugin()).isSuccess)
+        assertTrue(pm.activate("echo-plugin").isSuccess)
+        val server = McpServer(pm)
+        val response = server.handleRequest(
+            """{"jsonrpc":"2.0","method":"tools/call","params":{"name":"echo.nonexistent"},"id":10}"""
+        )
+        assertTrue("未知工具应报错: $response", response.contains("error"))
+    }
+
+    @Test fun `tools call provider tool delegates to callTool`() = runBlocking {
+        val pm = PluginManager("0.20.0")
+        val server = McpServer(pm)
+        server.registerToolProvider(object : McpToolProvider {
+            override fun getTools(): List<McpTool> =
+                listOf(McpTool("test_tool", "test", emptyMap()))
+            override fun callTool(name: String, arguments: Map<String, String>): Result<String> =
+                Result.success("called with ${arguments["k"]}")
+        })
+        val response = server.handleRequest(
+            """{"jsonrpc":"2.0","method":"tools/call","params":{"name":"test_tool","arguments":{"k":"v"}},"id":11}"""
+        )
+        assertTrue("provider 工具应委托 callTool: $response", response.contains("called with v"))
     }
 }

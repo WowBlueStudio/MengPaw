@@ -57,6 +57,14 @@ class McpOverAcpBridge(
         // Process through McpServer
         val response = mcpServer.handleRequest(message.payload)
 
+        // 协议升级 (v0.22.1): 请求-响应一轮完成 — 回发 MCP_RESPONSE (requestId 关联)
+        if (message.requestId.isNotBlank() && message.from != "*") {
+            try {
+                server.sendViaTransport(
+                    AcpMessage.mcpResponse("mengpaw", message.from, response, message.requestId)
+                )
+            } catch (_: Exception) { /* 响应回发失败不阻断 (调用方仍可经 AcpResult 取结果) */ }
+        }
         return AcpResult(true, "mcp_response", response)
     }
 
@@ -65,23 +73,33 @@ class McpOverAcpBridge(
          * Wrap a raw MCP JSON-RPC request string into an ACP MCP_REQUEST message.
          * Use this from client code to build ACP messages.
          */
-        fun wrapRequest(from: String, jsonRpcBody: String): AcpMessage =
-            AcpMessage(from, "*", AcpMessageType.MCP_REQUEST.name, jsonRpcBody, ttl = 1)
+        fun wrapRequest(from: String, jsonRpcBody: String, requestId: String = ""): AcpMessage =
+            AcpMessage(from, "*", AcpMessageType.MCP_REQUEST.name, jsonRpcBody, ttl = 1, requestId = requestId)
 
         /**
          * Build common MCP requests as ACP messages.
          */
-        fun toolsList(from: String): AcpMessage = wrapRequest(from,
-            """{"jsonrpc":"2.0","method":"tools/list","id":1}""")
+        fun toolsList(from: String, requestId: String = ""): AcpMessage = wrapRequest(from,
+            """{"jsonrpc":"2.0","method":"tools/list","id":1}""", requestId)
 
-        fun resourcesList(from: String): AcpMessage = wrapRequest(from,
-            """{"jsonrpc":"2.0","method":"resources/list","id":2}""")
+        fun resourcesList(from: String, requestId: String = ""): AcpMessage = wrapRequest(from,
+            """{"jsonrpc":"2.0","method":"resources/list","id":2}""", requestId)
 
-        fun promptsList(from: String): AcpMessage = wrapRequest(from,
-            """{"jsonrpc":"2.0","method":"prompts/list","id":3}""")
+        fun promptsList(from: String, requestId: String = ""): AcpMessage = wrapRequest(from,
+            """{"jsonrpc":"2.0","method":"prompts/list","id":3}""", requestId)
 
-        fun toolsCall(from: String, toolName: String, arguments: String = "{}"): AcpMessage =
-            wrapRequest(from,
-                """{"jsonrpc":"2.0","method":"tools/call","id":4,"params":{"name":"$toolName","arguments":$arguments}}""")
+        /** tools/call — SECURITY: JsonObject 构造, 不做字符串插值 (防注入)。 */
+        fun toolsCall(from: String, toolName: String, arguments: String = "{}", requestId: String = ""): AcpMessage {
+            val payload = buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("method", "tools/call")
+                put("id", 4)
+                putJsonObject("params") {
+                    put("name", toolName)
+                    put("arguments", Json.parseToJsonElement(arguments.ifBlank { "{}" }))
+                }
+            }.toString()
+            return wrapRequest(from, payload, requestId)
+        }
     }
 }

@@ -56,10 +56,18 @@ data class AcpMessage(
     val to: String,
     val type: String,
     val payload: String = "",
-    val ttl: Int = 10
+    val ttl: Int = 10,
+    /** 请求-响应关联 ID (MCP_REQUEST/MCP_RESPONSE 往返用; 旧消息默认空, 向后兼容). */
+    val requestId: String = ""
 ) {
     companion object {
-        fun discover(from: String) = AcpMessage(from, "*", AcpMessageType.DISCOVER.name)
+        /** DISCOVER 带协议能力协商: payload = {"protocols":[...]} — 空参保持旧格式兼容. */
+        fun discover(from: String, protocols: List<String> = emptyList()) = AcpMessage(
+            from, "*", AcpMessageType.DISCOVER.name,
+            if (protocols.isEmpty()) "" else kotlinx.serialization.json.buildJsonObject {
+                put("protocols", kotlinx.serialization.json.buildJsonArray { protocols.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+            }.toString()
+        )
         fun delegate(from: String, to: String, task: String) = AcpMessage(from, to, AcpMessageType.DELEGATE.name, task)
         fun result(from: String, to: String, text: String) = AcpMessage(from, to, AcpMessageType.RESULT.name, text)
         fun shareMemory(from: String, to: String, memoryId: String) = AcpMessage(from, to, AcpMessageType.SHARE_MEMORY.name, memoryId)
@@ -143,6 +151,16 @@ data class AcpMessage(
                     put("sessionKey", JsonPrimitive(sessionKey))
                     put("receivedSequence", JsonPrimitive(receivedSequence))
                 }.toString())
+
+        // ── MCP over ACP (协议升级: 请求-响应一轮完成, requestId 关联) ──
+
+        /** MCP_REQUEST: 把 JSON-RPC 请求封装进 ACP (requestId 关联往返)。 */
+        fun mcpRequest(from: String, jsonRpc: String, requestId: String) =
+            AcpMessage(from, "*", AcpMessageType.MCP_REQUEST.name, jsonRpc, ttl = 1, requestId = requestId)
+
+        /** MCP_RESPONSE: MCP 调用结果回发 (to = 请求方, requestId 回显)。 */
+        fun mcpResponse(from: String, to: String, jsonRpc: String, requestId: String) =
+            AcpMessage(from, to, AcpMessageType.MCP_RESPONSE.name, jsonRpc, ttl = 1, requestId = requestId)
 
         // ── Memory Twin pairing protocol ─────────────────────────────
 

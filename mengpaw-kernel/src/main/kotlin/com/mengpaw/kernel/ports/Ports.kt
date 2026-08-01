@@ -19,6 +19,12 @@ object Ports {
     /** ACP (Agent Communication Protocol) — 本机监听, 设备间 Agent 通信. */
     const val ACP = 9876
 
+    /** MP 浏览器 MCP 桥 — 本机监听 (127.0.0.1), Shell 进程调浏览器 MCP 工具. */
+    const val BROWSER_MCP = 9880
+
+    /** 本机 MCP 网关 — 标准 MCP JSON-RPC 端点 (127.0.0.1), 任何 MCP client 直连. */
+    const val MCP_LOCAL = 9881
+
     /** 自建 LLM / QwenPaw MCP — 出站 OpenAI 兼容端点默认端口. */
     const val LLM_SELF = 9877
 
@@ -58,6 +64,16 @@ object Ports {
         PortInfo(
             port = ACP, protocol = "HTTP/JSON", direction = Direction.INBOUND,
             owner = "内核 ACP", purpose = "设备间 Agent 通信 (委派/共享记忆/技能/会话同步/孪生账本/MCP 桥)",
+            configurable = false
+        ),
+        PortInfo(
+            port = BROWSER_MCP, protocol = "HTTP/JSON", direction = Direction.INBOUND,
+            owner = "MP 浏览器", purpose = "设备内 MCP 桥 — Shell 调浏览器 MCP 工具 (导航/截图/点击/输入/提取/执行脚本)",
+            configurable = false
+        ),
+        PortInfo(
+            port = MCP_LOCAL, protocol = "MCP JSON-RPC", direction = Direction.INBOUND,
+            owner = "内核 MCP 网关", purpose = "本机标准 MCP 端点 — 任何 MCP client 直连调用 MengPaw 工具",
             configurable = false
         ),
         PortInfo(
