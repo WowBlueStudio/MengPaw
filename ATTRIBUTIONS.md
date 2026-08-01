@@ -58,7 +58,9 @@ MengPaw 的开发受益于以下项目和框架。此处严格区分「代码参
 
 ## 许可证
 
-MengPaw: **AGPL-3.0-or-later**
+MengPaw: **AGPL-3.0-or-later（社区版） OR LicenseRef-Commercial（商业版）** — 双许可，详见 [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)
+
+外置连接器插件已移至独立仓库 [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)，MIT 许可。
 
 Copyright (c) 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
 

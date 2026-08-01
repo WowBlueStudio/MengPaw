@@ -35,6 +35,8 @@
 
 | 文件 | 大小 | 内容 |
 |------|:----:|------|
+| `LICENSE` | 22 KB | 社区版许可全文 (AGPL-3.0, 未经删改) |
+| `COMMERCIAL-LICENSE.md` | 4 KB | 双许可总声明 + 商业授权条款草案 |
 | `legal/COPYRIGHT-CERTIFICATE.md` | 4 KB | 版权声明 (中文) |
 | `legal/COPYRIGHT-CERTIFICATE-EN.md` | 4 KB | 版权声明 (英文) |
 

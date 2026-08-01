@@ -65,7 +65,7 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS 双向桥)
 │   └── plugin/                 # 浏览器内置插件 (22 命令)
 │
-└── plugins/                    # 21 个捆绑功能插件 + plugin-connector-* 外置连接器 (同级，均只依赖 kernel)
+└── plugins/                    # 21 个功能插件 (同级，均只依赖 kernel)
     ├── plugin-fs/              # 文件系统 (5 命令)
     ├── plugin-net/             # HTTP 网络 (3 命令)
     ├── plugin-skill/           # 双层技能系统 (4 命令) ⭐💎
@@ -191,12 +191,21 @@ Agent 通过 CLI 命令操控设备：
 | Self-Hosted | 自定义 | 自定义 |
 | Custom | 自定义 | 自定义 |
 
-## 许可证
+## 许可证（双许可）
 
-GNU Affero General Public License v3.0 (AGPL-3.0) — 详见 [LICENSE](LICENSE)
+MengPaw 以**双许可**方式发布：
 
-> **核心要求**：如果你修改了本软件并作为网络服务运行，必须公开你的修改版源代码。
+| | 社区版 | 商业版 |
+|---|--------|--------|
+| 许可 | AGPL-3.0（[LICENSE](LICENSE)） | 商业授权（[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)） |
+| 费用 | 免费 | 付费 |
+| 适用 | 个人使用 / 开源 / 遵守 AGPL 义务的部署 | 闭源分发 / 白标 / 嵌入产品 / 不想公开修改源码的服务化部署 |
 
-## 贡献
+> 企业内部自用（不对外分发）不受限。商用授权咨询：1138018324@qq.com
 
-参见 [CONTRIBUTING.md](CONTRIBUTING.md) — 环境搭建、代码规范、构建命令。
+外置连接器插件（[mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)）为独立 MIT 许可，社区开放贡献。
+
+## 反馈与贡献
+
+- **Bug 报告 / 功能请求**：GitHub [Issues](https://github.com/WowBlueStudio/MengPaw/issues)（附模板）
+- **代码贡献**：暂不接受 PR（保证版权单一归属），未来可能开放，见 [CONTRIBUTING.md](CONTRIBUTING.md)
