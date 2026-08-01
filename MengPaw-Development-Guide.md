@@ -49,7 +49,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 ├──────────────────────────────────────────────────┤
 │  mengpaw-kernel (46 文件, 纯 Kotlin/JVM)          │  ← 微内核
 │  CLI · LLM · Session · Plugin · Security          │
-│  AgentEngine · Goal/Fleet · MCP · ACP           │
+│  AgentEngine · Goal/Fleet/Swarm · MCP · ACP     │
 │  NotifyBus · Error · Trigger · Namespace          │
 ├──────────────────────────────────────────────────┤
 │  plugins/ (25 模块, 同级, 均只依赖 kernel)         │  ← 插件层
@@ -135,7 +135,8 @@ AgentEngine 支持四种执行模式：
 | **ReAct** | `run()` | Thought → Action → Observation 标准模式，含循环检测和最大步数限制 |
 | **Plan-Execute** | `runWithPlan()` | LLM 分解任务为 3-7 步计划，逐步执行，每步独立 mini ReAct 循环 |
 | **Goal** | `runWithGoal()` | 单目标驱动 + RubricGate 自动完成评估（参考 QwenPaw GoalMode） |
-| **Fleet** | `runWithFleet()` | LLM 拆解子任务 → Worker 执行 → Verifier 验证（参考 QwenPaw FleetMode） |
+| **Fleet** | `runWithFleet()` | 多 Agent 编队（转发到火种模式，默认单模型） |
+| **火种 (Swarm)** | `runWithSwarm()` | 星星之火可以燎原：规划器拆解 → 并行 Worker（可按角色混合模型）→ Verifier 验证 → 合成器输出。JIT 三闸门（总预算/WIP 并行/单任务）+ Andon 失败协议 + 零待命 Worker。详见 [docs/swarm-design.md](docs/swarm-design.md) |
 
 **Goal 模式架构**:
 ```
@@ -274,12 +275,13 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 #### Agent 运行模式 (内置)
 
-> Goal / Fleet / Fleet+ 三种 Loop 模式已内置在 AgentEngine 中，不再作为独立插件。
+> Goal / Fleet / 火种 (Swarm) 三种 Loop 模式已内置在 AgentEngine 中，不再作为独立插件。
 
 | 模式 | 引擎方法 | 核心机制 |
 |------|---------|---------|
 | **Goal** | `AgentEngine.runWithGoal()` | GoalSession + 三层 Gate (GoalTurnGate/GoalBudgetGate/RubricGate) — LLM 自动评估完成度 |
-| **Fleet** | `AgentEngine.runWithFleet()` | LLM 拆解子任务 → Worker 独立 ReAct 执行 → Verifier 验证 |
+| **Fleet** | `AgentEngine.runWithFleet()` | 转发到火种模式 (默认单模型，`roles` 为空) |
+| **火种 (Swarm)** | `AgentEngine.runWithSwarm()` | 规划器拆解 → 并行 Worker（`roles` 按角色混合模型，零待命 Session）→ Verifier 验证 + Andon 决策 → 合成器。JIT 看板三闸门: `maxTotalSteps` 总预算 + `maxParallel` WIP + `maxStepsPerSubtask` 单任务。设计文档见 [docs/swarm-design.md](docs/swarm-design.md) |
 | **Fleet+** | `runWithFleet()` + ACP | Fleet 模式 + 跨 ACP 框架/设备协调 |
 
 #### 浏览器扩展 (3)

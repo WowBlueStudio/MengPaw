@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.25.0 (开发中) — 火种模式（Swarm Mode）
+
+### 新增
+- **火种模式（Swarm）**: `AgentEngine.runWithSwarm()` — 规划器拆解 → 并行 Worker（`roles` 按角色混合不同模型）→ Verifier 验证 → 合成器输出。命名释义"星星之火，可以燎原"。设计文档见 [docs/swarm-design.md](docs/swarm-design.md)
+  - JIT 看板三闸门: `maxTotalSteps` 共享步数预算（AtomicInteger CAS）+ `maxParallel` WIP 并行上限 + `maxStepsPerSubtask` 单任务闸
+  - Andon 失败协议: worker 失败回报协调器决策（重派可切 `worker.alt` 模型 / 终止），不静默重试
+  - 零待命 Worker: 独立 Session（`scope="swarm"`）用完即销毁，无跨任务记忆；轻量 ReAct 循环复用全局 Pipeline，不建完整 AgentEngine
+  - 上下文分片: worker 不入 `conversationSessionId`，只回报结构化结果卡片 `SwarmResultCard`
+  - `runWithFleet()` 转发到火种模式（默认单模型，向后兼容）
+- **UI 触发**: 设置页 Loop 模式新增"火种模式"选项（`LoopMode.SWARM`），AgentViewModel 分发到 `runWithSwarm`
+- **系统提示词**: 中英双语新增 /Swarm（火种模式）说明
+- **worker 记忆屏蔽**: `ExecutionContext.scope` 字段，`agent.memory.*` 写入命令对 swarm 会话静默屏蔽（防并行噪音污染三轨记忆）
+
+### 修复
+- `SessionManager.createSession`/`deleteSession` 并发 CAS 竞态: 并行 worker 创建会话会丢更新、并行删除会复活会话（`@Synchronized`）
+
+### 测试
+- `SwarmModeExecutorTest` 12 用例: 混合模型角色分发 / 并行时序 / 会话隔离回归锚点 / 预算闸停线 / Andon 重派与终止 / Fleet 兼容 / 缺省回退 / SwarmBudget / 拆解兜底 / 记忆屏蔽
+
 ## v0.24.0 (2026-08-01) — 双许可 + 连接器拆分独立仓库 + 插件市场接线
 
 ### 新增
