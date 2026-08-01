@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.22.1 (2026-08-01) — 浏览器协作通道 + 框架协议升级 + 梦境 SPI
+
+### 新增
+- **设备内 MCP 通道打通（浏览器 MCP 首次真正工作）**：浏览器 APK 内置 McpHttpServer（127.0.0.1:9880，GET /health + POST /mcp）；plugin-browser-mcp 改 HTTP 桥——根因是跨进程静态字段赋值因类加载器隔离不可见；Shell 侧 BrowserReturnWatcher 轮询 browser_return_*.md → FileProvider 预览回传
+- **网页转档管道**：plugin-browser-search 重定义（网页转档）——HtmlConverter 网页→Markdown + extract/summary/engines/clean/md/outputs/clear 7 命令，删除重复 search.fetch
+- **Agent 前台唤醒浏览器**：`sys.browser.open` 命令 + PromptEngine 浏览器协作段落重写（三通道：唤醒 / MCP 工具 browser.mcp.* / 网页转档 search.*）
+- **框架通信协议升级 — 协议进内核, 连接器进插件**：
+  - 内核 McpServer 补 `tools/call`（插件命令 + McpToolProvider 委托）
+  - ACP 增强：AcpMessage.requestId + DISCOVER 版本协商 + MCP_REQUEST/MCP_RESPONSE 完整往返（McpOverAcpBridge）
+  - FrameworkAdapter SPI + Registry（内核不持有具体框架实现）
+  - plugin-framework 升级内置协议插件：本机标准 MCP server（localhost:9881 McpGateway）+ framework.connect/call/disconnect/adapters
+  - 外部分发连接器插件（remote 不内置）：connector-openclaw（WS 18789）/ connector-qwenpaw（REST 8080）
+- **梦境模式 SPI 化**：内核 DreamProvider + DreamProviderRegistry（第三方可整体替换梦境管道，后注册者胜，默认回退 DreamEngine）；plugin-dream 内置插件（UNINSTALLABLE 保护，不可直接移除）
+- docs/PROTOCOL.md 协议接入指南
+
+### 修复
+- 浏览器 MCP 从未工作的根因：类加载器隔离下跨进程静态字段赋值不可见 → 替换为 HTTP bridge
+- error-report/update 插件失效反射：remote 插件不能编译期依赖 → MainActivity Class.forName 反射注入
+- agent-tools SSRF 面；fs 命令去重；插件提示词与命令列表对齐
+- toolsCall 字符串插值注入面 → JsonObject 构造
+
+### 移除
+- 退役 4 半成品插件（notification/workflow/incubator/browser-inspector）+ browser-cdp（无用户安装，不做旧兼容）
+- 22 个无消费者 plugin-manifest.json 遗留文件；tribe-vs-hermes-comparison.md（目标已达成）
+
+### 发行
+- Shell APK v0.22.1（versionCode 22001）
+- plugins.json 24 条（11 builtin + 11 remote + 2 embedded，新增 dream-plugin + 2 connector）
+- 测试：kernel 188/188 全绿（含 DreamProviderTest 4 用例），APK 签名已验证
+
+## v0.22.0 (2026-08-01) — 单轨记忆 + 孪生工作区同步 + 梦境管道重构
+
+### 新增
+- **单轨记忆化**：`{agent}/memory/` 三轨持有全部记忆，旁轨 `memory.md` 轨道删除——任务记忆（recordTaskMemory）改接三轨中期，DreamEngine.buildContext 删除旁轨读取段，agent 模板同步删除 memory.md
+- **孪生改造 — 哈希链账本 → 工作区文件同步**：同步单元从账本条目改为整个 `{agent}/` 工作区——TwinWorkspace 清单（SHA-256+mtime）比对 + 新协议 WS_MANIFEST/WS_PULL 差异传输 + LWW 冲突落盘（.conflict 备份 + 审计 + PromptEngine 缓存失效钩子）。同步范围：根文档（soul/profile/agents/boost/trigger/HEARTBEAT/{date}_dream.md）+ `memory/` 全部；排除 CLI.md / inbox/ / dialog/ / memory/backup/
+- **梦境管道重写**：读全部中期分片 → 复制 `memory/backup/` → 提炼 `{agent}/{date}_dream.md`（同日多次追加，新条目前置）→ 删除已整理分片 → 30 天前备份自动清理（替代旧 mem- 解析/归档；产物 DREAM.md → {date}_dream.md，随孪生工作区同步传播）
+
+### 移除
+- `twin.ledger.*`（6 条：show/verify/diff/stats/repair/encrypt）+ `twin.identity.*`（4 条：push/pull/diff/merge）+ `twin.dream.*`（2 条：sync/history）——账本删除、身份文档随工作区自动同步、梦境产物随工作区同步传播；删除 TwinLedgerStore/TwinLedger/TwinDreamSync/TwinIdentity/rebuildMemoryDoc/applyDreamEntry/applyIdentityUpdate（twin.* 命令 29→16）
+- DataPaths.TWIN_LEDGER / TWIN_DREAMS 路径
+- AgentDocs.deleteDream 死代码
+
+### 修复
+- **AcpTransport 响应体丢弃（账本同步端到端从未跑通的根因）**：原 send() 只发不读 HTTP 响应体——新增 sendForResult() 解析响应体，请求-响应一轮完成
+- **twin 双引擎债务**：cmdStart 复用 MainActivity 激活时创建的 activeEngine，避免双引擎
+- 删除 peers.json 只写不读；配对签名不再依赖 LedgerEntry.sha256
+
+### 发行
+- Shell APK v0.22.0（versionCode 22000）
+- plugins.json 同步 twin 命令列表
+- 测试：kernel 169/169 全绿，APK 签名已验证
+
 ## v0.21.1 (2026-07-31) — 记忆系统融入内核 + 任务记忆接入 Dream
 
 ### 新增
