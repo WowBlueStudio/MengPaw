@@ -84,7 +84,7 @@ class DreamWorker(
                 System.currentTimeMillis() - dreamFile.lastModified() < 6 * 3600 * 1000L) continue
 
             val scroll = ScrollContextManager(name)
-            val result = DreamEngine.dreamPass(llmProvider, name, scroll)
+            val result = com.mengpaw.kernel.agent.DreamProviderRegistry.active().refine(name, llmProvider, scroll)
             if (result != null) ran++
         }
 

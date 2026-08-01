@@ -19,7 +19,8 @@ import java.util.*
  *
  * Inspired by QwenPaw's proactive mode (Apache 2.0), adapted for Android.
  */
-object DreamEngine {
+object DreamEngine : DreamProvider {
+    override val providerName: String = "kernel-default"
     // FIX A8: Use lazy getter so DataPaths.AGENTS is resolved at access time, not at class load
     private val agentsDir: File get() = File(DataPaths.AGENTS)
     private val dreamLog: File get() = File(agentsDir, "dream.log")
@@ -47,22 +48,13 @@ object DreamEngine {
         要具体。跳过已解决的。无问候语和元评论。中文输出。
     """.trimIndent()
 
-    data class DreamPassResult(
-        val content: String,
-        val contextChars: Int,
-        val outputChars: Int
-    )
-
-    /**
-     * Execute one LLM-based dream pass for a specific agent.
-     * Compresses context via Scroll headlines (62x vs raw), single cheap LLM call.
-     */
-    suspend fun dreamPass(
-        llmProvider: LlmProvider,
+    /** LLM 提炼梦境 (DreamProvider SPI): 上下文 → 洞察 → 写入 {date}_dream.md。 */
+    override suspend fun refine(
         agentName: String,
-        scrollContext: ScrollContextManager? = null
-    ): DreamPassResult? {
-        val ctx = buildContext(agentName, scrollContext) ?: return null
+        llmProvider: LlmProvider,
+        scroll: ScrollContextManager?
+    ): String? {
+        val ctx = buildContext(agentName, scroll) ?: return null
         val messages = listOf(
             mapOf("role" to "system", "content" to PASS_PROMPT),
             mapOf("role" to "user", "content" to ctx)
@@ -72,15 +64,16 @@ object DreamEngine {
             val trimmed = response.take(MAX_OUTPUT_CHARS).trim()
             if (trimmed.isNotEmpty()) {
                 writeDreamMd(agentName, trimmed)
-                DreamPassResult(trimmed, ctx.length, trimmed.length)
+                trimmed
             } else null
         } catch (e: Exception) {
-            ErrorCollector.report(e, "DreamEngine.dreamPass")
+            ErrorCollector.report(e, "DreamEngine.refine")
             null
         }
     }
 
-    private fun buildContext(agentName: String, scroll: ScrollContextManager?): String? {
+    /** 梦境输入组装 (DreamProvider SPI): 对话摘要 + 三轨记忆 + 档案 → LLM 上下文。 */
+    override suspend fun buildContext(agentName: String, scroll: ScrollContextManager?): String? {
         val parts = mutableListOf<String>()
         scroll?.let { s ->
             val headlines = s.listIndex().take(20)
@@ -179,14 +172,15 @@ object DreamEngine {
      * 3. 提炼 → 产出 {agent}/{date}_dream.md
      * 4. 到期删除: 已整理分片从 memory/ 移除; backup/ 中 30 天前的备份删除
      */
-    fun dream(agentId: String): MemResult {
-        val midDir = File(DataPaths.midTermMemoryDir(agentId))
-        if (!midDir.exists()) return MemResult(0, 0, 0, 0, 0)
+    /** 文件整理 (DreamProvider SPI): 备份 → 摘录 → 到期删除。 */
+    override fun organize(agentName: String): DreamResult {
+        val midDir = File(DataPaths.midTermMemoryDir(agentName))
+        if (!midDir.exists()) return DreamResult(0, 0, "无中期记忆目录")
         val dateFiles = midDir.listFiles()
             ?.filter { it.name.startsWith("memory_") && it.name.endsWith(".md") }
             ?.sorted()
             ?: emptyList()
-        if (dateFiles.isEmpty()) return MemResult(0, 0, 0, 0, 0)
+        if (dateFiles.isEmpty()) return DreamResult(0, 0, "无待整理分片")
 
         val backupDir = File(midDir, "backup")
         try { backupDir.mkdirs() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream.mkdir") }
@@ -215,7 +209,7 @@ object DreamEngine {
             }
         }
 
-        if (digest.isNotBlank()) writeDreamMd(agentId, digest)
+        if (digest.isNotBlank()) writeDreamMd(agentName, digest)
 
         // 4b: backup/ 中 30 天前的备份到期删除
         val cutoff = System.currentTimeMillis() - BACKUP_RETENTION_DAYS * 24 * 3600 * 1000
@@ -223,19 +217,23 @@ object DreamEngine {
             backupDir.listFiles()?.forEach { if (it.lastModified() < cutoff) it.delete() }
         } catch (_: Exception) { /* best-effort */ }
 
-        val result = MemResult(reviewed, 0, 0, archived, 0)
+        val result = DreamResult(reviewed, archived, "备份 ${archived} 个分片到 memory/backup/")
         try {
             if (!dreamLog.exists()) dreamLog.parentFile?.mkdirs()
-            dreamLog.appendText("${DATE_FMT.format(Date())} | agent=$agentId | reviewed=$reviewed archived=$archived (→ memory/backup/)\n")
+            dreamLog.appendText("${DATE_FMT.format(Date())} | agent=$agentName | reviewed=$reviewed archived=$archived (→ memory/backup/)\n")
         } catch (_: Exception) { /* best-effort log */ }
         return result
     }
 
-    fun dreamStats(): String {
+    /** 梦境统计 (DreamProvider SPI)。 */
+    override fun stats(): String {
         if (!dreamLog.exists()) return "总计: 0 次"
         val lines = try { dreamLog.readLines() } catch (e: Exception) { KernelLog.w("DreamEngine", "dreamStats: ${e.message}"); return "总计: 0 次" }
         return "梦境: ${lines.size} 次"
     }
+
+    /** 梦境历史 (DreamProvider SPI)。 */
+    override fun history(limit: Int): String = dreamHistory(limit)
 
     // ── Internal ─────────────────────────────────────────────────────
 

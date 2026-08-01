@@ -608,14 +608,16 @@ class AgentExecutor(private val docManager: AgentDocManager) {
 
     /** Dream mode: organize memories, archive, summarize — never delete. */
     private suspend fun dream(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        // 梦境提供者 SPI: 第三方可实现 DreamProvider 注册覆盖 (plugin-dream 为内置默认)
+        val provider = com.mengpaw.kernel.agent.DreamProviderRegistry.active()
         if (args.isNotEmpty() && args[0] == "stats") {
-            return ExecutionResult.ok(com.mengpaw.kernel.agent.DreamEngine.dreamStats())
+            return ExecutionResult.ok(provider.stats())
         }
         if (args.isNotEmpty() && args[0] == "history") {
-            return ExecutionResult.ok(com.mengpaw.kernel.agent.DreamEngine.dreamHistory())
+            return ExecutionResult.ok(provider.history())
         }
         // FIX: sessionId → agentName; sessionId 是 UUID 而 DreamEngine 需要 agent 目录名
-        val result = com.mengpaw.kernel.agent.DreamEngine.dream(agentName(ctx))
+        val result = provider.organize(agentName(ctx))
         val cleanup = com.mengpaw.kernel.agent.DreamEngine.cleanupWorkspace()
         return ExecutionResult.ok("""
 梦境完成:

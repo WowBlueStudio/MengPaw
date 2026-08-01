@@ -112,7 +112,7 @@ class EventReceiver : BroadcastReceiver() {
                 TriggerEngine.onSystemWake()
                 // 触发梦境模式 — 整理记忆、归档、摘要
                 try {
-                    val result = com.mengpaw.kernel.agent.DreamEngine.dream("MengPaw")
+                    val result = com.mengpaw.kernel.agent.DreamProviderRegistry.active().organize("MengPaw")
                     android.util.Log.d("EventReceiver", "Dream: reviewed=${result.memoriesReviewed} archived=${result.archived}")
                 } catch (e: Exception) {
                     android.util.Log.w("EventReceiver", "Dream failed: ${e.message}")
