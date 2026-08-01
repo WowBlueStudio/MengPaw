@@ -92,7 +92,7 @@ git push origin vX.Y.Z
 **注意事项**：
 - commit message 以 `release:` 开头
 - tag 名称与版本号一致（`vX.Y.Z`）
-- 确认 GitHub + Gitee 两个 remote 都推送成功
+- GitHub 推送后：**Gitee 镜像由 gitee-sync workflow 自动同步**（需已配置 GITEE_TOKEN secret；配置前需手动 `git push gitee master`）——插件索引的国内用户路径依赖它，发布后确认镜像已同步
 
 ---
 
@@ -128,9 +128,18 @@ gh release create vX.Y.Z \
 
 ## 6.6 插件市场（plugins.json）
 
-- **plugins.json 随 git commit 自动发布**（GitHub Pages 托管），无需单独上传
+- **plugins.json 随 git commit 发布，push 即生效**——客户端 raw 直读双源：GitHub（`raw.githubusercontent.com/WowBlueStudio/MengPaw/master/plugins.json`，全球）/ Gitee（`gitee.com/WowBlueStudio/MengPaw/raw/master/plugins.json`，国内 GeoRouter），**不是 GitHub Pages**。Gitee 侧生效依赖镜像同步（见 §5 注意事项）
 - 新插件（如 tools-plugin）加条目（status: builtin）+ 命令清单
 - 仅当有插件发布独立 AAR 时才需在 gh release 附 AAR
+
+### 6.6.1 连接器（外置 remote 条目）发布链路
+
+连接器源码在独立仓库 [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)（MIT），发布流程：
+
+1. 连接器仓库构建 AAR → `gh release create plugins-vX.Y.Z` 上传（tag 必须 `plugins-v*`，校验器要求）
+2. 主仓库 plugins.json 条目更新：downloadUrl/mirrorUrl → 新 release URL，**checksum（`sha256:64hex`）+ size 必须补齐**，id/version 与连接器 `PluginMetadata` 完全一致（不一致会导致「永远提示更新」）
+3. `powershell -File scripts/validate-plugins.ps1` 前后对比 ERROR 数
+4. Gitee 镜像生效后把 mirrorUrl 切到 Gitee release URL
 
 ## 6.7 测试（发布前）
 
@@ -158,7 +167,8 @@ adb -s <设备> shell dumpsys package com.mengpaw.shell | grep versionName
 - [ ] APK 可下载
 - [ ] CHANGELOG 只包含当前版本内容
 - [ ] 设备 versionName == X.Y.Z
-- [ ] `git ls-remote gitee master` 与本地 HEAD 一致（gitee 显示 up-to-date 是正常现象）
+- [ ] `git ls-remote gitee master` 与本地 HEAD 一致（gitee 显示 up-to-date 是正常现象；workflow 生效后自动同步）
+- [ ] `curl https://raw.githubusercontent.com/WowBlueStudio/MengPaw/master/plugins.json` 含新条目
 
 ---
 
