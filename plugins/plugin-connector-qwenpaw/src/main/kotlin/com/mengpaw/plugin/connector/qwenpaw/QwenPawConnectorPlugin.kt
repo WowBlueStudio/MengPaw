@@ -74,6 +74,8 @@ class QwenPawConnectorPlugin : Plugin, FrameworkAdapter {
     // ── FrameworkAdapter ────────────────────────────────────────────────
 
     override val frameworkName: String = "qwenpaw"
+    override val toolsDescription: String =
+        "chat {text,agentId?,sessionId?} — REST 对话 (SSE 流, 阻塞最长 2 分钟); acp-prompt {text} — SSH ACP 对话 (实验性)"
 
     /** REST 通道端点 (http://host:port, 无长连接, callTool 时真实探测)。 */
     @Volatile private var endpoint: String? = null
@@ -202,6 +204,9 @@ class QwenPawConnectorPlugin : Plugin, FrameworkAdapter {
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Type", "application/json")
                 conn.setRequestProperty("X-Agent-Id", agentId)
+                // qwenpaw app 开启认证时需 Bearer token (connector-qwenpaw.config --token)
+                val token = ConnectorConfigStore.read(PLUGIN_ID).token?.takeIf { it.isNotBlank() }
+                if (token != null) conn.setRequestProperty("Authorization", "Bearer $token")
                 conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
                 val code = conn.responseCode
                 if (code !in 200..299) {
@@ -348,6 +353,11 @@ class QwenPawConnectorPlugin : Plugin, FrameworkAdapter {
 
         fun setSessionId(id: String?) { sessionIdHolder = id }
 
-        fun close() { ch.close() }
+        fun close() {
+            // 未决请求立即失败 — 避免挂到超时 (60s)
+            pending.values.forEach { it.completeExceptionally(IllegalStateException("ACP 通道已关闭")) }
+            pending.clear()
+            ch.close()
+        }
     }
 }

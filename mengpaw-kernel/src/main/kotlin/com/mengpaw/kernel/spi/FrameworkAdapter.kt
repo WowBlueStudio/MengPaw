@@ -29,6 +29,13 @@ interface FrameworkAdapter {
 
     /** 当前是否在线 (已连接且心跳存活)。 */
     fun isOnline(): Boolean
+
+    /**
+     * 可用工具说明 — framework.adapters 展示给 Agent (如 "run {prompt}, version")。
+     * 缺省为空串 (旧连接器不受影响)。
+     */
+    val toolsDescription: String
+        get() = ""
 }
 
 /** 连接目标 — 通讯录条目解析出的最小信息 (内核定义, 不依赖 plugin-framework 类型)。 */

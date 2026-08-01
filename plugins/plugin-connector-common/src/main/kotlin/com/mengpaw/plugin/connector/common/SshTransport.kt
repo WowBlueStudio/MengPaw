@@ -83,7 +83,11 @@ class SshTransport(
         Result.success(Unit)
     } catch (e: Exception) {
         session = null
-        Result.failure(e)
+        Result.failure(
+            IllegalStateException(
+                "${e.message ?: "SSH 连接失败"} — 若首次启用 OpenSSH Server 请确认 Windows 防火墙已放行 TCP ${port} 端口"
+            )
+        )
     }
 
     fun isConnected(): Boolean = session?.isConnected == true

@@ -73,4 +73,15 @@ class ConnectorConfigStoreTest {
         val keyDesc = ConnectorConfigStore.describe("connector-test-plugin", keyCfg)
         assertFalse("描述不得含密钥口令", keyDesc.contains("passphrase-xyz"))
     }
+
+    @Test
+    fun `token roundtrip and describe masks token`() {
+        ensureDataPaths()
+        val cfg = ConnectorConfigStore.ConnectorConfig(user = "dev", token = "tok-abc-123")
+        ConnectorConfigStore.write("connector-test-plugin", cfg)
+        assertEquals("token 回环", "tok-abc-123", ConnectorConfigStore.read("connector-test-plugin").token)
+        val desc = ConnectorConfigStore.describe("connector-test-plugin", cfg)
+        assertFalse("描述不得含明文 token", desc.contains("tok-abc-123"))
+        assertTrue("token 以星号呈现", desc.contains("****"))
+    }
 }

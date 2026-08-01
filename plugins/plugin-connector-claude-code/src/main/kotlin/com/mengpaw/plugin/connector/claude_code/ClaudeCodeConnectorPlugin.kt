@@ -57,6 +57,8 @@ class ClaudeCodeConnectorPlugin : Plugin, FrameworkAdapter {
     // ── FrameworkAdapter ────────────────────────────────────────────────
 
     override val frameworkName: String = "claude-code"
+    override val toolsDescription: String =
+        "run {prompt,model?,maxTurns?} — 一次委派任务 (claude -p, 阻塞最长 5 分钟); version — CLI 版本"
 
     @Volatile private var transport: SshTransport? = null
     @Volatile private var connectedHost: String = ""

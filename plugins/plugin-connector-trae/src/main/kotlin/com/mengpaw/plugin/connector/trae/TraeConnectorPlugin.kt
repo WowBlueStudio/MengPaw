@@ -56,6 +56,8 @@ class TraeConnectorPlugin : Plugin, FrameworkAdapter {
     // ── FrameworkAdapter ────────────────────────────────────────────────
 
     override val frameworkName: String = "trea-ide"
+    override val toolsDescription: String =
+        "run {task,provider?,model?,workingDir?} — 一次任务 (trae-cli run, 阻塞最长 5 分钟); show-config"
 
     @Volatile private var transport: SshTransport? = null
     @Volatile private var connectedHost: String = ""

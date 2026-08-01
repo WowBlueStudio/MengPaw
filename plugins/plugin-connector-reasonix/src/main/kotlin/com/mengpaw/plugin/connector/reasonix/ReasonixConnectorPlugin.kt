@@ -56,6 +56,8 @@ class ReasonixConnectorPlugin : Plugin, FrameworkAdapter {
     // ── FrameworkAdapter ────────────────────────────────────────────────
 
     override val frameworkName: String = "reasonix"
+    override val toolsDescription: String =
+        "run {task} — 一次任务执行 (reasonix run, 阻塞最长 5 分钟); version — CLI 版本"
 
     @Volatile private var transport: SshTransport? = null
     @Volatile private var connectedHost: String = ""

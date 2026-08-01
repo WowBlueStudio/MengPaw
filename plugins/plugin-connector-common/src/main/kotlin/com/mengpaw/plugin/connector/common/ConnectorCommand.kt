@@ -16,21 +16,31 @@ object ConnectorCommand {
 
     /**
      * config 命令 — 无参数查看脱敏配置; 带 --key value 参数则更新并原子保存。
-     * Usage: <ns>.config [--user U] [--password P] [--key-path F] [--key-passphrase P]
-     *                    [--ssh-port N] [--channel ssh|rest] [--agent-id ID] [--cli-path F]
+     * 覆盖凭据需显式 --yes (对照 framework.trust --yes 先例, 防 Agent 无确认覆盖用户配置)。
+     * Usage: <ns>.config [--yes] [--user U] [--password P] [--key-path F] [--key-passphrase P]
+     *                    [--ssh-port N] [--channel ssh|rest] [--agent-id ID] [--token T] [--cli-path F]
      */
     fun configHandler(pluginId: String): CommandHandler = { args, _ ->
         val current = ConnectorConfigStore.read(pluginId)
         if (args.isEmpty()) {
             ExecutionResult.ok(
                 "当前连接配置:\n" + ConnectorConfigStore.describe(pluginId, current) +
-                "\n用法: ${nsOf(pluginId)}.config [--user U] [--password P] [--key-path F] [--key-passphrase P] [--ssh-port N] [--channel ssh|rest] [--agent-id ID] [--cli-path F]"
+                "\n用法: ${nsOf(pluginId)}.config [--yes] [--user U] [--password P] [--key-path F] [--key-passphrase P] [--ssh-port N] [--channel ssh|rest] [--agent-id ID] [--token T] [--cli-path F]"
+            )
+        } else if (!args.contains("--yes")) {
+            // 二次确认: 覆盖凭据是敏感操作, 未确认不改变状态
+            ExecutionResult.fail(
+                "⚠️ 变更将覆盖现有连接配置 (当前用户: ${current.user.ifBlank { "未配置" }}; " +
+                "通道: ${current.channel}; 认证: " +
+                (if (!current.password.isNullOrBlank() || !current.keyPath.isNullOrBlank()) "已配置" else "未配置") + ")。\n" +
+                "配置未改变。确认请执行: ${nsOf(pluginId)}.config --yes <参数>"
             )
         } else {
             var updated = current
             var i = 0
             while (i < args.size) {
                 val key = args[i]
+                if (key == "--yes") { i += 1; continue }
                 val value = args.getOrNull(i + 1) ?: ""
                 updated = when (key) {
                     "--user" -> updated.copy(user = value)
@@ -40,6 +50,7 @@ object ConnectorCommand {
                     "--ssh-port" -> updated.copy(sshPort = value.toIntOrNull() ?: 22)
                     "--channel" -> updated.copy(channel = if (value in listOf("ssh", "rest")) value else "ssh")
                     "--agent-id" -> updated.copy(agentId = value)
+                    "--token" -> updated.copy(token = value.ifBlank { null })
                     "--cli-path" -> updated.copy(cliPath = value.ifBlank { null })
                     else -> updated
                 }

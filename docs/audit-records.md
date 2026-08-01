@@ -5,6 +5,7 @@
 
 | 日期 | 审校项 | 结果 |
 |------|--------|------|
+| 2026-08-01 | 外置连接器插件 ×4 十二问审计 | 三层十二问 → P2×6 全修（无 P0/P1）: 工具可见性 (FrameworkAdapter.toolsDescription 字段 + framework.adapters 输出工具说明) + connector config 写凭据 --yes 二次确认 + QwenPaw REST Bearer token 支持 (--token) + AcpOverSsh close 清理 pending + SSH 失败补防火墙放行 22 端口建议 + 长任务阻塞时长说明 (toolsDescription 注明最长 5 分钟)。5 模块编译通过, 内核 187 测试 + common 单测全绿。 |
 | 2026-08-01 | 框架通信 × 智能体进化 十二问审计 | 三层十二问审计 → P1×4+P2×5 全修（无 P0）+ 智能体进化 SPI 化内置插件化: P1 (框架 BM25 索引补 5 条 connect/call/disconnect/adapters/add + EvolutionStore 三处写入原子化 tmp+rename + 开发指南 framework 6→10 + CLI.md 补 agent.dream/内置插件表补 dream+evolution)；P2 (PluginManager 生命周期对称 disable→onUninstall/enable→onInstall + framework.add 手动添加 + discover 异步化 --wait + trust --yes 二次确认)；进化 SPI 化 (内核 EvolutionProvider 接口+注册表+EvolutionEngine 默认实现, evolution.* 命令保持内核注册, 内置 plugin-evolution 注册默认实现不可移除, 仿 plugin-dream 模式)；self 标签「Agent 进化」误伤 9 处改为「Agent 自我管理」(skill/注释/UI/文档)。内核测试 0 失败, Shell APK 编译通过。 |
 | 2026-07-25 | v0.15.0 记忆孪生全链路审计 | 三层十二问审计 → 14 问题全修: P0×6 (系统提示词/配对指引/ACP就绪/syncWithPeer/mDNS单点/命令命名空间), P1×6 (QoS/心跳/解绑UI/错误诊断/同步反馈/self.tools覆盖), P2×2 (协议版本/原子写入)。8 文件修改, 626 行新增, 编译通过, 测试通过。 |
 | 2026-07-21 | v0.6.0 设计系统合规 | 11 个 UI 文件硬编码色值清零, 全部替换为 ArcoColors token |

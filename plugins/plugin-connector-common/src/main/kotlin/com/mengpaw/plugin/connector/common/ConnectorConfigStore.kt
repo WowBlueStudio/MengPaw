@@ -25,6 +25,8 @@ object ConnectorConfigStore {
         val channel: String = "ssh",
         /** REST 通道的 Agent ID (qwenpaw)。 */
         val agentId: String = "default",
+        /** REST 通道认证 token (qwenpaw app 开启认证时必填, Authorization: Bearer)。 */
+        val token: String? = null,
         /** CLI 绝对路径 (Windows: 引号内路径, 如 "C:\tools\claude.cmd")。空 = PATH 查找。 */
         val cliPath: String? = null,
         /** SSH 端口, 默认 22。 */
@@ -45,6 +47,7 @@ object ConnectorConfigStore {
                 keyPassphrase = if (j.has("keyPassphrase") && !j.isNull("keyPassphrase")) j.optString("keyPassphrase") else null,
                 channel = j.optString("channel", "ssh"),
                 agentId = j.optString("agentId", "default"),
+                token = if (j.has("token") && !j.isNull("token")) j.optString("token") else null,
                 cliPath = if (j.has("cliPath") && !j.isNull("cliPath")) j.optString("cliPath") else null,
                 sshPort = j.optInt("sshPort", 22)
             )
@@ -63,6 +66,7 @@ object ConnectorConfigStore {
                 .apply { if (cfg.keyPassphrase != null) put("keyPassphrase", cfg.keyPassphrase) }
                 .put("channel", cfg.channel)
                 .put("agentId", cfg.agentId)
+                .apply { if (cfg.token != null) put("token", cfg.token) }
                 .apply { if (cfg.cliPath != null) put("cliPath", cfg.cliPath) }
                 .put("sshPort", cfg.sshPort)
             val tmp = File(f.parentFile, "${f.name}.tmp")
@@ -84,6 +88,7 @@ object ConnectorConfigStore {
             else -> "未配置 (需 --password 或 --key-path)"
         }}")
         appendLine("通道: ${cfg.channel}${if (cfg.channel == "rest") " (agent-id: ${cfg.agentId})" else ""}")
+        if (!cfg.token.isNullOrBlank()) appendLine("REST Token: ${"*".repeat(cfg.token!!.length)}")
         appendLine("CLI 路径: ${cfg.cliPath ?: "PATH 查找"}")
         appendLine("⚠️ 凭据明文存于本机 配置/$pluginId-connector.json — 仅限个人局域网使用")
     }

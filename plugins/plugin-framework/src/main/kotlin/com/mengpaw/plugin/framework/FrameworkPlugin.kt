@@ -131,7 +131,11 @@ class FrameworkPlugin : Plugin {
             sb.append("> 无连接器插件 — 安装后自动注册 (plugin.search connector)\n")
         } else {
             adapters.forEach { a ->
-                sb.append("- ${a.frameworkName}: ${if (a.isOnline()) "在线" else "离线"}\n")
+                sb.append("- ${a.frameworkName}: ${if (a.isOnline()) "在线" else "离线"}")
+                if (a.toolsDescription.isNotBlank()) {
+                    sb.append("\n    工具: ${a.toolsDescription}")
+                }
+                sb.append("\n")
             }
         }
         return ExecutionResult.ok(sb.toString())
