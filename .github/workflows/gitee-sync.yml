@@ -26,7 +26,8 @@ jobs:
           GITEE_SSH_KEY: ${{ secrets.GITEE_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "$GITEE_SSH_KEY" > ~/.ssh/id_rsa
+          # secret 存 base64 单行（多行私钥经 GitHub secret 传递会损坏首尾换行）
+          echo "$GITEE_SSH_KEY" | base64 -d > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -t rsa gitee.com >> ~/.ssh/known_hosts 2>/dev/null || true
           git remote add gitee git@gitee.com:wowbluestudio/MengPaw.git
