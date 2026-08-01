@@ -4,7 +4,22 @@
 
 ---
 
-## 2026-07-31 — v0.21.1 记忆系统融入内核 + 任务记忆接入 Dream
+## 2026-08-01 — v0.23.0 连接器插件 + SPI 化 + 拆分
+
+### 118. jsch getErrStream() 返回 InputStream 与 setErrStream(OutputStream) 类型不匹配 → Kotlin 只合成只读属性
+- 场景：SshTransport `ch.errStream = err` 编译报 "'val' cannot be reassigned" + "expected InputStream"——jsch 的 getErrStream(): InputStream 与 setErrStream(OutputStream) 参数类型不同, Kotlin 属性合成规则对 getter/setter 类型不匹配时只合成**只读属性** (getter 类型)。
+- 修复：用 Java 方法形式调用 `ch.setErrStream(err)` / `ch.setOutputStream(out)`; 同类 API 用 javap 确认签名 (ChannelShell 无 setCommand, ChannelExec 才有)。
+- 教训：**第三方库 get/set 类型不一致时 Kotlin 合成只读属性, 赋值报 val 错误——用 javap 看真实签名, 方法调用绕过**。
+
+### 117. 函数类型 typealias 不能 `Typealias {}` 构造; 表达式体函数内禁止 return
+- 场景：`CommandHandler { args, _ -> }` 编译报 "Interface SuspendFunction2 does not have constructors"——CommandHandler 是 typealias (suspend (List, ctx) -> Result), 不是接口, 无 SAM 构造语法。修复: 直接 `= { args, _ -> ... }`。
+- 表达式体函数 (`fun f() = try {...}`) 内含 `return Result.failure(...)` 报 "Returns are prohibited for functions with an expression body"——修复: 改块体 `{ return try {...} }`。
+- 教训：**typealias 到函数类型用 lambda 字面量, 不要构造调用; 需要 return 的函数一律块体**。
+
+### 116. Windows 上 renameTo 目标存在即失败——writeAtomic 漏 file.delete()
+- 场景：新记忆命令测试 `write updates existing entry` 失败——editEntry 返回 1 但文件内容未变。`AgentDocs.writeAtomic` 用 `tmp.renameTo(file)`,Windows 上目标存在时 renameTo 返回 false(静默失败);同文件 `appendLongTermMemory` 有 `file.delete()` 注释("Windows: renameTo fails if target exists"),writeAtomic 漏了这一步。
+- 修复：writeAtomic 在 renameTo 前补 `file.delete()`。
+- 教训：**Windows renameTo 不覆盖, 原子写必须显式删除目标; 既有代码的同类处理注释是线索**。editEntry/deleteEntry 此前零测试覆盖, 该 bug 长期潜伏, 由新命令测试暴露。
 
 ### 116. Windows 上 renameTo 目标存在即失败——writeAtomic 漏 file.delete()
 - 场景：新记忆命令测试 `write updates existing entry` 失败——editEntry 返回 1 但文件内容未变。`AgentDocs.writeAtomic` 用 `tmp.renameTo(file)`,Windows 上目标存在时 renameTo 返回 false(静默失败);同文件 `appendLongTermMemory` 有 `file.delete()` 注释("Windows: renameTo fails if target exists"),writeAtomic 漏了这一步。

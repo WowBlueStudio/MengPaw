@@ -1,6 +1,30 @@
 # Changelog
 
-## v0.22.1 (2026-08-01) — 浏览器协作通道 + 框架协议升级 + 梦境 SPI
+## v0.23.0 (2026-08-01) — 智能体进化 SPI + 外置连接器 ×4 + 大文件拆分
+
+### 新增
+- **智能体进化 SPI 化**: 内核 EvolutionProvider 接口 + 注册表 + EvolutionEngine 默认实现 (仿梦境模式); 内置 plugin-evolution 注册默认实现 (UNINSTALLABLE 锁定, 第三方可实现接口覆盖); evolution.* 命令保持内核注册
+- **外置连接器插件 ×4** (FrameworkAdapter SPI, 外部分发不捆绑, 经 framework.connect/call 委派任务到 PC):
+  - plugin-connector-common 共享库 — jsch (MIT) SSH 传输 + 交互式通道 + 凭据原子存储 + config/info 命令
+  - Claude Code 通讯 (SSH → claude -p headless) / Reasonix 通讯 (SSH → reasonix run) / TREA IDE 通讯 (SSH → trae-cli run)
+  - QwenPaw 通讯 v0.2.0 真实协议重写 — REST 8088 (POST /api/console/chat, SSE 流) + SSH ACP 实验通道 (stdio JSON-RPC)
+  - 上游许可全部兼容: Claude Code 闭源商业 CLI 仅互操作调用 / QwenPaw Apache-2.0 / DeepSeek-Reasonix + trae-agent + jsch MIT
+- **插件装配清单 PluginRegistrar** — 内置插件 ID/WowBlue 标识/显示信息/类注册/自动安装五份数据独立成文件, 新增捆绑插件只改一处
+- plugins.json v7 (28 条目: 12 builtin + 14 remote + 2 embedded)
+
+### 修复
+- 框架通信十二问审计 P1×4+P2×5: BM25 索引补 5 条 / EvolutionStore 三处原子化 / PluginManager 生命周期对称 (disable→onUninstall) / framework.add 手动添加 / discover 异步化 --wait / trust --yes 二次确认
+- 连接器审计 P2×6: 工具可见性 (toolsDescription + framework.adapters 输出) / config --yes 确认 / QwenPaw Bearer token / AcpOverSsh close 清理 / SSH 防火墙提示
+- 连接器闪退与泄漏审查: textBuffer 竞态 synchronized / describe !! 清零 / channel 与重复 connect session 泄漏
+- Ports.QWENPAW_REST 8080→8088 (官方默认端口); self 标签「Agent 进化」误伤 9 处 →「Agent 自我管理」
+
+### 重构
+- AgentExecutor 53.5KB → 31KB (memory.* 18 命令移至 AgentMemoryExecutor); MainActivity 52.5KB → 46KB (装配清单移至 PluginRegistrar) — ≥50KB 大文件清零
+
+### 发行
+- Shell APK v0.23.0 (versionCode 23000)
+- plugins.json v7 (28 条目, 含 4 个 connector 新条目 + qwenpaw 0.2.0)
+- 测试: 内核 187 全绿 + connector-common 单测 6/6
 
 ### 新增
 - **设备内 MCP 通道打通（浏览器 MCP 首次真正工作）**：浏览器 APK 内置 McpHttpServer（127.0.0.1:9880，GET /health + POST /mcp）；plugin-browser-mcp 改 HTTP 桥——根因是跨进程静态字段赋值因类加载器隔离不可见；Shell 侧 BrowserReturnWatcher 轮询 browser_return_*.md → FileProvider 预览回传
