@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Commercial
 
 pluginManagement {
     repositories {
@@ -48,14 +48,8 @@ include(":plugin-agent-tools")
 include(":plugin-dream")
 include(":plugin-evolution")
 
-// ── Connectors (外置连接器, 可编译验证但不捆绑 APK) ──────
-include(":plugin-connector-common")
-include(":plugin-connector-claude-code")
-include(":plugin-connector-reasonix")
-include(":plugin-connector-trae")
-include(":plugin-connector-qwenpaw")
-
 // plugin-agent-loop and plugin-agent-mission removed — modes now built into AgentEngine
+// Connectors moved to standalone repo mengpaw-connectors (MIT) — see COMMERCIAL-LICENSE.md §11.4
 
 // Map plugin modules to their directory under plugins/
 project(":plugin-framework").projectDir = File(rootDir, "plugins/plugin-framework")
@@ -79,10 +73,6 @@ project(":plugin-root").projectDir = File(rootDir, "plugins/plugin-root")
 project(":plugin-agent-tools").projectDir = File(rootDir, "plugins/plugin-agent-tools")
 project(":plugin-dream").projectDir = File(rootDir, "plugins/plugin-dream")
 project(":plugin-evolution").projectDir = File(rootDir, "plugins/plugin-evolution")
-project(":plugin-connector-common").projectDir = File(rootDir, "plugins/plugin-connector-common")
-project(":plugin-connector-claude-code").projectDir = File(rootDir, "plugins/plugin-connector-claude-code")
-project(":plugin-connector-reasonix").projectDir = File(rootDir, "plugins/plugin-connector-reasonix")
-project(":plugin-connector-trae").projectDir = File(rootDir, "plugins/plugin-connector-trae")
-project(":plugin-connector-qwenpaw").projectDir = File(rootDir, "plugins/plugin-connector-qwenpaw")
 // plugin-agent-loop / plugin-agent-mission dir mappings removed — modes built into AgentEngine
+// plugin-connector-* dir mappings removed — moved to standalone repo mengpaw-connectors
 

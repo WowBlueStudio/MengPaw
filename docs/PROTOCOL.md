@@ -67,10 +67,10 @@ curl -X POST http://127.0.0.1:9881/mcp \
 
 实现内核 SPI,5 步:
 
-**Step 1 — 建插件模块**(参照 `plugins/plugin-connector-qwenpaw/`):
+**Step 1 — 建插件模块**(参照独立仓库 [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors) 的 `plugin-connector-qwenpaw` 模块, MIT 许可, 可直接 fork 改造):
 ```kotlin
-// build.gradle.kts: 只依赖 kernel + 连接所需依赖
-implementation(project(":mengpaw-kernel"))
+// build.gradle.kts: 只依赖内核构件(JitPack) + 连接所需依赖
+implementation("com.github.WowBlueStudio.MengPaw:mengpaw-kernel:<tag>")
 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 ```
 
@@ -100,7 +100,7 @@ override suspend fun onUninstall() {
 **Step 4 — 通讯录登记**: 在 plugin-framework 的 `FrameworkPeerStore.FRAMEWORK_TYPES` + `PROTOCOL_LABELS` 加类型(随内置插件发布,或后续扩展)。
 
 **Step 5 — 构建与发布**:
-- 连接器插件**不内置**(settings.gradle.kts 不含 include)— 独立构建 AAR + plugins.json 加 remote 条目
+- 连接器插件**不内置主仓库** — 在独立仓库 mengpaw-connectors 构建 AAR, 随其 GitHub Releases 发布, plugins.json 加 remote 条目
 - 安装后自动注册:`framework.adapters` 可见 → `framework.connect <peer>` → `framework.call <peer> <tool> [jsonArgs]`
 
 ## 4. 最小 ACP 子集(可选,远程配对路径)

@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.22.0 | **更新**: 2026-08-01 | **架构**: 微内核(70文件) + AgentRuntime + 23插件模块(11捆绑随壳更新) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.6.0
+> **版本**: 0.23.0 | **更新**: 2026-08-01 | **架构**: 微内核(70文件) + AgentRuntime + 21插件模块(11捆绑随壳更新) + 双许可(社区AGPL + 商业授权) + 连接器拆分独立仓库(MIT) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.6.0
 
 ---
 
@@ -242,9 +242,9 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `plugin/` (3 文件) | BuiltinBrowserPlugin, BrowserPlugin, BrowserPluginRegistry |
 
 
-### 3.5 插件模块（26 个，plugins/ 目录，按 settings.gradle.kts 为准）
+### 3.5 插件模块（21 个，plugins/ 目录，按 settings.gradle.kts 为准）
 
-> 插件数统一口径：**26 模块**（settings.gradle.kts:29-54，含 5 个外部连接器）| **12 捆绑**（mengpaw-shell 打包）| **plugins.json 28 条目**（12 builtin + 14 remote + 2 embedded）
+> 插件数统一口径：**21 模块**（settings.gradle.kts；外部连接器已移至独立仓库 mengpaw-connectors，见下）| **12 捆绑**（mengpaw-shell 打包）| **plugins.json 28 条目**（12 builtin + 14 remote + 2 embedded）
 
 #### 基础功能 (6)
 
@@ -330,14 +330,12 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 >
 > plugin-hermes 模块实际实现为 `TribePlugin`（id=tribe-plugin，注册 tribe.* 22 条 + hermes.* 兼容命令），plugins.json 中对应 `tribe-plugin` 条目。
 
-#### 外部连接器（外部分发, 不捆绑 APK, 经插件市场手动安装）
+#### 外部连接器（已移至独立仓库 mengpaw-connectors）
 
-> 5 个模块 (settings.gradle.kts:50-54): plugin-connector-common (共享库) + 4 个连接器插件。
-> 连接器实现内核 `spi.FrameworkAdapter` (frameworkName/connect/callTool/isOnline), onInstall 注册进
-> FrameworkAdapterRegistry — plugin-framework 的 `framework.connect/call` 按通讯录类型自动分派。
-> 使用链路: `framework.add <名称> <IP> [端口] --type <类型>` → `framework.connect <名称>` → `framework.call <名称> <工具> {"参数":"值"}`。
-> 凭据经 `<ns>.config` 命令配置 (SSH 用户/密码或 PEM 密钥, 原子写入 {CONFIG}/)。默认通道 SSH
-> (PC 需启用 Windows 自带 OpenSSH Server, 手机 → PC 零额外安装); QwenPaw 另支持 REST 直连。
+> **v0.23.0 起**：5 个连接器模块（plugin-connector-common 共享库 + claude-code / reasonix / trae / qwenpaw / openclaw）已拆出至独立仓库
+> **[mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)**（**MIT 许可，社区开放贡献**）。
+> 本仓库不再包含连接器源码，仅经插件市场分发其 AAR（plugins.json status=remote, 用户手动 plugin.install）。
+> 连接器构建依赖主仓库内核构件（JitPack: `com.github.WowBlueStudio.MengPaw:mengpaw-kernel:<tag>`，版本由该仓库 `kernelVersion` 统一控制）。
 
 | 模块 | 框架类型 (--type) | 通道 | callTool 工具 | 上游 (许可) |
 |------|------|------|------|------|
@@ -346,9 +344,13 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | plugin-connector-reasonix | reasonix | SSH → `reasonix run` | run, version | esengine/DeepSeek-Reasonix (MIT) |
 | plugin-connector-trae | trea-ide | SSH → `trae-cli run` | run, show-config | bytedance/trae-agent (MIT) |
 | plugin-connector-qwenpaw | qwenpaw | REST 8088 + SSH ACP | chat, acp-prompt | agentscope-ai/QwenPaw (Apache-2.0) |
+| plugin-connector-openclaw | openclaw | WebSocket :18789 | — | — |
 
-> 外置语义: 不入 BUILTIN 列表/不捆绑 APK, plugins.json status=remote, 用户手动 plugin.install;
-> 入主构建仅为可编译验证。QwenPaw SSH ACP 通道为实验性 (stdio JSON-RPC)。
+> 连接器实现内核 `spi.FrameworkAdapter` (frameworkName/connect/callTool/isOnline), onInstall 注册进
+> FrameworkAdapterRegistry — plugin-framework 的 `framework.connect/call` 按通讯录类型自动分派。
+> 使用链路: `framework.add <名称> <IP> [端口] --type <类型>` → `framework.connect <名称>` → `framework.call <名称> <工具> {"参数":"值"}`。
+> 凭据经 `<ns>.config` 命令配置 (SSH 用户/密码或 PEM 密钥, 原子写入 {CONFIG}/)。默认通道 SSH
+> (PC 需启用 Windows 自带 OpenSSH Server, 手机 → PC 零额外安装); QwenPaw 另支持 REST 直连。
 
 ### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0)
 
@@ -555,7 +557,7 @@ MCP 协议极其简单——JSON-RPC + 三个原语（tool / resource / prompt�
 | 远程轨 | MCP over ACP `:9876` (配对+加密) | 跨设备调用, requestId 请求-响应一轮完成 |
 | 框架轨 | 连接器插件 (内核 FrameworkAdapter SPI) | 非 MengPaw 框架 (OpenClaw WS / QwenPaw REST) |
 
-协议分层: 内核 = 协议核心 (ACP + MCP + SPI, 无具体框架); plugin-framework = 内置协议插件 (发现/信任/网关/分派); connector-* = 外部分发连接器。**接入指南见 [PROTOCOL.md](PROTOCOL.md)**。
+协议分层: 内核 = 协议核心 (ACP + MCP + SPI, 无具体框架); plugin-framework = 内置协议插件 (发现/信任/网关/分派); connector-* = 外部分发连接器（独立仓库 [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)，MIT）。**接入指南见 [PROTOCOL.md](PROTOCOL.md)**。
 
 
 ### 4.8 记忆三轨制 (v0.15.0+, 单轨 v0.22.0)
@@ -893,3 +895,41 @@ ShellService.start(this)   // startForeground + WakeLock
 
 
 ---
+
+## 11. 许可证与商业 (v0.23.0+)
+
+### 11.1 双许可模型
+
+MengPaw 以**双许可**发布（详细条款见 [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)）：
+
+| | 社区版 | 商业版 |
+|---|--------|--------|
+| 许可 | AGPL-3.0（[LICENSE](LICENSE)） | 商业授权（[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)） |
+| 费用 | 免费 | 付费（协商） |
+| 适用 | 个人/开源/遵守 AGPL 义务的部署 | 闭源分发/白标/嵌入产品/不想公开修改源码的服务化部署 |
+
+- **免费边界**：企业内部自用且不对外分发不受限；遵守 AGPL（公开修改源码）的任何分发与部署免费
+- **商用边界**：闭源分发、白标、嵌入产品、服务化部署不公开源码 → 需购买商业授权
+- 既有版本（≤v0.23.0）的 AGPL 授权继续有效；双许可自 v0.23.0+ 适用
+- 公司为唯一版权人（主仓库暂不接受外部代码贡献），双许可无版权障碍
+
+### 11.2 SPDX 头规范（新格式）
+
+所有 `.kt`/`.kts` 文件首两行：
+
+```kotlin
+// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Commercial
+```
+
+`LicenseRef-Commercial` 指 [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) 定义的商业授权，使用者二选一。
+
+### 11.3 贡献政策
+
+- **主仓库**：仅接受 Bug 报告与功能请求（GitHub Issues 模板）；**暂不接受 PR**（保证版权单一归属），未来可能开放
+- **连接器仓库**（[mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)）：MIT 许可，**社区开放 PR**（inbound=outbound，无需 CLA）
+- **商用咨询**：1138018324@qq.com
+
+### 11.4 连接器依赖内核的许可边界
+
+连接器（MIT）编译期依赖内核构件（AGPL，JitPack），仅实现 `spi.FrameworkAdapter` / `Plugin` 接口——独立作品，非 AGPL 内核的衍生作品。**铁律：连接器不得复制内核源码，只依赖构件**；若未来需要复用内核代码，须将该部分留在主仓库并遵守双许可。
