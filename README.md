@@ -1,5 +1,7 @@
 # MengPaw 🐾
 
+[中文](README.md) | [English](README.en.md)
+
 面向 Agent 的自举式 Android 操作系统框架。
 
 > **Agent 通过内置 CLI 操控自身，API Key 是唯一安全禁区。**
