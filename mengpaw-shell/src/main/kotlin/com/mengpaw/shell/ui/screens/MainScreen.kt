@@ -45,6 +45,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -93,6 +94,9 @@ fun MainScreen(
     // ── @mention state ────────────────────────────────────────────
     var showMentionDropdown by remember { mutableStateOf(false) }
     var mentionQuery by remember { mutableStateOf("") }
+    // ── !bang 命令补全 state (与 @mention 共用同一悬浮控件) ──
+    var showBangDropdown by remember { mutableStateOf(false) }
+    var bangQuery by remember { mutableStateOf("") }
 
     // FIX U17+U6: Derive filtered list once to avoid allocation per recomposition
     val displayedMessages by remember(messages) {
@@ -450,14 +454,26 @@ fun MainScreen(
                 }
             }
 
-            // ── @mention 内联下拉（不走 Popup，不干扰输入法）──
-            if (showMentionDropdown) {
-                val mentionAgents = remember(mentionQuery, viewModel.agentNamesForMention().size) {
-                    viewModel.agentNamesForMention().filter { (name, _) ->
-                        mentionQuery.isBlank() || name.contains(mentionQuery, ignoreCase = true)
+            // ── @mention / !bang 命令补全内联下拉（不走 Popup，不干扰输入法）──
+            if (showMentionDropdown || showBangDropdown) {
+                val bangCandidates = if (showBangDropdown)
+                    remember(bangQuery, viewModel.bangCommands().size) {
+                        val all = viewModel.bangCommands()
+                        val q = bangQuery.trim()
+                        if (q.isEmpty()) all
+                        else all.filter {
+                            it.name.startsWith(q, ignoreCase = true) || it.name.contains(q, ignoreCase = true)
+                        }
                     }
-                }
-                if (mentionAgents.isNotEmpty()) {
+                else emptyList()
+                val mentionAgents = if (!showBangDropdown)
+                    remember(mentionQuery, viewModel.agentNamesForMention().size) {
+                        viewModel.agentNamesForMention().filter { (name, _) ->
+                            mentionQuery.isBlank() || name.contains(mentionQuery, ignoreCase = true)
+                        }
+                    }
+                else emptyList()
+                if (bangCandidates.isNotEmpty() || mentionAgents.isNotEmpty()) {
                     Surface(
                         modifier = Modifier.fillMaxWidth()
                             .padding(horizontal = ArcoSpacing.lg),
@@ -466,46 +482,79 @@ fun MainScreen(
                         color = ThemeColors.bgPrimary
                     ) {
                         Column(Modifier.padding(vertical = ArcoSpacing.xs)) {
-                            mentionAgents.take(6).forEach { (name, framework) ->
-                                Row(
-                                    Modifier.fillMaxWidth()
-                                        .clickable {
-                                            val current = inputText
-                                            val atIdx = current.lastIndexOf('@')
-                                            if (atIdx >= 0) {
-                                                val beforeAt = current.substring(0, atIdx)
-                                                val afterQuery = current.substring(atIdx + 1 + mentionQuery.length)
-                                                inputText = "$beforeAt@$name $afterQuery"
+                            if (showBangDropdown) {
+                                bangCandidates.take(6).forEach { cmd ->
+                                    Row(
+                                        Modifier.fillMaxWidth()
+                                            .clickable {
+                                                val current = inputText
+                                                val bangIdx = current.lastIndexOf('!')
+                                                if (bangIdx >= 0) {
+                                                    val beforeBang = current.substring(0, bangIdx)
+                                                    val afterQuery = current.substring(bangIdx + 1 + bangQuery.length)
+                                                    inputText = "$beforeBang!${cmd.name} $afterQuery"
+                                                }
+                                                showBangDropdown = false
+                                                try { inputFocus.requestFocus() } catch (_: Exception) {}
                                             }
-                                            showMentionDropdown = false
-                                            viewModel.addTag(InputTag.AgentRef(name))
-                                            try { inputFocus.requestFocus() } catch (_: Exception) {}
-                                        }
-                                        .padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.sm),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Surface(shape = CircleShape, color = ThemeColors.brandContainer,
-                                        modifier = Modifier.size(24.dp)) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text(name.take(1), color = ThemeColors.brand,
-                                                fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            .padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.sm),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("!${cmd.name}", fontWeight = FontWeight.SemiBold,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = ThemeColors.brand)
+                                        if (cmd.description.isNotBlank()) {
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(cmd.description,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = ThemeColors.textSecondary,
+                                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f))
                                         }
                                     }
-                                    Spacer(Modifier.width(ArcoSpacing.sm))
-                                    Text("@$name", fontWeight = FontWeight.SemiBold,
-                                        style = MaterialTheme.typography.bodyMedium)
-                                    if (framework != null) {
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("· $framework",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = ThemeColors.textSecondary)
+                                }
+                            } else {
+                                mentionAgents.take(6).forEach { (name, framework) ->
+                                    Row(
+                                        Modifier.fillMaxWidth()
+                                            .clickable {
+                                                val current = inputText
+                                                val atIdx = current.lastIndexOf('@')
+                                                if (atIdx >= 0) {
+                                                    val beforeAt = current.substring(0, atIdx)
+                                                    val afterQuery = current.substring(atIdx + 1 + mentionQuery.length)
+                                                    inputText = "$beforeAt@$name $afterQuery"
+                                                }
+                                                showMentionDropdown = false
+                                                viewModel.addTag(InputTag.AgentRef(name))
+                                                try { inputFocus.requestFocus() } catch (_: Exception) {}
+                                            }
+                                            .padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.sm),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(shape = CircleShape, color = ThemeColors.brandContainer,
+                                            modifier = Modifier.size(24.dp)) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(name.take(1), color = ThemeColors.brand,
+                                                    fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            }
+                                        }
+                                        Spacer(Modifier.width(ArcoSpacing.sm))
+                                        Text("@$name", fontWeight = FontWeight.SemiBold,
+                                            style = MaterialTheme.typography.bodyMedium)
+                                        if (framework != null) {
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("· $framework",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = ThemeColors.textSecondary)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
+            } // close if(showMentionDropdown || showBangDropdown)
 
             // ── Bottom input bar ──
             Box {
@@ -536,6 +585,8 @@ fun MainScreen(
                             if (now - lastSendTime < 300) return  // debounce: prevent double-fire from onPreviewKeyEvent + IME
                             lastSendTime = now
                             val text = inputText; inputText = ""
+                            // 发送后立即收起悬浮下拉 — 程序化清空输入不触发 onValueChange, 需手动关闭
+                            showMentionDropdown = false; showBangDropdown = false
                             val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
                             val agentTag = activeTags.filterIsInstance<InputTag.AgentRef>().firstOrNull()
                             viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps,
@@ -545,6 +596,20 @@ fun MainScreen(
                     }
                     OutlinedTextField(value = inputText, onValueChange = { newVal ->
                         inputText = newVal
+                        // !bang 命令补全检测 — ! 之前缀须全空白 (与 submitTask 的 startsWith("!") 语义对齐)
+                        val bangIdx = newVal.lastIndexOf('!')
+                        if (bangIdx >= 0 && newVal.substring(0, bangIdx).isBlank()) {
+                            val query = newVal.substring(bangIdx + 1)
+                            if (!query.contains(' ') && !query.contains('\n')) {
+                                bangQuery = query
+                                showBangDropdown = true
+                                showMentionDropdown = false
+                            } else {
+                                showBangDropdown = false
+                            }
+                        } else {
+                            showBangDropdown = false
+                        }
                         // @mention 检测 — 在空格/换行/行首后输入 @
                         val atIdx = newVal.lastIndexOf('@')
                         if (atIdx >= 0) {
@@ -554,6 +619,7 @@ fun MainScreen(
                                 if (!query.contains(' ') && !query.contains('\n')) {
                                     mentionQuery = query
                                     showMentionDropdown = true
+                                    showBangDropdown = false
                                 } else {
                                     showMentionDropdown = false
                                 }
@@ -609,6 +675,8 @@ fun MainScreen(
                                 val text = inputText
                                 if (text.isNotBlank()) {
                                     inputText = ""
+                                    // 发送后立即收起悬浮下拉
+                                    showMentionDropdown = false; showBangDropdown = false
                                     inputFocus.requestFocus()
                                     val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
                                     val agentTag = activeTags.filterIsInstance<InputTag.AgentRef>().firstOrNull()

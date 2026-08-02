@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mengpaw.kernel.AgentEngine
 import com.mengpaw.kernel.AgentState
+import com.mengpaw.kernel.CommandInfo
 import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionResult
@@ -87,6 +88,10 @@ class AgentViewModel : ViewModel() {
     fun removeTag(tag: InputTag) = inputTagManager.removeTag(tag)
     fun clearTags() = inputTagManager.clearTags()
     fun agentNamesForMention(): List<Pair<String, String?>> = inputTagManager.agentNamesForMention(sessions)
+
+    /** ! 命令补全候选 — 当前 Agent 引擎的命令 + 功能描述（组合期安全: 直读 map, 不触发会话创建）. */
+    fun bangCommands(): List<CommandInfo> =
+        sessions[_activeAgentName]?.engine?.listCommands() ?: emptyList()
 
     /** Delegate loopMode to InputTagManager. */
     var loopMode: LoopMode
