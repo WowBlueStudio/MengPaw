@@ -42,6 +42,11 @@ sealed class ChatMessageUi {
         override val stableId get() = "s_$createdAt"
     }
 
+    /** Result of a "!command" — executed locally, bypassing the agent. */
+    data class CommandResult(val content: String, val isError: Boolean = false) : ChatMessageUi() {
+        override val stableId get() = "c_$createdAt"
+    }
+
     data class Suggestion(val suggestion: PluginSuggestion) : ChatMessageUi() {
         override val stableId get() = "sg_$createdAt"
     }

@@ -136,6 +136,32 @@ fun AgentBubble(content: String, agentName: String = "MengPaw",
     }
 }
 
+/** Result of a "!command" — left-aligned, agent-bubble style; red-tinted on failure. */
+@Composable
+fun CommandResultBubble(message: ChatMessageUi.CommandResult) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        Surface(
+            shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm),
+            color = if (message.isError) ArcoColors.Red1.copy(alpha = 0.35f) else ThemeColors.bgCardHigh,
+            modifier = Modifier.fillMaxWidth(0.9f)
+        ) {
+            Column(Modifier.padding(ArcoSpacing.lg)) {
+                Text(if (message.isError) "❌ 命令执行失败" else "❯ 命令输出",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (message.isError) ArcoColors.Red6 else ThemeColors.textSecondary)
+                Spacer(Modifier.height(ArcoSpacing.xs))
+                SelectionContainer {
+                    MarkdownText(
+                        content = message.content,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary),
+                        nestedScroll = true
+                    )
+                }
+            }
+        }
+    }
+}
+
 // ── Agent Bubble with Trace (expandable thinking steps) ──
 @Composable
 fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: String = "MengPaw") {
@@ -278,6 +304,7 @@ fun BubbleWrapper(
         is ChatMessageUi.User -> message.content
         is ChatMessageUi.Agent -> message.content
         is ChatMessageUi.AgentWithTrace -> message.finalContent
+        is ChatMessageUi.CommandResult -> message.content
         else -> ""
     }
 

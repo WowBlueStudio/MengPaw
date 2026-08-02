@@ -34,7 +34,9 @@ data class MessageData(
     val text: String,
     val executionMode: String? = null,
     val agentRef: String? = null,
-    val traces: List<TraceData> = emptyList()
+    val traces: List<TraceData> = emptyList(),
+    /** True for failed "!command" results (type="command"). Default false keeps old files compatible. */
+    val isError: Boolean = false
 )
 
 @Serializable
@@ -323,6 +325,9 @@ class SessionPersistenceService(
                     },
                     executionMode = msg.executionMode, agentRef = msg.agentRef
                 )
+                is ChatMessageUi.CommandResult -> MessageData(
+                    type = "command", text = msg.content, isError = msg.isError
+                )
                 else -> null
             }
         }
@@ -348,6 +353,7 @@ class SessionPersistenceService(
                             executionMode = data.executionMode?.ifEmpty { null },
                             agentRef = data.agentRef?.ifEmpty { null })
                     }
+                    "command" -> ChatMessageUi.CommandResult(data.text, isError = data.isError)
                     else -> null
                 }
             }

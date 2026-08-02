@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.mengpaw.kernel.AgentEngine
 import com.mengpaw.kernel.AgentState
 import com.mengpaw.kernel.KernelLog
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.llm.LlmProvider
 import com.mengpaw.kernel.llm.PromptEngine
 import com.mengpaw.shell.ui.screens.model.AgentSession
@@ -291,6 +293,12 @@ class AgentViewModel : ViewModel() {
         agentRef: String? = null
     ) {
         if (task.isBlank()) return
+        // ── Bang 命令: "!cmd" 绕过 Agent 直接执行 — 完整文本(含 ! 前缀)保留在用户消息 ──
+        val trimmedTask = task.trimStart()
+        if (trimmedTask.startsWith("!")) {
+            runBangCommand(original = task, command = trimmedTask.removePrefix("!").trimStart())
+            return
+        }
         // ── Evolution: 用户纠正识别 (钩子归系统 → 用户反应档案, 用户分身数据源) ──
         detectCorrection(task, agentRef)
         val session = activeSession()
@@ -547,6 +555,29 @@ class AgentViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Execute a "!command" locally — bypasses the agent/LLM entirely.
+     * The user message (with the "!" prefix) stays in history verbatim;
+     * the result is appended as a CommandResult bubble.
+     */
+    private fun runBangCommand(original: String, command: String) {
+        val session = activeSession()
+        // 原子 CAS 入列用户消息, 保留含 ! 的完整原文
+        session.messages.update { it + ChatMessageUi.User(original) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = try {
+                session.engine.executeCommand(command)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                ExecutionResult.fail(e.message ?: "未知错误", errorCode = ErrorCodes.ERR_INTERNAL)
+            }
+            val truncated = (if (result.success) result.output else result.error ?: "命令执行失败")
+                .let { if (it.length > 4000) it.take(4000) + "\n\n...(输出过长, 已截断)" else it }
+            session.messages.update { it + ChatMessageUi.CommandResult(truncated, isError = !result.success) }
+        }
+    }
+
     fun stopAgent() { activeSession().engine.stop() }
 
     fun removePendingTask(index: Int) {
@@ -696,6 +727,7 @@ class AgentViewModel : ViewModel() {
             is ChatMessageUi.User -> "> 用户说: ${msg.content.take(200)}"
             is ChatMessageUi.Agent -> "> Agent 回复: ${msg.content.take(200)}"
             is ChatMessageUi.AgentWithTrace -> "> Agent 回复: ${msg.finalContent.take(200)}"
+            is ChatMessageUi.CommandResult -> "> 命令输出: ${msg.content.take(200)}"
             else -> ""
         }
     }
