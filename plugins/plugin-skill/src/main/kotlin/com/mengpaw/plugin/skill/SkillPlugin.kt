@@ -79,9 +79,38 @@ class SkillPlugin : Plugin {
         File(com.mengpaw.kernel.DataPaths.agentSkillsDir(agentName)).also { it.mkdirs() }
 
     override suspend fun onInstall(ctx: PluginContext) {
-        storageDir = "${ctx.storageDir}/skills"
-        File(storageDir).mkdirs()
+        // 全局池固定于 DataPaths.SKILLS（/技能剧本/）— UI/提示词/命令三方对齐。
+        // 此前覆盖到插件私有目录（{ctx.storageDir}/skills）导致设置页全局技能恒空 —
+        // 重大路径不一致修复: 不再覆盖, 保持初始值 + 存量迁移（移动不留残留）。
+        globalDir
         seedDefaults()
+        migrateLegacySkills(ctx)
+    }
+
+    /**
+     * 存量迁移: 旧版把全局池放在 {ctx.storageDir}/skills（插件私有目录）—
+     * 把其中的技能 .md 移动到 /技能剧本/（目标已存在则删源防残留），
+     * 最后删除整个旧目录 — Android 存储宝贵, 零残留。
+     */
+    private fun migrateLegacySkills(ctx: PluginContext) {
+        try {
+            val legacy = java.io.File(ctx.storageDir, "skills")
+            if (!legacy.isDirectory) return
+            val target = java.io.File(storageDir).also { it.mkdirs() }
+            legacy.listFiles { f -> f.isFile && f.extension == "md" }?.forEach { src ->
+                val dest = java.io.File(target, src.name)
+                try {
+                    if (dest.exists()) {
+                        src.delete()  // 目标已有同名 — 删源防残留
+                    } else if (!src.renameTo(dest)) {
+                        src.copyTo(dest, overwrite = true)
+                        src.delete()
+                    }
+                } catch (_: Exception) { /* 单文件失败不阻塞其余 */ }
+            }
+            // 旧目录整体删除（含残留子项）— 零残留
+            legacy.deleteRecursively()
+        } catch (_: Exception) {}
     }
 
     /** Seed missing default skills into the global pool. */
