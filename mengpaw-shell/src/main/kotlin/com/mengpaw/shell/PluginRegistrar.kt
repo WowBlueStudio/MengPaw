@@ -87,19 +87,19 @@ object PluginRegistrar {
 
     /** Builtin plugin display info (名称/描述), 用于内置但未安装时在全局插件列表兜底显示. */
     val BUILTIN_PLUGIN_INFO = mapOf(
-        "framework-plugin" to ("框架发现" to "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理"),
-        "skill-plugin" to ("技能系统" to "可复用的 Agent 剧本系统（YAML+Markdown），含默认 Skill"),
-        "dev-plugin" to ("插件开发" to "插件开发工具链 — create/audit/share/examples"),
-        "fs-plugin" to ("文件系统" to "文件系统增量操作：cp, mv, stat, grep, glob (读写用内核 agent.read/write/ls/rm/mkdir)"),
-        "net-plugin" to ("网络请求" to "HTTP 请求：GET/POST，支持自定义 Header 和超时"),
-        "clipboard-plugin" to ("剪贴板" to "剪贴板操作：copy, paste, clear"),
-        "memory-twin-plugin" to ("记忆孪生" to "跨设备工作区同步 — ACP P2P 文件同步 + 心跳保活 + QoS自适应 + 手动IP发现"),
-        "root-plugin" to ("Root 权限" to "Root 权限管理 — su 命令执行/应用管理/文件系统/系统修改/备份恢复/审计日志"),
-        "tribe-plugin" to ("部落协作" to "多 Agent 部落协作：LAN 自动组队、Kanban 委派、LLM 路由、任务模板、Fleet 并行、广播讨论、ACP 实时、心跳"),
-        "tools-plugin" to ("Agent 命令集" to "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用"),
-        "dream-plugin" to ("梦境模式" to "梦境模式内置默认实现 (不可移除) — 记忆整理管道; 第三方可实现 DreamProvider 覆盖"),
-        "evolution-plugin" to ("智能体进化" to "智能体进化内置默认实现 (不可移除) — 失败模式库/省察引导/框架反馈; 第三方可实现 EvolutionProvider 覆盖"),
-        "concise-plugin" to ("言简意赅" to "去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），让模型回答更简洁")
+        "framework-plugin" to ("框架发现" to "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理 (LAN MengPaw framework discovery — mDNS register/scan, fingerprint, trust management)"),
+        "skill-plugin" to ("技能系统" to "可复用的 Agent 剧本系统（YAML+Markdown），含默认 Skill (Reusable Agent skill system (YAML+Markdown) with default skills)"),
+        "dev-plugin" to ("插件开发" to "插件开发工具链 — create/audit/share/examples (Plugin dev toolchain — create/audit/share/examples)"),
+        "fs-plugin" to ("文件系统" to "文件系统增量操作：cp, mv, stat, grep, glob (读写用内核 agent.read/write/ls/rm/mkdir) (File system ops: cp, mv, stat, grep, glob (read/write via agent.read/write/ls/rm/mkdir))"),
+        "net-plugin" to ("网络请求" to "HTTP 请求：GET/POST，支持自定义 Header 和超时 (HTTP requests: GET/POST with custom headers and timeouts)"),
+        "clipboard-plugin" to ("剪贴板" to "剪贴板操作：copy, paste, clear (Clipboard ops: copy, paste, clear)"),
+        "memory-twin-plugin" to ("记忆孪生" to "跨设备工作区同步 — ACP P2P 文件同步 + 心跳保活 + QoS自适应 + 手动IP发现 (Cross-device workspace sync — ACP P2P file sync + heartbeat + adaptive QoS + manual IP discovery)"),
+        "root-plugin" to ("Root 权限" to "Root 权限管理 — su 命令执行/应用管理/文件系统/系统修改/备份恢复/审计日志 (Root access management — su exec/apps/fs/system/backup/audit)"),
+        "tribe-plugin" to ("部落协作" to "多 Agent 部落协作：LAN 自动组队、Kanban 委派、LLM 路由、任务模板、Fleet 并行、广播讨论、ACP 实时、心跳 (Multi-agent tribe collaboration: LAN teams, Kanban delegation, LLM routing, task templates, Fleet parallel, broadcast, ACP realtime, heartbeat)"),
+        "tools-plugin" to ("Agent 命令集" to "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用 (Agent toolset import — external CLI sets (gh/Feishu), summary injected into system prompt)"),
+        "dream-plugin" to ("梦境模式" to "梦境模式内置默认实现 (不可移除) — 记忆整理管道; 第三方可实现 DreamProvider 覆盖 (Dream mode built-in (non-removable) — memory consolidation; third-party DreamProvider can override)"),
+        "evolution-plugin" to ("智能体进化" to "智能体进化内置默认实现 (不可移除) — 失败模式库/省察引导/框架反馈; 第三方可实现 EvolutionProvider 覆盖 (Agent Evolution built-in (non-removable) — failure library/reflection guides/framework feedback; third-party EvolutionProvider can override)"),
+        "concise-plugin" to ("言简意赅" to "去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），让模型回答更简洁 (Removes structural-output noise from the system prompt (forced Thought/Action boilerplate, Markdown decoration) for cleaner answers)")
     )
 
     /** PluginViewModel 类注册 — 使内置插件类可被反射实例化 (install 时用类名加载). */
