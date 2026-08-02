@@ -92,8 +92,10 @@ fun FrameworkItemSection(
                         }
                         AnimatedVisibility(visible = expanded) {
                             if (item.docMarkdown.isNotBlank()) {
-                                // 全文展开（外层页面滚动查看）— 此前 heightIn(300) 会裁切长剧本且不可滚动
-                                MarkdownText(content = item.docMarkdown.take(5000), modifier = Modifier.padding(top = ArcoSpacing.sm))
+                                // 全文展开（外层页面滚动查看）— nestedScroll=true 避免自带 verticalScroll 在
+                                // 双层 AnimatedVisibility 下拿到无限高度约束而崩溃（此前 heightIn(300) 会裁切）
+                                MarkdownText(content = item.docMarkdown.take(5000), modifier = Modifier.padding(top = ArcoSpacing.sm),
+                                    nestedScroll = true)
                             } else {
                                 Text(strings.noDocs, Modifier.padding(top = ArcoSpacing.sm), fontSize = 12.sp, color = ThemeColors.textSecondary)
                             }
