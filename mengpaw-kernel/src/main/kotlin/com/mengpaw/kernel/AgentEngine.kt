@@ -20,6 +20,7 @@ import com.mengpaw.kernel.plugin.PluginMarketplaceClient
 import com.mengpaw.kernel.security.IntegrityProvider
 import com.mengpaw.kernel.security.NoOpIntegrityProvider
 import com.mengpaw.kernel.security.Sanitizer
+import com.mengpaw.kernel.security.SecurityPolicy
 import com.mengpaw.kernel.session.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -252,6 +253,36 @@ class AgentEngine(
 
     /** Invalidate cached pipeline when plugins change. Call after plugin install/uninstall. */
     fun invalidatePipeline() { pipelineManager.invalidatePipeline() }
+
+    /**
+     * Execute a user-typed bang command ("!cmd") — bypasses the LLM/ReAct loop.
+     * Routes through the full CLI pipeline (parse → rate limit → security → integrity → execute → audit).
+     * Unknown CLI commands (e.g. "!echo hi") fall back to the sandboxed shell executor.
+     */
+    suspend fun executeCommand(commandLine: String): ExecutionResult {
+        val ctx = ExecutionContext(
+            sessionId = conversationSessionId ?: "ui-bang",
+            agentName = agentName,
+            workDir = bangWorkDir(),
+            scope = "system"
+        )
+        val result = pipelineManager.buildPipeline().execute(commandLine, ctx)
+        if (result.success || result.errorCode != ErrorCodes.ERR_NOT_FOUND) return result
+        // Fallback: bare shell commands through the sandbox (blacklist + metacharacter checks)
+        if (!SecurityPolicy().isAllowed(commandLine)) {
+            return ExecutionResult.fail(
+                "Command '${commandLine.substringBefore(' ')}' is blocked by security policy",
+                errorCode = ErrorCodes.ERR_PERMISSION_DENIED
+            )
+        }
+        return DefaultCommandExecutor().execute(commandLine, ctx)
+    }
+
+    /** Work directory for bang commands — agent workspace, created if missing (prevents ProcessBuilder ERR_IO). */
+    private fun bangWorkDir(): String {
+        val dir = java.io.File(DataPaths.AGENTS, "$agentName/workspace")
+        return if (dir.mkdirs() || dir.exists()) dir.absolutePath else DataPaths.BASE
+    }
 
     /** Reset loop detection state — call before each new task. */
     fun resetLoopDetection() = promptEngine.resetLoopDetection()
