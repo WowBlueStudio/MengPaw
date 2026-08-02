@@ -18,11 +18,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.design.theme.ThemeColors
@@ -400,15 +403,36 @@ private fun RenderBlock(
     }
 }
 
-/** 表格渲染 — 固定列宽 + 网格边框。 */
+/** 表格渲染 — 共享列宽（全表测量取列内最宽单元格）+ 网格边框。表头最多 2 行，数据行完整显示。 */
 @Composable
 private fun TableTextView(block: MdBlock.Table, baseStyle: TextStyle, background: Color) {
     if (block.header.isEmpty() && block.rows.isEmpty()) return
 
-    // 计算每列固定宽度（取最宽单元格 + 2）
     val borderColor = ThemeColors.border
-    val cellMod = { _: Int -> Modifier.widthIn(max = 360.dp).padding(horizontal = 8.dp, vertical = 4.dp) }
+    val maxCellWidth = 360.dp
+    val headerStyle = baseStyle.copy(fontWeight = FontWeight.Bold,
+        fontSize = (baseStyle.fontSize.value * 0.95f).sp)
     val cellStyle = baseStyle.copy(fontSize = (baseStyle.fontSize.value * 0.9f).sp)
+
+    // TextMeasurer 测量表头 + 全部数据行的每列单元格宽度，取列内最大值 → 所有 Row 共享 colWidths 保证竖线对齐
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val colWidths: List<Dp> = remember(block, baseStyle) {
+        val maxWidthPx = with(density) { maxCellWidth.roundToPx() }
+        fun widthOf(cell: String, style: TextStyle) = textMeasurer.measure(
+            text = AnnotatedString(cell), style = style,
+            constraints = Constraints(maxWidth = maxWidthPx)
+        ).size.width
+        val headerWidths = block.header.map { widthOf(it, headerStyle) }
+        val rowWidths = block.rows.map { row -> row.map { widthOf(it, cellStyle) } }
+        val colCount = maxOf(block.header.size, block.rows.maxOfOrNull { it.size } ?: 0)
+        List(colCount) { col ->
+            val headerW = headerWidths.getOrNull(col) ?: 0
+            val rowW = rowWidths.maxOfOrNull { row -> row.getOrNull(col) ?: 0 } ?: 0
+            with(density) { maxOf(headerW, rowW).toDp() }
+        }
+    }
+    val cellMod = { col: Int -> Modifier.width(colWidths[col]).padding(horizontal = 8.dp, vertical = 4.dp) }
 
     Surface(
         shape = RoundedCornerShape(ArcoRadius.sm),
@@ -422,8 +446,7 @@ private fun TableTextView(block: MdBlock.Table, baseStyle: TextStyle, background
                     .border(0.5.dp, borderColor, RoundedCornerShape(topStart = ArcoRadius.sm, topEnd = ArcoRadius.sm))
             ) {
                 block.header.forEachIndexed { i, cell ->
-                    Text(cell, modifier = cellMod(i),
-                        style = baseStyle.copy(fontWeight = FontWeight.Bold, fontSize = (baseStyle.fontSize.value * 0.95f).sp),
+                    Text(cell, modifier = cellMod(i), style = headerStyle,
                         color = ThemeColors.textPrimary, maxLines = 2)
                 }
             }
@@ -441,7 +464,7 @@ private fun TableTextView(block: MdBlock.Table, baseStyle: TextStyle, background
                 ) {
                     row.forEachIndexed { i, cell ->
                         Text(cell, modifier = cellMod(i), style = cellStyle,
-                            color = ThemeColors.textPrimary, maxLines = 2)
+                            color = ThemeColors.textPrimary) // 无 maxLines — 长单元格完整显示，行高自适应
                     }
                 }
             }
