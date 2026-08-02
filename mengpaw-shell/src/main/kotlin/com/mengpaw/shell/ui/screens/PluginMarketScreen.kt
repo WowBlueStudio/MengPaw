@@ -21,6 +21,7 @@ import com.mengpaw.design.components.ArcoDivider
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.shell.ui.localization.AppStrings
 
 /**
  * 插件管理 — 市场 + 已安装 双标签。
@@ -30,6 +31,7 @@ import com.mengpaw.design.tokens.ArcoSpacing
 fun PluginMarketScreen(
     onNavigateBack: () -> Unit,
     onNavigateToDetail: (String) -> Unit,
+    strings: AppStrings,
     modifier: Modifier = Modifier,
     viewModel: PluginViewModel = viewModel()
 ) {
@@ -43,8 +45,8 @@ fun PluginMarketScreen(
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text("插件管理", fontWeight = FontWeight.SemiBold) },
-            navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "返回") } },
+            title = { Text(strings.pluginMarketTitle, fontWeight = FontWeight.SemiBold) },
+            navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, strings.back) } },
             actions = {
                 if (isLoading) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp,
@@ -52,7 +54,7 @@ fun PluginMarketScreen(
                     Spacer(Modifier.width(ArcoSpacing.sm))
                 }
                 IconButton(onClick = { viewModel.refreshMarketplace() }) {
-                    Icon(Icons.Default.Refresh, "强制刷新")
+                    Icon(Icons.Default.Refresh, strings.forceRefresh)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -63,10 +65,10 @@ fun PluginMarketScreen(
             // Tab row
             TabRow(selectedTab, containerColor = com.mengpaw.design.theme.ThemeColors.bgPrimary) {
                 Tab(selectedTab == 0, { selectedTab = 0 }) {
-                    Text("市场 (${plugins.size})", modifier = Modifier.padding(ArcoSpacing.md))
+                    Text("${strings.marketTab} (${plugins.size})", modifier = Modifier.padding(ArcoSpacing.md))
                 }
                 Tab(selectedTab == 1, { selectedTab = 1 }) {
-                    Text("已安装 ($installedCount)", modifier = Modifier.padding(ArcoSpacing.md))
+                    Text("${strings.installedTab} ($installedCount)", modifier = Modifier.padding(ArcoSpacing.md))
                 }
             }
 
@@ -79,10 +81,10 @@ fun PluginMarketScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Outlined.Extension, null, Modifier.size(64.dp), tint = ArcoColors.Gray4)
                         Spacer(Modifier.height(ArcoSpacing.md))
-                        Text(if (selectedTab == 0) "暂无可用插件" else "暂无已安装插件",
+                        Text(if (selectedTab == 0) strings.noPluginsAvailable else strings.noInstalledPlugins,
                             color = com.mengpaw.design.theme.ThemeColors.textSecondary)
                         if (selectedTab == 0) {
-                            Text("点击刷新获取插件列表", style = MaterialTheme.typography.bodySmall,
+                            Text(strings.refreshHint, style = MaterialTheme.typography.bodySmall,
                                 color = ArcoColors.Gray5)
                         }
                     }
@@ -95,6 +97,7 @@ fun PluginMarketScreen(
                     items(displayItems) { plugin ->
                         PluginCard(
                             item = plugin,
+                            strings = strings,
                             onInstall = { viewModel.installPlugin(plugin.id) },
                             onUninstall = { viewModel.uninstallPlugin(plugin.id) },
                             onToggle = {
@@ -113,11 +116,11 @@ fun PluginMarketScreen(
                     Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Text("可用: ${plugins.size}", style = MaterialTheme.typography.labelSmall,
+                    Text("${strings.availablePrefix}${plugins.size}", style = MaterialTheme.typography.labelSmall,
                         color = com.mengpaw.design.theme.ThemeColors.textSecondary)
-                    Text("已安装: $installedCount", style = MaterialTheme.typography.labelSmall,
+                    Text("${strings.installedPrefix}$installedCount", style = MaterialTheme.typography.labelSmall,
                         color = com.mengpaw.design.theme.ThemeColors.textSecondary)
-                    Text("活跃: $activeCount", style = MaterialTheme.typography.labelSmall,
+                    Text("${strings.activePrefix}$activeCount", style = MaterialTheme.typography.labelSmall,
                         color = com.mengpaw.design.theme.ThemeColors.brand)
                 }
             }
@@ -128,6 +131,7 @@ fun PluginMarketScreen(
 @Composable
 private fun PluginCard(
     item: PluginUiItem,
+    strings: AppStrings,
     onInstall: () -> Unit,
     onUninstall: () -> Unit,
     onToggle: () -> Unit,
@@ -156,9 +160,9 @@ private fun PluginCard(
             // Info
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.name, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                    Text(item.displayName, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.width(ArcoSpacing.sm))
-                    Text(if (item.version.isNotBlank()) "v${item.version}" else "内置",
+                    Text(if (item.version.isNotBlank()) "v${item.version}" else strings.builtinBadge,
                         style = MaterialTheme.typography.labelSmall,
                         color = com.mengpaw.design.theme.ThemeColors.textSecondary)
                 }
@@ -167,16 +171,16 @@ private fun PluginCard(
                 Row {
                     if (isBuiltin) {
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Blue1) {
-                            Text("已内置", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                            Text(strings.builtinBadge, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                                 style = MaterialTheme.typography.labelSmall, color = ArcoColors.Blue6)
                         }
                     } else if (item.availability == PluginAvailability.EMBEDDED) {
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Blue1) {
-                            Text("已嵌入", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                            Text(strings.embeddedBadge, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                                 style = MaterialTheme.typography.labelSmall, color = ArcoColors.Blue6)
                         }
                     } else if (item.isInstalled) {
-                        val label = if (item.isActive) "活跃" else "已禁用"
+                        val label = if (item.isActive) strings.activeBadge else strings.disabledBadge
                         val bg = if (item.isActive) ArcoColors.Green1 else ArcoColors.Gray3
                         val fg = if (item.isActive) ArcoColors.Green6 else ArcoColors.Gray6
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = bg) {
@@ -185,7 +189,7 @@ private fun PluginCard(
                         }
                     } else if (item.availability == PluginAvailability.UNAVAILABLE) {
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Gray3) {
-                            Text("暂未发布", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                            Text(strings.notPublishedBadge, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                                 style = MaterialTheme.typography.labelSmall, color = ArcoColors.Gray6)
                         }
                     }
@@ -213,14 +217,14 @@ private fun PluginCard(
                                     checkedColor = com.mengpaw.design.theme.ThemeColors.brand)
                             )
                             IconButton(onClick = onUninstall, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.Delete, "卸载",
+                                Icon(Icons.Default.Delete, strings.uninstall,
                                     tint = com.mengpaw.design.theme.ThemeColors.error,
                                     modifier = Modifier.size(18.dp))
                             }
                         }
                     } else if (item.availability == PluginAvailability.DOWNLOADABLE) {
                         IconButton(onClick = onInstall, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Download, "安装",
+                            Icon(Icons.Default.Download, strings.install,
                                 tint = com.mengpaw.design.theme.ThemeColors.brand,
                                 modifier = Modifier.size(20.dp))
                         }
@@ -233,7 +237,7 @@ private fun PluginCard(
                         Text("${(state.progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                is InstallState.Verifying -> Text("校验中...", style = MaterialTheme.typography.labelSmall,
+                is InstallState.Verifying -> Text(strings.verifying, style = MaterialTheme.typography.labelSmall,
                     color = com.mengpaw.design.theme.ThemeColors.textSecondary)
                 is InstallState.Installing -> {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -244,16 +248,16 @@ private fun PluginCard(
                 }
                 is InstallState.Done -> {
                     Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green1) {
-                        Text("已安装", Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        Text(strings.installedBadge, Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6)
                     }
                 }
                 is InstallState.Failed -> {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("失败", style = MaterialTheme.typography.labelSmall,
+                        Text(strings.failedBadge, style = MaterialTheme.typography.labelSmall,
                             color = com.mengpaw.design.theme.ThemeColors.error)
                         TextButton(onClick = onInstall) {
-                            Text("重试", color = com.mengpaw.design.theme.ThemeColors.brand)
+                            Text(strings.retry, color = com.mengpaw.design.theme.ThemeColors.brand)
                         }
                     }
                 }

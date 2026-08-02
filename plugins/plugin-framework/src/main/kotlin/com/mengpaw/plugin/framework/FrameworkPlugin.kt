@@ -23,7 +23,7 @@ class FrameworkPlugin : Plugin {
 
     override val metadata = PluginMetadata(
         id = "framework-plugin",
-        name = "框架通信",
+        name = "框架发现",
         version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",

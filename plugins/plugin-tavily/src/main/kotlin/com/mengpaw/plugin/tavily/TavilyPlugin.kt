@@ -28,7 +28,7 @@ import java.io.File
  */
 class TavilyPlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "tavily-plugin", name = "Tavily AI 搜索", version = "0.20.2",
+        id = "tavily-plugin", name = "AI 搜索", version = "0.20.2",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "AI 优化搜索引擎：结构化搜索结果 + 网页内容提取",
         minCoreVersion = "0.2.0",

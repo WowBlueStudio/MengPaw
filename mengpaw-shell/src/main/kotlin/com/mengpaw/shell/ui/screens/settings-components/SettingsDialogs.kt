@@ -3,6 +3,7 @@
 
 package com.mengpaw.shell.ui.screens
 
+import com.mengpaw.shell.ui.localization.AppStrings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +21,7 @@ import com.mengpaw.design.tokens.ArcoSpacing
 /** CRON 触发器 — 简洁输入，让用户找 Agent 配置时间参数。 */
 @Composable
 fun CronTriggerDialog(
+    strings: AppStrings,
     onDismiss: () -> Unit,
     onConfirm: (id: String, cronExpr: String, action: String) -> Unit
 ) {
@@ -28,25 +30,25 @@ fun CronTriggerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("CRON 定时任务", fontWeight = FontWeight.Bold) },
+        title = { Text(strings.cronTitle, fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
                 OutlinedTextField(
                     value = cronExpr, onValueChange = { cronExpr = it },
-                    label = { Text("Cron 表达式") },
-                    placeholder = { Text("分 时 日 月 周  例: 0 9 * * *") },
+                    label = { Text(strings.cronExpression) },
+                    placeholder = { Text(strings.cronPlaceholder) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(ArcoRadius.md),
-                    supportingText = { Text("时间参数让 Agent 帮你算，例如：帮我每天早上9点生成昨日摘要", fontSize = 11.sp, color = ThemeColors.textSecondary) }
+                    supportingText = { Text(strings.cronHint, fontSize = 11.sp, color = ThemeColors.textSecondary) }
                 )
                 OutlinedTextField(
                     value = action, onValueChange = { action = it },
-                    label = { Text("执行动作") },
-                    placeholder = { Text("描述 Agent 需要执行的任务...") },
+                    label = { Text(strings.actionLabel) },
+                    placeholder = { Text(strings.actionPlaceholder) },
                     minLines = 2, maxLines = 3, modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(ArcoRadius.md)
                 )
-                Text("💡 在聊天框告诉 Agent：帮我在每天早上9点生成昨日摘要 — Agent 会自动调用 self.trigger add 配置",
+                Text(strings.cronTip,
                     fontSize = 11.sp, color = ThemeColors.textSecondary)
             }
         },
@@ -55,15 +57,16 @@ fun CronTriggerDialog(
                 onClick = { if (cronExpr.isNotBlank() && action.isNotBlank()) onConfirm("cron-${(1000..9999).random()}", cronExpr, action) },
                 enabled = cronExpr.isNotBlank() && action.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand), shape = RoundedCornerShape(ArcoRadius.md)
-            ) { Text("添加", color = androidx.compose.ui.graphics.Color.White) }
+            ) { Text(strings.add, color = androidx.compose.ui.graphics.Color.White) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.cancel) } }
     )
 }
 
 /** SCHEDULE 日程触发器 — 简洁输入，让用户找 Agent 配置时间参数。 */
 @Composable
 fun LifetimeTriggerDialog(
+    strings: AppStrings,
     onDismiss: () -> Unit,
     onConfirm: (id: String, config: String, action: String) -> Unit
 ) {
@@ -72,25 +75,25 @@ fun LifetimeTriggerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("SCHEDULE 日程触发器", fontWeight = FontWeight.Bold) },
+        title = { Text(strings.scheduleTitle, fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
                 OutlinedTextField(
                     value = config, onValueChange = { config = it },
-                    label = { Text("配置参数") },
-                    placeholder = { Text("窗口,count=N,interval=M") },
+                    label = { Text(strings.scheduleParams) },
+                    placeholder = { Text(strings.scheduleParamsPlaceholder) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(ArcoRadius.md),
-                    supportingText = { Text("格式: HH:MM-HH:MM,count=N,interval=M  例: 08:00-22:00,count=3,interval=60", fontSize = 11.sp, color = ThemeColors.textSecondary) }
+                    supportingText = { Text(strings.scheduleFormatHint, fontSize = 11.sp, color = ThemeColors.textSecondary) }
                 )
                 OutlinedTextField(
                     value = action, onValueChange = { action = it },
-                    label = { Text("执行动作") },
-                    placeholder = { Text("描述 Agent 需要执行的任务...") },
+                    label = { Text(strings.actionLabel) },
+                    placeholder = { Text(strings.actionPlaceholder) },
                     minLines = 2, maxLines = 3, modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(ArcoRadius.md)
                 )
-                Text("💡 在聊天框告诉 Agent：帮我在每天上午10点到下午6点之间找我聊4次天，间隔至少1小时 — Agent 会自动调用 self.trigger add schedule 配置",
+                Text(strings.scheduleTip,
                     fontSize = 11.sp, color = ThemeColors.textSecondary)
             }
         },
@@ -99,8 +102,8 @@ fun LifetimeTriggerDialog(
                 onClick = { if (config.isNotBlank() && action.isNotBlank()) onConfirm("chat-${(1000..9999).random()}", config, action) },
                 enabled = config.isNotBlank() && action.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand), shape = RoundedCornerShape(ArcoRadius.md)
-            ) { Text("添加", color = androidx.compose.ui.graphics.Color.White) }
+            ) { Text(strings.add, color = androidx.compose.ui.graphics.Color.White) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.cancel) } }
     )
 }

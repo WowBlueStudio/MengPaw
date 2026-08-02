@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.shell.ui.localization.AppStrings
 
 /**
  * Plugin detail screen showing metadata, commands, permissions, and actions.
@@ -29,6 +30,7 @@ import com.mengpaw.design.tokens.ArcoSpacing
 fun PluginDetailScreen(
     pluginId: String,
     onNavigateBack: () -> Unit,
+    strings: AppStrings,
     modifier: Modifier = Modifier,
     viewModel: PluginViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
@@ -37,14 +39,14 @@ fun PluginDetailScreen(
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text(plugin?.name ?: pluginId, fontWeight = FontWeight.SemiBold) },
-            navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "返回") } },
+            title = { Text(plugin?.displayName ?: pluginId, fontWeight = FontWeight.SemiBold) },
+            navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, strings.back) } },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = com.mengpaw.design.theme.ThemeColors.bgPrimary)
         )
     }) { padding ->
         if (plugin == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("插件未找到: $pluginId", color = com.mengpaw.design.theme.ThemeColors.textSecondary)
+                Text(strings.pluginNotFound + pluginId, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
             }
             return@Scaffold
         }
@@ -68,7 +70,7 @@ fun PluginDetailScreen(
                             }
                             Spacer(Modifier.width(ArcoSpacing.md))
                             Column {
-                                Text(plugin.name, fontWeight = FontWeight.Bold,
+                                Text(plugin.displayName, fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.titleMedium)
                                 Text("${if (plugin.version.isNotBlank()) "v${plugin.version} · " else ""}${plugin.author}",
                                     style = MaterialTheme.typography.bodySmall, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
@@ -79,9 +81,9 @@ fun PluginDetailScreen(
                         // Status badge
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val (statusText, statusColor) = when {
-                                plugin.isActive -> "✅ 活跃 Active" to ArcoColors.Green6
-                                plugin.isInstalled -> "📦 已安装 Installed(未激活)" to ArcoColors.Orange6
-                                else -> "⬇️ 未安装 Not Installed" to ArcoColors.Gray6
+                                plugin.isActive -> "✅ ${strings.activeBadge}" to ArcoColors.Green6
+                                plugin.isInstalled -> "📦 ${strings.installedBadge}" to ArcoColors.Orange6
+                                else -> "⬇️ ${strings.notInstalledBadge}" to ArcoColors.Gray6
                             }
                             Surface(shape = RoundedCornerShape(ArcoRadius.sm),
                                 color = statusColor.copy(alpha = 0.1f)) {
@@ -89,7 +91,7 @@ fun PluginDetailScreen(
                                     style = MaterialTheme.typography.labelSmall, color = statusColor)
                             }
                             Spacer(Modifier.width(ArcoSpacing.sm))
-                            Text("类型: ${plugin.type.name}", style = MaterialTheme.typography.labelSmall,
+                            Text("${strings.typePrefix}${plugin.type.name}", style = MaterialTheme.typography.labelSmall,
                                 color = com.mengpaw.design.theme.ThemeColors.textSecondary)
                         }
 
@@ -107,7 +109,7 @@ fun PluginDetailScreen(
                     colors = CardDefaults.cardColors(containerColor = com.mengpaw.design.theme.ThemeColors.bgPrimary)
                 ) {
                     Column(Modifier.padding(ArcoSpacing.lg)) {
-                        Text("命令列表 (${plugin.commands.size})", fontWeight = FontWeight.SemiBold,
+                        Text("${strings.commandsLabel} (${plugin.commands.size})", fontWeight = FontWeight.SemiBold,
                             style = MaterialTheme.typography.titleSmall)
                         Spacer(Modifier.height(ArcoSpacing.sm))
                         plugin.commands.forEach { cmd ->
@@ -135,7 +137,7 @@ fun PluginDetailScreen(
                         colors = CardDefaults.cardColors(containerColor = com.mengpaw.design.theme.ThemeColors.bgPrimary)
                     ) {
                         Column(Modifier.padding(ArcoSpacing.lg)) {
-                            Text("权限 (${plugin.permissions.size})", fontWeight = FontWeight.SemiBold,
+                            Text("${strings.permissionsLabel} (${plugin.permissions.size})", fontWeight = FontWeight.SemiBold,
                                 style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.height(ArcoSpacing.sm))
                             plugin.permissions.forEach { perm ->
@@ -170,7 +172,7 @@ fun PluginDetailScreen(
                                 null, Modifier.size(18.dp)
                             )
                             Spacer(Modifier.width(ArcoSpacing.xs))
-                            Text(if (plugin.isActive) "禁用 Disable" else "启用 Enable")
+                            Text(if (plugin.isActive) strings.disable else strings.enable)
                         }
                         Button(
                             onClick = { viewModel.uninstallPlugin(plugin.id) },
@@ -180,7 +182,7 @@ fun PluginDetailScreen(
                         ) {
                             Icon(Icons.Default.Delete, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(ArcoSpacing.xs))
-                            Text("卸载 Uninstall")
+                            Text(strings.uninstall)
                         }
                     }
                 } else {
@@ -192,7 +194,7 @@ fun PluginDetailScreen(
                     ) {
                         Icon(Icons.Default.Download, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(ArcoSpacing.sm))
-                        Text("安装插件 Install")
+                        Text(strings.installPlugin)
                     }
                 }
             }
@@ -207,7 +209,7 @@ fun PluginDetailScreen(
                 is InstallState.Failed -> {
                     item {
                         Card(colors = CardDefaults.cardColors(containerColor = ArcoColors.Red1)) {
-                            Text("错误: ${state.error}", Modifier.padding(ArcoSpacing.md),
+                            Text("${strings.errorPrefix}${state.error}", Modifier.padding(ArcoSpacing.md),
                                 color = com.mengpaw.design.theme.ThemeColors.error, style = MaterialTheme.typography.bodySmall)
                         }
                     }

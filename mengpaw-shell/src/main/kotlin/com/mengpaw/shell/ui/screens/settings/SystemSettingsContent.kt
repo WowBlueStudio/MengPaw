@@ -46,7 +46,7 @@ fun SystemSettingsContent(
                 Text(state.strings.darkTheme, style = MaterialTheme.typography.bodyMedium)
                 Text(state.strings.darkThemeDesc, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
             }
-            Text(state.themeMode.label, style = MaterialTheme.typography.labelMedium, color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
+            Text(if (state.useChinese) state.themeMode.label else state.themeMode.enLabel, style = MaterialTheme.typography.labelMedium, color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
         }
     }
     Spacer(Modifier.height(ArcoSpacing.lg))
@@ -97,9 +97,9 @@ fun SystemSettingsContent(
             Spacer(Modifier.width(ArcoSpacing.md))
             Column(Modifier.weight(1f)) {
                 Text(state.strings.systemBackgroundMode, style = MaterialTheme.typography.bodyMedium)
-                Text(state.backgroundMode.desc, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                Text(if (state.useChinese) state.backgroundMode.desc else state.backgroundMode.enDesc, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
             }
-            Text(state.backgroundMode.label, style = MaterialTheme.typography.labelMedium, color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
+            Text(if (state.useChinese) state.backgroundMode.label else state.backgroundMode.enLabel, style = MaterialTheme.typography.labelMedium, color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
         }
     }
     Spacer(Modifier.height(ArcoSpacing.md))
@@ -251,5 +251,4 @@ fun SystemSettingsContent(
     }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
-    HorizontalDivider(color = ThemeColors.border)
 }

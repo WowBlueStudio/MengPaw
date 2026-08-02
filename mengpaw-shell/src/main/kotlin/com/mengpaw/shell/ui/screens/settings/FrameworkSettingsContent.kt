@@ -27,6 +27,7 @@ import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.llm.CacheStrategy
 import com.mengpaw.design.components.SectionHeader
+import com.mengpaw.shell.ui.localization.AppStrings
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
@@ -52,7 +53,7 @@ fun FrameworkSettingsContent(
                     }
                     Spacer(Modifier.width(ArcoSpacing.md))
                     Column(Modifier.weight(1f)) {
-                        Text(saved.preset.label, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                        Text(if (state.useChinese) saved.preset.label else saved.preset.enLabel, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
                         Text(saved.endpoint.take(40),
                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
                     }
@@ -74,18 +75,19 @@ fun FrameworkSettingsContent(
 
     // ── 角色模型路由（步坦协同/火种）──
     SectionHeader(state.strings.roleRoutingTitle)
-    Text("各角色可用不同模型：规划/验收用强模型、执行用便宜模型；未配置的角色回退主模型。",
+    Text(state.strings.roleRoutingDesc,
         style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
     Spacer(Modifier.height(ArcoSpacing.sm))
     if (state.savedProviders.isEmpty()) {
-        Text("请先在上方保存至少一个模型连接，再为角色分配模型。",
+        Text(state.strings.roleRoutingEmpty,
             style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
     } else {
         SettingsViewModel.SWARM_ROLES.forEach { role ->
             val current = state.swarmRoles[role]
             var menuExpanded by remember { mutableStateOf(false) }
             Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(SettingsViewModel.roleLabel(role), style = MaterialTheme.typography.bodySmall,
+                Text(if (state.useChinese) SettingsViewModel.roleLabel(role)
+                        else roleEnglishLabel(role, state.strings), style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.weight(0.45f))
                 Box {
                     Surface(
@@ -94,7 +96,7 @@ fun FrameworkSettingsContent(
                         color = if (current != null) ThemeColors.brand.copy(alpha = 0.12f) else ThemeColors.bgCardHigh
                     ) {
                         Text(
-                            if (current != null) "${current.preset.label} · ${current.model}" else "默认（主模型）",
+                            if (current != null) "${if (state.useChinese) current.preset.label else current.preset.enLabel} · ${current.model}" else state.strings.defaultMainModel,
                             Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             fontSize = 12.sp,
                             color = if (current != null) ThemeColors.brand else ThemeColors.textPrimary,
@@ -102,11 +104,11 @@ fun FrameworkSettingsContent(
                         )
                     }
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        DropdownMenuItem(text = { Text("默认（主模型）") }, onClick = {
+                        DropdownMenuItem(text = { Text(state.strings.defaultMainModel) }, onClick = {
                             viewModel.setSwarmRole(role, null); menuExpanded = false
                         })
                         state.savedProviders.forEach { sp ->
-                            DropdownMenuItem(text = { Text("${sp.preset.label} · ${sp.model}") }, onClick = {
+                            DropdownMenuItem(text = { Text("${if (state.useChinese) sp.preset.label else sp.preset.enLabel} · ${sp.model}") }, onClick = {
                                 viewModel.setSwarmRole(role, sp); menuExpanded = false
                             })
                         }
@@ -131,7 +133,7 @@ fun FrameworkSettingsContent(
                         shape = RoundedCornerShape(ArcoRadius.sm),
                         color = if (state.selectedProvider == preset) ThemeColors.brand.copy(alpha = 0.12f) else ThemeColors.bgCardHigh
                     ) {
-                        Text(preset.label, Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        Text(if (state.useChinese) preset.label else preset.enLabel, Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                             fontSize = 12.sp, fontWeight = if (state.selectedProvider == preset) FontWeight.SemiBold else FontWeight.Normal,
                             color = if (state.selectedProvider == preset) ThemeColors.brand else ThemeColors.textPrimary)
                     }
@@ -144,7 +146,7 @@ fun FrameworkSettingsContent(
                     shape = RoundedCornerShape(ArcoRadius.sm),
                     color = if (state.selectedProvider == preset) ThemeColors.brand.copy(alpha = 0.12f) else ThemeColors.bgCardHigh
                 ) {
-                    Text(preset.label, Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                    Text(if (state.useChinese) preset.label else preset.enLabel, Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                         fontSize = 12.sp, fontWeight = if (state.selectedProvider == preset) FontWeight.SemiBold else FontWeight.Normal,
                         color = if (state.selectedProvider == preset) ThemeColors.brand else ThemeColors.textPrimary)
                 }
@@ -239,9 +241,6 @@ fun FrameworkSettingsContent(
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
-    Spacer(Modifier.height(ArcoSpacing.lg))
-    HorizontalDivider(color = ThemeColors.border)
-    Spacer(Modifier.height(ArcoSpacing.lg))
 
     SecurityRulesSection(strings = state.strings)
 
@@ -258,7 +257,7 @@ fun FrameworkSettingsContent(
         expanded = pluginsExpanded, onToggle = { pluginsExpanded = !pluginsExpanded })
     AnimatedVisibility(visible = pluginsExpanded) {
         Column {
-            FrameworkItemSection("", Icons.Outlined.Extension, pluginItems)
+            FrameworkItemSection("", Icons.Outlined.Extension, pluginItems, state.strings)
         }
     }
     Spacer(Modifier.height(ArcoSpacing.lg))
@@ -270,7 +269,7 @@ fun FrameworkSettingsContent(
         expanded = toolsExpanded, onToggle = { toolsExpanded = !toolsExpanded })
     AnimatedVisibility(visible = toolsExpanded) {
         Column {
-            FrameworkItemSection("", Icons.Outlined.Terminal, toolItems)
+            FrameworkItemSection("", Icons.Outlined.Terminal, toolItems, state.strings)
         }
     }
     Spacer(Modifier.height(ArcoSpacing.lg))
@@ -282,7 +281,19 @@ fun FrameworkSettingsContent(
         expanded = skillsExpanded, onToggle = { skillsExpanded = !skillsExpanded })
     AnimatedVisibility(visible = skillsExpanded) {
         Column {
-            FrameworkItemSection("", Icons.Outlined.AutoAwesome, skillItems)
+            FrameworkItemSection("", Icons.Outlined.AutoAwesome, skillItems, state.strings)
         }
     }
+}
+
+
+/** 角色英文显示名（英文 UI 用 — 中文走 SettingsViewModel.roleLabel）。 */
+@Composable
+private fun roleEnglishLabel(role: String, strings: AppStrings): String = when (role) {
+    com.mengpaw.kernel.agent.SwarmRoles.PLANNER -> strings.rolePlanner
+    com.mengpaw.kernel.agent.SwarmRoles.WORKER -> strings.roleWorker
+    com.mengpaw.kernel.agent.SwarmRoles.VERIFIER -> strings.roleVerifier
+    com.mengpaw.kernel.agent.SwarmRoles.SYNTHESIZER -> strings.roleSynthesizer
+    com.mengpaw.kernel.agent.SwarmRoles.WORKER_ALT -> strings.roleWorkerAlt
+    else -> role
 }

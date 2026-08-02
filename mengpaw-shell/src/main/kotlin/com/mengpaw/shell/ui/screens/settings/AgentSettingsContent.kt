@@ -62,7 +62,7 @@ fun AgentSettingsContent(
                         Spacer(Modifier.width(ArcoSpacing.md))
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(saved.preset.label, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                                Text(if (state.useChinese) saved.preset.label else saved.preset.enLabel, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
                                 if (active) {
                                     Spacer(Modifier.width(6.dp))
                                     Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brand.copy(alpha = 0.12f)) {
@@ -325,7 +325,7 @@ fun AgentSettingsContent(
 
     if (showAddCronDialog) {
         CronTriggerDialog(
-            onDismiss = { showAddCronDialog = false },
+            strings = state.strings,            onDismiss = { showAddCronDialog = false },
             onConfirm = { id, expr, action ->
                 com.mengpaw.kernel.trigger.TriggerEngine.addCron(id, expr, action)
                 triggerVersion++
@@ -336,7 +336,7 @@ fun AgentSettingsContent(
 
     if (showAddLifetimeDialog) {
         LifetimeTriggerDialog(
-            onDismiss = { showAddLifetimeDialog = false },
+            strings = state.strings,            onDismiss = { showAddLifetimeDialog = false },
             onConfirm = { id, timeRange, action ->
                 com.mengpaw.kernel.trigger.TriggerEngine.addSchedule(id, timeRange, action)
                 triggerVersion++
@@ -349,17 +349,13 @@ fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-        Spacer(Modifier.height(ArcoSpacing.lg))
-    HorizontalDivider(color = ThemeColors.border)
-    Spacer(Modifier.height(ArcoSpacing.lg))
-
     // ── Agent Tools: 该 Agent 专属工具（非全局共享）— 默认折叠 ──
     var agentToolsExpanded by remember { mutableStateOf(false) }
     SectionHeader(state.strings.agentTools, count = "(${agentToolItems.size})",
         expanded = agentToolsExpanded, onToggle = { agentToolsExpanded = !agentToolsExpanded })
     AnimatedVisibility(visible = agentToolsExpanded) {
         Column {
-    Text("该 Agent 专属的命令工具，仅在当前 Agent 可用。全局命令通过 self.tools 查看。",
+    Text(state.strings.agentToolsDesc,
         fontSize = 11.sp, color = ThemeColors.textSecondary,
         modifier = Modifier.padding(bottom = ArcoSpacing.xs))
     if (agentToolItems.isNotEmpty()) {
@@ -397,7 +393,7 @@ fun AgentSettingsContent(
             }
         }
     } else {
-        Text("暂未配置专属工具。Agent 使用全局工具池（self.tools）中的命令。",
+        Text(state.strings.noToolsConfigured,
             style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
     }
         }
@@ -413,7 +409,7 @@ fun AgentSettingsContent(
         expanded = agentSkillsExpanded, onToggle = { agentSkillsExpanded = !agentSkillsExpanded })
     AnimatedVisibility(visible = agentSkillsExpanded) {
         Column {
-    Text("该 Agent 本地已加载的技能，Markdown 剧本格式。使用 skill.run <name> 执行。",
+    Text(state.strings.agentSkillsDesc,
         fontSize = 11.sp, color = ThemeColors.textSecondary,
         modifier = Modifier.padding(bottom = ArcoSpacing.xs))
     if (agentSkillItems.isNotEmpty()) {
@@ -471,7 +467,7 @@ fun AgentSettingsContent(
         }
     }
     if (workspaceItems.isEmpty()) {
-        Text("工作区暂无文档", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        Text(state.strings.noWorkspaceDocs, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
     } else {
         workspaceItems.forEach { item ->
             key(item.name) {
@@ -519,15 +515,15 @@ fun AgentSettingsContent(
                 if (showDeleteConfirm) {
                     AlertDialog(
                         onDismissRequest = { showDeleteConfirm = false },
-                        title = { Text("删除文档", fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
-                        text = { Text("确定删除 ${item.name}？此操作不可恢复。", fontSize = 13.sp, color = ThemeColors.textSecondary, lineHeight = 20.sp) },
+                        title = { Text(state.strings.deleteDoc, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
+                        text = { Text(state.strings.deleteConfirm, fontSize = 13.sp, color = ThemeColors.textSecondary, lineHeight = 20.sp) },
                         confirmButton = {
                             TextButton(onClick = {
                                 onDeleteWorkspaceFile?.invoke(item.name)
                                 showDeleteConfirm = false
-                            }) { Text("删除", color = ArcoColors.Red6) }
+                            }) { Text(state.strings.delete, color = ArcoColors.Red6) }
                         },
-                        dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") } }
+                        dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(state.strings.cancel) } }
                     )
                 }
             }

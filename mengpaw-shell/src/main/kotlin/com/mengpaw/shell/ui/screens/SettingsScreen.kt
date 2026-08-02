@@ -24,10 +24,10 @@ import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.shell.ui.isWide
 
 /** Category tag for framework items. */
-enum class ItemCategory(val label: String, val color: Color) {
-    BUILTIN("内置", ArcoColors.Blue6),
-    OFFICIAL("官方", ArcoColors.Green6),
-    CUSTOM("自建", ArcoColors.Orange6)
+enum class ItemCategory(val label: String, val enLabel: String, val color: Color) {
+    BUILTIN("内置", "Built-in", ArcoColors.Blue6),
+    OFFICIAL("官方", "Official", ArcoColors.Green6),
+    CUSTOM("自建", "Custom", ArcoColors.Orange6)
 }
 
 /** A named item in a framework list (CLI command, plugin, tool, skill). */
@@ -36,8 +36,13 @@ data class FrameworkItem(
     val category: ItemCategory,
     val summary: String = "",
     val docMarkdown: String = "",
-    val isWowBlue: Boolean = false
-)
+    val isWowBlue: Boolean = false,
+    /** 插件英文名 — 显示为「中文名 (English)」; null 时只显示 name。 */
+    val enName: String? = null
+) {
+    /** UI 显示名 — 插件统一「中文名 (English)」中英对照格式。 */
+    val displayName: String get() = enName?.let { "$name ($it)" } ?: name
+}
 
 /**
  * iPad-style two-column settings screen.

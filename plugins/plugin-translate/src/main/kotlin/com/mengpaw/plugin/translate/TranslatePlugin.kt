@@ -34,7 +34,7 @@ import kotlinx.coroutines.withContext
 class TranslatePlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "translate-plugin",
-        name = "Google 翻译",
+        name = "翻译引擎",
         version = "0.20.2",
         type = PluginType.NATIVE,
         author = "MengPaw",

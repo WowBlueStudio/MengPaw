@@ -503,19 +503,22 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
         withContext(Dispatchers.IO) {
             val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
             val installed = pm.listAll().map { (plugin, status) ->
-                FrameworkItem(name = plugin.metadata.name, isWowBlue = plugin.metadata.id in PluginRegistrar.WOWBLUE_PLUGIN_IDS,
+                val enName = PluginRegistrar.PLUGIN_EN_NAMES[plugin.metadata.id]
+                FrameworkItem(name = plugin.metadata.name, enName = enName,
+                    isWowBlue = plugin.metadata.id in PluginRegistrar.WOWBLUE_PLUGIN_IDS,
                     category = if (plugin.metadata.id in PluginRegistrar.BUILTIN_PLUGIN_IDS) ItemCategory.BUILTIN else ItemCategory.OFFICIAL,
                     summary = plugin.metadata.description,
-                    docMarkdown = "## ${plugin.metadata.name}\n\n${plugin.metadata.description}\n\nID: ${plugin.metadata.id}\n版本: ${plugin.metadata.version}\n状态: ${status.name}\n命令数: ${plugin.commands.size}")
+                    docMarkdown = "## ${enName?.let { "${plugin.metadata.name} ($it)" } ?: plugin.metadata.name}\n\n${plugin.metadata.description}\n\nID: ${plugin.metadata.id}\n版本: ${plugin.metadata.version}\n状态: ${status.name}\n命令数: ${plugin.commands.size}")
             }
             // Builtin plugins compiled into the APK but not yet installed — show them anyway,
             // so new bundled plugins are never invisible in the global list
             val missingBuiltins = PluginRegistrar.BUILTIN_PLUGIN_IDS
                 .filter { id -> pm.get(id) == null }
                 .mapNotNull { id -> PluginRegistrar.BUILTIN_PLUGIN_INFO[id]?.let { (name, desc) ->
-                    FrameworkItem(name = name, category = ItemCategory.BUILTIN, isWowBlue = id in PluginRegistrar.WOWBLUE_PLUGIN_IDS,
+                    val enName = PluginRegistrar.PLUGIN_EN_NAMES[id]
+                    FrameworkItem(name = name, enName = enName, category = ItemCategory.BUILTIN, isWowBlue = id in PluginRegistrar.WOWBLUE_PLUGIN_IDS,
                         summary = "$desc — 内置，未安装",
-                        docMarkdown = "## $name\n\n$desc\n\nID: $id\n状态: 未安装（内置插件，可在插件市场激活）")
+                        docMarkdown = "## ${enName?.let { "$name ($it)" } ?: name}\n\n$desc\n\nID: $id\n状态: 未安装（内置插件，可在插件市场激活）")
                 } }
             // Kernel namespaces are not plugins but surface as builtin capabilities
             val kernelNamespaces = listOf(
@@ -745,7 +748,8 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     if (showPlugins) {
         PluginMarketScreen(
             onNavigateBack = { showPlugins = false },
-            onNavigateToDetail = {}
+            onNavigateToDetail = {},
+            strings = strings
         )
     }
     if (showLicense) {

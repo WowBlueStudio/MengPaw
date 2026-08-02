@@ -62,8 +62,13 @@ data class PluginUiItem(
     val isInstalled: Boolean,
     val isActive: Boolean,
     val installState: InstallState = InstallState.Idle,
-    val availability: PluginAvailability = PluginAvailability.BUILTIN
-)
+    val availability: PluginAvailability = PluginAvailability.BUILTIN,
+    /** 插件英文名 — 显示为「中文名 (English)」; null 时只显示 name。 */
+    val enName: String? = null
+) {
+    /** UI 显示名 — 插件统一「中文名 (English)」中英对照格式。 */
+    val displayName: String get() = enName?.let { "$name ($it)" } ?: name
+}
 
 /**
  * ViewModel bridging the plugin system to Compose UI.
@@ -113,6 +118,7 @@ class PluginViewModel : ViewModel() {
                 PluginUiItem(
                     id = entry.id,
                     name = entry.name,
+                    enName = com.mengpaw.shell.PluginRegistrar.PLUGIN_EN_NAMES[entry.id],
                     version = entry.version,
                     description = entry.description,
                     type = entry.type,

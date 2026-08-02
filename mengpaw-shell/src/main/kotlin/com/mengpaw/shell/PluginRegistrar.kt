@@ -47,6 +47,44 @@ object PluginRegistrar {
         "evolution-plugin", "concise-plugin"
     )
 
+    /**
+     * 插件英文名映射 — UI 统一显示「中文名 (English)」（中英对照卖点）。
+     * 只对中文名插件设置; 中文名已含英文（部落协作 (Tribe) 改回部落协作 + 本映射）或
+     * 纯英文名（Mission / Agent Loop）不设。
+     */
+    val PLUGIN_EN_NAMES = mapOf(
+        // 内置
+        "concise-plugin" to "Concise",
+        "dream-plugin" to "Dream",
+        "evolution-plugin" to "Agent Evolution",
+        "framework-plugin" to "Framework Discovery",
+        "fs-plugin" to "File System",
+        "net-plugin" to "Network",
+        "memory-twin-plugin" to "Memory Twin",
+        "skill-plugin" to "Skills",
+        "clipboard-plugin" to "Clipboard",
+        "dev-plugin" to "Plugin Dev Tools",
+        "root-plugin" to "Root Access",
+        "tools-plugin" to "Agent Tools",
+        "tribe-plugin" to "Tribe",
+        // remote
+        "update-plugin" to "Auto Update",
+        "translate-plugin" to "Translation Engine",
+        "error-report-plugin" to "Error Reporting",
+        "tavily-plugin" to "AI Search",
+        "render-plugin" to "Image Render API",
+        "comfy-plugin" to "ComfyUI Workflows",
+        "browser-push-plugin" to "Cross-Device Push",
+        "browser-search-plugin" to "Page Archiving",
+        "browser-mcp-plugin" to "Browser MCP",
+        // connectors
+        "connector-openclaw-plugin" to "OpenClaw Connector",
+        "connector-qwenpaw-plugin" to "QwenPaw Connector",
+        "connector-claude-code-plugin" to "Claude Code Connector",
+        "connector-reasonix-plugin" to "Reasonix Connector",
+        "connector-trae-plugin" to "Trae IDE Connector"
+    )
+
     /** Builtin plugin display info (名称/描述), 用于内置但未安装时在全局插件列表兜底显示. */
     val BUILTIN_PLUGIN_INFO = mapOf(
         "framework-plugin" to ("框架发现" to "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理"),
@@ -57,7 +95,7 @@ object PluginRegistrar {
         "clipboard-plugin" to ("剪贴板" to "剪贴板操作：copy, paste, clear"),
         "memory-twin-plugin" to ("记忆孪生" to "跨设备工作区同步 — ACP P2P 文件同步 + 心跳保活 + QoS自适应 + 手动IP发现"),
         "root-plugin" to ("Root 权限" to "Root 权限管理 — su 命令执行/应用管理/文件系统/系统修改/备份恢复/审计日志"),
-        "tribe-plugin" to ("部落协作 (Tribe)" to "多 Agent 部落协作：LAN 自动组队、Kanban 委派、LLM 路由、任务模板、Fleet 并行、广播讨论、ACP 实时、心跳"),
+        "tribe-plugin" to ("部落协作" to "多 Agent 部落协作：LAN 自动组队、Kanban 委派、LLM 路由、任务模板、Fleet 并行、广播讨论、ACP 实时、心跳"),
         "tools-plugin" to ("Agent 命令集" to "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用"),
         "dream-plugin" to ("梦境模式" to "梦境模式内置默认实现 (不可移除) — 记忆整理管道; 第三方可实现 DreamProvider 覆盖"),
         "evolution-plugin" to ("智能体进化" to "智能体进化内置默认实现 (不可移除) — 失败模式库/省察引导/框架反馈; 第三方可实现 EvolutionProvider 覆盖"),
