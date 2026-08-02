@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.26.0 (2026-08-02) — 指令直通 + 引擎提速
+
+### 新增
+- **! 命令体系**: 输入 `!cmd` 绕过 Agent 直接执行（Pipeline 安全管线优先 + 受控 shell fallback），命令文本完整保留在消息前缀中；输入 `!` 弹出命令补全下拉（与 @mention 同一悬浮控件，候选含命令名 + 功能描述）
+- **言简意赅内置插件**: middleware 去除系统提示词结构性输出干扰（删除强制 Thought→Action 完整序列要求 + 反 Markdown 约束），插件可开关，停用即恢复原提示词
+- **角色模型路由**: Fleet/火种各角色（planner/worker/verifier/synthesizer/worker.alt）可配不同模型 — 规划/验收用强模型、执行用便宜模型，Andon 重派自动切备用模型；框架设置页可视化配置 + Vault 加密持久化
+- **全局技能池**: Find_Skills（整合 findskills.org API + skills.sh 排行榜检索外部技能）、Make_Skills（知识剧本/剧本+脚本/流程 Flow 三类技能设计 + 稳定进化目标 + 进化升级闭环）
+- **多 Action 并行执行**: 一次 LLM 输出解析多个 Action 并行执行、合并 Observation（10 步任务省 60-70% 延迟）
+- **Mission 并行化**: 串行子任务改走并行管线（WIP 闸 + maxParallel），worker 零待命独立会话（不污染主会话/不写记忆）；Mission/Swarm 公共提示词提取
+- **工具进程会话式复用**: 常驻 sh 会话进程池（哨兵协议携带退出码，每次调用自动初始化 cwd，超时销毁防泄漏）
+
+### 优化
+- **提示词瘦身**: docs 摘要化（超 12K 字符截断 + agent.read 外链）、few-shot 精简、工具结果激进裁剪；`PROMPT_TEMPLATE_VERSION` 纳入缓存键
+- **Pipeline 只读命令结果缓存**: 白名单 + 5s TTL + 会话级键，消除 ReAct 循环内重复查询
+- **上下文折叠改造**: 阈值 0.9（模型档位化）+ MIN 组数保底 + token 预算保留原文（连贯性档位 8%/15%/25%）+ 摘要长度反相关（目标占用率 ~60%）
+- **省察引导缓存修复**: Evolution 引导改末尾追加（前插会击穿整个前缀缓存）
+
+### 修复
+- 多 Action + 末尾 Final Answer 被 Rule 1 吞掉（并行执行形态让位 Rule 2）
+- `!` 命令取消路径子进程泄漏（会话式池超时/取消 destroyForcibly）
+
+### 发行
+- Shell APK v0.26.0（versionCode 26000）— 浏览器保持 v0.7.0 独立版本线
+
 ## 浏览器 v0.7.0 (2026-08-02) — MCP 服务 + 前台唤醒
 
 > 浏览器独立版本线。自 v0.6.0 起新增与 MengPaw Shell 的设备内互联改造，本版首次发布。
