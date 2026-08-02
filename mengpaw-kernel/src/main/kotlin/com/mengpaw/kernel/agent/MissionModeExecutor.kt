@@ -4,16 +4,29 @@
 package com.mengpaw.kernel
 
 import com.mengpaw.kernel.agent.MissionSubtask
+import com.mengpaw.kernel.agent.MissionSwarmPrompts
 import com.mengpaw.kernel.agent.SubtaskStatus
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.security.PromptFirewall
+import com.mengpaw.kernel.security.Sanitizer
+import com.mengpaw.kernel.session.Message
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 /**
- * Mission-mode executor: decompose -> worker execution -> verification.
+ * Mission-mode executor: decompose -> parallel worker execution -> verification -> synthesis.
  *
- * Uses the LLM to decompose the task, then runs each subtask sequentially
- * with retry+verify (Worker-Verifier pattern) and LLM synthesis.
- *
- * Ported from QwenPaw MissionMode architecture.
+ * 子任务并行执行（WIP 闸限流），worker 零待命（独立 session，不入主会话、
+ * 不写记忆，用完即销毁）— 修复原串行版子任务污染主会话历史的缺陷。
+ * 保留 Mission 特性: 👍 DONE 降级 / ## Mission: 报告头 / hard-error 走 retry。
  */
 class MissionModeExecutor(
     private val agentEngine: AgentEngine
@@ -25,84 +38,50 @@ class MissionModeExecutor(
      * @param maxSubtasks maximum number of subtasks to decompose into
      * @param maxStepsPerSubtask maximum ReAct steps per subtask
      * @param maxRetriesPerSubtask maximum retries on verification failure
+     * @param maxParallel maximum concurrent subtask pipelines (WIP gate)
      * @param onStep optional step callback for progress tracking
      * @return the synthesized mission report
      */
     suspend fun runWithMission(
         task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
-        maxRetriesPerSubtask: Int = 2, onStep: ((AgentEngine.TraceStep) -> Unit)? = null
+        maxRetriesPerSubtask: Int = 2, maxParallel: Int = 4,
+        onStep: ((AgentEngine.TraceStep) -> Unit)? = null
     ): String {
         val llmProvider = agentEngine.getLlmProvider()
         val guardedTask = if (PromptFirewall.checkUserPrompt(task) != null)
             PromptFirewall.wrapWithDefense(task) else task
 
         // Step 1: Structured decomposition — LLM produces JSON subtask list
-        val decomposePrompt = """
-You are decomposing a complex task into independent subtasks for parallel execution.
-
-Task: $guardedTask
-
-Output a JSON array of subtasks. Each subtask has:
-- "id": short kebab-case id
-- "desc": what to do (one sentence, actionable)
-- "criteria": how to verify success (one sentence, concrete)
-
-Rules:
-- Maximum $maxSubtasks subtasks
-- Each subtask must be independently executable (no cross-dependencies)
-- Order from most critical to least
-
-Output ONLY the JSON array, no other text:
-[{"id":"...","desc":"...","criteria":"..."}]
-""".trimIndent()
-
         val decomposeResult = try {
-            llmProvider.complete(decomposePrompt)
+            llmProvider.complete(MissionSwarmPrompts.buildDecomposePrompt(guardedTask, maxSubtasks))
         } catch (e: Exception) {
             return agentEngine.run(task, maxStepsPerSubtask * maxSubtasks, onStep)
         }
 
-        // Parse JSON subtasks
-        val subtasks = try {
-            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-            val jsonStr = decomposeResult.trim().substringAfter("[").substringBeforeLast("]").let { "[$it]" }
-            val array = json.parseToJsonElement(jsonStr)
-            (array as? kotlinx.serialization.json.JsonArray)?.map { el ->
-                val obj = el as? kotlinx.serialization.json.JsonObject ?: return@map null
-                MissionSubtask(
-                    id = (obj["id"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "task-?",
-                    description = (obj["desc"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "?",
-                    expectedOutcome = (obj["criteria"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: ""
-                )
-            }?.filterNotNull()?.take(maxSubtasks) ?: emptyList()
-        } catch (e: Exception) {
-            // Fallback: simple line parsing
-            decomposeResult.lines()
-                .filter { it.trimStart().startsWith("-") || it.trimStart().startsWith("*") }
-                .take(maxSubtasks)
-                .mapIndexed { i, line ->
-                    val parts = line.removePrefix("-").removePrefix("*").trim().split("|", limit = 2)
-                    MissionSubtask(
-                        id = "task-${i + 1}",
-                        description = parts.getOrElse(0) { "Subtask ${i + 1}" }.trim(),
-                        expectedOutcome = parts.getOrElse(1) { "" }.trim()
-                    )
-                }
-        }
-
-        if (subtasks.isEmpty()) {
+        // Parse subtasks (JSON first, line-parse fallback)
+        val specs = MissionSwarmPrompts.parseSubtasks(decomposeResult, maxSubtasks)
+        if (specs.isEmpty()) {
             return agentEngine.run(task, maxStepsPerSubtask * maxSubtasks, onStep)
+        }
+        val subtasks = specs.map {
+            MissionSubtask(id = it.id, description = it.desc, expectedOutcome = it.criteria)
         }
 
         // Update state to show mission progress
         agentEngine.updateAgentState(AgentState.Running("Mission: ${subtasks.size} subtasks", 0, subtasks.size))
+        // stop() 可达 — 并行 worker 依赖父 Job 取消传播
+        agentEngine.attachRunningJob(kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job])
 
-        // Step 2: Sequential execution with retry+verify per subtask
-        val results = mutableListOf<String>()
-        for ((i, subtask) in subtasks.withIndex()) {
-            agentEngine.updateAgentState(AgentState.Running("Mission: ${i + 1}/${subtasks.size}", i + 1, subtasks.size))
-            val result = executeSubtask(subtask, maxStepsPerSubtask, maxRetriesPerSubtask, llmProvider, onStep)
-            results.add(result)
+        // Step 2: Parallel execution with retry+verify per subtask (WIP gate)
+        val semaphore = Semaphore(maxParallel)
+        coroutineScope {
+            subtasks.map { sub ->
+                async(KernelDispatchers.BACKGROUND) {
+                    semaphore.withPermit {
+                        executeSubtask(sub, maxStepsPerSubtask, maxRetriesPerSubtask, llmProvider, onStep)
+                    }
+                }
+            }.awaitAll()
         }
 
         // Step 3: LLM synthesis of all results
@@ -117,19 +96,10 @@ Output ONLY the JSON array, no other text:
             }
             "$icon ${st.description}: ${st.output.take(300)}"
         }
-        val synthesisPrompt = """
-Synthesize the following Mission results into a clear, structured final report.
-
-Original task: $guardedTask
-Subtask results ($verified verified, $failed failed of ${subtasks.size}):
-
-$parts
-
-Provide a concise summary with:
-1. What was accomplished
-2. Key findings or outputs
-3. Any remaining issues (if $failed > 0)
-""".trimIndent()
+        val synthesisPrompt = MissionSwarmPrompts.buildSynthesisPrompt(
+            task = guardedTask, mode = "Mission", verified = verified, failed = failed,
+            total = subtasks.size, parts = parts
+        )
 
         val synthesis = try {
             llmProvider.complete(synthesisPrompt)
@@ -160,19 +130,13 @@ Provide a concise summary with:
 
             // Build task prompt — include verifier feedback on retry
             val taskPrompt = if (retries > 0 && lastVerifierFeedback.isNotBlank()) {
-                buildString {
-                    append(subtask.description)
-                    append("\n\n## 质量审查反馈（第 $retries 次）\n")
-                    append("上一轮未通过验证，请根据以下审查意见改进：\n\n")
-                    append(lastVerifierFeedback)
-                    append("\n\n请修正上述问题后重新执行。原任务：${subtask.description}")
-                }
+                MissionSwarmPrompts.buildRetryPrompt(subtask.description, retries, lastVerifierFeedback)
             } else {
                 subtask.description
             }
 
             val workerResult = try {
-                agentEngine.run(taskPrompt, maxSteps = maxSteps, onStep = onStep)
+                runMissionWorker(subtask, taskPrompt, maxSteps, onStep)
             } catch (e: Exception) {
                 "Error: ${e.message}"
             }
@@ -189,63 +153,119 @@ Provide a concise summary with:
             }
 
             // Strict Verifier (Worker-Verifier pattern)
-            val verifierPrompt = """
-You are a strict quality verifier. Review the worker agent's output against the success criteria.
-
-**Success criteria**: ${subtask.expectedOutcome.ifBlank { "Complete the task: ${subtask.description}" }}
-
-**Worker output**:
-${workerResult.take(2000)}
-
-**Analysis rules**:
-- Check if the output actually fulfills the criteria (not just mentions it)
-- Check for factual errors, incomplete data, or vague hand-waving
-- A "Final Answer" that says "I cannot do this" without trying alternatives = FAIL
-- Partial completion with clear next steps = FAIL (must retry to complete)
-
-Respond in this exact format:
-
-VERDICT: <PASS or FAIL>
-ANALYSIS: <1-3 sentences on what was checked and whether it meets criteria>
-FIX: <if FAIL, give the worker concrete, actionable instructions for the retry. Be specific — name which tool to use, what data to look for, what approach to try differently>
-""".trimIndent()
-
-            try {
-                val verifyResult = llmProvider.complete(verifierPrompt)
-                val verdict = verifyResult.lines()
-                    .find { it.trimStart().startsWith("VERDICT:", ignoreCase = true) }
-                    ?.substringAfter(":")?.trim()?.uppercase() ?: "PASS"
-
-                if (verdict == "PASS") {
-                    subtask.status = SubtaskStatus.VERIFIED
-                    subtask.verifierNote = verifyResult.lines()
-                        .find { it.trimStart().startsWith("ANALYSIS:", ignoreCase = true) }
-                        ?.substringAfter(":")?.trim() ?: "PASS"
-                    return workerResult
-                } else {
-                    // FAIL — extract analysis and fix instructions for the worker
-                    lastVerifierFeedback = buildString {
-                        val analysis = verifyResult.lines()
-                            .find { it.trimStart().startsWith("ANALYSIS:", ignoreCase = true) }
-                            ?.substringAfter(":")?.trim()
-                        val fix = verifyResult.lines()
-                            .find { it.trimStart().startsWith("FIX:", ignoreCase = true) }
-                            ?.substringAfter(":")?.trim()
-                        if (analysis != null) { append("问题: $analysis\n") }
-                        if (fix != null) { append("修复建议: $fix") }
-                        if (isBlank()) { append(verifyResult.take(300)) }
-                    }
-                    subtask.verifierNote = "FAIL: ${lastVerifierFeedback.take(150)}"
-                    retries++
-                }
+            val (passed, note, fix) = try {
+                val verifyResult = llmProvider.complete(MissionSwarmPrompts.buildVerifierPrompt(
+                    criteria = subtask.expectedOutcome.ifBlank { "Complete the task: ${subtask.description}" },
+                    output = workerResult
+                ))
+                MissionSwarmPrompts.parseVerifierVerdict(verifyResult)
             } catch (_: Exception) {
                 // Verification unavailable — accept result without verification
                 subtask.status = SubtaskStatus.DONE
                 return workerResult
             }
+
+            if (passed) {
+                subtask.status = SubtaskStatus.VERIFIED
+                subtask.verifierNote = note
+                return workerResult
+            } else {
+                // FAIL — build feedback from analysis + fix instructions
+                lastVerifierFeedback = buildString {
+                    if (note.isNotBlank() && note != "PASS") { append("问题: $note\n") }
+                    if (fix.isNotBlank()) { append("修复建议: $fix") }
+                    if (isBlank()) { append(verifyResultFallback(workerResult)) }
+                }
+                subtask.verifierNote = "FAIL: ${lastVerifierFeedback.take(150)}"
+                retries++
+            }
         }
 
         subtask.status = SubtaskStatus.FAILED
         return lastVerifierFeedback.ifBlank { subtask.output }
+    }
+
+    private fun verifyResultFallback(workerResult: String): String = workerResult.take(300)
+
+    /**
+     * 零待命 worker — 独立 session (scope="mission")，不入主会话、不写记忆
+     * （AgentMemoryExecutor 对 mission scope 屏蔽写命令），用完即销毁。
+     * ReAct 循环同主引擎（含多 Action 并行执行），但共享可变状态
+     * （detectLoop/trackResult 等）一律不碰 — 并行安全纪律同 Swarm runWorker。
+     */
+    private suspend fun runMissionWorker(
+        subtask: MissionSubtask,
+        taskPrompt: String,
+        maxSteps: Int,
+        onStep: ((AgentEngine.TraceStep) -> Unit)?
+    ): String {
+        val sessionManager = agentEngine.getSessionManager()
+        val session = sessionManager.createSession(
+            task = subtask.description,
+            metadata = mapOf("missionId" to "mission-" + subtask.id),
+            scope = "mission",
+            agentId = agentEngine.agentName
+        )
+        try {
+            val context = ExecutionContext(
+                sessionId = session.id,
+                agentName = agentEngine.agentName,
+                scope = "mission"
+            )
+            sessionManager.addMessage(session.id, Message("user", taskPrompt))
+            sessionManager.addMessage(session.id, Message("system",
+                "你是 Mission 模式的并行 worker，只完成本子任务，不依赖其他 worker 的结果，也不写记忆。"))
+
+            var step = 0
+            while (step < maxSteps) {
+                val job = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
+                if (job != null && !job.isActive) throw kotlinx.coroutines.CancellationException("Mission stopped")
+
+                val conversation = agentEngine.buildConversation(session.id)
+                val response = try {
+                    agentEngine.getLlmProvider().completeWithMessages(conversation)
+                } catch (e: Exception) {
+                    return "Error: ${e.message}"
+                }
+                val sanitized = com.mengpaw.kernel.security.Sanitizer.sanitize(response)
+                sessionManager.addMessage(session.id, Message("assistant", sanitized))
+
+                val parsed = agentEngine.getPromptEngine().parse(sanitized)
+                if (parsed.isFinal) {
+                    return parsed.thought
+                }
+                if (parsed.needsContinue) {
+                    sessionManager.addMessage(session.id, Message("user",
+                        "继续。输出 Action: <命令> 和 Action Input: <参数>。"))
+                    continue
+                }
+                val actionList = parsed.actions.ifEmpty { listOfNotNull(parsed.action) }
+                if (actionList.isNotEmpty()) {
+                    val entries = coroutineScope {
+                        actionList.map { call ->
+                            async(KernelDispatchers.BACKGROUND) {
+                                val commandLine = "${call.name} ${call.parameters.values.joinToString(" ")}"
+                                val result = try {
+                                    kotlinx.coroutines.withTimeout(60_000L) {
+                                        agentEngine.getPipelineManager().buildPipeline().execute(commandLine, context)
+                                    }
+                                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                                    ExecutionResult.fail("命令超时 (60s): $commandLine", errorCode = ErrorCodes.ERR_INTERNAL)
+                                }
+                                val obs = (if (result.success) result.output else "Error: ${result.error}").take(4000)
+                                onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, commandLine, obs))
+                                "Command: $commandLine\nResult: $obs"
+                            }
+                        }.awaitAll()
+                    }
+                    sessionManager.addMessage(session.id, Message("assistant", entries.joinToString("\n\n")))
+                }
+                step++
+            }
+            return "已达到最大步数 ($maxSteps) 未完成"
+        } finally {
+            // 零待命: 销毁会话, 无跨任务记忆
+            sessionManager.deleteSession(session.id)
+        }
     }
 }

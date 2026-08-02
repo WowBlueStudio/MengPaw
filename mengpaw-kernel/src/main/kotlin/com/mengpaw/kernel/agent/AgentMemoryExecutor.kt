@@ -25,7 +25,9 @@ class AgentMemoryExecutor {
      * 火种模式 (scope="swarm") 的 worker 是零待命临时执行体——
      * 禁止写记忆, 防止并行 worker 向 Agent 三轨记忆注入噪音。
      */
-    private fun swarmWriteBlocked(ctx: ExecutionContext): Boolean = ctx.scope == "swarm"
+    /** 零待命并行 worker（swarm/mission）屏蔽记忆写命令。 */
+    private fun swarmWriteBlocked(ctx: ExecutionContext): Boolean =
+        ctx.scope == "swarm" || ctx.scope == "mission"
 
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         "memory" to ::memory,

@@ -749,8 +749,10 @@ class AgentEngine(
      */
     suspend fun runWithMission(
         task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
-        maxRetriesPerSubtask: Int = 2, onStep: ((TraceStep) -> Unit)? = null
-    ): String = missionModeExecutor.runWithMission(task, maxSubtasks, maxStepsPerSubtask, maxRetriesPerSubtask, onStep)
+        maxRetriesPerSubtask: Int = 2, maxParallel: Int = 4,
+        onStep: ((TraceStep) -> Unit)? = null
+    ): String = missionModeExecutor.runWithMission(
+        task, maxSubtasks, maxStepsPerSubtask, maxRetriesPerSubtask, maxParallel, onStep)
 
     // ── 火种模式 (Swarm Mode) — 规划器拆解 → 并行 Worker → Verifier → 合成器 ──
 

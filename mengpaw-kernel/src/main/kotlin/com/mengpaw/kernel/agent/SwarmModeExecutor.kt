@@ -220,12 +220,8 @@ class SwarmModeExecutor(
                 scope = "swarm"
             )
             val taskPrompt = if (feedback.isNotBlank()) {
-                buildString {
-                    append(subtask.description)
-                    append("\n\n## 质量审查反馈（第 ${subtask.retryCount} 次）\n")
-                    append(feedback)
-                    append("\n\n请修正上述问题后重新执行。")
-                }
+                com.mengpaw.kernel.agent.MissionSwarmPrompts.buildRetryPrompt(
+                    subtask.description, subtask.retryCount, feedback)
             } else {
                 subtask.description
             }
@@ -291,44 +287,20 @@ class SwarmModeExecutor(
         outcome: WorkerOutcome,
         verifierProvider: LlmProvider
     ): Pair<Boolean, String> {
-        val verifierPrompt = """
-You are a strict quality verifier. Review the worker agent's output against the success criteria.
-
-**Success criteria**: ${subtask.expectedOutcome.ifBlank { "Complete the task: ${subtask.description}" }}
-
-**Worker output**:
-${outcome.answer.take(2000)}
-
-**Analysis rules**:
-- Check if the output actually fulfills the criteria (not just mentions it)
-- Check for factual errors, incomplete data, or vague hand-waving
-- A "Final Answer" that says "I cannot do this" without trying alternatives = FAIL
-- Partial completion with clear next steps = FAIL (must retry to complete)
-
-Respond in this exact format:
-
-VERDICT: <PASS or FAIL>
-ANALYSIS: <1-3 sentences on what was checked and whether it meets criteria>
-FIX: <if FAIL, give the worker concrete, actionable instructions for the retry>
-""".trimIndent()
+        val verifierPrompt = com.mengpaw.kernel.agent.MissionSwarmPrompts.buildVerifierPrompt(
+            criteria = subtask.expectedOutcome.ifBlank { "Complete the task: ${subtask.description}" },
+            output = outcome.answer
+        )
 
         return try {
             val verifyResult = verifierProvider.complete(verifierPrompt)
-            val verdict = verifyResult.lines()
-                .find { it.trimStart().startsWith("VERDICT:", ignoreCase = true) }
-                ?.substringAfter(":")?.trim()?.uppercase() ?: "PASS"
+            val (passed, analysis, fix) = com.mengpaw.kernel.agent.MissionSwarmPrompts.parseVerifierVerdict(verifyResult)
             val note = buildString {
-                val analysis = verifyResult.lines()
-                    .find { it.trimStart().startsWith("ANALYSIS:", ignoreCase = true) }
-                    ?.substringAfter(":")?.trim()
-                val fix = verifyResult.lines()
-                    .find { it.trimStart().startsWith("FIX:", ignoreCase = true) }
-                    ?.substringAfter(":")?.trim()
-                if (analysis != null) append("问题: $analysis\n")
-                if (fix != null) append("修复建议: $fix")
+                if (analysis.isNotBlank() && analysis != "PASS") append("问题: $analysis\n")
+                if (fix.isNotBlank()) append("修复建议: $fix")
                 if (isBlank()) append(verifyResult.take(200))
-            }
-            (verdict == "PASS") to note
+            }.ifBlank { "PASS" }
+            passed to note
         } catch (e: Exception) {
             // 验证不可用 — 接受结果 (Mission 同款降级)
             true to "PASS (verifier unavailable)"
@@ -342,25 +314,7 @@ FIX: <if FAIL, give the worker concrete, actionable instructions for the retry>
         plannerProvider: LlmProvider,
         maxSubtasks: Int
     ): List<SwarmSubtask> {
-        val decomposePrompt = """
-You are decomposing a complex task into independent subtasks for parallel execution.
-
-Task: $task
-
-Output a JSON array of subtasks. Each subtask has:
-- "id": short kebab-case id
-- "desc": what to do (one sentence, actionable)
-- "criteria": how to verify success (one sentence, concrete)
-- "role": optional worker role (omit for default worker)
-
-Rules:
-- Maximum $maxSubtasks subtasks
-- Each subtask must be independently executable (no cross-dependencies)
-- Order from most critical to least
-
-Output ONLY the JSON array, no other text:
-[{"id":"...","desc":"...","criteria":"...","role":"worker"}]
-""".trimIndent()
+        val decomposePrompt = com.mengpaw.kernel.agent.MissionSwarmPrompts.buildDecomposePrompt(task, maxSubtasks, withRole = true)
 
         val decomposeResult = try {
             plannerProvider.complete(decomposePrompt)
@@ -368,32 +322,15 @@ Output ONLY the JSON array, no other text:
             return emptyList()
         }
 
-        return try {
-            val jsonStr = decomposeResult.trim().substringAfter("[").substringBeforeLast("]").let { "[$it]" }
-            val array = json.parseToJsonElement(jsonStr)
-            (array as? kotlinx.serialization.json.JsonArray)?.mapNotNull { el ->
-                val obj = el.jsonObject
+        return com.mengpaw.kernel.agent.MissionSwarmPrompts.parseSubtasks(decomposeResult, maxSubtasks)
+            .map { spec ->
                 SwarmSubtask(
-                    id = (obj["id"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "task-?",
-                    description = (obj["desc"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "?",
-                    expectedOutcome = (obj["criteria"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "",
-                    role = (obj["role"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "worker"
+                    id = spec.id,
+                    description = spec.desc,
+                    expectedOutcome = spec.criteria,
+                    role = spec.role ?: "worker"
                 )
-            }?.take(maxSubtasks) ?: emptyList()
-        } catch (e: Exception) {
-            // Fallback: 简单行解析
-            decomposeResult.lines()
-                .filter { it.trimStart().startsWith("-") || it.trimStart().startsWith("*") }
-                .take(maxSubtasks)
-                .mapIndexed { i, line ->
-                    val parts = line.removePrefix("-").removePrefix("*").trim().split("|", limit = 2)
-                    SwarmSubtask(
-                        id = "task-${i + 1}",
-                        description = parts.getOrElse(0) { "Subtask ${i + 1}" }.trim(),
-                        expectedOutcome = parts.getOrElse(1) { "" }.trim()
-                    )
-                }
-        }
+            }
     }
 
     // ── 合成器 ─────────────────────────────────────────────────────
@@ -408,19 +345,10 @@ Output ONLY the JSON array, no other text:
         val parts = cards.joinToString("\n") { card ->
             "${card.icon} ${card.subtaskId}: ${card.summary.take(300)}"
         }
-        val synthesisPrompt = """
-Synthesize the following parallel-worker results into a clear, structured final report.
-
-Original task: $task
-Subtask results ($verified verified, $failed failed of ${cards.size}):
-
-$parts
-
-Provide a concise summary with:
-1. What was accomplished
-2. Key findings or outputs
-3. Any remaining issues (if $failed > 0)
-""".trimIndent()
+        val synthesisPrompt = com.mengpaw.kernel.agent.MissionSwarmPrompts.buildSynthesisPrompt(
+            task = task, mode = "parallel-worker", verified = verified, failed = failed,
+            total = cards.size, parts = parts
+        )
 
         return try {
             synthesizerProvider.complete(synthesisPrompt)
