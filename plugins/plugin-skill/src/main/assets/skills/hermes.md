@@ -1,6 +1,6 @@
 ---
 name: hermes
-description: 多智能体协作 — 发现/委派/团队共享记忆
+description: 多智能体协作 — 发现/委派/团队共享记忆。触发词：「多智能体」「委派任务」「团队共享记忆」
 enabled: true
 category: general
 ---

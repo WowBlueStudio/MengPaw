@@ -1,6 +1,6 @@
 ---
 name: protocols
-description: 框架通讯录协议参考：ACP/MCP/WS/REST/FILE 的能力边界与通信方式
+description: 框架通讯录协议参考：ACP/MCP/WS/REST/FILE 的能力边界与通信方式。触发词：「通信协议」「ACP」「MCP 能力」
 enabled: true
 category: system
 ---

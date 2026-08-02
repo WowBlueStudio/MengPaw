@@ -1,6 +1,6 @@
 ---
 name: sessions
-description: 会话管理 — 搜索/删除/归档历史会话，查看存储用量
+description: 会话管理 — 搜索/删除/归档历史会话，查看存储用量。触发词：「历史会话」「查找会话」「删除会话」「存储占用」
 enabled: true
 category: system
 ---

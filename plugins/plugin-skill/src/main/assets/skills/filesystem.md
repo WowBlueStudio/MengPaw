@@ -1,6 +1,6 @@
 ---
 name: filesystem
-description: 文件系统操作命令参考 — 读写文件、目录管理、内容搜索
+description: 文件系统操作命令参考 — 读写文件、目录管理、内容搜索。触发词：「读写文件」「查找文件」「目录管理」
 enabled: true
 category: system
 ---

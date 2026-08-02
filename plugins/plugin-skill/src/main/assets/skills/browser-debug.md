@@ -1,6 +1,6 @@
 ---
 name: browser-debug
-description: 浏览器协作排障 — MCP 工具常见错误、桥离线、页面提取失败的处理
+description: 浏览器协作排障 — MCP 工具常见错误、桥离线、页面提取失败的处理。触发词：「浏览器报错」「桥离线」「页面提取失败」
 enabled: true
 category: browser
 ---

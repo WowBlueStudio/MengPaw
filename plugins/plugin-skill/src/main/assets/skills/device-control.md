@@ -1,6 +1,6 @@
 ---
 name: device-control
-description: 设备操控能力 — 悬浮窗/日历/Root/跨应用/脚本执行
+description: 设备操控能力 — 悬浮窗/日历/Root/跨应用/脚本执行。触发词：「设备操控」「悬浮窗」「日历操作」「root 操作」
 enabled: true
 category: system
 ---

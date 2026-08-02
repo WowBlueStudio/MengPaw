@@ -1,6 +1,6 @@
 ---
 name: android
-description: Android 开发专家知识库。操控设备的权威参考。
+description: Android 开发专家知识库。操控设备的权威参考。。触发词：「查安卓命令」「怎么操控设备」「安卓开发」
 enabled: true
 category: system
 ---

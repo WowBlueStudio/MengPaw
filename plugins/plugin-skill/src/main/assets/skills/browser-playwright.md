@@ -1,6 +1,6 @@
 ---
 name: browser-playwright
-description: Playwright 能力对照 — MengPaw 浏览器 MCP 工具与 Playwright API 的映射说明
+description: Playwright 能力对照 — MengPaw 浏览器 MCP 工具与 Playwright API 的映射说明。触发词：「playwright 对照」「浏览器能力映射」
 enabled: true
 category: browser
 ---

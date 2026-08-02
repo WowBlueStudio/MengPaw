@@ -1,6 +1,6 @@
 ---
 name: make-plan
-description: 需要多步拆解复杂任务时触发；获取分步骤执行计划，由 Agent 自己逐步执行
+description: 需要多步拆解复杂任务时触发；获取分步骤执行计划，由 Agent 自己逐步执行。触发词：「做个计划」「拆解这个任务」「先给计划」
 enabled: true
 category: meta
 ---

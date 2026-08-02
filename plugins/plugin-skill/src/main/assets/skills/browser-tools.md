@@ -1,6 +1,6 @@
 ---
 name: browser-tools
-description: 浏览器插件开发 API 参考 — Plugin 接口、数据类型、开发指南；替代 plugin-index.md 中的失效链接
+description: 浏览器插件开发 API 参考 — Plugin 接口、数据类型、开发指南；替代 plugin-index.md 中的失效链接。触发词：「浏览器插件开发」「浏览器插件 API」
 enabled: true
 category: browser
 ---

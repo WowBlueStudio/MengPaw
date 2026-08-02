@@ -1,6 +1,6 @@
 ---
 name: plugin-system
-description: 插件管理命令参考 — 发现/安装/启用插件来扩展Agent能力
+description: 插件管理命令参考 — 发现/安装/启用插件来扩展Agent能力。触发词：「怎么装插件」「插件管理」「启用插件」
 enabled: true
 category: system
 ---

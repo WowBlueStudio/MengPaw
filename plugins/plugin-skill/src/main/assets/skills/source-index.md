@@ -1,6 +1,6 @@
 ---
 name: source-index
-description: 回答技术问题时快速定位要读的文档和源码；减少盲目搜索
+description: 回答技术问题时快速定位要读的文档和源码；减少盲目搜索。触发词：「源码在哪」「读哪个文档」「定位文档」
 enabled: true
 category: system
 ---
