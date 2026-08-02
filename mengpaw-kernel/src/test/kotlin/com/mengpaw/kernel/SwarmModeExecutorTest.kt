@@ -100,6 +100,31 @@ class SwarmModeExecutorTest {
         assertTrue("synthesizer 被调", synthesizer.calls.any { it.contains("Synthesize", ignoreCase = true) })
     }
 
+    // ── 用例 1b: Fleet 转发透传 roles（模型路由接线回归锚点）──────────
+
+    @Test
+    fun `runWithFleet forwards roles to swarm`() = runBlocking {
+        val planner = ScriptedLlmProvider(listOf(DECOMPOSE_JSON), "fleet-planner")
+        val worker = ScriptedLlmProvider(listOf("Final Answer: 子任务A完成"), "fleet-worker")
+        val verifier = ScriptedLlmProvider(listOf("VERDICT: PASS\nANALYSIS: 达标"), "fleet-verifier")
+        val synthesizer = ScriptedLlmProvider(listOf("## 综合报告"), "fleet-synthesizer")
+        val engine = engineWith(planner)
+
+        val report = engine.runWithFleet(
+            task = "编队任务",
+            roles = mapOf(
+                "planner" to planner, "worker" to worker,
+                "verifier" to verifier, "synthesizer" to synthesizer
+            )
+        )
+
+        assertTrue("报告应含综合报告", report.contains("综合报告"))
+        assertTrue("planner 收到拆解 (roles 透传生效)", planner.calls.any { it.contains("decompos", ignoreCase = true) })
+        assertTrue("worker 收到子任务", worker.calls.isNotEmpty())
+        assertTrue("verifier 被调", verifier.calls.any { it.contains("VERDICT:") })
+        assertTrue("synthesizer 被调", synthesizer.calls.any { it.contains("Synthesize", ignoreCase = true) })
+    }
+
     // ── 用例 2: 并行执行 (时序) ──────────────────────────────────────
 
     @Test

@@ -781,14 +781,18 @@ class AgentEngine(
     // ── Fleet Mode (转发到火种模式) ─────────────────────────────────
 
     /**
-     * Fleet-mode: 多 Agent 并行编队协调 (v0.25+: 转发到 runWithSwarm, 默认单模型)。
+     * Fleet-mode: 多 Agent 并行编队协调 (v0.25+: 转发到 runWithSwarm)。
+     * 角色级模型路由: [roles] 指定 planner/worker/verifier/synthesizer/worker.alt 异模型
+     * （缺省回退主 provider）；Andon 重派自动切 worker.alt。
      * 报告头为 "## 火种模式:"。
      */
     suspend fun runWithFleet(
-        task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
+        task: String,
+        roles: Map<String, LlmProvider> = emptyMap(),
+        maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
         maxRetriesPerSubtask: Int = 2, onStep: ((TraceStep) -> Unit)? = null
     ): String = runWithSwarm(
-        task = task, maxSubtasks = maxSubtasks, maxParallel = 4,
+        task = task, roles = roles, maxSubtasks = maxSubtasks, maxParallel = 4,
         maxStepsPerSubtask = maxStepsPerSubtask, maxRetriesPerSubtask = maxRetriesPerSubtask,
         maxTotalSteps = maxSubtasks * maxStepsPerSubtask, onStep = onStep
     )
