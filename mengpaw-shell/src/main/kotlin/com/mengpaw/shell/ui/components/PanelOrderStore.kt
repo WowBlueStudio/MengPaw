@@ -15,7 +15,7 @@ object PanelOrderStore {
     private val file: File get() = File(DataPaths.CONFIG, FILE_NAME)
 
     data class PanelOrder(
-        val modes: List<String> = listOf("goal", "mission", "plan", "research", "translate", "silent"),
+        val modes: List<String> = listOf("goal", "mission", "swarm", "plan", "research", "translate", "silent"),
         val plugins: List<String> = emptyList()
     )
 

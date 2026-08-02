@@ -43,6 +43,7 @@ fun ExpandItem(icon: ImageVector, label: String, onClick: () -> Unit) {
 fun ModeItem(mode: ExecutionMode, isActive: Boolean, onClick: () -> Unit) {
     val icon = when (mode) {
         ExecutionMode.MISSION -> Icons.Outlined.AccountTree
+        ExecutionMode.SWARM -> Icons.Outlined.Whatshot
         ExecutionMode.GOAL -> Icons.Outlined.FlagCircle
         ExecutionMode.PLAN -> Icons.Outlined.Checklist
         ExecutionMode.RESEARCH -> Icons.Outlined.TravelExplore

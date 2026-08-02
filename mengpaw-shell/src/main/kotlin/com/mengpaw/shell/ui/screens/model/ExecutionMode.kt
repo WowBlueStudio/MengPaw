@@ -3,9 +3,10 @@
 
 package com.mengpaw.shell.ui.screens.model
 
-/** 执行模式 — 用户通过 /命令 主动触发，非自动检测。 */
+/** 执行模式 — 用户通过 /命令 主动触发，非自动检测。与 PromptEngine 斜杠命令清单一一对应。 */
 enum class ExecutionMode(val label: String, val prefix: String) {
     MISSION("Mission", "/Mission"),
+    SWARM("Swarm", "/Swarm"),
     GOAL("Goal", "/Goal"),
     PLAN("Plan", "/Plan"),
     RESEARCH("Research", "/Research"),

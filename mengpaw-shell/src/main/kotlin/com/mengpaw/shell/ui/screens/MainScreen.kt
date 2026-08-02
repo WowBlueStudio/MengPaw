@@ -59,7 +59,7 @@ import com.mengpaw.shell.ui.isWide
 import java.io.File
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MainScreen(
     onNavigateToSettings: () -> Unit = {},
@@ -651,6 +651,7 @@ fun MainScreen(
                             val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
                             val hint = when (modeTag?.mode) {
                                 ExecutionMode.MISSION -> strings.placeholderMission
+                                ExecutionMode.SWARM -> strings.placeholderSwarm
                                 ExecutionMode.GOAL -> "描述目标，Agent 自动评估完成度..."
                                 ExecutionMode.PLAN -> "描述任务，Agent 先分解计划再逐步执行..."
                                 ExecutionMode.RESEARCH -> strings.placeholderResearch
@@ -765,8 +766,9 @@ fun MainScreen(
                 val orderedModes = panelOrder.modes.mapNotNull { id ->
                     ExecutionMode.entries.find { it.name.lowercase() == id }
                 }.ifEmpty { ExecutionMode.entries.toList() }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    orderedModes.take(6).forEach { mode ->
+                // 两行布局容纳全部模式（7 个 → 4+3）— take(6) 截断曾吞掉 Swarm
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)) {
+                    orderedModes.forEach { mode ->
                         val isActive = activeTags.any { it is InputTag.Mode && it.mode == mode }
                         ModeItem(mode = mode, isActive = isActive, onClick = {
                             showExpandSheet = false

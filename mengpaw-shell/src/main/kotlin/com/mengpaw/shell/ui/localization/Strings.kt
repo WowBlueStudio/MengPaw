@@ -75,6 +75,7 @@ data class AppStrings(
 
     // Mode-specific placeholders
     val placeholderMission: String,
+    val placeholderSwarm: String,
     val placeholderResearch: String,
     val placeholderTranslate: String,
     val placeholderSilent: String,
@@ -341,6 +342,7 @@ val EnglishStrings = AppStrings(
     mentionHint = "@mention an agent...",
 
     placeholderMission = "Describe a complex task for sub-agents to decompose...",
+    placeholderSwarm = "Describe a task for parallel swarm workers with mixed models...",
     placeholderResearch = "Enter a topic for deep research with source verification...",
     placeholderTranslate = "Enter text to translate...",
     placeholderSilent = "Describe a background task to run silently...",
@@ -602,6 +604,7 @@ val ChineseStrings = AppStrings(
     mentionHint = "@智能体名称...",
 
     placeholderMission = "输入一个需要子智能体进行拆解执行的复杂任务",
+    placeholderSwarm = "输入需要火种模式并行拆解执行的任务（可混合不同模型）",
     placeholderResearch = "输入需要深度调研的课题，将进行多轮搜索与交叉验证",
     placeholderTranslate = "输入需要翻译的内容",
     placeholderSilent = "输入后台静默执行的任务，完成后推送结果",
