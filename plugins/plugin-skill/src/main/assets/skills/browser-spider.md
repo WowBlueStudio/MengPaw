@@ -42,7 +42,7 @@ browser.mcp.invoke browser_eval {"script":"var n=document.querySelector('.next')
 
 ## MCP 工具清单（browser.mcp.invoke）
 
-`browser_navigate` / `browser_extract` / `browser_eval` / `browser_click` / `browser_type` / `browser_screenshot` / `browser_download_url`（7 个，`browser.mcp.tools` 查看详情）。抓取常用：navigate → extract → eval。
+`browser_navigate` / `browser_extract` / `browser_eval` / `browser_click` / `browser_type` / `browser_screenshot`（6 个，`browser.mcp.tools` 查看详情）。抓取常用：navigate → extract → eval。
 
 ## 去重与持久化
 

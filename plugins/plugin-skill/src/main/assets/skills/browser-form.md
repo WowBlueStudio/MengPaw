@@ -6,7 +6,7 @@ category: browser
 ---
 # 表单自动化 (经 MCP 工具)
 
-> 通道: `browser.mcp.invoke` 7 工具。主手册: `skill.run browser-control`。
+> 通道: `browser.mcp.invoke` 6 工具。主手册: `skill.run browser-control`。
 
 ## 适用场景
 
@@ -25,7 +25,7 @@ category: browser
 
 ## MCP 工具清单（browser.mcp.invoke）
 
-`browser_navigate`（跳转）/ `browser_type`（输入）/ `browser_click`（点击）/ `browser_eval`（JS 执行）/ `browser_extract`（页面提取）/ `browser_screenshot`（截图核对）/ `browser_download_url`（下载文件）。表单常用：navigate → type → click → eval 验证。
+`browser_navigate`（跳转）/ `browser_type`（输入）/ `browser_click`（点击）/ `browser_eval`（JS 执行）/ `browser_extract`（页面提取）/ `browser_screenshot`（截图核对）。表单常用：navigate → type → click → eval 验证。
 
 ## 常见场景
 
@@ -57,7 +57,7 @@ browser.mcp.invoke browser_eval {"script":"JSON.stringify({errs:document.querySe
 | 元素找不到 | 页面 JS 渲染 — navigate 后等 1-2s 再操作; 用 eval 探测 DOM |
 | 提交无反应 | eval 检查表单 action/method; 换 `form.submit()` |
 | CAPTCHA | 无法自动过 — 告知用户手动完成, 完成后继续 |
-| 文件上传 | 无法经 MCP 上传 — 用 `agent.write` 存文件 + 引导用户（下载用 browser_download_url） |
+| 文件上传 | 无法经 MCP 上传 — 用 `agent.write` 存文件 + 引导用户 |
 | 输入疑似被清空 | 页面重渲染 — type 后立即 eval 验证 value 再继续 |
 
 ## 注意事项
