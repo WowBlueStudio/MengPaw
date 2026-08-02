@@ -865,12 +865,15 @@ class AgentEngine(
         }
 
         // ── Evolution 省察引导注入: 金字塔提问片段 (限流 MAX_INJECTIONS/会话) ──
+        // 追加到对话末尾而非 add(0) 前插 — 前插会使后续所有消息位移, 击穿整个
+        // 前缀缓存 (prompt caching 按字节前缀命中); 末尾追加只增不改, 缓存前缀不受扰动,
+        // 且"最新指令"语义更强（紧贴当前轮次）。
         val guide = pendingGuideFragment
         if (guide != null && guideInjections < com.mengpaw.kernel.evolution.EvolutionGuide.MAX_INJECTIONS) {
             guideInjections++
             pendingGuideFragment = null
             val mutable = nonSystemHistory.toMutableList()
-            mutable.add(0, mapOf("role" to "system", "content" to guide))
+            mutable.add(mapOf("role" to "system", "content" to guide))
             return llmRequestBuilder.buildMessages(mutable, injectCacheAnnotations = true)
         }
 
