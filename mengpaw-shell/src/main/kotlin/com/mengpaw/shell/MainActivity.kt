@@ -620,8 +620,12 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             val skillsDir = java.io.File(com.mengpaw.kernel.DataPaths.SKILLS)
             val skillFiles = if (skillsDir.exists()) {
                 skillsDir.listFiles()?.filter { it.extension == "md" }
-                    ?.map { FrameworkItem(it.nameWithoutExtension, ItemCategory.BUILTIN,
-                        try { it.readText().lines().firstOrNull()?.removePrefix("#")?.trim() ?: "" } catch (_: Exception) { "" }, "") }
+                    ?.map { file ->
+                        val content = try { file.readText() } catch (_: Exception) { "" }
+                        // docMarkdown = 技能 md 全文 — 展开区以 Markdown 渲染剧本
+                        FrameworkItem(file.nameWithoutExtension, ItemCategory.BUILTIN,
+                            summary = extractSummary(content), docMarkdown = content)
+                    }
                     ?: emptyList()
             } else emptyList()
             // Empty dir → empty list; the section renders its own "暂无条目" empty state.

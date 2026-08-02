@@ -75,8 +75,6 @@ fun FrameworkSettingsContent(
 
     // ── 角色模型路由（步坦协同/火种）──
     SectionHeader(state.strings.roleRoutingTitle)
-    Text(state.strings.roleRoutingDesc,
-        style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
     Spacer(Modifier.height(ArcoSpacing.sm))
     if (state.savedProviders.isEmpty()) {
         Text(state.strings.roleRoutingEmpty,
@@ -217,9 +215,6 @@ fun FrameworkSettingsContent(
             Text(if (state.memoryBackend == "builtin") state.strings.frameworkMemoryBackendDesc else state.memoryBackend,
                 style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
-        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh) {
-            Text(state.strings.frameworkRequiresPlugin, Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ThemeColors.textSecondary)
-        }
     }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
@@ -232,9 +227,6 @@ fun FrameworkSettingsContent(
             Text(state.strings.frameworkContextStrategy, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
             Text(if (state.contextStrategy == "default") state.strings.frameworkContextStrategyDesc else state.contextStrategy,
                 style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-        }
-        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh) {
-            Text(state.strings.frameworkRequiresPlugin, Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontSize = 11.sp, color = ThemeColors.textSecondary)
         }
     }
 

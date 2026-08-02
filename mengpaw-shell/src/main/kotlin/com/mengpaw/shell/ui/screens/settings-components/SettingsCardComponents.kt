@@ -92,7 +92,8 @@ fun FrameworkItemSection(
                         }
                         AnimatedVisibility(visible = expanded) {
                             if (item.docMarkdown.isNotBlank()) {
-                                MarkdownText(content = item.docMarkdown.take(5000), modifier = Modifier.padding(top = ArcoSpacing.sm).heightIn(max = 300.dp))
+                                // 全文展开（外层页面滚动查看）— 此前 heightIn(300) 会裁切长剧本且不可滚动
+                                MarkdownText(content = item.docMarkdown.take(5000), modifier = Modifier.padding(top = ArcoSpacing.sm))
                             } else {
                                 Text(strings.noDocs, Modifier.padding(top = ArcoSpacing.sm), fontSize = 12.sp, color = ThemeColors.textSecondary)
                             }
