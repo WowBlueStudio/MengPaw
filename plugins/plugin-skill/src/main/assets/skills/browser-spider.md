@@ -1,6 +1,6 @@
 ---
 name: browser-spider
-description: 网页抓取工作流 — 唤醒、导航、提取、转档、分页、去重、持久化 (经 MCP + search.*)
+description: 网页抓取工作流 — 唤醒、导航、提取、转档、分页、去重、持久化 (经 MCP + search.*)。触发词：「抓取这个网页」「采集这个列表」「把这页转成文档」「爬这个网站」
 enabled: true
 category: browser
 ---
