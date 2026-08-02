@@ -72,6 +72,51 @@ fun FrameworkSettingsContent(
         }
     }
 
+    // ── 角色模型路由（Fleet/火种）──
+    SectionHeader("角色模型路由（Fleet/火种）")
+    Text("各角色可用不同模型：规划/验收用强模型、执行用便宜模型；未配置的角色回退主模型。",
+        style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+    Spacer(Modifier.height(ArcoSpacing.sm))
+    if (state.savedProviders.isEmpty()) {
+        Text("请先在上方保存至少一个模型连接，再为角色分配模型。",
+            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+    } else {
+        SettingsViewModel.SWARM_ROLES.forEach { role ->
+            val current = state.swarmRoles[role]
+            var menuExpanded by remember { mutableStateOf(false) }
+            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(SettingsViewModel.roleLabel(role), style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(0.45f))
+                Box {
+                    Surface(
+                        onClick = { menuExpanded = true },
+                        shape = RoundedCornerShape(ArcoRadius.sm),
+                        color = if (current != null) ThemeColors.brand.copy(alpha = 0.12f) else ThemeColors.bgCardHigh
+                    ) {
+                        Text(
+                            if (current != null) "${current.preset.label} · ${current.model}" else "默认（主模型）",
+                            Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            fontSize = 12.sp,
+                            color = if (current != null) ThemeColors.brand else ThemeColors.textPrimary,
+                            maxLines = 1
+                        )
+                    }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(text = { Text("默认（主模型）") }, onClick = {
+                            viewModel.setSwarmRole(role, null); menuExpanded = false
+                        })
+                        state.savedProviders.forEach { sp ->
+                            DropdownMenuItem(text = { Text("${sp.preset.label} · ${sp.model}") }, onClick = {
+                                viewModel.setSwarmRole(role, sp); menuExpanded = false
+                            })
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(ArcoSpacing.md))
+
     if (state.apiSectionExpanded) {
         SectionHeader(if (state.savedProviders.isNotEmpty()) state.strings.frameworkEditConnection else state.strings.frameworkNewConnection)
 

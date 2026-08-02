@@ -344,7 +344,15 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             agentViewModel.applyConfiguration(
                 saved.endpoint, saved.apiKey, saved.model,
                 com.mengpaw.kernel.llm.AdaptiveLlmProvider(saved.endpoint, saved.apiKey, saved.model),
-                settingsViewModel.state.value.effectiveAgentLanguage
+                settingsViewModel.state.value.effectiveAgentLanguage,
+                swarmRoles = settingsViewModel.state.value.swarmRoles
+            )
+        } else if (settingsViewModel.state.value.swarmRoles.isNotEmpty()) {
+            // 只有角色路由配置（无主 key）也要同步
+            agentViewModel.applyConfiguration(
+                "", "", "", com.mengpaw.shell.ui.screens.model.UnconfiguredLlmProvider(),
+                settingsViewModel.state.value.effectiveAgentLanguage,
+                swarmRoles = settingsViewModel.state.value.swarmRoles
             )
         }
     }
@@ -367,7 +375,13 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                 agentViewModel.applyConfiguration(
                     s.apiEndpoint, s.apiKey, s.modelName,
                     com.mengpaw.kernel.llm.AdaptiveLlmProvider(s.apiEndpoint, s.apiKey, s.modelName),
-                    s.effectiveAgentLanguage
+                    s.effectiveAgentLanguage,
+                    swarmRoles = s.swarmRoles
+                )
+            } else if (s.swarmRoles.isNotEmpty()) {
+                agentViewModel.applyConfiguration(
+                    "", "", "", com.mengpaw.shell.ui.screens.model.UnconfiguredLlmProvider(),
+                    s.effectiveAgentLanguage, swarmRoles = s.swarmRoles
                 )
             }
         }

@@ -37,6 +37,18 @@ class AgentSessionFactory(
     var globalModel: String = "unknown"
     var globalAgentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE
 
+    /** 角色模型路由 — Fleet/火种各角色 → provider 快照（设置页配置，缺省回退主模型）。 */
+    @Volatile
+    var globalSwarmRoles: Map<String, SavedProvider> = emptyMap()
+
+    /** 组装角色 → LlmProvider（跳过无 key/构造失败的条目）。 */
+    fun buildSwarmRoles(): Map<String, LlmProvider> =
+        globalSwarmRoles.mapNotNull { (role, sp) ->
+            if (sp.endpoint.isBlank() || sp.apiKey.isBlank()) null
+            else try { role to AdaptiveLlmProvider(sp.endpoint, sp.apiKey, sp.model) }
+            catch (_: Exception) { null }
+        }.toMap()
+
     fun defaultProvider(): LlmProvider =
         if (globalApiKey.isBlank()) UnconfiguredLlmProvider()
         else try { AdaptiveLlmProvider(globalEndpoint, globalApiKey, globalModel) } catch (_: Exception) { UnconfiguredLlmProvider() }

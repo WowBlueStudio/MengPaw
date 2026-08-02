@@ -167,12 +167,14 @@ class AgentViewModel : ViewModel() {
         apiKey: String,
         model: String,
         provider: LlmProvider,
-        agentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE
+        agentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE,
+        swarmRoles: Map<String, SavedProvider>? = null
     ) {
         sessionFactory.globalEndpoint = endpoint
         sessionFactory.globalApiKey = apiKey
         sessionFactory.globalModel = model
         sessionFactory.globalAgentLang = agentLang
+        if (swarmRoles != null) sessionFactory.globalSwarmRoles = swarmRoles
 
         sessions.values.forEach { session ->
             try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) { }
@@ -463,8 +465,10 @@ class AgentViewModel : ViewModel() {
                     // ── 显式斜杠命令结束, 以下为 loopMode 分发 ──
                     inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
                     inputTagManager.loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
-                    inputTagManager.loopMode == LoopMode.MISSION || inputTagManager.loopMode == LoopMode.FLEET -> session.engine.runWithFleet(task = finalTask, onStep = onStep)
-                    inputTagManager.loopMode == LoopMode.SWARM -> session.engine.runWithSwarm(task = finalTask, onStep = onStep)
+                    inputTagManager.loopMode == LoopMode.MISSION || inputTagManager.loopMode == LoopMode.FLEET ->
+                        session.engine.runWithFleet(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep)
+                    inputTagManager.loopMode == LoopMode.SWARM ->
+                        session.engine.runWithSwarm(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep)
                     else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
                 }
 

@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers; import kotlinx.coroutines.launch; import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
 private val appJson = Json { ignoreUnknownKeys = true; prettyPrint = true }
@@ -144,7 +146,9 @@ data class SettingsState(
     val apiSectionExpanded: Boolean = false,
     val savedProviders: List<SavedProvider> = emptyList(),
     val isTesting: Boolean = false,
-    val balance: String = ""
+    val balance: String = "",
+    /** 角色模型路由 — Fleet/火种各角色 → provider 快照（只配想覆盖的角色，缺省回退主模型）。 */
+    val swarmRoles: Map<String, SavedProvider> = emptyMap()
 ) {
     val strings: AppStrings get() = if (useChinese) ChineseStrings else EnglishStrings
 
@@ -194,13 +198,49 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     balance = p.balance
                 )
             }
-            if (providers.isNotEmpty()) {
-                _state.value = _state.value.copy(savedProviders = providers)
+            // 角色模型路由配置（独立 Vault key，损坏则静默跳过）
+            var roles = emptyMap<String, SavedProvider>()
+            try {
+                val rolesRaw = vault.retrieve(VAULT_KEY_SWARM_ROLES)
+                if (!rolesRaw.isNullOrBlank()) {
+                    val rolesJson = appJson.decodeFromString<Map<String, SavedProviderJson>>(rolesRaw)
+                    roles = rolesJson.mapNotNull { (role, p) ->
+                        val sp = SavedProvider(
+                            preset = try { LlmProviderPreset.valueOf(p.preset) } catch (_: Exception) { LlmProviderPreset.CUSTOM },
+                            apiKey = p.apiKey, endpoint = p.endpoint, model = p.model, balance = p.balance
+                        )
+                        if (sp.endpoint.isBlank()) null else role to sp
+                    }.toMap()
+                }
+            } catch (_: Exception) {}
+            if (providers.isNotEmpty() || roles.isNotEmpty()) {
+                _state.value = _state.value.copy(savedProviders = providers, swarmRoles = roles)
             }
         } catch (_: Exception) {
             // Corrupted data or first launch — start fresh
             migrateLegacyKey()
         }
+    }
+
+    /** 设置/清除角色模型路由（provider=null 移除该角色，回退主模型）。 */
+    fun setSwarmRole(role: String, provider: SavedProvider?) {
+        val roles = if (provider == null) _state.value.swarmRoles - role
+        else _state.value.swarmRoles + (role to provider)
+        _state.value = _state.value.copy(swarmRoles = roles)
+        persistSwarmRoles(roles)
+    }
+
+    /** Serialize and persist role routing to encrypted Vault. */
+    private fun persistSwarmRoles(roles: Map<String, SavedProvider>) {
+        if (!vault.isAvailable) return
+        val jsonMap = roles.mapValues { (_, p) ->
+            SavedProviderJson(
+                preset = p.preset.name, apiKey = p.apiKey,
+                endpoint = p.endpoint, model = p.model, balance = p.balance
+            )
+        }
+        vault.store(VAULT_KEY_SWARM_ROLES,
+            appJson.encodeToString(MapSerializer(String.serializer(), SavedProviderJson.serializer()), jsonMap))
     }
 
     /** Migrate old single-key Vault entries into the new multi-provider format. */
@@ -240,6 +280,29 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         private const val VAULT_KEY_PROVIDERS = "saved_providers_json"
+        private const val VAULT_KEY_SWARM_ROLES = "swarm_roles_json"
+
+        /** Fleet/火种角色模型路由的角色键。 */
+        const val ROLE_PLANNER = "planner"
+        const val ROLE_WORKER = "worker"
+        const val ROLE_VERIFIER = "verifier"
+        const val ROLE_SYNTHESIZER = "synthesizer"
+        const val ROLE_WORKER_ALT = "worker.alt"
+
+        /** 全部可配角色（顺序 = UI 展示顺序）。 */
+        val SWARM_ROLES: List<String> = listOf(
+            ROLE_PLANNER, ROLE_WORKER, ROLE_VERIFIER, ROLE_SYNTHESIZER, ROLE_WORKER_ALT
+        )
+
+        /** 角色显示名（UI）。 */
+        fun roleLabel(role: String): String = when (role) {
+            ROLE_PLANNER -> "规划器 (拆解)"
+            ROLE_WORKER -> "执行器 (worker)"
+            ROLE_VERIFIER -> "验收器 (verifier)"
+            ROLE_SYNTHESIZER -> "合成器 (synthesizer)"
+            ROLE_WORKER_ALT -> "备用执行器 (worker.alt)"
+            else -> role
+        }
     }
 
     /** Switch to a preset provider and auto-fill endpoint + model. Triggers model list fetch. */
