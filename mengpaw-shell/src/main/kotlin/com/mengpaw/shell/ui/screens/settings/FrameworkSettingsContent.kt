@@ -73,49 +73,6 @@ fun FrameworkSettingsContent(
         }
     }
 
-    // ── 角色模型路由（步坦协同/火种）──
-    SectionHeader(state.strings.roleRoutingTitle)
-    Spacer(Modifier.height(ArcoSpacing.sm))
-    if (state.savedProviders.isEmpty()) {
-        Text(state.strings.roleRoutingEmpty,
-            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-    } else {
-        SettingsViewModel.SWARM_ROLES.forEach { role ->
-            val current = state.swarmRoles[role]
-            var menuExpanded by remember { mutableStateOf(false) }
-            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (state.useChinese) SettingsViewModel.roleLabel(role)
-                        else roleEnglishLabel(role, state.strings), style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.weight(0.45f))
-                Box {
-                    Surface(
-                        onClick = { menuExpanded = true },
-                        shape = RoundedCornerShape(ArcoRadius.sm),
-                        color = if (current != null) ThemeColors.brand.copy(alpha = 0.12f) else ThemeColors.bgCardHigh
-                    ) {
-                        Text(
-                            if (current != null) "${if (state.useChinese) current.preset.label else current.preset.enLabel} · ${current.model}" else state.strings.defaultMainModel,
-                            Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            fontSize = 12.sp,
-                            color = if (current != null) ThemeColors.brand else ThemeColors.textPrimary,
-                            maxLines = 1
-                        )
-                    }
-                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        DropdownMenuItem(text = { Text(state.strings.defaultMainModel) }, onClick = {
-                            viewModel.setSwarmRole(role, null); menuExpanded = false
-                        })
-                        state.savedProviders.forEach { sp ->
-                            DropdownMenuItem(text = { Text("${if (state.useChinese) sp.preset.label else sp.preset.enLabel} · ${sp.model}") }, onClick = {
-                                viewModel.setSwarmRole(role, sp); menuExpanded = false
-                            })
-                        }
-                    }
-                }
-            }
-        }
-    }
-    Spacer(Modifier.height(ArcoSpacing.md))
 
     if (state.apiSectionExpanded) {
         SectionHeader(if (state.savedProviders.isNotEmpty()) state.strings.frameworkEditConnection else state.strings.frameworkNewConnection)
@@ -278,14 +235,3 @@ fun FrameworkSettingsContent(
     }
 }
 
-
-/** 角色英文显示名（英文 UI 用 — 中文走 SettingsViewModel.roleLabel）。 */
-@Composable
-private fun roleEnglishLabel(role: String, strings: AppStrings): String = when (role) {
-    com.mengpaw.kernel.agent.SwarmRoles.PLANNER -> strings.rolePlanner
-    com.mengpaw.kernel.agent.SwarmRoles.WORKER -> strings.roleWorker
-    com.mengpaw.kernel.agent.SwarmRoles.VERIFIER -> strings.roleVerifier
-    com.mengpaw.kernel.agent.SwarmRoles.SYNTHESIZER -> strings.roleSynthesizer
-    com.mengpaw.kernel.agent.SwarmRoles.WORKER_ALT -> strings.roleWorkerAlt
-    else -> role
-}
