@@ -12,13 +12,16 @@ import com.mengpaw.kernel.security.SecurityPolicy
 /**
  * Execution pipeline with security checks, rate limiting, and audit trail.
  *
- * Flow: Parse → Rate Limit → Security Policy → Integrity Guard → Execute → Audit
+ * Flow: Parse → Result Cache → Rate Limit → Security Policy → Integrity Guard → Execute → Audit
+ * （缓存命中跳过限流/安全/执行，但保留 audit 轨迹）
  */
 class Pipeline(
     private val interpreter: CliInterpreter = CliInterpreter(),
     private val registry: CommandRegistry = CommandRegistry(),
     private val securityPolicy: SecurityPolicy = SecurityPolicy(),
-    private val maxCommandsPerSecond: Int = 30
+    private val maxCommandsPerSecond: Int = 30,
+    /** 只读命令结果缓存（白名单 + 短 TTL）；null = 关闭。 */
+    private val resultCache: CommandResultCache? = null
 ) {
     /** Integrity provider for path-level protection; set after construction for Android. */
     var integrityProvider: IntegrityProvider = NoOpIntegrityProvider
@@ -42,6 +45,20 @@ class Pipeline(
             val parsed = interpreter.parse(trimmed)
             if (parsed.command.isBlank()) {
                 return failAudit("Empty command", ErrorCodes.ERR_INVALID_INPUT, trimmed, context, startTime)
+            }
+
+            // ── Result cache: 白名单只读命令命中直接返回（跳过限流/安全/执行）──
+            val cacheable = resultCache != null && parsed.command in CommandResultCache.CACHEABLE
+            if (cacheable) {
+                val cacheKey = resultCache!!.keyFor(parsed.command, parsed.args, context.agentName, context.sessionId)
+                val cached = resultCache.get(cacheKey)
+                if (cached != null) {
+                    synchronized(pipelineLock) {
+                        auditLog.add(AuditEntry(startTime, context.sessionId, trimmed, true, "(cache hit)"))
+                        if (auditLog.size > MAX_AUDIT_ENTRIES) auditLog.removeAt(0)
+                    }
+                    return cached
+                }
             }
 
             // VULN-FIX: Rate limiting — prevent command loop DoS
@@ -72,6 +89,13 @@ class Pipeline(
                 )
 
             val result = executor(parsed.args, context)
+            // 只读命令成功结果写入缓存（同会话键）
+            if (cacheable && result.success) {
+                resultCache!!.put(
+                    resultCache.keyFor(parsed.command, parsed.args, context.agentName, context.sessionId),
+                    result
+                )
+            }
             // VULN-FIX: Audit trail — log all executions to shared static log
             // SECURITY: Sanitize output to prevent API key/token leakage in audit log
             val sanitizedOutput = com.mengpaw.kernel.security.Sanitizer.sanitize(result.output.take(200))

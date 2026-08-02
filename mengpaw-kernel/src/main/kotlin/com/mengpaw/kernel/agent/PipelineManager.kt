@@ -79,7 +79,7 @@ class PipelineManager(
         }
 
         pluginManager.bindRegistry(registry)
-        val pipeline = Pipeline(registry = registry)
+        val pipeline = Pipeline(registry = registry, resultCache = com.mengpaw.kernel.cli.CommandResultCache())
         pipeline.integrityProvider = integrityProvider
         cachedPipeline = pipeline
         return pipeline

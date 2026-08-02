@@ -40,6 +40,71 @@ class PipelineTest {
         assertTrue(result.output.contains("Session: test"))
     }
 
+    // ── Result cache tests ─────────────────────────────────────────────
+
+    private fun cachedPipeline(ttl: Long = 10_000): Pair<Pipeline, java.util.concurrent.atomic.AtomicInteger> {
+        val calls = java.util.concurrent.atomic.AtomicInteger(0)
+        val registry = CommandRegistry()
+        registry.register("self.status") { _, _ ->
+            calls.incrementAndGet()
+            ExecutionResult.ok("status-${calls.get()}")
+        }
+        return Pipeline(registry = registry, resultCache = CommandResultCache(ttlMillis = ttl)) to calls
+    }
+
+    @Test
+    fun `cached read command executes handler once`() = runTest {
+        val (pipeline, calls) = cachedPipeline()
+        val ctx = ExecutionContext(sessionId = "test", agentName = "MengPaw")
+        val r1 = pipeline.execute("self.status", ctx)
+        val r2 = pipeline.execute("self.status", ctx)
+        assertTrue(r1.success && r2.success)
+        assertEquals("同参重复调用应命中缓存，handler 只执行 1 次", 1, calls.get())
+        assertTrue("两次结果应一致", r1.output == r2.output)
+    }
+
+    @Test
+    fun `cache key isolates by session`() = runTest {
+        val (pipeline, calls) = cachedPipeline()
+        val ctxA = ExecutionContext(sessionId = "sessA", agentName = "MengPaw")
+        val ctxB = ExecutionContext(sessionId = "sessB", agentName = "MengPaw")
+        pipeline.execute("self.status", ctxA)
+        pipeline.execute("self.status", ctxB)
+        assertEquals("不同会话不应共享缓存", 2, calls.get())
+    }
+
+    @Test
+    fun `cache expires after ttl`() = runTest {
+        val (pipeline, calls) = cachedPipeline(ttl = 50)
+        val ctx = ExecutionContext(sessionId = "test", agentName = "MengPaw")
+        pipeline.execute("self.status", ctx)
+        Thread.sleep(120)
+        pipeline.execute("self.status", ctx)
+        assertEquals("TTL 过期后应重新执行", 2, calls.get())
+    }
+
+    @Test
+    fun `non-whitelisted command never cached`() = runTest {
+        val calls = java.util.concurrent.atomic.AtomicInteger(0)
+        val registry = CommandRegistry()
+        registry.register("fs.write") { _, _ -> calls.incrementAndGet(); ExecutionResult.ok("written") }
+        val pipeline = Pipeline(registry = registry, resultCache = CommandResultCache())
+        val ctx = ExecutionContext(sessionId = "test", agentName = "MengPaw")
+        pipeline.execute("fs.write a b", ctx)
+        pipeline.execute("fs.write a b", ctx)
+        assertEquals("写命令不在白名单，不应缓存", 2, calls.get())
+    }
+
+    @Test
+    fun `cache hit still produces audit entry`() = runTest {
+        val (pipeline, calls) = cachedPipeline()
+        val ctx = ExecutionContext(sessionId = "test", agentName = "MengPaw")
+        pipeline.execute("self.status", ctx)
+        pipeline.execute("self.status", ctx)
+        val audit = pipeline.getSessionAudit("test")
+        assertEquals("缓存命中也要留审计轨迹（2 次执行 2 条审计）", 2, audit.size)
+    }
+
     @Test
     fun `execute empty command`() = runTest {
         val pipeline = createPipeline()
