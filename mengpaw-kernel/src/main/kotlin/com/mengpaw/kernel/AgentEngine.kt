@@ -369,7 +369,8 @@ class AgentEngine(
         val ratio = estimateContextRatio(promptTokens)
         if (ratio < PipelineManager.SOFT_COMPACT_RATIO) { consecutiveCompacts = 0; compactStuck = false; return false }
         if (ratio < PipelineManager.TOOL_SNIP_RATIO) return false
-        if (ratio < PipelineManager.COMPACT_RATIO) { return snipStaleToolResults(sessionId, currentStep) > 0 }
+        // 折叠主阈值按模型档位（默认 0.9 / 保守模型 0.8 — setAgentIdentity 时设置）
+        if (ratio < compactRatio) { return snipStaleToolResults(sessionId, currentStep) > 0 }
         val estimatedFoldTokens = (promptTokens * 0.3).toInt()
         if (ratio < PipelineManager.COMPACT_FORCE_RATIO && estimatedFoldTokens < PipelineManager.MIN_FOLD_TOKENS) return false
         sessionManager.compressIfNeeded(llmProvider)
@@ -394,10 +395,16 @@ class AgentEngine(
     var modelName: String = "unknown"
         private set
 
+    /** 折叠主阈值（模型档位）— 默认 0.9，保守模型 0.8（PipelineManager.compactRatioFor）。 */
+    @Volatile
+    var compactRatio: Double = PipelineManager.compactRatioFor("unknown")
+        private set
+
     fun setAgentIdentity(name: String, framework: String?, model: String) {
         agentName = name
         this.framework = framework
         this.modelName = model
+        compactRatio = PipelineManager.compactRatioFor(model)
         toolResultManager = ToolResultManager(name)
         sessionManager.agentName = name
         rebuildSystemPrompt()

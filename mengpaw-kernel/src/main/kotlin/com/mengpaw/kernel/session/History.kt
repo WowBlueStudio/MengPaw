@@ -134,18 +134,25 @@ class SessionManager {
         val session = _sessions.value[sessionId] ?: return false
         if (session.messages.size <= maxMessages) return false
 
-        val keepCount = 10
+        // ── 保留策略: MIN 组数保底 + MAX token 预算（连贯性档位）──
+        // 从最近往回按问答组（user 消息为界）累积保留原文:
+        //   - MIN_KEEP_GROUPS 组无条件保留（原文优先, 即使超预算）
+        //   - 预算内继续累积直到用尽（预算 = 窗口 × 连贯性档位 8%/15%/25%）
+        // 组数随问答大小自动浮动: 大问答保留组数少, 小问答保留多
         // Snapshot BEFORE the suspend LLM call to avoid losing concurrently-added messages
         val snapshot = session.messages.toList()
-        val toCompress = snapshot.dropLast(keepCount)
+        val budgetTokens = (com.mengpaw.kernel.PipelineManager.DEFAULT_CONTEXT_WINDOW *
+            retentionBudgetRatio(snapshot)).toInt()
+        val (toKeep, toCompress) = splitRetention(snapshot, budgetTokens)
         if (toCompress.isEmpty()) return false
-        val toKeep = snapshot.takeLast(keepCount)
 
         // ── QwenPaw-style: archive raw messages before compaction ──
         archiveRawMessages(toCompress)
 
-        // ── QwenPaw-style: structured summary ──
-        val summary = summarizeMessagesStructured(llmProvider, toCompress)
+        // ── QwenPaw-style: structured summary (长度与保留原文反相关 — 目标占用率 ~60%) ──
+        val keptTokens = toKeep.sumOf { (it.content.length * TOK_PER_CHAR).toInt() }
+        val summary = summarizeMessagesStructured(
+            llmProvider, toCompress, summaryBudgetCharsFor(keptTokens))
 
         // ── Build compact_summary with dialog path reference ──
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
@@ -204,7 +211,8 @@ class SessionManager {
      */
     private suspend fun summarizeMessagesStructured(
         llmProvider: LlmProvider,
-        messages: List<Message>
+        messages: List<Message>,
+        summaryBudgetChars: Int = 600
     ): String {
         val conversationText = messages.joinToString("\n") { "[${it.role}] ${it.content.take(500)}" }
 
@@ -239,11 +247,81 @@ $conversationText
             )
         )
         return try {
-            llmProvider.completeWithMessages(summaryPrompt).take(600)
+            llmProvider.completeWithMessages(summaryPrompt).take(summaryBudgetChars)
         } catch (e: Exception) {
             KernelLog.w("History", "summarize failed: ${e.message}")
             "目标: (参见完整历史)\n进展: 对话已压缩\n关键决策: 无\n下一步: 继续对话\n关键上下文: 见 dialog/归档文件"
         }
+    }
+
+    // ── 保留策略: MIN 组数保底 + token 预算 ──────────────────────────
+
+    /** token/字符 粗估系数（同 LlmRequestBuilder.FALLBACK_TOK_PER_CHAR）。 */
+    private val TOK_PER_CHAR = 0.25
+    /** 至少保留的问答组数（原文优先保底 — 即使超预算）。 */
+    private val MIN_KEEP_GROUPS = 3
+
+    /**
+     * 从最近往回按问答组（user 消息为界）切分保留原文。
+     * @return Pair(保留原文, 待压缩) — 保持原顺序。
+     */
+    private fun splitRetention(messages: List<Message>, budgetTokens: Int): Pair<List<Message>, List<Message>> {
+        val keep = mutableListOf<Message>()
+        var keptTokens = 0
+        var groups = 0
+        var idx = messages.size - 1
+        while (idx >= 0) {
+            // 收集一组: 从 idx 往回直到（不含）上一个 user 消息
+            val group = mutableListOf<Message>()
+            var boundary = idx
+            while (boundary >= 0) {
+                group.add(0, messages[boundary])
+                if (messages[boundary].role == "user") break
+                boundary--
+            }
+            val groupTokens = group.sumOf { (it.content.length * TOK_PER_CHAR).toInt() }
+            // MIN 保底（原文优先）或预算内 → 保留; 否则停止
+            if (groups < MIN_KEEP_GROUPS || keptTokens + groupTokens <= budgetTokens) {
+                keep.addAll(0, group)
+                keptTokens += groupTokens
+                groups++
+                idx = boundary - 1
+            } else {
+                break
+            }
+        }
+        val toCompress = messages.dropLast(keep.size)
+        return keep to toCompress
+    }
+
+    /**
+     * 连贯性信号 → 保留预算档位（轻量启发式, 零 LLM 开销）。
+     * 高 25%: 工作深度（最近 10 组内同一命令/文件路径 ≥3 次）或调试态（最近 5 组含错误关键字）
+     * 中 15%: 产出规模（最近消息平均 >2000 字符）
+     * 低 8%: 默认（普通问答, 主题轮换快）
+     */
+    private fun retentionBudgetRatio(messages: List<Message>): Double {
+        val recent = messages.takeLast(40)
+        // 工作深度: 同一命令出现 >= 3 次
+        val cmds = recent.filter { it.role == "assistant" && it.content.startsWith("Command:") }
+            .map { it.content.substringAfter("Command: ").substringBefore("\n").take(40) }
+        if (cmds.groupingBy { it }.eachCount().values.any { it >= 3 }) return 0.25
+        // 调试态: 最近 5 组（~20 条）含错误关键字
+        val debugMarkers = listOf("Error", "失败", "超时", "再试", "修正")
+        if (recent.takeLast(20).any { m -> debugMarkers.any { m.content.contains(it) } }) return 0.25
+        // 产出规模: 平均消息 > 2000 字符
+        val avgSize = recent.map { it.content.length }.average()
+        return if (avgSize > 2000) 0.15 else 0.08
+    }
+
+    /**
+     * 摘要长度反相关 — 折叠后目标占用率 ~60%:
+     * 摘要预算 = 0.6×窗口 − 保留原文 token, 折算字符。上下限 [300, 1200]。
+     */
+    private fun summaryBudgetCharsFor(keptTokens: Int): Int {
+        val targetTokens = (com.mengpaw.kernel.PipelineManager.DEFAULT_CONTEXT_WINDOW * 0.60).toInt()
+        val summaryTokens = targetTokens - keptTokens
+        return (summaryTokens / TOK_PER_CHAR).toInt().coerceIn(300, 1200)
     }
 
     /**

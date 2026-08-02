@@ -25,9 +25,26 @@ class PipelineManager(
         const val DEFAULT_CONTEXT_WINDOW = 131_072
         const val SOFT_COMPACT_RATIO = 0.50
         const val TOOL_SNIP_RATIO = 0.60
-        const val COMPACT_RATIO = 0.80
-        const val COMPACT_FORCE_RATIO = 0.90
+
+        /** 折叠主阈值（默认档 0.9 — 稀有折叠哲学; 保守模型档见 [compactRatioFor]）。 */
+        const val COMPACT_RATIO = 0.90
+        /** 强制折叠线 — 超过后免 MIN_FOLD_TOKENS 收益门槛。 */
+        const val COMPACT_FORCE_RATIO = 0.95
         const val MIN_FOLD_TOKENS = 400
+
+        /** 保守模型名单子串 — 旧/小模型有效窗口短，折叠阈值回落 0.8 防实际降智区工作。 */
+        private val CONSERVATIVE_MODEL_MARKERS = listOf(
+            "flash-mini", "nano", "lite", "mini", "7b", "8b", "13b"
+        )
+
+        /**
+         * 按模型名解析折叠主阈值 — kernel 与壳层共用的单一规则（消灭双份硬编码漂移）。
+         * 默认 0.90（Claude Code 稀有折叠哲学）; 保守模型 0.80（保持旧阶梯）。
+         */
+        fun compactRatioFor(modelName: String): Double {
+            val name = modelName.lowercase()
+            return if (CONSERVATIVE_MODEL_MARKERS.any { name.contains(it) }) 0.80 else 0.90
+        }
     }
 
     /** Integrity provider for path-level file protection; set after construction for Android. */

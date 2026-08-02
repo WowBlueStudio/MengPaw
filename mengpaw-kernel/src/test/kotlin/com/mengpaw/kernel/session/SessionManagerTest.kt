@@ -91,22 +91,23 @@ class SessionManagerTest {
         val session = manager.createSession("Test")
         val mockLlm = MockLlmProvider { "summary of the conversation" }
 
-        // Add 55 messages (over threshold of 50)
+        // 55 条 ~800 字符消息（组 token ~200/条, 默认档 8% 预算 ≈10485 tokens →
+        // 预算内保留 ~51 条 + MIN 3 组, 压缩前几条）
         repeat(55) { i ->
-            manager.addMessage(session.id, Message("user", "message $i"))
+            manager.addMessage(session.id, Message("user", "message $i " + "x".repeat(800)))
         }
 
         val didCompress = manager.compressIfNeeded(mockLlm)
         assertTrue(didCompress)
         val history = manager.getHistory(session.id)
-        // 1 system summary + 10 kept messages = 11
-        assertEquals(11, history.size)
+        // 摘要在前
         assertEquals("system", history[0].role)
         assertTrue(history[0].content.contains("[📋 对话摘要]"))
         assertTrue(history[0].content.contains("summary of the conversation"))
-        // Last 10 messages should be the most recent
-        assertEquals("message 45", history[1].content)
-        assertEquals("message 54", history[10].content)
+        // 保留最近原文（尾部 = 压缩前最后一条）; 条数 < 55 且 ≥ 摘要 + MIN 组
+        assertEquals("message 54 " + "x".repeat(800), history.last().content)
+        assertTrue("压缩后应少于 55 条: ${history.size}", history.size < 55)
+        assertTrue("至少 MIN 组保底: ${history.size}", history.size >= 1 + 3)
     }
 
     @Test
@@ -121,30 +122,74 @@ class SessionManagerTest {
 
         // Add 55 messages, compress
         repeat(55) { i ->
-            manager.addMessage(session.id, Message("user", "message batch1 $i"))
+            manager.addMessage(session.id, Message("user", "message batch1 $i " + "x".repeat(800)))
         }
         val didCompress1 = manager.compressIfNeeded(mockLlm)
         assertTrue(didCompress1)
         assertEquals(1, callCount)
         var history = manager.getHistory(session.id)
-        assertEquals(11, history.size)
+        assertTrue(history[0].content.contains("summary iteration 1"))
 
-        // Add another 45 messages, putting us at 56 again
+        // Add another 45 messages, putting us over threshold again
         repeat(45) { i ->
-            manager.addMessage(session.id, Message("user", "message batch2 $i"))
+            manager.addMessage(session.id, Message("user", "message batch2 $i " + "x".repeat(800)))
         }
-        assertEquals(56, manager.getHistory(session.id).size)
 
         val didCompress2 = manager.compressIfNeeded(mockLlm)
         assertTrue(didCompress2)
         assertEquals(2, callCount)
         history = manager.getHistory(session.id)
-        assertEquals(11, history.size)
         // The first message is the newest compression summary
         assertTrue(history[0].content.contains("[📋 对话摘要]"))
         assertTrue(history[0].content.contains("summary iteration 2"))
-        // The last 10 messages are the most recent additions
-        assertEquals("message batch2 44", history[10].content)
+        // The last message is the most recent addition
+        assertEquals("message batch2 44 " + "x".repeat(800), history.last().content)
+        assertTrue("压缩后应少于 100 条: ${history.size}", history.size < 100)
+    }
+
+    @Test
+    fun `oversized recent group falls back to MIN keep`() = runBlocking {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        val mockLlm = MockLlmProvider { "summary" }
+
+        // 57 条小消息 + 最近 3 组各 ~50K 字符（单组就超 8% 预算 ≈41940 字符）→ MIN 3 组兜底
+        repeat(57) { i ->
+            manager.addMessage(session.id, Message("user", "small $i"))
+        }
+        repeat(3) { i ->
+            manager.addMessage(session.id, Message("user", "huge $i " + "y".repeat(50_000)))
+        }
+
+        val didCompress = manager.compressIfNeeded(mockLlm)
+        assertTrue(didCompress)
+        val history = manager.getHistory(session.id)
+        // MIN 3 组原文无条件保留（即使超预算）: 摘要 + 3 组 = 4 条
+        assertEquals(4, history.size)
+        assertEquals("system", history[0].role)
+        assertTrue("最近组应保留: ${history.last().content.take(20)}", history.last().content.startsWith("huge 2"))
+    }
+
+    @Test
+    fun `high coherence budget retains more original messages`() = runBlocking {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        val mockLlm = MockLlmProvider { "summary" }
+
+        // 190 条普通消息 + 3 条同命令（最近 40 条内同一命令 ≥3 次 → 档位 25%）
+        repeat(190) { i ->
+            manager.addMessage(session.id, Message("user", "m $i " + "x".repeat(800)))
+        }
+        repeat(3) {
+            manager.addMessage(session.id, Message("assistant", "Command: fs.cat /a\nResult: ..."))
+        }
+
+        val didCompress = manager.compressIfNeeded(mockLlm)
+        assertTrue(didCompress)
+        val history = manager.getHistory(session.id)
+        // 25% 预算 ≈32768 tokens ≈131K 字符 → 保留远超默认档（8% 只 ~52 条）
+        assertTrue("高连贯档应保留大量原文: ${history.size}", history.size > 100)
+        assertTrue("最近的同命令消息应保留", history.last().content.startsWith("Command: fs.cat"))
     }
 
     @Test

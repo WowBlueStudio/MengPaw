@@ -83,9 +83,12 @@ class AgentSessionFactory(
         val conciseMw = com.mengpaw.plugin.concise.ConciseMiddleware
 
         // Post-call middleware: context folding + scroll eviction
+        // 折叠阈值按模型档位（kernel 单一规则 compactRatioFor，消灭双份硬编码漂移）
         val postMw = PostCallMiddleware { response, step, totalChars, estimatedTokens ->
-            val ratio = estimatedTokens.toDouble() / 131_072.0
-            if (ratio > 0.80) {
+            val threshold = com.mengpaw.kernel.PipelineManager.compactRatioFor(model)
+            val ratio = estimatedTokens.toDouble() /
+                com.mengpaw.kernel.PipelineManager.DEFAULT_CONTEXT_WINDOW
+            if (ratio > threshold) {
                 PostCallResult(response, shouldFold = true,
                     foldReason = "Step $step: context at ${(ratio * 100).toInt()}%")
             } else {
