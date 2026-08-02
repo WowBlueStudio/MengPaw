@@ -32,7 +32,7 @@ object PluginRegistrar {
         "framework-plugin", "skill-plugin", "dev-plugin",
         "fs-plugin", "net-plugin", "clipboard-plugin",
         "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin",
-        "dream-plugin", "evolution-plugin"
+        "dream-plugin", "evolution-plugin", "concise-plugin"
     )
 
     /**
@@ -59,7 +59,8 @@ object PluginRegistrar {
         "tribe-plugin" to ("部落协作 (Tribe)" to "多 Agent 部落协作：LAN 自动组队、Kanban 委派、LLM 路由、任务模板、Fleet 并行、广播讨论、ACP 实时、心跳"),
         "tools-plugin" to ("Agent 命令集" to "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用"),
         "dream-plugin" to ("梦境模式" to "梦境模式内置默认实现 (不可移除) — 记忆整理管道; 第三方可实现 DreamProvider 覆盖"),
-        "evolution-plugin" to ("智能体进化" to "智能体进化内置默认实现 (不可移除) — 失败模式库/省察引导/框架反馈; 第三方可实现 EvolutionProvider 覆盖")
+        "evolution-plugin" to ("智能体进化" to "智能体进化内置默认实现 (不可移除) — 失败模式库/省察引导/框架反馈; 第三方可实现 EvolutionProvider 覆盖"),
+        "concise-plugin" to ("言简意赅" to "去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），让模型回答更简洁")
     )
 
     /** PluginViewModel 类注册 — 使内置插件类可被反射实例化 (install 时用类名加载). */
@@ -76,6 +77,7 @@ object PluginRegistrar {
         PluginViewModel.registerPluginClass("tools-plugin", "com.mengpaw.plugin.agenttools.AgentToolsPlugin")
         PluginViewModel.registerPluginClass("dream-plugin", "com.mengpaw.plugin.dream.DreamPlugin")
         PluginViewModel.registerPluginClass("evolution-plugin", "com.mengpaw.plugin.evolution.EvolutionPlugin")
+        PluginViewModel.registerPluginClass("concise-plugin", "com.mengpaw.plugin.concise.ConcisePlugin")
     }
 
     /** 捆绑插件实例清单 — 随 APK 编译进壳, 首次启动自动 install + activate. */
@@ -90,6 +92,7 @@ object PluginRegistrar {
         "tools-plugin" to com.mengpaw.plugin.agenttools.AgentToolsPlugin(),
         "dream-plugin" to com.mengpaw.plugin.dream.DreamPlugin(),
         "evolution-plugin" to com.mengpaw.plugin.evolution.EvolutionPlugin(),
+        "concise-plugin" to com.mengpaw.plugin.concise.ConcisePlugin(),
     )
 
     /** 捆绑插件自动安装 — 已安装跳过, 逐个容错 (单插件失败不影响其余). */

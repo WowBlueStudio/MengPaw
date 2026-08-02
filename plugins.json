@@ -4,6 +4,20 @@
   "updated": "2026-08-01",
   "plugins": [
     {
+      "id": "concise-plugin",
+      "name": "言简意赅",
+      "version": "0.1.0",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），让模型回答更简洁。可停用，停用即恢复原提示词",
+      "status": "builtin",
+      "minCoreVersion": "0.2.0",
+      "commands": ["concise.status"],
+      "checksum": "",
+      "size": 0,
+      "changelog": "### 新增\n- **言简意赅 内置插件**: middleware 变换系统提示词 — 删除强制 Thought→Action→Action Input 完整序列要求 + 追加反 Markdown 装饰约束。\n- 插件开关 = middleware 内动态查询状态，停用即恢复原提示词。"
+    },
+    {
       "id": "dream-plugin",
       "name": "梦境模式",
       "version": "",

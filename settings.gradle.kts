@@ -47,6 +47,7 @@ include(":plugin-root")
 include(":plugin-agent-tools")
 include(":plugin-dream")
 include(":plugin-evolution")
+include(":plugin-concise")
 
 // plugin-agent-loop and plugin-agent-mission removed — modes now built into AgentEngine
 // Connectors moved to standalone repo mengpaw-connectors (MIT) — see COMMERCIAL-LICENSE.md §11.4
@@ -73,6 +74,7 @@ project(":plugin-root").projectDir = File(rootDir, "plugins/plugin-root")
 project(":plugin-agent-tools").projectDir = File(rootDir, "plugins/plugin-agent-tools")
 project(":plugin-dream").projectDir = File(rootDir, "plugins/plugin-dream")
 project(":plugin-evolution").projectDir = File(rootDir, "plugins/plugin-evolution")
+project(":plugin-concise").projectDir = File(rootDir, "plugins/plugin-concise")
 // plugin-agent-loop / plugin-agent-mission dir mappings removed — modes built into AgentEngine
 // plugin-connector-* dir mappings removed — moved to standalone repo mengpaw-connectors
 

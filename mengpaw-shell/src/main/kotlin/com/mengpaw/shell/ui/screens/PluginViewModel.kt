@@ -392,7 +392,8 @@ class PluginViewModel : ViewModel() {
             "memory-twin-plugin" to "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin",
             "root-plugin" to "com.mengpaw.plugin.root.RootPlugin",
             "dream-plugin" to "com.mengpaw.plugin.dream.DreamPlugin",
-            "evolution-plugin" to "com.mengpaw.plugin.evolution.EvolutionPlugin"
+            "evolution-plugin" to "com.mengpaw.plugin.evolution.EvolutionPlugin",
+            "concise-plugin" to "com.mengpaw.plugin.concise.ConcisePlugin"
         )
 
         /** Look up the class name for a builtin plugin by its ID. */
