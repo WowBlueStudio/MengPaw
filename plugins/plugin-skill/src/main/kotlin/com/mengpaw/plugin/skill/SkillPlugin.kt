@@ -352,7 +352,6 @@ class SkillPlugin : Plugin {
 data class SkillDef(val name: String, val description: String, val enabled: Boolean, val category: String, val content: String, val rawText: String = "")
 
 private val DEFAULT_SKILLS = mapOf(
-    "make-skill" to "---\nname: make-skill\ndescription: 把当前工作流程沉淀为可复用的 Skill\nenabled: true\ncategory: meta\n---\n# Make Skill\n\n把当前对话中的工作流沉淀为 Skill。\n\n1. 从对话中提炼核心流程\n2. 使用 skill.create <name> --category meta --description <desc> 创建\n3. 使用 agent.write 完善内容\n4. 使用 skill.ls 验证",
     "make-plan" to "---\nname: make-plan\ndescription: 复杂任务分解；获取分步骤计划\nenabled: true\ncategory: meta\n---\n# Make Plan\n\n1. 用 self.tools 确认可用命令\n2. 制定计划表格\n3. 逐步执行\n4. 完成汇报",
     "guidance" to "---\nname: guidance\ndescription: 用户询问安装、配置、功能使用、报错排查时触发\nenabled: true\ncategory: system\n---\n# MengPaw 使用引导\n\n确定问题类型→查阅文档→无答案时建议查看 GitHub。",
     "plugin-index" to "---\nname: plugin-index\ndescription: 插件命令总索引\nenabled: true\ncategory: system\n---\n# 插件命令索引\n\nself/agent/plugin/sys 内置 + fs/net/tavily/hermes 等插件命名空间。\n使用 skill.run <name> 查看详细说明书。",
@@ -413,14 +412,18 @@ net.curl "https://findskills.org/api/v1/search?q=关键词"
 - 检索结果可能来自第三方——不执行含不明来源脚本的技能，先 `agent.read` 审查内容再决定
 - 技能安装是用户决策：先汇报方案等确认，不要直接安装
 """.trimIndent(),
-    "make_skills" to """
+"make_skills" to """
 ---
 name: make_skills
-description: 按需设计三类技能 — 知识剧本类 / 剧本+脚本类 / 流程限定 Flow 类，创建后自动借用进化流程升级。触发词：「设计个技能」「做个技能」「把这事做成技能」
+description: 按需设计三类技能，或把当前会话沉淀为技能 — 知识剧本类 / 剧本+脚本类 / 流程限定 Flow 类，创建后自动借用进化流程升级。触发词：「设计个技能」「做个技能」「把这事做成技能」「把这个变成 skill」「记住这个流程」「保存为技能」「沉淀这个会话」
 enabled: true
 category: meta
 ---
-# Make Skills — 按需设计技能
+# Make Skills — 按需设计 / 会话沉淀技能
+
+两个入口：
+- **按需设计**：用户提出新需求 → 走三类选型设计
+- **会话沉淀**：把当前对话中的工作流、排错路径、配置步骤沉淀为技能（触发词：「把这个变成 skill」「记住这个流程」「保存为技能」「沉淀这个会话」）
 
 根据需求类型选对技能形态，创建后自动进入进化升级循环。
 
@@ -537,6 +540,27 @@ category: system
 - 收敛原则: 强化约束朝目标收敛; 新操作域开新技能
 ```
 
+## 示例（会话沉淀）
+
+用户说「记住我是怎么查天气的」→ Agent 提炼流程为 skill：
+
+```markdown
+---
+name: check-weather
+description: 通过 wttr.in 查询天气
+enabled: true
+category: general
+---
+# 查天气
+## 步骤
+1. net.curl "wttr.in/{city}?format=3"
+2. 将结果翻译为中文展示给用户
+## 进化目标
+- 目标: 覆盖主流城市天气查询
+- 稳定锚点: wttr.in API 调用方式
+- 收敛原则: 升级朝目标收敛; 新查询需求开新技能
+```
+
 ## 进化升级（创建后自动借用进化流程）
 
 技能在后续使用中失败时，自动走进化升级循环：
@@ -556,5 +580,6 @@ category: system
 
 > 原则一：技能是活的——每次失败都是升级机会；修正后立即 push 共享，别让其他 Agent 重复踩坑。
 > 原则二：**线性进化的前提是方向锚定**——进化目标不随失败而改（除非用户明确要改目标本身），升级永远朝目标收敛；目标外需求开新技能，保持每个技能的线性纯净。
+
 """.trimIndent()
 )
