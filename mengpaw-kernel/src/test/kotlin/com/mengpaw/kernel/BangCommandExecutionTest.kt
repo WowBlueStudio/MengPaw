@@ -12,6 +12,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -67,5 +68,23 @@ class BangCommandExecutionTest {
     @Test
     fun `empty command rejected`() = runBlocking {
         assertEquals(ErrorCodes.ERR_INVALID_INPUT, engine().executeCommand("   ").errorCode)
+    }
+
+    @Test
+    fun `listCommands 非空且含 self 命令与描述`() {
+        val cmds = engine().listCommands()
+        assertTrue("补全列表不应为空", cmds.isNotEmpty())
+        val st = cmds.firstOrNull { it.name == "self.status" }
+        assertNotNull("应包含 self.status", st)
+        assertTrue("self.status 应有功能描述: ${st!!.description}", st.description.isNotBlank())
+    }
+
+    @Test
+    fun `notify 命令经 self 前缀兜底拿到描述`() {
+        val cmds = engine().listCommands()
+        val notify = cmds.firstOrNull { it.name == "self.notify.message" }
+        assertNotNull("应包含 self.notify.message", notify)
+        assertTrue("notify.message 描述不应为空 (BuiltinCommandIndex 缺 self. 前缀需兜底): ${notify!!.description}",
+            notify.description.isNotBlank())
     }
 }

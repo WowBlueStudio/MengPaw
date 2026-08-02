@@ -31,11 +31,13 @@ object CommandSearch {
     private val index = mutableListOf<CommandIndex>()
 
     /** 注册一条命令到索引. 同 fullName 已存在时不覆盖 (保护 BuiltinCommandIndex 精编关键词). */
+    @Synchronized
     fun register(cmd: CommandIndex) {
         insertOrUpdate(cmd, force = false)
     }
 
     /** 强制注册/更新一条命令 (插件重新激活时用). */
+    @Synchronized
     fun registerOrUpdate(cmd: CommandIndex) {
         insertOrUpdate(cmd, force = true)
     }
@@ -53,21 +55,29 @@ object CommandSearch {
     }
 
     /** 批量注册. */
+    @Synchronized
     fun registerAll(cmds: List<CommandIndex>) {
         index.addAll(cmds)
     }
 
     /** 按命名空间移除所有已索引命令 (插件卸载时调用). */
+    @Synchronized
     fun removeByNamespace(namespace: String) {
         index.removeAll { it.namespace == namespace }
     }
 
     /** 清空索引 (用于重建). */
+    @Synchronized
     fun clear() {
         index.clear()
     }
 
+    /** 全量枚举 (UI 命令补全用 — 与 mutator 同步, 防止并发 add 时 CME). */
+    @Synchronized
+    fun all(): List<CommandIndex> = index.toList()
+
     /** 索引大小. */
+    @Synchronized
     fun size(): Int = index.size
 
     /** 索引统计: 命令数 + 覆盖的命名空间. */

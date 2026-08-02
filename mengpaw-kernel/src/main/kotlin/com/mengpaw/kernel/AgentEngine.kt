@@ -14,6 +14,7 @@ import com.mengpaw.kernel.cli.*
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.error.ErrorType
 import com.mengpaw.kernel.llm.*
+import com.mengpaw.kernel.namespace.SelfExecutor
 import com.mengpaw.kernel.plugin.PluginExecutor
 import com.mengpaw.kernel.plugin.PluginManager
 import com.mengpaw.kernel.plugin.PluginMarketplaceClient
@@ -27,6 +28,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withTimeout
+
+/** Command completion entry — name + functional hint for the "!" dropdown. */
+data class CommandInfo(val name: String, val description: String)
 
 class AgentEngine(
     llmProvider: LlmProvider,
@@ -282,6 +286,21 @@ class AgentEngine(
     private fun bangWorkDir(): String {
         val dir = java.io.File(DataPaths.AGENTS, "$agentName/workspace")
         return if (dir.mkdirs() || dir.exists()) dir.absolutePath else DataPaths.BASE
+    }
+
+    /**
+     * 列出当前引擎管线中可执行的全部 CLI 命令（名称 + 描述），供 "!" 命令补全下拉使用。
+     * 幂等触发 buildPipeline 以确保 SelfExecutor.commandRegistry 指向本引擎注册表
+     * （多 Agent 场景下必须如此 — 全局指针最后被哪个引擎构建就指向哪个引擎的注册表）。
+     */
+    fun listCommands(): List<CommandInfo> {
+        pipelineManager.buildPipeline() // 幂等; 同时把全局 registry 指针重指到本引擎
+        val registry = SelfExecutor.commandRegistry ?: return emptyList()
+        val descMap = CommandSearch.all().associate { it.fullName to it.description }
+        return registry.list().sorted().map { name ->
+            // self. 前缀兜底: BuiltinCommandIndex 里 notify.message/banner 缺 self. 前缀（既有数据缺口）
+            CommandInfo(name, descMap[name] ?: descMap[name.removePrefix("self.")] ?: "")
+        }
     }
 
     /** Reset loop detection state — call before each new task. */
