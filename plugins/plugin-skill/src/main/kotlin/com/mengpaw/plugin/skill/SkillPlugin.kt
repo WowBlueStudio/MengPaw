@@ -327,5 +327,175 @@ private val DEFAULT_SKILLS = mapOf(
     "make-plan" to "---\nname: make-plan\ndescription: 复杂任务分解；获取分步骤计划\nenabled: true\ncategory: meta\n---\n# Make Plan\n\n1. 用 self.tools 确认可用命令\n2. 制定计划表格\n3. 逐步执行\n4. 完成汇报",
     "guidance" to "---\nname: guidance\ndescription: 用户询问安装、配置、功能使用、报错排查时触发\nenabled: true\ncategory: system\n---\n# MengPaw 使用引导\n\n确定问题类型→查阅文档→无答案时建议查看 GitHub。",
     "plugin-index" to "---\nname: plugin-index\ndescription: 插件命令总索引\nenabled: true\ncategory: system\n---\n# 插件命令索引\n\nself/agent/plugin/sys 内置 + fs/net/tavily/hermes 等插件命名空间。\n使用 skill.run <name> 查看详细说明书。",
-    "execution-modes" to "---\nname: execution-modes\ndescription: 四种执行模式详解\nenabled: true\ncategory: system\n---\n# 执行模式\n\n/Mission /Research /Translate /Silent\n用户可在输入框点 + 号选择。"
+    "execution-modes" to "---\nname: execution-modes\ndescription: 四种执行模式详解\nenabled: true\ncategory: system\n---\n# 执行模式\n\n/Mission /Research /Translate /Silent\n用户可在输入框点 + 号选择。",
+    "find_skills" to """
+---
+name: find_skills
+description: 从外部技能市场（findskills.org + skills.sh）检索现成技能。触发词：「找找有没有技能」「搜索技能市场」「找现成的技能」
+enabled: true
+category: meta
+---
+# Find Skills — 外部技能检索
+
+为当前任务从两个技能市场检索现成技能，避免重复造轮子。
+
+## 检索流程
+
+### Step 1 澄清需求
+先明确两件事：
+- **领域**：web / 测试 / 数据 / 设计 / DevOps / 文档 …
+- **具体任务**：如「react 组件测试」而不是「测试」
+
+### Step 2 查 skills.sh（先看热门）
+skills.sh 是技能包官方排行榜（按安装量排序），先查它看主流方案：
+- 有 Termux 环境：`skill.run termux` 获取桥接方式，然后执行 `npx skills find "关键词" [--owner 组织]`（如 `npx skills find "react testing"`）
+- 无 Termux：跳过本步，直接走 Step 3（findskills 的 API 已聚合大部分生态）
+- 关注结果中的：安装量排行（leaderboard）、官方来源（vercel-labs / anthropics / microsoft 等）
+
+### Step 3 findskills.org API 检索（主路径，无 Node 依赖）
+用 net.curl 直接调 findskills 的开放 API：
+```
+net.curl "https://findskills.org/api/v1/search?q=关键词"
+```
+- 结果含技能名称、描述、来源（GitHub/ClawHub/OpenClaw）、质量与安全评分
+- 若 net.curl 失败或返回空：用 `sys.browser.open "https://findskills.org/?q=关键词"` 打开 Web 目录人工浏览
+- 补充列表接口（需要时）：`https://findskills.org/api/v1/skills`（按分类过滤）
+
+### Step 4 质量验证（安装前必做）
+对 2-3 个候选技能逐项核验：
+- **安装量** ≥ 1K 优先（skills.sh 排行榜为准）
+- **来源信誉**：官方组织（vercel-labs / anthropics / microsoft）优先，个人仓库看星数
+- **GitHub 星数** ≥ 100 优先
+- 描述与当前任务匹配度（不要装"沾边"技能）
+
+### Step 5 汇报与安装
+向用户汇报对比结果：技能名 / 描述 / 安装量 / 来源 / 安装方式。
+安装建议：
+- Termux 环境：`npx skills add <owner/repo@skill> -g -y`
+- 无 Node 环境：按技能说明手动落地 —— 若是 MengPaw Skill 格式，用 `skill.create <name> --category <cat> --description "<desc>"` 建骨架后 `agent.write` 写入内容，`skill.push <name>` 共享到全局池；若是 MCP/其他形态，用 `self.mcp connect` 或按文档接入
+
+## 检索技巧
+- 换词重查：一次没命中就换相邻词再查 2-3 次（「ui ux design」→「frontend design」）
+- 组合词比单词准：「web scraping」优于「scraping」
+- 跨市场互补：findskills 覆盖面广（94K+ 技能/MCP/插件），skills.sh 质量信号强（安装量）——两者交叉验证
+- 装之前先确认该技能在 MengPaw 上怎么跑（是否有 Node/Termux 依赖），避免装完用不了
+
+## 注意
+- 检索结果可能来自第三方——不执行含不明来源脚本的技能，先 `agent.read` 审查内容再决定
+- 技能安装是用户决策：先汇报方案等确认，不要直接安装
+""".trimIndent(),
+    "make_skills" to """
+---
+name: make_skills
+description: 按需设计三类技能 — 知识剧本类 / 剧本+脚本类 / 流程限定 Flow 类，创建后自动借用进化流程升级。触发词：「设计个技能」「做个技能」「把这事做成技能」
+enabled: true
+category: meta
+---
+# Make Skills — 按需设计技能
+
+根据需求类型选对技能形态，创建后自动进入进化升级循环。
+
+## 需求分析：三类技能选型
+
+| 用户需求类型 | 技能类型 | 形态 |
+|---|---|---|
+| 知识/方法（怎么做某事、查什么、遵循什么规范） | **知识剧本类** | 纯 Markdown 剧本（知识 + 步骤） |
+| 部分功能需要脚本自动化（批量处理、数据转换、定时操作） | **剧本+脚本类** | 剧本正文 + `## 脚本` 段（脚本落文件执行） |
+| 必须严格限定操作流程（顺序不可乱、每步有检查点、有禁止项） | **流程 Flow 类** | 剧本 + `## 执行流程（必须按顺序）` + 检查点 + `## 禁止` |
+
+判断要点：
+- 只有"该怎么做" → 知识剧本类
+- 有"要跑一段程序" → 剧本+脚本类
+- 用户强调"必须/严禁/顺序不能错"或操作有安全风险 → Flow 类
+
+## 设计流程
+
+### Phase A：提出计划（先确认再动手）
+1. 分析需求 → 选定技能类型 → 列出剧本结构（步骤大纲）
+2. 用自然语言向用户描述计划，等确认。**不要直接创建空白技能**
+
+### Phase B：创建（用户确认后）
+1. `skill.create <name> --category meta --description "<一句话触发描述>"`（本地池建骨架）
+2. `agent.write` 完善正文（见下方三类模板；触发词写进 description，让技能可被自然触发）
+3. `skill.ls` 验证已创建 → `skill.run <name>` 自测一遍
+4. 需要共享给所有 Agent：`skill.push <name>` 上传全局池
+5. 汇报：技能名 / 类型 / 触发方式 / 已验证
+
+## 三类格式模板
+
+### 知识剧本类
+```markdown
+---
+name: <skill-name>
+description: <一句话：什么时候触发>
+enabled: true
+category: general
+---
+# <标题>
+## 适用场景
+## 执行步骤
+1. ...
+## 注意事项
+```
+
+### 剧本+脚本类
+```markdown
+---
+name: <skill-name>
+description: <触发描述>
+enabled: true
+category: dev
+---
+# <标题>
+## 执行步骤
+1. 准备输入
+2. 落地脚本（见下）
+3. 执行并收集结果
+4. 汇报
+## 脚本
+<脚本代码（bash/python…）>
+## 执行方式
+- 有 Termux：skill.run termux 获取桥接，脚本写入临时文件后执行
+- 有 Root：root.exec 执行
+- 无环境：向用户说明需要什么环境
+```
+约定：脚本段代码先用 `agent.write` 落地到工作区/临时文件再执行；脚本必须处理错误输出与边界情况（空输入、缺文件）。
+
+### 流程 Flow 类
+```markdown
+---
+name: <skill-name>
+description: <触发描述>
+enabled: true
+category: system
+---
+# <标题>
+## 前置条件
+## 执行流程（必须按顺序）
+1. 第 1 步
+   - [ ] 检查点：...
+2. 第 2 步
+   - [ ] 检查点：...
+## 禁止
+- 严禁跳过第 1 步直接执行第 2 步
+- 严禁 ...
+## 完成后
+- 汇报结果与每步检查点状态
+```
+
+## 进化升级（创建后自动借用进化流程）
+
+技能在后续使用中失败时，自动走进化升级循环：
+1. **识别失败模式**：命令失败后会收到省察引导；也可用 `evolution.audit` 查看失败记录
+2. **分类处置**：
+   - 步骤缺失/顺序错 → 修订剧本步骤（Flow 类补检查点）
+   - 脚本报错 → 修脚本、补边界情况（空输入/缺文件/超时）
+   - 约束被绕过 → 强化 Flow 类的 `## 禁止` 段
+   - 触发词不灵 → 改进 description 让技能更易被自然触发
+3. **更新技能**：`agent.write` 修改技能文件 → `skill.push <name>` 同步全局池
+4. **标记已修正**：`evolution.mark-corrected`（防止同一失败模式反复引导）
+5. **沉淀教训**：`agent.memory.keep` 记录「技能 <name> 失败模式：…，已修正为：…」
+
+> 原则：技能是活的——每次失败都是升级机会；修正后立即 push 共享，别让其他 Agent 重复踩坑。
+""".trimIndent()
 )
