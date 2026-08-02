@@ -14,7 +14,9 @@ data class ReActResponse(
     val action: ToolCall?,
     val isFinal: Boolean,
     /** Model output Thought but no Action — loop should inject a continue prompt. */
-    val needsContinue: Boolean = false
+    val needsContinue: Boolean = false,
+    /** Multiple tool calls from one LLM output (parallel execution). Empty when only [action] set. */
+    val actions: List<ToolCall> = emptyList()
 )
 
 data class ToolCall(
@@ -37,6 +39,8 @@ class PromptEngine {
     private var cachedPromptAgent: String? = null
     private var cachedPromptFramework: String? = null
     private var cachedPromptModel: String? = null
+    /** 模板版本快照 — 提示词常量改动后 bump [PROMPT_TEMPLATE_VERSION] 强制重建缓存。 */
+    private var cachedPromptTemplateVersion: Int? = null
 
     /** Read a workspace doc with file-system cache. Re-reads only if file changed. */
     private fun cachedRead(agentName: String, fileName: String, reader: (String) -> String): String {
@@ -120,6 +124,7 @@ class PromptEngine {
         // Return cached prompt if nothing changed — skip all disk I/O
         if (agentName == cachedPromptAgent && lang == cachedPromptLang &&
             framework == cachedPromptFramework && modelName == cachedPromptModel &&
+            cachedPromptTemplateVersion == PROMPT_TEMPLATE_VERSION &&
             cachedSystemPrompt != null &&
             docCache.isNotEmpty() // guard: if cache was wiped, rebuild
         ) {
@@ -213,6 +218,7 @@ Skills 分为两层：
         cachedPromptAgent = agentName
         cachedPromptFramework = framework
         cachedPromptModel = modelName
+        cachedPromptTemplateVersion = PROMPT_TEMPLATE_VERSION
         return prompt
     }
 
@@ -229,6 +235,12 @@ Skills 分为两层：
     }
 
     companion object {
+        /**
+         * 提示词模板版本 — 修改 CHINESE_PROMPT/ENGLISH_PROMPT/FEWSHOT 等常量后必须 bump，
+         * 否则 cachedSystemPrompt 缓存命中会让运行中进程继续用旧提示词。
+         */
+        const val PROMPT_TEMPLATE_VERSION = 1
+
         // ── Few-shot examples: demonstrate correct ReAct usage with real MengPaw commands ──
         val CHINESE_FEWSHOT = """
             ## 示例（严格模仿格式）
@@ -442,6 +454,8 @@ Skills 分为两层：
             ...或...
             Final Answer: （最终答案）
 
+            需要多个独立工具时，可一次输出多个 Action（每个都带 Action Input），框架会并行执行。
+
             使用中文思考和输出。
 
             **关键**：每一步必须输出完整的 Thought → Action → Action Input 序列。不要只输出 Thought 就停止。只有在任务真正完成时才输出 Final Answer。
@@ -538,6 +552,8 @@ Skills 分为两层：
             ...or...
             Final Answer: (your final response)
 
+            When multiple independent tools are needed, you may output multiple Action blocks at once (each with its own Action Input); the framework will execute them in parallel.
+
             Think and respond in English.
 
             **Critical**: Every step MUST output the complete Thought → Action → Action Input sequence. Never stop after just a Thought. Only output Final Answer when the task is truly complete.
@@ -561,7 +577,9 @@ Skills 分为两层：
         val actionLocs = Regex("(?i)action[:：]", RegexOption.MULTILINE).findAll(normalized).map { it.range.first }.toList()
 
         // ── Rule 1: Final Answer (must appear after last Action, or with no Action at all) ──
-        if (finalLocs.isNotEmpty()) {
+        // 注: 多个 Action + Final Answer 属于"模型要并行执行"形态 — 让位给 Rule 2 执行，
+        //     Final Answer 内容留待模型下轮（看到 Observation 后）重新总结
+        if (finalLocs.isNotEmpty() && actionLocs.size < 2) {
             val lastFinalPos = finalLocs.last()
             val lastActionPos = actionLocs.lastOrNull() ?: -1
             if (lastFinalPos > lastActionPos) {
@@ -573,18 +591,22 @@ Skills 分为两层：
             }
         }
 
-        // ── Rule 2: Parse Action ──
+        // ── Rule 2: Parse Action(s) — 一次输出可含多个 Action（并行执行）──
         val actionRegex = Regex("(?i)action[:：]\\s*(\\S+)")
-        val actionName = actionRegex.find(normalized)?.groupValues?.get(1)?.trim()
+        val inputRegex = Regex(
+            "(?i)action input[:：]\\s*(.+?)(?=Thought[:：]|Action[:：]|Final Answer[:：]|$)",
+            RegexOption.DOT_MATCHES_ALL
+        )
 
-        if (actionName != null) {
+        // 用全部 Action 位置切段：每段起点=Action 位置，终点=下一个 Action 位置或文本尾
+        // 段内 Final Answer 内容由 inputRegex 的 lookahead 排除（Action 段永远以 Action 开头）
+        val actions = actionLocs.mapIndexedNotNull { i, pos ->
+            val segmentStart = pos
+            val segmentEnd = actionLocs.getOrNull(i + 1) ?: normalized.length
+            val segment = normalized.substring(segmentStart, segmentEnd)
+            val name = actionRegex.find(segment)?.groupValues?.get(1)?.trim() ?: return@mapIndexedNotNull null
             // Parse Action Input (tolerant JSON parsing)
-            val inputRegex = Regex(
-                "(?i)action input[:：]\\s*(.+?)(?=Thought[:：]|Action[:：]|Final Answer[:：]|$)",
-                RegexOption.DOT_MATCHES_ALL
-            )
-            val inputText = inputRegex.find(normalized)?.groupValues?.get(1)?.trim() ?: "{}"
-
+            val inputText = inputRegex.find(segment)?.groupValues?.get(1)?.trim() ?: "{}"
             val params = if (inputText.startsWith("{") && ':' in inputText) {
                 try {
                     val obj = Json.parseToJsonElement(inputText) as JsonObject
@@ -595,9 +617,12 @@ Skills 分为两层：
             } else {
                 mapOf("raw" to inputText)
             }
+            ToolCall(name, params)
+        }
 
+        if (actions.isNotEmpty()) {
             val thought = extractThought(normalized)
-            return ReActResponse(thought, ToolCall(actionName, params), isFinal = false)
+            return ReActResponse(thought, actions.first(), isFinal = false, actions = actions)
         }
 
         // ── Rule 3: No "Action:" and no "Final Answer:" → natural language response ──

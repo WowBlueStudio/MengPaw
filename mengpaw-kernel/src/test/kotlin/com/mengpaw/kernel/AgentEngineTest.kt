@@ -14,9 +14,11 @@ class AgentEngineTest {
 
     private val mockLlm = MockLlmProvider()
 
+    private val sessionManager = SessionManager()
+
     private val engine = AgentEngine(
         llmProvider = mockLlm,
-        sessionManager = SessionManager()
+        sessionManager = sessionManager
     )
 
     // ── PlanStep & TaskPlan Tests ────────────────────────────────────────
@@ -157,6 +159,40 @@ class AgentEngineTest {
         val result = engine.run("Simple task", maxSteps = 3)
         assertEquals("All done successfully.", result)
         assertTrue(engine.state.value is AgentState.Finished)
+    }
+
+    @Test
+    fun `run executes multiple actions in one step`() = runBlocking {
+        // 多 Action 并行执行: 一轮 LLM 输出 2 个 Action → 2 条 Observation → 模型总结
+        var turn = 0
+        val llm = object : LlmProvider {
+            override suspend fun complete(prompt: String): String = respond()
+            override suspend fun completeWithMessages(messages: List<Map<String, String>>): String = respond()
+            override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
+                respond().also { onToken(it) }
+            override fun info() = ProviderInfo("mock", "multi-action", ProviderType.LOCAL)
+            override fun close() {}
+            fun respond(): String = when (turn++) {
+                0 -> """
+                    Thought: 查状态并列出文件。
+                    Action: self.status
+                    Action Input: {}
+                    Action: agent.ls
+                    Action Input: {"path": "."}
+                """.trimIndent()
+                else -> "Final Answer: 完成"
+            }
+        }
+        val sm2 = SessionManager()
+        val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
+        val result = engine2.run("并行任务", maxSteps = 3)
+        assertEquals("完成", result)
+        // 两条 Command 观察都进入会话（合并为一条 assistant 消息，含 2 个 Command 块）
+        val sessionId = engine2.currentConversationId()
+        assertNotNull("会话应存在", sessionId)
+        val commands = sm2.sessions.value.values.first().messages
+            .sumOf { Regex("(?m)^Command:").findAll(it.content).count() }
+        assertEquals("应产生 2 条 Command 观察", 2, commands)
     }
 
     @Test

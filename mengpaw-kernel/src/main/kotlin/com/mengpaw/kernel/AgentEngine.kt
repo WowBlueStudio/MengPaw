@@ -27,6 +27,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeout
 
 /** Command completion entry — name + functional hint for the "!" dropdown. */
@@ -588,50 +591,72 @@ class AgentEngine(
                 }
                 consecutiveContinueCount = 0 // Reset on successful action
 
-                if (parsed.action != null) {
-                    val commandLine = "${parsed.action.name} ${parsed.action.parameters.values.joinToString(" ")}"
+                // ── 单次 LLM 输出可含多个 Action — 并行执行后合并 Observation ──
+                // 并发纪律照搬 Swarm runWorker (:195-199): 共享可变状态
+                // (detectLoop/trackResult/consecutiveFailures/ErrorCollector) 只在主协程串行更新
+                val actionList = parsed.actions.ifEmpty { listOfNotNull(parsed.action) }
 
-                    if (promptEngine.detectLoop(commandLine)) {
-                        ErrorCollector.report(ErrorType.LOOP_DETECTED, "AgentEngine", commandLine,
+                if (actionList.isNotEmpty()) {
+                    val commandLines = actionList.map { call ->
+                        "${call.name} ${call.parameters.values.joinToString(" ")}"
+                    }
+
+                    // Loop detection on the first command (kept serial — shared mutable state)
+                    if (promptEngine.detectLoop(commandLines.first())) {
+                        val cmd = commandLines.first()
+                        ErrorCollector.report(ErrorType.LOOP_DETECTED, "AgentEngine", cmd,
                             sessionId = session.id, agentName = agentName)
-                        val errorMsg = localizedError("loop_detected", commandLine, agentLanguage)
+                        val errorMsg = localizedError("loop_detected", cmd, agentLanguage)
                         sessionManager.addMessage(session.id, Message("assistant", errorMsg))
                         _state.value = AgentState.Error(errorMsg)
-                        onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, errorMsg))
+                        onStep?.invoke(TraceStep(step + 1, parsed.thought, cmd, errorMsg))
                         return errorMsg
                     }
 
-                    val result = try {
-                        kotlinx.coroutines.withTimeout(60_000L) { pipelineManager.buildPipeline().execute(commandLine, context) }
-                    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                        ExecutionResult.fail("命令超时 (60s): $commandLine。请检查网络连接或尝试其他方式。", errorCode = ErrorCodes.ERR_INTERNAL)
+                    // ── 并行执行（结构化并发: async 内 withTimeout + pipeline.execute）──
+                    val results = coroutineScope {
+                        commandLines.map { cmd ->
+                            async(KernelDispatchers.BACKGROUND) {
+                                try {
+                                    withTimeout(60_000L) { pipelineManager.buildPipeline().execute(cmd, context) }
+                                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                                    ExecutionResult.fail("命令超时 (60s): $cmd。请检查网络连接或尝试其他方式。", errorCode = ErrorCodes.ERR_INTERNAL)
+                                }
+                            }
+                        }.awaitAll()
                     }
-                    if (!result.success) {
-                        consecutiveFailures++
-                        ErrorCollector.report(ErrorType.TOOL_CALL_FAILED, "AgentEngine",
-                            "$commandLine → ${result.error}", sessionId = session.id, agentName = agentName,
-                            metadata = mapOf("errorCode" to (result.errorCode ?: ""), "command" to commandLine))
-                        // 进化省察: 生成金字塔引导片段, 下次 LLM 调用注入 (轻/深分级)
-                        pendingGuideFragment = com.mengpaw.kernel.evolution.EvolutionGuide.buildFragment(
-                            agentName = agentName, command = commandLine, message = result.error ?: "")
-                    } else {
-                        consecutiveFailures = 0
+
+                    // ── 合并后串行更新共享可变状态 + 组装 Observation ──
+                    val observationEntries = mutableListOf<String>()
+                    var anyFailure = false
+                    results.forEachIndexed { i, result ->
+                        val commandLine = commandLines[i]
+                        if (!result.success) {
+                            anyFailure = true
+                            ErrorCollector.report(ErrorType.TOOL_CALL_FAILED, "AgentEngine",
+                                "$commandLine → ${result.error}", sessionId = session.id, agentName = agentName,
+                                metadata = mapOf("errorCode" to (result.errorCode ?: ""), "command" to commandLine))
+                            // 进化省察: 生成金字塔引导片段, 下次 LLM 调用注入 (轻/深分级)
+                            pendingGuideFragment = com.mengpaw.kernel.evolution.EvolutionGuide.buildFragment(
+                                agentName = agentName, command = commandLine, message = result.error ?: "")
+                        }
+                        var rawObservation = if (result.success) result.output else "Error: ${result.error}"
+                        // ── QwenPaw-style tool result pruning ──
+                        rawObservation = toolResultManager.pruneToolResult(commandLine, rawObservation, step + 1)
+                        onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, rawObservation))
+                        observationEntries.add("Command: $commandLine\nResult: $rawObservation")
                     }
-                    // Detect failure loop: 5+ consecutive failures → agent is stuck
-                    if (promptEngine.trackResult(result.success)) {
+                    // 连续失败统计与失败循环检测（串行，无竞争）
+                    if (anyFailure) consecutiveFailures++ else consecutiveFailures = 0
+                    if (promptEngine.trackResult(!anyFailure)) {
                         val errorMsg = localizedError("consecutive_failures", "5", agentLanguage)
                         sessionManager.addMessage(session.id, Message("assistant", errorMsg))
                         _state.value = AgentState.Error(errorMsg)
-                        onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, errorMsg))
+                        onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLines.first(), errorMsg))
                         return errorMsg
                     }
-                    var rawObservation = if (result.success) result.output else "Error: ${result.error}"
-                    // ── QwenPaw-style tool result pruning ──
-                    rawObservation = toolResultManager.pruneToolResult(commandLine, rawObservation, step + 1)
-                    onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, rawObservation))
-
-                    val observationEntry = "Command: $commandLine\nResult: $rawObservation"
-                    sessionManager.addMessage(session.id, Message("assistant", observationEntry))
+                    // 合并为一条 assistant 消息（多 Action 的多个 Observation）
+                    sessionManager.addMessage(session.id, Message("assistant", observationEntries.joinToString("\n\n")))
                 } else {
                     onStep?.invoke(TraceStep(step + 1, parsed.thought, null, null))
                 }

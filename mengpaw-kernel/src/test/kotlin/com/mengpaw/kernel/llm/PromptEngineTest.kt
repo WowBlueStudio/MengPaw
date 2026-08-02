@@ -24,6 +24,74 @@ class PromptEngineTest {
         assertNotNull(result.action)
         assertEquals("fs.cat", result.action?.name)
         assertEquals("/test.txt", result.action?.parameters?.get("path"))
+        // 单 Action 向后兼容: actions 列表 = [单 Action]
+        assertEquals(1, result.actions.size)
+        assertEquals("fs.cat", result.actions.first().name)
+    }
+
+    @Test
+    fun `parse multiple actions`() {
+        val input = """
+            Thought: 查状态并列出文件。
+            Action: self.status
+            Action Input: {}
+            Action: agent.ls
+            Action Input: {"path": "."}
+        """.trimIndent()
+
+        val result = engine.parse(input)
+        assertFalse(result.isFinal)
+        assertEquals(2, result.actions.size)
+        assertEquals("self.status", result.actions[0].name)
+        assertEquals("agent.ls", result.actions[1].name)
+        assertEquals(".", result.actions[1].parameters["path"])
+        // action 字段保留 = 第一个（向后兼容）
+        assertEquals("self.status", result.action?.name)
+    }
+
+    @Test
+    fun `parse multiple actions with trailing final answer executes actions`() {
+        // 多 Action + 末尾 Final Answer 属于并行执行形态 — 不吞为最终答案
+        val input = """
+            Action: self.status
+            Action Input: {}
+            Action: agent.ls
+            Action Input: {"path": "."}
+            Final Answer: 完成
+        """.trimIndent()
+
+        val result = engine.parse(input)
+        assertFalse("多 Action 形态不应被当最终答案", result.isFinal)
+        assertEquals(2, result.actions.size)
+    }
+
+    @Test
+    fun `parse single action with trailing final answer keeps final`() {
+        // 单 Action + Final Answer 保持原行为（取答案，不执行 Action）
+        val input = """
+            Action: self.status
+            Action Input: {}
+            Final Answer: 设备正常
+        """.trimIndent()
+
+        val result = engine.parse(input)
+        assertTrue("单 Action + Final Answer 应保持最终答案语义", result.isFinal)
+        assertEquals("设备正常", result.thought)
+    }
+
+    @Test
+    fun `parse multiple actions with json tolerance`() {
+        // 第二个 Action Input 非法 JSON → raw 回退（容错）
+        val input = """
+            Action: self.status
+            Action Input: {}
+            Action: agent.ls
+            Action Input: 直接文本参数
+        """.trimIndent()
+
+        val result = engine.parse(input)
+        assertEquals(2, result.actions.size)
+        assertEquals("直接文本参数", result.actions[1].parameters["raw"])
     }
 
     @Test
