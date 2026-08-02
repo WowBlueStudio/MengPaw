@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.26.4 (2026-08-02) — 执行模式补火种 + 技能进化 + 闪退修复
+
+### 修复
+- **技能/插件剧本文档展开闪退**: 去掉 300dp 裁切后 MarkdownText 自带 verticalScroll 在双层 AnimatedVisibility 下拿到无限高度约束崩溃——改 nestedScroll 交由外层滚动（真机复现，全局技能/插件/工具展开区同构一并修复）
+- **MCP 工具数量纠正**: 技能文档误写 7 个工具（把 GitHub API 字段当工具）——真实 6 个：navigate/screenshot/click/type/extract/eval
+
+### 新增
+- **执行模式补 Swarm（火种）**: PromptEngine 已有 /Swarm 但 UI 枚举缺失无法选择——补齐 + 火种图标 + 输入提示双语；模式区 Row(take(6)) 截断改造为 **FlowRow 两行布局**，容纳全部 7 模式（4+3）
+
+### 调整
+- **设置页清理**: 删除角色模型路由区块（标题+角色下拉）与 roleEnglishLabel 死函数、9 条中英死字符串；ViewModel 层数据保留
+- **技能进化**: make-plan/guidance/browser-spider/browser-form 按 make_skills 流程进化（命令全量核对源码、补 MCP 工具清单、统一适用场景/执行步骤/注意事项/**进化目标三要素**模板）
+- **触发词全覆盖**: 24 个技能/手册 description 全部补齐触发词（「填表单」「抓取这个网页」「怎么装插件」「浏览器报错」等）——Agent 一说即触发
+
+### 发行
+- Shell APK v0.26.4（versionCode 26004）— 浏览器保持 v0.7.0 独立版本线
+
 ## v0.26.3 (2026-08-02) — 技能文档全文展开 + 表格渲染修复
 
 ### 新增
