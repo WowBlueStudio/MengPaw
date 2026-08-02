@@ -75,6 +75,16 @@ class PromptEngine {
     }
 
     /**
+     * 文档注入瘦身 — 超长文档只注入前段 + agent.read 外链（AgentToolsSummary 模式）。
+     * ≤12K 字符全量注入（现状）；>12K 注入前 6K，避免大文档拖慢每轮 LLM 输入。
+     */
+    private fun compactDoc(doc: String, path: String): String {
+        if (doc.length <= DOC_FULL_INJECT_CHARS) return doc
+        return doc.take(DOC_SNIPPET_CHARS) +
+            "\n\n…[文档过长 (${doc.length} 字符)，完整内容: agent.read $path]"
+    }
+
+    /**
      * Build the system prompt with agent identity, framework context, and model info.
      * @param lang Output language
      * @param agentName The name of this agent (e.g. "MengPaw", "平板-Agent")
@@ -193,14 +203,14 @@ Skills 分为两层：
 """
             )
             append("\n## 你的操作手册（AGENTS.md）\n\n")
-            append(agentsDoc)
+            append(compactDoc(agentsDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/agents.md"))
             if (soulDoc.isNotBlank()) {
                 append("\n\n## 你的灵魂准则（SOUL.md）\n\n")
-                append(soulDoc)
+                append(compactDoc(soulDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/soul.md"))
             }
             if (memoryDoc.isNotBlank()) {
                 append("\n\n## 你的长期记忆（长期积累的重要知识）\n\n")
-                append(memoryDoc)
+                append(compactDoc(memoryDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/memory/memory.md"))
             }
         }
 
@@ -239,7 +249,12 @@ Skills 分为两层：
          * 提示词模板版本 — 修改 CHINESE_PROMPT/ENGLISH_PROMPT/FEWSHOT 等常量后必须 bump，
          * 否则 cachedSystemPrompt 缓存命中会让运行中进程继续用旧提示词。
          */
-        const val PROMPT_TEMPLATE_VERSION = 1
+        const val PROMPT_TEMPLATE_VERSION = 2
+
+        /** 文档全量注入上限 — 超过则走 [compactDoc] 前段 + 外链。 */
+        private const val DOC_FULL_INJECT_CHARS = 12_000
+        /** 超长文档注入的前段字符数。 */
+        private const val DOC_SNIPPET_CHARS = 6_000
 
         // ── Few-shot examples: demonstrate correct ReAct usage with real MengPaw commands ──
         val CHINESE_FEWSHOT = """
@@ -281,19 +296,7 @@ Skills 分为两层：
 
             Observation: (未找到匹配 "网页搜索" 的命令. 用 self.tools [ns] 查看完整列表.)
 
-            Thought: 内置没有。看插件市场有什么。
-            Action: plugin.marketplace
-            Action Input: {}
-
-            Observation: tavily-plugin: AI 网页搜索 · search-plugin: 通用搜索
-
-            Thought: 找到 tavily-plugin，看详情。
-            Action: plugin.info
-            Action Input: {"id":"tavily-plugin"}
-
-            Observation: tavily-plugin v0.2.0 · 命令: tavily.search, tavily.extract
-
-            Thought: 信息够了，安装。
+            Thought: 内置没有。查插件市场并安装 tavily-plugin。
             Action: plugin.install
             Action Input: {"id":"tavily-plugin"}
 
@@ -341,19 +344,7 @@ Skills 分为两层：
 
             Observation: (No commands matched "web search". Try self.tools [ns] for full listing.)
 
-            Thought: Not built-in. Check plugin marketplace.
-            Action: plugin.marketplace
-            Action Input: {}
-
-            Observation: tavily-plugin: AI web search · search-plugin: general search
-
-            Thought: Found tavily-plugin. Check its details before installing.
-            Action: plugin.info
-            Action Input: {"id":"tavily-plugin"}
-
-            Observation: tavily-plugin v0.2.0 · commands: tavily.search, tavily.extract
-
-            Thought: Good. Install it.
+            Thought: Not built-in. Find and install tavily-plugin from the marketplace.
             Action: plugin.install
             Action Input: {"id":"tavily-plugin"}
 

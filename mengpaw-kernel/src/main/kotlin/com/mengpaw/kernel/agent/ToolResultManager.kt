@@ -19,7 +19,7 @@ class ToolResultManager(private val agentName: String) {
         /** Recent steps (<=3): generous threshold before offloading to disk. */
         const val TOOL_SNIPPET_RECENT_BYTES = 30_000
         /** Older steps: aggressive truncation, keep only snippet + file path. */
-        const val TOOL_SNIPPET_OLD_BYTES = 2_000
+        const val TOOL_SNIPPET_OLD_BYTES = 1_200  // 上下文瘦身 (v0.26): 2000 → 1200
         /** Auto-clean tool result files older than this (days). */
         const val TOOL_RESULT_RETENTION_DAYS = 5L
     }

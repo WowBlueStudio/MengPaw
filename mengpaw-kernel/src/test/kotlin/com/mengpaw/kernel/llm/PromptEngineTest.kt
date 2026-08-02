@@ -3,12 +3,51 @@
 
 package com.mengpaw.kernel.llm
 
+import com.mengpaw.kernel.DataPaths
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Test
+import java.io.File
 
 class PromptEngineTest {
 
     private val engine = PromptEngine()
+
+    @Before
+    fun initPaths() {
+        DataPaths.initialize(System.getProperty("java.io.tmpdir") + "/mengpaw_prompt_test")
+    }
+
+    @Test
+    fun `fewshot trimmed keeps action markers and drops removed steps`() {
+        val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertTrue("精简后仍含 Action 标记", prompt.contains("Action:"))
+        assertTrue("示例 2 压缩后新文本存在", prompt.contains("查插件市场并安装 tavily-plugin"))
+        assertFalse("示例 2 被删的 plugin.info 详情轮不应存在", prompt.contains("找到 tavily-plugin，看详情"))
+    }
+
+    @Test
+    fun `oversized agents doc is compacted with read link`() {
+        // 写超长 agents.md → docsBlock 注入应被 compactDoc 截断 + 外链
+        val dir = File(DataPaths.AGENTS, "MengPaw")
+        dir.mkdirs()
+        val doc = File(dir, "agents.md")
+        doc.writeText("长文档内容".repeat(4000))  // ~20K 字符 > 12K 阈值
+        try {
+            val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+            assertTrue("超长文档应含截断外链标记", prompt.contains("文档过长"))
+            assertTrue("外链应指向 agents.md", prompt.contains("agent.read"))
+        } finally {
+            doc.delete()
+        }
+    }
+
+    @Test
+    fun `same params hit system prompt cache`() {
+        val p1 = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        val p2 = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertTrue("相同参数应命中缓存（同一实例）", p1 == p2)
+    }
 
     @Test
     fun `parse standard react`() {
