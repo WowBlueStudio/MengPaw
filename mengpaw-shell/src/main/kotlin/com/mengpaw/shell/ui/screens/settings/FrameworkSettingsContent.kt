@@ -72,8 +72,8 @@ fun FrameworkSettingsContent(
         }
     }
 
-    // ── 角色模型路由（Fleet/火种）──
-    SectionHeader("角色模型路由（Fleet/火种）")
+    // ── 角色模型路由（步坦协同/火种）──
+    SectionHeader(state.strings.roleRoutingTitle)
     Text("各角色可用不同模型：规划/验收用强模型、执行用便宜模型；未配置的角色回退主模型。",
         style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
     Spacer(Modifier.height(ArcoSpacing.sm))

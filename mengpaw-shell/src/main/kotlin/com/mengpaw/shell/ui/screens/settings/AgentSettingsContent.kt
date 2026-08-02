@@ -204,15 +204,19 @@ fun AgentSettingsContent(
             Row(Modifier.padding(ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(mode.label, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
-                        if (mode == LoopMode.FLEET) {
+                        // 英文 UI 用枚举英文字段（此前英文界面也显示中文）
+                        Text(if (state.useChinese) mode.label else mode.enLabel,
+                            fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
+                        // WowBlue 徽标: 火种模式 + 步坦协同（原创特性）
+                        if (mode == LoopMode.SWARM || mode == LoopMode.FLEET) {
                             Spacer(Modifier.width(6.dp))
                             Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Pink6.copy(alpha = 0.1f)) {
                                 Text("WowBlue", Modifier.padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = ArcoColors.Pink6)
                             }
                         }
                     }
-                    Text(mode.desc, fontSize = 12.sp, color = ThemeColors.textSecondary)
+                    Text(if (state.useChinese) mode.desc else mode.enDesc,
+                        fontSize = 12.sp, color = ThemeColors.textSecondary)
                 }
             }
         }

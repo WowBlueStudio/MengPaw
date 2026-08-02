@@ -100,13 +100,18 @@ data class SavedProvider(
 /** Agent language modes for controlling LLM output language. */
 enum class AgentLanguageMode(val labelKey: String) { FOLLOW_UI("followUi"), CHINESE("chinese"), ENGLISH("english") }
 
-/** Agent loop / execution mode. */
-enum class LoopMode(val label: String, val desc: String) {
-    REACT("React 模式", "标准问答，灵活高效"),
-    GOAL("Goal 模式", "单目标驱动，完成即停"),
-    MISSION("Mission 模式", "建立临时子 Agent 分解任务链，逐步执行"),
-    SWARM("火种模式", "星星之火，可以燎原：并行 Worker 协作，可按角色混合模型"),
-    FLEET("Fleet 模式", "多 Agent 编队协同，跨设备分布式执行复杂任务")
+/** Agent loop / execution mode. label/desc 中文 + enLabel/enDesc 英文（英文 UI 用）。 */
+enum class LoopMode(val label: String, val desc: String, val enLabel: String, val enDesc: String) {
+    REACT("React 模式", "标准问答，灵活高效",
+        "React Mode", "Standard Q&A, flexible and efficient"),
+    GOAL("Goal 模式", "单目标驱动，完成即停",
+        "Goal Mode", "Single goal, stops when done"),
+    MISSION("Mission 模式", "建立临时子 Agent 分解任务链，逐步执行",
+        "Mission Mode", "Decompose into subtask chain with temporary sub-agents"),
+    SWARM("火种模式", "星星之火，可以燎原：并行 Worker 协作，可按角色混合模型",
+        "Swarm Mode", "Parallel workers with role-based model routing"),
+    FLEET("步坦协同模式", "装甲集群推进+步兵协同清剿：多 Agent 编队协同，跨设备分布式执行复杂任务",
+        "Combined Arms Mode", "Multi-agent combined-arms coordination for distributed complex tasks")
 }
 
 /** 主题模式 — 亮色 / 暗色 / 跟随系统。 */

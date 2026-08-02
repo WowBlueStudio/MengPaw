@@ -43,7 +43,8 @@ object PluginRegistrar {
      */
     val WOWBLUE_PLUGIN_IDS = setOf(
         "memory-twin-plugin", "skill-plugin",
-        "framework-plugin", "dev-plugin", "tribe-plugin", "tools-plugin"
+        "framework-plugin", "dev-plugin", "tribe-plugin", "tools-plugin",
+        "evolution-plugin", "concise-plugin"
     )
 
     /** Builtin plugin display info (名称/描述), 用于内置但未安装时在全局插件列表兜底显示. */

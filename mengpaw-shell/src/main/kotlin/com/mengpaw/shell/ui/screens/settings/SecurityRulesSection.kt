@@ -108,6 +108,9 @@ fun SecurityRulesSection(
                     Text(strings.securityFileIntegrity, fontWeight = FontWeight.Medium, fontSize = 14.sp)
                     Text(strings.securityFileIntegrityDesc, fontSize = 12.sp, color = ThemeColors.textSecondary)
                 }
+                // 展开标识（此前可展开但无 chevron 提示 — 用户看不到可点）
+                Icon(if (showProtectedPaths) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = null, tint = ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
             }
             AnimatedVisibility(visible = showProtectedPaths) {
                 Column(Modifier.padding(top = ArcoSpacing.sm)) {
