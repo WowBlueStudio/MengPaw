@@ -32,18 +32,19 @@ class PipelineManager(
         const val COMPACT_FORCE_RATIO = 0.95
         const val MIN_FOLD_TOKENS = 400
 
-        /** 保守模型名单子串 — 旧/小模型有效窗口短，折叠阈值回落 0.8 防实际降智区工作。 */
-        private val CONSERVATIVE_MODEL_MARKERS = listOf(
-            "flash-mini", "nano", "lite", "mini", "7b", "8b", "13b"
+        /** 保守模型名单 — 旧/小模型有效窗口短，折叠阈值回落 0.8 防实际降智区工作。 */
+        private val conservativeModelRegex = Regex(
+            "(^|[^a-z0-9])(flash-mini|nano|lite|mini|7b|8b|13b)([^a-z0-9]|$)"
         )
 
         /**
          * 按模型名解析折叠主阈值 — kernel 与壳层共用的单一规则（消灭双份硬编码漂移）。
          * 默认 0.90（Claude Code 稀有折叠哲学）; 保守模型 0.80（保持旧阶梯）。
+         * P2 修复: 词边界匹配（"mini" 不误伤 minimax / litemode 等含子串的模型名）。
          */
         fun compactRatioFor(modelName: String): Double {
             val name = modelName.lowercase()
-            return if (CONSERVATIVE_MODEL_MARKERS.any { name.contains(it) }) 0.80 else 0.90
+            return if (conservativeModelRegex.containsMatchIn(name)) 0.80 else 0.90
         }
     }
 
@@ -56,15 +57,27 @@ class PipelineManager(
      */
     @Volatile private var cachedPipeline: Pipeline? = null
 
+    /** buildPipeline double-checked 锁 — 防并行首次构建分片（限流器/缓存分片 + registry 指针抖动）。 */
+    private val pipelineBuildLock = Any()
+
     /** Invalidate cached pipeline when plugins change. Call after plugin install/uninstall. */
     fun invalidatePipeline() { cachedPipeline = null }
 
     /**
      * Build (or return cached) execution pipeline.
      * Registers all namespaces: built-in (self, plugin, agent), additional, and dynamic plugins.
+     * P2 修复: double-checked 加锁 — 首个多 Action 批/mission 并行 worker 同时 miss 时
+     * 会各建 Pipeline（限流器/缓存分片 + 全局 registry 指针抖动）。
      */
     fun buildPipeline(): Pipeline {
         cachedPipeline?.let { return it }
+        synchronized(pipelineBuildLock) {
+            cachedPipeline?.let { return it }
+            return buildPipelineUnlocked()
+        }
+    }
+
+    private fun buildPipelineUnlocked(): Pipeline {
         val registry = CommandRegistry()
 
         // Expose registry for self.tools command

@@ -211,7 +211,8 @@ class SwarmModeExecutor(
             task = subtask.description,
             metadata = mapOf("swarmId" to swarmId, "role" to subtask.role),
             scope = "swarm",
-            agentId = agentEngine.agentName
+            agentId = agentEngine.agentName,
+            activate = false  // 零待命 worker 不抢占 activeSessionId（防折叠压缩错会话）
         )
         try {
             val context = ExecutionContext(
@@ -258,17 +259,26 @@ class SwarmModeExecutor(
                     sessionManager.addMessage(session.id, Message("user", "继续。输出 Action: <命令> 和 Action Input: <参数>。"))
                     continue
                 }
-                if (parsed.action != null) {
-                    val commandLine = "${parsed.action.name} ${parsed.action.parameters.values.joinToString(" ")}"
-                    val result = try {
-                        withTimeout(60_000L) { pipelineManager.buildPipeline().execute(commandLine, context) }
-                    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                        ExecutionResult.fail("命令超时 (60s): $commandLine", errorCode = ErrorCodes.ERR_INTERNAL)
+                // P2 修复: 多 Action 并行（与主循环/Mission worker 对齐 — 一次 LLM 输出多工具）
+                val actionList = parsed.actions.ifEmpty { listOfNotNull(parsed.action) }
+                if (actionList.isNotEmpty()) {
+                    val entries = coroutineScope {
+                        actionList.map { call ->
+                            async(KernelDispatchers.BACKGROUND) {
+                                val commandLine = "${call.name} ${call.parameters.values.joinToString(" ")}"
+                                val result = try {
+                                    withTimeout(60_000L) { pipelineManager.buildPipeline().execute(commandLine, context) }
+                                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                                    ExecutionResult.fail("命令超时 (60s): $commandLine", errorCode = ErrorCodes.ERR_INTERNAL)
+                                }
+                                // 防单条结果撑爆 worker 上下文
+                                val observation = (if (result.success) result.output else "Error: ${result.error}").take(com.mengpaw.kernel.agent.MissionSwarmPrompts.WORKER_OBSERVATION_MAX)
+                                onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, commandLine, observation))
+                                "Command: $commandLine\nResult: $observation"
+                            }
+                        }.awaitAll()
                     }
-                    // 防单条结果撑爆 worker 上下文
-                    val observation = (if (result.success) result.output else "Error: ${result.error}").take(4000)
-                    sessionManager.addMessage(session.id, Message("assistant", "Command: $commandLine\nResult: $observation"))
-                    onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, commandLine, observation))
+                    sessionManager.addMessage(session.id, Message("assistant", entries.joinToString("\n\n")))
                 }
                 step++
             }

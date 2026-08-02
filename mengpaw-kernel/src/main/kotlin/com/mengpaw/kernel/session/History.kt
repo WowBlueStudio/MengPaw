@@ -68,7 +68,9 @@ class SessionManager {
         task: String,
         metadata: Map<String, String> = emptyMap(),
         scope: String = "agent",
-        agentId: String? = null
+        agentId: String? = null,
+        /** false = 不抢占 activeSessionId（零待命并行 worker 用 — 防折叠压缩错会话）。 */
+        activate: Boolean = true
     ): Session {
         val session = Session(
             id = UUID.randomUUID().toString().take(8),
@@ -78,7 +80,7 @@ class SessionManager {
             metadata = metadata
         )
         _sessions.value = _sessions.value + (session.id to session)
-        _activeSessionId.value = session.id
+        if (activate) _activeSessionId.value = session.id
         // Emit lifecycle event (matching OpenClaw "created" event kind)
         recordSessionEvent(session.id, SessionEventBus.SessionEvent(
             kind = SessionEventBus.EventKind.SESSION_CREATED,
@@ -122,12 +124,12 @@ class SessionManager {
      * QwenPaw-style: archives raw messages to dialog/YYYY-MM-DD.jsonl before compaction;
      * produces a structured summary with Goal/Progress/KeyDecisions/NextSteps/CriticalContext.
      * When over [maxMessages] (default 50), uses [llmProvider] to generate a structured summary
-     * and replaces older messages. Keeps the last 10 messages intact.
+     * and replaces older messages. Retains recent conversation groups:
+     * MIN_KEEP_GROUPS groups unconditionally + more up to the token budget
+     * (window × coherence tier 8%/15%/25% — see [splitRetention]).
      *
-     * @return true if compaction was performed.
-     */
-    /**
      * @param specificSessionId If provided, compress this session. Otherwise use active session.
+     * @return true if compaction was performed.
      */
     suspend fun compressIfNeeded(llmProvider: LlmProvider, maxMessages: Int = 50, specificSessionId: String? = null): Boolean {
         val sessionId = specificSessionId ?: _activeSessionId.value ?: return false
@@ -296,7 +298,7 @@ $conversationText
 
     /**
      * 连贯性信号 → 保留预算档位（轻量启发式, 零 LLM 开销）。
-     * 高 25%: 工作深度（最近 10 组内同一命令/文件路径 ≥3 次）或调试态（最近 5 组含错误关键字）
+     * 高 25%: 工作深度（最近 ~40 条消息内同一 Command 命令 ≥3 次）或调试态（最近 ~20 条含错误关键字）
      * 中 15%: 产出规模（最近消息平均 >2000 字符）
      * 低 8%: 默认（普通问答, 主题轮换快）
      */

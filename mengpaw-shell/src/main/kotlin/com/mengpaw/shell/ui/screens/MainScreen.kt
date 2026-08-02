@@ -457,7 +457,9 @@ fun MainScreen(
             // ── @mention / !bang 命令补全内联下拉（不走 Popup，不干扰输入法）──
             if (showMentionDropdown || showBangDropdown) {
                 val bangCandidates = if (showBangDropdown)
-                    remember(bangQuery, viewModel.bangCommands().size) {
+                    // P2 修复: key 只依赖 bangQuery — bangCommands() 有 buildPipeline 副作用,
+                    // 放 key 里每次重组都执行（主线程全量重建）
+                    remember(bangQuery) {
                         val all = viewModel.bangCommands()
                         val q = bangQuery.trim()
                         if (q.isEmpty()) all

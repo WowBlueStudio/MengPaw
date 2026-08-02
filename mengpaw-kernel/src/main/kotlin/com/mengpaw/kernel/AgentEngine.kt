@@ -373,8 +373,11 @@ class AgentEngine(
         if (ratio < compactRatio) { return snipStaleToolResults(sessionId, currentStep) > 0 }
         val estimatedFoldTokens = (promptTokens * 0.3).toInt()
         if (ratio < PipelineManager.COMPACT_FORCE_RATIO && estimatedFoldTokens < PipelineManager.MIN_FOLD_TOKENS) return false
-        sessionManager.compressIfNeeded(llmProvider)
-        consecutiveCompacts++
+        // P1 修复: 折叠只压缩本会话（并行 worker 会话不抢占 activeSessionId,
+        // 但显式传参更稳 — 防压缩错会话）; 仅在压缩实际发生时累加计数器
+        if (sessionManager.compressIfNeeded(llmProvider, specificSessionId = sessionId)) {
+            consecutiveCompacts++
+        }
         if (consecutiveCompacts >= 2) {
             compactStuck = true
             val msg = when (agentLanguage) {

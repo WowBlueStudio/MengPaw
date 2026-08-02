@@ -32,8 +32,10 @@ class PromptEngine {
     private val recentCommands = java.util.LinkedList<String>()
 
     // ── Workspace doc cache — avoids disk I/O on every LLM call ──
+    // P2 修复: ConcurrentHashMap — 并行 worker 执行文件写命令触发 invalidateDocCache
+    // 并发重建时普通 HashMap 会竞争损坏
     private data class DocCache(var content: String, var lastModified: Long)
-    private val docCache = mutableMapOf<String, DocCache>()
+    private val docCache = java.util.concurrent.ConcurrentHashMap<String, DocCache>()
     private var cachedSystemPrompt: String? = null
     private var cachedPromptLang: AgentLanguage? = null
     private var cachedPromptAgent: String? = null
@@ -565,7 +567,8 @@ Skills 分为两层：
 
         // Find all marker positions (case-insensitive, Chinese/English colon)
         val finalLocs = Regex("(?i)final answer[:：]", RegexOption.MULTILINE).findAll(normalized).map { it.range.first }.toList()
-        val actionLocs = Regex("(?i)action[:：]", RegexOption.MULTILINE).findAll(normalized).map { it.range.first }.toList()
+        // Action 只认行首（P2 修复: 全文匹配会误切 Action Input JSON 值内的 "action:" 字样）
+        val actionLocs = Regex("(?i)(?m)^\\s*action[:：]").findAll(normalized).map { it.range.first }.toList()
 
         // ── Rule 1: Final Answer (must appear after last Action, or with no Action at all) ──
         // 注: 多个 Action + Final Answer 属于"模型要并行执行"形态 — 让位给 Rule 2 执行，
@@ -583,7 +586,7 @@ Skills 分为两层：
         }
 
         // ── Rule 2: Parse Action(s) — 一次输出可含多个 Action（并行执行）──
-        val actionRegex = Regex("(?i)action[:：]\\s*(\\S+)")
+        val actionRegex = Regex("(?i)(?m)^\\s*action[:：]\\s*(\\S+)")
         val inputRegex = Regex(
             "(?i)action input[:：]\\s*(.+?)(?=Thought[:：]|Action[:：]|Final Answer[:：]|$)",
             RegexOption.DOT_MATCHES_ALL

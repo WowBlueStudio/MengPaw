@@ -137,6 +137,8 @@ class MissionModeExecutor(
 
             val workerResult = try {
                 runMissionWorker(subtask, taskPrompt, maxSteps, onStep)
+            } catch (e: CancellationException) {
+                throw e  // 保持取消契约 — 用户 stop() 不被吞成重试
             } catch (e: Exception) {
                 "Error: ${e.message}"
             }
@@ -171,10 +173,11 @@ class MissionModeExecutor(
                 return workerResult
             } else {
                 // FAIL — build feedback from analysis + fix instructions
+                // 兜底用 worker 输出前段（原实现为验证器原文 take(300)，语义近似；保留 worker 输出更贴合反馈）
                 lastVerifierFeedback = buildString {
                     if (note.isNotBlank() && note != "PASS") { append("问题: $note\n") }
                     if (fix.isNotBlank()) { append("修复建议: $fix") }
-                    if (isBlank()) { append(verifyResultFallback(workerResult)) }
+                    if (isBlank()) { append(workerResult.take(300)) }
                 }
                 subtask.verifierNote = "FAIL: ${lastVerifierFeedback.take(150)}"
                 retries++
@@ -184,8 +187,6 @@ class MissionModeExecutor(
         subtask.status = SubtaskStatus.FAILED
         return lastVerifierFeedback.ifBlank { subtask.output }
     }
-
-    private fun verifyResultFallback(workerResult: String): String = workerResult.take(300)
 
     /**
      * 零待命 worker — 独立 session (scope="mission")，不入主会话、不写记忆
@@ -204,7 +205,8 @@ class MissionModeExecutor(
             task = subtask.description,
             metadata = mapOf("missionId" to "mission-" + subtask.id),
             scope = "mission",
-            agentId = agentEngine.agentName
+            agentId = agentEngine.agentName,
+            activate = false  // 零待命 worker 不抢占 activeSessionId（防折叠压缩错会话）
         )
         try {
             val context = ExecutionContext(
@@ -252,7 +254,7 @@ class MissionModeExecutor(
                                 } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                                     ExecutionResult.fail("命令超时 (60s): $commandLine", errorCode = ErrorCodes.ERR_INTERNAL)
                                 }
-                                val obs = (if (result.success) result.output else "Error: ${result.error}").take(4000)
+                                val obs = (if (result.success) result.output else "Error: ${result.error}").take(com.mengpaw.kernel.agent.MissionSwarmPrompts.WORKER_OBSERVATION_MAX)
                                 onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, commandLine, obs))
                                 "Command: $commandLine\nResult: $obs"
                             }

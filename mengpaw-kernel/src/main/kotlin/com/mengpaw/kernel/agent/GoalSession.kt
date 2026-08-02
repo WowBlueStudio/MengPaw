@@ -27,9 +27,7 @@ data class MissionSubtask(
     val expectedOutcome: String = "",
     var status: SubtaskStatus = SubtaskStatus.PENDING,
     var output: String = "",
-    var verifierNote: String = "",
-    /** 验证失败重试次数（并行版行为不变量 — 原为 executeSubtask 局部变量）。 */
-    var retryCount: Int = 0
+    var verifierNote: String = ""
 )
 
 enum class SubtaskStatus { PENDING, RUNNING, DONE, FAILED, VERIFIED }

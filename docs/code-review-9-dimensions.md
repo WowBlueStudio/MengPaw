@@ -217,3 +217,54 @@
 ---
 
 *文档生成: 2026-07-28 · 对应 commit: `ae14842` · 9 轮修复 | 102/102 项完成*
+
+---
+
+# v0.26.0 九维审查记录（第二轮）
+
+> 审查日期: 2026-08-02 | 版本: v0.26.0 | 审查范围: 48 个改动文件（0df1f7b..HEAD）
+> 审查方式: 3 路并行代理审查（健壮性+兼容性 / 可维护+可读+简洁 / 扩展+灵活+复用+可测）+ 人工复核 + 修复验证
+> 结果: 66 项发现，P1 3 项 + P2 14 项 + P3 若干，全部处理；kernel 236 测试通过
+
+## P1 修复（必修，3/3）
+
+| # | 问题 | 修复 |
+|---|------|------|
+| 1 | **哨兵协议误报**（SessionShellPool）: 命令输出无结尾换行（`printf hello`）时哨兵 echo 与输出合并同行 → `startsWith` 不命中 → 误报 ERR_IO 丢输出 | 哨兵改用 `printf '\n%s\n'` 前置换行强制独立成行 + 回归测试 |
+| 2 | **写后读缓存陈旧**（Pipeline）: 白名单含 agent.read/ls，写命令不使缓存失效 → "写入→立即读"命中写前快照 | 非白名单命令成功后 `clear()` 缓存 + 回归测试 |
+| 3 | **Mission worker 劫持 activeSessionId**（SessionManager/Mission/Swarm）: worker 创建会话抢占 activeSessionId，deleteSession 回落任意旧会话 → 主会话折叠压缩错会话 + compactStuck 假阳性 | `createSession(activate=false)` 零待命 worker 不抢；折叠传 `specificSessionId`；计数器仅压缩实际发生时累加 + 回归测试 |
+
+## P2 修复（核心批次，14 项）
+
+- **取消契约**：SessionShellPool / Mission worker 的 `catch(Exception)` 吞 CancellationException → 前置 `catch(CancellationException){ throw }`
+- **截断标记**：SessionShellPool 输出超限静默截断 → 追加 `...(truncated at 100 KB)`
+- **cd 注入**：workDir 双引号拼接可注入 → 单引号 `shellEscape`
+- **写失败重试**：空闲进程死亡（Android 回收）后首命令必失败 → ERR_IO 重试一次
+- **并发上限**：SessionShellPool 借出无上限（进程风暴回潮）→ `Semaphore(MAX_CONCURRENT=4)` WIP 闸
+- **缓存字节上限**：CommandResultCache 大输出（MB 级）滞留 → 64KB 上限不入缓存
+- **buildPipeline 竞争**：并行首次构建分片（限流器/缓存分片 + registry 指针）→ double-checked 加锁
+- **docCache 并发**：PromptEngine 文档缓存 HashMap 竞争 → ConcurrentHashMap
+- **多 Action 误切**：actionLocs 全文匹配误切 JSON 内 "action:" → 行首锚定 `(?m)^\s*action`
+- **remember 副作用**：MainScreen 补全 key 每重组执行 buildPipeline → key 只依赖 bangQuery
+- **postMw 漂移**：换模型后壳层折叠阈值锁旧档 → 延迟读引擎 compactRatio
+- **折叠预算窗口**：硬编码 131K 与模型档位矛盾 → 注释修正；保守名单改词边界正则（不误伤 minimax）
+- **模板版本自检**：ConciseMiddleware 删除句失配静默失效 → `lastTransformRemovedSentence` + status 如实显示"模板失配"
+- **Swarm 多 Action**：worker 循环仍是单 Action → 补并行（三份循环对齐）
+
+## P3 清理（主要项）
+
+- DefaultCommandExecutor 过时 KDoc + 死常量 MAX_OUTPUT 移除
+- History compressIfNeeded 重复 KDoc 合并更新（保留策略描述）；retentionBudgetRatio 注释与实际一致
+- MissionSubtask.retryCount 死代码移除；verifyResultFallback 无谓包装内联
+- 截断魔数 4000 共享常量（MissionSwarmPrompts.WORKER_OBSERVATION_MAX）
+- 超时消息插值实际值（不再硬编码 30s）
+
+## 未处理（设计权衡/已知限制，记录在案）
+
+- **三份 ReAct 循环**（主循环/Mission worker/Swarm worker）：已对齐多 Action 行为，共享抽取留待重构（P2 低）
+- **ConciseMiddleware 读 PluginManager.globalInstance**：壳层装配一致（已知设计）
+- **技能内容 assets 母本 + DEFAULT_SKILLS 双份**：母本 git 可读 + 内联运行时预装，有意的双写
+- **后台进程输出污染下轮**（会话复用固有风险）：哨兵后不 drain，标记为已知限制
+- **ScriptedLlmProvider 测试 mock 三份复制**：跨模块共享需 testFixtures 基建，留待后续
+
+*审查记录: 2026-08-02 · 对应 commit: 待填 · 3 路并行审查 | P1 3/3 + P2 14 + P3 完成*

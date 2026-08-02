@@ -38,9 +38,16 @@ class ConcisePlugin : Plugin {
 
     private suspend fun statusCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val active = PluginManager.globalInstance.status(PLUGIN_ID) == PluginStatus.ACTIVE
+        // 模板失配自检: 最近一次变换未实际删除强要求句 → 提示词模板可能已升级
+        val matched = if (active) lastTransformRemovedSentence else true
+        val transformState = when {
+            !active -> "⏸ 未激活（middleware 原样返回）"
+            matched -> "✅ 生效（middleware 已挂载，停用插件即恢复原提示词）"
+            else -> "⚠️ 模板失配（内核提示词已升级，删除句未命中 — 需同步 ConciseMiddleware 常量）"
+        }
         return ExecutionResult.ok(
             "言简意赅 — 系统提示词精简\n" +
-            "状态: ${if (active) "✅ 生效（middleware 已挂载，停用插件即恢复原提示词）" else "⏸ 未激活（middleware 原样返回）"}\n" +
+            "状态: $transformState\n" +
             "变换规则:\n" +
             "1. 删除强制 Thought → Action → Action Input 完整序列要求（中英两版）\n" +
             "2. 追加反 Markdown 装饰约束（回复默认纯文本，代码/命令/路径可用代码块）\n" +

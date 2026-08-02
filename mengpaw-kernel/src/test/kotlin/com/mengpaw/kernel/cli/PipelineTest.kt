@@ -96,6 +96,28 @@ class PipelineTest {
     }
 
     @Test
+    fun `write command invalidates cache`() = runTest {
+        // P1 回归锚点: "写入→立即读" 不得命中写前旧快照
+        val calls = java.util.concurrent.atomic.AtomicInteger(0)
+        val registry = CommandRegistry()
+        registry.register("self.status") { _, _ ->
+            calls.incrementAndGet()
+            ExecutionResult.ok("status-${calls.get()}")
+        }
+        registry.register("fs.write") { args, _ ->
+            ExecutionResult.ok("written: ${args.firstOrNull()}")
+        }
+        val pipeline = Pipeline(registry = registry, resultCache = CommandResultCache())
+        val ctx = ExecutionContext(sessionId = "test", agentName = "MengPaw")
+        pipeline.execute("self.status", ctx)   // 读 → 缓存 status-1
+        pipeline.execute("self.status", ctx)   // 命中缓存（calls 仍 1）
+        assertEquals(1, calls.get())
+        pipeline.execute("fs.write /a b", ctx)  // 写命令成功 → 清缓存
+        pipeline.execute("self.status", ctx)   // 缓存已失效 → 重新执行
+        assertEquals("写命令后读不应命中旧缓存", 2, calls.get())
+    }
+
+    @Test
     fun `cache hit still produces audit entry`() = runTest {
         val (pipeline, calls) = cachedPipeline()
         val ctx = ExecutionContext(sessionId = "test", agentName = "MengPaw")

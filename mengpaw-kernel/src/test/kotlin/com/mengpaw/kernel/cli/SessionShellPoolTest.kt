@@ -40,6 +40,18 @@ class SessionShellPoolTest {
     }
 
     @Test
+    fun `output without trailing newline still parses sentinel`() = runBlocking {
+        // P1 回归锚点: printf hello 无结尾换行 — 哨兵 printf 前置换行保证独立成行
+        val r = SessionShellPool.execute("printf hello", ctx)
+        assertTrue("无换行输出应成功: ${r.error}", r.success)
+        assertEquals("输出应完整保留", "hello", r.output.trim())
+        // 后续会话仍可复用
+        val r2 = SessionShellPool.execute("echo world", ctx)
+        assertTrue(r2.success)
+        assertTrue(r2.output.contains("world"))
+    }
+
+    @Test
     fun `session reused across calls without recreating process`() = runBlocking {
         val r1 = SessionShellPool.execute("echo hello-1", ctx)
         val r2 = SessionShellPool.execute("echo hello-2", ctx)

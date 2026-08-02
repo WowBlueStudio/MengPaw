@@ -8,19 +8,18 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 
 /**
- * Default [CommandExecutor] implementation — executes CLI commands via
- * [ProcessBuilder] with sandbox restrictions.
+ * Default [CommandExecutor] implementation — 沙箱检查后委托 [SessionShellPool]
+ * 会话式进程池执行（每次调用自动初始化 cwd; 超时/取消由池销毁会话）。
  *
  * Plugins receive a [CommandExecutor] through [com.mengpaw.kernel.plugin.PluginContext].
  * The framework may override this with a custom implementation that routes
  * commands through the full CLI pipeline (parse → security → execute).
  *
  * ## Sandbox
- * - Work directory is confined to [ExecutionContext.workDir]
- * - Dangerous commands and shell metacharacters are blocked
- * - Timeout: 30 seconds per command (enforced)
- * - Output capped at 100 KB
- * - Blocking I/O runs on [Dispatchers.IO] for coroutine cancellation support
+ * - Dangerous command prefixes and shell metacharacters are blocked here
+ *   （通过检查后才进池 — 池不改变安全面）
+ * - Timeout: 30 seconds per command (enforced by the pool)
+ * - Output capped at 100 KB (pool)
  */
 class DefaultCommandExecutor : CommandExecutor {
 
@@ -102,8 +101,4 @@ class DefaultCommandExecutor : CommandExecutor {
         return false
     }
 
-    companion object {
-        /** Max output size in bytes before truncation. */
-        const val MAX_OUTPUT = 100 * 1024 // 100 KB
-    }
 }

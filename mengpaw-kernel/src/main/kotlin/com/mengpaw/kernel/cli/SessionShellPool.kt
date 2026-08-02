@@ -33,6 +33,9 @@ object SessionShellPool {
 
     private const val MAX_IDLE = 4
 
+    /** 并发执行上限 — 防多 Action 并行 × 多 Agent 的进程风暴（WIP 闸）。 */
+    private const val MAX_CONCURRENT = 4
+
     /** 输出上限（同 DefaultCommandExecutor：100KB）。 */
     private const val MAX_OUTPUT = 100 * 1024
 
@@ -41,6 +44,9 @@ object SessionShellPool {
     var commandTimeoutMs: Long = 30_000L
 
     private val idle = ArrayDeque<ShellSession>()
+
+    /** 并发执行上限（Semaphore）— 防多 Action 并行 × 多 Agent 的进程风暴回潮。 */
+    private val concurrency = java.util.concurrent.Semaphore(MAX_CONCURRENT)
 
     /** 累计创建的会话数 — 测试断言"进程未被重建"用。 */
     @Volatile
@@ -65,18 +71,29 @@ object SessionShellPool {
      * @return 成功=输出；超时=ERR_TIMEOUT；进程异常/不可用=ERR_IO。
      */
     suspend fun execute(commandLine: String, ctx: ExecutionContext): ExecutionResult {
-        val session = borrow()
-        return try {
-            withTimeout(commandTimeoutMs) {
-                runInSession(session, commandLine, ctx)
+        concurrency.acquire()  // 并发上限（WIP 闸）— MAX_CONCURRENT 内排队
+        var attempt = 0
+        while (true) {
+            val session = borrow()
+            val result = try {
+                withTimeout(commandTimeoutMs) {
+                    runInSession(session, commandLine, ctx)
+                }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                session.kill()  // 超时销毁（修复泄漏缺口: 取消路径必须销毁子进程）
+                ExecutionResult.fail("Command timed out (${commandTimeoutMs / 1000}s)", errorCode = ErrorCodes.ERR_TIMEOUT)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                session.kill()  // 用户取消 — 保持取消契约, 不吞
+                throw e
+            } catch (e: Exception) {
+                session.kill()
+                KernelLog.w("SessionShellPool", "Error: ${e.message}")
+                ExecutionResult.fail(e.message ?: "Unknown error", errorCode = ErrorCodes.ERR_IO)
             }
-        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            session.kill()  // 修复现状泄漏缺口: 取消路径必须销毁子进程
-            ExecutionResult.fail("Command timed out (30s)", errorCode = ErrorCodes.ERR_TIMEOUT)
-        } catch (e: Exception) {
-            session.kill()
-            KernelLog.w("SessionShellPool", "Error: ${e.message}")
-            ExecutionResult.fail(e.message ?: "Unknown error", errorCode = ErrorCodes.ERR_IO)
+            // 空闲进程死亡（Android 回收）→ ERR_IO 重试一次（新建会话, 幂等命令）
+            if (result.errorCode == ErrorCodes.ERR_IO && attempt == 0) { attempt++; continue }
+            concurrency.release()
+            return result
         }
     }
 
@@ -110,15 +127,18 @@ object SessionShellPool {
         session: ShellSession, commandLine: String, ctx: ExecutionContext
     ): ExecutionResult = withContext(Dispatchers.IO) {
         val sb = StringBuilder()
+        var truncated = false
         try {
-            // ── 每次调用自动初始化: 重置 cwd（实测 cd 残留会污染下轮；引号防路径空格/转义）──
-            session.writer.write("cd \"${ctx.workDir}\" 2>/dev/null\n")
+            // ── 每次调用自动初始化: 重置 cwd（单引号转义防注入/路径破坏）──
+            session.writer.write("cd ${shellEscape(ctx.workDir)} 2>/dev/null\n")
             session.writer.write(commandLine)
             session.writer.write("\n")
-            // 退出码捕获: 哨兵行携带 exit code（换行分隔，不引入分号）
+            // 退出码捕获: exit_code 紧跟命令（$? 语义）; 哨兵用 printf 前置换行 —
+            // 命令输出无结尾换行（如 printf hello）时 echo 会与输出合并同行导致
+            // startsWith 不命中 → 误报失败丢输出（P1 修复）
             val marker = "__MENGPAW_DONE_${java.util.UUID.randomUUID().toString().take(8)}__"
             session.writer.write("exit_code=\$?\n")
-            session.writer.write("echo $marker\$exit_code\n")
+            session.writer.write("printf '\\n%s\\n' \"$marker\$exit_code\"\n")
             session.writer.flush()
 
             // ── 读 stdout 直到哨兵（轮询 — delay 可被 withTimeout 取消）──
@@ -133,12 +153,17 @@ object SessionShellPool {
                         exitCode = line.removePrefix(marker).trim().toIntOrNull() ?: 0
                         break
                     }
-                    if (sb.length < MAX_OUTPUT) sb.append(line).append('\n')
+                    if (sb.length + line.length + 1 <= MAX_OUTPUT) {
+                        sb.append(line).append('\n')
+                    } else {
+                        truncated = true  // 超限: 停止追加, 继续读到哨兵（防写阻塞）
+                    }
                 }
                 if (!done) delay(10)
             }
             returnSession(session)
-            val output = sb.toString().trimEnd()
+            var output = sb.toString().trimEnd()
+            if (truncated) output = output.take(MAX_OUTPUT - 40) + "\n... (truncated at 100 KB)"
             if (exitCode == 0) {
                 ExecutionResult.ok(output.ifBlank { "(empty)" })
             } else {
@@ -149,6 +174,9 @@ object SessionShellPool {
                     errorCode = ErrorCodes.ERR_INTERNAL
                 )
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            session.kill()
+            throw e  // 保持取消契约（延迟取消经轮询 delay 抛出）
         } catch (e: Exception) {
             // 写失败（进程死亡/管道断）→ 销毁，下次 borrow 自动重建
             session.kill()
@@ -156,6 +184,9 @@ object SessionShellPool {
             ExecutionResult.fail("Shell execution error: ${e.message ?: e::class.simpleName}", errorCode = ErrorCodes.ERR_IO)
         }
     }
+
+    /** 单引号 shell 转义 — 引号内字符全部字面，防路径注入（P2 修复）。 */
+    private fun shellEscape(s: String): String = "'" + s.replace("'", "'\\''") + "'"
 
     /** 输出超限 — 截断返回并销毁会话（防写阻塞，正确性优先于复用率）。 */
     private fun sessionDead(session: ShellSession, commandLine: String): ExecutionResult {

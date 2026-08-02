@@ -19,6 +19,14 @@ import com.mengpaw.kernel.plugin.PluginStatus
  *    parse() 硬依赖只有 Action:/Final Answer: 两个标记，强要求句可安全移除
  * 2. 追加反 Markdown 装饰约束 — 回复默认纯文本，代码/命令/路径可用代码块
  */
+/**
+ * 上次变换是否实际删除了强要求句 — 模板失配自检（提示词模板升级后
+ * 删除句失配则静默失效, 供 ConcisePlugin.status 如实展示而非"✅ 生效"误报）。
+ */
+@Volatile
+var lastTransformRemovedSentence: Boolean = false
+    private set
+
 val ConciseMiddleware: AgentMiddleware = AgentMiddleware { prompt, _ ->
     // 开关: 插件未 ACTIVE 时原样返回（停用即恢复原提示词）
     if (PluginManager.globalInstance.status(ConcisePlugin.PLUGIN_ID) != PluginStatus.ACTIVE) {
@@ -26,7 +34,9 @@ val ConciseMiddleware: AgentMiddleware = AgentMiddleware { prompt, _ ->
     }
     var p = prompt
     // 1. 删除强要求句（原文精确匹配；文本若已变动则自然跳过，防御性）
+    val before = p
     p = p.replace(ZH_FORCED_SEQUENCE, "").replace(EN_FORCED_SEQUENCE, "")
+    lastTransformRemovedSentence = p.length != before.length
     // 2. 反 Markdown 约束 — 按语言分支 + 幂等守卫（防多次 refresh 重复注入）
     val (marker, plainText) =
         if (p.contains("Think and respond in English")) EN_MARKER to EN_PLAIN_TEXT

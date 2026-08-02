@@ -23,6 +23,9 @@ data class SubtaskSpec(
 )
 
 object MissionSwarmPrompts {
+    /** worker 观察截断上限（防单条结果撑爆 worker 上下文）— Mission/Swarm 共享。 */
+    const val WORKER_OBSERVATION_MAX = 4000
+
 
     /** 拆解提示词 — withRole=true 供 Swarm（角色混合模型），Mission 用 false。 */
     fun buildDecomposePrompt(task: String, maxSubtasks: Int, withRole: Boolean = false): String = buildString {

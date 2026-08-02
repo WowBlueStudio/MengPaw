@@ -31,6 +31,8 @@ class CommandResultCache(
     }
 
     fun put(key: String, result: ExecutionResult) {
+        // P2 修复: 大输出不入缓存（agent.memory/docs 可达 MB 级 — 防内存滞留）
+        if (result.output.length > MAX_CACHE_OUTPUT_CHARS) return
         if (cache.size >= maxEntries) {
             // 容量保护：移除最早过期的一项（惰性近似）
             cache.entries.minByOrNull { it.value.expiresAt }?.let { cache.remove(it.key) }
@@ -45,6 +47,9 @@ class CommandResultCache(
     fun clear() = cache.clear()
 
     companion object {
+        /** 缓存输出上限 — 超限不入缓存（防大对象滞留内存）。 */
+        private const val MAX_CACHE_OUTPUT_CHARS = 64 * 1024
+
         /**
          * 可缓存白名单 — 纯查询/无副作用命令。
          * 恒定类（无参）：self.status/config/version/ports/search.stats/acp fingerprint、

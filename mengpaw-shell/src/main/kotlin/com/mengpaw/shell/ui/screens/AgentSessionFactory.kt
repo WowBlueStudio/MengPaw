@@ -40,14 +40,26 @@ class AgentSessionFactory(
     /** 角色模型路由 — Fleet/火种各角色 → provider 快照（设置页配置，缺省回退主模型）。 */
     @Volatile
     var globalSwarmRoles: Map<String, SavedProvider> = emptyMap()
+        set(value) {
+            field = value
+            rolesProviderCache = null  // 配置变化 → 缓存失效（P2 修复）
+        }
 
-    /** 组装角色 → LlmProvider（跳过无 key/构造失败的条目）。 */
-    fun buildSwarmRoles(): Map<String, LlmProvider> =
-        globalSwarmRoles.mapNotNull { (role, sp) ->
+    /** 角色 provider 缓存 — 避免每次 Mission/Swarm 运行新建 AdaptiveLlmProvider（HttpClient 开销）。 */
+    @Volatile
+    private var rolesProviderCache: Map<String, LlmProvider>? = null
+
+    /** 组装角色 → LlmProvider（跳过无 key/构造失败的条目；配置不变时复用实例）。 */
+    fun buildSwarmRoles(): Map<String, LlmProvider> {
+        rolesProviderCache?.let { return it }
+        val built = globalSwarmRoles.mapNotNull { (role, sp) ->
             if (sp.endpoint.isBlank() || sp.apiKey.isBlank()) null
             else try { role to AdaptiveLlmProvider(sp.endpoint, sp.apiKey, sp.model) }
             catch (_: Exception) { null }
         }.toMap()
+        rolesProviderCache = built
+        return built
+    }
 
     fun defaultProvider(): LlmProvider =
         if (globalApiKey.isBlank()) UnconfiguredLlmProvider()
@@ -83,9 +95,12 @@ class AgentSessionFactory(
         val conciseMw = com.mengpaw.plugin.concise.ConciseMiddleware
 
         // Post-call middleware: context folding + scroll eviction
-        // 折叠阈值按模型档位（kernel 单一规则 compactRatioFor，消灭双份硬编码漂移）
+        // P2 修复: 阈值延迟读引擎 compactRatio — applyConfiguration 换模型后
+        // setAgentIdentity 更新引擎档位, postMw 跟随（不再锁死创建时的模型档）
+        val engineRef = arrayOfNulls<AgentEngine>(1)
         val postMw = PostCallMiddleware { response, step, totalChars, estimatedTokens ->
-            val threshold = com.mengpaw.kernel.PipelineManager.compactRatioFor(model)
+            val threshold = engineRef[0]?.compactRatio
+                ?: com.mengpaw.kernel.PipelineManager.compactRatioFor(model)
             val ratio = estimatedTokens.toDouble() /
                 com.mengpaw.kernel.PipelineManager.DEFAULT_CONTEXT_WINDOW
             if (ratio > threshold) {
@@ -107,6 +122,7 @@ class AgentSessionFactory(
             it.setAgentIdentity(name, framework, model)
             it.setAgentLanguage(globalAgentLang)
             it.configureCacheStrategy(globalEndpoint)
+            engineRef[0] = it  // postMw 延迟读引擎折叠档位（P2 修复）
         }
 
         // Inject provider into TribePlugin for LLM routing (tribe.route / fleet)

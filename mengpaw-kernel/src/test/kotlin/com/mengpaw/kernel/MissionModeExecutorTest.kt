@@ -130,6 +130,32 @@ class MissionModeExecutorTest {
     }
 
     @Test
+    fun `mission workers do not hijack activeSessionId`() {
+        // P1 回归锚点: worker 会话创建不得抢占 activeSessionId（防主会话折叠压缩错会话）
+        val provider = ScriptedLlmProvider(listOf(
+            DECOMPOSE_JSON,
+            "子任务A完成", "VERDICT: PASS\nANALYSIS: 达标",
+            "子任务B完成", "VERDICT: PASS\nANALYSIS: 达标",
+            "综合报告"
+        ))
+        val (engine, sm) = engineWith(provider)
+        // 先建一个"主会话"模拟历史会话（多会话累积场景 — deleteSession 需传会话 id 非 task 名）
+        val mainSession = sm.createSession("main")
+        val older = sm.createSession("older")
+        val oldest = sm.createSession("oldest")
+        sm.deleteSession(older.id)
+        sm.deleteSession(oldest.id)
+
+        runMission(engine, "会话隔离任务")
+
+        // worker 零待命销毁后 activeSessionId 不应被 worker 会话污染
+        // （原缺陷: worker 创建时抢占 → deleteSession 回落到任意旧会话）
+        assertTrue("activeSessionId 应保持主会话: ${sm.activeSessionId.value} (main=${mainSession.id})",
+            sm.activeSessionId.value == mainSession.id || sm.activeSessionId.value == null)
+        assertNull("worker 不入 conversationSessionId", engine.currentConversationId())
+    }
+
+    @Test
     fun `mission scope blocks memory writes`() = runBlocking {
         val executor = AgentMemoryExecutor()
         val missionCtx = ExecutionContext(sessionId = "mission-test", scope = "mission")

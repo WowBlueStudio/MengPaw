@@ -89,6 +89,12 @@ class Pipeline(
                 )
 
             val result = executor(parsed.args, context)
+            // 非白名单命令（含写命令 agent.write/fs.write 等）成功 → 清空缓存,
+            // 防"写入→立即读"命中写前旧快照（P1 修复: 写后读陈旧）
+            // 注: resultCache 可能为 null（未启用缓存的 Pipeline）— 双重判空
+            if (resultCache != null && !cacheable && result.success) {
+                resultCache!!.clear()
+            }
             // 只读命令成功结果写入缓存（同会话键）
             if (cacheable && result.success) {
                 resultCache!!.put(
