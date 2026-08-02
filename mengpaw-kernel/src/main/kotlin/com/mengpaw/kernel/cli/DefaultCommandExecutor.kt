@@ -4,12 +4,8 @@
 package com.mengpaw.kernel.cli
 
 import com.mengpaw.kernel.KernelLog
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import java.io.File
-import java.util.concurrent.TimeUnit
 
 /**
  * Default [CommandExecutor] implementation — executes CLI commands via
@@ -52,8 +48,8 @@ class DefaultCommandExecutor : CommandExecutor {
     }
 
     /**
-     * Blocking execution on [Dispatchers.IO] so [withTimeout] cancellation works
-     * via coroutine cancellation (interrupts the IO thread).
+     * Execution via the session shell pool — 每次调用、汇报后自动初始化
+     * （常驻会话进程，替代每次新起 sh -c）。沙箱检查完成后委托池执行。
      */
     private suspend fun executeBlocking(commandLine: String, ctx: ExecutionContext): ExecutionResult {
         // Sandbox: block dangerous patterns
@@ -83,58 +79,8 @@ class DefaultCommandExecutor : CommandExecutor {
             }
         }
 
-        return withContext(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val process = ProcessBuilder()
-                    .command("sh", "-c", trimmed)
-                    .directory(File(ctx.workDir))
-                    .redirectErrorStream(true)
-                    .start()
-
-                // Read output with timeout + cancellation support
-                val output = readOutputWithTimeout(process)
-                val finished = process.waitFor(30, TimeUnit.SECONDS)
-                if (!finished) {
-                    process.destroyForcibly()
-                    return@withContext ExecutionResult.fail("Process timed out (30s)", errorCode = ErrorCodes.ERR_TIMEOUT)
-                }
-                val exitCode = process.exitValue()
-
-                if (exitCode == 0) {
-                    ExecutionResult.ok(output.ifBlank { "(empty)" })
-                } else {
-                    ExecutionResult.fail(
-                        output.ifBlank { "Exit code: $exitCode" },
-                        code = exitCode,
-                        errorCode = ErrorCodes.ERR_INTERNAL
-                    )
-                }
-            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                ExecutionResult.fail("Command timed out (30s)", errorCode = ErrorCodes.ERR_TIMEOUT)
-            } catch (e: Exception) {
-                KernelLog.w("DefaultCommandExecutor", "Error: ${e.message}")
-                ExecutionResult.fail(e.message ?: "Unknown error", errorCode = ErrorCodes.ERR_IO)
-            }
-        }
-    }
-
-    /**
-     * Read process output with 100KB cap.
-     * This runs on [Dispatchers.IO] so it can be interrupted by coroutine cancellation.
-     */
-    private fun readOutputWithTimeout(process: Process): String {
-        val sb = StringBuilder()
-        val buf = CharArray(8192)
-        var total = 0
-        process.inputStream.bufferedReader().use { reader ->
-            var n: Int
-            while (reader.read(buf).also { n = it } != -1 && total < MAX_OUTPUT) {
-                sb.append(buf, 0, n)
-                total += n
-            }
-        }
-        if (total >= MAX_OUTPUT) sb.append("\n... (truncated at ${MAX_OUTPUT / 1024} KB)")
-        return sb.toString()
+        // 会话式进程池执行（每次调用自动初始化 cwd；超时/异常由池销毁会话）
+        return SessionShellPool.execute(trimmed, ctx)
     }
 
     /**
