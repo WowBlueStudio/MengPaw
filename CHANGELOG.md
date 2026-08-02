@@ -1,5 +1,17 @@
 # Changelog
 
+## 浏览器 v0.7.0 (2026-08-02) — MCP 服务 + 前台唤醒
+
+> 浏览器独立版本线。自 v0.6.0 起新增与 MengPaw Shell 的设备内互联改造，本版首次发布。
+
+### 新增
+- **设备内 MCP 服务**: APK 内置 `McpHttpServer` (127.0.0.1:9880) — `GET /health` + `POST /mcp`，与 Shell `BrowserMcpPlugin` 经 HTTP 桥互联（替代类加载器隔离下静态字段失效的方案）
+- **前台唤醒**: `onNewIntent` 处理 OPEN_URL / OPEN_MD / VIEW — Agent 可唤起到前台并打开网页/Markdown
+- **Agent 协同设置**: 设置弹窗新增协同相关配置
+
+### 发行
+- Browser APK v0.7.0 (versionCode 9)，独立版本线，与主应用 release 分开发布
+
 ## v0.25.0 (2026-08-02) — 火种模式（Swarm Mode）
 
 ### 新增
