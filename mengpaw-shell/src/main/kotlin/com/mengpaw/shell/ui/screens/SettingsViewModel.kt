@@ -212,7 +212,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         if (sp.endpoint.isBlank()) null else role to sp
                     }.toMap()
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                com.mengpaw.kernel.KernelLog.w("SettingsVM", "角色路由配置解析失败（损坏则跳过）: ${e.message}")
+            }
             if (providers.isNotEmpty() || roles.isNotEmpty()) {
                 _state.value = _state.value.copy(savedProviders = providers, swarmRoles = roles)
             }
@@ -282,25 +284,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         private const val VAULT_KEY_PROVIDERS = "saved_providers_json"
         private const val VAULT_KEY_SWARM_ROLES = "swarm_roles_json"
 
-        /** Fleet/火种角色模型路由的角色键。 */
-        const val ROLE_PLANNER = "planner"
-        const val ROLE_WORKER = "worker"
-        const val ROLE_VERIFIER = "verifier"
-        const val ROLE_SYNTHESIZER = "synthesizer"
-        const val ROLE_WORKER_ALT = "worker.alt"
-
-        /** 全部可配角色（顺序 = UI 展示顺序）。 */
-        val SWARM_ROLES: List<String> = listOf(
-            ROLE_PLANNER, ROLE_WORKER, ROLE_VERIFIER, ROLE_SYNTHESIZER, ROLE_WORKER_ALT
-        )
+        /** Fleet/火种角色模型路由 — 角色键与内核 SwarmRoles 单一事实源对齐。 */
+        val SWARM_ROLES: List<String> = com.mengpaw.kernel.agent.SwarmRoles.ALL
 
         /** 角色显示名（UI）。 */
         fun roleLabel(role: String): String = when (role) {
-            ROLE_PLANNER -> "规划器 (拆解)"
-            ROLE_WORKER -> "执行器 (worker)"
-            ROLE_VERIFIER -> "验收器 (verifier)"
-            ROLE_SYNTHESIZER -> "合成器 (synthesizer)"
-            ROLE_WORKER_ALT -> "备用执行器 (worker.alt)"
+            com.mengpaw.kernel.agent.SwarmRoles.PLANNER -> "规划器 (拆解)"
+            com.mengpaw.kernel.agent.SwarmRoles.WORKER -> "执行器 (worker)"
+            com.mengpaw.kernel.agent.SwarmRoles.VERIFIER -> "验收器 (verifier)"
+            com.mengpaw.kernel.agent.SwarmRoles.SYNTHESIZER -> "合成器 (synthesizer)"
+            com.mengpaw.kernel.agent.SwarmRoles.WORKER_ALT -> "备用执行器 (worker.alt)"
             else -> role
         }
     }

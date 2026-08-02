@@ -6,72 +6,20 @@ package com.mengpaw.kernel
 import com.mengpaw.kernel.agent.AgentMemoryExecutor
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.llm.LlmProvider
-import com.mengpaw.kernel.llm.ProviderInfo
-import com.mengpaw.kernel.llm.ProviderType
 import com.mengpaw.kernel.session.SessionManager
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Mission 并行化测试 — 移植 SwarmModeExecutorTest 模式:
  * 并行时序 / 会话隔离(零待命) / 记忆屏蔽 / 重试精确 / 拆解兜底 / 报告结构。
+ * LLM mock 用共享 TestProviders（ScriptedLlmProvider / DelayLlmProvider）。
  */
 class MissionModeExecutorTest {
-
-    // ── 测试基建 ──────────────────────────────────────────────────────
-
-    private class ScriptedLlmProvider(
-        private val responses: List<String>,
-        val tag: String = "mock"
-    ) : LlmProvider {
-        val calls = CopyOnWriteArrayList<String>()
-        private val idx = AtomicInteger(0)
-
-        override suspend fun complete(prompt: String): String {
-            calls.add(prompt)
-            return responses[idx.getAndIncrement().coerceAtMost(responses.lastIndex)]
-        }
-
-        override suspend fun completeWithMessages(messages: List<Map<String, String>>): String =
-            complete(messages.joinToString("\n") { "${it["role"]}:${it["content"]}" })
-
-        override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
-            complete(prompt).also { onToken(it) }
-
-        override fun info(): ProviderInfo = ProviderInfo("mock", tag, ProviderType.LOCAL)
-        override fun close() {}
-    }
-
-    /** 每次调用 delay — 并行时序断言用。 */
-    private class DelayLlmProvider(
-        private val delayMs: Long = 100,
-        private val responses: List<String>
-    ) : LlmProvider {
-        val calls = CopyOnWriteArrayList<String>()
-        private val idx = AtomicInteger(0)
-
-        override suspend fun complete(prompt: String): String {
-            calls.add(prompt)
-            delay(delayMs)
-            return responses[idx.getAndIncrement().coerceAtMost(responses.lastIndex)]
-        }
-
-        override suspend fun completeWithMessages(messages: List<Map<String, String>>): String =
-            complete(messages.joinToString("\n") { "${it["role"]}:${it["content"]}" })
-
-        override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
-            complete(prompt).also { onToken(it) }
-
-        override fun info(): ProviderInfo = ProviderInfo("mock", "delay", ProviderType.LOCAL)
-        override fun close() {}
-    }
 
     private val DECOMPOSE_JSON =
         "[{\"id\":\"t1\",\"desc\":\"子任务A\",\"criteria\":\"完成A\"}," +
@@ -127,6 +75,26 @@ class MissionModeExecutorTest {
         // 零待命: worker 会话不入主会话、用完即销毁
         assertNull("worker 不应污染 conversationSessionId", engine.currentConversationId())
         assertTrue("worker 会话应零待命销毁", sm.sessions.value.isEmpty())
+    }
+
+    @Test
+    fun `wip gate limits parallel pipelines`() {
+        // maxParallel=2 时 4 子任务分两波 — LLM 并发峰值 ≤2（ScriptedLlmProvider.maxConcurrent 统计）
+        val provider = ScriptedLlmProvider(listOf(
+            "[{\"id\":\"t1\",\"desc\":\"子任务A\",\"criteria\":\"完成A\"}," +
+                "{\"id\":\"t2\",\"desc\":\"子任务B\",\"criteria\":\"完成B\"}," +
+                "{\"id\":\"t3\",\"desc\":\"子任务C\",\"criteria\":\"完成C\"}," +
+                "{\"id\":\"t4\",\"desc\":\"子任务D\",\"criteria\":\"完成D\"}]",
+            "A完成", "VERDICT: PASS\nANALYSIS: ok",
+            "B完成", "VERDICT: PASS\nANALYSIS: ok",
+            "C完成", "VERDICT: PASS\nANALYSIS: ok",
+            "D完成", "VERDICT: PASS\nANALYSIS: ok",
+            "综合报告"
+        ))
+        val (engine, _) = engineWith(provider)
+        runMission(engine, "WIP 闸任务", maxParallel = 2)
+        assertTrue("WIP 闸应限制并发 ≤ maxParallel(2): 实际峰值 ${provider.maxConcurrent}",
+            provider.maxConcurrent <= 2)
     }
 
     @Test

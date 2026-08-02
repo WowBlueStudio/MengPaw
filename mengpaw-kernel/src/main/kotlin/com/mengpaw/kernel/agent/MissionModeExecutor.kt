@@ -107,12 +107,15 @@ class MissionModeExecutor(
             parts
         }
 
-        return buildString {
+        val report = buildString {
             appendLine("## Mission: $task")
             appendLine("子任务: ${subtasks.size} | ✅ $verified | 👍 ${subtasks.filter { it.status == SubtaskStatus.DONE }.size} | ❌ $failed")
             appendLine()
             appendLine(synthesis)
         }
+        // 状态机复位: 任务结束必须 Finished（此前停留 Running, 引擎状态失真 — 同 Swarm 对齐）
+        agentEngine.updateAgentState(AgentState.Finished(report))
+        return report
     }
 
     /** Execute a single subtask with verification and retry. */

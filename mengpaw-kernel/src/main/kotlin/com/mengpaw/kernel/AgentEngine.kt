@@ -266,15 +266,24 @@ class AgentEngine(
      * Routes through the full CLI pipeline (parse → rate limit → security → integrity → execute → audit).
      * Unknown CLI commands (e.g. "!echo hi") fall back to the sandboxed shell executor.
      */
-    suspend fun executeCommand(commandLine: String): ExecutionResult {
+    suspend fun executeCommand(
+        commandLine: String,
+        scope: String = "system",
+        workDir: String? = null
+    ): ExecutionResult {
         val ctx = ExecutionContext(
             sessionId = conversationSessionId ?: "ui-bang",
             agentName = agentName,
-            workDir = bangWorkDir(),
-            scope = "system"
+            workDir = workDir ?: bangWorkDir(),
+            scope = scope
         )
         val result = pipelineManager.buildPipeline().execute(commandLine, ctx)
-        if (result.success || result.errorCode != ErrorCodes.ERR_NOT_FOUND) return result
+        // Fallback 仅限真"命令不存在"（Pipeline 的 Unknown command 错误）— 命令存在但参数
+        // 错误（如 agent.read 缺失文件也返回 ERR_NOT_FOUND）不得落 shell 兜底, 否则
+        // 显示 "command not found" 掩盖真实错误（错误码二义性修复）
+        val unknownCommand = result.errorCode == ErrorCodes.ERR_NOT_FOUND &&
+            result.error?.startsWith("Unknown command") == true
+        if (result.success || !unknownCommand) return result
         // Fallback: bare shell commands through the sandbox (blacklist + metacharacter checks)
         if (!SecurityPolicy().isAllowed(commandLine)) {
             return ExecutionResult.fail(
@@ -293,14 +302,13 @@ class AgentEngine(
 
     /**
      * 列出当前引擎管线中可执行的全部 CLI 命令（名称 + 描述），供 "!" 命令补全下拉使用。
-     * 幂等触发 buildPipeline 以确保 SelfExecutor.commandRegistry 指向本引擎注册表
-     * （多 Agent 场景下必须如此 — 全局指针最后被哪个引擎构建就指向哪个引擎的注册表）。
+     * 读本引擎 registry（PipelineManager 持有）— 不再依赖 SelfExecutor.commandRegistry
+     * 全局指针（多 Agent 场景最后构建者赢的串扰问题）。
      */
     fun listCommands(): List<CommandInfo> {
-        pipelineManager.buildPipeline() // 幂等; 同时把全局 registry 指针重指到本引擎
-        val registry = SelfExecutor.commandRegistry ?: return emptyList()
+        pipelineManager.buildPipeline() // 幂等; 确保本引擎 registry 已构建
         val descMap = CommandSearch.all().associate { it.fullName to it.description }
-        return registry.list().sorted().map { name ->
+        return pipelineManager.listCommands().sorted().map { name ->
             // self. 前缀兜底: BuiltinCommandIndex 里 notify.message/banner 缺 self. 前缀（既有数据缺口）
             CommandInfo(name, descMap[name] ?: descMap[name.removePrefix("self.")] ?: "")
         }
@@ -312,6 +320,9 @@ class AgentEngine(
     companion object {
         /** Single source of truth: generated from gradle.properties mengpaw.version. */
         val CORE_VERSION: String get() = MengPawVersion.FRAMEWORK
+
+        /** 零待命并行 worker 会话 scope — 不注入主循环省察引导。 */
+        private val WORKER_SCOPES = setOf("mission", "swarm")
     }
 
     /**
@@ -602,7 +613,7 @@ class AgentEngine(
                 consecutiveContinueCount = 0 // Reset on successful action
 
                 // ── 单次 LLM 输出可含多个 Action — 并行执行后合并 Observation ──
-                // 并发纪律照搬 Swarm runWorker (:195-199): 共享可变状态
+                // 并发纪律照搬 SwarmModeExecutor.runWorker: 共享可变状态
                 // (detectLoop/trackResult/consecutiveFailures/ErrorCollector) 只在主协程串行更新
                 val actionList = parsed.actions.ifEmpty { listOfNotNull(parsed.action) }
 
@@ -878,7 +889,10 @@ class AgentEngine(
         // 追加到对话末尾而非 add(0) 前插 — 前插会使后续所有消息位移, 击穿整个
         // 前缀缓存 (prompt caching 按字节前缀命中); 末尾追加只增不改, 缓存前缀不受扰动,
         // 且"最新指令"语义更强（紧贴当前轮次）。
-        val guide = pendingGuideFragment
+        // 只对主会话注入 — 并行 worker（mission/swarm 零待命会话）不消费主循环遗留的
+        // 省察引导（防注入错目标会话）。
+        val guide = if (sessionManager.getSession(sessionId)?.scope in WORKER_SCOPES) null
+        else pendingGuideFragment
         if (guide != null && guideInjections < com.mengpaw.kernel.evolution.EvolutionGuide.MAX_INJECTIONS) {
             guideInjections++
             pendingGuideFragment = null

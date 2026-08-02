@@ -60,6 +60,10 @@ class PipelineManager(
     /** buildPipeline double-checked 锁 — 防并行首次构建分片（限流器/缓存分片 + registry 指针抖动）。 */
     private val pipelineBuildLock = Any()
 
+    /** 本管理器构建的 registry — listCommands 直接读本引擎（防多 Agent 全局指针串扰）。 */
+    @Volatile
+    private var registry: CommandRegistry? = null
+
     /** Invalidate cached pipeline when plugins change. Call after plugin install/uninstall. */
     fun invalidatePipeline() { cachedPipeline = null }
 
@@ -78,7 +82,7 @@ class PipelineManager(
     }
 
     private fun buildPipelineUnlocked(): Pipeline {
-        val registry = CommandRegistry()
+        val registry = CommandRegistry().also { this.registry = it }
 
         // Expose registry for self.tools command
         SelfExecutor.commandRegistry = registry
@@ -114,6 +118,9 @@ class PipelineManager(
         cachedPipeline = pipeline
         return pipeline
     }
+
+    /** 本引擎注册表的命令名列表（! 命令补全用 — 读本引擎 registry, 不依赖全局指针）。 */
+    fun listCommands(): List<String> = registry?.list() ?: emptyList()
 
     /** List all active CLI namespaces (built-in + plugins) for settings display. */
     fun getActiveNamespaces(): List<String> {

@@ -41,8 +41,8 @@ class PromptEngine {
     private var cachedPromptAgent: String? = null
     private var cachedPromptFramework: String? = null
     private var cachedPromptModel: String? = null
-    /** 模板版本快照 — 提示词常量改动后 bump [PROMPT_TEMPLATE_VERSION] 强制重建缓存。 */
-    private var cachedPromptTemplateVersion: Int? = null
+    /** 模板内容哈希快照 — 提示词常量改动自动失效（无需手动 bump）。 */
+    private var cachedTemplateHash: Int? = null
 
     /** Read a workspace doc with file-system cache. Re-reads only if file changed. */
     private fun cachedRead(agentName: String, fileName: String, reader: (String) -> String): String {
@@ -136,7 +136,7 @@ class PromptEngine {
         // Return cached prompt if nothing changed — skip all disk I/O
         if (agentName == cachedPromptAgent && lang == cachedPromptLang &&
             framework == cachedPromptFramework && modelName == cachedPromptModel &&
-            cachedPromptTemplateVersion == PROMPT_TEMPLATE_VERSION &&
+            cachedTemplateHash == TEMPLATE_HASH &&
             cachedSystemPrompt != null &&
             docCache.isNotEmpty() // guard: if cache was wiped, rebuild
         ) {
@@ -230,7 +230,7 @@ Skills 分为两层：
         cachedPromptAgent = agentName
         cachedPromptFramework = framework
         cachedPromptModel = modelName
-        cachedPromptTemplateVersion = PROMPT_TEMPLATE_VERSION
+        cachedTemplateHash = TEMPLATE_HASH
         return prompt
     }
 
@@ -247,12 +247,6 @@ Skills 分为两层：
     }
 
     companion object {
-        /**
-         * 提示词模板版本 — 修改 CHINESE_PROMPT/ENGLISH_PROMPT/FEWSHOT 等常量后必须 bump，
-         * 否则 cachedSystemPrompt 缓存命中会让运行中进程继续用旧提示词。
-         */
-        const val PROMPT_TEMPLATE_VERSION = 2
-
         /** 文档全量注入上限 — 超过则走 [compactDoc] 前段 + 外链。 */
         private const val DOC_FULL_INJECT_CHARS = 12_000
         /** 超长文档注入的前段字符数。 */
@@ -551,6 +545,14 @@ Skills 分为两层：
 
             **Critical**: Every step MUST output the complete Thought → Action → Action Input sequence. Never stop after just a Thought. Only output Final Answer when the task is truly complete.
         """.trimIndent()
+
+        /**
+         * 模板内容哈希 — 缓存键自动派生（修改 CHINESE_PROMPT/ENGLISH_PROMPT/FEWSHOT
+         * 任一常量即自动失效, 无需手动 bump 版本号 — 消除"忘 bump 静默用旧提示词"）。
+         * 置于 companion 末尾: 引用全部模板常量定义。
+         */
+        val TEMPLATE_HASH: Int =
+            (CHINESE_PROMPT + ENGLISH_PROMPT + CHINESE_FEWSHOT + ENGLISH_FEWSHOT).hashCode()
     }
 
     /**

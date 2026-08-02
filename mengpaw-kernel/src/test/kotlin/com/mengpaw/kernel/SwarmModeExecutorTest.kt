@@ -7,67 +7,18 @@ import com.mengpaw.kernel.agent.AgentMemoryExecutor
 import com.mengpaw.kernel.agent.SwarmBudget
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.llm.LlmProvider
-import com.mengpaw.kernel.llm.ProviderInfo
-import com.mengpaw.kernel.llm.ProviderType
 import com.mengpaw.kernel.session.SessionManager
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 火种模式 (Swarm Mode) 测试。
  *
  * 回归锚点: 会话隔离用例 (worker 不污染 conversationSessionId) — 钉死 Mission 时代的会话污染缺陷。
+ * LLM mock 用共享 TestProviders（ScriptedLlmProvider / DelayLlmProvider）。
  */
 class SwarmModeExecutorTest {
-
-    // ── 测试基建 ──────────────────────────────────────────────────────
-
-    /** 按序返回响应 (超出循环用最后一个), 记录每次 prompt 供"谁被调用"断言。 */
-    private class ScriptedLlmProvider(
-        private val responses: List<String>,
-        val tag: String = "mock"
-    ) : LlmProvider {
-        val calls = CopyOnWriteArrayList<String>()
-        private val idx = AtomicInteger(0)
-
-        override suspend fun complete(prompt: String): String {
-            calls.add(prompt)
-            return responses[idx.getAndIncrement().coerceAtMost(responses.lastIndex)]
-        }
-
-        override suspend fun completeWithMessages(messages: List<Map<String, String>>): String =
-            complete(messages.joinToString("\n") { "${it["role"]}:${it["content"]}" })
-
-        override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
-            complete(prompt).also { onToken(it) }
-
-        override fun info(): ProviderInfo = ProviderInfo("mock", tag, ProviderType.LOCAL)
-        override fun close() {}
-    }
-
-    /** 每次调用延迟后返回 — 用于并行时序断言。 */
-    private class DelayLlmProvider(
-        private val delayMs: Long,
-        private val responses: List<String> = listOf("Final Answer: ok")
-    ) : LlmProvider {
-        override suspend fun complete(prompt: String): String {
-            delay(delayMs)
-            return responses[responses.size - 1]
-        }
-
-        override suspend fun completeWithMessages(messages: List<Map<String, String>>): String =
-            complete(messages.joinToString("\n"))
-
-        override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
-            complete(prompt).also { onToken(it) }
-
-        override fun info(): ProviderInfo = ProviderInfo("mock", "delay", ProviderType.LOCAL)
-        override fun close() {}
-    }
 
     private val DECOMPOSE_JSON =
         """[{"id":"a","desc":"子任务A","criteria":"完成A"},{"id":"b","desc":"子任务B","criteria":"完成B"}]"""

@@ -34,6 +34,7 @@ import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.shell.ui.components.BigBangPopup
+import com.mengpaw.shell.ui.localization.AppStrings
 
 /** Regex for extracting image paths from Markdown: ![alt](path). Cached. */
 val MARKDOWN_IMAGE_REGEX = Regex("!\\[.*?]\\((.*?)\\)")
@@ -138,7 +139,7 @@ fun AgentBubble(content: String, agentName: String = "MengPaw",
 
 /** Result of a "!command" — left-aligned, agent-bubble style; red-tinted on failure. */
 @Composable
-fun CommandResultBubble(message: ChatMessageUi.CommandResult) {
+fun CommandResultBubble(message: ChatMessageUi.CommandResult, strings: AppStrings) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
         Surface(
             shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm),
@@ -146,7 +147,7 @@ fun CommandResultBubble(message: ChatMessageUi.CommandResult) {
             modifier = Modifier.fillMaxWidth(0.9f)
         ) {
             Column(Modifier.padding(ArcoSpacing.lg)) {
-                Text(if (message.isError) "❌ 命令执行失败" else "❯ 命令输出",
+                Text(if (message.isError) "❌ ${strings.commandFailedLabel}" else "❯ ${strings.commandOutputLabel}",
                     style = MaterialTheme.typography.labelSmall,
                     color = if (message.isError) ArcoColors.Red6 else ThemeColors.textSecondary)
                 Spacer(Modifier.height(ArcoSpacing.xs))

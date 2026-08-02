@@ -52,6 +52,14 @@ class SessionShellPoolTest {
     }
 
     @Test
+    fun `oversized output gets truncation marker`() = runBlocking {
+        // 输出 120KB > 100KB 上限 → 截断标记（防 Agent 基于残缺输出下结论）
+        val r = SessionShellPool.execute("head -c 120000 /dev/zero | tr '\\0' 'x'", ctx)
+        assertTrue("截断命令应成功: ${r.error}", r.success)
+        assertTrue("应含截断标记: ...${r.output.takeLast(60)}", r.output.contains("truncated at 100 KB"))
+    }
+
+    @Test
     fun `session reused across calls without recreating process`() = runBlocking {
         val r1 = SessionShellPool.execute("echo hello-1", ctx)
         val r2 = SessionShellPool.execute("echo hello-2", ctx)

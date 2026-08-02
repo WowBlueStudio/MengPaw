@@ -5,6 +5,7 @@ package com.mengpaw.kernel
 
 import com.mengpaw.kernel.agent.SwarmBudget
 import com.mengpaw.kernel.agent.SwarmResultCard
+import com.mengpaw.kernel.agent.SwarmRoles
 import com.mengpaw.kernel.agent.SwarmSubtask
 import com.mengpaw.kernel.agent.SwarmSubtaskStatus
 import com.mengpaw.kernel.cli.ErrorCodes
@@ -73,7 +74,7 @@ class SwarmModeExecutor(
         agentEngine.updateAgentState(AgentState.Running("火种: 规划中", 0, 0))
 
         // ── Phase 0: 规划器拆解 ──
-        val planner = providerFor("planner", roles)
+        val planner = providerFor(SwarmRoles.PLANNER, roles)
         val subtasks = decompose(guardedTask, planner, maxSubtasks)
         if (subtasks.isEmpty()) {
             // 拆解失败兜底: 退化为单 Agent 执行 (同 Mission 策略)
@@ -96,7 +97,7 @@ class SwarmModeExecutor(
         }
 
         // ── Phase 3: 合成器汇总 ──
-        val synthesis = synthesize(guardedTask, cards, providerFor("synthesizer", roles))
+        val synthesis = synthesize(guardedTask, cards, providerFor(SwarmRoles.SYNTHESIZER, roles))
         val verified = cards.count { it.status == SwarmSubtaskStatus.VERIFIED }
         val failed = cards.count { it.status == SwarmSubtaskStatus.FAILED }
         val skipped = cards.count { it.status == SwarmSubtaskStatus.SKIPPED }
@@ -155,7 +156,7 @@ class SwarmModeExecutor(
             }
 
             // Phase 2: Verifier 验证 (Worker-Verifier 模式)
-            val (passed, note) = verify(subtask, outcome, providerFor("verifier", roles))
+            val (passed, note) = verify(subtask, outcome, providerFor(SwarmRoles.VERIFIER, roles))
             if (passed) {
                 return SwarmResultCard(subtask.id, SwarmSubtaskStatus.VERIFIED,
                     outcome.answer, outcome.tokensUsed, outcome.stepsUsed, note)
@@ -338,7 +339,7 @@ class SwarmModeExecutor(
                     id = spec.id,
                     description = spec.desc,
                     expectedOutcome = spec.criteria,
-                    role = spec.role ?: "worker"
+                    role = spec.role ?: SwarmRoles.WORKER
                 )
             }
     }
@@ -372,11 +373,11 @@ class SwarmModeExecutor(
 
     /** 角色 → provider: 指定角色 → 缺省 "worker" → 引擎主 provider。 */
     private fun providerFor(role: String, roles: Map<String, LlmProvider>): LlmProvider =
-        roles[role] ?: roles["worker"] ?: agentEngine.getLlmProvider()
+        roles[role] ?: roles[SwarmRoles.WORKER] ?: agentEngine.getLlmProvider()
 
     /** Andon 重派角色: 优先 roles["worker.alt"] (可不同模型), 无则原角色。 */
     private fun retryRoleFor(role: String, roles: Map<String, LlmProvider>): String =
-        if ("worker.alt" in roles) "worker.alt" else role
+        if (SwarmRoles.WORKER_ALT in roles) SwarmRoles.WORKER_ALT else role
 }
 
 /** Worker 循环返回值 — 协调器只消费此结构, 不看 Worker 内部日志。 */

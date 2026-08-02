@@ -55,7 +55,10 @@ class AgentSessionFactory(
         val built = globalSwarmRoles.mapNotNull { (role, sp) ->
             if (sp.endpoint.isBlank() || sp.apiKey.isBlank()) null
             else try { role to AdaptiveLlmProvider(sp.endpoint, sp.apiKey, sp.model) }
-            catch (_: Exception) { null }
+            catch (e: Exception) {
+                KernelLog.w("AgentVM", "角色 $role provider 构造失败，已跳过: ${e.message}")
+                null
+            }
         }.toMap()
         rolesProviderCache = built
         return built

@@ -118,6 +118,22 @@ class PipelineTest {
     }
 
     @Test
+    fun `cache evicts oldest beyond maxEntries`() = runTest {
+        // 直接单测缓存（不经 Pipeline — maxEntries 淘汰路径）
+        val cache = CommandResultCache(ttlMillis = 10_000, maxEntries = 3)
+        repeat(4) { i -> cache.put("k$i", ExecutionResult.ok("v$i")) }
+        assertNull("最早条目应被淘汰", cache.get("k0"))
+        assertNotNull("最新条目应保留", cache.get("k3"))
+    }
+
+    @Test
+    fun `oversized output not cached`() = runTest {
+        val cache = CommandResultCache(ttlMillis = 10_000)
+        cache.put("big", ExecutionResult.ok("x".repeat(70 * 1024)))  // 70KB > 64KB 上限
+        assertNull("超大输出不应入缓存", cache.get("big"))
+    }
+
+    @Test
     fun `cache hit still produces audit entry`() = runTest {
         val (pipeline, calls) = cachedPipeline()
         val ctx = ExecutionContext(sessionId = "test", agentName = "MengPaw")

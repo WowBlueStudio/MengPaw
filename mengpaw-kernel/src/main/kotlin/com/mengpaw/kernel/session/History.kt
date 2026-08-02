@@ -317,8 +317,10 @@ $conversationText
     }
 
     /**
-     * 摘要长度反相关 — 折叠后目标占用率 ~60%:
-     * 摘要预算 = 0.6×窗口 − 保留原文 token, 折算字符。上下限 [300, 1200]。
+     * 摘要长度反相关 — 保留原文越多摘要越短。
+     * 预算 = 0.6×窗口 − 保留原文 token 折算字符, 上下限 [300, 1200]。
+     * 注: 1200 字符上限 ≈ 300 token, 对 131K 窗口占比极小 — "60% 目标占用率"
+     * 仅在保留原文接近窗口上限时才有意义; 实际约束是"摘要不喧宾夺主"。
      */
     private fun summaryBudgetCharsFor(keptTokens: Int): Int {
         val targetTokens = (com.mengpaw.kernel.PipelineManager.DEFAULT_CONTEXT_WINDOW * 0.60).toInt()

@@ -41,6 +41,8 @@ class BangCommandExecutionTest {
     @Before
     fun init() {
         DataPaths.initialize(System.getProperty("java.io.tmpdir") + "/mengpaw_bang_test")
+        // 清池防跨测试类污染（SessionShellPool.totalCreated 是静态共享计数）
+        com.mengpaw.kernel.cli.SessionShellPool.resetForTest()
     }
 
     private fun engine() = AgentEngine(llmProvider = FakeProvider(), sessionManager = SessionManager())

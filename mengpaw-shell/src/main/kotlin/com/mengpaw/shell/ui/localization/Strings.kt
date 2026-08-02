@@ -16,6 +16,8 @@ data class AppStrings(
     // Main Screen
     val systemBanner: String,
     val inputPlaceholder: String,
+    val commandOutputLabel: String,
+    val commandFailedLabel: String,
     val thinking: String,
     val agentLabel: String,
     val stop: String,
@@ -213,6 +215,8 @@ val EnglishStrings = AppStrings(
 
     systemBanner = "Agent is ready. Describe the task you want to accomplish.",
     inputPlaceholder = "Describe a task for the Agent...",
+    commandOutputLabel = "Command output",
+    commandFailedLabel = "Command failed",
     thinking = "🤔 Thinking...",
     agentLabel = "Agent",
     stop = "Stop",
@@ -402,6 +406,8 @@ val ChineseStrings = AppStrings(
 
     systemBanner = "Agent 已就绪。描述你想要完成的任务。",
     inputPlaceholder = "描述一个任务给 Agent...",
+    commandOutputLabel = "命令输出",
+    commandFailedLabel = "命令执行失败",
     thinking = "🤔 思考中 (Thinking)...",
     agentLabel = "Agent",
     stop = "停止",

@@ -33,7 +33,11 @@ class PromptDump {
 
     @Test
     fun dumpPrompts() {
-        if (System.getProperty("prompt.dump") != "true") return  // 默认空跑
+        // 未开启时显示"跳过"而非"通过"（Assume）— 默认空跑语义更诚实
+        org.junit.Assume.assumeTrue(
+            "需要 -Dprompt.dump=true 才执行",
+            System.getProperty("prompt.dump") == "true"
+        )
         val engine = PromptEngine()
         // Gradle 测试进程 cwd 不稳定，必须显式传绝对目录
         val dir = File(System.getProperty("prompt.dump.dir")

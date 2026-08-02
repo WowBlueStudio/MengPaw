@@ -171,6 +171,23 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `production scale tier retains more than default`() = runBlocking {
+        // 平均 >2000 字符（产出规模信号）→ 15% 档预算 ≈ 78K 字符 ≈ 35 条保留
+        // （默认 8% 档同规模只保留 ~19 条 — 见 compresses when over threshold 用例）
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        val mockLlm = MockLlmProvider { "summary" }
+        repeat(200) { i ->
+            manager.addMessage(session.id, Message("user", "m $i " + "x".repeat(2200)))
+        }
+        val didCompress = manager.compressIfNeeded(mockLlm)
+        assertTrue(didCompress)
+        val history = manager.getHistory(session.id)
+        assertTrue("15% 档保留应多于 8% 档（~19 条）: ${history.size}", history.size > 25)
+        assertTrue("最近的产出消息应保留", history.last().content.startsWith("m 199"))
+    }
+
+    @Test
     fun `high coherence budget retains more original messages`() = runBlocking {
         val manager = SessionManager()
         val session = manager.createSession("Test")
