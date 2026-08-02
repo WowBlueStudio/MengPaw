@@ -6,9 +6,13 @@ category: browser
 ---
 # 网页抓取工作流
 
-> 通道: `sys.browser.open` 唤醒 / `browser.mcp.*` 提取 / `search.md` 转档。主手册: `skill.run browser-control`。
+> 通道: `sys.browser.open` 唤醒 / `browser.mcp.invoke <工具>` 提取 / `search.md` 转档。主手册: `skill.run browser-control`。
 
-## 完整流程
+## 适用场景
+
+批量抓取网页内容、列表页逐条归档、需要登录/JS 渲染的页面采集。
+
+## 执行步骤
 
 ```
 # 1. 唤醒并打开
@@ -36,10 +40,14 @@ browser.mcp.invoke browser_eval {"script":"var n=document.querySelector('.next')
 | 静态页面/批量抓取 | `search.md` / `net.curl` | 快, 不占浏览器, 可并发 |
 | 高质量搜索 | `tavily.search` | 结构化结果, 免解析 |
 
+## MCP 工具清单（browser.mcp.invoke）
+
+`browser_navigate` / `browser_extract` / `browser_eval` / `browser_click` / `browser_type` / `browser_screenshot` / `browser_download_url`（7 个，`browser.mcp.tools` 查看详情）。抓取常用：navigate → extract → eval。
+
 ## 去重与持久化
 
-- 转档产物在 `SEARCH_OUTPUTS` (`search.outputs` 查看), 文件名带时间戳
-- 抓取前 `search.outputs` 查重, 避免重复转档
+- 转档产物在 `SEARCH_OUTPUTS` (`search.outputs` 查看)，文件名带时间戳
+- 抓取前 `search.outputs` 查重，避免重复转档；`search.clean` 清理无用转档
 - 关键资料提炼后 `agent.memory.keep` 沉淀
 
 ## 反爬应对
@@ -47,3 +55,14 @@ browser.mcp.invoke browser_eval {"script":"var n=document.querySelector('.next')
 - 403/验证码 → 换浏览器通道 (MCP) 重试
 - 限流 → 逐条间隔 + `search.md` 分步
 - 需要登录 → 浏览器会话天然带登录态 (browser_navigate 登录后保持)
+
+## 注意事项
+
+- 大页面前 `browser_extract` 核对结构再批量 eval，避免选择器失配空转
+- 转档命名用语义名（list_1/article_N），便于后续检索定位
+
+## 进化目标
+
+- 目标: 覆盖主流抓取场景——静态/JS/登录/分页/去重/持久化全链路
+- 稳定锚点: 唤醒→提取→转档→去重的核心链路与 `search.md --name` 命名约定
+- 收敛原则: 升级朝链路完整度收敛；新抓取场景开新技能，不污染本技能
