@@ -634,7 +634,9 @@ class AgentEngine(
                 // ── 单次 LLM 输出可含多个 Action — 并行执行后合并 Observation ──
                 // 并发纪律照搬 SwarmModeExecutor.runWorker: 共享可变状态
                 // (detectLoop/trackResult/consecutiveFailures/ErrorCollector) 只在主协程串行更新
-                val actionList = parsed.actions.ifEmpty { listOfNotNull(parsed.action) }
+                // 同批去重: 相同命令(名称+参数)只执行一次 — 模型偶发重复输出同一 Action
+                val actionList = (parsed.actions.ifEmpty { listOfNotNull(parsed.action) })
+                    .distinctBy { "${it.name} ${it.parameters.values.joinToString(" ")}" }
 
                 if (actionList.isNotEmpty()) {
                     val commandLines = actionList.map { call ->
@@ -685,7 +687,9 @@ class AgentEngine(
                         var rawObservation = if (result.success) result.output else "Error: ${result.error}"
                         // ── QwenPaw-style tool result pruning ──
                         rawObservation = toolResultManager.pruneToolResult(commandLine, rawObservation, step + 1)
-                        onStep?.invoke(TraceStep(step + 1, parsed.thought, commandLine, rawObservation))
+                        // 多 Action 并行: 思考只在第一个 Action 上呈现, 后续 Action 复用同一步序号
+                        // (UI 对空 thought 渲染成纯工具行, 避免 N 条相同思考重复)
+                        onStep?.invoke(TraceStep(step + 1, if (i == 0) parsed.thought else "", commandLine, rawObservation))
                         observationEntries.add("Command: $commandLine\nResult: $rawObservation")
                     }
                     // 连续失败统计与失败循环检测（串行，无竞争）

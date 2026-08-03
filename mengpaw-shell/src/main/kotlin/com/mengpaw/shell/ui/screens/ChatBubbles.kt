@@ -218,18 +218,23 @@ fun TraceStepItem(trace: AgentTrace) {
 
     Column(Modifier.fillMaxWidth().padding(vertical = 1.dp).padding(horizontal = ArcoSpacing.sm, vertical = 4.dp)) {
         // ── Thought: step number + brain icon, always fully visible ──
-        Row(verticalAlignment = Alignment.Top) {
-            Text("Step${trace.step}", fontSize = 10.sp, color = ArcoColors.Blue5,
-                fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 2.dp))
-            Spacer(Modifier.width(4.dp))
-            Icon(Icons.Outlined.Psychology, null, Modifier.size(14.dp).padding(top = 2.dp), tint = ArcoColors.Blue4)
-            Spacer(Modifier.width(4.dp))
-            Text(trace.thought, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+        // 多 Action 并行的后续工具 thought 为空 → 缩进渲染纯工具行, 不重复显示思考
+        val isParallelTool = trace.thought.isBlank()
+        if (!isParallelTool) {
+            Row(verticalAlignment = Alignment.Top) {
+                Text("Step${trace.step}", fontSize = 10.sp, color = ArcoColors.Blue5,
+                    fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 2.dp))
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Outlined.Psychology, null, Modifier.size(14.dp).padding(top = 2.dp), tint = ArcoColors.Blue4)
+                Spacer(Modifier.width(4.dp))
+                Text(trace.thought, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+            }
         }
         // ── Action + Observation: terminal icon, merged into one collapsible block ──
         if (trace.action != null || !trace.observation.isNullOrBlank()) {
             Spacer(Modifier.height(2.dp))
-            Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp)
+            Column(Modifier.fillMaxWidth()
+                .padding(horizontal = if (isParallelTool) 26.dp else 6.dp, vertical = 3.dp)
                 .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { mergedExpanded = !mergedExpanded }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Terminal, null, Modifier.size(13.dp), tint = ArcoColors.Gray6)
