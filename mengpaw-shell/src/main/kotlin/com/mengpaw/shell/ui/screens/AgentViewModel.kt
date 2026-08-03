@@ -330,11 +330,13 @@ class AgentViewModel : ViewModel() {
             var runningMsgIndex = -1     // fast‑path index; verified against ref before use
             var runningMsgRef: ChatMessageUi.AgentWithTrace? = null // identity guard for concurrent insertions
             try {
-                // /Mission /Goal: 临时覆盖 loopMode
+                // /Mission /Goal /Fleet: 临时覆盖 loopMode
                 if (executionMode == ExecutionMode.MISSION) {
                     inputTagManager.loopMode = LoopMode.MISSION
                 } else if (executionMode == ExecutionMode.GOAL) {
                     inputTagManager.loopMode = LoopMode.GOAL
+                } else if (executionMode == ExecutionMode.FLEET) {
+                    inputTagManager.loopMode = LoopMode.FLEET
                 }
 
                 // /Dream: 后台执行 — 直接 LLM 调用，不触发主引擎状态变化

@@ -7,6 +7,7 @@ package com.mengpaw.shell.ui.screens.model
 enum class ExecutionMode(val label: String, val prefix: String) {
     MISSION("Mission", "/Mission"),
     SWARM("Swarm", "/Swarm"),
+    FLEET("Fleet", "/Fleet"),
     GOAL("Goal", "/Goal"),
     PLAN("Plan", "/Plan"),
     RESEARCH("Research", "/Research"),

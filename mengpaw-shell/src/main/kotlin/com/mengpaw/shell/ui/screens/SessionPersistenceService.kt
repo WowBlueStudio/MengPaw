@@ -104,9 +104,6 @@ class SessionPersistenceService(
 
     // ── Per-session tracking ──
 
-    /** 增量持久化: 追踪上次落盘的消息数, 30s 保存时若未变化则跳过 I/O */
-    private var lastPersistedMsgCount: Int = 0
-
     /** Track current session ID for per-session save. Auto-assigned on first message. */
     private var currentSessionId: String = ""
 
@@ -130,7 +127,6 @@ class SessionPersistenceService(
             val session = sessions[getActiveAgentName()] ?: return
             val msgs = session.messages.value.filter { it !is ChatMessageUi.System }
             if (msgs.isEmpty()) return
-            if (msgs.size == lastPersistedMsgCount) return
             ensureSessionId()
             val messagesData = messagesToJson(msgs)
             val wrapper = SessionPersistenceData(
@@ -141,7 +137,6 @@ class SessionPersistenceService(
             val file = File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
             atomicWriteJson(file, json.encodeToString(SessionPersistenceData.serializer(), wrapper))
             saveSessionById(currentSessionId, msgs)
-            lastPersistedMsgCount = msgs.size
             if (_sessionHistory.value.none { it.id == currentSessionId }) {
                 val title = msgs.firstOrNull()?.let {
                     when (it) { is ChatMessageUi.User -> it.content.take(40); else -> "" }
@@ -593,7 +588,6 @@ class SessionPersistenceService(
                 val cur = File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
                 if (cur.exists()) cur.delete()
             } catch (_: Exception) {}
-            lastPersistedMsgCount = 0
         }
     }
 
