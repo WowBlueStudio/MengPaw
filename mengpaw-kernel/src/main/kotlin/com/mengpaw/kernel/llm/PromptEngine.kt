@@ -153,7 +153,7 @@ class PromptEngine {
         val boostDoc = cachedRead(agentName, "boost.md") { AgentDocs.readBoostDoc(it) }
         // Read heartbeat.md — CRON task rules. Non-empty = scheduled tasks configured.
         val heartbeatDoc = cachedRead(agentName, "heartbeat.md") { AgentDocs.readHeartbeatDoc(it) }
-        // Read trueman.md — TrueMen (random chat) rules. Non-empty = custom topics/guidance.
+        // Read trueman.md — Truman (random chat) rules. Non-empty = custom topics/guidance.
         val truemanDoc = cachedRead(agentName, "trueman.md") { AgentDocs.readTruemanDoc(it) }
 
         val docsBlock = buildString {
@@ -199,7 +199,7 @@ class PromptEngine {
 
 你的工作区中有 trueman.md 随机对话规则文件。
 
-- 当随机对话（SCHEDULE/TrueMen）触发器触发（`[触发器任务 · SCHEDULE]`）时，阅读 trueman.md 了解聊什么
+- 当随机对话（SCHEDULE/Truman）触发器触发（`[触发器任务 · SCHEDULE]`）时，阅读 trueman.md 了解聊什么
 - 随机对话是"真人感"聊天，不是任务——轻开场、看情况收、别硬聊
 - 留空 trueman.md = 只用内置话题池
 
@@ -395,7 +395,7 @@ Skills 分为两层：
             - **命令发现: self.search** — 不确定用什么命令时, 用 `self.search <自然语言描述>` 按需求搜索 (BM25 毫秒级返回 top-5 匹配). 例: `self.search 网页搜索` → [tavily.search, net.curl, browser.content]. 需要完整命令列表时用 `self.tools [ns]` 遍历. 端口相关查 `self.ports`.
             - **工作区: agent.docs** — 查阅 Soul/Agents/Memory/Boost/Profile。新 Agent 第一步: `agent.boost` 读引导。
             - **你是自身定制专家** — 改名字 (agent.write profile.md)、换头像 (self.avatar)、改配色 (self.theme)。主动建议，不等用户开口。
-            - **你是活的** — 你有 CRON 定时任务和随机对话（TrueMen）。工作区 heartbeat.md 定义 CRON 规则、trueman.md 定义随机对话规则。定期检查 inbox 是否有新任务。inbox 中出现 browser_extract_*.md 时按文件内步骤立即执行网页提炼流水线, 完成后写 browser_return_*.md 供 Shell 回传浏览器预览; browser_url_*.txt 与 browser_return_*.md 是系统/浏览器之间的交换文件, 不要当任务处理。
+            - **你是活的** — 你有 CRON 定时任务和随机对话（Truman）。工作区 heartbeat.md 定义 CRON 规则、trueman.md 定义随机对话规则。定期检查 inbox 是否有新任务。inbox 中出现 browser_extract_*.md 时按文件内步骤立即执行网页提炼流水线, 完成后写 browser_return_*.md 供 Shell 回传浏览器预览; browser_url_*.txt 与 browser_return_*.md 是系统/浏览器之间的交换文件, 不要当任务处理。
             - **主动安装** — 缺命令用 `plugin.search` 找、`plugin.install` 装、`plugin.info` 看详情。
             - **教程在框架设置中** — USB调试/Root/无障碍指南。
 
@@ -493,7 +493,7 @@ Skills 分为两层：
             - **Command discovery: self.search** — When unsure which command to use, search by natural language: `self.search <description>` returns top-5 matches in microseconds. E.g. `self.search web search` → [tavily.search, net.curl, browser.content]. For complete listings, fall back to `self.tools [ns]`. For ports/network interfaces, use `self.ports`.
             - **Workspace: agent.docs** — Read Soul/Agents/Memory/Boost/Profile. New Agent step 1: `agent.boost`.
             - **You are a self-customization expert** — Change name (agent.write profile.md), avatar (self.avatar), colors (self.theme). Proactively suggest, don't wait to be asked.
-            - **You are alive** — You have CRON scheduled tasks and TrueMen (random chat). heartbeat.md in workspace defines CRON rules, trueman.md defines random-chat rules. Check inbox regularly. When a browser_extract_*.md appears in inbox, follow its steps immediately (webpage-to-Markdown pipeline), then write browser_return_*.md for the Shell to relay back to the browser preview. browser_url_*.txt and browser_return_*.md are system/browser exchange files — do NOT treat them as tasks.
+            - **You are alive** — You have CRON scheduled tasks and Truman (random chat). heartbeat.md in workspace defines CRON rules, trueman.md defines random-chat rules. Check inbox regularly. When a browser_extract_*.md appears in inbox, follow its steps immediately (webpage-to-Markdown pipeline), then write browser_return_*.md for the Shell to relay back to the browser preview. browser_url_*.txt and browser_return_*.md are system/browser exchange files — do NOT treat them as tasks.
             - **Proactive installation** — Missing a command? `plugin.search` → `plugin.info` → `plugin.install`.
             - **Tutorials in Settings** — USB debugging, Root, Accessibility guides.
 
