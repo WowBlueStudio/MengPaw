@@ -35,6 +35,17 @@ class FrameworkDiscovery(private val context: Context) {
 
     /** 设备显示名称 */
     var deviceName: String = Build.MODEL ?: "MengPaw"
+
+    /** 判断地址是否为本机 — mDNS 自发现过滤用（实例名改名后名字比对不可靠） */
+    private fun isLocalAddress(addr: String?): Boolean {
+        if (addr.isNullOrBlank()) return false
+        return try {
+            val target = java.net.InetAddress.getByName(addr).hostAddress
+            java.net.NetworkInterface.getNetworkInterfaces().asSequence()
+                .flatMap { it.inetAddresses.asSequence() }
+                .any { it.hostAddress == target }
+        } catch (_: Exception) { false }
+    }
     /** 框架名称（软件名） */
     var frameworkName: String = "MengPaw"
     /** 框架版本 */
@@ -74,6 +85,18 @@ class FrameworkDiscovery(private val context: Context) {
         }
         try { nsd.registerService(info, NsdManager.PROTOCOL_DNS_SD, registrationListener) }
         catch (e: Exception) { KernelLog.w("FrameworkDiscovery", "register failed: ${e.message}") }
+        // 清理历史遗留的本机自条目: mDNS 实例名冲突时系统会把本机注册名改成 "... (2)"，
+        // 名字比对过滤失效 → 自己被解析并写入 store，这里按 IP 兜底清除（幂等，每次启动一次）
+        try {
+            FrameworkPeerStore.loadAll()
+                .filter { isLocalAddress(it.address) }
+                .forEach {
+                    FrameworkPeerStore.remove(it.fingerprint)
+                    KernelLog.i("FrameworkDiscovery", "purged self peer: ${it.name} @ ${it.address}")
+                }
+        } catch (e: Exception) {
+            KernelLog.w("FrameworkDiscovery", "purge self peers failed: ${e.message}")
+        }
     }
 
     /** 启动持续发现循环 — 每 30s 重新扫描一次 */
@@ -126,6 +149,8 @@ class FrameworkDiscovery(private val context: Context) {
         override fun onServiceResolved(info: NsdServiceInfo) {
             val name = info.serviceName.removePrefix("MengPaw-")
             val addr = info.host?.hostAddress ?: return
+            // 自发现过滤（IP 比对兜底）: 实例名可能被系统改名，名字比对不可靠
+            if (isLocalAddress(addr)) return
             // 属性读取 API 33+
             val fwName = if (android.os.Build.VERSION.SDK_INT >= 33)
                 info.attributes["fwname"]?.let { String(it) } ?: "MengPaw"

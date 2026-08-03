@@ -376,13 +376,6 @@ private fun FrameworkGroupItem(
                 .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.xs),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                null,
-                Modifier.size(18.dp),
-                tint = ThemeColors.textSecondary
-            )
-            Spacer(Modifier.width(6.dp))
             // Online indicator
             Box(
                 Modifier

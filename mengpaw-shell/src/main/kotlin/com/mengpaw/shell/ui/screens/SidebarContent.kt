@@ -362,11 +362,6 @@ fun SidebarContent(
                         else frameworkStatus.indicatorColor
                     Box(Modifier.size(8.dp).background(fwStatusColor, CircleShape))
                     Spacer(Modifier.width(ArcoSpacing.sm))
-                    Icon(
-                        if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                        null, Modifier.size(16.dp), tint = ThemeColors.textSecondary
-                    )
-                    Spacer(Modifier.width(2.dp))
                     // 框架类型图标 — MengPaw 连续点击5次激活记忆孪生
                     val typeIcon = frameworkTypeIcon(framework.frameworkType)
                     var twinTapCount by remember { mutableIntStateOf(0) }
@@ -452,9 +447,10 @@ fun SidebarContent(
                                 style = MaterialTheme.typography.labelSmall, color = FrameworkStatus.OFFLINE.indicatorColor, fontSize = 9.sp)
                         }
                     }
-                    // 部落看板竖条（绿=完成/黄=排队/黄闪烁=执行/红=错误）
+                    // 部落看板竖条（绿=完成/黄=排队/黄闪烁=执行/红=错误/灰=离线）
                     Spacer(Modifier.width(4.dp))
-                    KanbanStatusBar(tribeBarStates[framework.name] ?: TribeBarState.GREEN)
+                    KanbanStatusBar(if (!framework.online) TribeBarState.GRAY
+                        else (tribeBarStates[framework.name] ?: TribeBarState.GREEN))
                 }
 
                 AnimatedVisibility(visible = expanded) {

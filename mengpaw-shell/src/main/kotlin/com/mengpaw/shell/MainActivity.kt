@@ -235,8 +235,10 @@ class MainActivity : ComponentActivity() {
                     frameworkName = "MengPaw"
                     frameworkVersion = com.mengpaw.kernel.AgentEngine.CORE_VERSION
                     val agentsDir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS)
+                    // 与本地列表同源过滤系统目录 — 本地所见 = 对外宣称（inbox 不是智能体）
+                    val systemDirs = setOf("inbox", "team", "acp", "incubator", "agent-001")
                     agentNames = agentsDir.listFiles()
-                        ?.filter { it.isDirectory && !it.name.startsWith(".") }
+                        ?.filter { it.isDirectory && it.name !in systemDirs && !it.name.startsWith(".") }
                         ?.map { it.name } ?: listOf("MengPaw")
                 }
             com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.register()

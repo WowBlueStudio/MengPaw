@@ -67,22 +67,52 @@ object AgentDocs {
         if (!dir.exists()) dir.mkdirs()
         // Ensure long-term memory directory exists — 幂等，老工作区升级后也补建
         File(dir, "memory").mkdirs()
-        // v0.28.0 一次性升级迁移: v0.27.1 及更早的模板用 HEARTBEAT.md(大写)，当前统一为 heartbeat.md(小写)。
-        // Android 文件系统区分大小写——升级后小写读取会漏掉旧文件，CRON 规则将不可见，必须改名。
-        // 迁移标记 = 旧大写文件存在；改名后一次性补种缺失的新文档(trueman.md / memory/memory.md 等，
-        // copyTemplates 跳过已存在文件，不覆盖 Agent 演化过的内容)，之后 HEARTBEAT.md 消失不再触发。
+        // v0.28.1 升级迁移 v2: v0.27.1 及更早的模板用 HEARTBEAT.md(大写)，当前统一为 heartbeat.md(小写)。
+        // Android 文件系统区分大小写——大写残留会导致小写读取落空；孪生同步是并集式、不传播删除，
+        // 旧设备的大写文件会被同步复活 → 只能靠每台设备自己的 bootstrap 自清理。
+        // 处理:
+        //   - 大写存在 && 小写缺失 → 改名（迁移 v1 行为）
+        //   - 大写存在 && 小写存在 → 删除大写残留（并存清理）
+        //   - 小写内容仍含旧模板指纹 "HEARTBEAT.md" → 用当前模板刷新（旧内容随改名原样保留）
         val legacyHeartbeat = File(dir, "HEARTBEAT.md")
+        val heartbeat = File(dir, "heartbeat.md")
         val isLegacyWorkspace = legacyHeartbeat.exists()
-        if (isLegacyWorkspace && !File(dir, "heartbeat.md").exists()) {
+        if (isLegacyWorkspace) {
+            if (heartbeat.exists()) {
+                try {
+                    if (legacyHeartbeat.delete()) {
+                        KernelLog.i("AgentDocs", "migrate: deleted stale HEARTBEAT.md ($agentName)")
+                    }
+                } catch (e: Exception) {
+                    KernelLog.w("AgentDocs", "delete HEARTBEAT.md failed: ${e.message}")
+                }
+            } else {
+                try {
+                    if (legacyHeartbeat.renameTo(heartbeat)) {
+                        KernelLog.i("AgentDocs", "migrate: HEARTBEAT.md -> heartbeat.md ($agentName)")
+                    }
+                } catch (e: Exception) {
+                    KernelLog.w("AgentDocs", "migrate HEARTBEAT.md failed: ${e.message}")
+                }
+            }
+            // 旧模板内容指纹刷新: 含 "HEARTBEAT.md" 自引用的文件 = 未演化的旧默认内容 → 用当前模板原子覆盖；
+            // 不含该指纹 = 已演化，不碰（幂等，一次启动后收敛）
             try {
-                if (legacyHeartbeat.renameTo(File(dir, "heartbeat.md"))) {
-                    KernelLog.i("AgentDocs", "migrate: HEARTBEAT.md -> heartbeat.md ($agentName)")
+                if (heartbeat.exists() && heartbeat.readText().contains("HEARTBEAT.md")) {
+                    val template = File(DataPaths.AGENT_TEMPLATES, "$language/heartbeat.md")
+                    if (template.exists()) {
+                        val tmpFile = File(dir, "heartbeat.md.tmp")
+                        tmpFile.writeText(template.readText())
+                        if (tmpFile.renameTo(heartbeat)) {
+                            KernelLog.i("AgentDocs", "migrate: refreshed stale heartbeat.md content ($agentName)")
+                        } else {
+                            tmpFile.delete()
+                        }
+                    }
                 }
             } catch (e: Exception) {
-                KernelLog.w("AgentDocs", "migrate HEARTBEAT.md failed: ${e.message}")
+                KernelLog.w("AgentDocs", "refresh heartbeat.md failed: ${e.message}")
             }
-        }
-        if (isLegacyWorkspace) {
             // 老工作区升级: 补种缺失的模板文档，不覆盖已演化文件
             bootstrapper?.invoke(agentName, language)
             return

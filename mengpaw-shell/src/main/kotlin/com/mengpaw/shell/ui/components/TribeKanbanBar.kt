@@ -27,7 +27,7 @@ import com.mengpaw.plugin.hermes.TribeKanbanBoard
  * 部落看板竖条状态 — 聚合规则（枚举顺序即优先级）:
  * 红(错误) > 黄闪烁(执行中) > 黄(排队) > 绿(完成/无任务)
  */
-enum class TribeBarState { GREEN, YELLOW, YELLOW_BLINK, RED }
+enum class TribeBarState { GREEN, YELLOW, YELLOW_BLINK, RED, GRAY }
 
 /**
  * 聚合一个框架下所有 Agent 的任务状态为竖条颜色。
@@ -54,6 +54,7 @@ fun aggregateTribeBarState(agentNames: Set<String>, tasks: List<TribeKanbanBoard
  * - 黄: 有排队任务
  * - 黄闪烁: 有执行中任务（600ms 透明度往复动画）
  * - 红: 有失败/超时任务
+ * - 灰: 框架离线（无任务状态可言）
  */
 @Composable
 fun KanbanStatusBar(state: TribeBarState) {
@@ -61,6 +62,7 @@ fun KanbanStatusBar(state: TribeBarState) {
         TribeBarState.GREEN -> ArcoColors.Green6
         TribeBarState.YELLOW, TribeBarState.YELLOW_BLINK -> ArcoColors.Orange6
         TribeBarState.RED -> ArcoColors.Red6
+        TribeBarState.GRAY -> ArcoColors.Gray6
     }
     val alpha = if (state == TribeBarState.YELLOW_BLINK) blinkAlpha() else 1f
     Box(
