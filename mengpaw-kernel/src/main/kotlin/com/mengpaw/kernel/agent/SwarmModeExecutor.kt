@@ -64,7 +64,8 @@ class SwarmModeExecutor(
         maxStepsPerSubtask: Int = 12,
         maxRetriesPerSubtask: Int = 2,
         maxTotalSteps: Int = maxSubtasks * maxStepsPerSubtask,
-        onStep: ((AgentEngine.TraceStep) -> Unit)? = null
+        onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
     ): String {
         val guardedTask = if (PromptFirewall.checkUserPrompt(task) != null)
             PromptFirewall.wrapWithDefense(task) else task
@@ -78,7 +79,7 @@ class SwarmModeExecutor(
         val subtasks = decompose(guardedTask, planner, maxSubtasks)
         if (subtasks.isEmpty()) {
             // 拆解失败兜底: 退化为单 Agent 执行 (同 Mission 策略)
-            return agentEngine.run(guardedTask, maxStepsPerSubtask * maxSubtasks, onStep)
+            return agentEngine.run(guardedTask, maxStepsPerSubtask * maxSubtasks, onStep, onDelta)
         }
 
         val budget = SwarmBudget(maxTotalSteps)

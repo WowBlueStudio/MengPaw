@@ -488,8 +488,9 @@ class AgentEngine(
      */
     suspend fun runWithGoal(
         task: String, maxTurns: Int = 20, maxTokensBudget: Int = 300_000,
-        onStep: ((TraceStep) -> Unit)? = null
-    ): String = goalModeExecutor.runWithGoal(task, maxTurns, maxTokensBudget, onStep)
+        onStep: ((TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
+    ): String = goalModeExecutor.runWithGoal(task, maxTurns, maxTokensBudget, onStep, onDelta)
 
     /**
      * Internal ReAct loop with optional context prefix.
@@ -803,9 +804,10 @@ class AgentEngine(
     suspend fun runWithMission(
         task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
         maxRetriesPerSubtask: Int = 2, maxParallel: Int = 4,
-        onStep: ((TraceStep) -> Unit)? = null
+        onStep: ((TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
     ): String = missionModeExecutor.runWithMission(
-        task, maxSubtasks, maxStepsPerSubtask, maxRetriesPerSubtask, maxParallel, onStep)
+        task, maxSubtasks, maxStepsPerSubtask, maxRetriesPerSubtask, maxParallel, onStep, onDelta)
 
     // ── 火种模式 (Swarm Mode) — 规划器拆解 → 并行 Worker → Verifier → 合成器 ──
 
@@ -825,10 +827,11 @@ class AgentEngine(
         maxStepsPerSubtask: Int = 12,
         maxRetriesPerSubtask: Int = 2,
         maxTotalSteps: Int = maxSubtasks * maxStepsPerSubtask,
-        onStep: ((TraceStep) -> Unit)? = null
+        onStep: ((TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
     ): String = swarmModeExecutor.runWithSwarm(
         task, roles, maxSubtasks, maxParallel, maxStepsPerSubtask,
-        maxRetriesPerSubtask, maxTotalSteps, onStep
+        maxRetriesPerSubtask, maxTotalSteps, onStep, onDelta
     )
 
     // ── Fleet Mode (转发到火种模式) ─────────────────────────────────
@@ -843,11 +846,12 @@ class AgentEngine(
         task: String,
         roles: Map<String, LlmProvider> = emptyMap(),
         maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
-        maxRetriesPerSubtask: Int = 2, onStep: ((TraceStep) -> Unit)? = null
+        maxRetriesPerSubtask: Int = 2, onStep: ((TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
     ): String = runWithSwarm(
         task = task, roles = roles, maxSubtasks = maxSubtasks, maxParallel = 4,
         maxStepsPerSubtask = maxStepsPerSubtask, maxRetriesPerSubtask = maxRetriesPerSubtask,
-        maxTotalSteps = maxSubtasks * maxStepsPerSubtask, onStep = onStep
+        maxTotalSteps = maxSubtasks * maxStepsPerSubtask, onStep = onStep, onDelta = onDelta
     )
 
     // ── Plan Mode (delegated to PlanModeExecutor) ─────────────────────

@@ -45,7 +45,8 @@ class MissionModeExecutor(
     suspend fun runWithMission(
         task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
         maxRetriesPerSubtask: Int = 2, maxParallel: Int = 4,
-        onStep: ((AgentEngine.TraceStep) -> Unit)? = null
+        onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
     ): String {
         val llmProvider = agentEngine.getLlmProvider()
         val guardedTask = if (PromptFirewall.checkUserPrompt(task) != null)
@@ -55,13 +56,13 @@ class MissionModeExecutor(
         val decomposeResult = try {
             llmProvider.complete(MissionSwarmPrompts.buildDecomposePrompt(guardedTask, maxSubtasks))
         } catch (e: Exception) {
-            return agentEngine.run(task, maxStepsPerSubtask * maxSubtasks, onStep)
+            return agentEngine.run(task, maxStepsPerSubtask * maxSubtasks, onStep, onDelta)
         }
 
         // Parse subtasks (JSON first, line-parse fallback)
         val specs = MissionSwarmPrompts.parseSubtasks(decomposeResult, maxSubtasks)
         if (specs.isEmpty()) {
-            return agentEngine.run(task, maxStepsPerSubtask * maxSubtasks, onStep)
+            return agentEngine.run(task, maxStepsPerSubtask * maxSubtasks, onStep, onDelta)
         }
         val subtasks = specs.map {
             MissionSubtask(id = it.id, description = it.desc, expectedOutcome = it.criteria)

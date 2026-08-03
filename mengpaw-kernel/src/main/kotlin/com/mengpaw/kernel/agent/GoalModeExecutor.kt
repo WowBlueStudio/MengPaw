@@ -29,7 +29,8 @@ class GoalModeExecutor(
      */
     suspend fun runWithGoal(
         task: String, maxTurns: Int = 20, maxTokensBudget: Int = 300_000,
-        onStep: ((AgentEngine.TraceStep) -> Unit)? = null
+        onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
     ): String {
         val llmProvider = agentEngine.getLlmProvider()
         val guardedTask = if (PromptFirewall.checkUserPrompt(task) != null)
@@ -56,7 +57,8 @@ class GoalModeExecutor(
             val result = agentEngine.runReActLoop(
                 task = "$goalPrompt\n\n$guardedTask",
                 maxSteps = 50,
-                onStep = onStep
+                onStep = onStep,
+                onDelta = onDelta
             )
             turnResults.add(result)
 

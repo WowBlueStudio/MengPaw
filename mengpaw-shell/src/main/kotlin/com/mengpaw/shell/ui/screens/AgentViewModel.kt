@@ -414,6 +414,11 @@ class AgentViewModel : ViewModel() {
                 runningMsgIndex = session.messages.value.size
                 session.messages.value = session.messages.value + runningMsg
 
+                // 流式缓冲: 每轮 LLM 输出累积于此, 工具轮结束(onStep)后清空,
+                // 避免 "Action:" 标记跨轮残留导致后续纯文本答案被永久过滤 (v0.28.3 根因1)
+                val streamBuf = StringBuilder()
+                var lastDeltaPush = 0L
+
                 // Shared step callback for trace collection + token stats + UI update
                 val onStep: (com.mengpaw.kernel.AgentEngine.TraceStep) -> Unit = { trace ->
                     traces.add(AgentTrace(trace.step, trace.thought, trace.action, trace.observation))
@@ -436,31 +441,33 @@ class AgentViewModel : ViewModel() {
                         }
                         mutable
                     }
+                    // 工具轮结束 → 清空流式缓冲, 下一轮从头累积
+                    // (旧实现 buffer 跨轮永不清空, "Action:" 一旦出现即永久过滤后续纯文本增量)
+                    streamBuf.clear()
+                    lastDeltaPush = 0L
                 }
 
                 // ── 流式输出: 增量 token 实时进气泡(打字机效果) ──
-                // 显示策略:
-                //  - 缓冲含 "Final Answer:" 标记 → 只显示标记后的答案部分
-                //  - 缓冲含 "Action:"(工具轮) → 不显示(Thought/Action 样板由
-                //    traces 消化; 工具执行后 onStep 会把 finalContent 重置为"思考中...")
-                //  - 无任何标记 → 直接流式显示全文(模型常见纯文本答案输出,
-                //    不带 Final Answer 前缀 — parse Rule 3 分支, 必须流式显示)
+                // 显示策略 (缓冲每轮结束被清空, 轮间互不污染):
+                //  - 含 "Final Answer:" → 只显示标记后的答案部分
+                //  - 含 "Action:"(工具轮) → 不显示样板(Thought/Action 由 traces 消化;
+                //    工具执行后 onStep 重置为"思考中...")
+                //  - 含 "Thought:" → 隐藏思考样板, 只显示其后内容 (thought-only 轮)
+                //  - 无任何标记 → 流式显示全文 (parse Rule 3 纯文本答案, 必须流式显示)
                 // 节流: 50ms 窗口合并增量, 避免每 token 全量重 parse Markdown
-                val streamBuf = StringBuilder()
-                var lastDeltaPush = 0L
-                var sawActionMarker = false
                 val onDelta: (String) -> Unit = { delta ->
                     streamBuf.append(delta)
                     val now = System.currentTimeMillis()
                     if (now - lastDeltaPush >= 50) { // 节流合并
                         lastDeltaPush = now
                         val text = streamBuf.toString()
-                        val hasAction = text.contains("Action:", ignoreCase = true)
                         val hasFinal = text.contains("Final Answer:", ignoreCase = true)
-                        if (hasAction) sawActionMarker = true
+                        val hasAction = text.contains("Action:", ignoreCase = true)
+                        val hasThought = text.contains("Thought:", ignoreCase = true)
                         val displayText = when {
                             hasFinal -> text.substringAfter("Final Answer:", text)
                             hasAction -> ""        // 工具轮: 不显示样板
+                            hasThought -> text.substringAfter("Thought:", text)
                             else -> text           // 纯文本答案流
                         }
                         if (displayText.isNotBlank()) {
@@ -506,15 +513,15 @@ class AgentViewModel : ViewModel() {
                 // Mode dispatch: map slash command + loopMode to the correct engine method
                 val result = when {
                     executionMode == ExecutionMode.PLAN -> session.engine.runWithPlan(task = finalTask, onStep = onStep)
-                    executionMode == ExecutionMode.MISSION -> session.engine.runWithMission(task = finalTask, onStep = onStep)
-                    executionMode == ExecutionMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
+                    executionMode == ExecutionMode.MISSION -> session.engine.runWithMission(task = finalTask, onStep = onStep, onDelta = onDelta)
+                    executionMode == ExecutionMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep, onDelta = onDelta)
                     // ── 显式斜杠命令结束, 以下为 loopMode 分发 ──
                     inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta)
-                    inputTagManager.loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
+                    inputTagManager.loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep, onDelta = onDelta)
                     inputTagManager.loopMode == LoopMode.MISSION || inputTagManager.loopMode == LoopMode.FLEET ->
-                        session.engine.runWithFleet(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep)
+                        session.engine.runWithFleet(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep, onDelta = onDelta)
                     inputTagManager.loopMode == LoopMode.SWARM ->
-                        session.engine.runWithSwarm(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep)
+                        session.engine.runWithSwarm(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep, onDelta = onDelta)
                     else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta)
                 }
 
