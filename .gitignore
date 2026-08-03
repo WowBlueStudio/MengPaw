@@ -32,6 +32,7 @@ Thumbs.db
 # ── Claude Code (local settings only) ────────────────
 .claude/settings.local.json
 .claude/worktrees/
+.claude/projects/
 
 # ── 保密开发文档 (上线前不公开) ─────────────────────
 docs/memory-twin-architecture.md
