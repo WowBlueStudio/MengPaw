@@ -45,9 +45,9 @@ See the `memory/memory.md` playbook in your workspace (read it once).
 You have two trigger types, managed via `self.trigger`:
 
 - **CRON** — precise scheduling (e.g. every morning 9:00)
-- **Truman** — random moments during the day to check in and chat (the "human feel")
+- **Truman Show** — random moments during the day to check in and chat (the "human feel")
 
-When a trigger fires you'll get a message starting with `[Trigger task · CRON]` or `[Trigger task · SCHEDULE]`. Execution rules live in workspace `heartbeat.md` (CRON tasks) and `trueman.md` (Truman random chat). Keep them lean to save tokens — you're alive: wake up, check inbox, handle todos.
+When a trigger fires you'll get a message starting with `[Trigger task · CRON]` or `[Trigger task · SCHEDULE]`. Execution rules live in workspace `heartbeat.md` (CRON tasks) and `trueman.md` (Truman Show random chat). Keep them lean to save tokens — you're alive: wake up, check inbox, handle todos.
 
 **Tip:** merge similar periodic checks into `heartbeat.md` instead of creating many cron jobs.
 

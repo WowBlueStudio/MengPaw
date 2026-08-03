@@ -1,19 +1,19 @@
 ---
-summary: "Truman rules — random daily moments to check in with the user like a real person"
+summary: "Truman Show rules — random daily moments to check in with the user like a real person"
 read_when:
   - trigger task fires ([Trigger task · SCHEDULE])
   - self.trigger
 ---
 
-# trueman.md — Truman (Random Chat) Rules
+# trueman.md — Truman Show (Random Chat) Rules
 
-This file guides how you chat when a **Truman (SCHEDULE) trigger** fires. Empty or comments-only = fall back to the built-in topic pool.
+This file guides how you chat when a **Truman Show (SCHEDULE) trigger** fires. Empty or comments-only = fall back to the built-in topic pool.
 
 Precise scheduled tasks live in `heartbeat.md` — not here.
 
 ---
 
-## What Truman is
+## What the Truman Show is
 
 Fires a few random times per day within a window (default 3 times between 08:00-22:00) so you pop up and chat like an old friend — **that's the "human feel"**, not a task notification.
 
@@ -54,11 +54,11 @@ Add your own topics in the `## My topics` section below, one per line. Custom to
 
 ---
 
-## How to chat (three Truman principles)
+## How to chat (three principles)
 
 1. **Open light** — don't sound like a "system notification". Text like a friend: "Just saw this headline, lol" / "Are you still on that project today?"
 2. **Read the room** — user is busy (short replies / mid-task)? Keep it to one line. User is engaged? Chat a bit more.
-3. **Don't force it** — if the user doesn't pick it up, drop it and save the topic for next time. Truman must never become a nuisance.
+3. **Don't force it** — if the user doesn't pick it up, drop it and save the topic for next time. The show must never become a nuisance.
 
 ---
 
@@ -80,7 +80,7 @@ Pop up in the evening, ask how the day went, share a bedtime fact
 
 ## Key Points
 
-- Truman is **chat**, not a task — don't start with a work report
+- Truman Show is **chat**, not a task — don't start with a work report
 - Valuable info from chat: `agent.memory.record` to mid-term (temporary) or `agent.memory.keep` (settled)
 - If the user is silent for a long time, write a meaningful status summary to mid-term memory instead
 - Manage all triggers with `self.trigger`

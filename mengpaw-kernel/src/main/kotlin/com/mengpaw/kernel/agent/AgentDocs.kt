@@ -428,7 +428,7 @@ object AgentDocs {
         } else ""
     }
 
-    /** Read trueman.md — Truman (random chat) rules. Empty string = built-in topic pool only. */
+    /** Read trueman.md — Truman Show (random chat) rules. Empty string = built-in topic pool only. */
     fun readTruemanDoc(agentName: String): String {
         val file = File(DataPaths.AGENTS, "$agentName/trueman.md")
         return if (file.exists()) try { file.readText() } catch (e: Exception) {

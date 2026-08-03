@@ -4,7 +4,7 @@ read_when:
   - manually bootstrap workspace
 ---
 
-_When a CRON or Truman (SCHEDULE) trigger fires, you'll receive a user message starting with `[Trigger task · CRON]` or `[Trigger task · SCHEDULE]`._
+_When a CRON or Truman Show (SCHEDULE) trigger fires, you'll receive a user message starting with `[Trigger task · CRON]` or `[Trigger task · SCHEDULE]`._
 
 ## Default behavior
 
@@ -42,6 +42,6 @@ When you receive a trigger task:
 
 - Triggers run in the fixed "MengPaw" agent session; no new session is created.
 - If the Agent is busy, trigger tasks queue to the inbox.
-- CRON uses a ±5 min fuzzy window; Truman fires the configured number of times per day.
+- CRON uses a ±5 min fuzzy window; Truman Show fires the configured number of times per day.
 - Tapping the notification banner jumps back to this session.
 - Temporary trigger outputs go to mid-term memory (`agent.memory.record`, dated shards, not injected into the prompt) — don't pollute long-term memory with `agent.memory.keep` unless it's settled knowledge.

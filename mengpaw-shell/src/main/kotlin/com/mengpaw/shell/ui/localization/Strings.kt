@@ -603,7 +603,7 @@ val EnglishStrings = AppStrings().apply {
     actionPlaceholder = "Describe the task for the Agent..."
     cronTip = "💡 Tell the Agent in chat: \"generate yesterday's digest every 9am\" — it will call self.trigger add"
     add = "Add"
-    scheduleTitle = "Truman"
+    scheduleTitle = "Truman Show"
     scheduleParams = "Parameters"
     scheduleParamsPlaceholder = "window,count=N,interval=M"
     scheduleFormatHint = "Format: HH:MM-HH:MM,count=N,interval=M  e.g. 08:00-22:00,count=3,interval=60"

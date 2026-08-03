@@ -9,7 +9,7 @@ read_when:
 
 This file tells you what to do when a **CRON trigger** fires. **Empty or comments-only = skip all scheduled tasks.**
 
-Random-chat (Truman) rules live in `trueman.md` — not here.
+Random-chat (Truman Show) rules live in `trueman.md` — not here.
 
 ---
 
