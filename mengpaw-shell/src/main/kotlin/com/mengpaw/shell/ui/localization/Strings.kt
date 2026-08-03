@@ -7,1072 +7,1078 @@ package com.mengpaw.shell.ui.localization
  * Localized strings for the MengPaw UI.
  * Switch between Chinese (zh) and English (en) with one click.
  */
-data class AppStrings(
+class AppStrings {
+
     // App
-    val isChinese: Boolean,
-    val appName: String,
-    val settings: String,
-    val back: String,
+    var isChinese: Boolean = false
+    var appName: String = ""
+    var settings: String = ""
+    var back: String = ""
 
     // Main Screen
-    val systemBanner: String,
-    val inputPlaceholder: String,
-    val commandOutputLabel: String,
-    val commandFailedLabel: String,
-    val thinking: String,
-    val agentLabel: String,
-    val stop: String,
-    val send: String,
+    var systemBanner: String = ""
+    var inputPlaceholder: String = ""
+    var commandOutputLabel: String = ""
+    var commandFailedLabel: String = ""
+    var thinking: String = ""
+    var agentLabel: String = ""
+    var stop: String = ""
+    var send: String = ""
 
     // Settings - LLM Provider
-    val llmProvider: String,
-    val apiEndpoint: String,
-    val apiKey: String,
-    val apiKeyShow: String,
-    val apiKeyHide: String,
-    val model: String,
+    var llmProvider: String = ""
+    var apiEndpoint: String = ""
+    var apiKey: String = ""
+    var apiKeyShow: String = ""
+    var apiKeyHide: String = ""
+    var model: String = ""
 
     // Settings - Agent
-    val agent: String,
-    val maxSteps: String,
-    val maxStepsDesc: String,
-    val llmConcurrency: String,
-    val llmConcurrencyDesc: String,
+    var agent: String = ""
+    var maxSteps: String = ""
+    var maxStepsDesc: String = ""
+    var llmConcurrency: String = ""
+    var llmConcurrencyDesc: String = ""
 
     // Settings - Appearance
-    val appearance: String,
-    val darkTheme: String,
-    val darkThemeDesc: String,
-    val language: String,
-    val languageDesc: String,
-    val languageZh: String,
-    val languageEn: String,
+    var appearance: String = ""
+    var darkTheme: String = ""
+    var darkThemeDesc: String = ""
+    var language: String = ""
+    var languageDesc: String = ""
+    var languageZh: String = ""
+    var languageEn: String = ""
 
     // Settings - Agent Language
-    val agentLanguage: String,
-    val agentLanguageDesc: String,
-    val agentLanguageFollowUi: String,
-    val agentLanguageChinese: String,
-    val agentLanguageEnglish: String,
+    var agentLanguage: String = ""
+    var agentLanguageDesc: String = ""
+    var agentLanguageFollowUi: String = ""
+    var agentLanguageChinese: String = ""
+    var agentLanguageEnglish: String = ""
 
     // Expand panel
-    val expandFileSection: String,
-    val expandModeSection: String,
-    val expandPluginSection: String,
-    val filePickImage: String,
-    val filePickDocument: String,
-    val filePickFile: String,
-    val filePickCamera: String,
-    val dragHint: String,
+    var expandFileSection: String = ""
+    var expandModeSection: String = ""
+    var expandPluginSection: String = ""
+    var filePickImage: String = ""
+    var filePickDocument: String = ""
+    var filePickFile: String = ""
+    var filePickCamera: String = ""
+    var dragHint: String = ""
 
     // Execution mode tags
-    val tagModeMission: String,
-    val tagModeResearch: String,
-    val tagModeTranslate: String,
-    val tagModeSilent: String,
-    val tagDismiss: String,
-    val mentionHint: String,
+    var tagModeMission: String = ""
+    var tagModeResearch: String = ""
+    var tagModeTranslate: String = ""
+    var tagModeSilent: String = ""
+    var tagDismiss: String = ""
+    var mentionHint: String = ""
 
     // Mode-specific placeholders
-    val placeholderMission: String,
-    val placeholderSwarm: String,
-    val placeholderResearch: String,
-    val placeholderTranslate: String,
-    val placeholderSilent: String,
+    var placeholderMission: String = ""
+    var placeholderSwarm: String = ""
+    var placeholderResearch: String = ""
+    var placeholderTranslate: String = ""
+    var placeholderSilent: String = ""
 
     // Settings - About
-    val about: String,
-    val version: String,
-    val core: String,
-    val design: String,
-    val resetDefaults: String,
+    var about: String = ""
+    var version: String = ""
+    var core: String = ""
+    var design: String = ""
+    var resetDefaults: String = ""
 
     // Sidebar
-    val sidebarAgents: String,
-    val sidebarCurrent: String,
-    val sidebarFeatures: String,
-    val sidebarFrameworkDirectory: String,
-    val sidebarFrameworkStatus: String,
-    val sidebarNoFriends: String,
-    val sidebarPlugins: String,
-    val sidebarSettings: String,
+    var sidebarAgents: String = ""
+    var sidebarCurrent: String = ""
+    var sidebarFeatures: String = ""
+    var sidebarFrameworkDirectory: String = ""
+    var sidebarFrameworkStatus: String = ""
+    var sidebarNoFriends: String = ""
+    var sidebarPlugins: String = ""
+    var sidebarSettings: String = ""
 
     // General
-    val cancel: String,
-    val delete: String,
+    var cancel: String = ""
+    var delete: String = ""
 
     // Settings - System
-    val systemAttribution: String,
-    val systemAttributionDesc: String,
-    val systemBackground: String,
-    val systemBackgroundMode: String,
-    val systemBackgroundPowerSaver: String,
-    val systemBackgroundPowerSaverDesc: String,
-    val systemBatteryIgnored: String,
-    val systemBatteryIgnoredDesc: String,
-    val systemBatteryNotIgnored: String,
-    val systemBatteryNotIgnoredDesc: String,
-    val systemCacheSaved: String,
-    val systemContactUs: String,
-    val systemCopyright: String,
-    val systemCopyrightDesc: String,
-    val systemDaily: String,
-    val systemEstimatedSavings: String,
-    val systemGoToBatterySettings: String,
-    val systemLegalContact: String,
-    val systemLicense: String,
-    val systemMonthly: String,
-    val systemNoTokenData: String,
-    val systemTimezone: String,
-    val systemTimezoneAuto: String,
-    val systemTimezoneShanghai: String,
-    val systemTokenStats: String,
-    val systemTotalUsage: String,
-    val systemWeekly: String,
+    var systemAttribution: String = ""
+    var systemAttributionDesc: String = ""
+    var systemBackground: String = ""
+    var systemBackgroundMode: String = ""
+    var systemBackgroundPowerSaver: String = ""
+    var systemBackgroundPowerSaverDesc: String = ""
+    var systemBatteryIgnored: String = ""
+    var systemBatteryIgnoredDesc: String = ""
+    var systemBatteryNotIgnored: String = ""
+    var systemBatteryNotIgnoredDesc: String = ""
+    var systemCacheSaved: String = ""
+    var systemContactUs: String = ""
+    var systemCopyright: String = ""
+    var systemCopyrightDesc: String = ""
+    var systemDaily: String = ""
+    var systemEstimatedSavings: String = ""
+    var systemGoToBatterySettings: String = ""
+    var systemLegalContact: String = ""
+    var systemLicense: String = ""
+    var systemMonthly: String = ""
+    var systemNoTokenData: String = ""
+    var systemTimezone: String = ""
+    var systemTimezoneAuto: String = ""
+    var systemTimezoneShanghai: String = ""
+    var systemTokenStats: String = ""
+    var systemTotalUsage: String = ""
+    var systemWeekly: String = ""
 
     // Settings - Agent
-    val agentAddHumanTouch: String,
-    val agentAddScheduled: String,
-    val agentApiReturnedModels: String,
-    val agentFromGlobalPool: String,
-    val agentFromSkillPool: String,
-    val agentInstallHelp: String,
-    val agentLastFired: String,
-    val agentLoopMode: String,
-    val agentLoopModeDesc: String,
-    val agentNoProvider: String,
-    val agentNoSkills: String,
-    val agentNoTriggers: String,
-    val agentParams: String,
-    val agentPlugins: String,
-    val agentProviderModel: String,
-    val agentRefreshFileList: String,
-    val agentRefreshModels: String,
-    val agentRemainingCount: String,
-    val agentSelectModel: String,
-    val agentShellTimeout: String,
-    val agentShellTimeoutDesc: String,
-    val agentSkills: String,
-    val agentSkillPool: String,
-    val agentTools: String,
-    val agentTriggerHuman: String,
-    val agentTriggers: String,
-    val agentTriggerScheduled: String,
-    val agentWorkspaceFiles: String,
+    var agentAddHumanTouch: String = ""
+    var agentAddScheduled: String = ""
+    var agentApiReturnedModels: String = ""
+    var agentFromGlobalPool: String = ""
+    var agentFromSkillPool: String = ""
+    var agentInstallHelp: String = ""
+    var agentLastFired: String = ""
+    var agentLoopMode: String = ""
+    var agentLoopModeDesc: String = ""
+    var agentNoProvider: String = ""
+    var agentNoSkills: String = ""
+    var agentNoTriggers: String = ""
+    var agentParams: String = ""
+    var agentPlugins: String = ""
+    var agentProviderModel: String = ""
+    var agentRefreshFileList: String = ""
+    var agentRefreshModels: String = ""
+    var agentRemainingCount: String = ""
+    var agentSelectModel: String = ""
+    var agentShellTimeout: String = ""
+    var agentShellTimeoutDesc: String = ""
+    var agentSkills: String = ""
+    var agentSkillPool: String = ""
+    var agentTools: String = ""
+    var agentTriggerHuman: String = ""
+    var agentTriggers: String = ""
+    var agentTriggerScheduled: String = ""
+    var agentWorkspaceFiles: String = ""
 
     // Settings - Framework
-    val frameworkAddProvider: String,
-    val frameworkApiProvider: String,
-    val frameworkCollapseList: String,
-    val frameworkContextStrategy: String,
-    val frameworkContextStrategyDesc: String,
-    val frameworkEditConnection: String,
-    val frameworkGlobalPlugins: String,
-    val frameworkGlobalSkills: String,
-    val frameworkGlobalTools: String,
-    val frameworkMemoryBackend: String,
-    val frameworkMemoryBackendDesc: String,
-    val frameworkMemoryManagement: String,
-    val frameworkNewConnection: String,
-    val frameworkPluginManagement: String,
-    val frameworkPluginManagementDesc: String,
-    val frameworkProviderLabel: String,
-    val frameworkSaveConnection: String,
-    val frameworkTestConnection: String,
-    val frameworkTestingConnection: String,
+    var frameworkAddProvider: String = ""
+    var frameworkApiProvider: String = ""
+    var frameworkCollapseList: String = ""
+    var frameworkContextStrategy: String = ""
+    var frameworkContextStrategyDesc: String = ""
+    var frameworkEditConnection: String = ""
+    var frameworkGlobalPlugins: String = ""
+    var frameworkGlobalSkills: String = ""
+    var frameworkGlobalTools: String = ""
+    var frameworkMemoryBackend: String = ""
+    var frameworkMemoryBackendDesc: String = ""
+    var frameworkMemoryManagement: String = ""
+    var frameworkNewConnection: String = ""
+    var frameworkPluginManagement: String = ""
+    var frameworkPluginManagementDesc: String = ""
+    var frameworkProviderLabel: String = ""
+    var frameworkSaveConnection: String = ""
+    var frameworkTestConnection: String = ""
+    var frameworkTestingConnection: String = ""
 
     // Settings - Sidebar tabs
-    val sidebarSettingsAgent: String,
-    val sidebarSettingsFramework: String,
-    val sidebarSettingsSystem: String,
+    var sidebarSettingsAgent: String = ""
+    var sidebarSettingsFramework: String = ""
+    var sidebarSettingsSystem: String = ""
 
     // Security
-    val securityAgentDocs: String,
-    val securityFingerprint: String,
-    val securityFileIntegrity: String,
-    val securityFileIntegrityDesc: String,
-    val securityKernelDir: String,
-    val securityKernelIntegrity: String,
-    val securityKernelIntegrityDesc: String,
-    val securityKeyStore: String,
-    val securityNoTrusted: String,
-    val securityPluginCache: String,
-    val securityPluginIntegrity: String,
-    val securityPluginIntegrityDesc: String,
-    val securityProtectedDirs: String,
-    val securityRules: String,
-    val securityTrusted: String,
-    val securityTrustedCount: String,
-    val securityTrustedFramework: String,
+    var securityAgentDocs: String = ""
+    var securityFingerprint: String = ""
+    var securityFileIntegrity: String = ""
+    var securityFileIntegrityDesc: String = ""
+    var securityKernelDir: String = ""
+    var securityKernelIntegrity: String = ""
+    var securityKernelIntegrityDesc: String = ""
+    var securityKeyStore: String = ""
+    var securityNoTrusted: String = ""
+    var securityPluginCache: String = ""
+    var securityPluginIntegrity: String = ""
+    var securityPluginIntegrityDesc: String = ""
+    var securityProtectedDirs: String = ""
+    var securityRules: String = ""
+    var securityTrusted: String = ""
+    var securityTrustedCount: String = ""
+    var securityTrustedFramework: String = ""
 
     // ── 插件市场 / 详情（英文化补全）──
-    val pluginMarketTitle: String,
-    val forceRefresh: String,
-    val marketTab: String,
-    val installedTab: String,
-    val noPluginsAvailable: String,
-    val noInstalledPlugins: String,
-    val refreshHint: String,
-    val availablePrefix: String,
-    val installedPrefix: String,
-    val activePrefix: String,
-    val builtinBadge: String,
-    val embeddedBadge: String,
-    val activeBadge: String,
-    val disabledBadge: String,
-    val notPublishedBadge: String,
-    val uninstall: String,
-    val install: String,
-    val verifying: String,
-    val installedBadge: String,
-    val failedBadge: String,
-    val retry: String,
-    val pluginNotFound: String,
-    val notInstalledBadge: String,
-    val typePrefix: String,
-    val commandsLabel: String,
-    val permissionsLabel: String,
-    val enable: String,
-    val disable: String,
-    val installPlugin: String,
-    val errorPrefix: String,
+    var pluginMarketTitle: String = ""
+    var forceRefresh: String = ""
+    var marketTab: String = ""
+    var installedTab: String = ""
+    var noPluginsAvailable: String = ""
+    var noInstalledPlugins: String = ""
+    var refreshHint: String = ""
+    var availablePrefix: String = ""
+    var installedPrefix: String = ""
+    var activePrefix: String = ""
+    var builtinBadge: String = ""
+    var embeddedBadge: String = ""
+    var activeBadge: String = ""
+    var disabledBadge: String = ""
+    var notPublishedBadge: String = ""
+    var uninstall: String = ""
+    var install: String = ""
+    var verifying: String = ""
+    var installedBadge: String = ""
+    var failedBadge: String = ""
+    var retry: String = ""
+    var pluginNotFound: String = ""
+    var notInstalledBadge: String = ""
+    var typePrefix: String = ""
+    var commandsLabel: String = ""
+    var permissionsLabel: String = ""
+    var enable: String = ""
+    var disable: String = ""
+    var installPlugin: String = ""
+    var errorPrefix: String = ""
     // ── 触发器对话框 ──
-    val cronTitle: String,
-    val cronExpression: String,
-    val cronPlaceholder: String,
-    val cronHint: String,
-    val actionLabel: String,
-    val actionPlaceholder: String,
-    val cronTip: String,
-    val add: String,
-    val scheduleTitle: String,
-    val scheduleParams: String,
-    val scheduleParamsPlaceholder: String,
-    val scheduleFormatHint: String,
-    val scheduleTip: String,
+    var cronTitle: String = ""
+    var cronExpression: String = ""
+    var cronPlaceholder: String = ""
+    var cronHint: String = ""
+    var actionLabel: String = ""
+    var actionPlaceholder: String = ""
+    var cronTip: String = ""
+    var add: String = ""
+    var scheduleTitle: String = ""
+    var scheduleParams: String = ""
+    var scheduleParamsPlaceholder: String = ""
+    var scheduleFormatHint: String = ""
+    var scheduleTip: String = ""
     // ── 设置卡片/Agent 设置/框架设置剩余硬编码 ──
-    val noEntries: String,
-    val noDocs: String,
-    val agentToolsDesc: String,
-    val noToolsConfigured: String,
-    val agentSkillsDesc: String,
-    val noWorkspaceDocs: String,
-    val deleteDoc: String,
-    val deleteConfirm: String,
-    val optimizedBadge: String,
-    val apiReturned: String,
+    var noEntries: String = ""
+    var noDocs: String = ""
+    var agentToolsDesc: String = ""
+    var noToolsConfigured: String = ""
+    var agentSkillsDesc: String = ""
+    var noWorkspaceDocs: String = ""
+    var deleteDoc: String = ""
+    var deleteConfirm: String = ""
+    var optimizedBadge: String = ""
+    var apiReturned: String = ""
     // ── 枚举 label（中文名兜底用 enLabel 字段; 此处为共用 UI 文案）──
-    val builtinCategory: String,
-    val officialCategory: String,
-    val customCategory: String,
-    val lightTheme: String,
-    val systemTheme: String,
-    val notifPersistent: String,
-    val silentRunning: String,
-    val foregroundOnly: String,
-    val notifPersistentDesc: String,
-    val silentRunningDesc: String,
-    val foregroundOnlyDesc: String,
-    val rolePlanner: String,
-    val roleWorker: String,
-    val roleVerifier: String,
-    val roleSynthesizer: String,
-    val roleWorkerAlt: String,
+    var builtinCategory: String = ""
+    var officialCategory: String = ""
+    var customCategory: String = ""
+    var lightTheme: String = ""
+    var systemTheme: String = ""
+    var notifPersistent: String = ""
+    var silentRunning: String = ""
+    var foregroundOnly: String = ""
+    var notifPersistentDesc: String = ""
+    var silentRunningDesc: String = ""
+    var foregroundOnlyDesc: String = ""
+    var rolePlanner: String = ""
+    var roleWorker: String = ""
+    var roleVerifier: String = ""
+    var roleSynthesizer: String = ""
+    var roleWorkerAlt: String = ""
 
     // ── 侧边栏 Framework Status 三状态（标签 + 解释）──
-    val frameworkStatusOnline: String,
-    val frameworkStatusOnlineDesc: String,
-    val frameworkStatusBusy: String,
-    val frameworkStatusBusyDesc: String,
-    val frameworkStatusOffline: String,
-    val frameworkStatusOfflineDesc: String,
+    var frameworkStatusOnline: String = ""
+    var frameworkStatusOnlineDesc: String = ""
+    var frameworkStatusBusy: String = ""
+    var frameworkStatusBusyDesc: String = ""
+    var frameworkStatusOffline: String = ""
+    var frameworkStatusOfflineDesc: String = ""
 
     // ── 卡片对话框共用 ──
-    val close: String,
-    val cardEdit: String,
-    val cardSave: String,
+    var close: String = ""
+    var cardEdit: String = ""
+    var cardSave: String = ""
 
     // ── 框架名片对话框 ──
-    val frameworkCardTitle: String,
-    val frameworkCardRemarkLabel: String,
-    val frameworkCardVersion: String,
-    val frameworkCardUntrusted: String,
-    val frameworkCardHostedAgents: String,
-    val frameworkCardDelete: String,
-    val frameworkCardTrust: String,
-    val frameworkCardUntwin: String,
+    var frameworkCardTitle: String = ""
+    var frameworkCardRemarkLabel: String = ""
+    var frameworkCardVersion: String = ""
+    var frameworkCardUntrusted: String = ""
+    var frameworkCardHostedAgents: String = ""
+    var frameworkCardDelete: String = ""
+    var frameworkCardTrust: String = ""
+    var frameworkCardUntwin: String = ""
 
     // ── 智能体名片对话框 ──
-    val agentCardTitle: String,
-    val agentCardNameLabel: String,
-    val agentCardIntroLabel: String,
-    val agentCardIntroField: String,
-    val agentCardNoIntro: String,
-    val agentCardWorkspaceFiles: String,
-    val agentCardDelete: String,
-    val agentCardDeleteTitle: String,
-    val agentCardDeleteBody: String,
-    val agentCardSwitch: String,
+    var agentCardTitle: String = ""
+    var agentCardNameLabel: String = ""
+    var agentCardIntroLabel: String = ""
+    var agentCardIntroField: String = ""
+    var agentCardNoIntro: String = ""
+    var agentCardWorkspaceFiles: String = ""
+    var agentCardDelete: String = ""
+    var agentCardDeleteTitle: String = ""
+    var agentCardDeleteBody: String = ""
+    var agentCardSwitch: String = ""
 
     // ── 新建智能体对话框 ──
-    val newAgentTitle: String,
-    val newAgentNameLabel: String,
-    val newAgentNamePlaceholder: String,
-    val newAgentFolderLabel: String,
-    val newAgentFolderPlaceholder: String,
-    val newAgentFolderHint: String,
-    val newAgentIntroLabel: String,
-    val newAgentIntroPlaceholder: String,
-    val newAgentCreate: String,
-    val newAgentDefaultName: String,
+    var newAgentTitle: String = ""
+    var newAgentNameLabel: String = ""
+    var newAgentNamePlaceholder: String = ""
+    var newAgentFolderLabel: String = ""
+    var newAgentFolderPlaceholder: String = ""
+    var newAgentFolderHint: String = ""
+    var newAgentIntroLabel: String = ""
+    var newAgentIntroPlaceholder: String = ""
+    var newAgentCreate: String = ""
+    var newAgentDefaultName: String = ""
 
     // ── 添加框架对话框 ──
-    val addFrameworkTitle: String,
-    val addFrameworkType: String,
-    val addFrameworkName: String,
-    val addFrameworkNamePlaceholder: String,
-    val addFrameworkAddress: String,
-    val addFrameworkAddrPortPlaceholder: String,
-    val addFrameworkAddrGenericPlaceholder: String,
-    val addFrameworkScanLan: String,
-    val addFrameworkDiscovered: String,
+    var addFrameworkTitle: String = ""
+    var addFrameworkType: String = ""
+    var addFrameworkName: String = ""
+    var addFrameworkNamePlaceholder: String = ""
+    var addFrameworkAddress: String = ""
+    var addFrameworkAddrPortPlaceholder: String = ""
+    var addFrameworkAddrGenericPlaceholder: String = ""
+    var addFrameworkScanLan: String = ""
+    var addFrameworkDiscovered: String = ""
 
     // ── 记忆孪生配对（侧边栏弹窗）──
-    val twinRequestTitle: String,
-    val twinRequestWarning: String,
-    val twinRequestDevice: String,
-    val twinRequestModel: String,
-    val twinRequestAgreeDesc: String,
-    val twinRequestAgree: String,
-    val twinRequestDisagree: String,
-    val twinVerifyTitle: String,
-    val twinVerifyDesc: String,
-    val twinVerifyPeer: String,
-    val twinVerifyWarning: String,
-    val twinVerifyConfirm: String,
-    val twinConfirmTitle: String,
-    val twinConfirmIntro: String,
-    val twinConfirmWarning: String,
-    val twinConfirmAction: String,
-    val twinPairedToast: String,
-    val unknown: String,
+    var twinRequestTitle: String = ""
+    var twinRequestWarning: String = ""
+    var twinRequestDevice: String = ""
+    var twinRequestModel: String = ""
+    var twinRequestAgreeDesc: String = ""
+    var twinRequestAgree: String = ""
+    var twinRequestDisagree: String = ""
+    var twinVerifyTitle: String = ""
+    var twinVerifyDesc: String = ""
+    var twinVerifyPeer: String = ""
+    var twinVerifyWarning: String = ""
+    var twinVerifyConfirm: String = ""
+    var twinConfirmTitle: String = ""
+    var twinConfirmIntro: String = ""
+    var twinConfirmWarning: String = ""
+    var twinConfirmAction: String = ""
+    var twinPairedToast: String = ""
+    var unknown: String = ""
 
     // ── 工作区文件（memory 聚合条目合成文案）──
-    val workspaceMemoryFolder: String,
-    val workspaceMemoryHeader: String,
-    val workspaceMemorySummary: String,
-    val workspaceEmptyDoc: String,
+    var workspaceMemoryFolder: String = ""
+    var workspaceMemoryHeader: String = ""
+    var workspaceMemorySummary: String = ""
+    var workspaceEmptyDoc: String = ""
 
     // ── 顶栏（会话模型标签）──
-    val agentNoModel: String,
-    val agentUnconfigured: String,
-    val providerVolcano: String,
-    val newSession: String,
-    val history: String
-)
+    var agentNoModel: String = ""
+    var agentUnconfigured: String = ""
+    var providerVolcano: String = ""
+    var newSession: String = ""
+    var history: String = ""
+
+}
 
 /**
  * English strings (default).
  */
-val EnglishStrings = AppStrings(
-    isChinese = false,
-    appName = "MengPaw",
-    settings = "Settings",
-    back = "Back",
+val EnglishStrings = AppStrings().apply {
 
-    systemBanner = "Agent is ready. Describe the task you want to accomplish.",
-    inputPlaceholder = "Describe a task for the Agent...",
-    commandOutputLabel = "Command output",
-    commandFailedLabel = "Command failed",
-    thinking = "🤔 Thinking...",
-    agentLabel = "Agent",
-    stop = "Stop",
-    send = "Send",
+    isChinese = false
+    appName = "MengPaw"
+    settings = "Settings"
+    back = "Back"
 
-    llmProvider = "LLM Provider",
-    apiEndpoint = "API Endpoint",
-    apiKey = "API Key",
-    apiKeyShow = "Show",
-    apiKeyHide = "Hide",
-    model = "Model",
+    systemBanner = "Agent is ready. Describe the task you want to accomplish."
+    inputPlaceholder = "Describe a task for the Agent..."
+    commandOutputLabel = "Command output"
+    commandFailedLabel = "Command failed"
+    thinking = "🤔 Thinking..."
+    agentLabel = "Agent"
+    stop = "Stop"
+    send = "Send"
 
-    agent = "Agent",
-    maxSteps = "Max Steps",
-    maxStepsDesc = "Maximum ReAct iterations before forced stop",
-    llmConcurrency = "LLM Concurrency",
-    llmConcurrencyDesc = "Max simultaneous LLM API calls (1-50)",
+    llmProvider = "LLM Provider"
+    apiEndpoint = "API Endpoint"
+    apiKey = "API Key"
+    apiKeyShow = "Show"
+    apiKeyHide = "Hide"
+    model = "Model"
 
-    appearance = "Appearance",
-    darkTheme = "Dark Theme",
-    darkThemeDesc = "Light / Dark / Follow System",
-    language = "Language",
-    languageDesc = "Switch UI language",
-    languageZh = "中文",
-    languageEn = "English",
+    agent = "Agent"
+    maxSteps = "Max Steps"
+    maxStepsDesc = "Maximum ReAct iterations before forced stop"
+    llmConcurrency = "LLM Concurrency"
+    llmConcurrencyDesc = "Max simultaneous LLM API calls (1-50)"
 
-    agentLanguage = "Agent Language",
-    agentLanguageDesc = "Language for Agent's thinking and responses",
-    agentLanguageFollowUi = "Follow UI",
-    agentLanguageChinese = "中文",
-    agentLanguageEnglish = "English",
+    appearance = "Appearance"
+    darkTheme = "Dark Theme"
+    darkThemeDesc = "Light / Dark / Follow System"
+    language = "Language"
+    languageDesc = "Switch UI language"
+    languageZh = "中文"
+    languageEn = "English"
 
-    expandFileSection = "File Upload",
-    expandModeSection = "Execution Mode",
-    expandPluginSection = "Plugin Tools",
-    filePickImage = "Image",
-    filePickDocument = "Document",
-    filePickFile = "File",
-    filePickCamera = "Camera",
-    dragHint = "Long-press to reorder",
+    agentLanguage = "Agent Language"
+    agentLanguageDesc = "Language for Agent's thinking and responses"
+    agentLanguageFollowUi = "Follow UI"
+    agentLanguageChinese = "中文"
+    agentLanguageEnglish = "English"
 
-    tagModeMission = "/Mission",
-    tagModeResearch = "/Research",
-    tagModeTranslate = "/Translate",
-    tagModeSilent = "/Silent",
-    tagDismiss = "Remove",
-    mentionHint = "@mention an agent...",
+    expandFileSection = "File Upload"
+    expandModeSection = "Execution Mode"
+    expandPluginSection = "Plugin Tools"
+    filePickImage = "Image"
+    filePickDocument = "Document"
+    filePickFile = "File"
+    filePickCamera = "Camera"
+    dragHint = "Long-press to reorder"
 
-    placeholderMission = "Describe a complex task for sub-agents to decompose...",
-    placeholderSwarm = "Describe a task for parallel swarm workers with mixed models...",
-    placeholderResearch = "Enter a topic for deep research with source verification...",
-    placeholderTranslate = "Enter text to translate...",
-    placeholderSilent = "Describe a background task to run silently...",
+    tagModeMission = "/Mission"
+    tagModeResearch = "/Research"
+    tagModeTranslate = "/Translate"
+    tagModeSilent = "/Silent"
+    tagDismiss = "Remove"
+    mentionHint = "@mention an agent..."
 
-    about = "About",
-    version = "Version",
-    core = "Core",
-    design = "Design",
-    resetDefaults = "Reset to Defaults",
+    placeholderMission = "Describe a complex task for sub-agents to decompose..."
+    placeholderSwarm = "Describe a task for parallel swarm workers with mixed models..."
+    placeholderResearch = "Enter a topic for deep research with source verification..."
+    placeholderTranslate = "Enter text to translate..."
+    placeholderSilent = "Describe a background task to run silently..."
+
+    about = "About"
+    version = "Version"
+    core = "Core"
+    design = "Design"
+    resetDefaults = "Reset to Defaults"
 
     // Sidebar
-    sidebarAgents = "Agents",
-    sidebarCurrent = "Current",
-    sidebarFeatures = "Features",
-    sidebarFrameworkDirectory = "Framework Directory",
-    sidebarFrameworkStatus = "Framework Status",
-    sidebarNoFriends = "Your agents have no friends yet",
-    sidebarPlugins = "Plugins",
-    sidebarSettings = "Settings",
+    sidebarAgents = "Agents"
+    sidebarCurrent = "Current"
+    sidebarFeatures = "Features"
+    sidebarFrameworkDirectory = "Framework Directory"
+    sidebarFrameworkStatus = "Framework Status"
+    sidebarNoFriends = "Your agents have no friends yet"
+    sidebarPlugins = "Plugins"
+    sidebarSettings = "Settings"
 
     // General
-    cancel = "Cancel",
-    delete = "Delete",
+    cancel = "Cancel"
+    delete = "Delete"
 
     // Settings - System
-    systemAttribution = "Open Source Attribution",
-    systemAttributionDesc = "Code references, inspiration sources, and license compliance",
-    systemBackground = "Background Running",
-    systemBackgroundMode = "Background Mode",
-    systemBackgroundPowerSaver = "Power Saver Mode",
-    systemBackgroundPowerSaverDesc = "Reduce background poll frequency and animation frame rate to extend battery life",
-    systemBatteryIgnored = "Battery optimization ignored",
-    systemBatteryIgnoredDesc = "System will not restrict background running when screen is off",
-    systemBatteryNotIgnored = "Battery optimization not ignored",
-    systemBatteryNotIgnoredDesc = "Tap to jump to system settings, disable to prevent screen-off restrictions",
-    systemCacheSaved = "Cache Saved",
-    systemContactUs = "Contact Us",
-    systemCopyright = "Copyright",
-    systemCopyrightDesc = "© 2026 ShenZhen wowblue culture and technology CO.,LTD.",
-    systemDaily = "Daily",
-    systemEstimatedSavings = "Est. Savings",
-    systemGoToBatterySettings = "Go to Settings →",
-    systemLegalContact = "Legal & Contact",
-    systemLicense = "License",
-    systemMonthly = "Monthly",
-    systemNoTokenData = "No token usage data yet. Recording starts automatically.",
-    systemTimezone = "Timezone",
-    systemTimezoneAuto = "Auto",
-    systemTimezoneShanghai = "Shanghai",
-    systemTokenStats = "Token Usage Statistics",
-    systemTotalUsage = "Total Usage",
-    systemWeekly = "Weekly",
+    systemAttribution = "Open Source Attribution"
+    systemAttributionDesc = "Code references, inspiration sources, and license compliance"
+    systemBackground = "Background Running"
+    systemBackgroundMode = "Background Mode"
+    systemBackgroundPowerSaver = "Power Saver Mode"
+    systemBackgroundPowerSaverDesc = "Reduce background poll frequency and animation frame rate to extend battery life"
+    systemBatteryIgnored = "Battery optimization ignored"
+    systemBatteryIgnoredDesc = "System will not restrict background running when screen is off"
+    systemBatteryNotIgnored = "Battery optimization not ignored"
+    systemBatteryNotIgnoredDesc = "Tap to jump to system settings, disable to prevent screen-off restrictions"
+    systemCacheSaved = "Cache Saved"
+    systemContactUs = "Contact Us"
+    systemCopyright = "Copyright"
+    systemCopyrightDesc = "© 2026 ShenZhen wowblue culture and technology CO.,LTD."
+    systemDaily = "Daily"
+    systemEstimatedSavings = "Est. Savings"
+    systemGoToBatterySettings = "Go to Settings →"
+    systemLegalContact = "Legal & Contact"
+    systemLicense = "License"
+    systemMonthly = "Monthly"
+    systemNoTokenData = "No token usage data yet. Recording starts automatically."
+    systemTimezone = "Timezone"
+    systemTimezoneAuto = "Auto"
+    systemTimezoneShanghai = "Shanghai"
+    systemTokenStats = "Token Usage Statistics"
+    systemTotalUsage = "Total Usage"
+    systemWeekly = "Weekly"
 
     // Settings - Agent
-    agentAddHumanTouch = "Add Human Touch",
-    agentAddScheduled = "Add Scheduled",
-    agentApiReturnedModels = "API Returned Models",
-    agentFromGlobalPool = "Install from Global Tool Pool",
-    agentFromSkillPool = "Install from Global Skill Pool",
-    agentInstallHelp = "Three methods: ① Install from global pool ② Agent auto-discovers and installs ③ Manual download with path, Agent installs",
-    agentLastFired = "Last fired: %s",
-    agentLoopMode = "Loop Mode",
-    agentLoopModeDesc = "Agent automatically selects the appropriate execution mode based on task complexity.",
-    agentNoProvider = "No API provider added yet. Please go to Framework Settings to configure.",
-    agentNoSkills = "No local skills yet. Use skill.pull to fetch from the global pool, or skill.create to author one.",
-    agentNoTriggers = "No triggers yet. Add scheduled tasks for Agent to execute automatically.",
-    agentParams = "Agent Parameters",
-    agentPlugins = "Agent Plugins",
-    agentProviderModel = "Provider & Model",
-    agentRefreshFileList = "Refresh file list",
-    agentRefreshModels = "Refresh Model List",
-    agentRemainingCount = "... and %d more",
-    agentSelectModel = "Select Model",
-    agentShellTimeout = "Shell Command Timeout",
-    agentShellTimeoutDesc = "Max execution time per command (seconds)",
-    agentSkills = "Agent Skills",
-    agentSkillPool = "Global Skill Pool",
-    agentTools = "Agent Tools",
-    agentTriggerHuman = "Human",
-    agentTriggers = "Scheduled Tasks & Triggers",
-    agentTriggerScheduled = "Scheduled",
-    agentWorkspaceFiles = "Workspace Files",
+    agentAddHumanTouch = "Add Human Touch"
+    agentAddScheduled = "Add Scheduled"
+    agentApiReturnedModels = "API Returned Models"
+    agentFromGlobalPool = "Install from Global Tool Pool"
+    agentFromSkillPool = "Install from Global Skill Pool"
+    agentInstallHelp = "Three methods: ① Install from global pool ② Agent auto-discovers and installs ③ Manual download with path, Agent installs"
+    agentLastFired = "Last fired: %s"
+    agentLoopMode = "Loop Mode"
+    agentLoopModeDesc = "Agent automatically selects the appropriate execution mode based on task complexity."
+    agentNoProvider = "No API provider added yet. Please go to Framework Settings to configure."
+    agentNoSkills = "No local skills yet. Use skill.pull to fetch from the global pool, or skill.create to author one."
+    agentNoTriggers = "No triggers yet. Add scheduled tasks for Agent to execute automatically."
+    agentParams = "Agent Parameters"
+    agentPlugins = "Agent Plugins"
+    agentProviderModel = "Provider & Model"
+    agentRefreshFileList = "Refresh file list"
+    agentRefreshModels = "Refresh Model List"
+    agentRemainingCount = "... and %d more"
+    agentSelectModel = "Select Model"
+    agentShellTimeout = "Shell Command Timeout"
+    agentShellTimeoutDesc = "Max execution time per command (seconds)"
+    agentSkills = "Agent Skills"
+    agentSkillPool = "Global Skill Pool"
+    agentTools = "Agent Tools"
+    agentTriggerHuman = "Human"
+    agentTriggers = "Scheduled Tasks & Triggers"
+    agentTriggerScheduled = "Scheduled"
+    agentWorkspaceFiles = "Workspace Files"
 
     // Settings - Framework
-    frameworkAddProvider = "Add API Provider",
-    frameworkApiProvider = "API Provider",
-    frameworkCollapseList = "Collapse Provider List",
-    frameworkContextStrategy = "Context Strategy",
-    frameworkContextStrategyDesc = "Built-in · Reasonix 4-Level Fold",
-    frameworkEditConnection = "Edit Connection",
-    frameworkGlobalPlugins = "Global Plugins",
-    frameworkGlobalSkills = "Global Skills",
-    frameworkGlobalTools = "Global Tools",
-    frameworkMemoryBackend = "Memory Backend",
-    frameworkMemoryBackendDesc = "Built-in · Markdown files",
-    frameworkMemoryManagement = "Memory Management",
-    frameworkNewConnection = "New Connection",
-    frameworkPluginManagement = "Plugin Management",
-    frameworkPluginManagementDesc = "Browse, install, manage Agent plugins",
-    frameworkProviderLabel = "Provider",
-    frameworkSaveConnection = "Save",
-    frameworkTestConnection = "Test",
-    frameworkTestingConnection = "Testing connection...",
+    frameworkAddProvider = "Add API Provider"
+    frameworkApiProvider = "API Provider"
+    frameworkCollapseList = "Collapse Provider List"
+    frameworkContextStrategy = "Context Strategy"
+    frameworkContextStrategyDesc = "Built-in · Reasonix 4-Level Fold"
+    frameworkEditConnection = "Edit Connection"
+    frameworkGlobalPlugins = "Global Plugins"
+    frameworkGlobalSkills = "Global Skills"
+    frameworkGlobalTools = "Global Tools"
+    frameworkMemoryBackend = "Memory Backend"
+    frameworkMemoryBackendDesc = "Built-in · Markdown files"
+    frameworkMemoryManagement = "Memory Management"
+    frameworkNewConnection = "New Connection"
+    frameworkPluginManagement = "Plugin Management"
+    frameworkPluginManagementDesc = "Browse, install, manage Agent plugins"
+    frameworkProviderLabel = "Provider"
+    frameworkSaveConnection = "Save"
+    frameworkTestConnection = "Test"
+    frameworkTestingConnection = "Testing connection..."
 
     // Settings - Sidebar tabs
-    sidebarSettingsAgent = "Agent Settings",
-    sidebarSettingsFramework = "Framework Settings",
-    sidebarSettingsSystem = "System Settings",
+    sidebarSettingsAgent = "Agent Settings"
+    sidebarSettingsFramework = "Framework Settings"
+    sidebarSettingsSystem = "System Settings"
 
     // Security
-    securityAgentDocs = "Agent Documents",
-    securityFingerprint = "Fingerprint: %s",
-    securityFileIntegrity = "File Integrity Protection",
-    securityFileIntegrityDesc = "Enabled — Protects core directories from modification",
-    securityKernelDir = "Kernel Directory",
-    securityKernelIntegrity = "Kernel Integrity Protection",
-    securityKernelIntegrityDesc = "Enabled — Prevents Agent from executing dangerous commands",
-    securityKeyStore = "Key Store",
-    securityNoTrusted = "No trusted framework devices yet. Add via ACP pairing.",
-    securityPluginCache = "Plugin Cache",
-    securityPluginIntegrity = "Plugin Integrity Protection",
-    securityPluginIntegrityDesc = "Enabled — Verifies plugin signatures and version compatibility",
-    securityProtectedDirs = "Protected Directories:",
-    securityRules = "Security Rules",
-    securityTrusted = "Trusted",
-    securityTrustedCount = "Trusted %d framework devices",
-    securityTrustedFramework = "Framework Trust List",
+    securityAgentDocs = "Agent Documents"
+    securityFingerprint = "Fingerprint: %s"
+    securityFileIntegrity = "File Integrity Protection"
+    securityFileIntegrityDesc = "Enabled — Protects core directories from modification"
+    securityKernelDir = "Kernel Directory"
+    securityKernelIntegrity = "Kernel Integrity Protection"
+    securityKernelIntegrityDesc = "Enabled — Prevents Agent from executing dangerous commands"
+    securityKeyStore = "Key Store"
+    securityNoTrusted = "No trusted framework devices yet. Add via ACP pairing."
+    securityPluginCache = "Plugin Cache"
+    securityPluginIntegrity = "Plugin Integrity Protection"
+    securityPluginIntegrityDesc = "Enabled — Verifies plugin signatures and version compatibility"
+    securityProtectedDirs = "Protected Directories:"
+    securityRules = "Security Rules"
+    securityTrusted = "Trusted"
+    securityTrustedCount = "Trusted %d framework devices"
+    securityTrustedFramework = "Framework Trust List"
 
-    pluginMarketTitle = "Plugin Management",
-    forceRefresh = "Force Refresh",
-    marketTab = "Market",
-    installedTab = "Installed",
-    noPluginsAvailable = "No plugins available",
-    noInstalledPlugins = "No installed plugins",
-    refreshHint = "Tap refresh to load the plugin list",
-    availablePrefix = "Available: ",
-    installedPrefix = "Installed: ",
-    activePrefix = "Active: ",
-    builtinBadge = "Built-in",
-    embeddedBadge = "Embedded",
-    activeBadge = "Active",
-    disabledBadge = "Disabled",
-    notPublishedBadge = "Not Published",
-    uninstall = "Uninstall",
-    install = "Install",
-    verifying = "Verifying...",
-    installedBadge = "Installed",
-    failedBadge = "Failed",
-    retry = "Retry",
-    pluginNotFound = "Plugin not found: ",
-    notInstalledBadge = "Not Installed",
-    typePrefix = "Type: ",
-    commandsLabel = "Commands",
-    permissionsLabel = "Permissions",
-    enable = "Enable",
-    disable = "Disable",
-    installPlugin = "Install Plugin",
-    errorPrefix = "Error: ",
-    cronTitle = "CRON Scheduled Task",
-    cronExpression = "Cron Expression",
-    cronPlaceholder = "min hour dom mon dow  e.g. 0 9 * * *",
-    cronHint = "Let the Agent compute the schedule, e.g. \"generate yesterday's digest every 9am\"",
-    actionLabel = "Action",
-    actionPlaceholder = "Describe the task for the Agent...",
-    cronTip = "💡 Tell the Agent in chat: \"generate yesterday's digest every 9am\" — it will call self.trigger add",
-    add = "Add",
-    scheduleTitle = "TrueMen",
-    scheduleParams = "Parameters",
-    scheduleParamsPlaceholder = "window,count=N,interval=M",
-    scheduleFormatHint = "Format: HH:MM-HH:MM,count=N,interval=M  e.g. 08:00-22:00,count=3,interval=60",
-    scheduleTip = "💡 Tell the Agent in chat: \"chat with me 4 times between 10am-6pm daily, ≥1h apart\" — it will call self.trigger add schedule",
-    noEntries = "No entries",
-    noDocs = "No docs",
-    agentToolsDesc = "Agent-specific command tools, only available to this agent. Global commands via self.tools.",
-    noToolsConfigured = "No agent-specific tools configured. Uses the global tool pool (self.tools).",
-    agentSkillsDesc = "Skills loaded for this agent (Markdown scripts). Run via skill.run <name>.",
-    noWorkspaceDocs = "No workspace documents",
-    deleteDoc = "Delete Document",
-    deleteConfirm = "Delete this document? This cannot be undone.",
-    optimizedBadge = "Optimized",
-    apiReturned = "From API",
-    builtinCategory = "Built-in",
-    officialCategory = "Official",
-    customCategory = "Custom",
-    lightTheme = "Light",
-    systemTheme = "System",
-    notifPersistent = "Persistent Notification",
-    silentRunning = "Silent Running",
-    foregroundOnly = "Foreground Only",
-    notifPersistentDesc = "Status bar icon, strongest keep-alive (recommended)",
-    silentRunningDesc = "Hidden notification icon, foreground service still active",
-    foregroundOnlyDesc = "Service released on exit, most battery-efficient",
-    rolePlanner = "Planner",
-    roleWorker = "Worker",
-    roleVerifier = "Verifier",
-    roleSynthesizer = "Synthesizer",
-    roleWorkerAlt = "Alternate Worker",
+    pluginMarketTitle = "Plugin Management"
+    forceRefresh = "Force Refresh"
+    marketTab = "Market"
+    installedTab = "Installed"
+    noPluginsAvailable = "No plugins available"
+    noInstalledPlugins = "No installed plugins"
+    refreshHint = "Tap refresh to load the plugin list"
+    availablePrefix = "Available: "
+    installedPrefix = "Installed: "
+    activePrefix = "Active: "
+    builtinBadge = "Built-in"
+    embeddedBadge = "Embedded"
+    activeBadge = "Active"
+    disabledBadge = "Disabled"
+    notPublishedBadge = "Not Published"
+    uninstall = "Uninstall"
+    install = "Install"
+    verifying = "Verifying..."
+    installedBadge = "Installed"
+    failedBadge = "Failed"
+    retry = "Retry"
+    pluginNotFound = "Plugin not found: "
+    notInstalledBadge = "Not Installed"
+    typePrefix = "Type: "
+    commandsLabel = "Commands"
+    permissionsLabel = "Permissions"
+    enable = "Enable"
+    disable = "Disable"
+    installPlugin = "Install Plugin"
+    errorPrefix = "Error: "
+    cronTitle = "CRON Scheduled Task"
+    cronExpression = "Cron Expression"
+    cronPlaceholder = "min hour dom mon dow  e.g. 0 9 * * *"
+    cronHint = "Let the Agent compute the schedule, e.g. \"generate yesterday's digest every 9am\""
+    actionLabel = "Action"
+    actionPlaceholder = "Describe the task for the Agent..."
+    cronTip = "💡 Tell the Agent in chat: \"generate yesterday's digest every 9am\" — it will call self.trigger add"
+    add = "Add"
+    scheduleTitle = "TrueMen"
+    scheduleParams = "Parameters"
+    scheduleParamsPlaceholder = "window,count=N,interval=M"
+    scheduleFormatHint = "Format: HH:MM-HH:MM,count=N,interval=M  e.g. 08:00-22:00,count=3,interval=60"
+    scheduleTip = "💡 Tell the Agent in chat: \"chat with me 4 times between 10am-6pm daily, ≥1h apart\" — it will call self.trigger add schedule"
+    noEntries = "No entries"
+    noDocs = "No docs"
+    agentToolsDesc = "Agent-specific command tools, only available to this agent. Global commands via self.tools."
+    noToolsConfigured = "No agent-specific tools configured. Uses the global tool pool (self.tools)."
+    agentSkillsDesc = "Skills loaded for this agent (Markdown scripts). Run via skill.run <name>."
+    noWorkspaceDocs = "No workspace documents"
+    deleteDoc = "Delete Document"
+    deleteConfirm = "Delete this document? This cannot be undone."
+    optimizedBadge = "Optimized"
+    apiReturned = "From API"
+    builtinCategory = "Built-in"
+    officialCategory = "Official"
+    customCategory = "Custom"
+    lightTheme = "Light"
+    systemTheme = "System"
+    notifPersistent = "Persistent Notification"
+    silentRunning = "Silent Running"
+    foregroundOnly = "Foreground Only"
+    notifPersistentDesc = "Status bar icon, strongest keep-alive (recommended)"
+    silentRunningDesc = "Hidden notification icon, foreground service still active"
+    foregroundOnlyDesc = "Service released on exit, most battery-efficient"
+    rolePlanner = "Planner"
+    roleWorker = "Worker"
+    roleVerifier = "Verifier"
+    roleSynthesizer = "Synthesizer"
+    roleWorkerAlt = "Alternate Worker"
 
     // Sidebar — Framework Status (labels + explanations)
-    frameworkStatusOnline = "Online",
-    frameworkStatusOnlineDesc = "Chat open · Accepting delegated tasks",
-    frameworkStatusBusy = "Busy",
-    frameworkStatusBusyDesc = "Chat open · Delegated tasks queued",
-    frameworkStatusOffline = "Offline",
-    frameworkStatusOfflineDesc = "Chat closed · Not responding to external requests",
+    frameworkStatusOnline = "Online"
+    frameworkStatusOnlineDesc = "Chat open · Accepting delegated tasks"
+    frameworkStatusBusy = "Busy"
+    frameworkStatusBusyDesc = "Chat open · Delegated tasks queued"
+    frameworkStatusOffline = "Offline"
+    frameworkStatusOfflineDesc = "Chat closed · Not responding to external requests"
 
     // Card dialogs — shared
-    close = "Close",
-    cardEdit = "Edit",
-    cardSave = "Save",
+    close = "Close"
+    cardEdit = "Edit"
+    cardSave = "Save"
 
     // Framework card dialog
-    frameworkCardTitle = "Framework Card",
-    frameworkCardRemarkLabel = "Remark Name",
-    frameworkCardVersion = "Version: %s",
-    frameworkCardUntrusted = "Untrusted",
-    frameworkCardHostedAgents = "Hosted Agents (%d)",
-    frameworkCardDelete = "Delete Framework",
-    frameworkCardTrust = "Trust this Framework",
-    frameworkCardUntwin = "Untwin",
+    frameworkCardTitle = "Framework Card"
+    frameworkCardRemarkLabel = "Remark Name"
+    frameworkCardVersion = "Version: %s"
+    frameworkCardUntrusted = "Untrusted"
+    frameworkCardHostedAgents = "Hosted Agents (%d)"
+    frameworkCardDelete = "Delete Framework"
+    frameworkCardTrust = "Trust this Framework"
+    frameworkCardUntwin = "Untwin"
 
     // Agent card dialog
-    agentCardTitle = "Agent Card",
-    agentCardNameLabel = "Agent Name",
-    agentCardIntroLabel = "Agent Intro",
-    agentCardIntroField = "Intro",
-    agentCardNoIntro = "No intro yet",
-    agentCardWorkspaceFiles = "Workspace Files (%d)",
-    agentCardDelete = "Delete Agent",
-    agentCardDeleteTitle = "Confirm Delete",
-    agentCardDeleteBody = "Delete \"%s\" permanently? This removes all agent data, including workspace files, memory, and session records.",
-    agentCardSwitch = "Switch to this Agent",
+    agentCardTitle = "Agent Card"
+    agentCardNameLabel = "Agent Name"
+    agentCardIntroLabel = "Agent Intro"
+    agentCardIntroField = "Intro"
+    agentCardNoIntro = "No intro yet"
+    agentCardWorkspaceFiles = "Workspace Files (%d)"
+    agentCardDelete = "Delete Agent"
+    agentCardDeleteTitle = "Confirm Delete"
+    agentCardDeleteBody = "Delete \"%s\" permanently? This removes all agent data, including workspace files, memory, and session records."
+    agentCardSwitch = "Switch to this Agent"
 
     // New agent dialog
-    newAgentTitle = "New Agent",
-    newAgentNameLabel = "Agent Name *",
-    newAgentNamePlaceholder = "e.g. Research Assistant",
-    newAgentFolderLabel = "Workspace Folder Name",
-    newAgentFolderPlaceholder = "Defaults to agent name",
-    newAgentFolderHint = "Will be created at: %s",
-    newAgentIntroLabel = "Agent Intro",
-    newAgentIntroPlaceholder = "Describe this agent's role and capabilities...",
-    newAgentCreate = "Create Agent",
-    newAgentDefaultName = "Agent %d",
+    newAgentTitle = "New Agent"
+    newAgentNameLabel = "Agent Name *"
+    newAgentNamePlaceholder = "e.g. Research Assistant"
+    newAgentFolderLabel = "Workspace Folder Name"
+    newAgentFolderPlaceholder = "Defaults to agent name"
+    newAgentFolderHint = "Will be created at: %s"
+    newAgentIntroLabel = "Agent Intro"
+    newAgentIntroPlaceholder = "Describe this agent's role and capabilities..."
+    newAgentCreate = "Create Agent"
+    newAgentDefaultName = "Agent %d"
 
     // Add framework dialog
-    addFrameworkTitle = "Add Framework",
-    addFrameworkType = "Framework Type",
-    addFrameworkName = "Framework Name",
-    addFrameworkNamePlaceholder = "e.g. Office PC",
-    addFrameworkAddress = "Address (optional)",
-    addFrameworkAddrPortPlaceholder = "e.g. 192.168.1.100:%d",
-    addFrameworkAddrGenericPlaceholder = "e.g. localhost:8080 or /path/to/socket",
-    addFrameworkScanLan = "Scan LAN",
-    addFrameworkDiscovered = "Discovered devices:",
+    addFrameworkTitle = "Add Framework"
+    addFrameworkType = "Framework Type"
+    addFrameworkName = "Framework Name"
+    addFrameworkNamePlaceholder = "e.g. Office PC"
+    addFrameworkAddress = "Address (optional)"
+    addFrameworkAddrPortPlaceholder = "e.g. 192.168.1.100:%d"
+    addFrameworkAddrGenericPlaceholder = "e.g. localhost:8080 or /path/to/socket"
+    addFrameworkScanLan = "Scan LAN"
+    addFrameworkDiscovered = "Discovered devices:"
 
     // Memory twin pairing dialogs
-    twinRequestTitle = "Memory Twin Pairing Request",
-    twinRequestWarning = "⚠️ Confirm this is your own device. Do NOT pair memory twins with others.",
-    twinRequestDevice = "Requesting device: %s",
-    twinRequestModel = "Model: %s",
-    twinRequestAgreeDesc = "After consent, both agents' memories will begin syncing.",
-    twinRequestAgree = "Agree",
-    twinRequestDisagree = "Disagree",
-    twinVerifyTitle = "Verify Pairing Code",
-    twinVerifyDesc = "Confirm both devices show the same 6-digit code",
-    twinVerifyPeer = "Pairing device: %s...",
-    twinVerifyWarning = "⚠️ If the codes differ, a man-in-the-middle attack may be present. Cancel immediately.",
-    twinVerifyConfirm = "Match — Confirm Pairing",
-    twinConfirmTitle = "Memory Twin Pairing",
-    twinConfirmIntro = "A memory twin pairing will be established with:",
-    twinConfirmWarning = "⚠️ After pairing, this device's agent memory will sync with the peer. Confirm this is your own device; do not pair with others.",
-    twinConfirmAction = "Confirm Pairing",
-    twinPairedToast = "🧠 Memory twin paired! Run twin.sync to sync the workspace now",
-    unknown = "Unknown",
+    twinRequestTitle = "Memory Twin Pairing Request"
+    twinRequestWarning = "⚠️ Confirm this is your own device. Do NOT pair memory twins with others."
+    twinRequestDevice = "Requesting device: %s"
+    twinRequestModel = "Model: %s"
+    twinRequestAgreeDesc = "After consent, both agents' memories will begin syncing."
+    twinRequestAgree = "Agree"
+    twinRequestDisagree = "Disagree"
+    twinVerifyTitle = "Verify Pairing Code"
+    twinVerifyDesc = "Confirm both devices show the same 6-digit code"
+    twinVerifyPeer = "Pairing device: %s..."
+    twinVerifyWarning = "⚠️ If the codes differ, a man-in-the-middle attack may be present. Cancel immediately."
+    twinVerifyConfirm = "Match — Confirm Pairing"
+    twinConfirmTitle = "Memory Twin Pairing"
+    twinConfirmIntro = "A memory twin pairing will be established with:"
+    twinConfirmWarning = "⚠️ After pairing, this device's agent memory will sync with the peer. Confirm this is your own device; do not pair with others."
+    twinConfirmAction = "Confirm Pairing"
+    twinPairedToast = "🧠 Memory twin paired! Run twin.sync to sync the workspace now"
+    unknown = "Unknown"
 
     // Workspace files — memory folder synthesized labels
-    workspaceMemoryFolder = "memory/ (Memory Folder)",
-    workspaceMemoryHeader = "## memory/ — Memory folder (triple-track)",
-    workspaceMemorySummary = "Long-term %d · Mid-term %d · Project %d · %d docs",
-    workspaceEmptyDoc = "(empty)",
+    workspaceMemoryFolder = "memory/ (Memory Folder)"
+    workspaceMemoryHeader = "## memory/ — Memory folder (triple-track)"
+    workspaceMemorySummary = "Long-term %d · Mid-term %d · Project %d · %d docs"
+    workspaceEmptyDoc = "(empty)"
 
     // Top bar — session model label
-    agentNoModel = "Agent model not configured",
-    agentUnconfigured = "Not configured",
-    providerVolcano = "Volcano Engine",
-    newSession = "New session",
+    agentNoModel = "Agent model not configured"
+    agentUnconfigured = "Not configured"
+    providerVolcano = "Volcano Engine"
+    newSession = "New session"
     history = "History"
-)
+
+}
 
 /**
  * Chinese (Simplified) strings.
  */
-val ChineseStrings = AppStrings(
-    isChinese = true,
-    appName = "MengPaw",
-    settings = "设置 (Settings)",
-    back = "返回",
+val ChineseStrings = AppStrings().apply {
 
-    systemBanner = "Agent 已就绪。描述你想要完成的任务。",
-    inputPlaceholder = "描述一个任务给 Agent...",
-    commandOutputLabel = "命令输出",
-    commandFailedLabel = "命令执行失败",
-    thinking = "🤔 思考中 (Thinking)...",
-    agentLabel = "Agent",
-    stop = "停止",
-    send = "发送",
+    isChinese = true
+    appName = "MengPaw"
+    settings = "设置 (Settings)"
+    back = "返回"
 
-    llmProvider = "LLM 提供商 (Provider)",
-    apiEndpoint = "API 地址 (Endpoint)",
-    apiKey = "API 密钥 (Key)",
-    apiKeyShow = "显示",
-    apiKeyHide = "隐藏",
-    model = "模型 (Model)",
+    systemBanner = "Agent 已就绪。描述你想要完成的任务。"
+    inputPlaceholder = "描述一个任务给 Agent..."
+    commandOutputLabel = "命令输出"
+    commandFailedLabel = "命令执行失败"
+    thinking = "🤔 思考中 (Thinking)..."
+    agentLabel = "Agent"
+    stop = "停止"
+    send = "发送"
 
-    agent = "Agent",
-    maxSteps = "最大步数 (Max Steps)",
-    maxStepsDesc = "ReAct 循环最大迭代次数",
-    llmConcurrency = "LLM 并发上限",
-    llmConcurrencyDesc = "同时进行的 LLM API 调用数量上限 (1-50)",
+    llmProvider = "LLM 提供商 (Provider)"
+    apiEndpoint = "API 地址 (Endpoint)"
+    apiKey = "API 密钥 (Key)"
+    apiKeyShow = "显示"
+    apiKeyHide = "隐藏"
+    model = "模型 (Model)"
 
-    appearance = "外观",
-    darkTheme = "深色主题 (Dark Theme)",
-    darkThemeDesc = "亮色 / 暗色 / 跟随系统",
-    language = "语言 (Language)",
-    languageDesc = "切换界面语言",
-    languageZh = "中文",
-    languageEn = "English",
+    agent = "Agent"
+    maxSteps = "最大步数 (Max Steps)"
+    maxStepsDesc = "ReAct 循环最大迭代次数"
+    llmConcurrency = "LLM 并发上限"
+    llmConcurrencyDesc = "同时进行的 LLM API 调用数量上限 (1-50)"
 
-    agentLanguage = "Agent 语言",
-    agentLanguageDesc = "控制 Agent 思考和输出的语言",
-    agentLanguageFollowUi = "跟随界面",
-    agentLanguageChinese = "中文",
-    agentLanguageEnglish = "English",
+    appearance = "外观"
+    darkTheme = "深色主题 (Dark Theme)"
+    darkThemeDesc = "亮色 / 暗色 / 跟随系统"
+    language = "语言 (Language)"
+    languageDesc = "切换界面语言"
+    languageZh = "中文"
+    languageEn = "English"
 
-    expandFileSection = "文件提交",
-    expandModeSection = "执行模式",
-    expandPluginSection = "插件工具",
-    filePickImage = "图片",
-    filePickDocument = "文档",
-    filePickFile = "文件",
-    filePickCamera = "拍照",
-    dragHint = "长按拖拽排序",
+    agentLanguage = "Agent 语言"
+    agentLanguageDesc = "控制 Agent 思考和输出的语言"
+    agentLanguageFollowUi = "跟随界面"
+    agentLanguageChinese = "中文"
+    agentLanguageEnglish = "English"
 
-    tagModeMission = "/Mission",
-    tagModeResearch = "/Research",
-    tagModeTranslate = "/Translate",
-    tagModeSilent = "/Silent",
-    tagDismiss = "移除",
-    mentionHint = "@智能体名称...",
+    expandFileSection = "文件提交"
+    expandModeSection = "执行模式"
+    expandPluginSection = "插件工具"
+    filePickImage = "图片"
+    filePickDocument = "文档"
+    filePickFile = "文件"
+    filePickCamera = "拍照"
+    dragHint = "长按拖拽排序"
 
-    placeholderMission = "输入一个需要子智能体进行拆解执行的复杂任务",
-    placeholderSwarm = "输入需要火种模式并行拆解执行的任务（可混合不同模型）",
-    placeholderResearch = "输入需要深度调研的课题，将进行多轮搜索与交叉验证",
-    placeholderTranslate = "输入需要翻译的内容",
-    placeholderSilent = "输入后台静默执行的任务，完成后推送结果",
+    tagModeMission = "/Mission"
+    tagModeResearch = "/Research"
+    tagModeTranslate = "/Translate"
+    tagModeSilent = "/Silent"
+    tagDismiss = "移除"
+    mentionHint = "@智能体名称..."
 
-    about = "关于",
-    version = "版本",
-    core = "内核 (Core)",
-    design = "设计 (Design)",
-    resetDefaults = "恢复默认设置",
+    placeholderMission = "输入一个需要子智能体进行拆解执行的复杂任务"
+    placeholderSwarm = "输入需要火种模式并行拆解执行的任务（可混合不同模型）"
+    placeholderResearch = "输入需要深度调研的课题，将进行多轮搜索与交叉验证"
+    placeholderTranslate = "输入需要翻译的内容"
+    placeholderSilent = "输入后台静默执行的任务，完成后推送结果"
+
+    about = "关于"
+    version = "版本"
+    core = "内核 (Core)"
+    design = "设计 (Design)"
+    resetDefaults = "恢复默认设置"
 
     // Sidebar
-    sidebarAgents = "智能体",
-    sidebarCurrent = "当前",
-    sidebarFeatures = "功能",
-    sidebarFrameworkDirectory = "框架通讯录",
-    sidebarFrameworkStatus = "框架状态",
-    sidebarNoFriends = "你的智能体还没有朋友",
-    sidebarPlugins = "插件管理",
-    sidebarSettings = "设置",
+    sidebarAgents = "智能体"
+    sidebarCurrent = "当前"
+    sidebarFeatures = "功能"
+    sidebarFrameworkDirectory = "框架通讯录"
+    sidebarFrameworkStatus = "框架状态"
+    sidebarNoFriends = "你的智能体还没有朋友"
+    sidebarPlugins = "插件管理"
+    sidebarSettings = "设置"
 
     // General
-    cancel = "取消",
-    delete = "删除",
+    cancel = "取消"
+    delete = "删除"
 
     // Settings - System
-    systemAttribution = "开源声明与致谢",
-    systemAttributionDesc = "代码参考、灵感来源与许可合规",
-    systemBackground = "后台运行",
-    systemBackgroundMode = "后台运行策略",
-    systemBackgroundPowerSaver = "后台省电模式",
-    systemBackgroundPowerSaverDesc = "降低后台轮询频率和动画帧率，延长续航",
-    systemBatteryIgnored = "已忽略电池优化",
-    systemBatteryIgnoredDesc = "系统不会在息屏时限制后台运行",
-    systemBatteryNotIgnored = "电池优化未忽略",
-    systemBatteryNotIgnoredDesc = "点击跳转系统设置，关闭后可防止息屏限制",
-    systemCacheSaved = "缓存节省",
-    systemContactUs = "联系我们",
-    systemCopyright = "版权声明",
-    systemCopyrightDesc = "© 2026 深圳哇蓝文化科技有限公司",
-    systemDaily = "每日",
-    systemEstimatedSavings = "预估节省",
-    systemGoToBatterySettings = "前往设置 →",
-    systemLegalContact = "法律与联系",
-    systemLicense = "许可证",
-    systemMonthly = "每月",
-    systemNoTokenData = "暂无 Token 用量数据。开始使用后自动记录。",
-    systemTimezone = "时区",
-    systemTimezoneAuto = "自动",
-    systemTimezoneShanghai = "上海",
-    systemTokenStats = "Token 用量统计",
-    systemTotalUsage = "总用量",
-    systemWeekly = "每周",
+    systemAttribution = "开源声明与致谢"
+    systemAttributionDesc = "代码参考、灵感来源与许可合规"
+    systemBackground = "后台运行"
+    systemBackgroundMode = "后台运行策略"
+    systemBackgroundPowerSaver = "后台省电模式"
+    systemBackgroundPowerSaverDesc = "降低后台轮询频率和动画帧率，延长续航"
+    systemBatteryIgnored = "已忽略电池优化"
+    systemBatteryIgnoredDesc = "系统不会在息屏时限制后台运行"
+    systemBatteryNotIgnored = "电池优化未忽略"
+    systemBatteryNotIgnoredDesc = "点击跳转系统设置，关闭后可防止息屏限制"
+    systemCacheSaved = "缓存节省"
+    systemContactUs = "联系我们"
+    systemCopyright = "版权声明"
+    systemCopyrightDesc = "© 2026 深圳哇蓝文化科技有限公司"
+    systemDaily = "每日"
+    systemEstimatedSavings = "预估节省"
+    systemGoToBatterySettings = "前往设置 →"
+    systemLegalContact = "法律与联系"
+    systemLicense = "许可证"
+    systemMonthly = "每月"
+    systemNoTokenData = "暂无 Token 用量数据。开始使用后自动记录。"
+    systemTimezone = "时区"
+    systemTimezoneAuto = "自动"
+    systemTimezoneShanghai = "上海"
+    systemTokenStats = "Token 用量统计"
+    systemTotalUsage = "总用量"
+    systemWeekly = "每周"
 
     // Settings - Agent
-    agentAddHumanTouch = "添加真人感",
-    agentAddScheduled = "添加定时",
-    agentApiReturnedModels = "API 返回模型",
-    agentFromGlobalPool = "从全局工具池安装",
-    agentFromSkillPool = "从全局技能池安装",
-    agentInstallHelp = "三种安装方式：①从全局工具池安装 ②Agent 自行搜索下载安装 ③用户手动下载并提供路径，Agent 自行安装",
-    agentLastFired = "上次触发: %s",
-    agentLoopMode = "Loop 模式",
-    agentLoopModeDesc = "Agent 会根据任务复杂度自动选择合适的执行模式，无需手动切换。",
-    agentNoProvider = "尚未添加 API 供应商，请先前往「框架设置」配置",
-    agentNoSkills = "该智能体尚未拉取本地技能，可从全局技能池 skill.pull 拉取，或 skill.create 创建。",
-    agentNoTriggers = "暂无触发器。添加定时任务让 Agent 在指定时间自动执行。",
-    agentParams = "Agent 参数",
-    agentPlugins = "Agent 插件",
-    agentProviderModel = "供应商 & 模型",
-    agentRefreshFileList = "刷新文件列表",
-    agentRefreshModels = "刷新模型列表",
-    agentRemainingCount = "... 还有 %d 个",
-    agentSelectModel = "选择模型",
-    agentShellTimeout = "Shell 命令超时",
-    agentShellTimeoutDesc = "单个命令最长执行时间（秒）",
-    agentSkills = "智能体技能(Agent Skills)",
-    agentSkillPool = "全局技能池",
-    agentTools = "智能体工具(Agent Tools)",
-    agentTriggerHuman = "真人",
-    agentTriggers = "定时任务 & 触发器",
-    agentTriggerScheduled = "定时",
-    agentWorkspaceFiles = "工作区文件",
+    agentAddHumanTouch = "添加真人感"
+    agentAddScheduled = "添加定时"
+    agentApiReturnedModels = "API 返回模型"
+    agentFromGlobalPool = "从全局工具池安装"
+    agentFromSkillPool = "从全局技能池安装"
+    agentInstallHelp = "三种安装方式：①从全局工具池安装 ②Agent 自行搜索下载安装 ③用户手动下载并提供路径，Agent 自行安装"
+    agentLastFired = "上次触发: %s"
+    agentLoopMode = "Loop 模式"
+    agentLoopModeDesc = "Agent 会根据任务复杂度自动选择合适的执行模式，无需手动切换。"
+    agentNoProvider = "尚未添加 API 供应商，请先前往「框架设置」配置"
+    agentNoSkills = "该智能体尚未拉取本地技能，可从全局技能池 skill.pull 拉取，或 skill.create 创建。"
+    agentNoTriggers = "暂无触发器。添加定时任务让 Agent 在指定时间自动执行。"
+    agentParams = "Agent 参数"
+    agentPlugins = "Agent 插件"
+    agentProviderModel = "供应商 & 模型"
+    agentRefreshFileList = "刷新文件列表"
+    agentRefreshModels = "刷新模型列表"
+    agentRemainingCount = "... 还有 %d 个"
+    agentSelectModel = "选择模型"
+    agentShellTimeout = "Shell 命令超时"
+    agentShellTimeoutDesc = "单个命令最长执行时间（秒）"
+    agentSkills = "智能体技能(Agent Skills)"
+    agentSkillPool = "全局技能池"
+    agentTools = "智能体工具(Agent Tools)"
+    agentTriggerHuman = "真人"
+    agentTriggers = "定时任务 & 触发器"
+    agentTriggerScheduled = "定时"
+    agentWorkspaceFiles = "工作区文件"
 
     // Settings - Framework
-    frameworkAddProvider = "新增API供应商",
-    frameworkApiProvider = "API供应商",
-    frameworkCollapseList = "收起API供应商列表",
-    frameworkContextStrategy = "上下文策略",
-    frameworkContextStrategyDesc = "内置 · Reasonix 四级折叠",
-    frameworkEditConnection = "编辑连接",
-    frameworkGlobalPlugins = "全局插件",
-    frameworkGlobalSkills = "全局技能(Skills)",
-    frameworkGlobalTools = "全局工具(Tools)",
-    frameworkMemoryBackend = "记忆管理后端",
-    frameworkMemoryBackendDesc = "内置 · Markdown 文件",
-    frameworkMemoryManagement = "记忆管理",
-    frameworkNewConnection = "新增连接",
-    frameworkPluginManagement = "插件管理",
-    frameworkPluginManagementDesc = "浏览、安装、管理 Agent 插件",
-    frameworkProviderLabel = "供应商",
-    frameworkSaveConnection = "保存",
-    frameworkTestConnection = "测试",
-    frameworkTestingConnection = "正在测试连接...",
+    frameworkAddProvider = "新增API供应商"
+    frameworkApiProvider = "API供应商"
+    frameworkCollapseList = "收起API供应商列表"
+    frameworkContextStrategy = "上下文策略"
+    frameworkContextStrategyDesc = "内置 · Reasonix 四级折叠"
+    frameworkEditConnection = "编辑连接"
+    frameworkGlobalPlugins = "全局插件"
+    frameworkGlobalSkills = "全局技能(Skills)"
+    frameworkGlobalTools = "全局工具(Tools)"
+    frameworkMemoryBackend = "记忆管理后端"
+    frameworkMemoryBackendDesc = "内置 · Markdown 文件"
+    frameworkMemoryManagement = "记忆管理"
+    frameworkNewConnection = "新增连接"
+    frameworkPluginManagement = "插件管理"
+    frameworkPluginManagementDesc = "浏览、安装、管理 Agent 插件"
+    frameworkProviderLabel = "供应商"
+    frameworkSaveConnection = "保存"
+    frameworkTestConnection = "测试"
+    frameworkTestingConnection = "正在测试连接..."
 
     // Settings - Sidebar tabs
-    sidebarSettingsAgent = "智能体设置",
-    sidebarSettingsFramework = "框架设置",
-    sidebarSettingsSystem = "系统设置",
+    sidebarSettingsAgent = "智能体设置"
+    sidebarSettingsFramework = "框架设置"
+    sidebarSettingsSystem = "系统设置"
 
     // Security
-    securityAgentDocs = "Agent 文档",
-    securityFingerprint = "指纹: %s",
-    securityFileIntegrity = "文件完整性防护",
-    securityFileIntegrityDesc = "已启用 — 保护核心目录不被修改",
-    securityKernelDir = "内核目录",
-    securityKernelIntegrity = "内核完整性防护",
-    securityKernelIntegrityDesc = "已启用 — 阻止 Agent 执行危险命令",
-    securityKeyStore = "密钥存储",
-    securityNoTrusted = "暂无受信任的框架设备。通过 ACP 配对添加。",
-    securityPluginCache = "插件缓存",
-    securityPluginIntegrity = "插件完整性防护",
-    securityPluginIntegrityDesc = "已启用 — 验证插件签名和版本兼容性",
-    securityProtectedDirs = "受保护的目录：",
-    securityRules = "安全规则",
-    securityTrusted = "已信任",
-    securityTrustedCount = "已信任 %d 个框架设备",
-    securityTrustedFramework = "框架信任列表",
+    securityAgentDocs = "Agent 文档"
+    securityFingerprint = "指纹: %s"
+    securityFileIntegrity = "文件完整性防护"
+    securityFileIntegrityDesc = "已启用 — 保护核心目录不被修改"
+    securityKernelDir = "内核目录"
+    securityKernelIntegrity = "内核完整性防护"
+    securityKernelIntegrityDesc = "已启用 — 阻止 Agent 执行危险命令"
+    securityKeyStore = "密钥存储"
+    securityNoTrusted = "暂无受信任的框架设备。通过 ACP 配对添加。"
+    securityPluginCache = "插件缓存"
+    securityPluginIntegrity = "插件完整性防护"
+    securityPluginIntegrityDesc = "已启用 — 验证插件签名和版本兼容性"
+    securityProtectedDirs = "受保护的目录："
+    securityRules = "安全规则"
+    securityTrusted = "已信任"
+    securityTrustedCount = "已信任 %d 个框架设备"
+    securityTrustedFramework = "框架信任列表"
 
-    pluginMarketTitle = "插件管理",
-    forceRefresh = "强制刷新",
-    marketTab = "市场",
-    installedTab = "已安装",
-    noPluginsAvailable = "暂无可用插件",
-    noInstalledPlugins = "暂无已安装插件",
-    refreshHint = "点击刷新获取插件列表",
-    availablePrefix = "可用: ",
-    installedPrefix = "已安装: ",
-    activePrefix = "活跃: ",
-    builtinBadge = "内置",
-    embeddedBadge = "已嵌入",
-    activeBadge = "活跃",
-    disabledBadge = "已禁用",
-    notPublishedBadge = "暂未发布",
-    uninstall = "卸载",
-    install = "安装",
-    verifying = "校验中...",
-    installedBadge = "已安装",
-    failedBadge = "失败",
-    retry = "重试",
-    pluginNotFound = "插件未找到: ",
-    notInstalledBadge = "未安装",
-    typePrefix = "类型: ",
-    commandsLabel = "命令列表",
-    permissionsLabel = "权限",
-    enable = "启用",
-    disable = "禁用",
-    installPlugin = "安装插件",
-    errorPrefix = "错误: ",
-    cronTitle = "CRON 定时任务",
-    cronExpression = "Cron 表达式",
-    cronPlaceholder = "分 时 日 月 周  例: 0 9 * * *",
-    cronHint = "时间参数让 Agent 帮你算，例如：帮我每天早上9点生成昨日摘要",
-    actionLabel = "执行动作",
-    actionPlaceholder = "描述 Agent 需要执行的任务...",
-    cronTip = "💡 在聊天框告诉 Agent：帮我在每天早上9点生成昨日摘要 — Agent 会自动调用 self.trigger add 配置",
-    add = "添加",
-    scheduleTitle = "随机对话",
-    scheduleParams = "配置参数",
-    scheduleParamsPlaceholder = "窗口,count=N,interval=M",
-    scheduleFormatHint = "格式: HH:MM-HH:MM,count=N,interval=M  例: 08:00-22:00,count=3,interval=60",
-    scheduleTip = "💡 在聊天框告诉 Agent：帮我在每天上午10点到下午6点之间找我聊4次天，间隔至少1小时 — Agent 会自动调用 self.trigger add schedule 配置",
-    noEntries = "暂无条目",
-    noDocs = "暂无文档",
-    agentToolsDesc = "该 Agent 专属的命令工具，仅在当前 Agent 可用。全局命令通过 self.tools 查看。",
-    noToolsConfigured = "暂未配置专属工具。Agent 使用全局工具池（self.tools）中的命令。",
-    agentSkillsDesc = "该 Agent 本地已加载的技能，Markdown 剧本格式。使用 skill.run <name> 执行。",
-    noWorkspaceDocs = "工作区暂无文档",
-    deleteDoc = "删除文档",
-    deleteConfirm = "确定删除此文档？此操作不可恢复。",
-    optimizedBadge = "已优化",
-    apiReturned = "API 返回",
-    builtinCategory = "内置",
-    officialCategory = "官方",
-    customCategory = "自建",
-    lightTheme = "亮色",
-    systemTheme = "跟随系统",
-    notifPersistent = "通知栏常驻",
-    silentRunning = "静默运行",
-    foregroundOnly = "仅前台使用",
-    notifPersistentDesc = "状态栏显示图标，保活最强，推荐",
-    silentRunningDesc = "隐藏通知图标，前台服务仍在后台",
-    foregroundOnlyDesc = "退出时释放服务，最省电",
-    rolePlanner = "规划器 (拆解)",
-    roleWorker = "执行器 (worker)",
-    roleVerifier = "验收器 (verifier)",
-    roleSynthesizer = "合成器 (synthesizer)",
-    roleWorkerAlt = "备用执行器 (worker.alt)",
+    pluginMarketTitle = "插件管理"
+    forceRefresh = "强制刷新"
+    marketTab = "市场"
+    installedTab = "已安装"
+    noPluginsAvailable = "暂无可用插件"
+    noInstalledPlugins = "暂无已安装插件"
+    refreshHint = "点击刷新获取插件列表"
+    availablePrefix = "可用: "
+    installedPrefix = "已安装: "
+    activePrefix = "活跃: "
+    builtinBadge = "内置"
+    embeddedBadge = "已嵌入"
+    activeBadge = "活跃"
+    disabledBadge = "已禁用"
+    notPublishedBadge = "暂未发布"
+    uninstall = "卸载"
+    install = "安装"
+    verifying = "校验中..."
+    installedBadge = "已安装"
+    failedBadge = "失败"
+    retry = "重试"
+    pluginNotFound = "插件未找到: "
+    notInstalledBadge = "未安装"
+    typePrefix = "类型: "
+    commandsLabel = "命令列表"
+    permissionsLabel = "权限"
+    enable = "启用"
+    disable = "禁用"
+    installPlugin = "安装插件"
+    errorPrefix = "错误: "
+    cronTitle = "CRON 定时任务"
+    cronExpression = "Cron 表达式"
+    cronPlaceholder = "分 时 日 月 周  例: 0 9 * * *"
+    cronHint = "时间参数让 Agent 帮你算，例如：帮我每天早上9点生成昨日摘要"
+    actionLabel = "执行动作"
+    actionPlaceholder = "描述 Agent 需要执行的任务..."
+    cronTip = "💡 在聊天框告诉 Agent：帮我在每天早上9点生成昨日摘要 — Agent 会自动调用 self.trigger add 配置"
+    add = "添加"
+    scheduleTitle = "随机对话"
+    scheduleParams = "配置参数"
+    scheduleParamsPlaceholder = "窗口,count=N,interval=M"
+    scheduleFormatHint = "格式: HH:MM-HH:MM,count=N,interval=M  例: 08:00-22:00,count=3,interval=60"
+    scheduleTip = "💡 在聊天框告诉 Agent：帮我在每天上午10点到下午6点之间找我聊4次天，间隔至少1小时 — Agent 会自动调用 self.trigger add schedule 配置"
+    noEntries = "暂无条目"
+    noDocs = "暂无文档"
+    agentToolsDesc = "该 Agent 专属的命令工具，仅在当前 Agent 可用。全局命令通过 self.tools 查看。"
+    noToolsConfigured = "暂未配置专属工具。Agent 使用全局工具池（self.tools）中的命令。"
+    agentSkillsDesc = "该 Agent 本地已加载的技能，Markdown 剧本格式。使用 skill.run <name> 执行。"
+    noWorkspaceDocs = "工作区暂无文档"
+    deleteDoc = "删除文档"
+    deleteConfirm = "确定删除此文档？此操作不可恢复。"
+    optimizedBadge = "已优化"
+    apiReturned = "API 返回"
+    builtinCategory = "内置"
+    officialCategory = "官方"
+    customCategory = "自建"
+    lightTheme = "亮色"
+    systemTheme = "跟随系统"
+    notifPersistent = "通知栏常驻"
+    silentRunning = "静默运行"
+    foregroundOnly = "仅前台使用"
+    notifPersistentDesc = "状态栏显示图标，保活最强，推荐"
+    silentRunningDesc = "隐藏通知图标，前台服务仍在后台"
+    foregroundOnlyDesc = "退出时释放服务，最省电"
+    rolePlanner = "规划器 (拆解)"
+    roleWorker = "执行器 (worker)"
+    roleVerifier = "验收器 (verifier)"
+    roleSynthesizer = "合成器 (synthesizer)"
+    roleWorkerAlt = "备用执行器 (worker.alt)"
 
     // 侧边栏 — Framework Status 三状态（标签 + 解释）
-    frameworkStatusOnline = "在线",
-    frameworkStatusOnlineDesc = "Chat 开放 · 接受委派任务",
-    frameworkStatusBusy = "忙碌",
-    frameworkStatusBusyDesc = "Chat 开放 · 委派任务排队等待",
-    frameworkStatusOffline = "离线",
-    frameworkStatusOfflineDesc = "Chat 关闭 · 不响应任何外部请求",
+    frameworkStatusOnline = "在线"
+    frameworkStatusOnlineDesc = "Chat 开放 · 接受委派任务"
+    frameworkStatusBusy = "忙碌"
+    frameworkStatusBusyDesc = "Chat 开放 · 委派任务排队等待"
+    frameworkStatusOffline = "离线"
+    frameworkStatusOfflineDesc = "Chat 关闭 · 不响应任何外部请求"
 
     // 卡片对话框共用
-    close = "关闭",
-    cardEdit = "编辑",
-    cardSave = "保存",
+    close = "关闭"
+    cardEdit = "编辑"
+    cardSave = "保存"
 
     // 框架名片对话框
-    frameworkCardTitle = "框架名片",
-    frameworkCardRemarkLabel = "备注名称",
-    frameworkCardVersion = "版本: %s",
-    frameworkCardUntrusted = "未信任",
-    frameworkCardHostedAgents = "托管智能体 (%d)",
-    frameworkCardDelete = "删除框架",
-    frameworkCardTrust = "信任此框架",
-    frameworkCardUntwin = "解除孪生",
+    frameworkCardTitle = "框架名片"
+    frameworkCardRemarkLabel = "备注名称"
+    frameworkCardVersion = "版本: %s"
+    frameworkCardUntrusted = "未信任"
+    frameworkCardHostedAgents = "托管智能体 (%d)"
+    frameworkCardDelete = "删除框架"
+    frameworkCardTrust = "信任此框架"
+    frameworkCardUntwin = "解除孪生"
 
     // 智能体名片对话框
-    agentCardTitle = "智能体名片",
-    agentCardNameLabel = "智能体名称",
-    agentCardIntroLabel = "智能体简介",
-    agentCardIntroField = "简介",
-    agentCardNoIntro = "暂无简介",
-    agentCardWorkspaceFiles = "工作区文件 (%d)",
-    agentCardDelete = "删除智能体",
-    agentCardDeleteTitle = "确认删除",
-    agentCardDeleteBody = "确定要永久删除「%s」吗？该操作将删除智能体的所有数据，包括工作区文件、记忆和会话记录。",
-    agentCardSwitch = "切换到此智能体",
+    agentCardTitle = "智能体名片"
+    agentCardNameLabel = "智能体名称"
+    agentCardIntroLabel = "智能体简介"
+    agentCardIntroField = "简介"
+    agentCardNoIntro = "暂无简介"
+    agentCardWorkspaceFiles = "工作区文件 (%d)"
+    agentCardDelete = "删除智能体"
+    agentCardDeleteTitle = "确认删除"
+    agentCardDeleteBody = "确定要永久删除「%s」吗？该操作将删除智能体的所有数据，包括工作区文件、记忆和会话记录。"
+    agentCardSwitch = "切换到此智能体"
 
     // 新建智能体对话框
-    newAgentTitle = "新建智能体",
-    newAgentNameLabel = "智能体名称 *",
-    newAgentNamePlaceholder = "例如：研究助手",
-    newAgentFolderLabel = "工作区文件夹名称",
-    newAgentFolderPlaceholder = "默认与智能体名称相同",
-    newAgentFolderHint = "将创建于: %s",
-    newAgentIntroLabel = "智能体简介",
-    newAgentIntroPlaceholder = "描述这个智能体的职责和能力...",
-    newAgentCreate = "创建智能体",
-    newAgentDefaultName = "智能体 %d",
+    newAgentTitle = "新建智能体"
+    newAgentNameLabel = "智能体名称 *"
+    newAgentNamePlaceholder = "例如：研究助手"
+    newAgentFolderLabel = "工作区文件夹名称"
+    newAgentFolderPlaceholder = "默认与智能体名称相同"
+    newAgentFolderHint = "将创建于: %s"
+    newAgentIntroLabel = "智能体简介"
+    newAgentIntroPlaceholder = "描述这个智能体的职责和能力..."
+    newAgentCreate = "创建智能体"
+    newAgentDefaultName = "智能体 %d"
 
     // 添加框架对话框
-    addFrameworkTitle = "添加框架",
-    addFrameworkType = "框架类型",
-    addFrameworkName = "框架名称",
-    addFrameworkNamePlaceholder = "如: 办公室电脑",
-    addFrameworkAddress = "地址 (可选)",
-    addFrameworkAddrPortPlaceholder = "如: 192.168.1.100:%d",
-    addFrameworkAddrGenericPlaceholder = "如: localhost:8080 或 /path/to/socket",
-    addFrameworkScanLan = "扫描局域网",
-    addFrameworkDiscovered = "发现的设备:",
+    addFrameworkTitle = "添加框架"
+    addFrameworkType = "框架类型"
+    addFrameworkName = "框架名称"
+    addFrameworkNamePlaceholder = "如: 办公室电脑"
+    addFrameworkAddress = "地址 (可选)"
+    addFrameworkAddrPortPlaceholder = "如: 192.168.1.100:%d"
+    addFrameworkAddrGenericPlaceholder = "如: localhost:8080 或 /path/to/socket"
+    addFrameworkScanLan = "扫描局域网"
+    addFrameworkDiscovered = "发现的设备:"
 
     // 记忆孪生配对弹窗
-    twinRequestTitle = "记忆孪生配对请求",
-    twinRequestWarning = "⚠️ 请确认是个人设备请求，请勿与他人设备记忆孪生",
-    twinRequestDevice = "请求设备: %s",
-    twinRequestModel = "型号: %s",
-    twinRequestAgreeDesc = "同意后，双方 Agent 的记忆将开始同步。",
-    twinRequestAgree = "同意",
-    twinRequestDisagree = "不同意",
-    twinVerifyTitle = "验证配对码",
-    twinVerifyDesc = "请确认两台设备显示相同的 6 位验证码",
-    twinVerifyPeer = "配对设备: %s...",
-    twinVerifyWarning = "⚠️ 如验证码不一致，说明存在中间人攻击，请立即取消",
-    twinVerifyConfirm = "一致，确认配对",
-    twinConfirmTitle = "记忆孪生配对",
-    twinConfirmIntro = "即将与以下设备建立记忆孪生配对：",
-    twinConfirmWarning = "⚠️ 配对后本设备的 Agent 记忆将与对方同步。请确认是个人设备，勿与他人设备配对。",
-    twinConfirmAction = "确认配对",
-    twinPairedToast = "🧠 记忆孪生配对成功！执行 twin.sync 立即同步工作区",
-    unknown = "未知",
+    twinRequestTitle = "记忆孪生配对请求"
+    twinRequestWarning = "⚠️ 请确认是个人设备请求，请勿与他人设备记忆孪生"
+    twinRequestDevice = "请求设备: %s"
+    twinRequestModel = "型号: %s"
+    twinRequestAgreeDesc = "同意后，双方 Agent 的记忆将开始同步。"
+    twinRequestAgree = "同意"
+    twinRequestDisagree = "不同意"
+    twinVerifyTitle = "验证配对码"
+    twinVerifyDesc = "请确认两台设备显示相同的 6 位验证码"
+    twinVerifyPeer = "配对设备: %s..."
+    twinVerifyWarning = "⚠️ 如验证码不一致，说明存在中间人攻击，请立即取消"
+    twinVerifyConfirm = "一致，确认配对"
+    twinConfirmTitle = "记忆孪生配对"
+    twinConfirmIntro = "即将与以下设备建立记忆孪生配对："
+    twinConfirmWarning = "⚠️ 配对后本设备的 Agent 记忆将与对方同步。请确认是个人设备，勿与他人设备配对。"
+    twinConfirmAction = "确认配对"
+    twinPairedToast = "🧠 记忆孪生配对成功！执行 twin.sync 立即同步工作区"
+    unknown = "未知"
 
     // 工作区文件 — memory 聚合条目合成文案
-    workspaceMemoryFolder = "memory/（记忆目录）",
-    workspaceMemoryHeader = "## memory/ — 记忆目录（三重记忆）",
-    workspaceMemorySummary = "长期 %d · 中期 %d · 项目 %d · 共 %d 个文档",
-    workspaceEmptyDoc = "（空文档）",
+    workspaceMemoryFolder = "memory/（记忆目录）"
+    workspaceMemoryHeader = "## memory/ — 记忆目录（三重记忆）"
+    workspaceMemorySummary = "长期 %d · 中期 %d · 项目 %d · 共 %d 个文档"
+    workspaceEmptyDoc = "（空文档）"
 
     // 顶栏 — 会话模型标签
-    agentNoModel = "智能体还未配置模型",
-    agentUnconfigured = "未配置",
-    providerVolcano = "火山引擎",
-    newSession = "新建会话",
+    agentNoModel = "智能体还未配置模型"
+    agentUnconfigured = "未配置"
+    providerVolcano = "火山引擎"
+    newSession = "新建会话"
     history = "历史"
-)
+
+}
