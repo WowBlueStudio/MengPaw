@@ -958,7 +958,7 @@ val ChineseStrings = AppStrings().apply {
     actionPlaceholder = "描述 Agent 需要执行的任务..."
     cronTip = "💡 在聊天框告诉 Agent：帮我在每天早上9点生成昨日摘要 — Agent 会自动调用 self.trigger add 配置"
     add = "添加"
-    scheduleTitle = "随机对话"
+    scheduleTitle = "伪人模式"
     scheduleParams = "配置参数"
     scheduleParamsPlaceholder = "窗口,count=N,interval=M"
     scheduleFormatHint = "格式: HH:MM-HH:MM,count=N,interval=M  例: 08:00-22:00,count=3,interval=60"
