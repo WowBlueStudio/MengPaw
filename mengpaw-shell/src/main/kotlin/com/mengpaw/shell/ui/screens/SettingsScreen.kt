@@ -38,7 +38,9 @@ data class FrameworkItem(
     val docMarkdown: String = "",
     val isWowBlue: Boolean = false,
     /** 插件英文名 — 显示为「中文名 (English)」; null 时只显示 name。 */
-    val enName: String? = null
+    val enName: String? = null,
+    /** 子条目 — 非空时本条目为目录节点(点击展开子列表),空时为文档行(点击展开 docMarkdown)。 */
+    val children: List<FrameworkItem> = emptyList()
 ) {
     /** UI 显示名 — 插件统一「中文名 (English)」中英对照格式。 */
     val displayName: String get() = enName?.let { "$name ($it)" } ?: name

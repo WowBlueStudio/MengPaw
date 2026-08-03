@@ -25,6 +25,7 @@ import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.design.components.MarkdownText
 import com.mengpaw.design.components.SectionHeader
+import com.mengpaw.shell.ui.localization.AppStrings
 
 @Composable
 fun AgentSettingsContent(
@@ -471,62 +472,99 @@ fun AgentSettingsContent(
     } else {
         workspaceItems.forEach { item ->
             key(item.name) {
-                var expanded by remember { mutableStateOf(false) }
-                var showDeleteConfirm by remember { mutableStateOf(false) }
-                // memory/ 聚合条目只读展示（含三重记忆目录），单文件条目可删除
-                val deletable = onDeleteWorkspaceFile != null && !item.name.startsWith("memory/")
-                Surface(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                        .clickable(enabled = item.docMarkdown.isNotBlank()) { expanded = !expanded },
-                    shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard
-                ) {
-                    Column(Modifier.padding(ArcoSpacing.md)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Description, null, Modifier.size(16.dp), tint = ArcoColors.Blue6)
-                            Spacer(Modifier.width(ArcoSpacing.sm))
-                            Column(Modifier.weight(1f)) {
-                                Text(item.name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
-                                if (item.summary.isNotBlank())
-                                    Text(item.summary, fontSize = 12.sp, color = ThemeColors.textSecondary, maxLines = 1)
-                            }
-                            if (item.isWowBlue) {
-                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Pink6.copy(alpha = 0.1f)) {
-                                    Text("WowBlue", Modifier.padding(horizontal = 4.dp, vertical = 1.dp), fontSize = 9.sp, color = ArcoColors.Pink6)
-                                }
-                                Spacer(Modifier.width(4.dp))
-                            }
-                            if (deletable) {
-                                IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.size(28.dp)) {
-                                    Icon(Icons.Outlined.Delete, state.strings.delete, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
-                                }
-                            }
-                            if (item.docMarkdown.isNotBlank()) {
-                                Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp), tint = ThemeColors.textSecondary)
-                            }
-                        }
-                        AnimatedVisibility(visible = expanded) {
-                            if (item.docMarkdown.isNotBlank()) {
-                                MarkdownText(content = item.docMarkdown.take(5000),
-                                    modifier = Modifier.padding(top = ArcoSpacing.sm).heightIn(max = 300.dp))
+                WorkspaceItemRow(
+                    item = item,
+                    onDeleteWorkspaceFile = onDeleteWorkspaceFile,
+                    strings = state.strings
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 工作区文件树单行 — 支持两级: 目录节点(children 非空)点击展开子列表,
+ * 文档行(children 空)点击展开 Markdown 正文。
+ * @param deletePrefix 相对工作区的路径前缀(子行传 "memory/"),根层为空。
+ */
+@Composable
+private fun WorkspaceItemRow(
+    item: FrameworkItem,
+    onDeleteWorkspaceFile: ((String) -> Unit)?,
+    strings: AppStrings,
+    deletePrefix: String = ""
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    val isDirectory = item.children.isNotEmpty()
+    // memory 目录节点只读容器; 文档行(含 memory 子文件)可删除
+    val deletable = onDeleteWorkspaceFile != null && !isDirectory
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+            .clickable(enabled = isDirectory || item.docMarkdown.isNotBlank()) { expanded = !expanded },
+        shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard
+    ) {
+        Column(Modifier.padding(ArcoSpacing.md)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (isDirectory) Icons.Outlined.Folder else Icons.Outlined.Description,
+                    null, Modifier.size(16.dp),
+                    tint = if (isDirectory) ArcoColors.Orange6 else ArcoColors.Blue6
+                )
+                Spacer(Modifier.width(ArcoSpacing.sm))
+                Column(Modifier.weight(1f)) {
+                    Text(item.name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
+                    if (item.summary.isNotBlank())
+                        Text(item.summary, fontSize = 12.sp, color = ThemeColors.textSecondary, maxLines = 1)
+                }
+                if (item.isWowBlue) {
+                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Pink6.copy(alpha = 0.1f)) {
+                        Text("WowBlue", Modifier.padding(horizontal = 4.dp, vertical = 1.dp), fontSize = 9.sp, color = ArcoColors.Pink6)
+                    }
+                    Spacer(Modifier.width(4.dp))
+                }
+                if (deletable) {
+                    IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Outlined.Delete, strings.delete, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
+                    }
+                }
+                Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    null, Modifier.size(18.dp), tint = ThemeColors.textSecondary)
+            }
+            AnimatedVisibility(visible = expanded) {
+                if (isDirectory) {
+                    // 目录展开 → 子文件列表(缩进), 每个子文件自身再展开正文
+                    Column(Modifier.padding(start = ArcoSpacing.lg, top = ArcoSpacing.xs)) {
+                        item.children.forEach { child ->
+                            key(child.name) {
+                                WorkspaceItemRow(
+                                    item = child,
+                                    onDeleteWorkspaceFile = onDeleteWorkspaceFile,
+                                    strings = strings,
+                                    deletePrefix = "${item.name}/"
+                                )
                             }
                         }
                     }
-                }
-                if (showDeleteConfirm) {
-                    AlertDialog(
-                        onDismissRequest = { showDeleteConfirm = false },
-                        title = { Text(state.strings.deleteDoc, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
-                        text = { Text(state.strings.deleteConfirm, fontSize = 13.sp, color = ThemeColors.textSecondary, lineHeight = 20.sp) },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                onDeleteWorkspaceFile?.invoke(item.name)
-                                showDeleteConfirm = false
-                            }) { Text(state.strings.delete, color = ArcoColors.Red6) }
-                        },
-                        dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(state.strings.cancel) } }
-                    )
+                } else if (item.docMarkdown.isNotBlank()) {
+                    MarkdownText(content = item.docMarkdown.take(5000),
+                        modifier = Modifier.padding(top = ArcoSpacing.sm).heightIn(max = 300.dp))
                 }
             }
         }
+    }
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text(strings.deleteDoc, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
+            text = { Text(strings.deleteConfirm, fontSize = 13.sp, color = ThemeColors.textSecondary, lineHeight = 20.sp) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteWorkspaceFile?.invoke(deletePrefix + item.name)
+                    showDeleteConfirm = false
+                }) { Text(strings.delete, color = ArcoColors.Red6) }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(strings.cancel) } }
+        )
     }
 }

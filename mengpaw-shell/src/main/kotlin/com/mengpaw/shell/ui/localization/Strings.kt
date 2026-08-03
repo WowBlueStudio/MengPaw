@@ -714,8 +714,8 @@ val EnglishStrings = AppStrings().apply {
     unknown = "Unknown"
 
     // Workspace files — memory folder synthesized labels
-    workspaceMemoryFolder = "memory/"
-    workspaceMemoryHeader = "## memory/ — Memory folder (triple-track)"
+    workspaceMemoryFolder = "memory"
+    workspaceMemoryHeader = "## memory — Memory folder (triple-track)"
     workspaceMemorySummary = "Long-term %d · Mid-term %d · Project %d · %d docs"
     workspaceEmptyDoc = "(empty)"
 
@@ -1069,8 +1069,8 @@ val ChineseStrings = AppStrings().apply {
     unknown = "未知"
 
     // 工作区文件 — memory 聚合条目合成文案
-    workspaceMemoryFolder = "memory/"
-    workspaceMemoryHeader = "## memory/ — 记忆目录（三重记忆）"
+    workspaceMemoryFolder = "memory"
+    workspaceMemoryHeader = "## memory — 记忆目录（三重记忆）"
     workspaceMemorySummary = "长期 %d · 中期 %d · 项目 %d · 共 %d 个文档"
     workspaceEmptyDoc = "（空文档）"
 

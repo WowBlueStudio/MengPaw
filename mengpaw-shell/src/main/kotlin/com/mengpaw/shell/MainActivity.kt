@@ -721,7 +721,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                     add(FrameworkItem(name = file.name, category = ItemCategory.BUILTIN,
                         summary = extractSummary(content), docMarkdown = content))
                 }
-                // memory/ 记忆目录聚合条目 — 三重记忆: 长期 memory.md / 中期 memory_{date}.md / 项目 project_{name}_memory.md
+                // memory 记忆目录节点 — 三重记忆各自成行: 长期 memory.md / 中期 memory_{date}.md / 项目 project_{name}_memory.md
                 val memoryDir = java.io.File(dir, "memory")
                 if (memoryDir.exists()) {
                     val memoryFiles = memoryDir.listFiles { f -> f.isFile && f.extension == "md" }
@@ -730,21 +730,17 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                         val longTerm = memoryFiles.count { it.name == "memory.md" }
                         val midTerm = memoryFiles.count { it.name.startsWith("memory_") }
                         val project = memoryFiles.count { it.name.startsWith("project_") }
-                        val doc = buildString {
-                            appendLine(strings.workspaceMemoryHeader)
-                            appendLine()
-                            memoryFiles.forEach { f ->
-                                val content = try { f.readText() } catch (_: Exception) { "" }
-                                appendLine("### ${f.name}")
-                                appendLine(content.trim().take(1200).ifBlank { strings.workspaceEmptyDoc })
-                                appendLine()
-                            }
-                        }
                         add(FrameworkItem(
                             name = strings.workspaceMemoryFolder,
                             category = ItemCategory.BUILTIN,
                             summary = String.format(strings.workspaceMemorySummary, longTerm, midTerm, project, memoryFiles.size),
-                            docMarkdown = doc))
+                            children = memoryFiles.map { f ->
+                                FrameworkItem(
+                                    name = f.name,
+                                    category = ItemCategory.BUILTIN,
+                                    docMarkdown = try { f.readText() } catch (_: Exception) { "" })
+                            }
+                        ))
                     }
                 }
             }
@@ -773,7 +769,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
             workspaceItems = workspaceItems,
             onRefreshWorkspace = { workspaceVersion++ },
             onDeleteWorkspaceFile = { fileName ->
-                if (fileName.startsWith("memory/")) return@SettingsScreen  // 聚合条目只读
+                if (fileName == strings.workspaceMemoryFolder) return@SettingsScreen  // memory 目录节点只读(子文件行单独可删)
                 if (fileName == "boost.md") com.mengpaw.kernel.agent.AgentDocs.deleteBoost(activeAgent)
                 else java.io.File(java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, activeAgent), fileName).delete()
                 workspaceVersion++
