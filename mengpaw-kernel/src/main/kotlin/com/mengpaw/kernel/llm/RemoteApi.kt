@@ -91,12 +91,21 @@ class RemoteApi(
 
             try {
                 val json = Json.parseToJsonElement(data).jsonObject
-                val delta = json["choices"]?.jsonArray
+                // OpenAI 兼容: choices[0].delta.content
+                val openAiDelta = json["choices"]?.jsonArray
                     ?.firstOrNull()?.jsonObject
                     ?.get("delta")?.jsonObject
-                    ?: continue
-                delta["content"]?.jsonPrimitive?.contentOrNull?.let { text ->
-                    if (text.isNotEmpty()) {
+                if (openAiDelta != null) {
+                    openAiDelta["content"]?.jsonPrimitive?.contentOrNull?.let { text ->
+                        if (text.isNotEmpty()) {
+                            fullContent.append(text)
+                            onToken(text)
+                        }
+                    }
+                } else {
+                    // Anthropic 兼容: content_block_delta → delta.text (text_delta)
+                    val text = json["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
+                    if (!text.isNullOrEmpty()) {
                         fullContent.append(text)
                         onToken(text)
                     }

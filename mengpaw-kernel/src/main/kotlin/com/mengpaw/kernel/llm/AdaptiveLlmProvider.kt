@@ -283,25 +283,35 @@ class AdaptiveLlmProvider(
                     )
                 }
 
-                // Extract delta content from choices[0]
-                val delta = json["choices"]?.jsonArray
+                // ── 双格式 delta 提取 ──
+                // OpenAI 兼容: {choices:[{delta:{content|reasoning_content}}]}
+                // Anthropic 兼容: {type:"content_block_delta", delta:{type:"text_delta", text}}
+                //   (api.deepseek.com/anthropic 等 Anthropic Messages SSE 格式)
+                val openAiDelta = json["choices"]?.jsonArray
                     ?.firstOrNull()?.jsonObject
                     ?.get("delta")?.jsonObject
-                    ?: continue
 
-                // Visible text delta (OpenAI standard)
-                delta["content"]?.jsonPrimitive?.contentOrNull?.let { text ->
-                    if (text.isNotEmpty()) {
+                if (openAiDelta != null) {
+                    // Visible text delta (OpenAI standard)
+                    openAiDelta["content"]?.jsonPrimitive?.contentOrNull?.let { text ->
+                        if (text.isNotEmpty()) {
+                            fullContent.append(text)
+                            onToken(text)
+                        }
+                    }
+                    // Reasoning delta (DeepSeek reasoning_content)
+                    openAiDelta["reasoning_content"]?.jsonPrimitive?.contentOrNull?.let { text ->
+                        if (text.isNotEmpty()) onToken(text)
+                    }
+                } else {
+                    // Anthropic content_block_delta: delta.text (text_delta)
+                    val text = json["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
+                    if (!text.isNullOrEmpty()) {
                         fullContent.append(text)
                         onToken(text)
                     }
-                }
-
-                // Reasoning delta (DeepSeek reasoning_content)
-                delta["reasoning_content"]?.jsonPrimitive?.contentOrNull?.let { text ->
-                    if (text.isNotEmpty()) {
-                        onToken(text)
-                    }
+                    // Anthropic 事件名校验: 只处理 content_block_delta, 跳过 message_start/message_delta/ping
+                    // (无 delta.text 的事件自然被上面的 null 检查跳过)
                 }
             } catch (_: Exception) {
                 // Skip malformed SSE lines (same resilience as Reasonix readStream)
