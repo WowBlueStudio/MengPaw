@@ -320,6 +320,8 @@ class AgentViewModel : ViewModel() {
         }
 
         session.messages.value = session.messages.value + ChatMessageUi.User(task)
+        // 用户消息落盘 — 与回复完成落盘配对, 事件驱动无需 30s 定时
+        sessionPersistence.saveCurrentSession()
 
         viewModelScope.launch {
             // ── 执行模式分发变量（在 try 外，catch 中也需要）────
@@ -849,8 +851,7 @@ class AgentViewModel : ViewModel() {
         if (!sessionPersistence.restoreCurrentSession()) {
             // Only show welcome if no saved session
         }
-        // Start periodic auto-save
-        sessionPersistence.scheduleAutoSave()
+        // 事件驱动落盘: 用户消息发出时 + 回复完成时 — 无定时器 (30s 定时已移除)
 
         // ── Observe session lifecycle events for recovery hints ──
         viewModelScope.launch {

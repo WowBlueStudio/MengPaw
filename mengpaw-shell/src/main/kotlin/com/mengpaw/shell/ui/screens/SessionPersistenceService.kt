@@ -122,16 +122,6 @@ class SessionPersistenceService(
 
     // ── Auto-save ──
 
-    /** Autosave active session every 30s and on pause. */
-    fun scheduleAutoSave() {
-        viewModelScope.launch {
-            while (true) {
-                kotlinx.coroutines.delay(30_000)
-                saveCurrentSession()
-            }
-        }
-    }
-
     // ── Save ──
 
     /** Persist active session messages so they survive process death. */
@@ -576,14 +566,35 @@ class SessionPersistenceService(
         }
     }
 
-    /** Delete a session record. */
+    /** Delete a session record — 全量清理, 不残留任何磁盘/内存痕迹。 */
     fun deleteSession(id: String) {
         _sessionHistory.value = _sessionHistory.value.filter { it.id != id }
         saveSessionHistory()
+        // ① 会话消息文件 sessions/$id.json
         try {
             val file = File(com.mengpaw.kernel.DataPaths.BASE, "sessions/$id.json")
             if (file.exists()) file.delete()
         } catch (_: Exception) {}
+        // ② 内核检查点文件 会话检查点/{sessionId}_step_*.json (无 delete API, 按前缀清)
+        try {
+            val cpDir = File(com.mengpaw.kernel.DataPaths.CHECKPOINTS)
+            if (cpDir.exists()) {
+                cpDir.listFiles { f -> f.name.startsWith(id) }?.forEach { it.delete() }
+            }
+        } catch (_: Exception) {}
+        // ③ 删除的是当前活跃会话 → 连根清除, 否则 Chat 界面残留 + 重启"复活":
+        //    - 清空内存消息 (Chat 界面立即清空, 不能再继续聊)
+        //    - currentSessionId 重置, 新消息开新会话
+        //    - 删除 current_session.json (restoreCurrentSession 恢复的源头)
+        if (currentSessionId == id) {
+            currentSessionId = ""
+            sessions[getActiveAgentName()]?.messages?.value = emptyList()
+            try {
+                val cur = File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
+                if (cur.exists()) cur.delete()
+            } catch (_: Exception) {}
+            lastPersistedMsgCount = 0
+        }
     }
 
     // ── Query ──
