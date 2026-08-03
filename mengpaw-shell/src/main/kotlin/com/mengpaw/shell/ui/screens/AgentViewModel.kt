@@ -434,6 +434,37 @@ class AgentViewModel : ViewModel() {
                     }
                 }
 
+                // ── 流式输出: 增量 token 实时进气泡(打字机效果) ──
+                // 只显示最终答案部分 — 缓冲中一旦出现 "Final Answer:" 标记,
+                // 其后的内容才开始增量更新 finalContent; 中间轮 Thought/Action
+                // 样板文本不透传(由 traces 消化), 避免样板闪烁
+                // 节流: 50ms 窗口合并增量, 避免每 token 全量重 parse Markdown
+                val streamBuf = StringBuilder()
+                var lastDeltaPush = 0L
+                val onDelta: (String) -> Unit = { delta ->
+                    streamBuf.append(delta)
+                    val text = streamBuf.toString()
+                    if (text.contains("Final Answer:", ignoreCase = true)) {
+                        val now = System.currentTimeMillis()
+                        if (now - lastDeltaPush >= 50) { // 节流合并, 避免每 token 全量重 parse
+                            lastDeltaPush = now
+                            val idx = text.indexOf("Final Answer:", ignoreCase = true)
+                            val answerPart = text.substring(idx + "Final Answer:".length)
+                            session.messages.update { current ->
+                                val mutable = current.toMutableList()
+                                val ridx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
+                                if (ridx >= 0) {
+                                    mutable[ridx] = ChatMessageUi.AgentWithTrace(
+                                        answerPart, traces.toList(),
+                                        isRunning = true, executionMode = modePrefix, agentRef = agentRef
+                                    )
+                                }
+                                mutable
+                            }
+                        }
+                    }
+                }
+
                 // Reset stale state from previous runs before starting
                 session.engine.resetLoopDetection()
                 try { session.engine.stop() } catch (_: Exception) {}
@@ -464,13 +495,13 @@ class AgentViewModel : ViewModel() {
                     executionMode == ExecutionMode.MISSION -> session.engine.runWithMission(task = finalTask, onStep = onStep)
                     executionMode == ExecutionMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
                     // ── 显式斜杠命令结束, 以下为 loopMode 分发 ──
-                    inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
+                    inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta)
                     inputTagManager.loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep)
                     inputTagManager.loopMode == LoopMode.MISSION || inputTagManager.loopMode == LoopMode.FLEET ->
                         session.engine.runWithFleet(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep)
                     inputTagManager.loopMode == LoopMode.SWARM ->
                         session.engine.runWithSwarm(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep)
-                    else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep)
+                    else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta)
                 }
 
                 // Translate result back to Chinese for US models

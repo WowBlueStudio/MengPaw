@@ -95,6 +95,13 @@ class AdaptiveLlmProvider(
         return callWithRetryAndFallback(messages, stream = true, onToken = onToken)
     }
 
+    override suspend fun completeStreamingWithMessages(
+        messages: List<Map<String, String>>,
+        onToken: (String) -> Unit
+    ): String {
+        return callWithRetryAndFallback(messages, stream = true, onToken = onToken)
+    }
+
     override fun info(): ProviderInfo = ProviderInfo(
         name = providerType.replaceFirstChar { it.uppercaseChar() },
         model = model,

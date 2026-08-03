@@ -29,6 +29,21 @@ interface LlmProvider : AutoCloseable {
     }
 
     /**
+     * Stream a structured messages list token by token.
+     * Each message has "role" and "content" keys for proper chat formatting.
+     *
+     * Default implementation joins messages into a flat prompt and falls back
+     * to [completeStreaming]; providers with native messages support override.
+     */
+    suspend fun completeStreamingWithMessages(
+        messages: List<Map<String, String>>,
+        onToken: (String) -> Unit
+    ): String {
+        val flatPrompt = messages.joinToString("\n") { "${it["role"]}: ${it["content"]}" }
+        return completeStreaming(flatPrompt, onToken)
+    }
+
+    /**
      * Get provider metadata.
      */
     fun info(): ProviderInfo

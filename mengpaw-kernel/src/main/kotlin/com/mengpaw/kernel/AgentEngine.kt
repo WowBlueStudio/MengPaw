@@ -471,10 +471,13 @@ class AgentEngine(
 
     data class TraceStep(val step: Int, val thought: String, val action: String?, val observation: String?)
 
-    suspend fun run(task: String, maxSteps: Int = 50, onStep: ((TraceStep) -> Unit)? = null): String {
+    suspend fun run(
+        task: String, maxSteps: Int = 50, onStep: ((TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
+    ): String {
         val guardedTask = if (com.mengpaw.kernel.security.PromptFirewall.checkUserPrompt(task) != null)
             com.mengpaw.kernel.security.PromptFirewall.wrapWithDefense(task) else task
-        return runReActLoop(task = guardedTask, maxSteps = maxSteps, onStep = onStep)
+        return runReActLoop(task = guardedTask, maxSteps = maxSteps, onStep = onStep, onDelta = onDelta)
     }
 
     // ── Goal Mode (delegated to GoalModeExecutor) ────────────────────
@@ -496,7 +499,8 @@ class AgentEngine(
         task: String,
         maxSteps: Int,
         contextPrefix: String = "",
-        onStep: ((TraceStep) -> Unit)? = null
+        onStep: ((TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
     ): String {
         ErrorCollector.init()
 
@@ -569,7 +573,10 @@ class AgentEngine(
                 }
 
                 val conversation = buildConversation(session.id)
-                val llmResponse = llmProvider.completeWithMessages(conversation)
+                // 流式调用: 增量 token 经 onDelta 实时透传 UI(打字机效果); 完整文本仍用于解析
+                val llmResponse = if (onDelta != null)
+                    llmProvider.completeStreamingWithMessages(conversation, onDelta)
+                else llmProvider.completeWithMessages(conversation)
                 // 利用 LLM 等待窗口刚刚结束的间隙刷盘中期记忆 (I/O 成本隐藏)
                 com.mengpaw.kernel.agent.AgentDocs.flushMidTermMemoryQueue()
                 val sanitized = Sanitizer.sanitize(llmResponse)
