@@ -44,32 +44,50 @@ object AgentTemplates {
 
             try {
                 val assetPath = "agent-templates/$lang"
-                val assetManager = context.assets
-                val fileList = assetManager.list(assetPath) ?: emptyArray()
-                if (fileList.isEmpty()) {
+                val count = extractAssets(context.assets, assetPath, targetDir)
+                if (count == 0) {
                     KernelLog.w("AgentTemplates", "No template files found in assets/$assetPath")
                     continue
                 }
-
-                for (filename in fileList) {
-                    if (!filename.endsWith(".md")) continue
-                    val targetFile = File(targetDir, filename)
-                    if (!targetFile.exists()) {
-                        try {
-                            assetManager.open("$assetPath/$filename").use { input ->
-                                targetFile.writeBytes(input.readBytes())
-                            }
-                        } catch (e: Exception) {
-                            KernelLog.w("AgentTemplates", "Failed to extract $lang/$filename: ${e.message}")
-                        }
-                    }
-                }
                 extracted.add(lang)
-                KernelLog.i("AgentTemplates", "Extracted ${fileList.size} $lang template files to ${targetDir.absolutePath}")
+                KernelLog.i("AgentTemplates", "Extracted $count $lang template files to ${targetDir.absolutePath}")
             } catch (e: Exception) {
                 KernelLog.w("AgentTemplates", "$lang template extraction failed: ${e.message}")
             }
         }
+    }
+
+    /**
+     * Recursively extract .md assets (including subdirectories like memory/)
+     * preserving the relative directory structure.
+     * @return number of files extracted
+     */
+    private fun extractAssets(assetManager: android.content.res.AssetManager, assetPath: String, targetDir: File): Int {
+        val entries = try { assetManager.list(assetPath) ?: emptyArray() } catch (_: Exception) { emptyArray() }
+        var count = 0
+        for (entry in entries) {
+            val childAsset = "$assetPath/$entry"
+            val childTarget = File(targetDir, entry)
+            // 目录判定：能列出子条目说明是目录（文件 open 会抛异常，list 返回 null/空）
+            val subEntries = try { assetManager.list(childAsset) } catch (_: Exception) { null }
+            if (subEntries != null && subEntries.isNotEmpty()) {
+                childTarget.mkdirs()
+                count += extractAssets(assetManager, childAsset, childTarget)
+            } else if (entry.endsWith(".md")) {
+                if (!childTarget.exists()) {
+                    try {
+                        assetManager.open(childAsset).use { input ->
+                            childTarget.parentFile?.mkdirs()
+                            childTarget.writeBytes(input.readBytes())
+                            count++
+                        }
+                    } catch (e: Exception) {
+                        KernelLog.w("AgentTemplates", "Failed to extract $childAsset: ${e.message}")
+                    }
+                }
+            }
+        }
+        return count
     }
 
     /**
@@ -89,22 +107,36 @@ object AgentTemplates {
         val workspaceDir = File(DataPaths.AGENTS, agentName)
         if (!workspaceDir.exists()) workspaceDir.mkdirs()
 
-        val templateFiles = try { templateDir.listFiles()?.filter { it.extension == "md" } ?: emptyList() } catch (_: Exception) { emptyList() }
-        for (template in templateFiles) {
-            val targetFile = File(workspaceDir, template.name)
-            if (targetFile.exists()) continue // Preserve agent's existing file
+        copyTemplates(templateDir, workspaceDir)
+    }
 
-            try {
-                // Atomic write: write to .tmp first, then rename
-                val tmpFile = File(workspaceDir, "${template.name}.tmp")
-                template.copyTo(tmpFile, overwrite = true)
-                if (!tmpFile.renameTo(targetFile)) {
-                    // Cross-device fallback: direct copy
-                    template.copyTo(targetFile, overwrite = false)
-                    tmpFile.delete()
+    /**
+     * Recursively copy template .md files (including subdirectories like memory/)
+     * into the workspace, preserving relative structure. Existing targets are kept
+     * untouched (preserve the agent's own files).
+     */
+    private fun copyTemplates(srcDir: File, destDir: File) {
+        val entries = try { srcDir.listFiles() ?: emptyArray() } catch (_: Exception) { emptyArray() }
+        for (entry in entries) {
+            if (entry.isDirectory) {
+                val subDest = File(destDir, entry.name)
+                subDest.mkdirs()
+                copyTemplates(entry, subDest)
+            } else if (entry.extension == "md") {
+                val targetFile = File(destDir, entry.name)
+                if (targetFile.exists()) continue // Preserve agent's existing file
+                try {
+                    // Atomic write: write to .tmp first, then rename
+                    val tmpFile = File(destDir, "${entry.name}.tmp")
+                    entry.copyTo(tmpFile, overwrite = true)
+                    if (!tmpFile.renameTo(targetFile)) {
+                        // Cross-device fallback: direct copy
+                        entry.copyTo(targetFile, overwrite = false)
+                        tmpFile.delete()
+                    }
+                } catch (e: Exception) {
+                    KernelLog.w("AgentTemplates", "Failed to copy ${entry.name}: ${e.message}")
                 }
-            } catch (e: Exception) {
-                KernelLog.w("AgentTemplates", "Failed to copy ${template.name} for $agentName: ${e.message}")
             }
         }
     }

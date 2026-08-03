@@ -65,9 +65,9 @@ object AgentDocs {
     fun bootstrap(agentName: String, language: String = "zh") {
         val dir = File(DataPaths.AGENTS, agentName)
         if (!dir.exists()) dir.mkdirs()
-        if (File(dir, "soul.md").exists()) return
-        // Ensure long-term memory directory exists
+        // Ensure long-term memory directory exists — 幂等，老工作区升级后也补建
         File(dir, "memory").mkdirs()
+        if (File(dir, "soul.md").exists()) return
         bootstrapper?.invoke(agentName, language)
     }
 
