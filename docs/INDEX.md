@@ -19,6 +19,7 @@
 |------|:----:|------|
 | `compilation-issues.md` | 1 KB | 10 类编译错误速查表 |
 | `audit-methodology.md` | 4 KB | 三层十二问审计方法论 |
+| `pyramid-investigation.md` | 6 KB | 金字塔彻查法：从现象逐层拆链路、证据排除、反模式与实战案例 | 功能"永远修不好"或做链路级排障时 |
 | `audit-records.md` | 3 KB | 各版本审校记录清单 |
 | `roadmap.md` | 2 KB | 开发路线图 Phase 1-10 |
 
