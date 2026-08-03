@@ -94,7 +94,7 @@ class AgentSessionFactory(
         val tribeMw = com.mengpaw.plugin.hermes.TribeInboxMiddleware
         // Agent Tools middleware: inject registered command-set summaries (tools.import)
         val agentToolsMw = com.mengpaw.plugin.agenttools.AgentToolsSummaryMiddleware
-        // 言简意赅 middleware: 去除提示词结构性输出干扰（放链尾 — 对前序注入后的完整提示词生效；插件停用即原样返回）
+        // 言简意赅 middleware: 前缀注入简洁引导（放链尾 — 对前序注入后的完整提示词生效；插件停用即原样返回）
         val conciseMw = com.mengpaw.plugin.concise.ConciseMiddleware
 
         // Post-call middleware: context folding + scroll eviction

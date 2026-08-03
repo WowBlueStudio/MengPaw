@@ -13,8 +13,8 @@ import com.mengpaw.kernel.plugin.PluginStatus
 import com.mengpaw.kernel.plugin.PluginType
 
 /**
- * 言简意赅 — 去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），
- * 让模型回答更简洁。middleware 由壳层链组装（[ConciseMiddleware]），
+ * 言简意赅 — 提示词前缀注入简洁引导（只动前缀，不删强要求句、不加反 Markdown 约束），
+ * 让模型回答更简洁且不破坏流式分步与 Markdown 格式。middleware 由壳层链组装（[ConciseMiddleware]），
  * 插件开关 = middleware 内动态查询插件状态，停用即恢复原提示词。
  */
 class ConcisePlugin : Plugin {
@@ -22,10 +22,10 @@ class ConcisePlugin : Plugin {
     override val metadata = PluginMetadata(
         id = PLUGIN_ID,
         name = "言简意赅",
-        version = "0.1.0",
+        version = "0.2.0",
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），让模型回答更简洁",
+        description = "提示词前缀注入简洁引导，回答更简洁且保留 Markdown 与分步思考（只动前缀）",
         minCoreVersion = "0.2.0",
         commands = listOf("concise.status")
     )
@@ -46,12 +46,12 @@ class ConcisePlugin : Plugin {
             else -> "⚠️ 模板失配（内核提示词已升级，删除句未命中 — 需同步 ConciseMiddleware 常量）"
         }
         return ExecutionResult.ok(
-            "言简意赅 — 系统提示词精简\n" +
+            "言简意赅 — 提示词前缀简洁引导\n" +
             "状态: $transformState\n" +
             "变换规则:\n" +
-            "1. 删除强制 Thought → Action → Action Input 完整序列要求（中英两版）\n" +
-            "2. 追加反 Markdown 装饰约束（回复默认纯文本，代码/命令/路径可用代码块）\n" +
-            "自检: 查看实际提示词可发 !concise.status 或检查 Agent 回复是否还带结构性样板"
+            "1. 前缀注入一行简洁引导（中英两版，幂等守卫防重复）\n" +
+            "2. 不动强要求句（保住流式分步思考）与 Markdown 格式规范\n" +
+            "自检: 查看实际提示词可发 !concise.status 或检查 Agent 回复是否保持 Markdown"
         )
     }
 

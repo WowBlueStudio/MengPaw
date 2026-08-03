@@ -6,6 +6,7 @@ package com.mengpaw.plugin.concise
 import com.mengpaw.kernel.plugin.PluginManager
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -63,26 +64,29 @@ class ConciseMiddlewareTest {
     }
 
     @Test
-    fun `active 时中文提示词删除强要求句并追加反 Markdown 约束`() {
+    fun `active 时中文提示词前缀注入简洁引导且强要求句保留`() {
         val out = ConciseMiddleware.onSystemPrompt(zhPrompt, "MengPaw")
-        assertFalse("强要求句应被删除", out.contains("必须输出完整的 Thought → Action → Action Input 序列"))
+        assertTrue("前缀应注入简洁引导", out.startsWith("回答保持简洁"))
+        assertTrue("强要求句应保留（不删，保住流式分步）", out.contains("必须输出完整的 Thought → Action → Action Input 序列"))
         assertTrue("Action 标记说明应保留", out.contains("Action:"))
-        assertTrue("反 Markdown 约束应追加", out.contains("回复默认用简洁纯文本"))
+        assertFalse("不应追加反 Markdown 约束", out.contains("回复默认用简洁纯文本"))
     }
 
     @Test
-    fun `active 时英文提示词删除强要求句并追加反 Markdown 约束`() {
+    fun `active 时英文提示词前缀注入简洁引导且强要求句保留`() {
         val out = ConciseMiddleware.onSystemPrompt(enPrompt, "MengPaw")
-        assertFalse("英文强要求句应被删除", out.contains("MUST output the complete"))
+        assertTrue("前缀应注入英文简洁引导", out.startsWith("Keep replies concise"))
+        assertTrue("英文强要求句应保留", out.contains("MUST output the complete"))
         assertTrue("Final Answer 标记应保留", out.contains("Final Answer:"))
-        assertTrue("英文反 Markdown 约束应追加", out.contains("plain text by default"))
+        assertFalse("不应追加英文反 Markdown 约束", out.contains("plain text by default"))
     }
 
     @Test
-    fun `变换幂等 — 二次调用不重复追加`() {
+    fun `变换幂等 — 二次调用不重复注入`() {
         val once = ConciseMiddleware.onSystemPrompt(zhPrompt, "MengPaw")
         val twice = ConciseMiddleware.onSystemPrompt(once, "MengPaw")
         assertTrue("二次调用应保持原文", once == twice)
+        assertEquals(1, twice.split("回答保持简洁").size - 1)
     }
 
     @Test

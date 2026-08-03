@@ -97,8 +97,8 @@ class ConciseMissionTest {
         // worker 只被调 1 次 — 纯文本被当最终答案，未误判为 needsContinue 循环
         // （合成调用也含子任务描述，需排除 "Synthesize"）
         assertEquals(1, provider.calls.count { it.contains("子任务A") && !it.contains("Synthesize") })
-        // middleware 变换确实生效（发给 worker 的完整消息含反 Markdown 约束）
-        assertTrue(provider.calls.any { it.contains("回复默认用简洁纯文本") })
+        // middleware 变换确实生效（发给 worker 的完整消息前缀含简洁引导）
+        assertTrue(provider.calls.any { it.contains("回答保持简洁") })
     }
 
     @Test
@@ -112,7 +112,7 @@ class ConciseMissionTest {
         ))
         val report = runMission(engineWith(provider), "批量处理")
         assertTrue("报告应含合成文本: $report", report.contains("综合报告：完成"))
-        // worker 原文（含 Markdown）完整进入合成输入 — 只降生成概率，不剥内容
+        // worker 原文（含 Markdown）完整进入合成输入 — 前缀引导不剥内容
         assertTrue("Markdown 内容应原样进入合成: ${provider.calls.last()}",
             provider.calls.last().contains("### 结果") && provider.calls.last().contains("**重要**"))
     }
