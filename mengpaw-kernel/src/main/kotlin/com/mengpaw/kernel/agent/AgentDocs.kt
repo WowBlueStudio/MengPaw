@@ -80,6 +80,13 @@ object AgentDocs {
         } else ""
     }
 
+    fun readProfileDoc(agentName: String): String {
+        val file = File(DataPaths.AGENTS, "$agentName/profile.md")
+        return if (file.exists()) try { file.readText() } catch (e: Exception) {
+            ErrorCollector.report(e, "AgentDocs.readProfileDoc"); ""
+        } else ""
+    }
+
     fun readSoulDoc(agentName: String): String {
         val file = File(DataPaths.AGENTS, "$agentName/soul.md")
         return if (file.exists()) try { file.readText() } catch (e: Exception) {

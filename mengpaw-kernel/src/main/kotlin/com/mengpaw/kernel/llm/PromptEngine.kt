@@ -144,6 +144,7 @@ class PromptEngine {
         }
 
         // Read workspace docs with file-system cache (re-reads only when file changed)
+        val profileDoc = cachedRead(agentName, "profile.md") { AgentDocs.readProfileDoc(it) }
         val agentsDoc = cachedRead(agentName, "agents.md") { AgentDocs.readAgentsDoc(it) }
         val soulDoc = cachedRead(agentName, "soul.md") { AgentDocs.readSoulDoc(it) }
         // Only LONG-TERM memory goes into system prompt
@@ -206,6 +207,11 @@ Skills 分为两层：
 
 """
             )
+            // ── 身份档案（PROFILE.md）— 你是谁、你在帮谁，每轮可见 ──
+            if (profileDoc.isNotBlank()) {
+                append("\n## 你的身份档案（PROFILE.md）\n\n")
+                append(compactDoc(profileDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/profile.md"))
+            }
             append("\n## 你的操作手册（AGENTS.md）\n\n")
             append(compactDoc(agentsDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/agents.md"))
             if (soulDoc.isNotBlank()) {
