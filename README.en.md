@@ -208,4 +208,4 @@ External connector plugins ([mengpaw-connectors](https://github.com/WowBlueStudi
 ## Feedback & Contribution
 
 - **Bug reports / feature requests**: GitHub [Issues](https://github.com/WowBlueStudio/MengPaw/issues) (with templates)
-- **Code contributions**: PRs are not yet accepted (to keep copyright single-owned); may open later, see [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Code contributions**: Pull Requests are open — plugins/docs preferred (submission transfers copyright; dual-licensed, see [CONTRIBUTING.md](CONTRIBUTING.md))

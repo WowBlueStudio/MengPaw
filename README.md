@@ -210,4 +210,4 @@ MengPaw 以**双许可**方式发布：
 ## 反馈与贡献
 
 - **Bug 报告 / 功能请求**：GitHub [Issues](https://github.com/WowBlueStudio/MengPaw/issues)（附模板）
-- **代码贡献**：暂不接受 PR（保证版权单一归属），未来可能开放，见 [CONTRIBUTING.md](CONTRIBUTING.md)
+- **代码贡献**：开放 Pull Request — 插件/文档类优先（提交即同意版权让渡，双许可详见 [CONTRIBUTING.md](CONTRIBUTING.md)）

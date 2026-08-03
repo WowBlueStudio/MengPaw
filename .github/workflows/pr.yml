@@ -1,0 +1,34 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: JVM tests + compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # AGP 在配置阶段需要 Android SDK（即使只跑 JVM 测试）
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Ensure gradlew executable
+        run: chmod +x gradlew
+
+      - name: Run JVM tests
+        run: ./gradlew :mengpaw-kernel:test :plugin-concise:testDebugUnitTest :plugin-dev:testDebugUnitTest --console=plain
