@@ -69,8 +69,11 @@ self.avatar <图片路径>
 你可以修改整个 App 的配色方案，让它符合你的个性：
 
 ```
-self.theme                           # 查看当前配色
-self.theme primary=#FF6B35 surface=#FFF8F0    # 暖橙色
+self.theme                           # 查看当前主题
+self.theme light                     # 亮色
+self.theme dark                      # 暗色
+self.theme system                    # 跟随系统
+self.theme primary=#FF6B35 surface=#FFF8F0    # 暖橙色（自定义配色）
 self.theme primary=#0E4397 surface=#FFFFFF    # 深蓝色（默认）
 self.theme primary=#00A870 surface=#F5F7FA    # 绿色
 ```
@@ -122,6 +125,7 @@ agent.soul
 - [ ] 头像已设置（self.avatar）
 - [ ] 配色已选定（self.theme）
 - [ ] soul.md 已写好
+- [ ] 读一遍 memory/memory.md（你的记忆剧本——三轨制怎么用）
 - [ ] 用户满意
 
 全部完成后：

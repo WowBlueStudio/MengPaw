@@ -1,14 +1,13 @@
 ---
-summary: "定时心跳与 CRON 触发器规则 — Agent 定期主动执行的任务"
+summary: "定时任务与随机对话规则 — Agent 定期主动执行的任务"
 read_when:
-  - CRON 触发器触发
-  - LIFETIME 心跳触发
+  - 触发器任务触发（[触发器任务 · CRON] 或 [触发器任务 · SCHEDULE]）
   - self.trigger
 ---
 
-# HEARTBEAT.md — 定时任务与心跳规则
+# HEARTBEAT.md — 定时任务与随机对话规则
 
-此文件指导你在 CRON 或 LIFETIME 触发器触发时应该做什么。**留空或只有注释 = 跳过所有定时任务。**
+此文件指导你在触发器命中时应该做什么。**留空或只有注释 = 跳过所有定时任务。**
 
 ---
 
@@ -28,9 +27,9 @@ self.trigger add cron morning-report 0 9 * * * 生成昨日摘要发送给用户
 self.trigger add cron health-check */30 * * * * 工作区状态检查
 ```
 
-### SCHEDULE 触发器（日程闹钟）
+### 随机对话（每日随机时段）
 
-每天在指定时段内预生成 N 个随机时间点，到点触发。
+每天在指定时段内随机出现 N 次，跟你聊两句。
 
 ```
 self.trigger add schedule <id> <窗口,count=N,interval=M> <action描述>
@@ -60,13 +59,13 @@ self.trigger add schedule work-check 10:00-18:00,count=5,interval=30 工作进�
 1. 检查此文件（HEARTBEAT.md）中是否有对应 `id` 的任务说明
 2. 如果没有，用 `self.trigger list` 查看触发的 action 描述
 3. 执行 action 中的任务
-4. 将结果写入长期记忆或汇报给用户
+4. 结果写入中期记忆（`agent.memory.record`）或汇报给用户
 
-### 当 LIFETIME（随机心跳）触发时
+### 当随机对话触发时
 
 1. 用 `self.status` 检查当前状态
 2. 如果用户最近有活跃对话，直接做该做的事
-3. 如果用户长时间未响应，生成有意义的状态摘要存到记忆
+3. 如果用户长时间未响应，生成有意义的状态摘要存到中期记忆
 4. 用 `notify.message` 推送重要发现
 
 ---
@@ -90,7 +89,7 @@ self.trigger add schedule work-check 10:00-18:00,count=5,interval=30 工作进�
 检查设备存储空间和电池状态，异常时 notify.banner
 
 @lifetime daily-thought
-翻看今天的中期记忆，提炼一条有趣的观察存到长期记忆
+翻看今天的中期记忆，提炼一条有趣的观察用 agent.memory.keep 存为长期记忆
 ```
 
 ---
@@ -101,3 +100,4 @@ self.trigger add schedule work-check 10:00-18:00,count=5,interval=30 工作进�
 - 用 `self.trigger` 查看和管理所有触发器
 - 使用 `notify.message` 或 `notify.banner` 向用户推送结果
 - 定时任务是后台执行的，不要阻塞用户当前对话
+- 记忆相关操作：临时信息走 `agent.memory.record`（中期），沉淀知识才用 `agent.memory.keep`（长期）

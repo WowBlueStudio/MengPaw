@@ -67,8 +67,11 @@ If there's no picture ready, ask the user for one. The avatar is stored as `avat
 You can customize the app's entire color scheme:
 
 ```
-self.theme                           # View current colors
-self.theme primary=#FF6B35 surface=#FFF8F0    # Warm orange
+self.theme                           # View current theme
+self.theme light                     # Light
+self.theme dark                      # Dark
+self.theme system                    # Follow system
+self.theme primary=#FF6B35 surface=#FFF8F0    # Warm orange (custom colors)
 self.theme primary=#0E4397 surface=#FFFFFF    # Deep blue (default)
 self.theme primary=#00A870 surface=#F5F7FA    # Green
 ```
@@ -112,6 +115,7 @@ Confirm everything is done:
 - [ ] Avatar set (`self.avatar`)
 - [ ] Theme chosen (`self.theme`)
 - [ ] soul.md is written
+- [ ] Read `memory/memory.md` once (your memory playbook — how the three tracks work)
 - [ ] The user is happy
 
 Then:
