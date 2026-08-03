@@ -308,4 +308,8 @@ Android 无 com.sun.net.httpserver;本地服务(MCP 网关 9881 / 浏览器桥 9
 
 AcpMessageType 枚举改动必须同步 processMessage 的 when(穷尽性);新增可选字段(requestId)向后兼容旧消息。
 
-*最后更新: 2026-08-01 · 提炼自 v0.16.0 ~ v0.22.1 完整开发周期*
+### 14.6 data class 字段数超 255 触发 ART VerifyError 闪退
+
+AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 → 类 clinit 验证失败，启动即闪退且 crash.log/crash buffer 无记录（仅 logcat 主缓冲有 FATAL）。修复：普通 class + 无参构造 + apply 块初始化，引用点零改动。阈值：构造参数 ≤254 安全。
+
+*最后更新: 2026-08-03 · 提炼自 v0.27.1 VerifyError 热修复*
