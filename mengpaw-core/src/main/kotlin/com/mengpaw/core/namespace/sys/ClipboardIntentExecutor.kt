@@ -40,13 +40,33 @@ internal object ClipboardIntentExecutor {
     suspend fun intentOpen(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val app = SysExecutor.appContext ?: return ExecutionResult.fail("SysExecutor not initialized")
         val target = args.firstOrNull() ?: return ExecutionResult.fail("Usage: sys.intent.open <url|package>")
+        val isUrl = target.startsWith("http://") || target.startsWith("https://")
         return try {
-            val intent = if (target.startsWith("http://") || target.startsWith("https://")) {
-                Intent(Intent.ACTION_VIEW, Uri.parse(target))
-            } else {
-                app.packageManager.getLaunchIntentForPackage(target)
-                    ?: return ExecutionResult.fail("Package not found: $target", errorCode = ErrorCodes.ERR_NOT_FOUND)
+            if (isUrl) {
+                // 默认优先 MP 浏览器 (com.mengpaw.browser) — OPEN_URL 通道直达;
+                // 未安装时回退系统浏览器
+                try {
+                    val browserIntent = Intent("com.mengpaw.action.OPEN_URL").apply {
+                        setClassName("com.mengpaw.browser", "com.mengpaw.browser.BrowserActivity")
+                        putExtra("url", target)
+                        addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        )
+                    }
+                    app.startActivity(browserIntent)
+                    return ExecutionResult.ok("Opened in MP Browser: $target")
+                } catch (_: android.content.ActivityNotFoundException) {
+                    // MP 浏览器未安装 → 回退系统浏览器
+                }
+                val sysIntent = Intent(Intent.ACTION_VIEW, Uri.parse(target))
+                sysIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                app.startActivity(sysIntent)
+                return ExecutionResult.ok("Opened (system browser): $target")
             }
+            val intent = app.packageManager.getLaunchIntentForPackage(target)
+                ?: return ExecutionResult.fail("Package not found: $target", errorCode = ErrorCodes.ERR_NOT_FOUND)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             app.startActivity(intent)
             ExecutionResult.ok("Opened: $target")
