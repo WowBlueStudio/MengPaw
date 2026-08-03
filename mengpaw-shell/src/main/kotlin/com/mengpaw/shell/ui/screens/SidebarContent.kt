@@ -69,10 +69,24 @@ data class TwinPairFile(
 )
 
 /** Agent online / presence status for external frameworks. */
-enum class FrameworkStatus(val label: String, val desc: String, val indicatorColor: Color) {
-    ONLINE("在线", "Chat 开放 · 接受委派任务", ArcoColors.Green6),
-    BUSY("忙碌", "Chat 开放 · 委派任务排队等待", ArcoColors.Orange6),
-    OFFLINE("离线", "Chat 关闭 · 不响应任何外部请求", ArcoColors.Gray6)
+enum class FrameworkStatus(val indicatorColor: Color) {
+    ONLINE(ArcoColors.Green6),
+    BUSY(ArcoColors.Orange6),
+    OFFLINE(ArcoColors.Gray6)
+}
+
+/** Localized Framework Status label (English mode → English). */
+fun FrameworkStatus.label(strings: AppStrings): String = when (this) {
+    FrameworkStatus.ONLINE -> strings.frameworkStatusOnline
+    FrameworkStatus.BUSY -> strings.frameworkStatusBusy
+    FrameworkStatus.OFFLINE -> strings.frameworkStatusOffline
+}
+
+/** Localized Framework Status explanation. */
+fun FrameworkStatus.desc(strings: AppStrings): String = when (this) {
+    FrameworkStatus.ONLINE -> strings.frameworkStatusOnlineDesc
+    FrameworkStatus.BUSY -> strings.frameworkStatusBusyDesc
+    FrameworkStatus.OFFLINE -> strings.frameworkStatusOfflineDesc
 }
 
 /** A framework peer (ACP node) that may host multiple agents. */
@@ -238,9 +252,9 @@ fun SidebarContent(
                     Box(Modifier.size(10.dp).background(status.indicatorColor, CircleShape))
                     Spacer(Modifier.width(ArcoSpacing.sm))
                     Column(Modifier.weight(1f)) {
-                        Text(status.label, fontWeight = FontWeight.Medium, fontSize = 14.sp,
+                        Text(status.label(strings), fontWeight = FontWeight.Medium, fontSize = 14.sp,
                             color = if (selected) status.indicatorColor else ThemeColors.textPrimary)
-                        Text(status.desc, fontSize = 11.sp, color = ThemeColors.textSecondary)
+                        Text(status.desc(strings), fontSize = 11.sp, color = ThemeColors.textSecondary)
                     }
                     if (selected) {
                         Icon(Icons.Outlined.Check, null, Modifier.size(16.dp), tint = status.indicatorColor)
@@ -428,13 +442,13 @@ fun SidebarContent(
                     if (framework.online) {
                         Spacer(Modifier.width(4.dp))
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = frameworkStatus.indicatorColor.copy(alpha = 0.1f)) {
-                            Text(frameworkStatus.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            Text(frameworkStatus.label(strings), Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                 style = MaterialTheme.typography.labelSmall, color = frameworkStatus.indicatorColor, fontSize = 9.sp)
                         }
                     } else {
                         Spacer(Modifier.width(4.dp))
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = FrameworkStatus.OFFLINE.indicatorColor.copy(alpha = 0.1f)) {
-                            Text(FrameworkStatus.OFFLINE.label, Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            Text(FrameworkStatus.OFFLINE.label(strings), Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                 style = MaterialTheme.typography.labelSmall, color = FrameworkStatus.OFFLINE.indicatorColor, fontSize = 9.sp)
                         }
                     }
@@ -476,7 +490,7 @@ fun SidebarContent(
         }
 
         if (showAddFramework) {
-            AddFrameworkDialog(onDismiss = { showAddFramework = false })
+            AddFrameworkDialog(strings = strings, onDismiss = { showAddFramework = false })
         }
 
         HorizontalDivider(Modifier.padding(vertical = ArcoSpacing.lg))
@@ -533,6 +547,7 @@ fun SidebarContent(
     // ═══════════════════════════════════════════════════════════════════
     cardAgentName?.let { name ->
         AgentCardDialog(
+            strings = strings,
             agentName = name,
             onDismiss = { cardAgentName = null },
             onSwitchTo = {
@@ -544,6 +559,7 @@ fun SidebarContent(
 
     cardFrameworkName?.let { name ->
         FrameworkCardDialog(
+            strings = strings,
             frameworkName = name,
             onDismiss = { cardFrameworkName = null }
         )
@@ -567,23 +583,23 @@ fun SidebarContent(
     twinPairFiles.firstOrNull()?.let { pairFile ->
         val twinData = try { appJson.decodeFromString<TwinPairFile>(pairFile.readText()) } catch (_: Exception) { null }
         if (twinData != null) {
-            val peerName = twinData.deviceName.ifBlank { twinData.peerId.take(16).ifBlank { "未知" } }
+            val peerName = twinData.deviceName.ifBlank { twinData.peerId.take(16).ifBlank { strings.unknown } }
             val peerModel = twinData.deviceModel
             val peerId = twinData.peerId
             AlertDialog(
                 onDismissRequest = { pairFile.delete() },
                 icon = { Icon(Icons.Outlined.Warning, null, tint = ArcoColors.Orange6) },
-                title = { Text("记忆孪生配对请求", fontWeight = FontWeight.Bold) },
+                title = { Text(strings.twinRequestTitle, fontWeight = FontWeight.Bold) },
                 text = {
                     Column {
-                        Text("⚠️ 请确认是个人设备请求，请勿与他人设备记忆孪生")
+                        Text(strings.twinRequestWarning)
                         Spacer(Modifier.height(12.dp))
-                        Text("请求设备: $peerName", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                        Text(String.format(strings.twinRequestDevice, peerName), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                         if (peerModel.isNotBlank()) {
-                            Text("型号: $peerModel", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                            Text(String.format(strings.twinRequestModel, peerModel), style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                         }
                         Spacer(Modifier.height(8.dp))
-                        Text("同意后，双方 Agent 的记忆将开始同步。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                        Text(strings.twinRequestAgreeDesc, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                     }
                 },
                 confirmButton = {
@@ -603,12 +619,12 @@ fun SidebarContent(
                         }
                         pairFile.delete()
                     }) {
-                        Text("同意", color = ThemeColors.brand)
+                        Text(strings.twinRequestAgree, color = ThemeColors.brand)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { pairFile.delete() }) {
-                        Text("不同意")
+                        Text(strings.twinRequestDisagree)
                     }
                 }
             )
@@ -638,7 +654,7 @@ fun SidebarContent(
             com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext?.let { ctx ->
                 android.widget.Toast.makeText(
                     ctx,
-                    "🧠 记忆孪生配对成功！执行 twin.sync 立即同步工作区",
+                    strings.twinPairedToast,
                     android.widget.Toast.LENGTH_LONG
                 ).show()
             }
@@ -652,11 +668,11 @@ fun SidebarContent(
                 com.mengpaw.plugin.memorytwin.TwinPairingEngine.cancelPairing(verifySessionId)
             },
             icon = { Icon(Icons.Outlined.Security, null, tint = ThemeColors.brand) },
-            title = { Text("验证配对码", fontWeight = FontWeight.Bold) },
+            title = { Text(strings.twinVerifyTitle, fontWeight = FontWeight.Bold) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "请确认两台设备显示相同的 6 位验证码",
+                        strings.twinVerifyDesc,
                         style = MaterialTheme.typography.bodySmall,
                         color = ThemeColors.textSecondary
                     )
@@ -671,13 +687,13 @@ fun SidebarContent(
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "配对设备: ${verifyPeerId.take(16)}...",
+                        String.format(strings.twinVerifyPeer, verifyPeerId.take(16)),
                         style = MaterialTheme.typography.bodySmall,
                         color = ThemeColors.textSecondary
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "⚠️ 如验证码不一致，说明存在中间人攻击，请立即取消",
+                        strings.twinVerifyWarning,
                         style = MaterialTheme.typography.bodySmall,
                         color = ArcoColors.Red6,
                         fontWeight = FontWeight.Medium
@@ -689,7 +705,7 @@ fun SidebarContent(
                     showTwinVerifyDialog = false
                     com.mengpaw.plugin.memorytwin.TwinPairingEngine.confirmPairing(verifySessionId)
                 }) {
-                    Text("一致，确认配对", color = ThemeColors.brand)
+                    Text(strings.twinVerifyConfirm, color = ThemeColors.brand)
                 }
             },
             dismissButton = {
@@ -697,7 +713,7 @@ fun SidebarContent(
                     showTwinVerifyDialog = false
                     com.mengpaw.plugin.memorytwin.TwinPairingEngine.cancelPairing(verifySessionId)
                 }) {
-                    Text("取消", color = ArcoColors.Red6)
+                    Text(strings.cancel, color = ArcoColors.Red6)
                 }
             }
         )
@@ -711,11 +727,11 @@ fun SidebarContent(
         AlertDialog(
             onDismissRequest = { showTwinConfirmDialog = false; twinPairTarget = null },
             icon = { Icon(Icons.Outlined.Hub, null, tint = ThemeColors.brand) },
-            title = { Text("记忆孪生配对", fontWeight = FontWeight.Bold) },
+            title = { Text(strings.twinConfirmTitle, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     if (target != null) {
-                        Text("即将与以下设备建立记忆孪生配对：")
+                        Text(strings.twinConfirmIntro)
                         Spacer(Modifier.height(4.dp))
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm),
                             color = ThemeColors.bgCardHigh, modifier = Modifier.fillMaxWidth()) {
@@ -727,7 +743,7 @@ fun SidebarContent(
                         }
                         Spacer(Modifier.height(8.dp))
                     }
-                    Text("⚠️ 配对后本设备的 Agent 记忆将与对方同步。请确认是个人设备，勿与他人设备配对。",
+                    Text(strings.twinConfirmWarning,
                         style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                 }
             },
@@ -774,7 +790,7 @@ fun SidebarContent(
                         }
                     }
                 }) {
-                    Text("确认配对", color = ThemeColors.brand)
+                    Text(strings.twinConfirmAction, color = ThemeColors.brand)
                 }
             },
             dismissButton = {
@@ -790,7 +806,8 @@ fun SidebarContent(
     // ═══════════════════════════════════════════════════════════════════
     if (showNewAgentDialog) {
         NewAgentDialog(
-            initialName = "智能体 ${discoveredAgents.size + 1}",
+            strings = strings,
+            initialName = String.format(strings.newAgentDefaultName, discoveredAgents.size + 1),
             onDismiss = { showNewAgentDialog = false },
             onConfirm = { form ->
                 val wsFolder = form.workspaceFolder.ifBlank { form.name }

@@ -277,7 +277,98 @@ data class AppStrings(
     val roleWorker: String,
     val roleVerifier: String,
     val roleSynthesizer: String,
-    val roleWorkerAlt: String
+    val roleWorkerAlt: String,
+
+    // ── 侧边栏 Framework Status 三状态（标签 + 解释）──
+    val frameworkStatusOnline: String,
+    val frameworkStatusOnlineDesc: String,
+    val frameworkStatusBusy: String,
+    val frameworkStatusBusyDesc: String,
+    val frameworkStatusOffline: String,
+    val frameworkStatusOfflineDesc: String,
+
+    // ── 卡片对话框共用 ──
+    val close: String,
+    val cardEdit: String,
+    val cardSave: String,
+
+    // ── 框架名片对话框 ──
+    val frameworkCardTitle: String,
+    val frameworkCardRemarkLabel: String,
+    val frameworkCardVersion: String,
+    val frameworkCardUntrusted: String,
+    val frameworkCardHostedAgents: String,
+    val frameworkCardDelete: String,
+    val frameworkCardTrust: String,
+    val frameworkCardUntwin: String,
+
+    // ── 智能体名片对话框 ──
+    val agentCardTitle: String,
+    val agentCardNameLabel: String,
+    val agentCardIntroLabel: String,
+    val agentCardIntroField: String,
+    val agentCardNoIntro: String,
+    val agentCardWorkspaceFiles: String,
+    val agentCardDelete: String,
+    val agentCardDeleteTitle: String,
+    val agentCardDeleteBody: String,
+    val agentCardSwitch: String,
+
+    // ── 新建智能体对话框 ──
+    val newAgentTitle: String,
+    val newAgentNameLabel: String,
+    val newAgentNamePlaceholder: String,
+    val newAgentFolderLabel: String,
+    val newAgentFolderPlaceholder: String,
+    val newAgentFolderHint: String,
+    val newAgentIntroLabel: String,
+    val newAgentIntroPlaceholder: String,
+    val newAgentCreate: String,
+    val newAgentDefaultName: String,
+
+    // ── 添加框架对话框 ──
+    val addFrameworkTitle: String,
+    val addFrameworkType: String,
+    val addFrameworkName: String,
+    val addFrameworkNamePlaceholder: String,
+    val addFrameworkAddress: String,
+    val addFrameworkAddrPortPlaceholder: String,
+    val addFrameworkAddrGenericPlaceholder: String,
+    val addFrameworkScanLan: String,
+    val addFrameworkDiscovered: String,
+
+    // ── 记忆孪生配对（侧边栏弹窗）──
+    val twinRequestTitle: String,
+    val twinRequestWarning: String,
+    val twinRequestDevice: String,
+    val twinRequestModel: String,
+    val twinRequestAgreeDesc: String,
+    val twinRequestAgree: String,
+    val twinRequestDisagree: String,
+    val twinVerifyTitle: String,
+    val twinVerifyDesc: String,
+    val twinVerifyPeer: String,
+    val twinVerifyWarning: String,
+    val twinVerifyConfirm: String,
+    val twinConfirmTitle: String,
+    val twinConfirmIntro: String,
+    val twinConfirmWarning: String,
+    val twinConfirmAction: String,
+    val twinPairedToast: String,
+    val unknown: String,
+
+    // ── 工作区文件（memory 聚合条目合成文案）──
+    val workspaceMemoryFolder: String,
+    val workspaceMemoryHeader: String,
+    val workspaceMemorySummary: String,
+    val workspaceEmptyDoc: String,
+
+    // ── 顶栏（会话模型标签）──
+    val agentNoModel: String,
+    val agentUnconfigured: String,
+    val providerVolcano: String,
+    val newSession: String,
+    val history: String
 )
 
 /**
@@ -509,7 +600,7 @@ val EnglishStrings = AppStrings(
     actionPlaceholder = "Describe the task for the Agent...",
     cronTip = "💡 Tell the Agent in chat: \"generate yesterday's digest every 9am\" — it will call self.trigger add",
     add = "Add",
-    scheduleTitle = "SCHEDULE Window Trigger",
+    scheduleTitle = "TrueMen",
     scheduleParams = "Parameters",
     scheduleParamsPlaceholder = "window,count=N,interval=M",
     scheduleFormatHint = "Format: HH:MM-HH:MM,count=N,interval=M  e.g. 08:00-22:00,count=3,interval=60",
@@ -539,7 +630,98 @@ val EnglishStrings = AppStrings(
     roleWorker = "Worker",
     roleVerifier = "Verifier",
     roleSynthesizer = "Synthesizer",
-    roleWorkerAlt = "Alternate Worker"
+    roleWorkerAlt = "Alternate Worker",
+
+    // Sidebar — Framework Status (labels + explanations)
+    frameworkStatusOnline = "Online",
+    frameworkStatusOnlineDesc = "Chat open · Accepting delegated tasks",
+    frameworkStatusBusy = "Busy",
+    frameworkStatusBusyDesc = "Chat open · Delegated tasks queued",
+    frameworkStatusOffline = "Offline",
+    frameworkStatusOfflineDesc = "Chat closed · Not responding to external requests",
+
+    // Card dialogs — shared
+    close = "Close",
+    cardEdit = "Edit",
+    cardSave = "Save",
+
+    // Framework card dialog
+    frameworkCardTitle = "Framework Card",
+    frameworkCardRemarkLabel = "Remark Name",
+    frameworkCardVersion = "Version: %s",
+    frameworkCardUntrusted = "Untrusted",
+    frameworkCardHostedAgents = "Hosted Agents (%d)",
+    frameworkCardDelete = "Delete Framework",
+    frameworkCardTrust = "Trust this Framework",
+    frameworkCardUntwin = "Untwin",
+
+    // Agent card dialog
+    agentCardTitle = "Agent Card",
+    agentCardNameLabel = "Agent Name",
+    agentCardIntroLabel = "Agent Intro",
+    agentCardIntroField = "Intro",
+    agentCardNoIntro = "No intro yet",
+    agentCardWorkspaceFiles = "Workspace Files (%d)",
+    agentCardDelete = "Delete Agent",
+    agentCardDeleteTitle = "Confirm Delete",
+    agentCardDeleteBody = "Delete \"%s\" permanently? This removes all agent data, including workspace files, memory, and session records.",
+    agentCardSwitch = "Switch to this Agent",
+
+    // New agent dialog
+    newAgentTitle = "New Agent",
+    newAgentNameLabel = "Agent Name *",
+    newAgentNamePlaceholder = "e.g. Research Assistant",
+    newAgentFolderLabel = "Workspace Folder Name",
+    newAgentFolderPlaceholder = "Defaults to agent name",
+    newAgentFolderHint = "Will be created at: %s",
+    newAgentIntroLabel = "Agent Intro",
+    newAgentIntroPlaceholder = "Describe this agent's role and capabilities...",
+    newAgentCreate = "Create Agent",
+    newAgentDefaultName = "Agent %d",
+
+    // Add framework dialog
+    addFrameworkTitle = "Add Framework",
+    addFrameworkType = "Framework Type",
+    addFrameworkName = "Framework Name",
+    addFrameworkNamePlaceholder = "e.g. Office PC",
+    addFrameworkAddress = "Address (optional)",
+    addFrameworkAddrPortPlaceholder = "e.g. 192.168.1.100:%d",
+    addFrameworkAddrGenericPlaceholder = "e.g. localhost:8080 or /path/to/socket",
+    addFrameworkScanLan = "Scan LAN",
+    addFrameworkDiscovered = "Discovered devices:",
+
+    // Memory twin pairing dialogs
+    twinRequestTitle = "Memory Twin Pairing Request",
+    twinRequestWarning = "⚠️ Confirm this is your own device. Do NOT pair memory twins with others.",
+    twinRequestDevice = "Requesting device: %s",
+    twinRequestModel = "Model: %s",
+    twinRequestAgreeDesc = "After consent, both agents' memories will begin syncing.",
+    twinRequestAgree = "Agree",
+    twinRequestDisagree = "Disagree",
+    twinVerifyTitle = "Verify Pairing Code",
+    twinVerifyDesc = "Confirm both devices show the same 6-digit code",
+    twinVerifyPeer = "Pairing device: %s...",
+    twinVerifyWarning = "⚠️ If the codes differ, a man-in-the-middle attack may be present. Cancel immediately.",
+    twinVerifyConfirm = "Match — Confirm Pairing",
+    twinConfirmTitle = "Memory Twin Pairing",
+    twinConfirmIntro = "A memory twin pairing will be established with:",
+    twinConfirmWarning = "⚠️ After pairing, this device's agent memory will sync with the peer. Confirm this is your own device; do not pair with others.",
+    twinConfirmAction = "Confirm Pairing",
+    twinPairedToast = "🧠 Memory twin paired! Run twin.sync to sync the workspace now",
+    unknown = "Unknown",
+
+    // Workspace files — memory folder synthesized labels
+    workspaceMemoryFolder = "memory/ (Memory Folder)",
+    workspaceMemoryHeader = "## memory/ — Memory folder (triple-track)",
+    workspaceMemorySummary = "Long-term %d · Mid-term %d · Project %d · %d docs",
+    workspaceEmptyDoc = "(empty)",
+
+    // Top bar — session model label
+    agentNoModel = "Agent model not configured",
+    agentUnconfigured = "Not configured",
+    providerVolcano = "Volcano Engine",
+    newSession = "New session",
+    history = "History"
 )
 
 /**
@@ -771,7 +953,7 @@ val ChineseStrings = AppStrings(
     actionPlaceholder = "描述 Agent 需要执行的任务...",
     cronTip = "💡 在聊天框告诉 Agent：帮我在每天早上9点生成昨日摘要 — Agent 会自动调用 self.trigger add 配置",
     add = "添加",
-    scheduleTitle = "SCHEDULE 日程触发器",
+    scheduleTitle = "随机对话",
     scheduleParams = "配置参数",
     scheduleParamsPlaceholder = "窗口,count=N,interval=M",
     scheduleFormatHint = "格式: HH:MM-HH:MM,count=N,interval=M  例: 08:00-22:00,count=3,interval=60",
@@ -801,5 +983,96 @@ val ChineseStrings = AppStrings(
     roleWorker = "执行器 (worker)",
     roleVerifier = "验收器 (verifier)",
     roleSynthesizer = "合成器 (synthesizer)",
-    roleWorkerAlt = "备用执行器 (worker.alt)"
+    roleWorkerAlt = "备用执行器 (worker.alt)",
+
+    // 侧边栏 — Framework Status 三状态（标签 + 解释）
+    frameworkStatusOnline = "在线",
+    frameworkStatusOnlineDesc = "Chat 开放 · 接受委派任务",
+    frameworkStatusBusy = "忙碌",
+    frameworkStatusBusyDesc = "Chat 开放 · 委派任务排队等待",
+    frameworkStatusOffline = "离线",
+    frameworkStatusOfflineDesc = "Chat 关闭 · 不响应任何外部请求",
+
+    // 卡片对话框共用
+    close = "关闭",
+    cardEdit = "编辑",
+    cardSave = "保存",
+
+    // 框架名片对话框
+    frameworkCardTitle = "框架名片",
+    frameworkCardRemarkLabel = "备注名称",
+    frameworkCardVersion = "版本: %s",
+    frameworkCardUntrusted = "未信任",
+    frameworkCardHostedAgents = "托管智能体 (%d)",
+    frameworkCardDelete = "删除框架",
+    frameworkCardTrust = "信任此框架",
+    frameworkCardUntwin = "解除孪生",
+
+    // 智能体名片对话框
+    agentCardTitle = "智能体名片",
+    agentCardNameLabel = "智能体名称",
+    agentCardIntroLabel = "智能体简介",
+    agentCardIntroField = "简介",
+    agentCardNoIntro = "暂无简介",
+    agentCardWorkspaceFiles = "工作区文件 (%d)",
+    agentCardDelete = "删除智能体",
+    agentCardDeleteTitle = "确认删除",
+    agentCardDeleteBody = "确定要永久删除「%s」吗？该操作将删除智能体的所有数据，包括工作区文件、记忆和会话记录。",
+    agentCardSwitch = "切换到此智能体",
+
+    // 新建智能体对话框
+    newAgentTitle = "新建智能体",
+    newAgentNameLabel = "智能体名称 *",
+    newAgentNamePlaceholder = "例如：研究助手",
+    newAgentFolderLabel = "工作区文件夹名称",
+    newAgentFolderPlaceholder = "默认与智能体名称相同",
+    newAgentFolderHint = "将创建于: %s",
+    newAgentIntroLabel = "智能体简介",
+    newAgentIntroPlaceholder = "描述这个智能体的职责和能力...",
+    newAgentCreate = "创建智能体",
+    newAgentDefaultName = "智能体 %d",
+
+    // 添加框架对话框
+    addFrameworkTitle = "添加框架",
+    addFrameworkType = "框架类型",
+    addFrameworkName = "框架名称",
+    addFrameworkNamePlaceholder = "如: 办公室电脑",
+    addFrameworkAddress = "地址 (可选)",
+    addFrameworkAddrPortPlaceholder = "如: 192.168.1.100:%d",
+    addFrameworkAddrGenericPlaceholder = "如: localhost:8080 或 /path/to/socket",
+    addFrameworkScanLan = "扫描局域网",
+    addFrameworkDiscovered = "发现的设备:",
+
+    // 记忆孪生配对弹窗
+    twinRequestTitle = "记忆孪生配对请求",
+    twinRequestWarning = "⚠️ 请确认是个人设备请求，请勿与他人设备记忆孪生",
+    twinRequestDevice = "请求设备: %s",
+    twinRequestModel = "型号: %s",
+    twinRequestAgreeDesc = "同意后，双方 Agent 的记忆将开始同步。",
+    twinRequestAgree = "同意",
+    twinRequestDisagree = "不同意",
+    twinVerifyTitle = "验证配对码",
+    twinVerifyDesc = "请确认两台设备显示相同的 6 位验证码",
+    twinVerifyPeer = "配对设备: %s...",
+    twinVerifyWarning = "⚠️ 如验证码不一致，说明存在中间人攻击，请立即取消",
+    twinVerifyConfirm = "一致，确认配对",
+    twinConfirmTitle = "记忆孪生配对",
+    twinConfirmIntro = "即将与以下设备建立记忆孪生配对：",
+    twinConfirmWarning = "⚠️ 配对后本设备的 Agent 记忆将与对方同步。请确认是个人设备，勿与他人设备配对。",
+    twinConfirmAction = "确认配对",
+    twinPairedToast = "🧠 记忆孪生配对成功！执行 twin.sync 立即同步工作区",
+    unknown = "未知",
+
+    // 工作区文件 — memory 聚合条目合成文案
+    workspaceMemoryFolder = "memory/（记忆目录）",
+    workspaceMemoryHeader = "## memory/ — 记忆目录（三重记忆）",
+    workspaceMemorySummary = "长期 %d · 中期 %d · 项目 %d · 共 %d 个文档",
+    workspaceEmptyDoc = "（空文档）",
+
+    // 顶栏 — 会话模型标签
+    agentNoModel = "智能体还未配置模型",
+    agentUnconfigured = "未配置",
+    providerVolcano = "火山引擎",
+    newSession = "新建会话",
+    history = "历史"
 )

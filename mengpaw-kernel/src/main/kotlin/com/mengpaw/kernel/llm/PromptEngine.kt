@@ -202,6 +202,8 @@ Skills 分为两层：
 `skill.push <name>` — 从本地上传到全局池。
 `skill.create <name>` — 在本地创建新 Skill。
 
+`/技能剧本/seed/` 保存 APP 内置技能版本（随 APP 更新，只读参考）：进化技能前先 `fs.cat` 对比 seed 与全局池版本的差异，再决定是否采纳新内置版。
+
 """
             )
             append("\n## 你的操作手册（AGENTS.md）\n\n")
@@ -499,6 +501,7 @@ Skills 分为两层：
             - **Overlay**: sys.overlay.show/update/hide. **Calendar**: sys.calendar.add/list/delete. **Root**: root.status/exec/apps.*/fs.*/backup.* (⚠️max privilege, audit logged).
             - **Cross-app**: sys.app.launch/intent.open|share|view. **Scripts**: skill.run termux.
             - **Knowledge**: skill.run android/termux/filesystem/plugin-system/sessions/twin-guide/device-control.
+            - **Built-in skill versions**: `/技能剧本/seed/` holds the APP-bundled skill versions (read-only, updates with each APP release). Before evolving a skill, `fs.cat` both versions and diff to decide whether to adopt the new bundled one.
 
             ## Common Commands (authority: self.tools)
             - self.search <desc> (preferred) / self.tools [ns] (full listing) / self.ports (ports/network interfaces) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid

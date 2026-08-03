@@ -246,12 +246,12 @@ fun MainScreen(
                                     maxLines = 1)
                             }
                         }
-                        Text(agentViewModel?.activeSessionLabel ?: "MengPaw / 未配置",
+                        Text(agentViewModel?.activeSessionLabel(strings) ?: "MengPaw / ${strings.agentUnconfigured}",
                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
                     }
                     Box(modifier = Modifier.size(44.dp).pointerInput(Unit) { detectTapGestures { viewModel.newSession() } },
                         contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.Add, "新建会话", tint = ThemeColors.textSecondary)
+                        Icon(Icons.Outlined.Add, strings.newSession, tint = ThemeColors.textSecondary)
                     }
                     // Mission monitor toggle (visible when mission is active)
                     if (missionActiveState) {
@@ -274,7 +274,7 @@ fun MainScreen(
                     }
                     Box(modifier = Modifier.size(44.dp).pointerInput(Unit) { detectTapGestures { showRightSidebar = !showRightSidebar } },
                         contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.History, "历史", tint = ThemeColors.textSecondary)
+                        Icon(Icons.Outlined.History, strings.history, tint = ThemeColors.textSecondary)
                     }
                 }
             }

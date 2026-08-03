@@ -17,9 +17,11 @@ import androidx.compose.ui.unit.sp
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.shell.ui.localization.AppStrings
 
 @Composable
 fun NewAgentDialog(
+    strings: AppStrings,
     initialName: String,
     onDismiss: () -> Unit,
     onConfirm: (NewAgentForm) -> Unit
@@ -30,18 +32,18 @@ fun NewAgentDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("新建智能体", fontWeight = FontWeight.Bold) },
+        title = { Text(strings.newAgentTitle, fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
                 OutlinedTextField(value = name, onValueChange = { name = it; if (workspaceFolder.isBlank()) workspaceFolder = it },
-                    label = { Text("智能体名称 *") }, placeholder = { Text("例如：研究助手") },
+                    label = { Text(strings.newAgentNameLabel) }, placeholder = { Text(strings.newAgentNamePlaceholder) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md))
                 OutlinedTextField(value = workspaceFolder, onValueChange = { workspaceFolder = it },
-                    label = { Text("工作区文件夹名称") }, placeholder = { Text("默认与智能体名称相同") },
+                    label = { Text(strings.newAgentFolderLabel) }, placeholder = { Text(strings.newAgentFolderPlaceholder) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md),
-                    supportingText = { Text("将创建于: ${com.mengpaw.kernel.DataPaths.AGENTS}/${workspaceFolder.ifBlank { name }}", fontSize = 10.sp, color = ThemeColors.textSecondary) })
+                    supportingText = { Text(String.format(strings.newAgentFolderHint, "${com.mengpaw.kernel.DataPaths.AGENTS}/${workspaceFolder.ifBlank { name }}"), fontSize = 10.sp, color = ThemeColors.textSecondary) })
                 OutlinedTextField(value = intro, onValueChange = { intro = it },
-                    label = { Text("智能体简介") }, placeholder = { Text("描述这个智能体的职责和能力...") },
+                    label = { Text(strings.newAgentIntroLabel) }, placeholder = { Text(strings.newAgentIntroPlaceholder) },
                     minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md))
             }
         },
@@ -50,8 +52,8 @@ fun NewAgentDialog(
                 onClick = { if (name.isNotBlank()) onConfirm(NewAgentForm(name = name.trim(), workspaceFolder = workspaceFolder.ifBlank { name }.trim(), intro = intro.trim())) },
                 enabled = name.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
                 shape = RoundedCornerShape(ArcoRadius.md)
-            ) { Text("创建智能体", color = Color.White) }
+            ) { Text(strings.newAgentCreate, color = Color.White) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.cancel) } }
     )
 }

@@ -1,5 +1,9 @@
 # make-skill vs make_skills 对比分析（2026-08-02）
 
+> ⚠️ v0.27.0 更新：DEFAULT_SKILLS 硬编码已整体删除，技能种子改为三层模型
+> （assets/skills/ 随 APK → `/技能剧本/seed/` 官方只读版 → 全局技能池），见
+> `mengpaw-core/SkillSeeds.kt`。本文下述"吸收内容"为技能剧本合并历史，不受影响。
+
 > 背景：吸收 make-skill（旧技能）优点进 make_skills（我们制作的技能），吸收完成后 make-skill 已删除——技能体系合并为单一 make_skills。
 
 ## 对比

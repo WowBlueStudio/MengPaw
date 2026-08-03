@@ -85,7 +85,7 @@ object TwinWorkspace {
             tmp.renameTo(target)
             if (tmp.exists()) try { tmp.delete() } catch (_: Exception) {}
             // 触发 PromptEngine 缓存失效 (旧 rebuildMemoryDoc 缺失的关键钩子)
-            AgentDocs.onDocChanged?.invoke(agentName, target.absolutePath)
+            AgentDocs.notifyDocChanged(agentName, target.absolutePath)
             writeAudit("WORKSPACE_SYNC | from=$fromDevice | file=$relPath")
             return "applied"
         } catch (e: Exception) {
@@ -102,7 +102,7 @@ object TwinWorkspace {
             val backup = File(target.parent, "${target.name}.deleted.${fromDevice}")
             if (!backup.exists()) target.renameTo(backup)
             else target.delete()
-            AgentDocs.onDocChanged?.invoke(agentName, target.absolutePath)
+            AgentDocs.notifyDocChanged(agentName, target.absolutePath)
             writeAudit("WORKSPACE_REMOVE | from=$fromDevice | file=$relPath")
         } catch (e: Exception) {
             ErrorCollector.report(e, "TwinWorkspace.removeWorkspaceFile($relPath)")

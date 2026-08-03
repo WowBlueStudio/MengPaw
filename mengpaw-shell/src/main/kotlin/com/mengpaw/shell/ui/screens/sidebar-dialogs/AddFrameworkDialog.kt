@@ -17,6 +17,7 @@ import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.shell.ui.localization.AppStrings
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -33,7 +34,7 @@ data class FrameworkFileData(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddFrameworkDialog(onDismiss: () -> Unit) {
+fun AddFrameworkDialog(strings: AppStrings, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var frameworkType by remember { mutableStateOf("mengpaw") }
@@ -50,9 +51,10 @@ fun AddFrameworkDialog(onDismiss: () -> Unit) {
         "hermes" to "Hermes (WS)", "codex" to "Codex (WS)",
         "qwenpaw" to "QwenPaw (REST)", "coze" to "Coze (REST)",
         "collab-cli" to "collab-cli (FILE)", "kimi-desktop" to "Kimi Desktop (?)",
-        "custom" to "自定义协议"
+        "custom" to (if (strings.isChinese) "自定义协议" else "Custom Protocol")
     )
-    val typeLabels = mapOf(
+    // 类型描述 — 中英双语（英文模式用英文描述）
+    val typeLabels = if (strings.isChinese) mapOf(
         "mengpaw" to "MengPaw · ACP · 端口 ${com.mengpaw.kernel.ports.Ports.ACP} · mDNS 自动发现 · 双向实时",
         "claude-code" to "Claude Code · MCP · JSON-RPC · 手动配置 · 单向实时",
         "trea-ide" to "Trea IDE · MCP · JSON-RPC · 手动配置 · 单向实时",
@@ -70,17 +72,35 @@ fun AddFrameworkDialog(onDismiss: () -> Unit) {
         "collab-cli" to "collab-cli · FILE · 文件系统共享 · UDP 广播 :${com.mengpaw.kernel.ports.Ports.COLLAB_UDP} · 双向 · MIT 开源",
         "kimi-desktop" to "Kimi Desktop · 协议待验证 · Electron 桌面应用",
         "custom" to "自定义框架 · 手动配置协议和端口"
+    ) else mapOf(
+        "mengpaw" to "MengPaw · ACP · port ${com.mengpaw.kernel.ports.Ports.ACP} · mDNS auto-discovery · bidirectional realtime",
+        "claude-code" to "Claude Code · MCP · JSON-RPC · manual config · one-way realtime",
+        "trea-ide" to "Trea IDE · MCP · JSON-RPC · manual config · one-way realtime",
+        "trea-work" to "Trea Work · MCP · JSON-RPC · cloud execution · one-way realtime",
+        "cursor" to "Cursor · MCP · JSON-RPC · IDE extension · one-way realtime",
+        "opencode" to "OpenCode · MCP · JSON-RPC · manual config · one-way realtime",
+        "reasonix" to "Reasonix · MCP · JSON-RPC · MCP plugin · one-way realtime",
+        "workbuddy" to "Workbuddy · MCP · JSON-RPC · MCP connector · one-way realtime",
+        "openclaw" to "OpenClaw · WebSocket · port ${com.mengpaw.kernel.ports.Ports.OPENCLAW_WS} · manual config · one-way realtime",
+        "qclaw" to "Qclaw · WebSocket · port ${com.mengpaw.kernel.ports.Ports.OPENCLAW_WS} · OpenClaw derivative · one-way realtime",
+        "hermes" to "Hermes · WebSocket · Gateway mode · one-way realtime",
+        "codex" to "Codex · Unix Socket · local process · one-way realtime",
+        "qwenpaw" to "QwenPaw · REST · FastAPI HTTP · manual config · one-way polling",
+        "coze" to "Coze · REST · cloud API · one-way polling",
+        "collab-cli" to "collab-cli · FILE · filesystem sharing · UDP broadcast :${com.mengpaw.kernel.ports.Ports.COLLAB_UDP} · bidirectional · MIT open source",
+        "kimi-desktop" to "Kimi Desktop · protocol unverified · Electron desktop app",
+        "custom" to "Custom framework · manually configure protocol and port"
     )
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加框架", fontWeight = FontWeight.Bold) },
+        title = { Text(strings.addFrameworkTitle, fontWeight = FontWeight.Bold) },
         text = {
             Column {
                 Text(typeLabels[frameworkType] ?: "", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                 Spacer(Modifier.height(ArcoSpacing.md))
 
-                Text("框架类型", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                Text(strings.addFrameworkType, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
                 Spacer(Modifier.height(4.dp))
                 ExposedDropdownMenuBox(expanded = typeExpanded, onExpandedChange = { typeExpanded = it }) {
                     OutlinedTextField(
@@ -101,26 +121,27 @@ fun AddFrameworkDialog(onDismiss: () -> Unit) {
 
                 Spacer(Modifier.height(ArcoSpacing.sm))
                 OutlinedTextField(value = name, onValueChange = { name = it },
-                    label = { Text("框架名称") }, placeholder = { Text("如: 办公室电脑") },
+                    label = { Text(strings.addFrameworkName) }, placeholder = { Text(strings.addFrameworkNamePlaceholder) },
                     modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Spacer(Modifier.height(ArcoSpacing.sm))
                 OutlinedTextField(value = address, onValueChange = { address = it },
-                    label = { Text("地址 (可选)") },
+                    label = { Text(strings.addFrameworkAddress) },
                     placeholder = {
                         val defaultPort = com.mengpaw.plugin.framework.FrameworkPeerStore.FRAMEWORK_TYPES[frameworkType] ?: 0
-                        if (defaultPort > 0) Text("如: 192.168.1.100:$defaultPort") else Text("如: localhost:8080 或 /path/to/socket")
+                        if (defaultPort > 0) Text(String.format(strings.addFrameworkAddrPortPlaceholder, defaultPort))
+                        else Text(strings.addFrameworkAddrGenericPlaceholder)
                     },
                     modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Spacer(Modifier.height(ArcoSpacing.sm))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = { isDiscovering = true; discovered = com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll().map { it.name to "${it.address}:${it.port}" }; isDiscovering = false }) {
                         if (isDiscovering) { CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp); Spacer(Modifier.width(4.dp)) }
-                        Text("扫描局域网")
+                        Text(strings.addFrameworkScanLan)
                     }
                 }
                 if (discovered.isNotEmpty()) {
                     Spacer(Modifier.height(ArcoSpacing.sm))
-                    Text("发现的设备:", style = MaterialTheme.typography.labelSmall)
+                    Text(strings.addFrameworkDiscovered, style = MaterialTheme.typography.labelSmall)
                     discovered.forEach { (n, addr) -> TextButton(onClick = { name = n; address = addr }) { Text("$n ($addr)", fontSize = 12.sp) } }
                 }
             }
@@ -139,8 +160,8 @@ fun AddFrameworkDialog(onDismiss: () -> Unit) {
                 },
                 enabled = name.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
                 shape = RoundedCornerShape(ArcoRadius.md)
-            ) { Text("添加", color = Color.White) }
+            ) { Text(strings.add, color = Color.White) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.cancel) } }
     )
 }

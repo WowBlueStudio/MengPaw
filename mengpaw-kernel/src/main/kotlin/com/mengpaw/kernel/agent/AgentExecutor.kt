@@ -557,7 +557,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             val wsRoot = "${com.mengpaw.kernel.DataPaths.AGENTS}/${agentName(ctx)}"
             val cachedDocs = setOf("agents.md", "soul.md", "memory/memory.md")
             if (canonical.startsWith(wsRoot) && cachedDocs.any { canonical.endsWith("/$it") }) {
-                com.mengpaw.kernel.agent.AgentDocs.onDocChanged?.invoke(agentName(ctx), canonical)
+                com.mengpaw.kernel.agent.AgentDocs.notifyDocChanged(agentName(ctx), canonical)
             }
             val isOutput = canonical.startsWith(com.mengpaw.kernel.DataPaths.OUTPUT)
             val msg = buildString {

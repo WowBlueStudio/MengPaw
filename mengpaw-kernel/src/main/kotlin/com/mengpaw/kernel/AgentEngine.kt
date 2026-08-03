@@ -68,7 +68,7 @@ class AgentEngine(
         // Wire real PluginManager into AgentDocManager so CLI.md generation sees installed plugins
         agentDocManager.pluginManager = pluginManager
         // Wire cache invalidation: when AgentDocs modifies workspace, invalidate PromptEngine cache
-        com.mengpaw.kernel.agent.AgentDocs.onDocChanged = { name, filePath ->
+        com.mengpaw.kernel.agent.AgentDocs.addDocListener { name, filePath ->
             promptEngine.invalidateDocCache(name, filePath)
         }
         // 构建命令搜索索引 (BM25 + 双语同义词表) — 一次性初始化
@@ -94,6 +94,23 @@ class AgentEngine(
     // Instead of creating a new Session per run(), reuse the same session
     // so the LLM sees full conversation history across multiple user messages.
     @Volatile private var conversationSessionId: String? = null
+
+    // ── Command completion listeners (UI 实时刷新钩子) ────────────
+    // 任何命令执行完毕 (bang "!" 或 ReAct 循环内) → 通知监听器。
+    // UI (设置页) 据此重扫 全局工具/智能体工具/智能体技能/插件 列表 — 与 AgentDocs 文档监听同构。
+    private val commandListeners = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
+
+    /** 注册命令完成监听器 — 命令执行完毕后回调 (无参数, UI 只关心"变了"这个事实)。 */
+    fun addCommandListener(listener: () -> Unit) { commandListeners.add(listener) }
+
+    /** 移除命令完成监听器。 */
+    fun removeCommandListener(listener: () -> Unit) { commandListeners.remove(listener) }
+
+    private fun notifyCommandExecuted() {
+        commandListeners.forEach { listener ->
+            try { listener() } catch (_: Exception) {}
+        }
+    }
 
     // ── Evolution (Agent 进化系统) ─────────────────────────────────
     /** 待注入的金字塔省察引导片段 (失败后生成, 下次 LLM 调用消费). */
@@ -278,6 +295,8 @@ class AgentEngine(
             scope = scope
         )
         val result = pipelineManager.buildPipeline().execute(commandLine, ctx)
+        // 命令执行完毕 → 通知监听器 (UI 实时刷新 Tools/Skills/Plugins 列表)
+        notifyCommandExecuted()
         // Fallback 仅限真"命令不存在"（Pipeline 的 Unknown command 错误）— 命令存在但参数
         // 错误（如 agent.read 缺失文件也返回 ERR_NOT_FOUND）不得落 shell 兜底, 否则
         // 显示 "command not found" 掩盖真实错误（错误码二义性修复）
@@ -646,6 +665,8 @@ class AgentEngine(
                             }
                         }.awaitAll()
                     }
+                    // 命令批次执行完毕 → 通知监听器 (UI 实时刷新 Tools/Skills/Plugins 列表)
+                    notifyCommandExecuted()
 
                     // ── 合并后串行更新共享可变状态 + 组装 Observation ──
                     val observationEntries = mutableListOf<String>()

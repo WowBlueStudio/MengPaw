@@ -17,6 +17,7 @@ import com.mengpaw.shell.ui.screens.model.AgentSession
 import com.mengpaw.shell.ui.screens.model.AgentTrace
 import com.mengpaw.shell.ui.screens.model.ChatMessageUi
 import com.mengpaw.shell.ui.screens.model.ExecutionMode
+import com.mengpaw.shell.ui.localization.AppStrings
 import com.mengpaw.shell.ui.screens.model.InputTag
 import com.mengpaw.shell.ui.screens.model.PendingTask
 import kotlinx.coroutines.Dispatchers
@@ -150,7 +151,7 @@ class AgentViewModel : ViewModel() {
     val activeAgent: StateFlow<String> = _activeAgent.asStateFlow()
 
     /** Provider/model label for the active agent (shown under agent name). */
-    val activeSessionLabel: String get() = activeSession().providerLabel
+    fun activeSessionLabel(strings: AppStrings): String = activeSession().providerLabel(strings)
 
     /** All agent names currently in the session map. */
     val agentNames: Set<String> get() = sessions.keys

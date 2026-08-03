@@ -25,10 +25,12 @@ import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.agent.AgentProfile
+import com.mengpaw.shell.ui.localization.AppStrings
 import java.io.File
 
 @Composable
 fun AgentCardDialog(
+    strings: AppStrings,
     agentName: String,
     onDismiss: () -> Unit,
     onSwitchTo: () -> Unit
@@ -50,7 +52,7 @@ fun AgentCardDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("智能体名片", fontWeight = FontWeight.Bold)
+                Text(strings.agentCardTitle, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = {
                     if (isEditing) {
@@ -59,7 +61,7 @@ fun AgentCardDialog(
                     }
                     isEditing = !isEditing
                 }) {
-                    Text(if (isEditing) "保存" else "编辑", color = ThemeColors.brand, fontSize = 13.sp)
+                    Text(if (isEditing) strings.cardSave else strings.cardEdit, color = ThemeColors.brand, fontSize = 13.sp)
                 }
             }
         },
@@ -86,7 +88,7 @@ fun AgentCardDialog(
 
                 if (isEditing) {
                     OutlinedTextField(value = editName, onValueChange = { editName = it },
-                        label = { Text("智能体名称") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        label = { Text(strings.agentCardNameLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(ArcoRadius.md))
                 } else {
                     Text(editName.ifBlank { agentName }, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
@@ -103,15 +105,15 @@ fun AgentCardDialog(
                 }
                 Spacer(Modifier.height(ArcoSpacing.sm))
 
-                Text("智能体简介", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary,
+                Text(strings.agentCardIntroLabel, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary,
                     modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(4.dp))
                 if (isEditing) {
                     OutlinedTextField(value = editIntro, onValueChange = { editIntro = it },
-                        label = { Text("简介") }, minLines = 2, maxLines = 4,
+                        label = { Text(strings.agentCardIntroField) }, minLines = 2, maxLines = 4,
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md))
                 } else {
-                    Text(editIntro.ifBlank { "暂无简介" }, style = MaterialTheme.typography.bodySmall,
+                    Text(editIntro.ifBlank { strings.agentCardNoIntro }, style = MaterialTheme.typography.bodySmall,
                         color = if (editIntro.isBlank()) ThemeColors.textSecondary.copy(alpha = 0.6f) else ThemeColors.textPrimary)
                 }
                 Spacer(Modifier.height(ArcoSpacing.md))
@@ -120,7 +122,7 @@ fun AgentCardDialog(
                     try { agentDir.listFiles()?.filter { it.extension == "md" }?.map { it.name }?.sorted() ?: emptyList() } catch (_: Exception) { emptyList() }
                 }
                 if (mdFiles.isNotEmpty()) {
-                    Text("工作区文件 (${mdFiles.size})", style = MaterialTheme.typography.labelSmall,
+                    Text(String.format(strings.agentCardWorkspaceFiles, mdFiles.size), style = MaterialTheme.typography.labelSmall,
                         color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
                     Surface(color = ThemeColors.bgCardHigh, shape = RoundedCornerShape(ArcoRadius.sm),
@@ -138,29 +140,29 @@ fun AgentCardDialog(
                     var showDeleteConfirm by remember { mutableStateOf(false) }
                     TextButton(onClick = { showDeleteConfirm = true },
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                        Text("删除智能体", fontSize = 13.sp)
+                        Text(strings.agentCardDelete, fontSize = 13.sp)
                     }
                     if (showDeleteConfirm) {
                         AlertDialog(
                             onDismissRequest = { showDeleteConfirm = false },
-                            title = { Text("确认删除") },
-                            text = { Text("确定要删除「$agentName」吗？\n\n该操作将永久删除智能体的所有数据，包括工作区文件、记忆和会话记录。") },
+                            title = { Text(strings.agentCardDeleteTitle) },
+                            text = { Text(String.format(strings.agentCardDeleteBody, agentName)) },
                             confirmButton = {
                                 TextButton(onClick = {
                                     val agentDir = File(com.mengpaw.kernel.DataPaths.AGENTS, agentName)
                                     if (agentDir.exists()) agentDir.deleteRecursively()
                                     showDeleteConfirm = false; onDismiss()
-                                }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("删除", fontWeight = FontWeight.Bold) }
+                                }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text(strings.delete, fontWeight = FontWeight.Bold) }
                             },
-                            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") } }
+                            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(strings.cancel) } }
                         )
                     }
                 }
                 Spacer(Modifier.weight(1f))
                 Button(onClick = onSwitchTo, colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
-                    shape = RoundedCornerShape(ArcoRadius.md)) { Text("切换到此智能体", color = Color.White, fontSize = 13.sp) }
+                    shape = RoundedCornerShape(ArcoRadius.md)) { Text(strings.agentCardSwitch, color = Color.White, fontSize = 13.sp) }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.close) } }
     )
 }

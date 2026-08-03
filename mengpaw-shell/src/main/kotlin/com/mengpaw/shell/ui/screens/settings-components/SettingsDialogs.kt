@@ -63,7 +63,7 @@ fun CronTriggerDialog(
     )
 }
 
-/** SCHEDULE 日程触发器 — 简洁输入，让用户找 Agent 配置时间参数。 */
+/** 随机对话触发器（SCHEDULE）— 简洁输入，让用户找 Agent 配置时间参数。 */
 @Composable
 fun LifetimeTriggerDialog(
     strings: AppStrings,

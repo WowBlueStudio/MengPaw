@@ -96,6 +96,7 @@ class MainActivity : ComponentActivity() {
         com.mengpaw.core.namespace.SysExecutor.setActivity(this)
         com.mengpaw.core.security.IntegrityGuard.globalInstance.init(this)
         com.mengpaw.core.AgentTemplates.init(this)
+        com.mengpaw.core.SkillSeeds.ensure(this)
         com.mengpaw.kernel.agent.AgentDocs.bootstrapper = { name, lang -> com.mengpaw.core.AgentTemplates.bootstrapAgent(name, lang) }
         KernelLog.setLogger(AndroidLogger())
         enableEdgeToEdge()
@@ -494,11 +495,14 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     val agentFramework = remember(activeAgent) { agentViewModel.frameworkFor(activeAgent) }
     val (agentEp, agentModel) = remember(activeAgent) { agentViewModel.agentConfig(activeAgent) }
     var workspaceVersion by remember { mutableIntStateOf(0) }
+    // 命令执行版本号: Agent 每完成一批命令 (bang/ReAct 循环) → +1 → 设置页
+    // 全局工具/智能体工具/智能体技能/插件 列表实时重扫 (命令可能改文件/装插件/进化技能)
+    var agentDataVersion by remember { mutableIntStateOf(0) }
 
     // Plugins: recomputed each time the settings screen opens (deferInit may finish later,
     // and downloaded plugins land anytime — never trust a one-shot list)
     var pluginItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
-    LaunchedEffect(showSettings) {
+    LaunchedEffect(showSettings, agentDataVersion) {
         if (!showSettings) return@LaunchedEffect
         withContext(Dispatchers.IO) {
             val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
@@ -614,7 +618,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     // not Skills — v0.19.5). Recomputed each time settings opens, because skill-plugin seeds
     // defaults asynchronously at startup and a one-shot snapshot would stay stale forever
     var skillItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
-    LaunchedEffect(showSettings) {
+    LaunchedEffect(showSettings, agentDataVersion) {
         if (!showSettings) return@LaunchedEffect
         withContext(Dispatchers.IO) {
             val skillsDir = java.io.File(com.mengpaw.kernel.DataPaths.SKILLS)
@@ -637,7 +641,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     // Per-agent local skills: Agent文档/{agent}/skills/*.md — NOT the global /技能剧本/ pool.
     // Global vs exclusive separation is enforced at the UI boundary (LESSONS 99).
     var agentSkillItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
-    LaunchedEffect(showSettings, activeAgent) {
+    LaunchedEffect(showSettings, activeAgent, agentDataVersion) {
         if (!showSettings) return@LaunchedEffect
         withContext(Dispatchers.IO) {
             // 一次性迁移: DataPaths 双重路径 bug(v0.19.7 修复)前, 本地技能落在
@@ -665,7 +669,7 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
 
     // Agent 专属工具: Agent文档/{agent}/tools/*.json — 命令集注册清单（非全局共享，LESSONS 99）
     var agentToolItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
-    LaunchedEffect(showSettings, activeAgent) {
+    LaunchedEffect(showSettings, activeAgent, agentDataVersion) {
         if (!showSettings) return@LaunchedEffect
         withContext(Dispatchers.IO) {
             val items = com.mengpaw.plugin.agenttools.AgentToolsStore.readAll(activeAgent).map { set ->
@@ -680,7 +684,32 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     }
 
     var workspaceItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
-    LaunchedEffect(activeAgent, workspaceVersion) {
+    // 实时刷新：Agent 写工作区文档（onDocChanged 多播）→ 列表立即重扫。
+    // 分屏聊天时，一边聊一边可见文档变动（写记忆/更新文档即时反映）。
+    DisposableEffect(Unit) {
+        val listener: (String, String?) -> Unit = { agentName, _ ->
+            if (showSettings && agentName == activeAgent) workspaceVersion++
+        }
+        com.mengpaw.kernel.agent.AgentDocs.addDocListener(listener)
+        onDispose { com.mengpaw.kernel.agent.AgentDocs.removeDocListener(listener) }
+    }
+    // 实时刷新：Agent 执行命令（bang "!" 或 ReAct 循环）→ 工具/技能/插件列表重扫。
+    // 挂在当前 agent 的 engine 实例上（每 agent 一个 engine），切换 agent 时重挂。
+    DisposableEffect(activeAgent) {
+        val engine = agentViewModel.activeEngine()
+        if (engine == null) {
+            onDispose { }
+        } else {
+            val listener = { if (showSettings) agentDataVersion++ }
+            engine.addCommandListener(listener)
+            onDispose { engine.removeCommandListener(listener) }
+        }
+    }
+    // 与 skill/agent-skill/agent-tool 列表一致：设置页打开时强制刷新 —
+    // 缺 showSettings 键会导致列表停留在应用启动时的快照，之后 Agent 写入的
+    // memory/ 记忆文件不会出现（工作区文件列表 memory 文件树不显示）
+    LaunchedEffect(showSettings, activeAgent, workspaceVersion) {
+        if (!showSettings) return@LaunchedEffect
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             val dir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, activeAgent)
             val items = buildList {
@@ -700,19 +729,19 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
                         val midTerm = memoryFiles.count { it.name.startsWith("memory_") }
                         val project = memoryFiles.count { it.name.startsWith("project_") }
                         val doc = buildString {
-                            appendLine("## memory/ — 记忆目录（三重记忆）")
+                            appendLine(strings.workspaceMemoryHeader)
                             appendLine()
                             memoryFiles.forEach { f ->
                                 val content = try { f.readText() } catch (_: Exception) { "" }
                                 appendLine("### ${f.name}")
-                                appendLine(content.trim().take(1200).ifBlank { "（空文档）" })
+                                appendLine(content.trim().take(1200).ifBlank { strings.workspaceEmptyDoc })
                                 appendLine()
                             }
                         }
                         add(FrameworkItem(
-                            name = "memory/（记忆目录）",
+                            name = strings.workspaceMemoryFolder,
                             category = ItemCategory.BUILTIN,
-                            summary = "长期 $longTerm · 中期 $midTerm · 项目 $project · 共 ${memoryFiles.size} 个文档",
+                            summary = String.format(strings.workspaceMemorySummary, longTerm, midTerm, project, memoryFiles.size),
                             docMarkdown = doc))
                     }
                 }

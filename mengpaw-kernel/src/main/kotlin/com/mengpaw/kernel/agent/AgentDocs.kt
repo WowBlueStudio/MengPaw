@@ -37,11 +37,29 @@ object AgentDocs {
     @Volatile
     var bootstrapper: ((agentName: String, language: String) -> Unit)? = null
 
-    /** Called when Agent modifies workspace docs — PromptEngine uses this to invalidate cache.
-     *  @param agentName 被修改的 Agent 名称
-     *  @param filePath  被修改文件的完整路径; null 表示未知 (兼容旧行为, 全量失效) */
-    @Volatile
-    var onDocChanged: ((agentName: String, filePath: String?) -> Unit)? = null
+    /** Workspace doc change listeners — fired when Agent modifies workspace docs.
+     *  PromptEngine uses this to invalidate cache; the shell uses it to refresh
+     *  the live workspace file list.  @param agentName 被修改的 Agent 名称
+     *  @param filePath 被修改文件的完整路径; null 表示未知 (兼容旧行为, 全量失效) */
+    private val docListeners = java.util.concurrent.CopyOnWriteArrayList<(String, String?) -> Unit>()
+
+    /** Register a workspace doc change listener. */
+    fun addDocListener(listener: (agentName: String, filePath: String?) -> Unit) {
+        docListeners.add(listener)
+    }
+
+    /** Remove a previously registered workspace doc change listener. */
+    fun removeDocListener(listener: (agentName: String, filePath: String?) -> Unit) {
+        docListeners.remove(listener)
+    }
+
+    /** Notify all listeners that an agent workspace document changed. */
+    fun notifyDocChanged(agentName: String, filePath: String?) {
+        docListeners.forEach { listener ->
+            try { listener(agentName, filePath) }
+            catch (_: Exception) { /* 单监听器失败不阻塞其余 */ }
+        }
+    }
 
     /** Create default doc files for a new agent. */
     fun bootstrap(agentName: String, language: String = "zh") {
@@ -105,7 +123,7 @@ object AgentDocs {
             file.delete() // ensure target removed (Windows: renameTo fails if target exists)
             tmp.renameTo(file)
             if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
-            onDocChanged?.invoke(agentName, file.absolutePath)
+            notifyDocChanged(agentName, file.absolutePath)
         } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup2: ${e.message}") }
     }
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.27.0 (2026-08-03) — 全面本地化 + 技能种子重构 + 实时刷新
+
+### 新增
+- **技能种子三层模型（重大重构）**: 全局技能不再硬编码进 SkillPlugin 代码（原 DEFAULT_SKILLS 约 230 行删除）——改为 assets/skills/ 随 APK 打包 → 首启复制到 `/技能剧本/seed/`（App 自带版本，只读）→ 全局技能池 `/技能剧本/`。启动同步：Agent 未演化的文件随 App 版本更新，演化过的文件保留；manifest（sha256 行格式，免 JSON 依赖）记录上一内置版本供 Agent 比对差异
+- **补火种 execution-modes.md**: 原 DEFAULT_SKILLS 中缺失的种子技能（执行模式手册）补齐
+- **设置页实时刷新（事件驱动）**: AgentDocs.onDocChanged 单回调改多播（CopyOnWriteArrayList），Agent 写工作区文档（记忆/文档/孪生同步）→ 工作区文件列表与 memory 文件树立即重扫——分屏聊天一边聊一边可见文档变动
+- **工具/技能/插件列表实时刷新**: AgentEngine 新增命令完成监听器（与文档监听同构），ReAct 循环每批命令与 bang 命令执行完毕 → 全局工具/智能体工具/智能体技能/全局技能/插件五类列表实时重扫（此前仅设置页打开时快照）
+- **SCHEDULE 触发器命名定案**: 英文 TrueMen（致敬《楚门的世界》）、中文「随机对话」，按钮保留「添加真人感」
+
+### 修复
+- **memory 文件树不显示**: 工作区文件列表 LaunchedEffect 缺 showSettings 键——首次快照停留在启动时，之后 Agent 写入的 memory/ 记忆文件不出现；加 showSettings 键 + guard 修复
+- **英文模式残留中文**: Framework Status 三状态及描述、Framework Directory 在线/离线徽章、框架名片、智能体名片、新建智能体、记忆孪生配对对话框、顶栏「智能体还未配置模型」等全部走 AppStrings 双语
+
+### 调整
+- **PromptEngine 技能段说明**: 中文段注明 seed/ 只读官方版本与全局池演化版的关系；英文 Knowledge 段同步补充——Agent 可自行比对官方新技能吸收知识
+- **SkillPlugin 收敛**: 删除 seedDefaults() 及其调用点，onInstall 只保留存量迁移（migrateLegacySkills）
+
+### 发行
+- Shell APK v0.27.0（versionCode 27000）— 浏览器保持 v0.7.0 独立版本线
+
 ## v0.26.4 (2026-08-02) — 执行模式补火种 + 技能进化 + 闪退修复
 
 ### 修复

@@ -6,6 +6,7 @@ package com.mengpaw.shell.ui.screens.model
 import com.mengpaw.kernel.AgentEngine
 import com.mengpaw.kernel.agent.ScrollContextManager
 import com.mengpaw.kernel.llm.LlmProvider
+import com.mengpaw.shell.ui.localization.AppStrings
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
@@ -24,8 +25,8 @@ class AgentSession(
     val isRunning: MutableStateFlow<Boolean> = MutableStateFlow(false),
     val inputEnabled: MutableStateFlow<Boolean> = MutableStateFlow(true)
 ) {
-    val providerLabel: String get() {
-        if (endpoint.isBlank() || apiKey.isBlank()) return "智能体还未配置模型"
+    fun providerLabel(strings: AppStrings): String {
+        if (endpoint.isBlank() || apiKey.isBlank()) return strings.agentNoModel
         val p = when {
             endpoint.contains("openai.com") -> "OpenAI"
             endpoint.contains("deepseek.com") -> "DeepSeek"
@@ -33,7 +34,7 @@ class AgentSession(
             endpoint.contains("moonshot.cn") -> "Kimi"
             endpoint.contains("bigmodel.cn") -> "GLM"
             endpoint.contains("dashscope") -> "Qwen"
-            endpoint.contains("volces.com") -> "火山引擎"
+            endpoint.contains("volces.com") -> strings.providerVolcano
             endpoint.contains("openmodel.ai") -> "OpenModel"
             else -> "Custom"
         }

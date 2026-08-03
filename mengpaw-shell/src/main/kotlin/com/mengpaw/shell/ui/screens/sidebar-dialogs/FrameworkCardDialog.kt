@@ -25,6 +25,7 @@ import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.KernelLog
+import com.mengpaw.shell.ui.localization.AppStrings
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -43,6 +44,7 @@ data class AcpContactFile(
 
 @Composable
 fun FrameworkCardDialog(
+    strings: AppStrings,
     frameworkName: String,
     onDismiss: () -> Unit
 ) {
@@ -63,7 +65,7 @@ fun FrameworkCardDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("框架名片", fontWeight = FontWeight.Bold)
+                Text(strings.frameworkCardTitle, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = {
                     if (isEditing) {
@@ -77,7 +79,7 @@ fun FrameworkCardDialog(
                         }
                     }
                     isEditing = !isEditing
-                }) { Text(if (isEditing) "保存" else "编辑", color = ThemeColors.brand, fontSize = 13.sp) }
+                }) { Text(if (isEditing) strings.cardSave else strings.cardEdit, color = ThemeColors.brand, fontSize = 13.sp) }
             }
         },
         text = {
@@ -95,7 +97,7 @@ fun FrameworkCardDialog(
                 Spacer(Modifier.height(ArcoSpacing.sm))
 
                 if (isEditing) {
-                    Text("备注名称", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
+                    Text(strings.frameworkCardRemarkLabel, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
                     OutlinedTextField(value = editRemark, onValueChange = { editRemark = it }, singleLine = true,
                         modifier = Modifier.fillMaxWidth(), placeholder = { Text(frameworkName, fontSize = 14.sp) },
@@ -110,7 +112,7 @@ fun FrameworkCardDialog(
                 if (peer != null) {
                     Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Info, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
-                        Spacer(Modifier.width(6.dp)); Text("版本: ${peer.version}", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
+                        Spacer(Modifier.width(6.dp)); Text(String.format(strings.frameworkCardVersion, peer.version), style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
                     }
                     Spacer(Modifier.height(4.dp))
                 }
@@ -128,19 +130,19 @@ fun FrameworkCardDialog(
                     val online = peer.lastSeen > System.currentTimeMillis() - 120_000
                     Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(8.dp).background(if (online) ArcoColors.Green6 else ArcoColors.Gray5, CircleShape))
-                        Spacer(Modifier.width(6.dp)); Text(if (online) "在线" else "离线", style = MaterialTheme.typography.labelSmall, color = if (online) ArcoColors.Green6 else ThemeColors.textSecondary, fontSize = 11.sp)
+                        Spacer(Modifier.width(6.dp)); Text(if (online) strings.frameworkStatusOnline else strings.frameworkStatusOffline, style = MaterialTheme.typography.labelSmall, color = if (online) ArcoColors.Green6 else ThemeColors.textSecondary, fontSize = 11.sp)
                     }
                     Spacer(Modifier.height(4.dp))
                     Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Security, null, Modifier.size(14.dp), tint = if (peer.trusted) ArcoColors.Green6 else ArcoColors.Orange6)
-                        Spacer(Modifier.width(6.dp)); Text(if (peer.trusted) "已信任" else "未信任", style = MaterialTheme.typography.labelSmall, color = if (peer.trusted) ArcoColors.Green6 else ArcoColors.Orange6, fontSize = 11.sp)
+                        Spacer(Modifier.width(6.dp)); Text(if (peer.trusted) strings.securityTrusted else strings.frameworkCardUntrusted, style = MaterialTheme.typography.labelSmall, color = if (peer.trusted) ArcoColors.Green6 else ArcoColors.Orange6, fontSize = 11.sp)
                     }
                     Spacer(Modifier.height(4.dp))
                 }
 
                 val agentList = peer?.agents ?: emptyList()
                 if (agentList.isNotEmpty()) {
-                    Text("托管智能体 (${agentList.size})", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
+                    Text(String.format(strings.frameworkCardHostedAgents, agentList.size), style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
                     agentList.forEach { agent ->
                         Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -164,10 +166,10 @@ fun FrameworkCardDialog(
                     val twinKey = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.key")
                     if (twinKey.exists()) try { twinKey.delete() } catch (_: Exception) { KernelLog.w("FrameworkDialog", "delete twinKey failed") }
                     onDismiss()
-                }) { Text("删除框架", color = ArcoColors.Red6, fontSize = 13.sp) }
+                }) { Text(strings.frameworkCardDelete, color = ArcoColors.Red6, fontSize = 13.sp) }
 
                 if (peer != null && !peer.trusted) {
-                    TextButton(onClick = { com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = true)); onDismiss() }) { Text("信任此框架", color = ThemeColors.brand, fontSize = 13.sp) }
+                    TextButton(onClick = { com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = true)); onDismiss() }) { Text(strings.frameworkCardTrust, color = ThemeColors.brand, fontSize = 13.sp) }
                 }
 
                 val twinActive = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.isActivated
@@ -184,10 +186,10 @@ fun FrameworkCardDialog(
                         com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = false))
                         android.util.Log.i("MengPawTwin", "解除孪生: $frameworkName")
                         onDismiss()
-                    }) { Text("解除孪生", color = ArcoColors.Orange6, fontSize = 13.sp) }
+                    }) { Text(strings.frameworkCardUntwin, color = ArcoColors.Orange6, fontSize = 13.sp) }
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.close) } }
     )
 }
