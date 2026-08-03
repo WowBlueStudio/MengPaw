@@ -543,6 +543,10 @@ class AgentViewModel : ViewModel() {
                 inputTagManager.loopMode = savedLoopMode
                 processNextPending()
 
+                // ── 回复完成立即落盘: 滑掉后台任务时 onCleared 不保证执行,
+                // 30s 定时可能未到 → 最后一次回复会丢; 完成即保存堵住此洞 ──
+                sessionPersistence.saveCurrentSession()
+
                 // ── 自动摘要：对话结束后提取关键信息存入 memory ──
                 launch {
                     try {
@@ -601,6 +605,8 @@ class AgentViewModel : ViewModel() {
                 _isRunning.value = false
                 session.inputEnabled.value = true
                 _inputEnabled.value = true
+                // 错误回复同样立即落盘 (进程死亡恢复点)
+                sessionPersistence.saveCurrentSession()
                 processNextPending()
             }
         }

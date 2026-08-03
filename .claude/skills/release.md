@@ -104,6 +104,7 @@ adb -s <设备> shell dumpsys package com.mengpaw.shell | grep versionName
 
 - 设备上 APK 与本地同密钥签名 → `-r` 覆盖安装成功；签名不匹配（异机构建/Play 安装）→ 报 INSTALL_FAILED_UPDATE_INCOMPATIBLE → 需 `adb uninstall` 后重装（丢数据）
 - 端口每次连接可能变化（无线调试需重新配对）——以用户提供为准
+- **静默安装铁律（v0.28.2 用户反馈固化）**：adb install 走系统安装器、设备端不弹审核框 —— 发布时一律由 Claude 直接 adb 推装两台设备，**不要让用户手动在设备上点文件管理器安装**（平板侧载审核框按错就得重来，用户明确吐槽）。荣耀平板每次 install 仍会弹一次"ICP 警告"（MagicOS 侧载限制，无法绕开，属正常，忽略即可，勿再提议改 manifest）
 
 ## 7. 验证清单（全部通过才算发布完成）
 
