@@ -67,6 +67,26 @@ object AgentDocs {
         if (!dir.exists()) dir.mkdirs()
         // Ensure long-term memory directory exists — 幂等，老工作区升级后也补建
         File(dir, "memory").mkdirs()
+        // v0.28.0 一次性升级迁移: v0.27.1 及更早的模板用 HEARTBEAT.md(大写)，当前统一为 heartbeat.md(小写)。
+        // Android 文件系统区分大小写——升级后小写读取会漏掉旧文件，CRON 规则将不可见，必须改名。
+        // 迁移标记 = 旧大写文件存在；改名后一次性补种缺失的新文档(trueman.md / memory/memory.md 等，
+        // copyTemplates 跳过已存在文件，不覆盖 Agent 演化过的内容)，之后 HEARTBEAT.md 消失不再触发。
+        val legacyHeartbeat = File(dir, "HEARTBEAT.md")
+        val isLegacyWorkspace = legacyHeartbeat.exists()
+        if (isLegacyWorkspace && !File(dir, "heartbeat.md").exists()) {
+            try {
+                if (legacyHeartbeat.renameTo(File(dir, "heartbeat.md"))) {
+                    KernelLog.i("AgentDocs", "migrate: HEARTBEAT.md -> heartbeat.md ($agentName)")
+                }
+            } catch (e: Exception) {
+                KernelLog.w("AgentDocs", "migrate HEARTBEAT.md failed: ${e.message}")
+            }
+        }
+        if (isLegacyWorkspace) {
+            // 老工作区升级: 补种缺失的模板文档，不覆盖已演化文件
+            bootstrapper?.invoke(agentName, language)
+            return
+        }
         if (File(dir, "soul.md").exists()) return
         bootstrapper?.invoke(agentName, language)
     }
