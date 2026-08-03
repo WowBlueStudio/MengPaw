@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.28.0 (2026-08-03) — 伪人模式定案 + 工作区进化 + 升级迁移
+
+### 新增
+- **profile.md 注入系统提示词**: 身份档案每轮可见（`agent.write profile.md` 可改，改名/换人设即时生效）——与 QwenPaw 对齐
+- **memory/memory.md 初始指导剧本**: 模板机制支持子目录，新 Agent 工作区自带记忆玩法说明书（三轨制命令对齐）
+- **trueman.md 进化剧本**: 随机对话（Truman Show/伪人模式）可自进化——每次聊天后 `agent.memory.record` 观察 → 约两周/10 次后提炼时段规律 → `self.trigger` 收紧窗口；铁律：窗口≥4h 保留随机、慢进化、透明汇报、主人最大（内核零改动，全用既有命令）
+- **工作区模板全面进化 zh+en**: 命令对齐（self.tools/self.search）、三轨记忆、进化系统、记忆孪生说明；en 补齐 agents/soul/profile/trigger
+
+### 调整
+- **SCHEDULE 触发器命名定案**: 英文 **Truman Show**（电影全名，避免杜鲁门总统歧义）、中文「伪人模式」（明牌自嘲：不是真人，是演出来的、知情可控的伪人）；按钮保留「添加真人感」
+- **heartbeat.md 小写统一**: 模板与读取路径全部小写（v0.27.1 及更早为大写 HEARTBEAT.md）；新增 trueman.md 双规则文件按触发类型载入（CRON→heartbeat.md，SCHEDULE→trueman.md）
+- **老工作区一次性升级迁移**: bootstrap 检测旧大写文件 → 改名 + 补种缺失新文档（trueman.md/memory/memory.md，不覆盖已演化内容）
+
+### 社区
+- **开放 Pull Request**: 版权让渡声明 + CI 门禁（JDK17 + kernel/plugin 测试）+ 九维评审 skill，合并由作者拍板
+
+### 发行
+- Shell APK v0.28.0（versionCode 28000）— 浏览器保持 v0.7.0 独立版本线
+
 ## v0.27.1 (2026-08-03) — 真机闪退热修复 (ART VerifyError)
 
 ### 修复
