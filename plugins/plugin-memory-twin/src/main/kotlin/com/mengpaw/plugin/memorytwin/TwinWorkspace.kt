@@ -13,7 +13,7 @@ import java.security.MessageDigest
  * 孪生工作区同步 (v0.22.0) — 替代哈希链账本。
  *
  * 同步单元 = 工作区文档文件 (整个 {agent}/ 目录, 排除 CLI.md/inbox/dialog/backup):
- * - 根文档: soul.md profile.md agents.md boost.md trigger.md HEARTBEAT.md {date}_dream.md
+ * - 根文档: soul.md profile.md agents.md boost.md trigger.md heartbeat.md trueman.md {date}_dream.md
  * - memory/: memory.md (长期) + memory_{date}.md (中期) + project_*_memory.md + archive.md
  * - 排除: CLI.md (Android 操作指南, 无需跨设备) / inbox/ (本地任务队列) /
  *         dialog/ (本地对话流) / memory/backup/ (本机安全副本) / *.tmp / *.conflict.*

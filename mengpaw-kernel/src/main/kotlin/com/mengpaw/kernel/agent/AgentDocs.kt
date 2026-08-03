@@ -420,11 +420,19 @@ object AgentDocs {
         } else ""
     }
 
-    /** Read HEARTBEAT.md — cron/heartbeat task rules. Empty string means skip all scheduled tasks. */
+    /** Read heartbeat.md — CRON task rules. Empty string means skip all scheduled tasks. */
     fun readHeartbeatDoc(agentName: String): String {
-        val file = File(DataPaths.AGENTS, "$agentName/HEARTBEAT.md")
+        val file = File(DataPaths.AGENTS, "$agentName/heartbeat.md")
         return if (file.exists()) try { file.readText() } catch (e: Exception) {
             ErrorCollector.report(e, "AgentDocs.readHeartbeatDoc"); ""
+        } else ""
+    }
+
+    /** Read trueman.md — TrueMen (random chat) rules. Empty string = built-in topic pool only. */
+    fun readTruemanDoc(agentName: String): String {
+        val file = File(DataPaths.AGENTS, "$agentName/trueman.md")
+        return if (file.exists()) try { file.readText() } catch (e: Exception) {
+            ErrorCollector.report(e, "AgentDocs.readTruemanDoc"); ""
         } else ""
     }
 
