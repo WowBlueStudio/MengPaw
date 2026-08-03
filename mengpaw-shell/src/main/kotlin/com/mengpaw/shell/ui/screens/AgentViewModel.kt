@@ -435,27 +435,37 @@ class AgentViewModel : ViewModel() {
                 }
 
                 // ── 流式输出: 增量 token 实时进气泡(打字机效果) ──
-                // 只显示最终答案部分 — 缓冲中一旦出现 "Final Answer:" 标记,
-                // 其后的内容才开始增量更新 finalContent; 中间轮 Thought/Action
-                // 样板文本不透传(由 traces 消化), 避免样板闪烁
+                // 显示策略:
+                //  - 缓冲含 "Final Answer:" 标记 → 只显示标记后的答案部分
+                //  - 缓冲含 "Action:"(工具轮) → 不显示(Thought/Action 样板由
+                //    traces 消化; 工具执行后 onStep 会把 finalContent 重置为"思考中...")
+                //  - 无任何标记 → 直接流式显示全文(模型常见纯文本答案输出,
+                //    不带 Final Answer 前缀 — parse Rule 3 分支, 必须流式显示)
                 // 节流: 50ms 窗口合并增量, 避免每 token 全量重 parse Markdown
                 val streamBuf = StringBuilder()
                 var lastDeltaPush = 0L
+                var sawActionMarker = false
                 val onDelta: (String) -> Unit = { delta ->
                     streamBuf.append(delta)
-                    val text = streamBuf.toString()
-                    if (text.contains("Final Answer:", ignoreCase = true)) {
-                        val now = System.currentTimeMillis()
-                        if (now - lastDeltaPush >= 50) { // 节流合并, 避免每 token 全量重 parse
-                            lastDeltaPush = now
-                            val idx = text.indexOf("Final Answer:", ignoreCase = true)
-                            val answerPart = text.substring(idx + "Final Answer:".length)
+                    val now = System.currentTimeMillis()
+                    if (now - lastDeltaPush >= 50) { // 节流合并
+                        lastDeltaPush = now
+                        val text = streamBuf.toString()
+                        val hasAction = text.contains("Action:", ignoreCase = true)
+                        val hasFinal = text.contains("Final Answer:", ignoreCase = true)
+                        if (hasAction) sawActionMarker = true
+                        val displayText = when {
+                            hasFinal -> text.substringAfter("Final Answer:", text)
+                            hasAction -> ""        // 工具轮: 不显示样板
+                            else -> text           // 纯文本答案流
+                        }
+                        if (displayText.isNotBlank()) {
                             session.messages.update { current ->
                                 val mutable = current.toMutableList()
                                 val ridx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
                                 if (ridx >= 0) {
                                     mutable[ridx] = ChatMessageUi.AgentWithTrace(
-                                        answerPart, traces.toList(),
+                                        displayText, traces.toList(),
                                         isRunning = true, executionMode = modePrefix, agentRef = agentRef
                                     )
                                 }

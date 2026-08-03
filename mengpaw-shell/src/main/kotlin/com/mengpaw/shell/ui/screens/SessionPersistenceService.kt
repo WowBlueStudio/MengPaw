@@ -500,7 +500,8 @@ class SessionPersistenceService(
             _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
             saveSessionHistory()
         }
-        sessions[getActiveAgentName()]?.messages?.value = listOf(ChatMessageUi.Agent("新会话已创建。"))
+        // 新会话保持空列表 — 去掉"新会话已创建。"占位提示 (用户要求, 2026-08-04)
+        sessions[getActiveAgentName()]?.messages?.value = emptyList()
     }
 
     /** Switch to a saved session, restoring its messages. */
