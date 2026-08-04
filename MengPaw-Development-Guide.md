@@ -496,6 +496,22 @@ twin.lost <peer> / twin.recover <peer>
 - **Fallback 降级链**: primary → fallback[0] → fallback[1] → ... → `LlmFallbackExhaustedException`
 - **响应格式归一化**: 兼容 OpenAI `choices[0].message.content` 和 GLM `data[0].content`
 
+### 4.1.1 流式输出 (SSE + UI 播放器, v0.28.5 定型)
+
+**链路**: `AdaptiveLlmProvider.consumeSseStream`(`bodyAsChannel()` + `readUTF8Line` 增量读, OpenAI/Anthropic 双格式解析)→ 引擎透传 onDelta → `AgentViewModel` UI 播放器 → 气泡渐进显示。
+
+**网关行为(实测铁证)**: LLM 网关(如 DeepSeek)**不是逐 token 流** — 按 ~1s 批次批量 flush(~120 chunks/批); 相同 prompt 二次请求命中服务端 prompt cache 后整段回放(TTFB 8s+ 然后 ~200ms 全到)。突发到达是常态, 客户端改不了, 打字机观感必须由 UI 播放器兜底。
+
+**UI 播放器**(`AgentViewModel.submitTask`, 核心设计):
+- `onDelta` 只做 `synchronized(streamBuf) { streamBuf.append(delta) }` — 不直推
+- **播放协程必须在 `Dispatchers.Default`**(关键坑): SSE 突发时数据全在内存缓冲, `readUTF8Line` 永不挂起 → 主线程被读取循环占死 → Main 调度的播放协程被饿死(实测 UI-PUSH 零输出)
+- 节奏自适应: 每 50ms tick 消费 `ceil(剩余/50)` 字符 → 长文 ~2.5s 播完, 短文逐字
+- 收尾: run() 返回后置 `streamFinished=true` → `join()` 等播放器播完 → cancel → 兜底 flush → final replace。join 防 Default 线程晚到 tick 覆盖最终消息
+- 并发安全: streamBuf/streamPlayed/streamFinished 统一 `synchronized(streamBuf)` 监视器; `traces` 用 `Collections.synchronizedList`(播放协程 toList 与 onStep add 跨线程); 播放器体 try/catch 保证 join() 永不抛
+- doTranslate(美系模型翻译)场景跳过 join/flush: 最终 replace 整段替换为中文, 英文逐字播放无意义
+
+**显示策略**(`computeStreamDisplayText`): 含 `Final Answer:` 只显标记后; 含 `Action:`(工具轮)不显样板(onStep 重置"思考中..."); 含 `Thought:` 显其后; 无标记全文流式。
+
 ### 4.2 支持的服务商 (12)
 
 | 服务商 | Endpoint | 默认模型 | 缓存策略 |
