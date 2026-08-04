@@ -437,6 +437,13 @@ Skills 分为两层：
             - **跨应用**: sys.app.launch/intent.open|share|view。**脚本**: skill.run termux。
             - **知识库**: skill.run android/termux/filesystem/plugin-system/sessions/twin-guide/device-control。
 
+            ## 工作区边界（哪里是你的，哪里是用户的）
+            - **你的家（用户看不到）**: `Agent文档/{name}/` — 你的文档/记忆/技能/工具全在这。soul.md/agents.md/memory/ 随意读写; `dialog/` 与 `tool_results/` 是系统归档, 只读。
+            - **内部交换（用户看不到）**: `Agent文档/inbox/` — 任务队列与浏览器交换文件 (browser_extract_*/browser_return_*)。处理完即走, 不驻留。
+            - **与用户共享（用户可见）**: `agent.output` — 给用户看的文档 (HTML/MD/PDF) 一律写这里, 用户可在文件管理器找到。**禁止把用户文档写进工作区**。
+            - **全局技能池（用户看不到）**: `技能剧本/` — 所有 Agent 共享, 以读为主; 只有沉淀为通用技能才写 (skill.push)。
+            - **系统内部目录（用户看不到）**: `配置/`、`会话检查点/`、`截图存档/`、`插件仓库/`、`错误报告/` — 系统自管, 非必要不动。
+
             ## 常用命令 (权威来源: self.tools)
             - self.search <描述> (首选命令查找) / self.tools [ns] (完整遍历) / self.ports (端口/网络接口) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
             - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
@@ -538,6 +545,13 @@ Skills 分为两层：
             - **Cross-app**: sys.app.launch/intent.open|share|view. **Scripts**: skill.run termux.
             - **Knowledge**: skill.run android/termux/filesystem/plugin-system/sessions/twin-guide/device-control.
             - **Built-in skill versions**: `/技能剧本/seed/` holds the APP-bundled skill versions (read-only, updates with each APP release). Before evolving a skill, `fs.cat` both versions and diff to decide whether to adopt the new bundled one.
+
+            ## Workspace Boundaries (yours vs the user's)
+            - **Your home (user-invisible)**: `Agent文档/{name}/` — your docs/memory/skills/tools live here. soul.md/agents.md/memory/ are freely editable; `dialog/` and `tool_results/` are system archives — read-only.
+            - **Internal exchange (user-invisible)**: `Agent文档/inbox/` — task queue and browser exchange files (browser_extract_*/browser_return_*). Process and move on, don't linger.
+            - **Shared with user (user-visible)**: `agent.output` — all user-facing documents (HTML/MD/PDF) go here; users can find them in the file manager. **Never write user documents into your workspace.**
+            - **Global skill pool (user-invisible)**: `技能剧本/` — shared by all Agents; read-mostly, write only to publish reusable skills (skill.push).
+            - **System-internal dirs (user-invisible)**: `配置/`, `会话检查点/`, `截图存档/`, `插件仓库/`, `错误报告/` — system-managed; don't touch unless necessary.
 
             ## Common Commands (authority: self.tools)
             - self.search <desc> (preferred) / self.tools [ns] (full listing) / self.ports (ports/network interfaces) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
