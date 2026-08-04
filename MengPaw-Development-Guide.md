@@ -245,7 +245,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ### 3.5 插件模块（21 个，plugins/ 目录，按 settings.gradle.kts 为准）
 
-> 插件数统一口径：**21 模块**（settings.gradle.kts；外部连接器已移至独立仓库 mengpaw-connectors，见下）| **13 捆绑**（mengpaw-shell 打包）| **plugins.json 28 条目**（13 builtin + 13 remote + 2 embedded）
+> 插件数统一口径：**21 模块**（settings.gradle.kts；外部连接器已移至独立仓库 mengpaw-connectors，见下）| **13 捆绑**（mengpaw-shell 打包）| **plugins.json 29 条目**（13 builtin + 14 remote + 2 embedded）
 
 #### 基础功能 (6)
 

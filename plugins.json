@@ -201,8 +201,8 @@
       "author": "MengPaw",
       "description": "WiFi 环境自动检测更新，冷启动检查，去轮询CoroutineScope泄漏，GitHub→Gitee→ghproxy 三级回退",
       "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-update.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-update.aar",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-update-release.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-update-release.aar",
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
@@ -215,8 +215,8 @@
         "update.install",
         "update.auto"
       ],
-      "checksum": "sha256:8cca801352cbbc25130e78ce77d7e4db09f13c47878db868a671464758f6a994",
-      "size": 29416,
+      "checksum": "sha256:177a7414781a037e8862463dd06e3583ebea77bba66a15ed7fdd2f4fded82333",
+      "size": 29521,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
@@ -227,8 +227,8 @@
       "author": "MengPaw",
       "description": "多语言翻译：Google 翻译集成 + 语种自动检测（自动识别源语言）",
       "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-translate.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-translate.aar",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-translate-release.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-translate-release.aar",
       "minCoreVersion": "0.8.0",
       "commands": [
         "translate.text",
@@ -236,8 +236,8 @@
         "translate.langs",
         "translate.setup"
       ],
-      "checksum": "sha256:abda168326e715e876455d099f2550ec7a3c969c2552504f71db648f8e89a833",
-      "size": 21566,
+      "checksum": "sha256:65bfe6f6b3457f691760e47394b044d07266ed5dbe030f1adb90eccd12d92f21",
+      "size": 21570,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
@@ -248,8 +248,8 @@
       "author": "MengPaw",
       "description": "官方错误收集与上报：error.bridge JSON桥接 + error.upload WiFi自动上传，序列化重写",
       "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-error-report.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-error-report.aar",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-error-report-release.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-error-report-release.aar",
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE"
@@ -263,8 +263,8 @@
         "error.status",
         "error.upload"
       ],
-      "checksum": "sha256:2ab06b3ab95883d947e769d1513256896c3e17657089ebc27a4eec382bbd9f23",
-      "size": 28602,
+      "checksum": "sha256:f8680ec1d1373a283c6287a019b169530619776333a8347ca8389ce215e074f7",
+      "size": 28668,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
@@ -275,16 +275,16 @@
       "author": "MengPaw",
       "description": "Tavily AI 优化搜索引擎 — 结构化搜索结果 + 网页内容提取，错误消息含 API Key 获取链接",
       "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-tavily.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-tavily.aar",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-tavily-release.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-tavily-release.aar",
       "minCoreVersion": "0.8.0",
       "commands": [
         "tavily.search",
         "tavily.extract",
         "tavily.setup"
       ],
-      "checksum": "sha256:a30aad3506f37d9346dc087fc6e2ed2dc54131ace77025aae5f8c730ce65f069",
-      "size": 14367,
+      "checksum": "sha256:cb1f6b1aa05471be9d802eafd3b38029563ab4343ec32b1c99da66836ffe6e6d",
+      "size": 16627,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
@@ -295,8 +295,8 @@
       "author": "MengPaw",
       "description": "多后端 API 生图：GPT Image (原DALL-E) / Replicate / Stability，模型更新至 2026.07",
       "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-render.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-render.aar",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-render-release.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-render-release.aar",
       "minCoreVersion": "0.8.0",
       "commands": [
         "render.models",
@@ -304,8 +304,8 @@
         "render.status",
         "render.preview"
       ],
-      "checksum": "sha256:0203b1e149e098ea24b76093ee002079baf498e99e8dab3f12c3a736c59924c3",
-      "size": 24873,
+      "checksum": "sha256:d0e97d2ffd5b119ec3d277329aa1df80c8ededd4bdcbdf11c417fb9eddfbf271",
+      "size": 24868,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
@@ -353,8 +353,8 @@
       "author": "MengPaw",
       "description": "ComfyUI 工作流搭建：节点编排/JSON 导出/API 执行/MP浏览器预览，错误消息含 CORS 排查指引",
       "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-comfy.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-comfy.aar",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-comfy-release.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-comfy-release.aar",
       "minCoreVersion": "0.8.0",
       "ports": [
         8188
@@ -366,8 +366,8 @@
         "comfy.preview",
         "comfy.export"
       ],
-      "checksum": "sha256:f777b336906cc9c011aa4d2760c094e1e541283f422238e2757a0072a1824363",
-      "size": 24618,
+      "checksum": "sha256:ee0aa45bcc9238b1e8792f2ab1e4fa52e6399201aa03134b2c81d0489c6d1161",
+      "size": 24632,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
@@ -378,8 +378,8 @@
       "author": "MengPaw",
       "description": "Agent 跨设备推送网页，基于 ACP 协议",
       "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-push.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-push.aar",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-browser-push-release.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-browser-push-release.aar",
       "minCoreVersion": "0.8.0",
       "commands": [
         "browser.push",
@@ -387,8 +387,8 @@
         "browser.push.accept",
         "browser.push.reject"
       ],
-      "checksum": "sha256:281fc1b3f774d39fb55d86fb92079661a5fe7fb6a8bbdd390e731c4b01b6c748",
-      "size": 16951,
+      "checksum": "sha256:755905b2179aa688fe50e3ec8a1529903f554152ffbddce90098f455299c4077",
+      "size": 16949,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
@@ -399,8 +399,8 @@
       "author": "MengPaw",
       "description": "网页转 Markdown 管道：clean 提取正文 → md 生成文档 → outputs/clear 输出管理；网页抓取复用 net.curl，高质量搜索用 tavily",
       "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-search.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-search.aar",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-browser-search-release.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-browser-search-release.aar",
       "minCoreVersion": "0.8.0",
       "commands": [
         "search.extract",
@@ -411,8 +411,8 @@
         "search.outputs",
         "search.clear"
       ],
-      "checksum": "sha256:1da4598a051abaab8477ed893f7a93420abd044d66393d1ad4430d0e5045aeb5",
-      "size": 7794,
+      "checksum": "sha256:9e6249821bf45f7770d6b435b253972078adae5f2144c1659c99002f79249ad8",
+      "size": 38325,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
@@ -423,16 +423,16 @@
       "author": "MengPaw",
       "description": "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取/调用（MP浏览器专用）",
       "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-mcp.aar",
-      "mirrorUrl": "https://gitee.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.2.0/plugin-browser-mcp.aar",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-browser-mcp-release.aar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-browser-mcp-release.aar",
       "minCoreVersion": "0.8.0",
       "commands": [
         "browser.mcp.tools",
         "browser.mcp.status",
         "browser.mcp.invoke"
       ],
-      "checksum": "sha256:d0cd2ac2d10a59903ecfc7ed677fa426697e2017f233ca4bc76616ef16fb7f04",
-      "size": 10741,
+      "checksum": "sha256:34a213968f76c08997b481c651d81988b8c6fe38a49d3e81339d1c3f3d21bb07",
+      "size": 18685,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
