@@ -3,10 +3,6 @@
 
 package com.mengpaw.kernel.llm
 
-import io.ktor.client.*
-import io.ktor.client.call.*
-import io.ktor.client.engine.okhttp.*
-import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -26,19 +22,14 @@ class RemoteApi(
 
     data class RemoteConfig(
         val maxTokens: Int = 4096,
-        val temperature: Double = 0.7,
-        val timeoutMs: Long = 120_000
+        val temperature: Double = 0.7
     )
 
-    private val client = HttpClient(OkHttp) {
-        install(HttpTimeout) {
-            requestTimeoutMillis = config.timeoutMs
-            connectTimeoutMillis = 20_000
-            // 推理模型思考期可达 60s+ 无数据 — 与 AdaptiveLlmProvider 对齐 (Ktor 3.x
-            // OkHttp 引擎不映射 requestTimeout, socketTimeout 是唯一活超时)
-            socketTimeoutMillis = 180_000
-        }
-    }
+    // v0.29.2: 共享客户端 (LlmHttpClient) — 与主 provider 同一连接池 (Reasonix 对照 #2)
+    private val client = LlmHttpClient.ktor
+
+    /** Token usage from the most recent API call (v0.29.2: fallback 链路缓存统计直通). */
+    @Volatile override var lastUsage: TokenUsage? = null
 
     override suspend fun complete(prompt: String): String {
         val messages = listOf(mapOf("role" to "user", "content" to prompt))
@@ -108,6 +99,18 @@ class RemoteApi(
 
             try {
                 val json = Json.parseToJsonElement(data).jsonObject
+
+                // Capture usage from inline usage event (v0.29.2: 与主 provider 对齐)
+                json["usage"]?.jsonObject?.let { u ->
+                    lastUsage = TokenUsage(
+                        promptTokens = u["prompt_tokens"]?.jsonPrimitive?.int ?: 0,
+                        completionTokens = u["completion_tokens"]?.jsonPrimitive?.int ?: 0,
+                        totalTokens = u["total_tokens"]?.jsonPrimitive?.int ?: 0,
+                        cacheHitTokens = u["prompt_cache_hit_tokens"]?.jsonPrimitive?.int ?: 0,
+                        cacheMissTokens = u["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
+                    )
+                }
+
                 // OpenAI 兼容: choices[0].delta.content
                 val openAiDelta = json["choices"]?.jsonArray
                     ?.firstOrNull()?.jsonObject
@@ -140,6 +143,10 @@ class RemoteApi(
     )
 
     private fun buildRequestBody(messages: List<Map<String, String>>, stream: Boolean = false): String {
+        // 前缀形状监测 (v0.29.2, Reasonix cache_shape.go 对标) — 与主 provider 同口径
+        val firstMsg = messages.firstOrNull()
+        if (firstMsg?.get("role") == "system") SystemPromptShape.monitor(firstMsg["content"] ?: "")
+
         return buildJsonObject {
             put("model", model)
             put("max_tokens", config.maxTokens)
@@ -159,6 +166,16 @@ class RemoteApi(
     private fun parseResponse(body: String): String {
         return try {
             val json = Json.parseToJsonElement(body).jsonObject
+            // Usage 提取 (v0.29.2: 非流式路径缓存统计, 与主 provider parseBody 对齐)
+            json["usage"]?.jsonObject?.let { u ->
+                lastUsage = TokenUsage(
+                    promptTokens = u["prompt_tokens"]?.jsonPrimitive?.int ?: 0,
+                    completionTokens = u["completion_tokens"]?.jsonPrimitive?.int ?: 0,
+                    totalTokens = u["total_tokens"]?.jsonPrimitive?.int ?: 0,
+                    cacheHitTokens = u["prompt_cache_hit_tokens"]?.jsonPrimitive?.int ?: 0,
+                    cacheMissTokens = u["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
+                )
+            }
             val choices = json["choices"]?.jsonArray ?: return body
             val first = choices.firstOrNull()?.jsonObject ?: return body
             val message = first["message"]?.jsonObject ?: return body
@@ -168,5 +185,7 @@ class RemoteApi(
         }
     }
 
-    override fun close() { client.close() }
+    override fun close() {
+        // v0.29.2: 共享客户端 (LlmHttpClient) 进程级生命周期 — 不关闭
+    }
 }

@@ -204,11 +204,13 @@ fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: Strin
                         MarkdownText(content = message.finalContent,
                             textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary), nestedScroll = true)
                     }
-                    // ── 等待期反馈 (v0.28.6): 思考中 → spinner + 已等待秒数, 流式文本到达后自动消失 ──
+                    // ── 等待期反馈 (v0.28.6): 思考中 → spinner + 已等待秒数, 流式文本到达后自动消失
+                    //    (v0.29.2): 工具轮显示 "正在执行 X… Ns" — 流式检测到 Action 行即推送 (Reasonix ③) ──
                     if (message.isRunning &&
-                        (message.finalContent == "思考中..." || message.finalContent.isBlank())) {
+                        (message.finalContent == "思考中..." || message.finalContent.isBlank() ||
+                            message.finalContent.startsWith(EXECUTING_TOOL_PREFIX))) {
                         Spacer(Modifier.height(ArcoSpacing.xs))
-                        WaitingIndicator()
+                        WaitingIndicator(message.finalContent)
                     }
                 }
             }
@@ -216,15 +218,20 @@ fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: Strin
     }
 }
 
-/** 等待期指示器: spinner + 已等待秒数 — 让 4-13s 的 LLM 准备期有"活着"的反馈. */
+/**
+ * 等待期指示器: spinner + 已等待秒数 — 让 4-13s 的 LLM 准备期有"活着"的反馈.
+ * [waitingText] = "思考中..." (无工具) 或 "$EXECUTING_TOOL_PREFIX<tool>…" (工具轮, v0.29.2).
+ */
 @Composable
-private fun WaitingIndicator() {
+private fun WaitingIndicator(waitingText: String) {
     var seconds by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); seconds++ } }
+    val label = if (waitingText.startsWith(EXECUTING_TOOL_PREFIX))
+        waitingText.removePrefix(EXECUTING_TOOL_PREFIX) else "思考中…"
     Row(verticalAlignment = Alignment.CenterVertically) {
         CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp, color = ThemeColors.brand)
         Spacer(Modifier.width(6.dp))
-        Text("思考中… ${seconds}s", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+        Text("$label ${seconds}s", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
     }
 }
 

@@ -29,6 +29,16 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
+ * 工具执行中提示的前缀 (v0.29.2, Reasonix ③ 对标 — 工具调用提前通知):
+ * AgentViewModel 流式检测到完整 "Action: <tool>" 行后, 用该前缀推送运行中气泡;
+ * ChatBubbles.WaitingIndicator 依此前缀显示"正在执行 X… Ns"而非"思考中… Ns"。
+ */
+internal const val EXECUTING_TOOL_PREFIX = "⚙ 正在执行 "
+
+/** 流式文本中的完整工具调用行 (多行锚定, 行尾须完整) — 半截工具名不匹配, 避免误报. */
+private val ACTION_LINE_REGEX = Regex("""(?m)^Action:\s*([\w.+\-]+)\s*$""")
+
+/**
  * ViewModel for the main agent chat screen.
  * Manages multiple agent sessions — each agent has its own AgentEngine and message history.
  */
@@ -444,6 +454,9 @@ class AgentViewModel : ViewModel() {
                 var streamPlayed = 0              // 已播放原始字符数 (播放协程推进, onStep 清零)
                 var streamFinished = false        // run() 已返回, 不会再增量 — 播放器播完即退
                                                   // (与 buffer 同监视器读写, 跨线程安全)
+                // 工具提前通知 (v0.29.2, Reasonix ③ 对标): 流式中完整 "Action: <tool>" 行
+                // 出现即推送 — 不等工具执行完成 (onStep), 消除工具轮流式空屏
+                var announcedTools = 0            // 已宣布的 Action 行数 (onStep 清零)
 
                 // 推送当前流式文本到运行中气泡 (播放协程 / onStep / flush 共用)
                 fun pushDisplay(displayText: String) {
@@ -481,6 +494,7 @@ class AgentViewModel : ViewModel() {
                     synchronized(streamBuf) {
                         streamBuf.clear()
                         streamPlayed = 0
+                        announcedTools = 0        // 下一轮工具提前通知重新计数
                     }
                 }
 
@@ -506,7 +520,20 @@ class AgentViewModel : ViewModel() {
                 var firstDelta = true
                 val onDelta: (String) -> Unit = { delta ->
                     if (firstDelta) { firstDelta = false; KernelLog.d("MengPawLatency", "T3 first-delta") }
-                    synchronized(streamBuf) { streamBuf.append(delta) }
+                    var newTool: String? = null
+                    synchronized(streamBuf) {
+                        streamBuf.append(delta)
+                        // 工具提前通知: 扫描已累积缓冲中的完整 "Action: <tool>" 行 (多行锚定,
+                        // 完整行才宣布 — 避免 "Action: l" 半截工具名误报; "Action Input:" 不匹配
+                        // 因为要求冒号紧跟 Action)。流式到达时行尾 \n 落地即命中。
+                        val matches = ACTION_LINE_REGEX.findAll(streamBuf).toList()
+                        if (matches.size > announcedTools) {
+                            announcedTools = matches.size
+                            newTool = matches.last().groupValues[1]
+                        }
+                    }
+                    // 锁外推送 (锁纪律同 onStep/播放协程: pushDisplay 不在监视器内调用)
+                    newTool?.let { pushDisplay("$EXECUTING_TOOL_PREFIX$it…") }
                 }
 
                 // 播放协程: 每 STREAM_PLAYBACK_INTERVAL_MS 把未播放增量推给 UI (打字机)

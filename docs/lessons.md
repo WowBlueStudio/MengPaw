@@ -325,4 +325,13 @@ AcpMessageType 枚举改动必须同步 processMessage 的 when(穷尽性);新�
 
 AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 → 类 clinit 验证失败，启动即闪退且 crash.log/crash buffer 无记录（仅 logcat 主缓冲有 FATAL）。修复：普通 class + 无参构造 + apply 块初始化，引用点零改动。阈值：构造参数 ≤254 安全。
 
-*最后更新: 2026-08-03 · 提炼自 v0.27.1 VerifyError 热修复*
+### 14.7 Reasonix 对照印证：传输层三差距与落地 (v0.29.2)
+
+对照 DeepSeek-Reasonix 分析文档五机制（自动 prefix cache / HTTP 连接复用 / SSE 低延迟 / 上下文维护 / 会话恢复）彻查自身代码：
+- **已有且被证实**：时间戳剥离、system prompt 固定顺序 + mtime 缓存、压缩只动尾部、SSE 逐行增量、断线首 token 前重试、append-only 事件日志、崩溃最多丢一轮——全部命中。
+- **真差距三处**（均落地）：① HTTP 客户端每会话新建 = 连接池归零，每次切换重新握手 → `LlmHttpClient` 共享单例（ConnectionPool(8,5min) + retryOnConnectionFailure + read 180s）；② 工具轮流式空屏 → 流式 `Action:` 行一落地即推送"正在执行 X…"（多行锚定正则，半截工具名不误报）；③ 悬空指标（AgentEngine cacheHitTokens 系恒 0 从未累加）+ fallback 链路无 usage 统计 + 无前缀形状监测 → 清死指标 + `SystemPromptShape` SHA-256 告警 + RemoteApi 补 lastUsage 透传。
+- **文档偏差修正**：Reasonix 文档称"逐 chunk 即到即渲染"——实测 DeepSeek 服务端按 ~1s 批 flush，客户端"逐 chunk"受服务端批次约束，打字机观感必须 UI 播放器兜底（v0.28.5 已定型）；"中断后提示继续 ≤3 次"在自身代码中对应"恢复块注入一次"，无 ≤3 计数。
+- **方法论**：连接池共享的关键风险是"配置死而不知"——`requestTimeoutMillis` 在 Ktor 3 OkHttp 引擎是死配置（字节码实证），清配置时必须以"实测活超时"为准（readTimeout 180s 防思考期误杀，无 callTimeout 防长流误杀）。
+- **前提条件**：共享客户端前先 grep 全部构造点确认超时/配置全走默认值，否则共享会吞掉自定义超时。
+
+*最后更新: 2026-08-05 · 提炼自 v0.29.2 Reasonix 对照落地*

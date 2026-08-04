@@ -188,7 +188,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|
 | `cli/` | 6 | CliInterpreter, CommandRegistry, CommandExecutor, Pipeline, CommandSearch (BM25), CliAudit |
-| `llm/` | 6 | AdaptiveLlmProvider, LlmProvider, LlmRequestBuilder, PromptEngine, RemoteApi, TranslateMiddleware |
+| `llm/` | 7 | AdaptiveLlmProvider, LlmProvider, LlmRequestBuilder, PromptEngine, RemoteApi, TranslateMiddleware, LlmHttpClient (共享 HTTP 客户端, v0.29.2) |
 | `session/` | 3 | SessionManager, History, Checkpoint |
 | `plugin/` | 4 | Plugin, PluginManager, PluginExecutor, PluginMarketplaceClient |
 | `agent/` | 9 | AgentDocManager, AgentDocs, AgentExecutor, AgentMiddleware, AgentProfile, DreamEngine, PromptBuilder, ScrollContext, GoalSession |
@@ -514,6 +514,8 @@ twin.lost <peer> / twin.recover <peer>
 
 **显示策略**(`computeStreamDisplayText`): 含 `Final Answer:` 只显标记后; 含 `Action:`(工具轮)不显样板(onStep 重置"思考中..."); 含 `Thought:` 显其后; 无标记全文流式。
 
+**工具调用提前通知 (v0.29.2, Reasonix ③ 对标)**: 流式中完整 `Action: <tool>` 行一落地即推送 `⚙ 正在执行 X…` 到运行中气泡(`ACTION_LINE_REGEX` 多行锚定, 行尾须完整 — 半截工具名不误报; "Action Input:" 天然不匹配), 不等工具执行完成(onStep)。消除工具轮流式空屏。UI 侧 `WaitingIndicator` 按前缀显示"正在执行 X… Ns"替代"思考中… Ns"。状态纪律: 检测在 `synchronized(streamBuf)` 内计数, `pushDisplay` 在锁外调用; `announcedTools` 随 onStep 清空。
+
 **发送前路径延迟优化 (v0.28.6)**: 实测 4-13s 决策链中, 客户端规则/构造毫秒级, 主体是服务端 prefill TTFB。优化清单:
 - "思考中..."气泡**前置**: 翻译/召回/引擎准备之前插入, 发送后 ~20ms 即有反馈(实测 T0→T1=23ms)
 - 翻译与记忆召回 `async(Dispatchers.IO)` **并行**发起(关键词从原始 task 提取 — 中文词面语义更优); `detectCorrection` fire-and-forget 出 Main
@@ -521,6 +523,14 @@ twin.lost <peer> / twin.recover <peer>
 - 对话压缩后台化(见 4.3): 接近阈值提前在引擎自有 scope 预压缩, 请求不等待
 - 等待期反馈: 思考中气泡附 spinner + 已等待秒数(`WaitingIndicator`, 流式文本到达后自动消失)
 - 实测(模拟器): buildConversation 3ms; T0→S-OPEN 客户端侧仅 ~160ms; 剩余 ~9s 为服务端 TTFB(缓存未命中 prefill, 客户端不可优化)
+
+### 4.1.2 HTTP 传输层 (v0.29.2, Reasonix ② 对标)
+
+**共享客户端** `LlmHttpClient`(kernel/llm 单例): 此前每个 provider 各自 `new HttpClient(OkHttp)` — 会话/角色切换即重建连接池, 每次重新 TCP+TLS 握手(~2-4 RTT)。现在所有 provider(主 + fallback)复用同一连接池: `ConnectionPool(8, 5min)` + `retryOnConnectionFailure(true)` + connect 20s / read 180s。超时语义保留实证结论: OkHttp 引擎不映射 requestTimeoutMillis(死配置已删), 无 callTimeout(防误杀长流), readTimeout 是唯一活超时。`close()` 为 no-op(进程级共享)。
+
+**前缀形状监测** `SystemPromptShape`(LlmRequestBuilder.kt, Reasonix cache_shape.go 对标): 每轮请求 wire 上 system prompt 做 SHA-256, 形状变化即 `W/CacheShape` 告警("cache prefix changed…自动前缀缓存将短暂失效")。调用点: 两个 provider 的 `buildRequestBody`(首条消息 role=system)。与 PromptEngine mtime 指纹缓存互补: 前者保证组装稳定, 后者实测 wire 形状。
+
+**Fallback 缓存统计直通**: RemoteApi 补齐 `lastUsage`(流式内联 usage + 非流式 parseResponse); `callWithRetryAndFallback` 在 fallback 服务成功后把 usage 透传给主 provider — 壳层 `session.provider.lastUsage` 不再恒 null, fallback 调用计入 TokenStatsCollector 缓存命中统计。
 
 ### 4.2 支持的服务商 (12)
 

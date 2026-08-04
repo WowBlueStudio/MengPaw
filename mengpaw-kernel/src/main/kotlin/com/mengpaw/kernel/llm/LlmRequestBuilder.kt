@@ -3,6 +3,7 @@
 
 package com.mengpaw.kernel.llm
 
+import com.mengpaw.kernel.KernelLog
 import kotlinx.serialization.json.*
 
 /**
@@ -21,13 +22,10 @@ class LlmRequestBuilder(systemPrompt: String) {
     fun updateSystemPrompt(newPrompt: String) {
         if (newPrompt != _systemPrompt) {
             _systemPrompt = newPrompt
-            cumulativeCacheHitTokens = 0; cumulativeCacheMissTokens = 0
             calibratedTokPerChar = FALLBACK_TOK_PER_CHAR
         }
     }
 
-    var cumulativeCacheHitTokens: Long = 0; private set
-    var cumulativeCacheMissTokens: Long = 0; private set
     var lastPromptTokens: Int = 0; internal set
 
     var calibratedTokPerChar: Double = FALLBACK_TOK_PER_CHAR; private set
@@ -114,10 +112,34 @@ enum class CacheStrategy {
             "openmodel.ai" in endpoint -> PREFIX_STABLE
             else -> PREFIX_STABLE
         }
-        fun labelFor(s: CacheStrategy) = when (s) {
-            PREFIX_STABLE -> "自动前缀缓存（DeepSeek 模式）"
-            CACHE_CONTROL -> "Prompt Caching（OpenAI 模式）"
-            NONE -> "未优化"
+    }
+}
+
+/**
+ * 前缀形状监测 (v0.29.2, Reasonix cache_shape.go 对标)。
+ *
+ * 对每轮请求 wire 上的 system prompt 做 SHA-256 — 形状变化即告警:
+ * 自动前缀缓存将短暂失效 (DeepSeek 命中省 ~50 倍成本)。调用点:
+ * AdaptiveLlmProvider / RemoteApi 的 buildRequestBody (首条消息 role=system)。
+ * 与 PromptEngine 的 mtime 指纹缓存互补: 后者保证组装结果稳定, 这里实测 wire 形状。
+ */
+internal object SystemPromptShape {
+    @Volatile private var lastHash: String? = null
+    @Volatile private var lastLen: Int = -1
+
+    fun monitor(systemPrompt: String) {
+        val h = sha256Hex(systemPrompt)
+        val prev = lastHash
+        lastHash = h
+        lastLen = systemPrompt.length
+        if (prev != null && h != prev) {
+            KernelLog.w("CacheShape",
+                "cache prefix changed: ${prev.take(8)}…→${h.take(8)}… (len $lastLen) — 自动前缀缓存将短暂失效")
         }
     }
+
+    private fun sha256Hex(s: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(s.toByteArray())
+            .joinToString("") { "%02x".format(it) }
 }

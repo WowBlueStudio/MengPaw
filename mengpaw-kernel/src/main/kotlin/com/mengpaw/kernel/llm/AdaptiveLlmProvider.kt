@@ -4,9 +4,6 @@
 package com.mengpaw.kernel.llm
 
 import com.mengpaw.kernel.KernelLog
-import io.ktor.client.*
-import io.ktor.client.engine.okhttp.*
-import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -58,22 +55,14 @@ class AdaptiveLlmProvider(
     data class AdaptiveConfig(
         val maxTokens: Int = 4096,
         val temperature: Double = 0.7,
-        // Ktor 3.x OkHttp 引擎不映射 requestTimeoutMillis(字节码实证) — 实际活超时只有
-        // socketTimeoutMs(readTimeout)。推理模型思考期可达 60s+ 无数据, 180s 防误杀
-        val timeoutMs: Long = 120_000,
-        val socketTimeoutMs: Long = 180_000,
         val maxRetries: Int = 5,         // 6 total attempts (0..5)
         val retryDelayMs: Long = 500,
         val fallbacks: List<FallbackEntry> = emptyList()
     )
 
-    private val client = HttpClient(OkHttp) {
-        install(HttpTimeout) {
-            requestTimeoutMillis = config.timeoutMs   // OkHttp 引擎不映射(死配置, 见 AdaptiveConfig 注释)
-            connectTimeoutMillis = 20_000             // DNS+TCP+TLS
-            socketTimeoutMillis = config.socketTimeoutMs  // 唯一活超时 (readTimeout)
-        }
-    }
+    // v0.29.2: 共享客户端 (LlmHttpClient) — 连接池/超时/keep-alive 集中配置,
+    // 会话/角色切换不再重建连接池重新握手 (Reasonix 对照 #2)
+    private val client = LlmHttpClient.ktor
 
     /** Token usage from the most recent API call. Read by shell layer for stats collection. */
     @Volatile override var lastUsage: TokenUsage? = null
@@ -136,7 +125,11 @@ class AdaptiveLlmProvider(
 
         for ((label, provider) in chain) {
             try {
-                return executeWithRetry(provider, label, messages, stream, onToken)
+                val result = executeWithRetry(provider, label, messages, stream, onToken)
+                // v0.29.2: fallback 服务成功后 usage 直通主 provider — 否则壳层读
+                // session.provider.lastUsage 恒 null, fallback 调用无缓存统计
+                if (provider !== this) this.lastUsage = provider.lastUsage
+                return result
             } catch (e: Exception) {
                 lastError = e
                 // Continue to next provider in the chain
@@ -353,6 +346,11 @@ class AdaptiveLlmProvider(
     }
 
     private fun buildRequestBody(messages: List<Map<String, String>>, stream: Boolean = false): String {
+        // 前缀形状监测 (v0.29.2, Reasonix cache_shape.go 对标): system prompt 变化即告警 —
+        // 自动前缀缓存将短暂失效 (DeepSeek 命中省 ~50 倍成本)
+        val firstMsg = messages.firstOrNull()
+        if (firstMsg?.get("role") == "system") SystemPromptShape.monitor(firstMsg["content"] ?: "")
+
         val json = buildJsonObject {
             put("model", model)
             put("max_tokens", config.maxTokens)
@@ -433,8 +431,7 @@ class AdaptiveLlmProvider(
             model = entry.model,
             config = RemoteApi.RemoteConfig(
                 maxTokens = config.maxTokens,
-                temperature = config.temperature,
-                timeoutMs = config.timeoutMs
+                temperature = config.temperature
             )
         )
     }
@@ -452,7 +449,7 @@ class AdaptiveLlmProvider(
     }
 
     override fun close() {
-        client.close()
+        // v0.29.2: 共享客户端 (LlmHttpClient) 进程级生命周期 — 不关闭
     }
 }
 

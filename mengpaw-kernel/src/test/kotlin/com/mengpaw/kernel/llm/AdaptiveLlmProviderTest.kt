@@ -67,10 +67,10 @@ class AdaptiveLlmProviderTest {
 
     @Test
     fun `adaptive config default values`() {
+        // v0.29.2: timeoutMs/socketTimeoutMs 已移除 — 超时集中配置在共享客户端 LlmHttpClient
         val config = AdaptiveLlmProvider.AdaptiveConfig()
         assertEquals(4096, config.maxTokens)
         assertEquals(0.7, config.temperature, 0.001)
-        assertEquals(120_000, config.timeoutMs)
         assertEquals(5, config.maxRetries)
         assertEquals(500, config.retryDelayMs)
         assertTrue(config.fallbacks.isEmpty())

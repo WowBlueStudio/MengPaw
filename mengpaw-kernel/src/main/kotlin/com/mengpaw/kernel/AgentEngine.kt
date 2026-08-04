@@ -270,15 +270,6 @@ class AgentEngine(
     /** Update agent output flow (used by sub-executors for progress reporting). */
     internal fun updateAgentOutput(output: String) { _output.value = output }
 
-    val cacheHitTokens: Long get() = llmRequestBuilder.cumulativeCacheHitTokens
-    val cacheMissTokens: Long get() = llmRequestBuilder.cumulativeCacheMissTokens
-    val cacheHitRatio: Double get() {
-        val total = cacheHitTokens + cacheMissTokens
-        return if (total > 0) cacheHitTokens.toDouble() / total else 0.0
-    }
-    val estimatedSavingsUsd: Double get() = cacheHitTokens * 0.0001372
-    val cacheStrategyLabel: String get() = CacheStrategy.labelFor(llmRequestBuilder.cacheStrategy)
-
     fun configureCacheStrategy(endpoint: String) {
         llmRequestBuilder.cacheStrategy = CacheStrategy.forProvider(endpoint)
     }
