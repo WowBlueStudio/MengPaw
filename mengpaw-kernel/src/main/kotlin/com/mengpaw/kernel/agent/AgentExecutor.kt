@@ -27,6 +27,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         "docs" to ::docs,
         "cli" to ::cli,
+        "modes" to ::modes,
         "boost" to ::boost,
         "boost.delete" to ::boostDelete,
         "profile" to ::profile,
@@ -59,6 +60,13 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         val ok = AgentDocs.deleteBoost(agent)
         return if (ok) ExecutionResult.ok("BOOST.md 已删除。你已完成初始化，不再需要引导文件。")
         else ExecutionResult.ok("BOOST.md 不存在——你早已完成初始化。")
+    }
+
+    /** Slash command mode menu — 8 execution modes (modes.md, template-provided). */
+    private suspend fun modes(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val modesDoc = docManager.getDoc(AgentDocType.MODES)
+        if (modesDoc.isBlank()) return ExecutionResult.ok("(modes.md 不存在)")
+        return ExecutionResult.ok(modesDoc)
     }
 
     /** First-run bootstrap ritual — guide the Agent through initial setup. */

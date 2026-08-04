@@ -102,5 +102,6 @@ enum class AgentDocType {
     SOUL,       // Agent style and execution mode (user-editable)
     PROFILE,    // Relationship settings (user-editable)
     BOOST,      // First-run bootstrap ritual (Agent reads on first wake)
-    CLI         // Framework + plugin command reference (auto-generated)
+    CLI,        // Framework + plugin command reference (auto-generated)
+    MODES       // Slash command mode menu (template-provided, Agent evolvable)
 }

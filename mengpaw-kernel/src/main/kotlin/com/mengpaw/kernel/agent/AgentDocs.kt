@@ -67,6 +67,26 @@ object AgentDocs {
         if (!dir.exists()) dir.mkdirs()
         // Ensure long-term memory directory exists — 幂等，老工作区升级后也补建
         File(dir, "memory").mkdirs()
+        // v0.29.1 升级迁移 v4: modes.md 补种 — 斜杠命令模式菜单文档。
+        // 无条件幂等 (须先于 v2/v3 分支——老工作区在 isLegacyWorkspace 时会提前 return):
+        // modes.md 缺失时从模板资产原子复制; 已演化/已存在文件不覆盖。
+        if (!File(dir, "modes.md").exists()) {
+            try {
+                var template = File(DataPaths.AGENT_TEMPLATES, "$language/modes.md")
+                if (!template.exists()) template = File(DataPaths.AGENT_TEMPLATES, "zh/modes.md")
+                if (template.exists()) {
+                    val tmpFile = File(dir, "modes.md.tmp")
+                    tmpFile.writeText(template.readText())
+                    if (tmpFile.renameTo(File(dir, "modes.md"))) {
+                        KernelLog.i("AgentDocs", "migrate: seeded modes.md ($agentName)")
+                    } else {
+                        tmpFile.delete()
+                    }
+                }
+            } catch (e: Exception) {
+                KernelLog.w("AgentDocs", "seed modes.md failed: ${e.message}")
+            }
+        }
         // v0.28.1 升级迁移 v2: v0.27.1 及更早的模板用 HEARTBEAT.md(大写)，当前统一为 heartbeat.md(小写)。
         // Android 文件系统区分大小写——大写残留会导致小写读取落空；孪生同步是并集式、不传播删除，
         // 旧设备的大写文件会被同步复活 → 只能靠每台设备自己的 bootstrap 自清理。

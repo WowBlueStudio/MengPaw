@@ -67,7 +67,7 @@ class CommandResultCache(
             "sys.calendar.calendars",
             // agent.* 查询（进程内文件/会话读）
             "agent.read", "agent.ls", "agent.sessions", "agent.audit",
-            "agent.docs", "agent.memory", "agent.profile", "agent.boost", "agent.soul"
+            "agent.docs", "agent.memory", "agent.profile", "agent.boost", "agent.soul", "agent.modes"
         )
     }
 }

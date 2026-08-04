@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.29.1 (2026-08-04) — 固定前缀抽离: 斜杠命令 → modes.md + FewShot 移除 (待发版)
+
+### 架构完善
+- **斜杠命令节抽离**: 8 种执行模式说明从系统提示词移到工作区文档 `modes.md` (模板资产 zh/en, 老工作区 bootstrap v4 自动补种); 前缀留一行指引, 模型回答「有什么模式」用新命令 `agent.modes` 读取
+- **FewShot 示例完全移除**: 格式契约由主提示词「响应格式（必须遵守）」节 + parse 容错 + needsContinue 兜底; 前缀减 ~2K
+- **拼接契约 parity 测试锁定**: 段顺序 (identity→main→docs) + 分隔符测试, 防重构静默改变前缀字节导致缓存失效
+- **删除文件摘除固定字段**: agents.md 无条件注入改条件注入; 修复缓存 gate 误命中缺陷 (docCache.isNotEmpty() 无法感知单文件删除 → mtime 快照比对)
+- **工作区边界段 (zh+en)**: 明确 Agent 私有目录 (Agent文档/inbox/技能剧本/配置等, 用户不可见) vs 用户共享目录 (agent.output, 文件管理器可见)
+
+### 新增命令
+- `agent.modes` — 查看斜杠命令模式菜单 (modes.md); 已注册 self.search 索引/命令缓存/循环检测安全名单/CLI.md
+
 ## v0.29.0 (2026-08-04) — 搜索原生内置 + 插件发布架构迁移 + Gitee 全量镜像
 
 ### 功能增强

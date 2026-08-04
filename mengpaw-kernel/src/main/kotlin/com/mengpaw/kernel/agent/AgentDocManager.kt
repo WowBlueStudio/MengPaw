@@ -123,6 +123,7 @@ class AgentDocManager(
             appendLine("|------|------|------|")
             appendLine("| agent.cli | agent.cli | 查看本文档 |")
             appendLine("| agent.docs | agent.docs | 列出所有文档 |")
+            appendLine("| agent.modes | agent.modes | 查看斜杠命令模式菜单 (modes.md) |")
             appendLine("| agent.memory | agent.memory [关键词] | 记忆索引/搜索 |")
             appendLine("| agent.audit | agent.audit [条数] | 命令审计日志 |")
             appendLine("| agent.profile | agent.profile | 身份档案 |")

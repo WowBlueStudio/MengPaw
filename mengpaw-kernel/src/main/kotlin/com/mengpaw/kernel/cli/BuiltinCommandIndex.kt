@@ -87,6 +87,9 @@ object BuiltinCommandIndex {
         idx("agent.boost", "阅读 Agent 初始化引导手册 (新 Agent 第一步)", "agent.boost",
             listOf("引导", "入门", "初始化", "新手", "教程", "Boost", "手册"),
             listOf("boost", "guide", "tutorial", "init", "getting started", "onboarding"))
+        idx("agent.modes", "查看斜杠命令模式菜单 (8 种执行模式说明)", "agent.modes",
+            listOf("模式", "斜杠", "命令菜单", "执行方式", "Mission", "Swarm", "Goal", "Plan", "Fleet", "Research", "Silent"),
+            listOf("modes", "slash", "command menu", "execution mode", "Mission", "Swarm", "Goal", "Plan", "Fleet", "Research", "Silent"))
         idx("agent.boost.delete", "删除 Agent 引导加速文件", "agent.boost.delete",
             listOf("删除", "Boost", "引导", "清理"),
             listOf("delete", "remove", "boost", "clean"))

@@ -19,11 +19,12 @@ class PromptEngineTest {
     }
 
     @Test
-    fun `fewshot trimmed keeps action markers and drops removed steps`() {
+    fun `fewshot removed - format contract held by main prompt`() {
         val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
-        assertTrue("精简后仍含 Action 标记", prompt.contains("Action:"))
-        assertTrue("示例 2 压缩后新文本存在（内置搜索）", prompt.contains("搜索能力原生内置"))
-        assertFalse("示例 2 不再演示 plugin.install 安装流程", prompt.contains("查插件市场并安装 tavily-plugin"))
+        assertFalse("FewShot 示例已从前缀移除", prompt.contains("## 示例（严格模仿格式）"))
+        assertFalse("示例内容不得残留", prompt.contains("搜索能力原生内置"))
+        assertTrue("格式契约由主提示词响应格式节承担", prompt.contains("Action: （命令名称）"))
+        assertTrue("格式契约含 Thought 标记", prompt.contains("Thought:"))
     }
 
     @Test
@@ -243,16 +244,22 @@ class PromptEngineTest {
     // 此组测试锁定契约: 改顺序/分隔符必须显式改测试。
 
     @Test
-    fun `parity - prompt segments order is identity then main then fewshot then docs`() {
+    fun `parity - prompt segments order is identity then main then docs`() {
         val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
         val identityIdx = prompt.indexOf("你是 **MengPaw**")
         val mainIdx = prompt.indexOf("你是檬爪 MengPaw")
-        val fewIdx = prompt.indexOf("## 示例（严格模仿格式）")
         val docsIdx = prompt.indexOf("## 📋 Skills 双层池")
         assertTrue("identity 必须位于提示词开头", identityIdx == 0)
         assertTrue("主提示词必须在 identity 之后", mainIdx > identityIdx)
-        assertTrue("FewShot 必须在主提示词之后", fewIdx > mainIdx)
-        assertTrue("docsBlock 必须在 FewShot 之后", docsIdx > fewIdx)
+        assertTrue("docsBlock 必须在主提示词之后", docsIdx > mainIdx)
+    }
+
+    @Test
+    fun `slash commands moved out - one-line pointer stays`() {
+        val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertFalse("斜杠命令清单已从前缀移除", prompt.contains("**/Mission**"))
+        assertFalse("模式详情不得残留前缀", prompt.contains("RubricGate"))
+        assertTrue("前缀保留一行指引", prompt.contains("agent.modes"))
     }
 
     @Test

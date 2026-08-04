@@ -140,11 +140,6 @@ class PromptEngine {
             AgentLanguage.ENGLISH -> ENGLISH_PROMPT
         }
 
-        val fewShot = when (lang) {
-            AgentLanguage.CHINESE -> CHINESE_FEWSHOT
-            AgentLanguage.ENGLISH -> ENGLISH_FEWSHOT
-        }
-
         // Return cached prompt if nothing changed — skip all disk I/O
         if (agentName == cachedPromptAgent && lang == cachedPromptLang &&
             framework == cachedPromptFramework && modelName == cachedPromptModel &&
@@ -255,12 +250,10 @@ Skills 分为两层：
             }
         }
 
-        val prompt = buildString(identity.length + basePrompt.length + fewShot.length + docsBlock.length + 4) {
+        val prompt = buildString(identity.length + basePrompt.length + docsBlock.length + 2) {
             append(identity)
             // 注入端口单一事实源表 (__PORTS_TABLE__ 占位符见 CHINESE_PROMPT/ENGLISH_PROMPT)
             append(basePrompt.replace("__PORTS_TABLE__", com.mengpaw.kernel.ports.Ports.describe(if (lang == AgentLanguage.CHINESE) "zh" else "en")))
-            append('\n')
-            append(fewShot)
             append('\n')
             append(docsBlock)
         }
@@ -297,91 +290,6 @@ Skills 分为两层：
             "boost.md", "heartbeat.md", "trumanshow.md"
         )
 
-        // ── Few-shot examples: demonstrate correct ReAct usage with real MengPaw commands ──
-        val CHINESE_FEWSHOT = """
-            ## 示例（严格模仿格式）
-
-            **示例 1 — 命令查找 + 状态**
-
-            用户：检查设备状态，看看 /sdcard/Download 下有什么
-
-            Thought: 不知道文件列表用什么命令。用 self.search 按需求搜索。
-            Action: self.search
-            Action Input: {"query":"列出目录文件"}
-
-            Observation: 1. agent.ls — agent.ls [路径]\n  列出工作区中的文件和目录\n2. fs.glob — fs.glob <pattern>\n  按通配符搜索文件
-
-            Thought: agent.ls 就是我要的。先查状态，再列工作区目录。
-            Action: self.status
-            Action Input: {}
-
-            Observation: {"status":"online","version":"0.15.0"}
-
-            Thought: 设备正常。用 agent.ls 列出工作区目录。
-            Action: agent.ls
-            Action Input: {"path":"."}
-
-            Observation: [文件] report.pdf (2.3MB)\n[文件] photo.jpg (1.1MB)
-
-            Final Answer: 设备在线，v0.15.0。下载目录有 2 个文件：report.pdf (2.3MB)、photo.jpg (1.1MB)。
-
-            ---
-
-            **示例 2 — 网页搜索（内置能力）**
-
-            用户：帮我搜索 Android 16 的最新消息
-
-            Thought: 搜索能力原生内置。直接 tavily.search。
-            Action: tavily.search
-            Action Input: {"query":"Android 16 最新消息"}
-
-            Observation: ## AI 摘要\nAndroid 16 已正式发布，带来桌面模式、无缝更新等新特性。\n## 搜索结果 (3)\n1. **Android 16 正式版发布** — https://android.com/16\n   Android 16 是首个面向大屏设备的版本...\n2. **Android 16 上手体验** — https://example.com/16-review\n   新增锁屏小组件与无缝更新...
-
-            Final Answer: 已搜索 Android 16 最新消息：正式版已发布，主打桌面模式与无缝更新（来源：前 2 条）。
-        """.trimIndent()
-
-        val ENGLISH_FEWSHOT = """
-            ## Examples (follow this format exactly)
-
-            **Example 1 — Command Search + Status**
-
-            User: Check device status and list /sdcard/Download
-
-            Thought: Don't know the file listing command. Use self.search to find it.
-            Action: self.search
-            Action Input: {"query":"list directory files"}
-
-            Observation: 1. agent.ls — agent.ls [path]\n  List workspace files and directories\n2. fs.glob — fs.glob <pattern>\n  Search files by glob pattern
-
-            Thought: agent.ls is what I need. Check status first, then list.
-            Action: self.status
-            Action Input: {}
-
-            Observation: {"status":"online","version":"0.15.0"}
-
-            Thought: Device online. List the workspace directory.
-            Action: agent.ls
-            Action Input: {"path":"."}
-
-            Observation: [file] report.pdf (2.3MB)\n[file] photo.jpg (1.1MB)
-
-            Final Answer: Device online, v0.15.0. Downloads: report.pdf (2.3MB), photo.jpg (1.1MB).
-
-            ---
-
-            **Example 2 — Web Search (built-in)**
-
-            User: Search for the latest Android 16 news
-
-            Thought: Web search is built in. Use tavily.search directly.
-            Action: tavily.search
-            Action Input: {"query":"latest Android 16 news"}
-
-            Observation: ## AI Summary\nAndroid 16 has been released with desktop mode and seamless updates.\n## Search Results (3)\n1. **Android 16 Stable Released** — https://android.com/16\n   Android 16 targets large screens...\n2. **Android 16 Hands-On** — https://example.com/16-review\n   New lockscreen widgets and seamless updates...
-
-            Final Answer: Latest Android 16 news: stable release with desktop mode and seamless updates (sources: top 2).
-        """.trimIndent()
-
         val CHINESE_PROMPT = """
             你是檬爪 MengPaw
             你通过 CLI 命令操控 Android 设备。
@@ -411,16 +319,7 @@ Skills 分为两层：
             ## 自身能力（全部内建，无需安装）
 
             ### 斜杠命令（用户点输入框 + → 执行模式区选择。MengPaw 特有功能，没有 Normal/Deep/Dream 模式）
-            消息带标签时你自动切换执行策略：
-            - **/Mission** — 复杂任务→LLM拆解→Worker执行→Strict Verifier严格审查(结构化反馈+精准重试)→LLM综合报告。自适应步数:接近上限仍有效推进时自动扩展。
-            - **/Swarm（火种模式）** — 星星之火，可以燎原：任务→LLM拆解→并行Worker(可按角色混合不同模型)→Verifier验证→合成报告。适合大规模检索/批量处理/多视角复合任务。失败自动重派或终止(Andon协议)，共享步数预算+并行上限防失控。Worker不写记忆、不保留跨任务上下文。
-            - **/Fleet（步坦协同模式）** — 装甲集群推进+步兵协同清剿：多 Agent 编队协同、跨设备分布式执行复杂任务（tribe.fleet 引擎）。
-            - **/Goal** — 单目标驱动→RubricGate自动评估「目标完成了吗?」→YES结束/NO继续
-            - **/Plan** — LLM先分解3-7步计划→每步独立mini ReAct执行→逐步标记完成→汇总
-            - **/Research** — 多轮搜索(tavily/web)→交叉验证每条信息→来源标注→结构化综合报告
-            - **/Translate** — 调用翻译中间件，直接完成翻译（不经过ReAct循环）
-            - **/Silent** — 后台静默执行，不阻塞对话，完成后以系统消息推送结果
-            用户问「有什么模式」时：列出全部，说明怎么在输入框+号里选。
+            消息带标签时你自动切换执行策略，无需额外处理。8 种模式的完整说明在工作区 `modes.md`——用户问「有什么模式」时，用 `agent.modes` 读取后列出全部，并说明怎么在输入框 + 号里选。
 
             ### 记忆系统 (三轨制)
             三层记忆，防止上下文膨胀导致你降智。每层都有完整的增删改查。
@@ -519,16 +418,7 @@ Skills 分为两层：
             ## Built-in Capabilities (no plugins needed)
 
             ### Slash Commands (user taps + → Execution Mode. MengPaw-specific, NOT Normal/Deep/Dream)
-            Tagged messages auto-switch your execution strategy:
-            - **/Mission** — Complex task→LLM decompose→Worker execution→Strict Verifier (structured feedback+precise retry)→LLM synthesis. Adaptive steps: auto-extends when making progress near limit.
-            - **/Swarm (火种 Swarm Mode)** — "A single spark starts a prairie fire": LLM decompose→parallel workers (per-role mixable models)→Verifier→synthesis. For large-scale retrieval/batch/multi-perspective composite tasks. Failures auto-redeploy or terminate (Andon); shared step budget + parallel cap prevent runaway. Workers write no memory, keep no cross-task context.
-            - **/Fleet (步坦协同 Combined Arms Mode)** — Armored advance + infantry coordination: multi-agent combined-arms teams, cross-device distributed execution of complex tasks (tribe.fleet engine).
-            - **/Goal** — Single goal→RubricGate auto-evaluates "goal completed?"→YES stop/NO continue
-            - **/Plan** — LLM plans 3-7 steps first→execute each as mini ReAct→mark done→synthesize
-            - **/Research** — Multi-round search (tavily/web)→cross-validate→source annotations→structured report
-            - **/Translate** — Uses translate middleware, direct completion (skips ReAct loop)
-            - **/Silent** — Background silent execution, push result when done
-            When asked "what modes": list all of them, explain + button.
+            Tagged messages auto-switch your execution strategy — no extra handling needed. The full description of all 8 modes lives in workspace `modes.md`: when asked "what modes", read it with `agent.modes`, list them all, and explain the + button in the input box.
 
             ### Memory System (three-tier)
             Three tiers to prevent context bloat. Each tier has full CRUD.
@@ -606,7 +496,7 @@ Skills 分为两层：
          * 置于 companion 末尾: 引用全部模板常量定义。
          */
         val TEMPLATE_HASH: Int =
-            (CHINESE_PROMPT + ENGLISH_PROMPT + CHINESE_FEWSHOT + ENGLISH_FEWSHOT).hashCode()
+            (CHINESE_PROMPT + ENGLISH_PROMPT).hashCode()
     }
 
     /**
@@ -707,7 +597,7 @@ Skills 分为两层：
 
     /** Safe-to-repeat commands — never trigger loop detection. */
     private val safeCommands = setOf(
-        "agent.docs", "agent.cli", "agent.memory", "agent.profile", "agent.boost",
+        "agent.docs", "agent.cli", "agent.memory", "agent.profile", "agent.boost", "agent.modes",
         "agent.soul", "agent.audit", "agent.storage", "agent.sessions",
         "agent.read", // read-only, safe to repeat
         "self.stats", "self.version", "self.time", "self.tools", "self.search", "self.status",
