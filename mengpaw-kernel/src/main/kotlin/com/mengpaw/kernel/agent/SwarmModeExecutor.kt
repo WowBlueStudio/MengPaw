@@ -97,8 +97,8 @@ class SwarmModeExecutor(
             }.awaitAll()
         }
 
-        // ── Phase 3: 合成器汇总 ──
-        val synthesis = synthesize(guardedTask, cards, providerFor(SwarmRoles.SYNTHESIZER, roles))
+        // ── Phase 3: 合成器汇总 (流式: 最终报告逐字输出) ──
+        val synthesis = synthesize(guardedTask, cards, providerFor(SwarmRoles.SYNTHESIZER, roles), onDelta)
         val verified = cards.count { it.status == SwarmSubtaskStatus.VERIFIED }
         val failed = cards.count { it.status == SwarmSubtaskStatus.FAILED }
         val skipped = cards.count { it.status == SwarmSubtaskStatus.SKIPPED }
@@ -350,7 +350,8 @@ class SwarmModeExecutor(
     private suspend fun synthesize(
         task: String,
         cards: List<SwarmResultCard>,
-        synthesizerProvider: LlmProvider
+        synthesizerProvider: LlmProvider,
+        onDelta: ((String) -> Unit)? = null
     ): String {
         val verified = cards.count { it.status == SwarmSubtaskStatus.VERIFIED }
         val failed = cards.count { it.status == SwarmSubtaskStatus.FAILED }
@@ -363,7 +364,13 @@ class SwarmModeExecutor(
         )
 
         return try {
-            synthesizerProvider.complete(synthesisPrompt)
+            // v0.28.4: 合成阶段流式化 — 用户最终看到的大段文本逐字输出;
+            // worker/decompose/verify 并行阶段保持非流式 (onStep/traces 呈现进度)
+            if (onDelta != null) {
+                synthesizerProvider.completeStreaming(synthesisPrompt, onDelta)
+            } else {
+                synthesizerProvider.complete(synthesisPrompt)
+            }
         } catch (e: Exception) {
             // 合成不可用 — 拼接卡片兜底
             parts

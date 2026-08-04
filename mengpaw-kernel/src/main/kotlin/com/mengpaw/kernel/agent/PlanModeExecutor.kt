@@ -28,7 +28,11 @@ class PlanModeExecutor(
      * @param onStep optional step callback for progress tracking
      * @return the execution summary
      */
-    suspend fun runWithPlan(task: String, maxStepsPerPlanStep: Int = 5, onStep: ((AgentEngine.TraceStep) -> Unit)? = null): String {
+    suspend fun runWithPlan(
+        task: String, maxStepsPerPlanStep: Int = 5,
+        onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
+    ): String {
         val llmProvider = agentEngine.getLlmProvider()
 
         agentEngine.updateAgentState(AgentState.Running(task, 0, 0))
@@ -48,7 +52,7 @@ class PlanModeExecutor(
             step.status = PlanStepStatus.RUNNING
             agentEngine.updateAgentState(AgentState.Running("[Step ${step.index + 1}/${plan.totalSteps}] ${step.description}", step.index + 1, plan.totalSteps))
             try {
-                val stepResult = executePlanStep(step, maxStepsPerPlanStep, llmProvider)
+                val stepResult = executePlanStep(step, maxStepsPerPlanStep, llmProvider, onDelta)
                 results.add("[OK] Step ${step.index + 1}: ${stepResult}")
                 step.status = PlanStepStatus.COMPLETED
             } catch (e: Exception) {
@@ -110,14 +114,23 @@ class PlanModeExecutor(
     }
 
     /** Execute a single plan step in a dedicated session. */
-    private suspend fun executePlanStep(step: PlanStep, maxSteps: Int, llmProvider: com.mengpaw.kernel.llm.LlmProvider): String {
+    private suspend fun executePlanStep(
+        step: PlanStep, maxSteps: Int,
+        llmProvider: com.mengpaw.kernel.llm.LlmProvider,
+        onDelta: ((String) -> Unit)? = null
+    ): String {
         val stepSession = sessionManager.createSession("PlanStep: ${step.description}")
         val context = ExecutionContext(sessionId = stepSession.id)
         sessionManager.addMessage(stepSession.id, com.mengpaw.kernel.session.Message("system",
             "Execute this single step: ${step.description}\nPlanned action: ${step.action}\nExpected outcome: ${step.expectedOutcome}"))
         for (iteration in 0 until maxSteps) {
             val conversation = agentEngine.buildConversation(stepSession.id)
-            val llmResponse = llmProvider.completeWithMessages(conversation)
+            // v0.28.4: 步骤执行 LLM 调用流式化 (onDelta 透传)
+            val llmResponse = if (onDelta != null) {
+                llmProvider.completeStreamingWithMessages(conversation, onDelta)
+            } else {
+                llmProvider.completeWithMessages(conversation)
+            }
             val sanitized = Sanitizer.sanitize(llmResponse)
             sessionManager.addMessage(stepSession.id, com.mengpaw.kernel.session.Message("assistant", sanitized))
             val parsed = promptEngine.parse(sanitized)

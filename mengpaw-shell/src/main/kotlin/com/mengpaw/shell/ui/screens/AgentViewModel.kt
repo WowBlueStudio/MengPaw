@@ -434,10 +434,14 @@ class AgentViewModel : ViewModel() {
                         val mutable = current.toMutableList()
                         val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
                         if (idx >= 0) {
-                            mutable[idx] = ChatMessageUi.AgentWithTrace(
+                            // 替换后同步 ref/index — 快路径恒命中 (v0.28.4)
+                            val newMsg = ChatMessageUi.AgentWithTrace(
                                 "思考中...", traces.toList(),
                                 isRunning = true, executionMode = modePrefix, agentRef = agentRef
                             )
+                            runningMsgRef = newMsg
+                            runningMsgIndex = idx
+                            mutable[idx] = newMsg
                         }
                         mutable
                     }
@@ -455,34 +459,44 @@ class AgentViewModel : ViewModel() {
                 //  - 含 "Thought:" → 隐藏思考样板, 只显示其后内容 (thought-only 轮)
                 //  - 无任何标记 → 流式显示全文 (parse Rule 3 纯文本答案, 必须流式显示)
                 // 节流: 50ms 窗口合并增量, 避免每 token 全量重 parse Markdown
+                fun computeStreamDisplayText(text: String): String {
+                    val hasFinal = text.contains("Final Answer:", ignoreCase = true)
+                    val hasAction = text.contains("Action:", ignoreCase = true)
+                    val hasThought = text.contains("Thought:", ignoreCase = true)
+                    return when {
+                        hasFinal -> text.substringAfter("Final Answer:", text)
+                        hasAction -> ""        // 工具轮: 不显示样板
+                        hasThought -> text.substringAfter("Thought:", text)
+                        else -> text           // 纯文本答案流
+                    }
+                }
                 val onDelta: (String) -> Unit = { delta ->
                     streamBuf.append(delta)
                     val now = System.currentTimeMillis()
                     if (now - lastDeltaPush >= 50) { // 节流合并
                         lastDeltaPush = now
                         val text = streamBuf.toString()
-                        val hasFinal = text.contains("Final Answer:", ignoreCase = true)
-                        val hasAction = text.contains("Action:", ignoreCase = true)
-                        val hasThought = text.contains("Thought:", ignoreCase = true)
-                        val displayText = when {
-                            hasFinal -> text.substringAfter("Final Answer:", text)
-                            hasAction -> ""        // 工具轮: 不显示样板
-                            hasThought -> text.substringAfter("Thought:", text)
-                            else -> text           // 纯文本答案流
-                        }
+                        val displayText = computeStreamDisplayText(text)
                         if (displayText.isNotBlank()) {
                             session.messages.update { current ->
                                 val mutable = current.toMutableList()
                                 val ridx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
                                 if (ridx >= 0) {
-                                    mutable[ridx] = ChatMessageUi.AgentWithTrace(
+                                    // 替换后同步 ref/index — 快路径恒命中 (此前 ref 恒指向被替换的旧实例)
+                                    val newMsg = ChatMessageUi.AgentWithTrace(
                                         displayText, traces.toList(),
                                         isRunning = true, executionMode = modePrefix, agentRef = agentRef
                                     )
+                                    runningMsgRef = newMsg
+                                    runningMsgIndex = ridx
+                                    mutable[ridx] = newMsg
                                 }
                                 mutable
                             }
                         }
+                        KernelLog.d("MengPawStream",
+                            "UI-PUSH dlen=${delta.length} blen=${streamBuf.length} " +
+                            "blank=${displayText.isBlank()} disp=${displayText.take(30)}")
                     }
                 }
 
@@ -507,12 +521,16 @@ class AgentViewModel : ViewModel() {
                         if (detected == LoopMode.GOAL || detected == LoopMode.MISSION) {
                             inputTagManager.loopMode = detected
                         }
+                        KernelLog.d("MengPawStream", "UI-DETECT score=$detected autoUpgrade=true")
+                    } else {
+                        KernelLog.d("MengPawStream", "UI-DETECT score=$detected autoUpgrade=false")
                     }
                 }
 
                 // Mode dispatch: map slash command + loopMode to the correct engine method
+                KernelLog.d("MengPawStream", "UI-MODE executionMode=${executionMode?.name} loopMode=${inputTagManager.loopMode}")
                 val result = when {
-                    executionMode == ExecutionMode.PLAN -> session.engine.runWithPlan(task = finalTask, onStep = onStep)
+                    executionMode == ExecutionMode.PLAN -> session.engine.runWithPlan(task = finalTask, onStep = onStep, onDelta = onDelta)
                     executionMode == ExecutionMode.MISSION -> session.engine.runWithMission(task = finalTask, onStep = onStep, onDelta = onDelta)
                     executionMode == ExecutionMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep, onDelta = onDelta)
                     // ── 显式斜杠命令结束, 以下为 loopMode 分发 ──
@@ -525,6 +543,32 @@ class AgentViewModel : ViewModel() {
                     else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta)
                 }
 
+                KernelLog.d("MengPawStream", "UI-FINAL resultLen=${result.length} translate=$doTranslate")
+
+                // ── 尾段 flush: 最后一次 LLM 调用 <50ms 内的增量在节流窗口内未推送,
+                // run() 已返回不会再有 delta — 强制推送一次缓冲, 修复"最后一段整块弹出"
+                // (doTranslate 开启时跳过: 最终 replace 会整段替换为中文, 提前 flush
+                //  英文尾段会造成"闪一下英文再变中文")
+                if (streamBuf.isNotBlank() && !doTranslate) {
+                    val flushText = computeStreamDisplayText(streamBuf.toString())
+                    if (flushText.isNotBlank()) {
+                        session.messages.update { current ->
+                            val mutable = current.toMutableList()
+                            val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
+                            if (idx >= 0) {
+                                val newMsg = ChatMessageUi.AgentWithTrace(
+                                    flushText, traces.toList(),
+                                    isRunning = true, executionMode = modePrefix, agentRef = agentRef
+                                )
+                                runningMsgRef = newMsg
+                                runningMsgIndex = idx
+                                mutable[idx] = newMsg
+                            }
+                            mutable
+                        }
+                    }
+                }
+
                 // Translate result back to Chinese for US models
                 val displayResult = if (doTranslate) translator.toChinese(result) else result
 
@@ -532,13 +576,16 @@ class AgentViewModel : ViewModel() {
                     val mutable = current.toMutableList()
                     val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
                     if (idx >= 0) {
-                        mutable[idx] = ChatMessageUi.AgentWithTrace(
+                        val newMsg = ChatMessageUi.AgentWithTrace(
                             finalContent = displayResult,
                             traces = traces.toList(),
                             isRunning = false,
                             executionMode = modePrefix,
                             agentRef = agentRef
                         )
+                        runningMsgRef = newMsg
+                        runningMsgIndex = idx
+                        mutable[idx] = newMsg
                     } else {
                         mutable.add(ChatMessageUi.Agent(displayResult,
                             executionMode = modePrefix, agentRef = agentRef))
@@ -596,13 +643,16 @@ class AgentViewModel : ViewModel() {
                     val mutable = current.toMutableList()
                     val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
                     if (idx >= 0) {
-                        mutable[idx] = ChatMessageUi.AgentWithTrace(
+                        val newMsg = ChatMessageUi.AgentWithTrace(
                             finalContent = errorMsg,
                             traces = emptyList(),
                             isRunning = false,
                             executionMode = modePrefix,
                             agentRef = agentRef
                         )
+                        runningMsgRef = newMsg
+                        runningMsgIndex = idx
+                        mutable[idx] = newMsg
                     } else {
                         mutable.add(ChatMessageUi.Agent(errorMsg,
                             executionMode = modePrefix, agentRef = agentRef))

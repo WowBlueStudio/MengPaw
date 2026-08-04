@@ -34,6 +34,9 @@ class RemoteApi(
         install(HttpTimeout) {
             requestTimeoutMillis = config.timeoutMs
             connectTimeoutMillis = 20_000
+            // 推理模型思考期可达 60s+ 无数据 — 与 AdaptiveLlmProvider 对齐 (Ktor 3.x
+            // OkHttp 引擎不映射 requestTimeout, socketTimeout 是唯一活超时)
+            socketTimeoutMillis = 180_000
         }
     }
 
@@ -60,6 +63,20 @@ class RemoteApi(
 
     override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String {
         val messages = listOf(mapOf("role" to "user", "content" to prompt))
+        return completeStreamingWithMessages(messages, onToken)
+    }
+
+    /**
+     * 流式 messages 调用 — v0.28.4: 从 completeStreaming 平移, 修正两个缺陷:
+     * 1. 原实现是死代码 — fallback 链(AdaptiveLlmProvider.executeWithRetry else 分支)
+     *    恒走非流式 completeWithMessages, 此方法从不被调用
+     * 2. HTTP 错误原返回 errorBody 文本(会被当作成功响应), 改为抛 LlmApiException
+     *    (与 AdaptiveLlmProvider 对齐, 触发上层重试/fallback 链)
+     */
+    override suspend fun completeStreamingWithMessages(
+        messages: List<Map<String, String>>,
+        onToken: (String) -> Unit
+    ): String {
         val requestBody = buildRequestBody(messages, stream = true)
 
         val response = client.post(apiEndpoint) {
@@ -71,7 +88,7 @@ class RemoteApi(
         // HTTP error check
         if (!response.status.isSuccess()) {
             val errorBody = try { response.bodyAsText() } catch (_: Exception) { "unknown" }
-            return errorBody.take(500)
+            throw LlmApiException(response.status.value, "HTTP ${response.status.value}: ${errorBody.take(200)}")
         }
 
         // SSE streaming: read data: lines incrementally

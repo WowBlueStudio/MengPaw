@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.28.4 (2026-08-04) — 流式第三轮彻查: 打点验证 + 五缺陷修复
+
+### 修复
+- **fallback 链路静默丢流式**: AdaptiveLlmProvider.executeWithRetry 的 fallback 分支此前恒走非流式 completeWithMessages(onToken 被丢弃)——主 API 失败后回答整段弹出;改为 stream 时走 completeStreamingWithMessages;RemoteApi 补 override(平移死代码 completeStreaming)并补齐 180s socketTimeout
+- **60s 超时静默截断**: consumeSseStream 把 SocketTimeoutException 吞掉返回空/部分内容且不重试;改为区分取消(先行 rethrow, 保证 stop() 契约)与异常(首 token 前超时抛 LlmApiException 触发重试+fallback 链;已有内容则返回部分);socketTimeoutMs 提至 180s(推理模型思考期可达 60s+; Ktor 3.x OkHttp 引擎不映射 requestTimeout, socketTimeout 是唯一活超时)
+- **Swarm/Mission 合成阶段流式化**: 最终报告(synthesize)改 completeStreaming 逐字输出;worker/decompose/verify 并行阶段保持非流式(onStep/traces 呈现进度)
+- **PLAN 模式补流式通道**: runWithPlan → executePlanStep 透传 onDelta, 步骤执行 LLM 调用流式化
+- **resolveRunningIndex 快路径修复**: 每次气泡替换后同步 runningMsgRef/runningMsgIndex(此前 ref 恒指向被替换的旧实例, 每次更新退化为 O(n) 类型兜底)
+- **节流尾段 flush**: run() 返回后强制推送 50ms 窗口内残留增量, 修复"最后一段整块弹出"(doTranslate 开启时跳过)
+
+### 诊断
+- 全链路埋 MengPawStream 打点日志(传输层 S-OPEN/S-FIRST/S-DONE/S-ERR、引擎 ENG-REACT、UI UI-DETECT/UI-MODE/UI-PUSH/UI-FINAL、重试 RETRY), 真机 logcat 可完整还原流式链路, 验证后移除
+
+### 发行
+- Shell APK v0.28.4 (versionCode 28004) — 本地打包推送两台设备, 暂不上传远端
+
 ## v0.28.3 (2026-08-04) — 流式输出三根因修复 (金字塔彻查)
 
 ### 修复

@@ -103,7 +103,12 @@ class MissionModeExecutor(
         )
 
         val synthesis = try {
-            llmProvider.complete(synthesisPrompt)
+            // v0.28.4: 合成阶段流式化 — 最终报告逐字输出
+            if (onDelta != null) {
+                llmProvider.completeStreaming(synthesisPrompt, onDelta)
+            } else {
+                llmProvider.complete(synthesisPrompt)
+            }
         } catch (_: Exception) {
             parts
         }

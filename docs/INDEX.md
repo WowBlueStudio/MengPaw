@@ -20,6 +20,7 @@
 | `compilation-issues.md` | 1 KB | 10 类编译错误速查表 |
 | `audit-methodology.md` | 4 KB | 三层十二问审计方法论 |
 | `pyramid-investigation.md` | 6 KB | 金字塔彻查法：从现象逐层拆链路、证据排除、反模式与实战案例 | 功能"永远修不好"或做链路级排障时 |
+| `streaming-investigation-20260804.md` | 4 KB | 流式传输调查：链路全通、token 突发+节流致无打字机、R8 裁剪 Log.d 之谜、v0.28.4 代码状态 | 重启后继续流式修复、排流式问题时 |
 | `audit-records.md` | 3 KB | 各版本审校记录清单 |
 | `roadmap.md` | 2 KB | 开发路线图 Phase 1-10 |
 

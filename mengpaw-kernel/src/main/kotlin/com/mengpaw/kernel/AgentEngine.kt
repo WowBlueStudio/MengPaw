@@ -574,6 +574,7 @@ class AgentEngine(
                 }
 
                 val conversation = buildConversation(session.id)
+                KernelLog.d("MengPawStream", "ENG-REACT step=$step stream=${onDelta != null}")
                 // 流式调用: 增量 token 经 onDelta 实时透传 UI(打字机效果); 完整文本仍用于解析
                 val llmResponse = if (onDelta != null)
                     llmProvider.completeStreamingWithMessages(conversation, onDelta)
@@ -860,8 +861,11 @@ class AgentEngine(
      * Plan-mode: structured plan generation and step-by-step execution.
      * Delegates to [PlanModeExecutor].
      */
-    suspend fun runWithPlan(task: String, maxStepsPerPlanStep: Int = 5, onStep: ((TraceStep) -> Unit)? = null): String =
-        planModeExecutor.runWithPlan(task, maxStepsPerPlanStep, onStep)
+    suspend fun runWithPlan(
+        task: String, maxStepsPerPlanStep: Int = 5,
+        onStep: ((TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null
+    ): String = planModeExecutor.runWithPlan(task, maxStepsPerPlanStep, onStep, onDelta)
 
     /** Format a plan summary for display. Delegates to [PlanModeExecutor]. */
     fun formatPlanSummary(plan: TaskPlan): String = planModeExecutor.formatPlanSummary(plan)
