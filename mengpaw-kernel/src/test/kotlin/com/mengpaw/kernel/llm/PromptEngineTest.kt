@@ -237,4 +237,46 @@ class PromptEngineTest {
         assertTrue("英文提示词应说明 browser_return_* 是交换文件", prompt.contains("browser_return_*.md"))
         assertTrue("英文提示词应列 search 管道命令", prompt.contains("search.clean"))
     }
+
+    // ── 固定前缀拼接契约 (parity) 锁定 ─────────────────────────────
+    // 拼接顺序/分隔符任何改动会改变发送给 LLM 的前缀字节 → DeepSeek 前缀缓存整体失效。
+    // 此组测试锁定契约: 改顺序/分隔符必须显式改测试。
+
+    @Test
+    fun `parity - prompt segments order is identity then main then fewshot then docs`() {
+        val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        val identityIdx = prompt.indexOf("你是 **MengPaw**")
+        val mainIdx = prompt.indexOf("你是檬爪 MengPaw")
+        val fewIdx = prompt.indexOf("## 示例（严格模仿格式）")
+        val docsIdx = prompt.indexOf("## 📋 Skills 双层池")
+        assertTrue("identity 必须位于提示词开头", identityIdx == 0)
+        assertTrue("主提示词必须在 identity 之后", mainIdx > identityIdx)
+        assertTrue("FewShot 必须在主提示词之后", fewIdx > mainIdx)
+        assertTrue("docsBlock 必须在 FewShot 之后", docsIdx > fewIdx)
+    }
+
+    @Test
+    fun `parity - deleted agents doc drops the agents section`() {
+        // agents.md 删除后不得再注入固定标题段 (v0.29.0: 无条件注入改为条件注入)
+        val dir = File(DataPaths.AGENTS, "MengPaw")
+        dir.mkdirs()
+        val doc = File(dir, "agents.md")
+        doc.writeText("## 安全\n- 测试内容")
+        try {
+            val withDoc = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+            assertTrue("agents.md 存在时应注入操作手册段", withDoc.contains("你的操作手册（AGENTS.md）"))
+        } finally {
+            doc.delete()
+        }
+        val withoutDoc = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertFalse("agents.md 删除后不得注入空标题段", withoutDoc.contains("你的操作手册（AGENTS.md）"))
+        assertFalse("agents.md 删除后不得注入残留内容", withoutDoc.contains("测试内容"))
+    }
+
+    @Test
+    fun `parity - ports placeholder never leaks and table is replaced`() {
+        val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertFalse("占位符不得泄漏到前缀", prompt.contains("__PORTS_TABLE__"))
+        assertTrue("端口表替换产物必须存在", prompt.contains("9876"))
+    }
 }

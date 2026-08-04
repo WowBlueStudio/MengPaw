@@ -41,8 +41,20 @@ class PromptEngine {
     private var cachedPromptAgent: String? = null
     private var cachedPromptFramework: String? = null
     private var cachedPromptModel: String? = null
+
+    /** 工作区文档 mtime 快照 — 任何文档删除/修改即失配, 强制重建提示词.
+     *  (docCache.isNotEmpty() 只检查条目存在, 无法感知单个文件被删除 —
+     *   文件删除后其余文档缓存仍在 → 旧 gate 误命中返回含已删文件的旧前缀) */
+    private var docMtimes: Map<String, Long>? = null
     /** 模板内容哈希快照 — 提示词常量改动自动失效（无需手动 bump）。 */
     private var cachedTemplateHash: Int? = null
+
+    /** 全部工作区文档的 mtime 快照（仅 stat, 不读内容）。 */
+    private fun currentDocMtimes(agentName: String): Map<String, Long> =
+        AGENT_DOC_FILES.associateWith { f ->
+            val file = java.io.File("${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/$f")
+            if (file.exists()) file.lastModified() else 0L
+        }
 
     /** Read a workspace doc with file-system cache. Re-reads only if file changed. */
     private fun cachedRead(agentName: String, fileName: String, reader: (String) -> String): String {
@@ -138,7 +150,7 @@ class PromptEngine {
             framework == cachedPromptFramework && modelName == cachedPromptModel &&
             cachedTemplateHash == TEMPLATE_HASH &&
             cachedSystemPrompt != null &&
-            docCache.isNotEmpty() // guard: if cache was wiped, rebuild
+            docMtimes == currentDocMtimes(agentName) // 文件删除/修改即失配 → 重建
         ) {
             return cachedSystemPrompt!!
         }
@@ -229,8 +241,10 @@ Skills 分为两层：
                 append("\n## 你的身份档案（PROFILE.md）\n\n")
                 append(compactDoc(profileDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/profile.md"))
             }
-            append("\n## 你的操作手册（AGENTS.md）\n\n")
-            append(compactDoc(agentsDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/agents.md"))
+            if (agentsDoc.isNotBlank()) {
+                append("\n## 你的操作手册（AGENTS.md）\n\n")
+                append(compactDoc(agentsDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/agents.md"))
+            }
             if (soulDoc.isNotBlank()) {
                 append("\n\n## 你的灵魂准则（SOUL.md）\n\n")
                 append(compactDoc(soulDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/soul.md"))
@@ -256,6 +270,7 @@ Skills 分为两层：
         cachedPromptFramework = framework
         cachedPromptModel = modelName
         cachedTemplateHash = TEMPLATE_HASH
+        docMtimes = currentDocMtimes(agentName)
         return prompt
     }
 
@@ -276,6 +291,11 @@ Skills 分为两层：
         private const val DOC_FULL_INJECT_CHARS = 12_000
         /** 超长文档注入的前段字符数。 */
         private const val DOC_SNIPPET_CHARS = 6_000
+        /** 注入提示词的工作区文档清单 — mtime 快照比对用（与 buildSystemPrompt 读取顺序一致）。 */
+        private val AGENT_DOC_FILES = listOf(
+            "profile.md", "agents.md", "soul.md", "memory/memory.md",
+            "boost.md", "heartbeat.md", "trumanshow.md"
+        )
 
         // ── Few-shot examples: demonstrate correct ReAct usage with real MengPaw commands ──
         val CHINESE_FEWSHOT = """
