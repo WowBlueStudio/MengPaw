@@ -218,7 +218,9 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 | 文件 | 职责 |
 |------|------|
-| `MainActivity.kt` | 入口 + 初始化 + 启动恢复配置 + 退出设置时 applyConfiguration |
+| `MainActivity.kt` | 入口 + 生命周期 + URL 处理 + 延迟初始化 (v0.29.1: 初始化拆至 AppInitializer, Compose 根拆至 AppRoot) |
+| `AppInitializer.kt` | 关键路径初始化 (崩溃日志/DataPaths/插件管理器/SysExecutor/模板/日志器) |
+| `ui/screens/AppRoot.kt` | Compose 根 — 主题装配 + MainScreen/设置页/插件市场全屏层 |
 | `service/AgentRuntime.kt` | **NEW** UI/运行时分离 — 触发器桥接, 所有 IO 工作在此 |
 | `ui/screens/` (14 文件) | MainScreen, AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SidebarContent, SplashScreen |
 | `ui/components/` (5 文件) | BigBangPopup, FleetMonitorOverlay, TokenChart, TokenStatsCollector, NotifyBanner |

@@ -76,7 +76,7 @@ AdaptiveLlmProvider.consumeSseStream → AgentEngine.runReActLoop
 
 | 层 | 证据 |
 |----|------|
-| Provider 实例化 | 主链路是 AdaptiveLlmProvider(MainActivity.kt:349/380 → AgentSessionFactory.kt:69/73),流式 override 存在 |
+| Provider 实例化 | 主链路是 AdaptiveLlmProvider(AppRoot.kt applyConfiguration → AgentSessionFactory.kt:69/73),流式 override 存在 |
 | SSE 解析 | consumeSseStream 双格式解析(OpenAI choices[0].delta + Anthropic delta.text)正确,fullContent 累积完整 |
 | 引擎透传 | AgentEngine.kt:575-579 每轮迭代都调 completeStreamingWithMessages 并传 onDelta |
 | 状态桥接 | session.messages collect → _messages,StateFlow 最终值必达 |
