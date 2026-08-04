@@ -134,7 +134,8 @@ private fun AppRootContent(
         if (saved != null && saved.apiKey.isNotBlank()) {
             agentViewModel.applyConfiguration(
                 saved.endpoint, saved.apiKey, saved.model,
-                com.mengpaw.kernel.llm.AdaptiveLlmProvider(saved.endpoint, saved.apiKey, saved.model),
+                com.mengpaw.kernel.llm.AdaptiveLlmProvider(saved.endpoint, saved.apiKey, saved.model,
+                    networkGate = com.mengpaw.shell.service.NetworkConditionMonitor),
                 settingsViewModel.state.value.effectiveAgentLanguage,
                 swarmRoles = settingsViewModel.state.value.swarmRoles
             )
@@ -170,7 +171,8 @@ private fun AppRootContent(
             if (s.apiKey.isNotBlank()) {
                 agentViewModel.applyConfiguration(
                     s.apiEndpoint, s.apiKey, s.modelName,
-                    com.mengpaw.kernel.llm.AdaptiveLlmProvider(s.apiEndpoint, s.apiKey, s.modelName),
+                    com.mengpaw.kernel.llm.AdaptiveLlmProvider(s.apiEndpoint, s.apiKey, s.modelName,
+                        networkGate = com.mengpaw.shell.service.NetworkConditionMonitor),
                     s.effectiveAgentLanguage,
                     swarmRoles = s.swarmRoles
                 )

@@ -44,7 +44,9 @@ class AdaptiveLlmProvider(
     private val apiEndpoint: String,
     private val apiKey: String,
     private val model: String = "gpt-4.1",
-    private val config: AdaptiveConfig = AdaptiveConfig()
+    private val config: AdaptiveConfig = AdaptiveConfig(),
+    /** v0.29.2: 网络状况门卫 (shell 注入) — 断网快返 + 弱网放慢退避; null = 不启用 */
+    private val networkGate: NetworkConditionGate? = null
 ) : LlmProvider {
 
     companion object {
@@ -178,10 +180,21 @@ class AdaptiveLlmProvider(
                 if (e is LlmApiException && e.httpStatus in NON_RETRYABLE_STATUSES) throw e
                 // Report 429 for coordinated pause across all concurrent callers
                 if (e is LlmApiException && e.httpStatus == 429) LlmRateLimiter.report429()
+                // v0.29.2 (用户提议): 断网即失败快返 — 重试必败 (每次尝试白烧一次请求+电量),
+                // 错误信息直通 LlmFallbackExhaustedException 呈现给用户, 网络恢复后重发
+                if (networkGate != null && !networkGate.isOnline()) {
+                    throw LlmApiException(0, "网络连接不可用，已中止本次请求。请恢复网络后重试。")
+                }
                 lastError = e
                 if (attempt < config.maxRetries) {
+                    // 弱网放慢退避: 质量差 ×3, 中 ×1.5 — 高铁等弱网场景不烧配额 (v0.29.2)
+                    val scale = when (networkGate?.quality() ?: 2) {
+                        0 -> 3.0
+                        1 -> 1.5
+                        else -> 1.0
+                    }
                     val baseDelay = (config.retryDelayMs * (1L shl attempt)).coerceAtMost(30_000L)
-                    val jitteredDelay = LlmRateLimiter.jitter(baseDelay)
+                    val jitteredDelay = (LlmRateLimiter.jitter(baseDelay) * scale).toLong()
                     delay(jitteredDelay)
                 }
             }

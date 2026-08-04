@@ -526,7 +526,9 @@ twin.lost <peer> / twin.recover <peer>
 
 ### 4.1.2 HTTP 传输层 (v0.29.2, Reasonix ② 对标)
 
-**共享客户端** `LlmHttpClient`(kernel/llm 单例): 此前每个 provider 各自 `new HttpClient(OkHttp)` — 会话/角色切换即重建连接池, 每次重新 TCP+TLS 握手(~2-4 RTT)。现在所有 provider(主 + fallback)复用同一连接池: `ConnectionPool(8, 5min)` + `retryOnConnectionFailure(true)` + connect 20s / read 180s。超时语义保留实证结论: OkHttp 引擎不映射 requestTimeoutMillis(死配置已删), 无 callTimeout(防误杀长流), readTimeout 是唯一活超时。`close()` 为 no-op(进程级共享)。
+**共享客户端** `LlmHttpClient`(kernel/llm 单例): 此前每个 provider 各自 `new HttpClient(OkHttp)` — 会话/角色切换即重建连接池, 每次重新 TCP+TLS 握手(~2-4 RTT)。现在所有 provider(主 + fallback)复用同一连接池: `ConnectionPool(8, 5min)` + `retryOnConnectionFailure(true)` + connect 20s / read 120s + `pingInterval(60s)`(HTTP/2 主动探活, 半死连接 60s 内发现; HTTP/1.1 无副作用)。超时语义保留实证结论: OkHttp 引擎不映射 requestTimeoutMillis(死配置已删), 无 callTimeout(防误杀长流), readTimeout 是唯一活超时 — 120s 为静默判定阈值(对齐 Reasonix idle watchdog), 思考期 60s+ 无数据仍留 ~60s 余量。`close()` 为 no-op(进程级共享)。
+
+**网络状况门卫** `NetworkConditionGate`(kernel SPI) + `NetworkConditionMonitor`(shell 实现, v0.29.2): Android 系统网络状态注入内核重试策略 — `registerDefaultNetworkCallback`(onAvailable/onLost → isOnline) + `NET_CAPABILITY_VALIDATED`/下行带宽(→ quality 0/1/2)。两条策略: 断网 → 重试立即失败快返(不烧 6 次退避 + fallback 链, 错误气泡直出); 弱网 → 退避 ×3(差)/×1.5(中)。免危险权限(仅 ACCESS_NETWORK_STATE, manifest 已有); 真实蜂窝 dBm 需 READ_PHONE_STATE 运行时弹窗, 刻意不用。注入点: MainActivity.onCreate attach; provider 构造传 `networkGate = NetworkConditionMonitor`(7 处: AppRoot×2 / AgentSessionFactory×3 / DreamWorker×1 / 角色缓存)。
 
 **前缀形状监测** `SystemPromptShape`(LlmRequestBuilder.kt, Reasonix cache_shape.go 对标): 每轮请求 wire 上 system prompt 做 SHA-256, 形状变化即 `W/CacheShape` 告警("cache prefix changed…自动前缀缓存将短暂失效")。调用点: 两个 provider 的 `buildRequestBody`(首条消息 role=system)。与 PromptEngine mtime 指纹缓存互补: 前者保证组装稳定, 后者实测 wire 形状。
 

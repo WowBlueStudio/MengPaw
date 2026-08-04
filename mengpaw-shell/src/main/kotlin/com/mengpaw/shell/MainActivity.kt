@@ -149,6 +149,10 @@ class MainActivity : ComponentActivity() {
                 .getField("appContext").set(null, this@MainActivity)
         } catch (_: Exception) {}
 
+        // ── 网络状况门卫 (v0.29.2): ConnectivityManager 回调 → 内核重试策略
+        //    (断网快返 + 弱网放慢退避; 免危险权限, 仅 ACCESS_NETWORK_STATE) ──
+        try { com.mengpaw.shell.service.NetworkConditionMonitor.attach(this@MainActivity) } catch (_: Exception) {}
+
         // ── 框架发现 (mDNS) ──
         try {
             com.mengpaw.plugin.framework.FrameworkDiscovery.instance =

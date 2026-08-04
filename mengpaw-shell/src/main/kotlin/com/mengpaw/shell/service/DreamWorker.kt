@@ -62,7 +62,8 @@ class DreamWorker(
         if (apiKey.isBlank()) return Result.success()
 
         val llmProvider = try {
-            AdaptiveLlmProvider(endpoint, apiKey, model)
+            AdaptiveLlmProvider(endpoint, apiKey, model,
+                networkGate = NetworkConditionMonitor)
         } catch (_: Exception) {
             return Result.failure()
         }

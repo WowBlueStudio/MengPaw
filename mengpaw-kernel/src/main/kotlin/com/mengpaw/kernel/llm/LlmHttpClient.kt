@@ -19,11 +19,14 @@ import java.util.concurrent.TimeUnit
  *
  * 超时语义 (对齐 Ktor 3.x OkHttp 引擎字节码实证, 见 lessons.md §5.5):
  *   - connect 20s   (DNS+TCP+TLS)
- *   - read 180s     (唯一活超时 — 推理模型思考期 60s+ 无数据, 防误杀)
+ *   - read 120s     (唯一活超时 — 静默判定阈值, 对齐 Reasonix idle watchdog 120s;
+ *                    推理思考期 60s+ 无数据, 120s 仍留 ~60s 思考余量, v0.29.2)
  *   - 无 callTimeout — requestTimeoutMillis 不被 OkHttp 引擎映射 (死配置),
  *     且 callTimeout 会误杀生成期 >120s 的流式响应
  *   - retryOnConnectionFailure(true) — 连接级失败由 OkHttp 立即重试,
  *     与上层 executeWithRetry 指数退避互补
+ *   - pingInterval(60s) — HTTP/2 主动探活 (v0.29.2): 半死连接 60s 内被发现,
+ *     不等静默超时; HTTP/1.1 连接无副作用 (Reasonix 120s idle watchdog 对标)
  *
  * 单例不 close — 进程生命周期共享, provider.close() 为 no-op (见两处实现)。
  */
@@ -32,9 +35,10 @@ internal object LlmHttpClient {
         engine {
             config {
                 connectTimeout(20, TimeUnit.SECONDS)
-                readTimeout(180, TimeUnit.SECONDS)
+                readTimeout(120, TimeUnit.SECONDS)
                 connectionPool(ConnectionPool(8, 5, TimeUnit.MINUTES))
                 retryOnConnectionFailure(true)
+                pingInterval(60, TimeUnit.SECONDS)
             }
         }
     }
