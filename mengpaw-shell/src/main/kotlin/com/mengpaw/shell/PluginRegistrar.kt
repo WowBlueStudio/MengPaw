@@ -11,6 +11,7 @@ import com.mengpaw.plugin.fs.FsPlugin
 import com.mengpaw.plugin.memorytwin.MemoryTwinPlugin
 import com.mengpaw.plugin.net.NetPlugin
 import com.mengpaw.plugin.skill.SkillPlugin
+import com.mengpaw.plugin.tavily.TavilyPlugin
 import com.mengpaw.shell.ui.screens.PluginViewModel
 
 /**
@@ -26,13 +27,14 @@ object PluginRegistrar {
      * Plugin IDs compiled into the shell APK (显示为"内置"分类).
      * 必须与 mengpaw-shell/build.gradle.kts 中 implementation(project(":plugin-*")) 对齐:
      * framework / skill / dev / fs / net / clipboard /
-     * memory-twin / root / hermes(Tribe). (memory 已融入内核 agent.memory.*)
+     * memory-twin / root / hermes(Tribe) / tavily. (memory 已融入内核 agent.memory.*)
      */
     val BUILTIN_PLUGIN_IDS = setOf(
         "framework-plugin", "skill-plugin", "dev-plugin",
         "fs-plugin", "net-plugin", "clipboard-plugin",
         "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin",
-        "dream-plugin", "evolution-plugin", "concise-plugin"
+        "dream-plugin", "evolution-plugin", "concise-plugin",
+        "tavily-plugin"
     )
 
     /**
@@ -67,11 +69,11 @@ object PluginRegistrar {
         "root-plugin" to "Root Access",
         "tools-plugin" to "Agent Tools",
         "tribe-plugin" to "Tribe",
+        "tavily-plugin" to "AI Search",
         // remote
         "update-plugin" to "Auto Update",
         "translate-plugin" to "Translation Engine",
         "error-report-plugin" to "Error Reporting",
-        "tavily-plugin" to "AI Search",
         "render-plugin" to "Image Render API",
         "comfy-plugin" to "ComfyUI Workflows",
         "browser-push-plugin" to "Cross-Device Push",
@@ -99,7 +101,8 @@ object PluginRegistrar {
         "tools-plugin" to ("Agent 命令集" to "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用 (Agent toolset import — external CLI sets (gh/Feishu), summary injected into system prompt)"),
         "dream-plugin" to ("梦境模式" to "梦境模式内置默认实现 (不可移除) — 记忆整理管道; 第三方可实现 DreamProvider 覆盖 (Dream mode built-in (non-removable) — memory consolidation; third-party DreamProvider can override)"),
         "evolution-plugin" to ("智能体进化" to "智能体进化内置默认实现 (不可移除) — 失败模式库/省察引导/框架反馈; 第三方可实现 EvolutionProvider 覆盖 (Agent Evolution built-in (non-removable) — failure library/reflection guides/framework feedback; third-party EvolutionProvider can override)"),
-        "concise-plugin" to ("言简意赅" to "去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），让模型回答更简洁 (Removes structural-output noise from the system prompt (forced Thought/Action boilerplate, Markdown decoration) for cleaner answers)")
+        "concise-plugin" to ("言简意赅" to "去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），让模型回答更简洁 (Removes structural-output noise from the system prompt (forced Thought/Action boilerplate, Markdown decoration) for cleaner answers)"),
+        "tavily-plugin" to ("AI 搜索" to "Tavily AI 优化搜索引擎 — 结构化搜索结果 + 网页正文提取，Agent 原生搜索能力 (Tavily AI-optimized search — structured results + web content extraction, Agent's native search)")
     )
 
     /** PluginViewModel 类注册 — 使内置插件类可被反射实例化 (install 时用类名加载). */
@@ -117,6 +120,7 @@ object PluginRegistrar {
         PluginViewModel.registerPluginClass("dream-plugin", "com.mengpaw.plugin.dream.DreamPlugin")
         PluginViewModel.registerPluginClass("evolution-plugin", "com.mengpaw.plugin.evolution.EvolutionPlugin")
         PluginViewModel.registerPluginClass("concise-plugin", "com.mengpaw.plugin.concise.ConcisePlugin")
+        PluginViewModel.registerPluginClass("tavily-plugin", "com.mengpaw.plugin.tavily.TavilyPlugin")
     }
 
     /** 捆绑插件实例清单 — 随 APK 编译进壳, 首次启动自动 install + activate. */
@@ -132,6 +136,7 @@ object PluginRegistrar {
         "dream-plugin" to com.mengpaw.plugin.dream.DreamPlugin(),
         "evolution-plugin" to com.mengpaw.plugin.evolution.EvolutionPlugin(),
         "concise-plugin" to com.mengpaw.plugin.concise.ConcisePlugin(),
+        "tavily-plugin" to TavilyPlugin(),
     )
 
     /** 捆绑插件自动安装 — 已安装跳过, 逐个容错 (单插件失败不影响其余). */

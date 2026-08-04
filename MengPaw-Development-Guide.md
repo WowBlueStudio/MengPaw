@@ -245,7 +245,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ### 3.5 插件模块（21 个，plugins/ 目录，按 settings.gradle.kts 为准）
 
-> 插件数统一口径：**21 模块**（settings.gradle.kts；外部连接器已移至独立仓库 mengpaw-connectors，见下）| **12 捆绑**（mengpaw-shell 打包）| **plugins.json 28 条目**（12 builtin + 14 remote + 2 embedded）
+> 插件数统一口径：**21 模块**（settings.gradle.kts；外部连接器已移至独立仓库 mengpaw-connectors，见下）| **13 捆绑**（mengpaw-shell 打包）| **plugins.json 28 条目**（13 builtin + 13 remote + 2 embedded）
 
 #### 基础功能 (6)
 
@@ -260,12 +260,12 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 #### AI / 搜索 (4)
 
-| 模块 | 命名空间 | 命令 |
-|------|---------|------|
-| plugin-tavily | tavily | search, extract (2) |
-| plugin-render | render | models, generate, status, preview (4) |
-| plugin-comfy | comfy | nodes, workflow, run, preview, export (5) |
-| plugin-translate | translate | text, auto, langs, setup (4) |
+| 模块 | 命名空间 | 命令 | 捆绑 |
+|------|---------|------|:--:|
+| plugin-tavily | tavily | search, extract, setup (3) | ⭐ |
+| plugin-render | render | models, generate, status, preview (4) | |
+| plugin-comfy | comfy | nodes, workflow, run, preview, export (5) | |
+| plugin-translate | translate | text, auto, langs, setup (4) | |
 
 #### 多智能体 (1)
 
@@ -734,8 +734,9 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 #### clipboard — 剪贴板 (3)
 `copy <text>` | `paste` | `clear`
 
-#### tavily — AI 搜索 (2)
-`search <query>` | `extract <url>`
+#### tavily — AI 搜索 (3)（内置）
+`search <query> [--max=N]` | `extract <url>` | `setup <key>`（配置/查看 API Key，存 `{BASE}/配置/tavily.json`，env `TAVILY_API_KEY` 优先）
+> v0.28.7 起内置：随 APK 自动安装激活，Agent 原生即有搜索能力（FewShot 示例 2 演示直接使用）
 
 #### hermes — 多智能体 (6)
 `team` | `discover` | `delegate <agent> <task>` | `ask <agent> <question>` | `memo <content>` | `role <agent> <role>`

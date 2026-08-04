@@ -307,23 +307,17 @@ Skills 分为两层：
 
             ---
 
-            **示例 2 — 发现并安装插件**
+            **示例 2 — 网页搜索（内置能力）**
 
-            用户：我需要搜索网页
+            用户：帮我搜索 Android 16 的最新消息
 
-            Thought: 缺网页搜索能力。用 self.search 按需求搜索。
-            Action: self.search
-            Action Input: {"query":"网页搜索"}
+            Thought: 搜索能力原生内置。直接 tavily.search。
+            Action: tavily.search
+            Action Input: {"query":"Android 16 最新消息"}
 
-            Observation: (未找到匹配 "网页搜索" 的命令. 用 self.tools [ns] 查看完整列表.)
+            Observation: ## AI 摘要\nAndroid 16 已正式发布，带来桌面模式、无缝更新等新特性。\n## 搜索结果 (3)\n1. **Android 16 正式版发布** — https://android.com/16\n   Android 16 是首个面向大屏设备的版本...\n2. **Android 16 上手体验** — https://example.com/16-review\n   新增锁屏小组件与无缝更新...
 
-            Thought: 内置没有。查插件市场并安装 tavily-plugin。
-            Action: plugin.install
-            Action Input: {"id":"tavily-plugin"}
-
-            Observation: tavily-plugin 安装成功。可用命令: tavily.search, tavily.extract
-
-            Final Answer: 已安装网页搜索插件。可以用 tavily.search <关键词> 搜索了。需要帮你搜什么？
+            Final Answer: 已搜索 Android 16 最新消息：正式版已发布，主打桌面模式与无缝更新（来源：前 2 条）。
         """.trimIndent()
 
         val ENGLISH_FEWSHOT = """
@@ -355,23 +349,17 @@ Skills 分为两层：
 
             ---
 
-            **Example 2 — Discover & Install Plugin**
+            **Example 2 — Web Search (built-in)**
 
-            User: I need web search
+            User: Search for the latest Android 16 news
 
-            Thought: Need web search. Try self.search first.
-            Action: self.search
-            Action Input: {"query":"web search"}
+            Thought: Web search is built in. Use tavily.search directly.
+            Action: tavily.search
+            Action Input: {"query":"latest Android 16 news"}
 
-            Observation: (No commands matched "web search". Try self.tools [ns] for full listing.)
+            Observation: ## AI Summary\nAndroid 16 has been released with desktop mode and seamless updates.\n## Search Results (3)\n1. **Android 16 Stable Released** — https://android.com/16\n   Android 16 targets large screens...\n2. **Android 16 Hands-On** — https://example.com/16-review\n   New lockscreen widgets and seamless updates...
 
-            Thought: Not built-in. Find and install tavily-plugin from the marketplace.
-            Action: plugin.install
-            Action Input: {"id":"tavily-plugin"}
-
-            Observation: tavily-plugin installed. Commands: tavily.search, tavily.extract
-
-            Final Answer: Web search plugin installed. Use tavily.search <query> to search. What should I search for?
+            Final Answer: Latest Android 16 news: stable release with desktop mode and seamless updates (sources: top 2).
         """.trimIndent()
 
         val CHINESE_PROMPT = """
@@ -438,6 +426,7 @@ Skills 分为两层：
             ## 插件
             - 源: GitHub(海外)/Gitee(国内) 自动路由。安装: `plugin.info <id>` → `self.tools <ns>`。
             - 内置插件用 `plugin.disable` 禁用，不可卸载。
+            - **网页搜索已内置**: `tavily.search <关键词> [--max=N]` (Tavily AI 搜索: AI 摘要+结构化结果), `tavily.extract <url>` 提取网页正文; key 未配置时用 `tavily.setup <key>` 配置。
             - 网页转档: search.clean/md/outputs/clear (browser-search-plugin); 抓取用 net.curl, 高质量搜索用 tavily.search。
 
             ## 会话
@@ -539,6 +528,7 @@ Skills 分为两层：
             ## Plugins
             - Sources: GitHub/Gitee auto-routed. Install: `plugin.info <id>` → `self.tools <ns>`. See `skill.run plugin-system` for details.
             - Built-in plugins use `plugin.disable`, cannot be uninstalled.
+            - **Web search built-in**: `tavily.search <query> [--max=N]` (Tavily AI search: AI summary + structured results), `tavily.extract <url>` for page content; configure with `tavily.setup <key>` if not set.
             - Webpage to Markdown: search.clean/md/outputs/clear (browser-search-plugin); fetching via net.curl, high-quality search via tavily.search.
 
             ## Sessions

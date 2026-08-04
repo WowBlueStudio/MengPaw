@@ -280,7 +280,8 @@
       "minCoreVersion": "0.8.0",
       "commands": [
         "tavily.search",
-        "tavily.extract"
+        "tavily.extract",
+        "tavily.setup"
       ],
       "checksum": "sha256:a30aad3506f37d9346dc087fc6e2ed2dc54131ace77025aae5f8c730ce65f069",
       "size": 14367,

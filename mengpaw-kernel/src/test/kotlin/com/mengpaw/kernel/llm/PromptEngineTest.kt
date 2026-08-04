@@ -22,8 +22,8 @@ class PromptEngineTest {
     fun `fewshot trimmed keeps action markers and drops removed steps`() {
         val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
         assertTrue("精简后仍含 Action 标记", prompt.contains("Action:"))
-        assertTrue("示例 2 压缩后新文本存在", prompt.contains("查插件市场并安装 tavily-plugin"))
-        assertFalse("示例 2 被删的 plugin.info 详情轮不应存在", prompt.contains("找到 tavily-plugin，看详情"))
+        assertTrue("示例 2 压缩后新文本存在（内置搜索）", prompt.contains("搜索能力原生内置"))
+        assertFalse("示例 2 不再演示 plugin.install 安装流程", prompt.contains("查插件市场并安装 tavily-plugin"))
     }
 
     @Test
