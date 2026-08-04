@@ -158,6 +158,28 @@ object AgentDocs {
                 KernelLog.w("AgentDocs", "refresh trumanshow.md failed: ${e.message}")
             }
         }
+        // 引用替换 (无条件幂等): 其他工作区文档内容里的旧文件名引用 → 新文件名。
+        // trueman.md 文件本身改名不够 — heartbeat.md/agents.md 每次对话都会注入提示词,
+        // 内容里的旧引用会让 Agent 指向不存在的文件。只替换文件名串, 已演化内容不受影响。
+        for (docName in listOf("heartbeat.md", "agents.md")) {
+            val doc = File(dir, docName)
+            try {
+                if (doc.exists()) {
+                    val text = doc.readText()
+                    if (text.contains("trueman.md")) {
+                        val tmpFile = File(dir, "$docName.tmp")
+                        tmpFile.writeText(text.replace("trueman.md", "trumanshow.md"))
+                        if (tmpFile.renameTo(doc)) {
+                            KernelLog.i("AgentDocs", "migrate: replaced trueman.md refs in $docName ($agentName)")
+                        } else {
+                            tmpFile.delete()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                KernelLog.w("AgentDocs", "replace trueman refs in $docName failed: ${e.message}")
+            }
+        }
         if (File(dir, "soul.md").exists()) return
         bootstrapper?.invoke(agentName, language)
     }
