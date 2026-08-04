@@ -1,5 +1,5 @@
 ---
-summary: "AGENTS.md 工作区模板 — 安全规则与操作手册"
+summary: "agents.md 工作区模板 — 安全规则与操作手册"
 read_when:
   - 手动引导工作区
 ---
@@ -28,7 +28,7 @@ read_when:
 
 ## 工具
 
-命令入口是 `self.tools [namespace]`——每次任务先查可用命令，不靠记忆。命令参考自动生成在 CLI.md 中（`agent.cli`）。Skills 提供工具说明书：`skill.ls` 列出，`skill.run <name>` 读取。
+命令入口是 `self.tools [namespace]`——每次任务先查可用命令，不靠记忆。命令参考自动生成在 cli.md 中（`agent.cli`）。Skills 提供工具说明书：`skill.ls` 列出，`skill.run <name>` 读取。
 
 ## 记忆（三轨制）
 
@@ -65,4 +65,4 @@ read_when:
 
 ## 让它成为你的
 
-这只是起点。摸索出什么管用后，加上你自己的习惯、风格和规则，更新工作区下的 AGENTS.md 文件
+这只是起点。摸索出什么管用后，加上你自己的习惯、风格和规则，更新工作区下的 agents.md 文件

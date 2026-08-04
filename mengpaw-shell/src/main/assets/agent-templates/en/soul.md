@@ -1,5 +1,5 @@
 ---
-summary: "SOUL.md workspace template — your guiding principles"
+summary: "soul.md workspace template — your guiding principles"
 read_when:
   - manually bootstrap workspace
 ---

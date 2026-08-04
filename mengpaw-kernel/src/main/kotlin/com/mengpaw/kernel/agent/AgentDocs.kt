@@ -87,6 +87,40 @@ object AgentDocs {
                 KernelLog.w("AgentDocs", "seed modes.md failed: ${e.message}")
             }
         }
+        // v0.29.1 升级迁移 v5: 文档文件名大小写统一 (AGENTS.md→agents.md, SOUL.md→soul.md, CLI.md→cli.md)。
+        // Android 文件系统区分大小写——内容里的旧大写引用会让 Agent 按大写文件名操作而落空
+        // (v0.29.1 实测: 提示词引导节写 BOOST.md 而实际文件 boost.md, Agent 读引导判断错乱)。
+        // 无条件幂等替换文件名串, 已演化内容不受影响; 同 v3 引用替换先例。
+        for ((docName, pairs) in mapOf(
+            "agents.md" to listOf("AGENTS.md" to "agents.md", "CLI.md" to "cli.md"),
+            "soul.md" to listOf("SOUL.md" to "soul.md"),
+            "profile.md" to listOf("PROFILE.md" to "profile.md")
+        )) {
+            val doc = File(dir, docName)
+            try {
+                if (doc.exists()) {
+                    var text = doc.readText()
+                    var changed = false
+                    for ((old, new) in pairs) {
+                        if (text.contains(old)) {
+                            text = text.replace(old, new)
+                            changed = true
+                        }
+                    }
+                    if (changed) {
+                        val tmpFile = File(dir, "$docName.tmp")
+                        tmpFile.writeText(text)
+                        if (tmpFile.renameTo(doc)) {
+                            KernelLog.i("AgentDocs", "migrate: normalized doc filename case in $docName ($agentName)")
+                        } else {
+                            tmpFile.delete()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                KernelLog.w("AgentDocs", "normalize filename case in $docName failed: ${e.message}")
+            }
+        }
         // v0.28.1 升级迁移 v2: v0.27.1 及更早的模板用 HEARTBEAT.md(大写)，当前统一为 heartbeat.md(小写)。
         // Android 文件系统区分大小写——大写残留会导致小写读取落空；孪生同步是并集式、不传播删除，
         // 旧设备的大写文件会被同步复活 → 只能靠每台设备自己的 bootstrap 自清理。

@@ -271,12 +271,12 @@ class PromptEngineTest {
         doc.writeText("## 安全\n- 测试内容")
         try {
             val withDoc = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
-            assertTrue("agents.md 存在时应注入操作手册段", withDoc.contains("你的操作手册（AGENTS.md）"))
+            assertTrue("agents.md 存在时应注入操作手册段", withDoc.contains("你的操作手册（agents.md）"))
         } finally {
             doc.delete()
         }
         val withoutDoc = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
-        assertFalse("agents.md 删除后不得注入空标题段", withoutDoc.contains("你的操作手册（AGENTS.md）"))
+        assertFalse("agents.md 删除后不得注入空标题段", withoutDoc.contains("你的操作手册（agents.md）"))
         assertFalse("agents.md 删除后不得注入残留内容", withoutDoc.contains("测试内容"))
     }
 

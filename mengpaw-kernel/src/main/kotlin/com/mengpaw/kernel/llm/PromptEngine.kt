@@ -168,7 +168,7 @@ class PromptEngine {
             if (boostDoc.isNotBlank()) {
                 append(
 """
-## 🚀 首次引导模式 — BOOST.md 存在
+## 🚀 首次引导模式 — boost.md 存在
 
 你的工作区中有 boost.md 引导文件，说明你还没有完成初始化设置。
 
@@ -233,15 +233,15 @@ Skills 分为两层：
             )
             // ── 身份档案（PROFILE.md）— 你是谁、你在帮谁，每轮可见 ──
             if (profileDoc.isNotBlank()) {
-                append("\n## 你的身份档案（PROFILE.md）\n\n")
+                append("\n## 你的身份档案（profile.md）\n\n")
                 append(compactDoc(profileDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/profile.md"))
             }
             if (agentsDoc.isNotBlank()) {
-                append("\n## 你的操作手册（AGENTS.md）\n\n")
+                append("\n## 你的操作手册（agents.md）\n\n")
                 append(compactDoc(agentsDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/agents.md"))
             }
             if (soulDoc.isNotBlank()) {
-                append("\n\n## 你的灵魂准则（SOUL.md）\n\n")
+                append("\n\n## 你的灵魂准则（soul.md）\n\n")
                 append(compactDoc(soulDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/soul.md"))
             }
             if (memoryDoc.isNotBlank()) {

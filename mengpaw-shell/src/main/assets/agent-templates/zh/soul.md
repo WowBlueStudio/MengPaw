@@ -1,5 +1,5 @@
 ---
-summary: "SOUL.md 工作区模板 — 你的灵魂准则"
+summary: "soul.md 工作区模板 — 你的灵魂准则"
 read_when:
   - 手动引导工作区
 ---

@@ -58,8 +58,8 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     private suspend fun boostDelete(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val agent = agentName(ctx)
         val ok = AgentDocs.deleteBoost(agent)
-        return if (ok) ExecutionResult.ok("BOOST.md 已删除。你已完成初始化，不再需要引导文件。")
-        else ExecutionResult.ok("BOOST.md 不存在——你早已完成初始化。")
+        return if (ok) ExecutionResult.ok("boost.md 已删除。你已完成初始化，不再需要引导文件。")
+        else ExecutionResult.ok("boost.md 不存在——你早已完成初始化。")
     }
 
     /** Slash command mode menu — 8 execution modes (modes.md, template-provided). */
@@ -73,7 +73,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     private suspend fun boost(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val boostDoc = docManager.getDoc(AgentDocType.BOOST)
         if (boostDoc.isBlank()) return ExecutionResult.ok(buildString {
-            appendLine("(BOOST.md 不存在 — 你已完成初始化)")
+            appendLine("(boost.md 不存在 — 你已完成初始化)")
             appendLine()
             appendLine("这说明你已经不是第一次醒来了。你的 soul/profile/memory 已经建立。")
             appendLine("继续做你该做的事。")
