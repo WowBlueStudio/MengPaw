@@ -370,6 +370,11 @@ fun MengPawApp(strings: AppStrings, settingsViewModel: SettingsViewModel) {
     // Sync loop mode from settings
     LaunchedEffect(settingsState.loopMode) { agentViewModel.loopMode = settingsState.loopMode }
 
+    // Sync auto-translate switch from settings (opt-in, 默认关闭 — v0.28.6)
+    LaunchedEffect(settingsState.autoTranslate) {
+        agentViewModel.setAutoTranslate(settingsState.autoTranslate)
+    }
+
     // ── Apply API config when exiting Settings (lightweight, no auto-start) ──
     LaunchedEffect(showSettings) {
         if (!showSettings) {

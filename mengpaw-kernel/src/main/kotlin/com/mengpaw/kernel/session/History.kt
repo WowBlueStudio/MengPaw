@@ -6,6 +6,7 @@ package com.mengpaw.kernel.session
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.llm.LlmProvider
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -135,6 +136,7 @@ class SessionManager {
         val sessionId = specificSessionId ?: _activeSessionId.value ?: return false
         val session = _sessions.value[sessionId] ?: return false
         if (session.messages.size <= maxMessages) return false
+        KernelLog.d("MengPawLatency", "SUM-START $sessionId msgs=${session.messages.size}")
 
         // ── 保留策略: MIN 组数保底 + MAX token 预算（连贯性档位）──
         // 从最近往回按问答组（user 消息为界）累积保留原文:
@@ -146,7 +148,7 @@ class SessionManager {
         val budgetTokens = (com.mengpaw.kernel.PipelineManager.DEFAULT_CONTEXT_WINDOW *
             retentionBudgetRatio(snapshot)).toInt()
         val (toKeep, toCompress) = splitRetention(snapshot, budgetTokens)
-        if (toCompress.isEmpty()) return false
+        if (toCompress.isEmpty()) { KernelLog.d("MengPawLatency", "SUM-END none"); return false }
 
         // ── QwenPaw-style: archive raw messages before compaction ──
         archiveRawMessages(toCompress)
@@ -168,18 +170,64 @@ class SessionManager {
             }
         )
 
-        // Preserve any messages added during the LLM call
-        val afterSnap = session.messages.toList()
-        val concurrentNew = if (afterSnap.size > snapshot.size) afterSnap.drop(snapshot.size) else emptyList()
-
+        // Preserve any messages added during the LLM call — v0.28.6 异步化竞态加固:
+        // 在监视器内以快照为基准做身份 diff (addMessage 的 200 条 removeAt(0) 会破坏
+        // 下标对齐, 旧实现 afterSnap.drop(snapshot.size) 在 monitor 外读还有丢消息窗口)
         synchronized(this) {
+            val current = session.messages.toList()
+            // 身份 Set (IdentityHashMap — 相等内容不误判为"新消息")
+            val snapshotIds = java.util.IdentityHashMap<Message, Boolean>()
+            snapshot.forEach { snapshotIds[it] = true }
+            val concurrentNew = current.filter { !snapshotIds.containsKey(it) }
             session.messages.clear()
             session.messages.add(summaryMsg)
             session.messages.addAll(toKeep)
             if (concurrentNew.isNotEmpty()) session.messages.addAll(concurrentNew)
             _sessions.value = _sessions.value + (sessionId to session)
         }
+        KernelLog.d("MengPawLatency", "SUM-END done msgs=${session.messages.size}")
         return true
+    }
+
+    // ── 后台预压缩 (v0.28.6): 接近阈值提前后台压缩, buildConversation 主请求不阻塞 ──
+    // 关键路径顺序: schedule(µs 返回, 启动后台压缩) → await(在途则放行, 否则同步兜底)
+    private val inFlightCompressions = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>()
+
+    /** 消息数 ≥ threshold-margin 且无在途压缩时, 在 [scope] 后台启动压缩. µs 级返回. */
+    fun scheduleCompressionIfNeeded(
+        sessionId: String,
+        scope: kotlinx.coroutines.CoroutineScope,
+        llmProvider: LlmProvider,
+        threshold: Int = 50,
+        margin: Int = 8
+    ) {
+        val session = _sessions.value[sessionId] ?: return
+        if (session.messages.size < threshold - margin) return
+        if (inFlightCompressions.containsKey(sessionId)) return
+        inFlightCompressions[sessionId] = scope.launch {
+            try {
+                compressIfNeeded(llmProvider, threshold, sessionId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            } finally {
+                inFlightCompressions.remove(sessionId)
+            }
+        }
+    }
+
+    /**
+     * 关键路径兜底: 在途压缩不 join (本轮放行 — 快照一致, 压缩与请求并发无害);
+     * 无在途且仍超阈值时同步压缩 (最终兜底, 确保消息预算).
+     */
+    suspend fun awaitCompressionIfNeeded(
+        llmProvider: LlmProvider,
+        threshold: Int = 50,
+        sessionId: String
+    ): Boolean {
+        val inFlight = inFlightCompressions[sessionId]
+        if (inFlight != null && inFlight.isActive) return false
+        return compressIfNeeded(llmProvider, threshold, sessionId)
     }
 
     /**

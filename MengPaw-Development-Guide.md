@@ -512,6 +512,14 @@ twin.lost <peer> / twin.recover <peer>
 
 **显示策略**(`computeStreamDisplayText`): 含 `Final Answer:` 只显标记后; 含 `Action:`(工具轮)不显样板(onStep 重置"思考中..."); 含 `Thought:` 显其后; 无标记全文流式。
 
+**发送前路径延迟优化 (v0.28.6)**: 实测 4-13s 决策链中, 客户端规则/构造毫秒级, 主体是服务端 prefill TTFB。优化清单:
+- "思考中..."气泡**前置**: 翻译/召回/引擎准备之前插入, 发送后 ~20ms 即有反馈(实测 T0→T1=23ms)
+- 翻译与记忆召回 `async(Dispatchers.IO)` **并行**发起(关键词从原始 task 提取 — 中文词面语义更优); `detectCorrection` fire-and-forget 出 Main
+- `saveCurrentSession` **异步化**: Main 只捕获快照(不可变 List 引用), 单线程 executor "session-save" 串行落盘, 在途快照合并(队列深度 ≤1), onCleared flush + awaitTermination(1s)
+- 对话压缩后台化(见 4.3): 接近阈值提前在引擎自有 scope 预压缩, 请求不等待
+- 等待期反馈: 思考中气泡附 spinner + 已等待秒数(`WaitingIndicator`, 流式文本到达后自动消失)
+- 实测(模拟器): buildConversation 3ms; T0→S-OPEN 客户端侧仅 ~160ms; 剩余 ~9s 为服务端 TTFB(缓存未命中 prefill, 客户端不可优化)
+
 ### 4.2 支持的服务商 (12)
 
 | 服务商 | Endpoint | 默认模型 | 缓存策略 |
@@ -529,11 +537,19 @@ twin.lost <peer> / twin.recover <peer>
 
 ### 4.3 对话压缩
 
-`SessionManager.compressIfNeeded()` — 消息数超过 50 条时，调用 LLM 将旧消息压缩为 system summary，保留最近 10 条完整上下文，上限 200 条。
+`SessionManager.compressIfNeeded()` — 消息数超过 50 条时，调用 LLM 将旧消息压缩为 system summary，保留最近问答组(保底组数 + token 预算档位 8%/15%/25%)，原始消息归档 `dialog/YYYY-MM-DD.jsonl`，上限 200 条。
+
+**v0.28.6 后台预压缩**: 压缩移出首请求关键路径 —
+- `scheduleCompressionIfNeeded`(消息 ≥ threshold-8 即 42 条时在引擎自有 `compressionScope` 后台启动; `ConcurrentHashMap` 单在途去重)
+- `awaitCompressionIfNeeded`(在途则不阻塞放行 — 快照一致, 压缩与请求并发无害; 无在途且仍超阈值才同步兜底)
+- `compressionScope` 独立于 runningJob(随引擎生灭), **刻意不在 stop() 取消** — submitTask 每轮先 stop, 取消会杀死在途压缩(浪费一次 LLM 调用 + 历史压不下去)
+- 并发契约: 消息列表替换在 `synchronized(this)` 监视器内(与 addMessage/recordInterruptedTurn 共用); LLM 调用窗口内新增消息用**身份 diff**(`IdentityHashMap`)保留 — 200 条上限的 removeAt(0) 会破坏旧 `afterSnap.drop()` 下标对齐逻辑
 
 ### 4.4 翻译中间件
 
-美国模型 (OpenAI/Grok) 自动中→英→模型→英→中流水线，为中文用户节省约 40% token 消耗。
+美国模型 (OpenAI/Grok/Claude) 自动中→英→模型→英→中流水线，为中文用户节省约 40% token 消耗。
+
+**v0.28.6 改为 opt-in**: 默认关闭(`TranslateMiddleware.enabled = false`)，仅用户主动开启(设置页 Agent → "自动翻译(美系模型)"开关, 持久化 `DataPaths.CONFIG/auto_translate`)时才加载 Google 翻译 — 不开启时零 translate.googleapis.com 请求。开启后仍只对美系模型生效; 发送链中翻译与记忆召回 `async` 并行发起。
 
 ### 4.5 Agent→User 主动推送 (NotifyBus)
 

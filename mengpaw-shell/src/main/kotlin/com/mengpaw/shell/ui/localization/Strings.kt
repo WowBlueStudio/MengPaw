@@ -160,6 +160,8 @@ class AppStrings {
     var agentTriggers: String = ""
     var agentTriggerScheduled: String = ""
     var agentWorkspaceFiles: String = ""
+    var agentAutoTranslate: String = ""
+    var agentAutoTranslateDesc: String = ""
 
     // Settings - Framework
     var frameworkAddProvider: String = ""
@@ -404,6 +406,8 @@ val EnglishStrings = AppStrings().apply {
     maxStepsDesc = "Maximum ReAct iterations before forced stop"
     llmConcurrency = "LLM Concurrency"
     llmConcurrencyDesc = "Max simultaneous LLM API calls (1-50)"
+    agentAutoTranslate = "Auto-translate (English models)"
+    agentAutoTranslateDesc = "Translate Chinese to English for OpenAI/Grok/Claude models, then back. Off by default — only enabled when you turn it on"
 
     appearance = "Appearance"
     darkTheme = "Dark Theme"
@@ -759,6 +763,8 @@ val ChineseStrings = AppStrings().apply {
     maxStepsDesc = "ReAct 循环最大迭代次数"
     llmConcurrency = "LLM 并发上限"
     llmConcurrencyDesc = "同时进行的 LLM API 调用数量上限 (1-50)"
+    agentAutoTranslate = "自动翻译（美系模型）"
+    agentAutoTranslateDesc = "将中文任务译为英文发给 OpenAI/Grok/Claude 系模型，回复再译回中文。默认关闭，仅在您主动开启时启用"
 
     appearance = "外观"
     darkTheme = "深色主题 (Dark Theme)"

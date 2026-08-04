@@ -29,8 +29,8 @@ import java.net.URLEncoder
  */
 class TranslateMiddleware {
 
-    /** Whether auto-translation is enabled. */
-    var enabled = true
+    /** Whether auto-translation is enabled. 默认关闭 — 仅用户主动开启时才启用 (opt-in). */
+    var enabled = false
 
     /** Models that benefit from translation (English-optimized). */
     private val englishModels = setOf(

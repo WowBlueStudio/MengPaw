@@ -145,6 +145,16 @@ fun AgentSettingsContent(
     }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
+    // 自动翻译 (美系模型) — opt-in, 默认关闭 (v0.28.6)
+    SettingsSwitch(
+        icon = Icons.Outlined.Translate,
+        title = state.strings.agentAutoTranslate,
+        subtitle = state.strings.agentAutoTranslateDesc,
+        checked = state.autoTranslate,
+        onCheckedChange = { viewModel.toggleAutoTranslate() }
+    )
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 

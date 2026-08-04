@@ -145,6 +145,8 @@ data class SettingsState(
     val themeMode: ThemeMode = ThemeMode.LIGHT,
     val showApiKey: Boolean = false,
     val backgroundMode: BackgroundMode = BackgroundMode.NOTIFICATION,
+    /** 自动翻译(美系模型) — opt-in, 默认关闭, 用户主动开启才加载 Google 翻译. */
+    val autoTranslate: Boolean = false,
     val useChinese: Boolean = true,
     val agentLanguageMode: AgentLanguageMode = AgentLanguageMode.FOLLOW_UI,
     val loopMode: LoopMode = LoopMode.REACT,
@@ -179,6 +181,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     init {
         loadSavedProviders()
+        // 自动翻译 opt-in: 配置文件不存在 → 默认关闭(用户未主动开启)
+        try {
+            val f = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "auto_translate")
+            if (f.exists()) _state.value = _state.value.copy(autoTranslate = f.readText().trim() == "true")
+        } catch (_: Exception) {}
     }
 
     /** Returns the first saved provider, or null if none configured. */
@@ -438,6 +445,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun toggleShowApiKey() {
         _state.value = _state.value.copy(showApiKey = !_state.value.showApiKey)
+    }
+
+    /** 自动翻译开关 — 默认关, 用户主动开启才启用 Google 翻译中间件. */
+    fun toggleAutoTranslate() {
+        val next = !_state.value.autoTranslate
+        _state.value = _state.value.copy(autoTranslate = next)
+        try {
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "auto_translate")
+            file.parentFile?.mkdirs()
+            file.writeText(next.toString())
+        } catch (_: Exception) {}
     }
 
     fun toggleLanguage() {

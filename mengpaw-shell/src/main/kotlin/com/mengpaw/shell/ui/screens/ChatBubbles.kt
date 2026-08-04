@@ -204,9 +204,27 @@ fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: Strin
                         MarkdownText(content = message.finalContent,
                             textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary), nestedScroll = true)
                     }
+                    // ── 等待期反馈 (v0.28.6): 思考中 → spinner + 已等待秒数, 流式文本到达后自动消失 ──
+                    if (message.isRunning &&
+                        (message.finalContent == "思考中..." || message.finalContent.isBlank())) {
+                        Spacer(Modifier.height(ArcoSpacing.xs))
+                        WaitingIndicator()
+                    }
                 }
             }
         }
+    }
+}
+
+/** 等待期指示器: spinner + 已等待秒数 — 让 4-13s 的 LLM 准备期有"活着"的反馈. */
+@Composable
+private fun WaitingIndicator() {
+    var seconds by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); seconds++ } }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp, color = ThemeColors.brand)
+        Spacer(Modifier.width(6.dp))
+        Text("思考中… ${seconds}s", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
     }
 }
 

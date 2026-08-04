@@ -3,6 +3,7 @@
 
 package com.mengpaw.kernel.llm
 
+import com.mengpaw.kernel.KernelLog
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
@@ -208,6 +209,7 @@ class AdaptiveLlmProvider(
         onToken: ((String) -> Unit)?
     ): String {
         val requestBody = buildRequestBody(messages, stream)
+        KernelLog.d("MengPawLatency", "S-OPEN ${apiEndpoint.take(48)}")
         val response = client.post(apiEndpoint) {
             header(HttpHeaders.Authorization, buildAuthHeader())
             header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
@@ -265,6 +267,7 @@ class AdaptiveLlmProvider(
     ): String {
         val channel = response.bodyAsChannel()
         val fullContent = StringBuilder()
+        var firstToken = true
 
         while (!channel.isClosedForRead) {
             val line = try {
@@ -313,6 +316,7 @@ class AdaptiveLlmProvider(
                     // Visible text delta (OpenAI standard)
                     openAiDelta["content"]?.jsonPrimitive?.contentOrNull?.let { text ->
                         if (text.isNotEmpty()) {
+                            if (firstToken) { firstToken = false; KernelLog.d("MengPawLatency", "S-FIRST") }
                             fullContent.append(text)
                             onToken(text)
                         }
@@ -325,6 +329,7 @@ class AdaptiveLlmProvider(
                     // Anthropic content_block_delta: delta.text (text_delta)
                     val text = json["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
                     if (!text.isNullOrEmpty()) {
+                        if (firstToken) { firstToken = false; KernelLog.d("MengPawLatency", "S-FIRST") }
                         fullContent.append(text)
                         onToken(text)
                     }
@@ -336,6 +341,7 @@ class AdaptiveLlmProvider(
             }
         }
 
+        KernelLog.d("MengPawLatency", "S-DONE len=${fullContent.length}")
         return fullContent.toString()
     }
 

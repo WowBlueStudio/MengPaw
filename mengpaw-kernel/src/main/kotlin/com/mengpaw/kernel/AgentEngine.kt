@@ -90,6 +90,14 @@ class AgentEngine(
 
     private val llmRequestBuilder = LlmRequestBuilder(systemPrompt = promptEngine.buildSystemPrompt())
 
+    /**
+     * 后台预压缩作用域 (v0.28.6) — 独立于 runningJob, 随引擎生灭。
+     * 刻意不在 stop() 取消: submitTask 每轮先 stop, 取消会杀死在途压缩
+     * (浪费一次 LLM 调用 + 历史永远压不下去)。
+     */
+    private val compressionScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+
     // ── Persistent conversation session (Claude Code pattern) ──────────
     // Instead of creating a new Session per run(), reuse the same session
     // so the LLM sees full conversation history across multiple user messages.
@@ -879,6 +887,7 @@ class AgentEngine(
      * Includes integrity gate, recovery block injection, and cache annotations.
      */
     internal suspend fun buildConversation(sessionId: String): List<Map<String, String>> {
+        KernelLog.d("MengPawLatency", "BC-ENTER $sessionId msgs=${sessionManager.getSession(sessionId)?.messages?.size}")
         // ★ Integrity gate: terminal latch (matching OpenClaw assertSqliteIntegrity)
         // If session data is corrupted, block LLM calls with a warning instead of
         // letting the model act on potentially garbage history.
@@ -887,7 +896,9 @@ class AgentEngine(
             return listOf(mapOf("role" to "system", "content" to "Session data integrity issue detected. " +
                 "Please use agent.repair or start a new conversation to continue."))
         }
-        sessionManager.compressIfNeeded(llmProvider, specificSessionId = sessionId)
+        // v0.28.6: 后台预压缩 (≥42 提前压, 不在请求前同步插 LLM 调用) + 同步兜底
+        sessionManager.scheduleCompressionIfNeeded(sessionId, compressionScope, llmProvider)
+        sessionManager.awaitCompressionIfNeeded(llmProvider, sessionId = sessionId)
         val history = sessionManager.getStructuredHistory(sessionId)
         val nonSystemHistory = if (history.isNotEmpty() && history[0]["role"] == "system") history.drop(1) else history
 
@@ -917,6 +928,7 @@ class AgentEngine(
                 agentName = agentName,
                 summary = "Recovery block injected: ${pendingRecovery.completedTools.size} tools completed"
             ))
+            KernelLog.d("MengPawLatency", "BC-EXIT $sessionId recovery")
             return llmRequestBuilder.buildMessages(
                 listOf(mapOf("role" to "system", "content" to llmRequestBuilder.currentSystemPrompt)) +
                     mutableMessages,
@@ -937,9 +949,11 @@ class AgentEngine(
             pendingGuideFragment = null
             val mutable = nonSystemHistory.toMutableList()
             mutable.add(mapOf("role" to "system", "content" to guide))
+            KernelLog.d("MengPawLatency", "BC-EXIT $sessionId guide")
             return llmRequestBuilder.buildMessages(mutable, injectCacheAnnotations = true)
         }
 
+        KernelLog.d("MengPawLatency", "BC-EXIT $sessionId normal")
         return llmRequestBuilder.buildMessages(nonSystemHistory, injectCacheAnnotations = true)
     }
 

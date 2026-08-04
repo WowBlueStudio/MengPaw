@@ -22,6 +22,7 @@ import com.mengpaw.shell.ui.screens.model.InputTag
 import com.mengpaw.shell.ui.screens.model.PendingTask
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -36,6 +37,7 @@ class AgentViewModel : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         sessionPersistence.saveCurrentSession()
+        sessionPersistence.flushSaveQueue()   // v0.28.6: 等异步落盘队列完成 (1s 兜底)
         // Unwire static trigger callback to prevent ViewModel memory leak
         com.mengpaw.shell.service.AgentRuntime.unwireTriggers()
         sessions.values.forEach { session ->
@@ -305,15 +307,19 @@ class AgentViewModel : ViewModel() {
         agentRef: String? = null
     ) {
         if (task.isBlank()) return
+        KernelLog.d("MengPawLatency", "T0 submitTask ${task.take(30)}")
         // ── Bang 命令: "!cmd" 绕过 Agent 直接执行 — 完整文本(含 ! 前缀)保留在用户消息 ──
         val trimmedTask = task.trimStart()
         if (trimmedTask.startsWith("!")) {
             runBangCommand(original = task, command = trimmedTask.removePrefix("!").trimStart())
             return
         }
-        // ── Evolution: 用户纠正识别 (钩子归系统 → 用户反应档案, 用户分身数据源) ──
-        detectCorrection(task, agentRef)
         val session = activeSession()
+        // ── Evolution: 用户纠正识别 (钩子归系统 → 用户反应档案, 用户分身数据源) ──
+        // v0.28.6: fire-and-forget 出 Main — reactions.md 文件读写不阻塞发送链
+        viewModelScope.launch(Dispatchers.IO) {
+            try { detectCorrection(task, agentRef, session) } catch (_: Exception) {}
+        }
         // Snapshot both state values atomically to avoid TOCTOU race
         val sessionRunning = session.isRunning.value
         val isRunning = _isRunning.value
@@ -369,9 +375,38 @@ class AgentViewModel : ViewModel() {
                     return@launch
                 }
 
+                // ── "思考中..."气泡前置 (v0.28.6): 在翻译/召回/引擎准备之前插入,
+                // 用户发送后立即看到反馈, 4-13s 等待期有活动气泡 ──
+                // Track running message for O(1) updates + identity guard against concurrent insertions
+                val runningMsg = ChatMessageUi.AgentWithTrace(
+                    finalContent = "思考中...",
+                    traces = emptyList(),
+                    isRunning = true,
+                    executionMode = modePrefix,
+                    agentRef = agentRef
+                )
+                runningMsgRef = runningMsg
+                runningMsgIndex = session.messages.value.size
+                session.messages.value = session.messages.value + runningMsg
+                KernelLog.d("MengPawLatency", "T1 bubble")
+
                 // Auto-translate for English-optimized models (saves ~40% tokens)
+                // v0.28.6: 翻译与记忆召回并行发起 (async) — 气泡已前置, 不再串行阻塞
                 val doTranslate = translator.shouldTranslate(session.modelName)
-                val translatedTask = if (doTranslate) translator.toEnglish(task) else task
+                val transDeferred = if (doTranslate) async(Dispatchers.IO) { translator.toEnglish(task) } else null
+
+                // ── 跨会话召回：匹配相关记忆 (关键词从原文提取 — 中文词面对中文 memory.md 语义更优) ──
+                val keywords = task.split(Regex("[\\s，。！？,.!?：:()（）]+"))
+                    .map { it.trim() }.filter { it.length >= 2 }
+                    .filterNot { it in setOf("的", "是", "我", "你", "他", "她", "the", "a", "an", "is", "are", "to", "of", "in", "请", "帮", "一个", "这个", "那个") }
+                    .take(5)
+                val memoryDeferred = async(Dispatchers.IO) {
+                    com.mengpaw.kernel.agent.AgentDocs.recallMemory(
+                        _activeAgentName, keywords
+                    )
+                }
+
+                val translatedTask = transDeferred?.await() ?: task
                 var actualTask = if (doTranslate && translatedTask != task) translatedTask else task
 
                 // /Research /Translate: 包装提示词（在翻译之后）
@@ -390,16 +425,7 @@ class AgentViewModel : ViewModel() {
                 }
                 // ── 模式分发结束 ─────────────────────────────────
 
-                // ── 跨会话召回：匹配相关记忆 ──
-                val keywords = actualTask.split(Regex("[\\s，。！？,.!?：:()（）]+"))
-                    .map { it.trim() }.filter { it.length >= 2 }
-                    .filterNot { it in setOf("的", "是", "我", "你", "他", "她", "the", "a", "an", "is", "are", "to", "of", "in", "请", "帮", "一个", "这个", "那个") }
-                    .take(5)
-                val recalledMemory = withContext(Dispatchers.IO) {
-                    com.mengpaw.kernel.agent.AgentDocs.recallMemory(
-                        _activeAgentName, keywords
-                    )
-                }
+                val recalledMemory = memoryDeferred.await()
                 val recallPrefix = if (recalledMemory.isNotBlank()) "$recalledMemory\n\n---\n\n" else ""
 
                 // 直接传递用户任务，不包装回溯摘要。Agent 通过对话历史自然感知上下文。
@@ -407,18 +433,6 @@ class AgentViewModel : ViewModel() {
 
                 // 播放协程(主线程)与 onStep(engine 线程)并发读写 — 同步列表防 CME (v0.28.5)
                 val traces = java.util.Collections.synchronizedList(mutableListOf<AgentTrace>())
-
-                // Track running message for O(1) updates + identity guard against concurrent insertions
-                val runningMsg = ChatMessageUi.AgentWithTrace(
-                    finalContent = "思考中...",
-                    traces = emptyList(),
-                    isRunning = true,
-                    executionMode = modePrefix,
-                    agentRef = agentRef
-                )
-                runningMsgRef = runningMsg
-                runningMsgIndex = session.messages.value.size
-                session.messages.value = session.messages.value + runningMsg
 
                 // ── 流式播放器: onDelta 只累积, 独立协程按节奏播放 (v0.28.5) ──
                 // 根因 (v0.28.4 彻查): DeepSeek 端点在 ~200ms 内突发全部增量,
@@ -489,7 +503,9 @@ class AgentViewModel : ViewModel() {
                 }
 
                 // onDelta (engine 线程回调): 只累积, 不推送 — 节奏由播放协程控制
+                var firstDelta = true
                 val onDelta: (String) -> Unit = { delta ->
+                    if (firstDelta) { firstDelta = false; KernelLog.d("MengPawLatency", "T3 first-delta") }
                     synchronized(streamBuf) { streamBuf.append(delta) }
                 }
 
@@ -529,6 +545,7 @@ class AgentViewModel : ViewModel() {
                 }
 
                 // Reset stale state from previous runs before starting
+                KernelLog.d("MengPawLatency", "T2 before-dispatch")
                 session.engine.resetLoopDetection()
                 try { session.engine.stop() } catch (_: Exception) {}
 
@@ -798,8 +815,17 @@ class AgentViewModel : ViewModel() {
     }
 
     // ── Translation middleware (auto for US models) ────────────────────
+    // v0.28.6: opt-in — 默认关闭, 仅用户主动开启才加载 Google 翻译 (读取 auto_translate 配置文件)
 
-    private val translator = com.mengpaw.kernel.llm.TranslateMiddleware()
+    private val translator = com.mengpaw.kernel.llm.TranslateMiddleware().apply {
+        enabled = try {
+            java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "auto_translate")
+                .takeIf { it.exists() }?.readText()?.trim() == "true"
+        } catch (_: Exception) { false }
+    }
+
+    /** 设置页实时同步: 自动翻译开关 (opt-in). */
+    fun setAutoTranslate(enabled: Boolean) { translator.enabled = enabled }
 
     // ── Evolution: 用户纠正识别 ─────────────────────────────────────────
 
@@ -815,12 +841,12 @@ class AgentViewModel : ViewModel() {
      * 供 Agent 在 L3 用户视角提问时检索(用户分身数据源)。
      * 规则版先行; 后续可升级为 LLM 语义识别。
      */
-    private fun detectCorrection(task: String, agentRef: String?) {
+    private fun detectCorrection(task: String, agentRef: String?, session: AgentSession) {
         try {
             if (task.length > 80) return
             if (CORRECTION_KEYWORDS.none { task.contains(it) }) return
             // 上下文切片: 最近一条 Agent 回复
-            val snippet = activeSession().messages.value.asReversed()
+            val snippet = session.messages.value.asReversed()
                 .firstNotNullOfOrNull { msg ->
                     when (msg) {
                         is ChatMessageUi.Agent -> msg.content

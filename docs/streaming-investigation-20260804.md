@@ -1,6 +1,6 @@
-# 流式传输调查记录 — 2026-08-04 (v0.28.4 → v0.28.5)
+# 流式传输调查记录 — 2026-08-04 (v0.28.4 → v0.28.6)
 
-> 会话中断/重启后的恢复入口。三秒读完:流式链路全通 + 网关突发到达均为事实, 打字机观感由 **UI 播放器**保证(Default 线程独立节奏播放, run() 返回后播完再收尾)。v0.28.5 已实现并验证, 打点已移除。
+> 会话中断/重启后的恢复入口。三秒读完:流式链路全通 + 网关突发到达均为事实, 打字机观感由 **UI 播放器**保证(Default 线程独立节奏播放, run() 返回后播完再收尾)。v0.28.5 实现并验证; v0.28.6 完成**发送前路径延迟优化**(决策链客户端侧压至 ~160ms, 剩服务端 TTFB 不可控)。
 
 ## 最终结论(两轮实测 + curl 铁证)
 
@@ -46,7 +46,27 @@ release 包 R8 minify 裁剪 Log.d(`proguard-android-optimize.txt` 默认 `-assu
 ## 当前代码状态
 
 v0.28.4(已发布): Step1-6 打点/超时分离/fallback 流式化/resolveRunningIndex/PLAN 通道/Swarm 合成流式化
-v0.28.5(工作区, 未发版): UI 播放器节奏化 + 打点清理
+v0.28.5(未发版): UI 播放器节奏化 + 打点清理
+v0.28.6(工作区, 未发版): 发送前路径延迟优化 — 详见下节
+
+## v0.28.6 发送链路延迟优化(2026-08-04 追加)
+
+**结论**: 4-13s 决策链中客户端部分原本就轻, 优化后 T0→S-OPEN 客户端侧仅 ~160ms(模拟器实测); 剩余 ~9s 为服务端 prefill TTFB(缓存未命中, 客户端不可优化, 前缀稳定已最大化缓存命中)。
+
+实测打点(MengPawLatency, 已移除):
+```
+T0 submitTask 47.714 → T1 bubble 47.737 (23ms) → T2 47.827 → BC-ENTER 47.847 → BC-EXIT 47.850 (3ms)
+→ S-OPEN 47.873 → T3 first-delta 56.911 (9.04s = 服务端 TTFB) → S-DONE 57.229 (140 chars 突发)
+```
+
+优化清单(全部已验证):
+1. **翻译 opt-in**(用户指令): `TranslateMiddleware.enabled` 默认 false; 设置页 Agent → 自动翻译开关(DataPaths.CONFIG/auto_translate); MainActivity LaunchedEffect 实时同步; 不开启零 Google 请求
+2. **saveCurrentSession 异步化**: Main 快照 + 单线程 executor("session-save")串行落盘 + 在途快照合并(队列 ≤1); onCleared flush + awaitTermination(1s); 归档写入仅在仍为当前会话时执行(防幽灵文件)
+3. **气泡前置 + 并行**: 思考中气泡在翻译/召回前插入(23ms 可见); 翻译与 recallMemory async 并行; detectCorrection fire-and-forget 出 Main
+4. **后台预压缩**: scheduleCompressionIfNeeded(≥42 条, 引擎自有 compressionScope, ConcurrentHashMap 单在途) + awaitCompressionIfNeeded(在途放行, 无在途且超阈值才同步兜底); 身份 diff(IdentityHashMap)加固 LLM 窗口内新增消息保留; **stop() 不取消** compressionScope(submitTask 每轮先 stop, 取消会杀死在途压缩)
+5. **等待期反馈**: 思考中气泡 spinner + 秒数(WaitingIndicator, ChatBubbles.kt)
+
+环境记录: 模拟器 provider 配置在 Vault; 若"智能体还未配置模型"重现, 需在设置页重新粘贴 API key。
 
 ## 剩余工作
 

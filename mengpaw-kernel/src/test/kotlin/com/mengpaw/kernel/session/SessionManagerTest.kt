@@ -8,6 +8,8 @@ import com.mengpaw.kernel.llm.ProviderInfo
 import com.mengpaw.kernel.llm.ProviderType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -145,6 +147,51 @@ class SessionManagerTest {
         // The last message is the most recent addition
         assertEquals("message batch2 44 " + "x".repeat(800), history.last().content)
         assertTrue("压缩后应少于 100 条: ${history.size}", history.size < 100)
+    }
+
+    @Test
+    fun `compressIfNeeded preserves messages added during LLM call`() = runBlocking {
+        // v0.28.6 身份 diff 加固: 压缩 LLM 调用窗口内并发追加的消息不能丢
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        val mockLlm = MockLlmProvider {
+            // 模拟 LLM 调用窗口内主循环并发 addMessage (monitor 此刻空闲)
+            manager.addMessage(session.id, Message("user", "concurrent-new"))
+            manager.addMessage(session.id, Message("assistant", "concurrent-reply"))
+            "summary of the conversation"
+        }
+        repeat(55) { i ->
+            manager.addMessage(session.id, Message("user", "message $i " + "x".repeat(800)))
+        }
+        assertTrue(manager.compressIfNeeded(mockLlm))
+        val history = manager.getHistory(session.id)
+        assertTrue("压缩窗口内追加的 user 消息不能丢", history.any { it.content == "concurrent-new" })
+        assertTrue("压缩窗口内追加的 assistant 消息不能丢", history.any { it.content == "concurrent-reply" })
+        assertEquals("concurrent-reply", history.last().content)
+    }
+
+    @Test
+    fun `scheduleCompressionIfNeeded single-flight and compresses in background`() = runBlocking {
+        // v0.28.6 后台预压缩: 连续 schedule 只触发一次压缩; 完成后历史被摘要替换
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        var callCount = 0
+        val mockLlm = MockLlmProvider { callCount++; "summary of the conversation" }
+        repeat(60) { i ->
+            manager.addMessage(session.id, Message("user", "message $i " + "x".repeat(800)))
+        }
+        val job = SupervisorJob()
+        val scope = CoroutineScope(job + Dispatchers.Default)
+        try {
+            manager.scheduleCompressionIfNeeded(session.id, scope, mockLlm, threshold = 50, margin = 8)
+            manager.scheduleCompressionIfNeeded(session.id, scope, mockLlm, threshold = 50, margin = 8)
+            delay(2000)
+            assertEquals("单在途去重, 压缩只触发一次", 1, callCount)
+            val history = manager.getHistory(session.id)
+            assertTrue(history.first().role == "system" && history.first().content.contains("[📋 对话摘要]"))
+        } finally {
+            job.cancel()
+        }
     }
 
     @Test
