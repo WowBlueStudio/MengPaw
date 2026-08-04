@@ -444,7 +444,7 @@ Skills 分为两层：
             ## 网络端口
             __PORTS_TABLE__
 
-            ## 浏览器协作 (MP Browser v0.6.0, 独立 APK)
+            ## 浏览器协作 (MP 浏览器, 独立 APK)
             - 浏览器是独立应用, Agent 无法直接执行浏览器 CLI (45 条命令在浏览器 APK 内, 未对 Shell 开放)。
             - **前台唤醒**: `sys.browser.open [url]` 唤起 MP 浏览器到前台 (带 url 则同时打开; 唤起后 MCP 工具自动可用)。
             - **网页提炼**: 浏览器菜单「提炼网页要点」→ Agent 抓取转换 Markdown + 提炼要点 → 自动回传浏览器预览 (命令: search.clean/md/outputs/clear)。
@@ -546,7 +546,7 @@ Skills 分为两层：
             ## Network Ports
             __PORTS_TABLE__
 
-            ## Browser Collaboration (MP Browser v0.6.0, separate APK)
+            ## Browser Collaboration (MP Browser, separate APK)
             - Browser is a separate app; Agent cannot execute browser CLI directly (the 45 in-browser commands are not exposed to Shell).
             - **Wake browser**: `sys.browser.open [url]` brings MP Browser to foreground (with url opens it; MCP tools become available once woken).
             - **Page extract**: Browser menu "Extract page highlights" → Agent fetches, converts to Markdown, summarizes → auto-relays back for preview (commands: search.clean/md/outputs/clear).
