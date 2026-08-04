@@ -3,7 +3,6 @@
 
 package com.mengpaw.shell.ui.screens
 
-import com.mengpaw.kernel.error.ErrorCollector
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -33,7 +32,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mengpaw.design.components.MarkdownText
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
@@ -43,71 +41,8 @@ import com.mengpaw.shell.ui.components.KanbanStatusBar
 import com.mengpaw.shell.ui.components.TribeBarState
 import com.mengpaw.shell.ui.components.aggregateTribeBarState
 import com.mengpaw.shell.ui.localization.AppStrings
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.io.File
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-
-private val appJson = Json { ignoreUnknownKeys = true; prettyPrint = true }
-
-@Serializable
-data class FrameworkContactFile(
-    val name: String = "",
-    val address: String = "",
-    val remark: String = "",
-    val frameworkType: String = "mengpaw"
-)
-
-@Serializable
-data class TwinPairFile(
-    val deviceName: String = "",
-    val deviceModel: String = "",
-    val peerId: String = ""
-)
-
-/** Agent online / presence status for external frameworks. */
-enum class FrameworkStatus(val indicatorColor: Color) {
-    ONLINE(ArcoColors.Green6),
-    BUSY(ArcoColors.Orange6),
-    OFFLINE(ArcoColors.Gray6)
-}
-
-/** Localized Framework Status label (English mode → English). */
-fun FrameworkStatus.label(strings: AppStrings): String = when (this) {
-    FrameworkStatus.ONLINE -> strings.frameworkStatusOnline
-    FrameworkStatus.BUSY -> strings.frameworkStatusBusy
-    FrameworkStatus.OFFLINE -> strings.frameworkStatusOffline
-}
-
-/** Localized Framework Status explanation. */
-fun FrameworkStatus.desc(strings: AppStrings): String = when (this) {
-    FrameworkStatus.ONLINE -> strings.frameworkStatusOnlineDesc
-    FrameworkStatus.BUSY -> strings.frameworkStatusBusyDesc
-    FrameworkStatus.OFFLINE -> strings.frameworkStatusOfflineDesc
-}
-
-/** A framework peer (ACP node) that may host multiple agents. */
-data class FrameworkContact(
-    val name: String,
-    val address: String,
-    val online: Boolean,
-    val trusted: Boolean,
-    val agents: List<String>,
-    val version: String = "",
-    val frameworkName: String = "",
-    val remark: String = "",
-    val frameworkType: String = "mengpaw"
-)
-
-/** Data class for new agent creation form. */
-data class NewAgentForm(
-    val name: String = "",
-    val workspaceFolder: String = "",
-    val intro: String = ""
-)
 
 /**
  * Left sidebar — Agent switcher + Framework directory.
@@ -155,7 +90,6 @@ fun SidebarContent(
     var showAddFramework by remember { mutableStateOf(false) }
     var showTwinConfirmDialog by remember { mutableStateOf(false) }
     var twinPairTarget by remember { mutableStateOf<FrameworkContact?>(null) }
-    val scope = rememberCoroutineScope()
 
     // Discover agents from disk — no remember() so list stays fresh when agents are created/deleted
     val agentsDir = File(com.mengpaw.kernel.DataPaths.AGENTS)
@@ -282,7 +216,7 @@ fun SidebarContent(
                     ?.filter { it.extension == "json" && !it.name.endsWith(".tmp.json") }
                     ?.forEach { file ->
                         try {
-                            val contactFile = appJson.decodeFromString<FrameworkContactFile>(file.readText())
+                            val contactFile = sidebarAppJson.decodeFromString<FrameworkContactFile>(file.readText())
                             contacts.add(FrameworkContact(
                                 name = contactFile.name.ifBlank { file.nameWithoutExtension },
                                 address = contactFile.address,
@@ -562,240 +496,18 @@ fun SidebarContent(
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // 记忆孪生配对请求 (接收方) — 检查 inbox 中的 twin_pair_*.json
+    // 记忆孪生配对对话框 (请求/验证码/5连击确认) — 已拆至 TwinPairingDialogs.kt
     // ═══════════════════════════════════════════════════════════════════
-    // 轮询 inbox 中的孪生配对请求 (文件写入不会自动触发 Compose 重组)
-    var twinPairFiles by remember { mutableStateOf<List<java.io.File>>(emptyList()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
-            val files = if (inbox.exists())
-                inbox.listFiles()?.filter { it.name.startsWith("twin_pair_") && it.name.endsWith(".json") }?.toList() ?: emptyList()
-            else emptyList()
-            twinPairFiles = files
-            kotlinx.coroutines.delay(2000) // 每2秒检查一次
+    TwinPairingDialogs(
+        strings = strings,
+        onActivateMemoryTwin = onActivateMemoryTwin,
+        twinPairTarget = twinPairTarget,
+        showTwinConfirmDialog = showTwinConfirmDialog,
+        onDismissTwinConfirm = {
+            showTwinConfirmDialog = false
+            twinPairTarget = null
         }
-    }
-    twinPairFiles.firstOrNull()?.let { pairFile ->
-        val twinData = try { appJson.decodeFromString<TwinPairFile>(pairFile.readText()) } catch (_: Exception) { null }
-        if (twinData != null) {
-            val peerName = twinData.deviceName.ifBlank { twinData.peerId.take(16).ifBlank { strings.unknown } }
-            val peerModel = twinData.deviceModel
-            val peerId = twinData.peerId
-            AlertDialog(
-                onDismissRequest = { pairFile.delete() },
-                icon = { Icon(Icons.Outlined.Warning, null, tint = ArcoColors.Orange6) },
-                title = { Text(strings.twinRequestTitle, fontWeight = FontWeight.Bold) },
-                text = {
-                    Column {
-                        Text(strings.twinRequestWarning)
-                        Spacer(Modifier.height(12.dp))
-                        Text(String.format(strings.twinRequestDevice, peerName), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                        if (peerModel.isNotBlank()) {
-                            Text(String.format(strings.twinRequestModel, peerModel), style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Text(strings.twinRequestAgreeDesc, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        // Check if pairing engine already has a session (new protocol)
-                        val pairingSession = com.mengpaw.plugin.memorytwin.TwinPairingEngine.getSessionForPeer(peerId)
-                        if (pairingSession != null && pairingSession.phase == com.mengpaw.plugin.memorytwin.TwinPairingEngine.PairingPhase.AWAITING_CONFIRM) {
-                            // New protocol: pairing engine will handle through verification code dialog
-                            android.util.Log.i("MengPawTwin", "使用新配对协议, 等待验证码确认")
-                        } else {
-                            // Legacy: write trust directly (will be upgraded to new protocol on next sync)
-                            val trustedDir = java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
-                            trustedDir.mkdirs()
-                            java.io.File(trustedDir, "$peerId.trusted").writeText(
-                                """{"deviceId":"$peerId","deviceName":"$peerName","pairedAt":${System.currentTimeMillis()}}"""
-                            )
-                        }
-                        pairFile.delete()
-                    }) {
-                        Text(strings.twinRequestAgree, color = ThemeColors.brand)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { pairFile.delete() }) {
-                        Text(strings.twinRequestDisagree)
-                    }
-                }
-            )
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // 记忆孪生 6位验证码弹窗 (双方) — 观察 TwinPairingEngine StateFlow
-    // ═══════════════════════════════════════════════════════════════════
-    val twinPairingState by com.mengpaw.plugin.memorytwin.TwinPairingEngine.pairingUiState.collectAsState()
-    var showTwinVerifyDialog by remember { mutableStateOf(false) }
-    var verifySessionId by remember { mutableStateOf("") }
-    var verifyPeerId by remember { mutableStateOf("") }
-    var verifyCode by remember { mutableStateOf("") }
-
-    // 当配对引擎状态变为 AWAITING_CONFIRM 时自动弹出验证码对话框
-    LaunchedEffect(twinPairingState) {
-        if (twinPairingState.phase == com.mengpaw.plugin.memorytwin.TwinPairingEngine.PairingPhase.AWAITING_CONFIRM &&
-            twinPairingState.verificationCode.isNotBlank() && !showTwinVerifyDialog) {
-            verifySessionId = twinPairingState.sessionId
-            verifyPeerId = twinPairingState.peerId
-            verifyCode = twinPairingState.verificationCode
-            showTwinVerifyDialog = true
-        }
-        if (twinPairingState.phase == com.mengpaw.plugin.memorytwin.TwinPairingEngine.PairingPhase.ESTABLISHED) {
-            showTwinVerifyDialog = false
-            com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext?.let { ctx ->
-                android.widget.Toast.makeText(
-                    ctx,
-                    strings.twinPairedToast,
-                    android.widget.Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-    }
-
-    if (showTwinVerifyDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showTwinVerifyDialog = false
-                com.mengpaw.plugin.memorytwin.TwinPairingEngine.cancelPairing(verifySessionId)
-            },
-            icon = { Icon(Icons.Outlined.Security, null, tint = ThemeColors.brand) },
-            title = { Text(strings.twinVerifyTitle, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        strings.twinVerifyDesc,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ThemeColors.textSecondary
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        verifyCode,
-                        fontSize = 36.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        color = ThemeColors.brand,
-                        letterSpacing = 8.sp
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        String.format(strings.twinVerifyPeer, verifyPeerId.take(16)),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ThemeColors.textSecondary
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        strings.twinVerifyWarning,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ArcoColors.Red6,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showTwinVerifyDialog = false
-                    com.mengpaw.plugin.memorytwin.TwinPairingEngine.confirmPairing(verifySessionId)
-                }) {
-                    Text(strings.twinVerifyConfirm, color = ThemeColors.brand)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showTwinVerifyDialog = false
-                    com.mengpaw.plugin.memorytwin.TwinPairingEngine.cancelPairing(verifySessionId)
-                }) {
-                    Text(strings.cancel, color = ArcoColors.Red6)
-                }
-            }
-        )
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // 记忆孪生配对确认 (发起方) — 5连击触发
-    // ═══════════════════════════════════════════════════════════════════
-    if (showTwinConfirmDialog) {
-        val target = twinPairTarget
-        AlertDialog(
-            onDismissRequest = { showTwinConfirmDialog = false; twinPairTarget = null },
-            icon = { Icon(Icons.Outlined.Hub, null, tint = ThemeColors.brand) },
-            title = { Text(strings.twinConfirmTitle, fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    if (target != null) {
-                        Text(strings.twinConfirmIntro)
-                        Spacer(Modifier.height(4.dp))
-                        Surface(shape = RoundedCornerShape(ArcoRadius.sm),
-                            color = ThemeColors.bgCardHigh, modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                target.remark.ifBlank { target.name },
-                                Modifier.padding(8.dp),
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    Text(strings.twinConfirmWarning,
-                        style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                }
-            },
-            confirmButton = {
-                val twinAlreadyActive = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.isActivated
-                TextButton(onClick = {
-                    showTwinConfirmDialog = false
-                    val peer = twinPairTarget
-                    twinPairTarget = null
-                    // 未激活则先激活孪生服务
-                    if (!twinAlreadyActive) {
-                        onActivateMemoryTwin()
-                    }
-                    // 发起配对 (已激活的直接配对, 未激活的等 ACP 就绪后配对)
-                    if (peer != null) {
-                        scope.launch(Dispatchers.IO) {
-                            if (!twinAlreadyActive) {
-                                // 轮询等待 ACP 就绪 (最多 5 秒)
-                                val ready = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.awaitAcpReady(5000L)
-                                if (!ready) {
-                                    android.util.Log.w("MengPawTwin", "ACP 未就绪, 放弃配对")
-                                    return@launch
-                                }
-                            }
-                            try {
-                                val transport = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpTransport
-                                if (transport != null) {
-                                    val deviceId = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() } catch (_: Exception) { "device-${System.currentTimeMillis()}" }
-                                    val ctx = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext ?: return@launch
-                                    val collector = com.mengpaw.plugin.memorytwin.TwinCapabilityCollector(ctx, deviceId, android.os.Build.MODEL ?: "")
-                                    val card = collector.collect(null, emptyList())
-                                    val result = com.mengpaw.plugin.memorytwin.TwinPairingEngine.initiatePairing(
-                                        peerId = peer.name,
-                                        myDeviceId = deviceId,
-                                        myFingerprint = deviceId,
-                                        capabilityCard = card.toJson(),
-                                        transport = transport
-                                    )
-                                    android.util.Log.i("MengPawTwin", "5连击配对发起: session=${result.sessionId} peer=${peer.name}")
-                                }
-                            } catch (e: Exception) {
-                                android.util.Log.e("MengPawTwin", "5连击配对失败: ${e.message}", e)
-                            }
-                        }
-                    }
-                }) {
-                    Text(strings.twinConfirmAction, color = ThemeColors.brand)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTwinConfirmDialog = false; twinPairTarget = null }) {
-                    Text(strings.cancel)
-                }
-            }
-        )
-    }
+    )
 
     // ═══════════════════════════════════════════════════════════════════
     // New Agent Dialog
@@ -814,15 +526,3 @@ fun SidebarContent(
     }
 }
 
-/** 根据框架类型返回对应图标。 */
-@Composable
-fun frameworkTypeIcon(frameworkType: String): androidx.compose.ui.graphics.vector.ImageVector = when (frameworkType) {
-    "claude-code", "trea-ide", "trea-work", "cursor", "opencode",
-    "reasonix", "workbuddy" -> Icons.Outlined.Terminal  // MCP
-    "openclaw", "qclaw", "hermes", "codex" -> Icons.Outlined.Dns  // WebSocket
-    "qwenpaw", "coze" -> Icons.Outlined.Language  // REST
-    "collab-cli" -> Icons.Outlined.Folder  // File
-    "kimi-desktop" -> Icons.Outlined.DesktopWindows  // 未知
-    "custom" -> Icons.Outlined.MoreHoriz
-    else -> Icons.Outlined.Hub  // mengpaw
-}

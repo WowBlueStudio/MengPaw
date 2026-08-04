@@ -3,7 +3,6 @@
 
 package com.mengpaw.shell.ui.screens
 
-import android.graphics.BitmapFactory
 import android.net.Uri
 import com.mengpaw.shell.ui.screens.model.ChatMessageUi
 import com.mengpaw.shell.ui.screens.model.ExecutionMode
@@ -14,7 +13,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import com.mengpaw.shell.ui.components.MissionMonitorOverlay
 import com.mengpaw.shell.ui.components.NotifyBannerHost
@@ -34,15 +32,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.mengpaw.design.components.ArcoDivider
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
@@ -59,7 +53,7 @@ import com.mengpaw.shell.ui.isWide
 import java.io.File
 
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     onNavigateToSettings: () -> Unit = {},
@@ -75,7 +69,6 @@ fun MainScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
-    val inputEnabled by viewModel.inputEnabled.collectAsState()
     var inputText by remember { mutableStateOf("") }
     val inputFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val listState = rememberLazyListState()
@@ -208,105 +201,32 @@ fun MainScreen(
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.fillMaxSize().widthIn(max = MAX_CONTENT_WIDTH.dp)) {
-            // ── Header bar ──
-            Surface(
-                shadowElevation = 2.dp,
-                color = ThemeColors.bgPrimary.copy(alpha = 0.92f)
-            ) {
-                Row(
-                    Modifier.fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Agent avatar — 44dp circle, 点击打开左侧栏
-                    val avatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$displayAgentName/avatar.png")
-                    val avatarBitmap = remember(displayAgentName) { if (avatarFile.exists()) BitmapFactory.decodeFile(avatarFile.absolutePath) else null }
-                    Box(modifier = Modifier.size(44.dp).clip(CircleShape)
-                        .pointerInput(Unit) { detectTapGestures { showLeftSidebar = !showLeftSidebar } }) {
-                        if (avatarBitmap != null) {
-                            Image(bitmap = avatarBitmap.asImageBitmap(), null, Modifier.fillMaxSize())
-                        } else {
-                            Surface(shape = CircleShape, color = ThemeColors.brandContainer, modifier = Modifier.fillMaxSize()) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(displayAgentName.take(1), color = ThemeColors.brand, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                }
-                            }
-                        }
-                    }
-                    Spacer(Modifier.width(ArcoSpacing.sm))
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(displayAgentName, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
-                            if (agentFramework != null) {
-                                Spacer(Modifier.width(4.dp))
-                                Text("@$agentFramework",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = ThemeColors.textSecondary,
-                                    maxLines = 1)
-                            }
-                        }
-                        Text(agentViewModel?.activeSessionLabel(strings) ?: "MengPaw / ${strings.agentUnconfigured}",
-                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 1)
-                    }
-                    Box(modifier = Modifier.size(44.dp).pointerInput(Unit) { detectTapGestures { viewModel.newSession() } },
-                        contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.Add, strings.newSession, tint = ThemeColors.textSecondary)
-                    }
-                    // Mission monitor toggle (visible when mission is active)
-                    if (missionActiveState) {
-                        Box(modifier = Modifier.size(44.dp).pointerInput(Unit) { detectTapGestures { showMissionOverlay = !showMissionOverlay } },
-                            contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.Monitor, "Mission", tint = ThemeColors.brand)
-                        }
-                    }
-                    // FIX: Dynamic plugin buttons from HEADER_BAR placement
-                    val headerButtons = remember(pluginViewModel.activeButtons) { pluginViewModel.activeButtons[com.mengpaw.kernel.plugin.ButtonPlacement.HEADER_BAR] ?: emptyList() }
-                    if (headerButtons.isNotEmpty()) {
-                        headerButtons.take(2).forEach { btn ->
-                            Box(modifier = Modifier.size(44.dp).pointerInput(btn.command) {
-                                    detectTapGestures { if (btn.command.isNotBlank()) inputText = btn.command }
-                                },
-                                contentAlignment = Alignment.Center) {
-                                Icon(pluginIconForName(btn.iconName), btn.label, tint = ThemeColors.brand)
-                            }
-                        }
-                    }
-                    Box(modifier = Modifier.size(44.dp).pointerInput(Unit) { detectTapGestures { showRightSidebar = !showRightSidebar } },
-                        contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.History, strings.history, tint = ThemeColors.textSecondary)
-                    }
-                }
-            }
-            ArcoDivider()
+            // ── Header bar (拆至 MainScreenHeader.kt) ──
+            MainScreenHeader(
+                strings = strings,
+                displayAgentName = displayAgentName,
+                agentFramework = agentFramework,
+                sessionLabel = agentViewModel?.activeSessionLabel(strings) ?: "MengPaw / ${strings.agentUnconfigured}",
+                missionActiveState = missionActiveState,
+                pluginViewModel = pluginViewModel,
+                onPluginCommand = { inputText = it },
+                onToggleLeftSidebar = { showLeftSidebar = !showLeftSidebar },
+                onToggleRightSidebar = { showRightSidebar = !showRightSidebar },
+                onToggleMissionOverlay = { showMissionOverlay = !showMissionOverlay },
+                onNewSession = { viewModel.newSession() }
+            )
 
             // ── Content area: adaptive — persistent sidebar on wide, overlay on compact ──
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Row(Modifier.fillMaxSize()) {
-                    // Persistent left sidebar (tablet only)
-                    if (isWide() && showLeftSidebar) {
-                        Surface(
-                            color = ThemeColors.bgPrimary,
-                            shadowElevation = 8.dp,
-                            modifier = Modifier.pointerInput(Unit) {
-                                var totalDrag = 0f
-                                detectHorizontalDragGestures(
-                                    onDragEnd = {
-                                        if (totalDrag < -120f) showLeftSidebar = false
-                                        totalDrag = 0f
-                                    }
-                                ) { _, dragAmount ->
-                                    totalDrag += dragAmount
-                                }
-                            }
-                        ) {
-                            leftSidebarContent({ showLeftSidebar = false }, isRunning)
-                        }
-                        VerticalDivider(
-                            color = ThemeColors.border,
-                            thickness = 0.5.dp
-                        )
-                    }
+                    // Persistent left sidebar (tablet only) — 拆至 MainScreenSidebars.kt
+                    PersistentLeftSidebar(
+                        show = showLeftSidebar,
+                        isWide = isWide(),
+                        isRunning = isRunning,
+                        onDismiss = { showLeftSidebar = false },
+                        content = leftSidebarContent
+                    )
 
                     // Messages — container centered, tablet 80% / phone 95%
                     val msgWidth = if (isWide()) 0.8f else 0.95f
@@ -407,30 +327,13 @@ fun MainScreen(
                             } // close Column
                     } // close Box wrapping LazyColumn
 
-                    // Persistent right sidebar (tablet only)
-                    if (isWide() && showRightSidebar) {
-                        VerticalDivider(
-                            color = ThemeColors.border,
-                            thickness = 0.5.dp
-                        )
-                        Surface(
-                            color = ThemeColors.bgPrimary,
-                            shadowElevation = 8.dp,
-                            modifier = Modifier.pointerInput(Unit) {
-                                var totalDrag = 0f
-                                detectHorizontalDragGestures(
-                                    onDragEnd = {
-                                        if (totalDrag > 120f) showRightSidebar = false
-                                        totalDrag = 0f
-                                    }
-                                ) { _, dragAmount ->
-                                    totalDrag += dragAmount
-                                }
-                            }
-                        ) {
-                            rightSidebarContent { showRightSidebar = false }
-                        }
-                    }
+                    // Persistent right sidebar (tablet only) — 拆至 MainScreenSidebars.kt
+                    PersistentRightSidebar(
+                        show = showRightSidebar,
+                        isWide = isWide(),
+                        onDismiss = { showRightSidebar = false },
+                        content = rightSidebarContent
+                    )
                 }
 
                 // Agent-pushed banner notifications — overlay at top of content area
@@ -443,15 +346,17 @@ fun MainScreen(
                     }
                 )
 
-                // Overlays — outside Row to avoid scope conflict
-                if (!isWide()) {
-                    SidebarOverlay(showLeftSidebar, fromLeft = true,
-                        onDismiss = { showLeftSidebar = false },
-                        content = { leftSidebarContent({ showLeftSidebar = false }, isRunning) })
-                    SidebarOverlay(showRightSidebar, fromLeft = false,
-                        onDismiss = { showRightSidebar = false },
-                        content = { rightSidebarContent { showRightSidebar = false } })
-                }
+                // Overlays — outside Row to avoid scope conflict (拆至 MainScreenSidebars.kt)
+                PhoneSidebarOverlays(
+                    showLeft = showLeftSidebar,
+                    showRight = showRightSidebar,
+                    isWide = isWide(),
+                    isRunning = isRunning,
+                    onDismissLeft = { showLeftSidebar = false },
+                    onDismissRight = { showRightSidebar = false },
+                    leftContent = leftSidebarContent,
+                    rightContent = rightSidebarContent
+                )
             }
 
             // ── @mention / !bang 命令补全内联下拉（不走 Popup，不干扰输入法）──
@@ -723,88 +628,38 @@ fun MainScreen(
         onDismiss = { showMissionOverlay = false }
     )
 
-    // ── Expand bottom sheet (3-section layout) ──
-    if (showExpandSheet) {
-        ModalBottomSheet(onDismissRequest = { showExpandSheet = false }, sheetState = sheetState,
-            containerColor = ThemeColors.bgPrimary) {
-            Column(Modifier.padding(ArcoSpacing.lg).padding(bottom = 32.dp)) {
-                // ═══ Section 1: 文件提交 ═══
-                Text(strings.expandFileSection, fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(ArcoSpacing.md))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    ExpandItem(Icons.Outlined.Image, strings.filePickImage) {
-                        showExpandSheet = false
-                        pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
-                        imagePicker.launch("image/*")
-                    }
-                    ExpandItem(Icons.Outlined.Description, strings.filePickDocument) {
-                        showExpandSheet = false
-                        pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
-                        docPicker.launch(arrayOf(
-                            "application/pdf", "text/plain", "text/markdown",
-                            "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        ))
-                    }
-                    ExpandItem(Icons.Outlined.AttachFile, strings.filePickFile) {
-                        showExpandSheet = false
-                        pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
-                        filePicker.launch(arrayOf("*/*"))
-                    }
-                    ExpandItem(Icons.Outlined.PhotoCamera, strings.filePickCamera) {
-                        showExpandSheet = false
-                        pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
-                        cameraLauncher.launch(cameraUri)
-                    }
-                }
-                Spacer(Modifier.height(ArcoSpacing.xl))
-
-                // ═══ Section 2: 执行模式 ═══
-                Text(strings.expandModeSection, fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(ArcoSpacing.sm))
-                val orderedModes = panelOrder.modes.mapNotNull { id ->
-                    ExecutionMode.entries.find { it.name.lowercase() == id }
-                }.ifEmpty { ExecutionMode.entries.toList() }
-                // 两行布局容纳全部模式（7 个 → 4+3）— take(6) 截断曾吞掉 Swarm
-                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)) {
-                    orderedModes.forEach { mode ->
-                        val isActive = activeTags.any { it is InputTag.Mode && it.mode == mode }
-                        ModeItem(mode = mode, isActive = isActive, onClick = {
-                            showExpandSheet = false
-                            if (isActive) viewModel.removeTag(InputTag.Mode(mode))
-                            else {
-                                viewModel.addTag(InputTag.Mode(mode))
-                            }
-                        })
-                    }
-                }
-                Spacer(Modifier.height(ArcoSpacing.xl))
-
-                // ═══ Section 3: 插件工具 ═══
-                Text(strings.expandPluginSection, fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(ArcoSpacing.sm))
-                val sheetButtons = pluginViewModel.activeButtons[com.mengpaw.kernel.plugin.ButtonPlacement.BOTTOM_SHEET] ?: emptyList()
-                val orderedPlugins = panelOrder.plugins.mapNotNull { btnId ->
-                    sheetButtons.find { it.id == btnId }
-                } + sheetButtons.filter { btn -> btn.id !in panelOrder.plugins }
-                if (orderedPlugins.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        orderedPlugins.take(4).forEach { btn ->
-                            ExpandItem(pluginIconForName(btn.iconName), btn.label) {
-                                showExpandSheet = false; inputText = btn.command
-                            }
-                        }
-                    }
-                } else {
-                    Text("<空>",
-                        style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                }
-                Spacer(Modifier.height(ArcoSpacing.lg))
-            }
+    // ── Expand bottom sheet (3-section layout) — 拆至 MainScreenExpandSheet.kt ──
+    MainScreenExpandSheet(
+        show = showExpandSheet,
+        sheetState = sheetState,
+        strings = strings,
+        panelOrder = panelOrder,
+        activeTags = activeTags,
+        pluginViewModel = pluginViewModel,
+        onAddTag = viewModel::addTag,
+        onRemoveTag = viewModel::removeTag,
+        onPluginCommand = { inputText = it },
+        onDismiss = { showExpandSheet = false },
+        onPickImage = {
+            pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
+            imagePicker.launch("image/*")
+        },
+        onPickDocument = {
+            pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
+            docPicker.launch(arrayOf(
+                "application/pdf", "text/plain", "text/markdown",
+                "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ))
+        },
+        onPickFile = {
+            pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
+            filePicker.launch(arrayOf("*/*"))
+        },
+        onPickCamera = {
+            pendingUploadDir = com.mengpaw.kernel.DataPaths.AGENTS + "/${displayAgentName}/workspace"
+            cameraLauncher.launch(cameraUri)
         }
-    }
+    )
 } // close outermost Box
 } // close MainScreen composable
 

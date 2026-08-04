@@ -108,6 +108,19 @@ Arco Design 暗色模式规范 bg-1~bg-5 五级背景 + text-1~text-4 白透明�
 
 `AgentCardDialog`/`NewAgentDialog`/`AddFrameworkDialog`/`FrameworkCardDialog` 从 `SidebarContent.kt` 提取到 `sidebar-dialogs/` 后，旧 private 函数未删除导致 `Conflicting overloads` 编译错误。Kotlin 的 private 函数是文件级作用域，不会与同包其他文件的同名函数冲突，但 `FrameworkCardDialog` 调用了 `SidebarContent.kt` 的 `private fun frameworkTypeIcon`——private 函数不能被同包其他文件访问，必须改为 `internal` 或公开。
 
+### 5.5 大文件拆分的体积线与两坑 (v0.29.1 第二轮拆分)
+
+**体积线定案** (用户实测: >60KB 的 Compose 文件打开设置卡, 拆完流畅):
+- Compose/UI 文件 ≤ 40KB (重组范围热点)
+- 纯逻辑文件 ≤ 60KB (ViewModel/Service 等)
+- data class ≤ 200 字段 (ART 255 寄存器上限, 见 §VerifyError)
+
+**段式拆分模式**: 单一大 @Composable 无私有辅助时, 按内联布局段抽独立文件 (头栏/侧栏/底表/下拉), 共享状态 12 项 hoist 在原组合内, 写入点经回调上抛 (onPluginCommand/onPickXxx/onDismiss)。跨文件符号保持 public; 移走的组合函数从原文件删除不留桩。
+
+**坑 1 — 同包顶层符号名冲突**: 新文件加 `internal val appJson` 与既有对话框文件 (AddFrameworkDialog/FrameworkCardDialog) 各自的 `private val appJson` 同包同名 → `Overload resolution ambiguity`。顶层 private 在文件内不遮蔽同包 internal 同名声明。解法: 共享实例用唯一名 (`sidebarAppJson`), 各文件私有副本不动。
+
+**坑 2 — material3 1.3.x 移除了 `ModalBottomSheetState` 类型**: `rememberModalBottomSheetState()` 返回泛化的 `SheetState` (1.3.0 起 `ModalBottomSheetState` 类型删除, 仅 Kt 函数保留)。显式声明类型必须写 `SheetState`, 且 `ModalBottomSheet` 仍需 `@OptIn(ExperimentalMaterial3Api::class)`。
+
 ## 6. 设置页重构
 
 ### 6.1 API 供应商设置与模型选择分离
