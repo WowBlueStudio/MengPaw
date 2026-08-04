@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.29.0 (2026-08-04) — 搜索原生内置 + 插件发布架构迁移 + Gitee 全量镜像
+
+### 功能增强
+- **Tavily 搜索原生内置**: plugin-tavily 从 remote marketplace 插件改为随 APK 打包的 bundled 插件, 开机自动激活, Agent 原生即具备 `tavily.search` 搜索能力; 系统提示词 FewShot 示例同步改为原生搜索示例, 插件段明示"网页搜索已内置"
+
+### 架构完善
+- **触发器重命名 trueman → trumanshow**: 工作区规则文件全栈更名 (模板资产 + 代码 + 文档 + 旧工作区); AgentDocs.bootstrap 新增迁移 v3 — 文件重命名 + 指纹刷新 + heartbeat.md/agents.md 内容引用替换 (幂等, 兼容旧工作区)
+- **插件发布路径迁移 mengpaw-connectors 独立仓库**: 主仓库 MengPaw 的 plugins-v0.2.0 tag 不存在 (实际 plugins-v0.20.2), 全部 remote 插件 downloadUrl 404; 迁移后 9 个主插件 + 5 个连接器 AAR 同仓双源发布 (GitHub + Gitee), checksum/size 实测补齐
+- **Gitee 全量镜像**: mengpaw-connectors Gitee 仓库建成公开, 代码 + tags + 双 release (plugins-v0.20.2 / plugins-v0.1.0) 14 个 AAR 全量镜像, mirrorUrl 全部 200, 国内客户端 GeoRouter 首选 Gitee 不再依赖 GitHub fallback
+- **浏览器版本动态化**: BuiltinBrowserPlugin self.version 不再硬编码, 改读 BuildConfig.VERSION_NAME; 提示词中"浏览器协作"节移除硬编码版本描述
+
+### 修复
+- **plugin-browser-mcp 编译缺陷**: 缺 kotlinx-coroutines-core 依赖 (remote 插件从未构建 release, 隐藏至今), 补依赖后构建通过
+
+### 发行
+- Shell APK v0.29.0 (versionCode 29000) — 全量发布双远端 + GitHub Release
+- Browser APK v0.7.0 (versionCode 9, 独立版本节奏) — 产物命名改随浏览器自身版本, 不再跟随主版本号
+
 ## v0.28.4 (2026-08-04) — 流式第三轮彻查: 打点验证 + 五缺陷修复
 
 ### 修复

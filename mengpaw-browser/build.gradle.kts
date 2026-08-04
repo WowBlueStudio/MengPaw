@@ -9,6 +9,9 @@ plugins {
 
 val mengpawVersion: String = project.findProperty("mengpaw.version") as? String ?: "0.0.0"
 
+// 浏览器独立版本节奏 (不跟随主项目 mengpaw.version) — 单点数据源, 版本迭代只改这里
+val browserVersion: String = "0.7.0"
+
 android {
     namespace = "com.mengpaw.browser"
     compileSdk = 35
@@ -18,7 +21,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 9
-        versionName = "0.7.0"
+        versionName = browserVersion
     }
 
     compileOptions {
@@ -58,13 +61,13 @@ android {
                 if (buildType.name == "debug") {
                     outputs.all {
                         (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
-                            it.outputFileName = "mengpaw-browser-v${mengpawVersion}-debug.apk"
+                            it.outputFileName = "mengpaw-browser-v${browserVersion}-debug.apk"
                         }
                     }
                 } else {
                     outputs.all {
                         (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.let {
-                            it.outputFileName = "mengpaw-browser-v${mengpawVersion}-release.apk"
+                            it.outputFileName = "mengpaw-browser-v${browserVersion}-release.apk"
                         }
                     }
                 }

@@ -245,7 +245,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ### 3.5 插件模块（21 个，plugins/ 目录，按 settings.gradle.kts 为准）
 
-> 插件数统一口径：**21 模块**（settings.gradle.kts；外部连接器已移至独立仓库 mengpaw-connectors，见下）| **13 捆绑**（mengpaw-shell 打包）| **plugins.json 29 条目**（13 builtin + 14 remote + 2 embedded）
+> 插件数统一口径：**21 模块**（settings.gradle.kts；外部连接器已移至独立仓库 mengpaw-connectors，见下）| **14 内置**（BUILTIN_PLUGIN_IDS，含 v0.29.0 内置的 tavily；mengpaw-shell 打包）| **plugins.json 29 条目**（13 builtin + 14 remote + 2 embedded）
 
 #### 基础功能 (6)
 
@@ -869,7 +869,7 @@ interface Plugin {
 
 ### 7.3 市场发布
 
-客户端直读 `plugins.json`（raw.githubusercontent.com 全球 / gitee.com/raw 国内，GeoRouter 选择），ETag 缓存 (5 分钟)，SHA256 校验。**发布即生效**——push 到 GitHub master 后 GitHub 侧立即可用；Gitee 侧依赖镜像同步（`.github/workflows/gitee-sync.yml`，需配置 GITEE_TOKEN secret），镜像滞后期间国内用户看到旧索引。
+客户端直读 `plugins.json`（raw.githubusercontent.com 全球 / gitee.com/raw 国内，GeoRouter 选择），ETag 缓存 (5 分钟)，SHA256 校验。**发布即生效**——push 到 GitHub master 后 GitHub 侧立即可用；Gitee 侧依赖镜像同步（`.github/workflows/gitee-sync.yml`，需配置 **GITEE_SSH_KEY** secret——Gitee 私人令牌只能调 API 不能做 git 认证；SSH 私钥经 GitHub secret 传递会损坏，须 base64 单行存储）。**v0.29.0 起镜像已全量建成**：插件 AAR 发布在独立仓库 mengpaw-connectors（GitHub + Gitee 双 release，tag `plugins-vX.Y.Z`），国内客户端 GeoRouter 首选 Gitee 不再依赖 GitHub fallback。
 
 信任链：官方 → 信任框架 (SHA256 + 确认) → 公网 (SHA256 + 确认 + 来源标记) → 未验证 (拒绝)
 
