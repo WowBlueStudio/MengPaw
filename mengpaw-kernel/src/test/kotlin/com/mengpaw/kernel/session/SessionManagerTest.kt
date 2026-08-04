@@ -385,6 +385,26 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `repairSessionIntegrity removes blank assistant messages`() {
+        // v0.28.7: 空响应产物(空白 assistant 消息)会让 checkSessionIntegrity 永久失败,
+        // 完整性 latch 锁死后续轮次 — repair 必须能清掉
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.addMessage(session.id, Message("user", "hello"))
+        manager.addMessage(session.id, Message("assistant", "")) // 空响应
+        manager.addMessage(session.id, Message("user", "world"))
+        manager.addMessage(session.id, Message("assistant", "hi"))
+
+        assertFalse("含空白消息时完整性检查应失败", manager.checkSessionIntegrity(session.id))
+        val changed = manager.repairSessionIntegrity(session.id)
+        assertTrue(changed)
+        assertTrue("修复后完整性检查应通过", manager.checkSessionIntegrity(session.id))
+        val history = manager.getHistory(session.id)
+        assertFalse("不应残留空白 assistant 消息", history.any { it.role == "assistant" && it.content.isBlank() })
+        assertEquals(3, history.size) // user → (blank removed) → user → assistant
+    }
+
+    @Test
     fun `repairSessionIntegrity does not fail on nonexistent session`() {
         val manager = SessionManager()
         val result = manager.repairSessionIntegrity("nonexistent")

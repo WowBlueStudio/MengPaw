@@ -144,6 +144,12 @@ class AgentEngine(
         if (integrityFailed) return false
         val sid = sessionId ?: conversationSessionId ?: return true
         if (!sessionManager.checkSessionIntegrity(sid)) {
+            // v0.28.7 自动修复(幂等): 清理空白 assistant 消息等可修项 → 重查。
+            // 修好则放行不锁死 — 空响应触发的 latch 不应阻塞后续轮次。
+            if (sessionManager.repairSessionIntegrity(sid) && sessionManager.checkSessionIntegrity(sid)) {
+                KernelLog.w("AgentEngine", "Integrity auto-repaired for session $sid — latch not engaged")
+                return true
+            }
             integrityFailed = true
             KernelLog.w("AgentEngine", "Integrity check failed for session $sid — terminal latch engaged")
             return false
@@ -562,6 +568,7 @@ class AgentEngine(
             runningJob = job
             var consecutiveContinueCount = 0 // Tracks needsContinue without action
             var consecutiveFailures = 0       // Tracks consecutive tool failures
+            var emptyResponseCount = 0        // Tracks empty LLM responses (retry once, then error)
             val originalMaxSteps = maxSteps
             var effectiveMax = maxSteps
             var step = 0
@@ -589,6 +596,30 @@ class AgentEngine(
                 // 利用 LLM 等待窗口刚刚结束的间隙刷盘中期记忆 (I/O 成本隐藏)
                 com.mengpaw.kernel.agent.AgentDocs.flushMidTermMemoryQueue()
                 val sanitized = Sanitizer.sanitize(llmResponse)
+
+                // ── 空响应防御 (v0.28.7): DeepSeek 偶发空流 (SSE 零增量, S-DONE len=0) ──
+                // 根因链: 空响应 → 空白 assistant 消息入库 → checkSessionIntegrity 失败 →
+                // 完整性 terminal latch 锁死该会话后续所有轮次 ("会话数据完整性检查失败")。
+                // 修复: 空响应不入库空白消息, 重试一次 (step 不递增); 仍空则写明确错误并终止。
+                if (sanitized.isBlank()) {
+                    emptyResponseCount++
+                    if (emptyResponseCount >= 2) {
+                        val errorMsg = localizedError("empty_response", "", agentLanguage)
+                        sessionManager.addMessage(session.id, Message("assistant", errorMsg))
+                        sessionManager.recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+                            kind = SessionEventBus.EventKind.LLM_CALL_ERROR,
+                            sessionId = session.id,
+                            agentName = agentName,
+                            summary = "Empty LLM response after retry",
+                            payload = mapOf("error" to "empty_response", "consecutive" to "true")
+                        ))
+                        _state.value = AgentState.Error(errorMsg)
+                        return errorMsg
+                    }
+                    KernelLog.w("AgentEngine", "Empty LLM response at step $step — retrying once")
+                    continue
+                }
+                emptyResponseCount = 0
 
                 val totalChars = llmRequestBuilder.currentSystemPrompt.length +
                     sessionManager.getStructuredHistory(session.id).sumOf { (it["content"]?.length ?: 0) }

@@ -657,6 +657,16 @@ $conversationText
                 }
             }
         }
+        // v0.28.7: 清理空白 assistant 消息 (空响应产物) — 否则 checkSessionIntegrity 永久失败,
+        // 完整性 latch 锁死后续所有轮次。kernel 层 assistant 消息仅在完成后写入,
+        // 不存在"运行中"占位, 空白必为已完成空轮 → 可安全移除。
+        for (i in msgs.indices) {
+            val msg = msgs[i]
+            if (msg.role == "assistant" && msg.content.isBlank() && msg.interruptedTurn == null && !msg.localOnly) {
+                toRemove.add(i)
+                changed = true
+            }
+        }
         toRemove.sortedDescending().forEach { msgs.removeAt(it) }
 
         // Enforce 200-message history limit (match addMessage behavior)

@@ -20,6 +20,7 @@ fun localizedError(key: String, detail: String, agentLanguage: PromptEngine.Agen
         "agent_error" -> "Agent 错误：$detail"
         "no_plan" -> "无法为任务生成计划：$detail"
         "session_corrupted" -> "会话数据完整性检查失败 ($detail)。请使用 agent.repair 修复后重试，或开启新会话。"
+        "empty_response" -> "模型未返回任何内容（空响应），已自动重试仍无结果。请重试一次，或换个问法。"
         else -> detail
     }
     PromptEngine.AgentLanguage.ENGLISH -> when (key) {
@@ -29,6 +30,7 @@ fun localizedError(key: String, detail: String, agentLanguage: PromptEngine.Agen
         "agent_error" -> "Agent error: $detail"
         "no_plan" -> "Could not generate a plan for: $detail"
         "session_corrupted" -> "Session data integrity check failed ($detail). Run agent.repair or start a new conversation."
+        "empty_response" -> "The model returned an empty response (retried automatically). Please try again or rephrase."
         else -> detail
     }
 }

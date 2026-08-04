@@ -196,6 +196,33 @@ class AgentEngineTest {
     }
 
     @Test
+    fun `empty LLM response is retried once then succeeds`() = runBlocking {
+        // v0.28.7: DeepSeek 偶发空流 (S-DONE len=0) → 自动重试一次, 不写空白 assistant 消息
+        mockLlm.responseQueue.add("")
+        mockLlm.responseQueue.add("Final Answer: Retried successfully.")
+        val result = engine.run("Empty retry test", maxSteps = 3)
+        assertEquals("Retried successfully.", result)
+        // 历史中无空白 assistant 消息 (否则完整性 latch 锁死后续轮次)
+        val sessionId = engine.currentConversationId()
+        val history = sessionManager.getHistory(sessionId!!)
+        assertFalse("不应有空白 assistant 消息", history.any { it.role == "assistant" && it.content.isBlank() })
+        assertTrue("完整性检查应通过", sessionManager.checkSessionIntegrity(sessionId))
+    }
+
+    @Test
+    fun `persistently empty LLM response yields error not blank message`() = runBlocking {
+        // 两次空响应 → 明确报错 (非空白), 不入库空白 assistant 消息
+        mockLlm.responseQueue.add("")
+        mockLlm.responseQueue.add("")
+        val result = engine.run("Empty error test", maxSteps = 3)
+        assertTrue("应返回空响应错误: $result", result.contains("空响应") || result.contains("empty response"))
+        val sessionId = engine.currentConversationId()
+        val history = sessionManager.getHistory(sessionId!!)
+        assertFalse("不应有空白 assistant 消息", history.any { it.role == "assistant" && it.content.isBlank() })
+        assertTrue("完整性检查应通过", sessionManager.checkSessionIntegrity(sessionId))
+    }
+
+    @Test
     fun `run handles max steps`() = runBlocking {
         // LLM never gives final answer, just keeps acting
         mockLlm.nextResponse = """
@@ -212,15 +239,21 @@ class AgentEngineTest {
 
     private class MockLlmProvider : LlmProvider {
         var nextResponse: String = "Final Answer: Done."
+        // 响应队列: 非空时按序出队, 用于模拟"先空响应后正常"等连续调用场景
+        val responseQueue = java.util.ArrayDeque<String>()
 
-        override suspend fun complete(prompt: String): String = nextResponse
+        private fun take(): String =
+            if (responseQueue.isNotEmpty()) responseQueue.removeFirst() else nextResponse
+
+        override suspend fun complete(prompt: String): String = take()
 
         override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String {
-            nextResponse.forEach { onToken(it.toString()) }
-            return nextResponse
+            val r = take()
+            r.forEach { onToken(it.toString()) }
+            return r
         }
 
-        override suspend fun completeWithMessages(messages: List<Map<String, String>>): String = nextResponse
+        override suspend fun completeWithMessages(messages: List<Map<String, String>>): String = take()
 
         override fun info(): ProviderInfo = ProviderInfo("mock", "mock-v1", ProviderType.LOCAL)
         override fun close() {}
