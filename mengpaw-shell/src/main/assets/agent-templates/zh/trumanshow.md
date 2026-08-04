@@ -5,7 +5,7 @@ read_when:
   - self.trigger
 ---
 
-# trueman.md — 伪人模式规则
+# trumanshow.md — 伪人模式规则
 
 此文件指导你在**伪人模式（SCHEDULE）触发器**命中时怎么聊。留空或只有注释 = 伪人模式只按内置话题池发挥。
 

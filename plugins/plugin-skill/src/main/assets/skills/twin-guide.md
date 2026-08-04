@@ -24,7 +24,7 @@ category: system
 | `twin.lost <peer>` | 设备丢失: 广播解绑 + 移除信任 |
 
 ## 同步内容
-- **根文档**: soul.md / profile.md / agents.md / boost.md / trigger.md / heartbeat.md / trueman.md / {date}_dream.md
+- **根文档**: soul.md / profile.md / agents.md / boost.md / trigger.md / heartbeat.md / trumanshow.md / {date}_dream.md
 - **memory/**: memory.md (长期) / memory_{date}.md (中期) / project_*_memory.md / archive.md
 - **不同步**: CLI.md / inbox/ / dialog/ / memory/backup/ (本地文件)
 - **冲突**: 本地较新且内容不同 → 保存 `.conflict` 备份, 不覆盖

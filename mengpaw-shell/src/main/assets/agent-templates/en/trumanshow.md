@@ -5,7 +5,7 @@ read_when:
   - self.trigger
 ---
 
-# trueman.md — Truman Show (Random Chat) Rules
+# trumanshow.md — Truman Show (Random Chat) Rules
 
 This file guides how you chat when a **Truman Show (SCHEDULE) trigger** fires. Empty or comments-only = fall back to the built-in topic pool.
 

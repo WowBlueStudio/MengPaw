@@ -774,8 +774,8 @@ class AgentViewModel : ViewModel() {
             return
         }
 
-        // Minimal prompt — behavior governed by workspace rule files (CRON → heartbeat.md, Truman Show → trueman.md).
-        val ruleFile = if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON) "heartbeat.md" else "trueman.md"
+        // Minimal prompt — behavior governed by workspace rule files (CRON → heartbeat.md, Truman Show → trumanshow.md).
+        val ruleFile = if (trigger.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON) "heartbeat.md" else "trumanshow.md"
         val prompt = "[触发器任务 · ${trigger.type}] ${trigger.action}\n(行为规范: 阅读 $ruleFile 获取执行细则)"
 
         // Light system note so user knows something happened

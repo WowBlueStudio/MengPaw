@@ -358,7 +358,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 8 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起, 哈希链账本已移除) + 短码配对 + 心跳保活 + QoS 自适应。
 
-**设计**: 孪生 = 同步整个 `{agent}/` 工作区文档, 保持跨设备一致。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trueman.md/{date}_dream.md) + `memory/` 全部; **排除**: CLI.md (Android 操作指南)、inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。
+**设计**: 孪生 = 同步整个 `{agent}/` 工作区文档, 保持跨设备一致。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trumanshow.md/{date}_dream.md) + `memory/` 全部; **排除**: CLI.md (Android 操作指南)、inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。
 
 #### 组件
 

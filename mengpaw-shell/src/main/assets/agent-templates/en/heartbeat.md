@@ -9,7 +9,7 @@ read_when:
 
 This file tells you what to do when a **CRON trigger** fires. **Empty or comments-only = skip all scheduled tasks.**
 
-Random-chat (Truman Show) rules live in `trueman.md` — not here.
+Random-chat (Truman Show) rules live in `trumanshow.md` — not here.
 
 ---
 
@@ -66,4 +66,4 @@ Read yesterday's mid-term memory with agent.memory.mid → summarize → settle 
 - Use `self.trigger` to view and manage all triggers
 - Scheduled tasks run in the background — don't block the user's active conversation
 - Temporary info → `agent.memory.record` (mid-term); settled knowledge → `agent.memory.keep` (long-term)
-- Random chatting belongs to `trueman.md`
+- Random chatting belongs to `trumanshow.md`

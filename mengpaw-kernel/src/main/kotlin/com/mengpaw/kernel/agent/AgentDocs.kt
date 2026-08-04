@@ -117,6 +117,47 @@ object AgentDocs {
             bootstrapper?.invoke(agentName, language)
             return
         }
+        // v0.28.7 升级迁移 v3: trueman.md → trumanshow.md (文件名与 Truman Show 全名一致)。
+        // 与 v2 同构: 旧名存在 && 新名缺失 → 改名; 并存 → 删旧名残留 (孪生同步并集式不传播删除,
+        // 每台设备靠自身 bootstrap 自清理)。旧模板内容指纹 (含 "trueman.md" 自引用 = 未演化)
+        // → 用当前模板原子覆盖; 已演化内容不碰。
+        val legacyTrueman = File(dir, "trueman.md")
+        val trumanShow = File(dir, "trumanshow.md")
+        if (legacyTrueman.exists()) {
+            if (trumanShow.exists()) {
+                try {
+                    if (legacyTrueman.delete()) {
+                        KernelLog.i("AgentDocs", "migrate: deleted stale trueman.md ($agentName)")
+                    }
+                } catch (e: Exception) {
+                    KernelLog.w("AgentDocs", "delete trueman.md failed: ${e.message}")
+                }
+            } else {
+                try {
+                    if (legacyTrueman.renameTo(trumanShow)) {
+                        KernelLog.i("AgentDocs", "migrate: trueman.md -> trumanshow.md ($agentName)")
+                    }
+                } catch (e: Exception) {
+                    KernelLog.w("AgentDocs", "migrate trueman.md failed: ${e.message}")
+                }
+            }
+            try {
+                if (trumanShow.exists() && trumanShow.readText().contains("trueman.md")) {
+                    val template = File(DataPaths.AGENT_TEMPLATES, "$language/trumanshow.md")
+                    if (template.exists()) {
+                        val tmpFile = File(dir, "trumanshow.md.tmp")
+                        tmpFile.writeText(template.readText())
+                        if (tmpFile.renameTo(trumanShow)) {
+                            KernelLog.i("AgentDocs", "migrate: refreshed stale trumanshow.md content ($agentName)")
+                        } else {
+                            tmpFile.delete()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                KernelLog.w("AgentDocs", "refresh trumanshow.md failed: ${e.message}")
+            }
+        }
         if (File(dir, "soul.md").exists()) return
         bootstrapper?.invoke(agentName, language)
     }
@@ -478,11 +519,11 @@ object AgentDocs {
         } else ""
     }
 
-    /** Read trueman.md — Truman Show (random chat) rules. Empty string = built-in topic pool only. */
-    fun readTruemanDoc(agentName: String): String {
-        val file = File(DataPaths.AGENTS, "$agentName/trueman.md")
+    /** Read trumanshow.md — Truman Show (random chat) rules. Empty string = built-in topic pool only. */
+    fun readTrumanShowDoc(agentName: String): String {
+        val file = File(DataPaths.AGENTS, "$agentName/trumanshow.md")
         return if (file.exists()) try { file.readText() } catch (e: Exception) {
-            ErrorCollector.report(e, "AgentDocs.readTruemanDoc"); ""
+            ErrorCollector.report(e, "AgentDocs.readTrumanShowDoc"); ""
         } else ""
     }
 
