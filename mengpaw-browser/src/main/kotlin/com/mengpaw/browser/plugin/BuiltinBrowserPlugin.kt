@@ -614,7 +614,8 @@ class BuiltinBrowserPlugin(
     // ═══════════════════════════════════════════════════════════════════
 
     private suspend fun versionCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        return ExecutionResult.ok("MP Browser v0.6.0 / Android SDK ${android.os.Build.VERSION.SDK_INT}")
+        // 版本号不硬编码 — 随 gradle defaultConfig.versionName (BuildConfig.VERSION_NAME) 自动同步
+        return ExecutionResult.ok("MP Browser v${com.mengpaw.browser.BuildConfig.VERSION_NAME} / Android SDK ${android.os.Build.VERSION.SDK_INT}")
     }
 
     // ═══════════════════════════════════════════════════════════════════
