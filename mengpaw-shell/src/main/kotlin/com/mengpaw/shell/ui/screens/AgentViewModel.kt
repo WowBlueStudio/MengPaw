@@ -53,6 +53,10 @@ class AgentViewModel : ViewModel() {
     // ── Active agent state ──
     private var _activeAgentName = "MengPaw"
 
+    // ── 流式播放器节奏 (v0.28.5): token 突发到达时仍逐段播放, 维持打字机观感 ──
+    private val STREAM_PLAYBACK_INTERVAL_MS = 50L  // 播放 tick 间隔
+    private val STREAM_PLAYBACK_TARGET_TICKS = 50  // 长文目标 ~2.5s 播完 (50ms × 50)
+
     // ── Helper services ─────────────────────────────────────────────────
 
     private val inputTagManager = InputTagManager()
@@ -329,6 +333,7 @@ class AgentViewModel : ViewModel() {
             val modePrefix = executionMode?.prefix
             var runningMsgIndex = -1     // fast‑path index; verified against ref before use
             var runningMsgRef: ChatMessageUi.AgentWithTrace? = null // identity guard for concurrent insertions
+            var playbackJob: Job? = null // 流式播放协程句柄 (try 外声明, catch 路径可取消)
             try {
                 // /Mission /Goal /Fleet: 临时覆盖 loopMode
                 if (executionMode == ExecutionMode.MISSION) {
@@ -400,7 +405,8 @@ class AgentViewModel : ViewModel() {
                 // 直接传递用户任务，不包装回溯摘要。Agent 通过对话历史自然感知上下文。
                 val contextPrefix = actualTask
 
-                val traces = mutableListOf<AgentTrace>()
+                // 播放协程(主线程)与 onStep(engine 线程)并发读写 — 同步列表防 CME (v0.28.5)
+                val traces = java.util.Collections.synchronizedList(mutableListOf<AgentTrace>())
 
                 // Track running message for O(1) updates + identity guard against concurrent insertions
                 val runningMsg = ChatMessageUi.AgentWithTrace(
@@ -414,10 +420,35 @@ class AgentViewModel : ViewModel() {
                 runningMsgIndex = session.messages.value.size
                 session.messages.value = session.messages.value + runningMsg
 
-                // 流式缓冲: 每轮 LLM 输出累积于此, 工具轮结束(onStep)后清空,
-                // 避免 "Action:" 标记跨轮残留导致后续纯文本答案被永久过滤 (v0.28.3 根因1)
-                val streamBuf = StringBuilder()
-                var lastDeltaPush = 0L
+                // ── 流式播放器: onDelta 只累积, 独立协程按节奏播放 (v0.28.5) ──
+                // 根因 (v0.28.4 彻查): DeepSeek 端点在 ~200ms 内突发全部增量,
+                // onDelta 直推 + 50ms 节流 → 只推 3 次, 观感 = 整段弹出。
+                // 方案: buffer 累积原始增量; 播放协程每 50ms 消费未播放部分,
+                // 节奏自适应 (长文 ~2.5s 播完, 短文逐字), 模拟打字机观感。
+                // 缓冲每轮结束(onStep)清空, 避免 "Action:" 标记跨轮残留 (v0.28.3 根因1)
+                val streamBuf = StringBuilder()   // LLM 原始增量缓冲 (engine 线程写)
+                var streamPlayed = 0              // 已播放原始字符数 (播放协程推进, onStep 清零)
+                var streamFinished = false        // run() 已返回, 不会再增量 — 播放器播完即退
+                                                  // (与 buffer 同监视器读写, 跨线程安全)
+
+                // 推送当前流式文本到运行中气泡 (播放协程 / onStep / flush 共用)
+                fun pushDisplay(displayText: String) {
+                    session.messages.update { current ->
+                        val mutable = current.toMutableList()
+                        val ridx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
+                        if (ridx >= 0) {
+                            // 替换后同步 ref/index — 快路径恒命中 (v0.28.4)
+                            val newMsg = ChatMessageUi.AgentWithTrace(
+                                displayText, traces.toList(),
+                                isRunning = true, executionMode = modePrefix, agentRef = agentRef
+                            )
+                            runningMsgRef = newMsg
+                            runningMsgIndex = ridx
+                            mutable[ridx] = newMsg
+                        }
+                        mutable
+                    }
+                }
 
                 // Shared step callback for trace collection + token stats + UI update
                 val onStep: (com.mengpaw.kernel.AgentEngine.TraceStep) -> Unit = { trace ->
@@ -430,35 +461,21 @@ class AgentViewModel : ViewModel() {
                             cacheHitTokens = usage.cacheHitTokens
                         )
                     }
-                    session.messages.update { current ->
-                        val mutable = current.toMutableList()
-                        val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
-                        if (idx >= 0) {
-                            // 替换后同步 ref/index — 快路径恒命中 (v0.28.4)
-                            val newMsg = ChatMessageUi.AgentWithTrace(
-                                "思考中...", traces.toList(),
-                                isRunning = true, executionMode = modePrefix, agentRef = agentRef
-                            )
-                            runningMsgRef = newMsg
-                            runningMsgIndex = idx
-                            mutable[idx] = newMsg
-                        }
-                        mutable
-                    }
-                    // 工具轮结束 → 清空流式缓冲, 下一轮从头累积
+                    pushDisplay("思考中...")
+                    // 工具轮结束 → 清空流式缓冲与播放进度, 下一轮从头累积
                     // (旧实现 buffer 跨轮永不清空, "Action:" 一旦出现即永久过滤后续纯文本增量)
-                    streamBuf.clear()
-                    lastDeltaPush = 0L
+                    synchronized(streamBuf) {
+                        streamBuf.clear()
+                        streamPlayed = 0
+                    }
                 }
 
-                // ── 流式输出: 增量 token 实时进气泡(打字机效果) ──
-                // 显示策略 (缓冲每轮结束被清空, 轮间互不污染):
+                // ── 流式显示策略 (缓冲每轮结束被清空, 轮间互不污染):
                 //  - 含 "Final Answer:" → 只显示标记后的答案部分
                 //  - 含 "Action:"(工具轮) → 不显示样板(Thought/Action 由 traces 消化;
                 //    工具执行后 onStep 重置为"思考中...")
                 //  - 含 "Thought:" → 隐藏思考样板, 只显示其后内容 (thought-only 轮)
                 //  - 无任何标记 → 流式显示全文 (parse Rule 3 纯文本答案, 必须流式显示)
-                // 节流: 50ms 窗口合并增量, 避免每 token 全量重 parse Markdown
                 fun computeStreamDisplayText(text: String): String {
                     val hasFinal = text.contains("Final Answer:", ignoreCase = true)
                     val hasAction = text.contains("Action:", ignoreCase = true)
@@ -470,33 +487,44 @@ class AgentViewModel : ViewModel() {
                         else -> text           // 纯文本答案流
                     }
                 }
+
+                // onDelta (engine 线程回调): 只累积, 不推送 — 节奏由播放协程控制
                 val onDelta: (String) -> Unit = { delta ->
-                    streamBuf.append(delta)
-                    val now = System.currentTimeMillis()
-                    if (now - lastDeltaPush >= 50) { // 节流合并
-                        lastDeltaPush = now
-                        val text = streamBuf.toString()
-                        val displayText = computeStreamDisplayText(text)
-                        if (displayText.isNotBlank()) {
-                            session.messages.update { current ->
-                                val mutable = current.toMutableList()
-                                val ridx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
-                                if (ridx >= 0) {
-                                    // 替换后同步 ref/index — 快路径恒命中 (此前 ref 恒指向被替换的旧实例)
-                                    val newMsg = ChatMessageUi.AgentWithTrace(
-                                        displayText, traces.toList(),
-                                        isRunning = true, executionMode = modePrefix, agentRef = agentRef
-                                    )
-                                    runningMsgRef = newMsg
-                                    runningMsgIndex = ridx
-                                    mutable[ridx] = newMsg
+                    synchronized(streamBuf) { streamBuf.append(delta) }
+                }
+
+                // 播放协程: 每 STREAM_PLAYBACK_INTERVAL_MS 把未播放增量推给 UI (打字机)
+                // v0.28.5: 必须用 Dispatchers.Default — SSE 突发到达时(如服务端缓存回放)
+                // readUTF8Line 从不挂起, 主线程被读取循环占死, Main 调度的播放协程会被饿死
+                // (实测 846 chunks/166ms 突发 → UI-PUSH 零输出)
+                playbackJob = viewModelScope.launch(Dispatchers.Default) {
+                    try {
+                        while (true) {
+                            kotlinx.coroutines.delay(STREAM_PLAYBACK_INTERVAL_MS)
+                            val displayText = synchronized(streamBuf) {
+                                val total = streamBuf.length
+                                if (streamPlayed >= total) {
+                                    if (streamFinished) return@launch // 已播完且流结束 → 退场
+                                    null // 无新内容, 本 tick 不推送
+                                } else {
+                                    // 节奏自适应: 每 tick 消费 ceil(剩余/目标tick数) 字符 —
+                                    // 长文 ~2.5s 播完, 短文逐字, 播速不随突发到达暴涨
+                                    val quantum = maxOf(1,
+                                        (total - streamPlayed + STREAM_PLAYBACK_TARGET_TICKS - 1) /
+                                        STREAM_PLAYBACK_TARGET_TICKS)
+                                    val end = minOf(total, streamPlayed + quantum)
+                                    streamPlayed = end
+                                    computeStreamDisplayText(streamBuf.substring(0, end))
                                 }
-                                mutable
-                            }
+                            } ?: continue
+                            if (displayText.isBlank()) continue // 工具轮样板: 不显示
+                            pushDisplay(displayText)
                         }
-                        KernelLog.d("MengPawStream",
-                            "UI-PUSH dlen=${delta.length} blen=${streamBuf.length} " +
-                            "blank=${displayText.isBlank()} disp=${displayText.take(30)}")
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        // 播放器永不让 join() 抛异常 — 只记录, 静默退出
+                        KernelLog.w("AgentViewModel", "Stream playback exit: ${e.message?.take(80)}")
                     }
                 }
 
@@ -521,14 +549,10 @@ class AgentViewModel : ViewModel() {
                         if (detected == LoopMode.GOAL || detected == LoopMode.MISSION) {
                             inputTagManager.loopMode = detected
                         }
-                        KernelLog.d("MengPawStream", "UI-DETECT score=$detected autoUpgrade=true")
-                    } else {
-                        KernelLog.d("MengPawStream", "UI-DETECT score=$detected autoUpgrade=false")
                     }
                 }
 
                 // Mode dispatch: map slash command + loopMode to the correct engine method
-                KernelLog.d("MengPawStream", "UI-MODE executionMode=${executionMode?.name} loopMode=${inputTagManager.loopMode}")
                 val result = when {
                     executionMode == ExecutionMode.PLAN -> session.engine.runWithPlan(task = finalTask, onStep = onStep, onDelta = onDelta)
                     executionMode == ExecutionMode.MISSION -> session.engine.runWithMission(task = finalTask, onStep = onStep, onDelta = onDelta)
@@ -543,30 +567,21 @@ class AgentViewModel : ViewModel() {
                     else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta)
                 }
 
-                KernelLog.d("MengPawStream", "UI-FINAL resultLen=${result.length} translate=$doTranslate")
-
-                // ── 尾段 flush: 最后一次 LLM 调用 <50ms 内的增量在节流窗口内未推送,
-                // run() 已返回不会再有 delta — 强制推送一次缓冲, 修复"最后一段整块弹出"
-                // (doTranslate 开启时跳过: 最终 replace 会整段替换为中文, 提前 flush
-                //  英文尾段会造成"闪一下英文再变中文")
-                if (streamBuf.isNotBlank() && !doTranslate) {
-                    val flushText = computeStreamDisplayText(streamBuf.toString())
-                    if (flushText.isNotBlank()) {
-                        session.messages.update { current ->
-                            val mutable = current.toMutableList()
-                            val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
-                            if (idx >= 0) {
-                                val newMsg = ChatMessageUi.AgentWithTrace(
-                                    flushText, traces.toList(),
-                                    isRunning = true, executionMode = modePrefix, agentRef = agentRef
-                                )
-                                runningMsgRef = newMsg
-                                runningMsgIndex = idx
-                                mutable[idx] = newMsg
-                            }
-                            mutable
+                // ── 尾段: run() 已返回 — 标记流结束, 等待播放器把剩余缓冲按节奏播完
+                // (打字机收尾, 最长 ~2.5s); join 防 Default 线程晚到 tick 覆盖最终消息
+                // (doTranslate 开启时跳过等待: 最终 replace 整段替换为中文,
+                //  英文逐字播放无意义, 旧实现同样跳过尾段)
+                synchronized(streamBuf) { streamFinished = true }
+                if (!doTranslate) playbackJob?.join()
+                playbackJob?.cancel()
+                if (!doTranslate) {
+                    // 兜底 flush: 播放器异常退出时推完剩余; 正常播完时此处无操作
+                    val flushText = synchronized(streamBuf) {
+                        computeStreamDisplayText(streamBuf.toString()).takeIf {
+                            streamPlayed < streamBuf.length && it.isNotBlank()
                         }
                     }
+                    if (flushText != null) pushDisplay(flushText)
                 }
 
                 // Translate result back to Chinese for US models
@@ -627,6 +642,8 @@ class AgentViewModel : ViewModel() {
                 // ── 自动摘要结束 ──
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Normal coroutine cancellation — re-throw to maintain cancellation chain
+                playbackJob?.cancel()
+                playbackJob?.join()
                 throw e
             } catch (e: Throwable) {
                 // Safety net: catch OOM, unexpected runtime errors, etc.
@@ -634,6 +651,9 @@ class AgentViewModel : ViewModel() {
                 KernelLog.w("AgentViewModel", "Task execution failed: ${e.message}")
                 // Stop engine to prevent stale state on retry
                 try { session.engine.stop() } catch (_: Exception) {}
+                // 终止播放协程并等待 — 防止 Default 线程晚到 tick 覆盖错误消息
+                playbackJob?.cancel()
+                playbackJob?.join()
                 val errorMsg = if (e is OutOfMemoryError) {
                     "⚠️ 内存不足，任务已中断。请清理会话历史后重试。"
                 } else {

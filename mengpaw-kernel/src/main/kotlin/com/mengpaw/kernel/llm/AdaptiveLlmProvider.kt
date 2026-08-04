@@ -3,7 +3,6 @@
 
 package com.mengpaw.kernel.llm
 
-import com.mengpaw.kernel.KernelLog
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
@@ -186,7 +185,6 @@ class AdaptiveLlmProvider(
                 // Report 429 for coordinated pause across all concurrent callers
                 if (e is LlmApiException && e.httpStatus == 429) LlmRateLimiter.report429()
                 lastError = e
-                KernelLog.d("MengPawStream", "RETRY label=$label attempt=$attempt err=${e.message?.take(80)}")
                 if (attempt < config.maxRetries) {
                     val baseDelay = (config.retryDelayMs * (1L shl attempt)).coerceAtMost(30_000L)
                     val jitteredDelay = LlmRateLimiter.jitter(baseDelay)
@@ -267,9 +265,6 @@ class AdaptiveLlmProvider(
     ): String {
         val channel = response.bodyAsChannel()
         val fullContent = StringBuilder()
-        var chunkCount = 0
-        var loggedFirst = false
-        KernelLog.d("MengPawStream", "S-OPEN stream=true model=$model endpoint=${apiEndpoint.take(60)}")
 
         while (!channel.isClosedForRead) {
             val line = try {
@@ -279,7 +274,6 @@ class AdaptiveLlmProvider(
             } catch (e: Exception) {
                 // v0.28.4: 异常中断不再静默 break — 首 token 前超时(推理思考期)抛 LlmApiException
                 // 触发 executeWithRetry 重试 + fallback 链; 已有内容则返回部分(重试会导致 onToken 重复推送)
-                KernelLog.d("MengPawStream", "S-ERR ${e.message?.take(80)} chars=${fullContent.length}")
                 if (fullContent.isEmpty()) {
                     throw LlmApiException(response.status.value,
                         "Stream interrupted before first token: ${e.message}")
@@ -320,11 +314,6 @@ class AdaptiveLlmProvider(
                     openAiDelta["content"]?.jsonPrimitive?.contentOrNull?.let { text ->
                         if (text.isNotEmpty()) {
                             fullContent.append(text)
-                            chunkCount++
-                            if (!loggedFirst) {
-                                loggedFirst = true
-                                KernelLog.d("MengPawStream", "S-FIRST len=${text.length} first=${text.take(40)}")
-                            }
                             onToken(text)
                         }
                     }
@@ -337,11 +326,6 @@ class AdaptiveLlmProvider(
                     val text = json["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
                     if (!text.isNullOrEmpty()) {
                         fullContent.append(text)
-                        chunkCount++
-                        if (!loggedFirst) {
-                            loggedFirst = true
-                            KernelLog.d("MengPawStream", "S-FIRST len=${text.length} first=${text.take(40)}")
-                        }
                         onToken(text)
                     }
                     // Anthropic 事件名校验: 只处理 content_block_delta, 跳过 message_start/message_delta/ping
@@ -352,7 +336,6 @@ class AdaptiveLlmProvider(
             }
         }
 
-        KernelLog.d("MengPawStream", "S-DONE chunks=$chunkCount chars=${fullContent.length}")
         return fullContent.toString()
     }
 

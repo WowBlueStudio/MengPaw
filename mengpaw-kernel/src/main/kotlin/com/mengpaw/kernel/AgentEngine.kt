@@ -574,7 +574,6 @@ class AgentEngine(
                 }
 
                 val conversation = buildConversation(session.id)
-                KernelLog.d("MengPawStream", "ENG-REACT step=$step stream=${onDelta != null}")
                 // 流式调用: 增量 token 经 onDelta 实时透传 UI(打字机效果); 完整文本仍用于解析
                 val llmResponse = if (onDelta != null)
                     llmProvider.completeStreamingWithMessages(conversation, onDelta)
