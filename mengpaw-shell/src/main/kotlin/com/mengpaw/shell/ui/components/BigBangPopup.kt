@@ -49,11 +49,13 @@ fun BigBangPopup(
     // FIX U14: Reset selection when text changes (prevents IndexOutOfBounds with stale indices)
     LaunchedEffect(text) { selectedIndices = emptySet() }
 
+    // FIX(闪退): Dialog 高度约束无限, fillMaxHeight(fraction) 无效 → LazyColumn 收到 ∞ 即崩
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(ArcoRadius.lg),
             color = ThemeColors.bgPrimary,
-            modifier = Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.6f)
+            modifier = Modifier.fillMaxWidth(0.9f).heightIn(max = screenH * 0.6f)
         ) {
             Column(Modifier.padding(ArcoSpacing.lg)) {
                 // Title

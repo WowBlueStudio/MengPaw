@@ -118,9 +118,11 @@ fun BrowserReaderMode(
         loading = false
     }
 
+    // FIX(闪退): Dialog 约束高度无限, fillMaxHeight(fraction) 无效 → 内部 verticalScroll 收到 ∞ 即崩
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f),
+        modifier = Modifier.fillMaxWidth(0.95f).heightIn(max = screenH * 0.9f),
         title = {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("阅读模式", fontWeight = FontWeight.Bold)

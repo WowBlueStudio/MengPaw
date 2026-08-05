@@ -493,9 +493,12 @@ fun FileAttachmentCard(att: AttachmentData, isUserSide: Boolean) {
     }
 }
 
-/** md 文件预览 Dialog — MarkdownText 渲染 (v0.34.0+), 200K 字符截断防卡 UI。 */
+/** md 文件预览 Dialog — MarkdownText 渲染 (v0.34.0+), 200K 字符截断防卡 UI。
+ *  FIX(闪退): Dialog 高度约束无限, fillMaxHeight(fraction) 无效 → 滚动容器收到 ∞ 即崩;
+ *  改用 heightIn(max=屏高×比例) 提供有界高度 + weight(1f) 滚动区。 */
 @Composable
 private fun MdPreviewDialog(path: String, name: String, onDismiss: () -> Unit) {
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
     Dialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
@@ -503,7 +506,7 @@ private fun MdPreviewDialog(path: String, name: String, onDismiss: () -> Unit) {
         Surface(
             shape = RoundedCornerShape(ArcoRadius.lg),
             color = ThemeColors.bgCardHigh,
-            modifier = Modifier.fillMaxWidth(0.92f).fillMaxHeight(0.85f)
+            modifier = Modifier.fillMaxWidth(0.92f).heightIn(max = screenH * 0.85f)
         ) {
             Column {
                 // 标题行: 文件名 + 关闭
@@ -522,14 +525,16 @@ private fun MdPreviewDialog(path: String, name: String, onDismiss: () -> Unit) {
                 val content = remember(path) {
                     try { File(path).readText().take(200_000) } catch (_: Exception) { "无法读取文件" }
                 }
-                SelectionContainer {
-                    com.mengpaw.design.components.MarkdownText(
-                        content = content,
-                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                            .padding(ArcoSpacing.lg),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary),
-                        nestedScroll = true
-                    )
+                Box(Modifier.fillMaxHeight().weight(1f)) {
+                    SelectionContainer {
+                        com.mengpaw.design.components.MarkdownText(
+                            content = content,
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                                .padding(ArcoSpacing.lg),
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary),
+                            nestedScroll = true
+                        )
+                    }
                 }
             }
         }

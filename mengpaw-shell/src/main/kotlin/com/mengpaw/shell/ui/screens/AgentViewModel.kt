@@ -974,7 +974,14 @@ class AgentViewModel : ViewModel() {
                     is AgentState.Error -> {
                         session.isRunning.value = false; _isRunning.value = false
                         session.inputEnabled.value = true; _inputEnabled.value = true
-                        session.messages.value = session.messages.value + ChatMessageUi.Agent(state.message)
+                        // FIX(双弹): 引擎错误路径返回 errorMsg 经 run() 尾段写入 running 消息,
+                        // 此处 Error 监听再次追加 → 同源错误消息连弹两条。幂等检查防重。
+                        val last = session.messages.value.lastOrNull()
+                        val alreadyShown = (last is ChatMessageUi.Agent && last.content == state.message) ||
+                            (last is ChatMessageUi.AgentWithTrace && last.finalContent == state.message)
+                        if (!alreadyShown) {
+                            session.messages.value = session.messages.value + ChatMessageUi.Agent(state.message)
+                        }
                     }
                 }
             }
