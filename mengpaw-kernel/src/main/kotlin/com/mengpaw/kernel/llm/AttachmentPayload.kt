@@ -14,7 +14,7 @@ import java.util.Base64
  * 靠文件大小上限控制请求体膨胀：
  * - image ≤ [IMAGE_BINARY_MAX] → `_image` = data URI（OpenAI image_url 格式）
  * - audio ≤ [AUDIO_BINARY_MAX] → `_audio_data`（base64）+ `_audio_format`
- * 超限/读失败静默跳过二进制 —— content 里已有 `[图片附件] 📎 path` 文本标注，
+ * 超限/读失败静默跳过二进制 —— content 里已有 `[图片附件] path` 文本标注，
  * LLM 上下文不丢，仅多模态能力降级为路径引用。
  */
 object AttachmentPayload {

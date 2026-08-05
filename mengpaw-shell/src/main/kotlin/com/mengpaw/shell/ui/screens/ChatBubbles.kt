@@ -399,7 +399,7 @@ fun BubbleWrapper(
                     showMenu = false
                 })
                 DropdownMenuItem(text = { Text("✏️ 标注图片发回") }, onClick = {
-                    imgs.firstOrNull()?.groupValues?.get(1)?.let { if (!it.startsWith("http")) onQuote("📎 标注图片: $it") }
+                    imgs.firstOrNull()?.groupValues?.get(1)?.let { if (!it.startsWith("http")) onQuote("标注图片: $it") }
                     showMenu = false
                 })
             }

@@ -11,9 +11,10 @@ import com.mengpaw.kernel.session.AttachmentData
  *
  * 上行设计: 附件不进输入框文本, 以 [AttachmentData] 独立携带;
  * 发送时 [buildTaskContent] 合成给 LLM 的纯文本 content:
- * - document/file → `📎 path`（与历史行为一致, LLM 用 fs 工具读）
- * - image → `[图片附件] 📎 path`（二进制走 _image 通道）
- * - audio → `[语音消息] 📎 path`（二进制走 _audio_data 通道, 路径供 LLM 引用/存档）
+ * - document/file → 裸路径行（LLM 用 fs 工具读）
+ * - image → `[图片附件] <path>`（二进制走 _image 通道）
+ * - audio → `[语音消息] <path>`（二进制走 _audio_data 通道, 路径供 LLM 引用/存档）
+ * 路径是 user 消息正文的一部分（非前缀拼接）, 随历史每轮计入上下文。
  */
 
 /** 按 MIME/文件名后缀判定附件类型: image/audio/video/document/file。 */
@@ -45,7 +46,7 @@ fun formatFromMime(mime: String?, name: String = ""): String {
     }
 }
 
-/** 发送正文合成 — 附件以文本标注形式并入 content（LLM 可读可引用）。 */
+/** 发送正文合成 — 附件以标注+路径行并入 content（LLM 可读可引用）。 */
 fun buildTaskContent(text: String, attachments: List<AttachmentData>): String {
     val attLines = attachments.joinToString("") { att ->
         val mark = when (att.type) {
@@ -53,7 +54,7 @@ fun buildTaskContent(text: String, attachments: List<AttachmentData>): String {
             "audio" -> "[语音消息] "
             else -> ""
         }
-        "\n$mark📎 ${att.path}"
+        "\n$mark${att.path}"
     }
     return if (attLines.isBlank()) text else "$text$attLines"
 }

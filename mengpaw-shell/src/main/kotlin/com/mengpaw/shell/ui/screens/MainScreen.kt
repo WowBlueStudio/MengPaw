@@ -550,7 +550,7 @@ fun MainScreen(
                             if (now - lastSendTime < 300) return  // debounce: prevent double-fire from onPreviewKeyEvent + IME
                             lastSendTime = now
                             val text = inputText; inputText = ""
-                            // v0.33.0+: 附件随消息发送 — 文本合成 `[图片附件] 📎 path` 标注
+                            // v0.33.0+: 附件随消息发送 — 文本合成 `[图片附件] path` 标注
                             val atts = pendingAttachments; pendingAttachments = emptyList()
                             // 发送后立即收起悬浮下拉 — 程序化清空输入不触发 onValueChange, 需手动关闭
                             showMentionDropdown = false; showBangDropdown = false
