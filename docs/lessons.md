@@ -347,7 +347,7 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 ## 15. 历史教训浓缩库（v0.2.2 ~ v0.23.0，原根 LESSONS.md 去重提炼）
 
 > 原根目录 `LESSONS.md`（1088 行编号教训）2026-08-05 删除，118 条去重（含 3 对重复条目）并按主题浓缩为要点。
-> 已被 §1-14、记忆（bug-audit-methodology / no-broken-code-push / release-checklist / no-release-without-ask）、RELEASE.md 覆盖的条目不再重复。
+> 已被 §1-14、记忆（bug-audit-methodology / no-broken-code-push / release-checklist / no-release-without-ask）、发布流程（`.claude/skills/release.md`）覆盖的条目不再重复。
 
 ### 15.1 发布与流程
 

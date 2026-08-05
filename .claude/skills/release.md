@@ -32,9 +32,21 @@ description: 发布 MengPaw 新版本 — 版本号/CHANGELOG/编译/签名验�
 # 已知预存在失败: AcpProtocolTest round-trip（干净 master 也失败，与本次无关，不阻塞发布）
 # 若出现 NEW 失败 → 必须修复才能发布
 
-# Release 构建（clean 防增量脏缓存）
-./gradlew clean :mengpaw-shell:assembleRelease
+# Release 构建（clean 防增量脏缓存；v0.30.0 起只构建本轮有变更的 APK）
+./gradlew clean :mengpaw-shell:assembleRelease                     # 仅 shell 有变更
+./gradlew :mengpaw-browser:assembleRelease                         # 仅 browser 有变更
+./gradlew clean :mengpaw-shell:assembleRelease :mengpaw-browser:assembleRelease  # 两者都有变更
 ```
+
+编译失败速查（完整清单见 docs/lessons.md §15.2）：
+
+| 错误类型 | 检查项 |
+|---------|--------|
+| `Unresolved reference` | import 是否遗漏 |
+| sealed class 字段不一致 | 子类字段名是否统一（content vs finalContent） |
+| R8 缺失类 | ProGuard 规则是否加了 `-keep` |
+| 跨模块引用失败 | data class 是否在 core 中 |
+| `@Composable` 上下文错误 | 函数是否在 `@Composable` 作用域内 |
 
 ## 3. 签名验证（必做，keytool 会误报）
 
@@ -62,7 +74,7 @@ git push gitee master && git push gitee vX.Y.Z       # Gitee 镜像
 
 - gitee 显示 "Everything up-to-date" 是正常现象（第一次 push 已成功）
 - 验证：`git ls-remote gitee master` 与本地 HEAD 一致
-- **plugins.json 随 commit 发布**：GitHub Pages 托管的市场索引自动更新（无需单独上传）
+- **plugins.json 随 commit 发布**：push 即生效——客户端 raw 直读双源（GitHub `raw.githubusercontent.com/WowBlueStudio/MengPaw/master/plugins.json` 全球 / Gitee raw 国内），**不是 GitHub Pages**
 
 ## 4.1 插件 AAR 发布（独立 tag，仅当插件有变更时）
 
@@ -82,6 +94,15 @@ gh release create plugins-vX.Y.Z releases/plugins/*.aar \
 
 - 插件 AAR 全流程详见 `.claude/skills/plugin-dev.md`（引用本节 push/gh 操作，不重复）
 - 构建脚本模块列表动态派生自 settings.gradle.kts——新增插件模块后无需改脚本
+
+## 4.2 连接器（外置 remote 条目）发布链路
+
+连接器源码在独立仓库 [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)（MIT，JitPack 坐标 `com.github.WowBlueStudio.MengPaw`），主仓库只维护 plugins.json 条目：
+
+1. 连接器仓库构建 AAR → 其仓库 `gh release create plugins-vX.Y.Z` 上传（tag 必须 `plugins-v*`，校验器要求）
+2. 主仓库 plugins.json 条目更新：downloadUrl/mirrorUrl → 新 release URL，**checksum（`sha256:64hex`）+ size 必须补齐**，id/version 与连接器 `PluginMetadata` 完全一致（不一致会导致「永远提示更新」）
+3. `powershell -File scripts/validate-plugins.ps1` 前后对比 ERROR 数
+4. Gitee 镜像生效后把 mirrorUrl 切到 Gitee release URL
 
 ## 5. GitHub Release
 
@@ -112,7 +133,8 @@ adb -s <设备> shell dumpsys package com.mengpaw.shell | grep versionName
 - [ ] （若发布了插件）`gh release view plugins-vX.Y.Z` 存在且 assets 含全部 AAR
 - [ ] 浏览器可下载 APK（github.com/WowBlueStudio/MengPaw/releases/tag/vX.Y.Z）
 - [ ] 两台设备 versionName == X.Y.Z
-- [ ] plugins.json 已含新插件条目（GitHub Pages 生效）
+- [ ] `git ls-remote gitee master` 与本地 HEAD 一致（gitee 显示 up-to-date 是正常现象）
+- [ ] `curl https://raw.githubusercontent.com/WowBlueStudio/MengPaw/master/plugins.json` 含新条目
 - [ ] CHANGELOG 只含当前版本内容
 
 ## 严禁
@@ -120,3 +142,4 @@ adb -s <设备> shell dumpsys package com.mengpaw.shell | grep versionName
 - 编译不过就 push / 不验证签名就上传 / 上传后不验证
 - 未经用户指令自动发布
 - 跳过确认步骤（LESSONS 103: v0.19.5 空壳 release 教训）
+- Release Notes 为空 / 忘记上传 APK —— 用户不知道更新了什么、没有下载链接

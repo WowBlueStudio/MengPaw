@@ -20,7 +20,7 @@
 | `pyramid-investigation.md` | 6 KB | 金字塔彻查法：从现象逐层拆链路、证据排除、反模式与实战案例 | 功能"永远修不好"或做链路级排障时 |
 | `roadmap.md` | 2 KB | 开发路线图 Phase 1-10（Phase 1-6 完成，7-10 未来规划） |
 
-> 已归档（git 历史可溯）：九维审查总结→`.claude/skills/pr-review.md`；审计方法论→记忆 `bug-audit-methodology`；编译问题速查→`lessons.md` §15；流式调查记录→主文档 §4.1.1 定论；审校记录→`CHANGELOG.md`；make-skill 对比→`CHANGELOG.md` v0.26.2。
+> 已归档（git 历史可溯）：九维审查总结→`.claude/skills/pr-review.md`；审计方法论→记忆 `bug-audit-methodology`；编译问题速查→`lessons.md` §15；流式调查记录→主文档 §4.1.1 定论；审校记录→`CHANGELOG.md`；make-skill 对比→`CHANGELOG.md` v0.26.2；根发布流程 RELEASE.md→`.claude/skills/release.md`（双轨合并）。
 
 ## 根目录文档
 
@@ -29,7 +29,6 @@
 | `MengPaw-Development-Guide.md` | 44 KB | 项目单一事实来源：架构总览、模块清单、CLI 参考、安全模型、插件开发（**在仓库根目录**，非 docs/） | 每次开发任务开始前 |
 | `README.md` | 8 KB | 项目介绍、快速开始、架构、核心概念 | 新开发者入门 |
 | `CONTRIBUTING.md` | 3 KB | 贡献指南：反馈渠道、版权让渡、PR 评审流程 | 准备提交 Issue/PR 时 |
-| `RELEASE.md` | 4 KB | 版本发布流程 | 做 release 时 |
 
 ## 法律文件
 

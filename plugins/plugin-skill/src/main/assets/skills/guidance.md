@@ -22,7 +22,7 @@ category: system
 
 | 关键词 | 问题类型 | 查阅内容 |
 |--------|---------|---------|
-| 安装、下载、APK | 安装问题 | `agent.memory.search 安装` → README / RELEASE.md |
+| 安装、下载、APK | 安装问题 | `agent.memory.search 安装` → README.md |
 | API Key、供应商、模型 | 配置问题 | `agent.memory.search API` → 设置文档 |
 | 插件、plugin、命令 | 功能问题 | `self.tools` → `plugin.list` / `plugin.search` |
 | 报错、闪退、不工作 | 故障排查 | `agent.memory.search 故障` → `agent.audit` / `evolution.audit` |
