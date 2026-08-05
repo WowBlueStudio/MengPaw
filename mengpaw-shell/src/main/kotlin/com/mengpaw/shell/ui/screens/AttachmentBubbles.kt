@@ -148,8 +148,9 @@ fun AttachmentCardList(attachments: List<AttachmentData>, isUserSide: Boolean) {
     }
 }
 
-/** 图片解码: 先读边界算 inSampleSize (目标 ≤2048px) — 防大图 OOM。 */
-private fun decodeSampled(path: String, maxDim: Int = 2048): Bitmap? {
+/** 图片解码: 先读边界算 inSampleSize (目标 ≤maxDim) — 防大图 OOM。
+ *  v0.34.0: internal — PendingAttachmentsBar 缩略图 (maxDim=512) 复用。 */
+internal fun decodeSampled(path: String, maxDim: Int = 2048): Bitmap? {
     return try {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)

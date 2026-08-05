@@ -317,62 +317,6 @@ fun MainScreen(
                                     }
                                 } // close inner Box wrapping LazyColumn
 
-                                // ── 活跃标签行（在输入栏上方，不影响侧边栏长度）──
-                                if (activeTags.isNotEmpty()) {
-                                    Row(
-                                        Modifier.fillMaxWidth()
-                                            .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.xs),
-                                        horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)
-                                    ) {
-                                        activeTags.forEach { tag ->
-                                            val chipLabel = when (tag) {
-                                                is InputTag.Mode -> tag.mode.prefix
-                                                is InputTag.AgentRef -> "@${tag.agentName}"
-                                            }
-                                            AssistChip(
-                                                onClick = {},
-                                                label = { Text(chipLabel, style = MaterialTheme.typography.labelSmall) },
-                                                trailingIcon = {
-                                                    Icon(Icons.Filled.Close, strings.tagDismiss,
-                                                        Modifier.size(14.dp).clickable { viewModel.removeTag(tag) })
-                                                },
-                                                shape = RoundedCornerShape(ArcoRadius.sm),
-                                                colors = AssistChipDefaults.assistChipColors(
-                                                    containerColor = ThemeColors.brandContainer,
-                                                    labelColor = ThemeColors.brand
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // ── 待发附件行 (v0.33.0+) — 文件选择后在此预览, 发送时随消息提交 ──
-                                if (pendingAttachments.isNotEmpty()) {
-                                    Row(
-                                        Modifier.fillMaxWidth()
-                                            .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.xs),
-                                        horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)
-                                    ) {
-                                        pendingAttachments.forEach { att ->
-                                            AssistChip(
-                                                onClick = {},
-                                                label = { Text(att.name.ifBlank { att.path.substringAfterLast('/') }, style = MaterialTheme.typography.labelSmall) },
-                                                leadingIcon = {
-                                                    Icon(attachmentTypeIcon(att.type), null, Modifier.size(16.dp))
-                                                },
-                                                trailingIcon = {
-                                                    Icon(Icons.Filled.Close, strings.tagDismiss,
-                                                        Modifier.size(14.dp).clickable { pendingAttachments = pendingAttachments - att })
-                                                },
-                                                shape = RoundedCornerShape(ArcoRadius.sm),
-                                                colors = AssistChipDefaults.assistChipColors(
-                                                    containerColor = ThemeColors.surfaceContainerHigh,
-                                                    labelColor = ThemeColors.textPrimary
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
                             } // close Column
                     } // close Box wrapping LazyColumn
 
@@ -524,6 +468,22 @@ fun MainScreen(
                 if (isRecordingVoice) keyboardController?.hide()
             }
             Surface(shadowElevation = 8.dp, color = ThemeColors.bgPrimary) {
+            Column {
+                // ── 待发栏 (v0.34.0+): 斜杠/@标签 + 附件缩略图/名称块统一一行,
+                // 位于输入框顶部; 无内容不显示; 随输入栏整体上移 (imePadding 在输入 Row 上) ──
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = activeTags.isNotEmpty() || pendingAttachments.isNotEmpty(),
+                    enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+                    exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically()
+                ) {
+                    PendingAttachmentsBar(
+                        activeTags = activeTags,
+                        attachments = pendingAttachments,
+                        strings = strings,
+                        onRemoveTag = viewModel::removeTag,
+                        onRemoveAttachment = { att -> pendingAttachments = pendingAttachments - att }
+                    )
+                }
                 Row(
                     Modifier.fillMaxWidth()
                         .imePadding()
@@ -694,7 +654,8 @@ fun MainScreen(
                                 .alpha(arrowAlpha.value)
                         )
                     }
-                }
+                } // close Row (input field row)
+            } // close Column (input bar container)
             } // close Surface (input bar)
 
             // ── 录音指示条 (v0.33.0+) — 悬浮在输入栏上缘, 红点脉冲 + 计时 ──
