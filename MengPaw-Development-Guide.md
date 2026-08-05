@@ -23,7 +23,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | 插件同级 | 内置功能 (`sys`) 与外挂插件同等地位，均实现 `Plugin` 接口，均只依赖 kernel |
 | 零 Python | 纯 Kotlin，无 Python 运行时 |
 | 多通道 | AIDL（系统集成）/ Unix Socket（Termux）/ HTTP（调试） |
-| 独立浏览器 | `mengpaw-browser` v0.7.1，Intent 互通，45 条浏览器操控命令 |
+| 独立浏览器 | `mengpaw-browser` v0.7.0，Intent 互通，45 条浏览器操控命令 |
 | 多模型 | 12 LLM Provider — OpenAI / DeepSeek / Kimi / GLM / Qwen / Grok / 火山引擎 / OpenModel / Self-Hosted / 自定义 |
 | 插件市场 | raw 直读 `plugins.json`（GitHub raw / Gitee raw 双源），ETag 缓存，SHA256 校验 |
 | 记忆孪生 | v0.15.0 — 跨设备 Agent 记忆同步 + 哈希链账本 + 短码配对 + 心跳保活 + QoS 自适应 + 手动 IP 发现 (plugin-memory-twin v0.2) |
@@ -71,7 +71,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | mengpaw-core | Android Library | 21 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 6 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
 | mengpaw-shell | APK | 65 | 0.30.0 (vc=30000) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
-| mengpaw-browser | APK | 33 | 0.7.0 (vc=9) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 27文件架构 |
+| mengpaw-browser | APK | 33 | 0.7.0 (vc=9) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 33文件架构 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
 
