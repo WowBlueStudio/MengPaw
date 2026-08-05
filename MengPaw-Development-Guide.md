@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.23.0 | **更新**: 2026-08-01 | **架构**: 微内核(70文件) + AgentRuntime + 21插件模块(11捆绑随壳更新) + 双许可(社区AGPL + 商业授权) + 连接器拆分独立仓库(MIT) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 三层自适应调度(REACT/GOAL/MISSION自动检测) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.6.0
+> **版本**: 0.30.0 | **更新**: 2026-08-05 | **架构**: 微内核(82文件) + AgentRuntime + 21插件模块(14内置随壳更新) + 双许可(社区AGPL + 商业授权) + 连接器拆分独立仓库(MIT) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 五模式自适应调度(REACT/GOAL/MISSION/SWARM/FLEET) + 8斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.0
 
 ---
 
@@ -67,11 +67,11 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 | 模块 | 类型 | 源文件 | 版本 | 说明 |
 |------|------|--------|------|------|
-| mengpaw-kernel | JVM Library | 54 | 0.17.0 | 微内核：纯 Kotlin，零 Android 依赖 |
-| mengpaw-core | Android Library | 6 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
-| mengpaw-design-system | Android Library | 5 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
-| mengpaw-shell | APK | 25 | 0.9.1 (vc=91) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
-| mengpaw-browser | APK | 12 | 0.7.1 (vc=71) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 27文件架构 |
+| mengpaw-kernel | JVM Library | 82 | 0.30.0 | 微内核：纯 Kotlin，零 Android 依赖 |
+| mengpaw-core | Android Library | 21 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
+| mengpaw-design-system | Android Library | 6 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
+| mengpaw-shell | APK | 65 | 0.30.0 (vc=30000) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
+| mengpaw-browser | APK | 33 | 0.7.0 (vc=9) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 27文件架构 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
 
@@ -183,27 +183,30 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ## 3. 模块详解
 
-### 3.1 mengpaw-kernel（微内核，70 文件）
+### 3.1 mengpaw-kernel（微内核，82 文件）
 
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|
-| `cli/` | 6 | CliInterpreter, CommandRegistry, CommandExecutor, Pipeline, CommandSearch (BM25), CliAudit |
-| `llm/` | 7 | AdaptiveLlmProvider, LlmProvider, LlmRequestBuilder, PromptEngine, RemoteApi, TranslateMiddleware, LlmHttpClient (共享 HTTP 客户端, v0.29.2) |
-| `session/` | 3 | SessionManager, History, Checkpoint |
+| `agent/` | 22 | AgentExecutor, AgentEngineTypes, MissionModeExecutor, GoalModeExecutor, PlanModeExecutor, SwarmModeExecutor, DreamEngine, ToolResultManager, AgentProfile, PromptBuilder 等 |
+| `llm/` | 9 | AdaptiveLlmProvider, LlmProvider, LlmRequestBuilder, PromptEngine, RemoteApi, TranslateMiddleware, LlmHttpClient (共享 HTTP 客户端, v0.29.2) |
+| `cli/` | 9 | CliInterpreter, CommandRegistry, CommandExecutor, Pipeline, CommandSearch (BM25), CliAudit |
+| `acp/` | 8 | AcpProtocol, AcpServer, AcpCrypto, AcpTransport, DelegateHandler, McpOverAcpBridge, ShareMemoryHandler |
+| `session/` | 5 | SessionManager, History, Checkpoint |
+| `security/` | 5 | Sanitizer, SecurityPolicy, PromptFirewall, IntegrityProvider |
+| `evolution/` | 5 | EvolutionProvider (SPI), EvolutionExecutor, EvolutionGuide, EvolutionHook, EvolutionStore |
 | `plugin/` | 4 | Plugin, PluginManager, PluginExecutor, PluginMarketplaceClient |
-| `agent/` | 9 | AgentDocManager, AgentDocs, AgentExecutor, AgentMiddleware, AgentProfile, DreamEngine, PromptBuilder, ScrollContext, GoalSession |
-| `security/` | 4 | Sanitizer, SecurityPolicy, PromptFirewall, IntegrityProvider |
+| `namespace/` | 3 | SelfExecutor, ScreenshotManager, NotifyBus |
 | `mcp/` | 2 | McpServer, McpClient |
-| `acp/` | 7 | AcpProtocol, AcpServer, AcpCrypto, AcpTransport, DelegateHandler, McpOverAcpBridge, ShareMemoryHandler |
+| `trigger/` | 1 | TriggerEngine |
 | `mission/` | 1 | FleetMonitor |
 | `error/` | 1 | ErrorCollector |
 | `extension/` | 1 | ManifestParser |
-| `trigger/` | 1 | TriggerEngine |
-| `namespace/` | 3 | SelfExecutor, ScreenshotManager, NotifyBus |
+| `spi/` | 1 | FrameworkAdapter (连接器 SPI, v0.23.0) |
+| `ports/` | 1 | Ports (端口单一事实源, self.ports) |
 | 根 | 4 | AgentEngine, DataPaths, KernelLog, KernelDispatchers |
 
 
-### 3.2 mengpaw-core（Android 适配层，6 文件）
+### 3.2 mengpaw-core（Android 适配层，21 文件，下表为核心桥接）
 
 | 文件 | 职责 |
 |------|------|
@@ -214,7 +217,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)` |
 | `AndroidLogger.kt` | 桥接：`KernelLog.setLogger(AndroidLogger())` |
 
-### 3.3 mengpaw-shell（主应用，24 文件，v0.8.4）
+### 3.3 mengpaw-shell（主应用，65 文件）
 
 | 文件 | 职责 |
 |------|------|
@@ -222,14 +225,14 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `AppInitializer.kt` | 关键路径初始化 (崩溃日志/DataPaths/插件管理器/SysExecutor/模板/日志器) |
 | `ui/screens/AppRoot.kt` | Compose 根 — 主题装配 + MainScreen/设置页/插件市场全屏层 |
 | `service/AgentRuntime.kt` | **NEW** UI/运行时分离 — 触发器桥接, 所有 IO 工作在此 |
-| `ui/screens/` (26 文件) | MainScreen (头栏/侧栏/底表拆至 MainScreenHeader·MainScreenSidebars·MainScreenExpandSheet), SidebarContent (数据拆至 SidebarContentData, 孪生对话框拆至 sidebar-dialogs/TwinPairingDialogs), AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SplashScreen |
-| `ui/components/` (5 文件) | BigBangPopup, FleetMonitorOverlay, TokenChart, TokenStatsCollector, NotifyBanner |
+| `ui/screens/` (46 文件) | MainScreen (头栏/侧栏/底表拆至 MainScreenHeader·MainScreenSidebars·MainScreenExpandSheet), SidebarContent (数据拆至 SidebarContentData, 孪生对话框拆至 sidebar-dialogs/TwinPairingDialogs), settings/ (5 文件: AgentSettingsContent 等), AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SplashScreen |
+| `ui/components/` (7 文件) | BigBangPopup, FleetMonitorOverlay, TokenChart, TokenStatsCollector, NotifyBanner 等 |
 | `ui/AdaptiveLayout.kt` | WindowSizeClass 计算 |
 | `ui/localization/Strings.kt` | 中英双语注解 |
-| `service/` (4 文件) | ShellService, DreamWorker, EventReceiver, WakeReceiver |
+| `service/` (7 文件) | ShellService, DreamWorker, EventReceiver, WakeReceiver 等 |
 
 
-### 3.4 mengpaw-browser（独立浏览器，30+ 文件）
+### 3.4 mengpaw-browser（独立浏览器，33 文件）
 
 | 目录/文件 | 职责 |
 |-----------|------|
@@ -238,11 +241,13 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `service/GoogleTranslate.kt` | 免费翻译客户端 |
 | `web/WebViewFactory.kt` | WebView 工厂 + App横幅CSS屏蔽 + onReceivedError |
 | `util/` (3 文件) | AdBlocker, SmartNavigate, DownloadUtil |
-| `ui/` (12 文件) | 9 弹窗 + FindBar + ReaderMode + Icons |
+| `BrowserDarkMode.kt` | 暗色模式 |
+| `ui/` (15 文件) | 13 弹窗/条 (AgentSettings/Bookmark/FindBar/History/Icons/ImagePicker/MarkdownViewer/Password/ReaderMode/Settings/Tab/TopBar/Translate) + DesktopTabBar + NewTabPage |
 | `ui/components/` (2 文件) | TabChip (标签样式), SearchEngineLogo (SVG) |
 | `ui/theme/BrowserThemeConfig.kt` | Agent 主题配置 |
 | `bridge/BrowserBridge.kt` | Java↔JS 双向桥 |
 | `plugin/` (3 文件) | BuiltinBrowserPlugin, BrowserPlugin, BrowserPluginRegistry |
+| `mcp/McpHttpServer.kt` | MCP HTTP 服务 |
 
 
 ### 3.5 插件模块（21 个，plugins/ 目录，按 settings.gradle.kts 为准）
