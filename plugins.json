@@ -268,26 +268,6 @@
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
     },
     {
-      "id": "tavily-plugin",
-      "name": "AI 搜索",
-      "version": "0.20.2",
-      "type": "native",
-      "author": "MengPaw",
-      "description": "Tavily AI 优化搜索引擎 — 结构化搜索结果 + 网页内容提取，错误消息含 API Key 获取链接",
-      "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-tavily-release.aar",
-      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.20.2/plugin-tavily-release.aar",
-      "minCoreVersion": "0.8.0",
-      "commands": [
-        "tavily.search",
-        "tavily.extract",
-        "tavily.setup"
-      ],
-      "checksum": "sha256:cb1f6b1aa05471be9d802eafd3b38029563ab4343ec32b1c99da66836ffe6e6d",
-      "size": 16627,
-      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
-    },
-    {
       "id": "render-plugin",
       "name": "API 生图引擎",
       "version": "0.20.2",

@@ -22,7 +22,26 @@ data class ReActResponse(
 data class ToolCall(
     val name: String,
     val parameters: Map<String, String>
-)
+) {
+    /**
+     * JSON 双轨制门卫: 检测参数是否为 JSON 形态。
+     * PromptEngine 的 tolerant JSON 解析成功时丢弃 key 只取值 — 单 key 碰巧兼容,
+     * 多 key 会参数错位 ({"force":true,"id":"x"} → "true x"); 解析失败时 raw 兜底
+     * 会把整个 JSON 串当参数。两种情况都应返回 PARAM_FORMAT_ERROR, 不执行命令。
+     * @return 错误描述文本, 或 null (参数格式正常, 可执行)
+     */
+    fun paramFormatError(): String? {
+        val raw = parameters["raw"]
+        val looksLikeJson = raw != null && raw.trim().startsWith("{")
+        val multiValueJson = raw == null && parameters.size > 1
+        return when {
+            looksLikeJson || multiValueJson ->
+                "参数格式错误: 命令 '$name' 收到 JSON/多字段参数, 但命令期望 CLI 纯文本。" +
+                "正确示例: $name <参数1> [参数2]。多字段 JSON 会因 key 被丢弃导致参数错位。"
+            else -> null
+        }
+    }
+}
 
 /**
  * ReAct prompt templates and parsing engine.
@@ -379,11 +398,16 @@ Skills 分为两层：
             ## 响应格式（必须遵守）
             Thought: （思考）
             Action: （命令名称）
-            Action Input: （参数）
+            Action Input: （参数 — CLI 纯文本风格，多个参数用空格分隔；禁止 JSON）
             ...或...
             Final Answer: （最终答案）
 
             需要多个独立工具时，可一次输出多个 Action（每个都带 Action Input），框架会并行执行。
+
+            **结果纪律（必须遵守）**：
+            - Action 发出后必须等框架返回 Result。后续思考只能引用 Result 原文，禁止自编结果。
+            - Result 含 Error 时禁止声称成功，必须原样引用错误并如实汇报。
+            - install/rm/write 类写操作后必须用查询命令验证；验证失败 = 操作失败，如实报告。
 
             使用中文思考和输出。
 
@@ -479,11 +503,16 @@ Skills 分为两层：
             ## Response Format (must follow)
             Thought: (your reasoning)
             Action: (command name)
-            Action Input: (parameters)
+            Action Input: (parameters — CLI plain text, space-separated; JSON is NOT accepted)
             ...or...
             Final Answer: (your final response)
 
             When multiple independent tools are needed, you may output multiple Action blocks at once (each with its own Action Input); the framework will execute them in parallel.
+
+            **Result discipline (must follow)**:
+            - After an Action, you MUST wait for the framework's Result. Subsequent reasoning may only cite the Result verbatim; never fabricate results.
+            - When a Result contains an Error, NEVER claim success — quote the error verbatim and report it honestly.
+            - After write operations (install/rm/write), you MUST verify with a query command; verification failure = operation failure, report it honestly.
 
             Think and respond in English.
 

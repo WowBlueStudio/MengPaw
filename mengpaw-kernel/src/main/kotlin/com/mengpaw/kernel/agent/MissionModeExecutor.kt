@@ -257,13 +257,20 @@ class MissionModeExecutor(
                             async(KernelDispatchers.BACKGROUND) {
                                 val commandLine = "${call.name} ${call.parameters.values.joinToString(" ")}"
                                 val result = try {
-                                    kotlinx.coroutines.withTimeout(60_000L) {
-                                        agentEngine.getPipelineManager().buildPipeline().execute(commandLine, context)
+                                    val formatError = call.paramFormatError()
+                                    if (formatError != null) {
+                                        ExecutionResult.fail(formatError, errorCode = ErrorCodes.PARAM_FORMAT_ERROR)
+                                    } else {
+                                        kotlinx.coroutines.withTimeout(60_000L) {
+                                            agentEngine.getPipelineManager().buildPipeline().execute(commandLine, context)
+                                        }
                                     }
                                 } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                                     ExecutionResult.fail("命令超时 (60s): $commandLine", errorCode = ErrorCodes.ERR_INTERNAL)
                                 }
-                                val obs = (if (result.success) result.output else "Error: ${result.error}").take(com.mengpaw.kernel.agent.MissionSwarmPrompts.WORKER_OBSERVATION_MAX)
+                                val obs = (if (result.success) result.output
+                                    else (result.errorCode?.let { "Error [$it]: ${result.error}" } ?: "Error: ${result.error}"))
+                                    .take(com.mengpaw.kernel.agent.MissionSwarmPrompts.WORKER_OBSERVATION_MAX)
                                 onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, commandLine, obs))
                                 "Command: $commandLine\nResult: $obs"
                             }

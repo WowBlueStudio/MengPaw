@@ -677,9 +677,12 @@ class AgentEngine(
                     .distinctBy { "${it.name} ${it.parameters.values.joinToString(" ")}" }
 
                 if (actionList.isNotEmpty()) {
-                    val commandLines = actionList.map { call ->
-                        "${call.name} ${call.parameters.values.joinToString(" ")}"
+                    // ── 组装命令行 + 参数格式门卫 (PARAM_FORMAT_ERROR) ──
+                    // JSON 双轨制防护见 ToolCall.paramFormatError() — 命中即不执行, 直接返回格式错误。
+                    val formattedCalls = actionList.map { call ->
+                        Triple("${call.name} ${call.parameters.values.joinToString(" ")}", call.paramFormatError(), call)
                     }
+                    val commandLines = formattedCalls.map { it.first }
 
                     // Loop detection on the first command (kept serial — shared mutable state)
                     if (promptEngine.detectLoop(commandLines.first())) {
@@ -695,10 +698,14 @@ class AgentEngine(
 
                     // ── 并行执行（结构化并发: async 内 withTimeout + pipeline.execute）──
                     val results = coroutineScope {
-                        commandLines.map { cmd ->
+                        formattedCalls.map { (cmd, formatError, _) ->
                             async(KernelDispatchers.BACKGROUND) {
                                 try {
-                                    withTimeout(60_000L) { pipelineManager.buildPipeline().execute(cmd, context) }
+                                    if (formatError != null) {
+                                        ExecutionResult.fail(formatError, errorCode = ErrorCodes.PARAM_FORMAT_ERROR)
+                                    } else {
+                                        withTimeout(60_000L) { pipelineManager.buildPipeline().execute(cmd, context) }
+                                    }
                                 } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                                     ExecutionResult.fail("命令超时 (60s): $cmd。请检查网络连接或尝试其他方式。", errorCode = ErrorCodes.ERR_INTERNAL)
                                 }
@@ -722,7 +729,12 @@ class AgentEngine(
                             pendingGuideFragment = com.mengpaw.kernel.evolution.EvolutionGuide.buildFragment(
                                 agentName = agentName, command = commandLine, message = result.error ?: "")
                         }
-                        var rawObservation = if (result.success) result.output else "Error: ${result.error}"
+                        // errorCode 注入 Observation — 模型可见错误类型 (PARAM_FORMAT_ERROR/NETWORK_OFFLINE/...)
+                        var rawObservation = if (result.success) {
+                            result.output
+                        } else {
+                            result.errorCode?.let { "Error [$it]: ${result.error}" } ?: "Error: ${result.error}"
+                        }
                         // ── QwenPaw-style tool result pruning ──
                         rawObservation = toolResultManager.pruneToolResult(commandLine, rawObservation, step + 1)
                         // 多 Action 并行: 思考只在第一个 Action 上呈现, 后续 Action 复用同一步序号

@@ -503,6 +503,8 @@ twin.lost <peer> / twin.recover <peer>
 - **Fallback 降级链**: primary → fallback[0] → fallback[1] → ... → `LlmFallbackExhaustedException`
 - **响应格式归一化**: 兼容 OpenAI `choices[0].message.content` 和 GLM `data[0].content`
 
+**结果纪律（v0.30.0+，系统提示词响应格式节）**: 提示词强制三条规则防 Observation 幻觉/谎报成功——① Action 发出后必须等框架返回 Result，后续思考只能引用 Result 原文，禁止自编结果；② Result 含 Error 时禁止声称成功，必须原样引用错误并如实汇报；③ install/rm/write 类写操作后必须用查询命令验证，验证失败 = 操作失败。Observation 由框架注入（`AgentEngine` 组装 `Command: …\nResult: …`），模型无自编通道；错误码随 Observation 以 `Error [CODE]: …` 形式可见（见 §5.2 错误码体系）。改提示词即改 `TEMPLATE_HASH` 自动失效缓存，无需手动 bump。
+
 ### 4.1.1 流式输出 (SSE + UI 播放器, v0.28.5 定型)
 
 **链路**: `AdaptiveLlmProvider.consumeSseStream`(`bodyAsChannel()` + `readUTF8Line` 增量读, OpenAI/Anthropic 双格式解析)→ 引擎透传 onDelta → `AgentViewModel` UI 播放器 → 气泡渐进显示。
@@ -727,6 +729,20 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 ### 5.2 插件命名空间
 
 格式 `namespace.command arg1 arg2 "arg with spaces" --flag value`
+
+**参数格式（v0.30.0+ 门卫）**: Action Input 一律 CLI 纯文本，多个参数空格分隔，**禁止 JSON**。PromptEngine 的 tolerant JSON 解析对 `{` 开头参数会丢弃 key 只取值——单 key 碰巧兼容，多 key 会参数错位；JSON 解析失败则整个串当参数。AgentEngine 组装命令行前设门卫：raw 键以 `{` 开头 或 JSON 多值（>1 key）→ 返回 `PARAM_FORMAT_ERROR`，不执行。
+
+**错误码体系** (`ErrorCodes`, 随 Observation 注入，模型可见 `Error [CODE]: ...`)：
+
+| 错误码 | 含义 |
+|--------|------|
+| `ERR_INVALID_INPUT` | 参数缺失/用法错误 |
+| `PARAM_FORMAT_ERROR` | 参数格式与命令签名不匹配（如 JSON 当 CLI 传） |
+| `ERR_NOT_FOUND` | 命令/插件/文件不存在 |
+| `ERR_PERMISSION_DENIED` | 安全策略/权限拦截 |
+| `DOWNLOAD_FAILED` | 插件下载 HTTP 失败（404/5xx，`MarketplaceDownloadException`） |
+| `NETWORK_OFFLINE` | 网络不可达（`MarketplaceNetworkException`，双源 + ghproxy 全失败） |
+| `ERR_TIMEOUT` / `ERR_IO` / `ERR_INTERNAL` | 超时 / IO 错误 / 未归类内部错误 |
 
 #### fs — 文件系统 (5)
 `cp <src> <dst>` | `mv <src> <dst>` | `stat <path>` | `grep <pattern> [path] [--regex] [-i] [--context N]` | `glob <pattern> [path]`

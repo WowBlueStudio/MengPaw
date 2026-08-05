@@ -60,6 +60,16 @@ data class MarketplaceIndex(
 )
 
 /**
+ * Marketplace 网络/连接层失败（断网、超时、全部源不可达）— 映射 NETWORK_OFFLINE。
+ */
+class MarketplaceNetworkException(message: String) : RuntimeException(message)
+
+/**
+ * Marketplace 下载 HTTP 失败（404/5xx 等）— 映射 DOWNLOAD_FAILED。
+ */
+class MarketplaceDownloadException(message: String) : RuntimeException(message)
+
+/**
  * Smart geo-router for plugin downloads.
  *
  * Detects China vs. rest-of-world via system locale/timezone — instant, no network.
@@ -170,7 +180,7 @@ class PluginMarketplaceClient(
 
         // All sources failed — add proxy guidance
         val originalError = fbResult.exceptionOrNull()
-        return Result.failure(RuntimeException(
+        return Result.failure(MarketplaceNetworkException(
             "${originalError?.message ?: "Unknown error"}; 检查网络连接或使用网络代理; 中国用户可尝试配置 net.proxy"
         ))
     }
@@ -194,13 +204,13 @@ class PluginMarketplaceClient(
                     Result.success(index)
                 }
                 else -> Result.failure(
-                    RuntimeException("HTTP ${response.status.value}")
+                    MarketplaceNetworkException("HTTP ${response.status.value}")
                 )
             }
         } catch (e: Exception) {
             ErrorCollector.report(e, "PluginMarketClient.tryFetch")
             if (cachedIndex != null) Result.success(cachedIndex ?: MarketplaceIndex())
-            else Result.failure(e)
+            else Result.failure(e.asMarketplaceError())
         }
     }
 
@@ -259,7 +269,7 @@ class PluginMarketplaceClient(
 
         // All sources failed — add proxy guidance
         val originalError = result.exceptionOrNull()
-        return Result.failure(RuntimeException(
+        return Result.failure(MarketplaceNetworkException(
             "${originalError?.message ?: "Unknown error"}; 检查网络连接或使用网络代理; 中国用户可尝试配置 net.proxy"
         ))
     }
@@ -279,7 +289,7 @@ class PluginMarketplaceClient(
             // Download with real byte-level progress via streaming channel read
             val bytes = client.prepareGet(url).execute { response ->
                 if (!response.status.isSuccess()) {
-                    throw RuntimeException("Download HTTP ${response.status.value}")
+                    throw MarketplaceDownloadException("Download HTTP ${response.status.value}")
                 }
                 val total = response.contentLength() ?: -1L
                 onProgress?.invoke(0, total)
@@ -315,7 +325,7 @@ class PluginMarketplaceClient(
             Result.success(destFile)
         } catch (e: Exception) {
             ErrorCollector.report(e, "PluginMarketClient.tryDownload")
-            Result.failure(e)
+            Result.failure(e.asMarketplaceError())
         }
     }
 
@@ -387,6 +397,13 @@ class PluginMarketplaceClient(
     private fun sha256(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256")
         return digest.digest(bytes).joinToString("") { "%02x".format(it) }
+    }
+
+    /** 将底层异常归类为网络/下载错误（逻辑异常如 SecurityException 保持原样）。 */
+    private fun Exception.asMarketplaceError(): Exception = when (this) {
+        is MarketplaceNetworkException, is MarketplaceDownloadException -> this
+        is java.io.IOException -> MarketplaceNetworkException(message ?: toString())
+        else -> this
     }
 
     private fun isPrivateUrl(url: String): Boolean {

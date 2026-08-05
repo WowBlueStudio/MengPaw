@@ -13,6 +13,12 @@ object ErrorCodes {
     const val ERR_INTERNAL = "ERR_INTERNAL"
     const val ERR_TIMEOUT = "ERR_TIMEOUT"
     const val ERR_IO = "ERR_IO"
+    /** 参数格式与命令签名不匹配（如模型发 JSON，命令期望 CLI 纯文本）。 */
+    const val PARAM_FORMAT_ERROR = "PARAM_FORMAT_ERROR"
+    /** 插件/资源下载失败（HTTP 错误、文件损坏等）。 */
+    const val DOWNLOAD_FAILED = "DOWNLOAD_FAILED"
+    /** 网络不可达/离线（连接超时、断网、全部源失败）。 */
+    const val NETWORK_OFFLINE = "NETWORK_OFFLINE"
 }
 
 /**

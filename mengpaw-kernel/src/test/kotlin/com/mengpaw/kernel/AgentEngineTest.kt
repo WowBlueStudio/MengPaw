@@ -196,6 +196,69 @@ class AgentEngineTest {
     }
 
     @Test
+    fun `json multi-key action input blocked by param format gate`() = runBlocking {
+        // 多 key JSON 会因 key 丢弃导致参数错位 ({"force":true,"id":"x"} → "true x")
+        // 门卫必须拦截并返回 PARAM_FORMAT_ERROR, 不得执行错位命令
+        var turn = 0
+        val llm = object : LlmProvider {
+            override suspend fun complete(prompt: String): String = respond()
+            override suspend fun completeWithMessages(messages: List<Map<String, String>>): String = respond()
+            override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
+                respond().also { onToken(it) }
+            override fun info() = ProviderInfo("mock", "json-gate", ProviderType.LOCAL)
+            override fun close() {}
+            fun respond(): String = when (turn++) {
+                0 -> """
+                    Thought: 安装插件。
+                    Action: plugin.install
+                    Action Input: {"force": true, "id": "tavily-plugin"}
+                """.trimIndent()
+                else -> "Final Answer: 完成"
+            }
+        }
+        val sm2 = SessionManager()
+        val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
+        val result = engine2.run("门卫测试", maxSteps = 3)
+        assertEquals("完成", result)
+        val history = sm2.getHistory(engine2.currentConversationId()!!)
+        val obs = history.joinToString("\n") { it.content }
+        assertTrue("Observation 应含 PARAM_FORMAT_ERROR: $obs", obs.contains("PARAM_FORMAT_ERROR"))
+        assertTrue("Observation 应展示模型请求的命令", obs.contains("Command: plugin.install true tavily-plugin"))
+        assertFalse("不得执行错位命令 (参数被吞): $obs", obs.contains("Plugin not found in marketplace: true"))
+        assertFalse("不得执行错位命令 (未知命令): $obs", obs.contains("Unknown command: plugin.install"))
+    }
+
+    @Test
+    fun `unparseable json action input blocked by param format gate`() = runBlocking {
+        // JSON 解析失败 → raw 兜底 → 整个 JSON 串会被当参数 → 门卫同样拦截
+        var turn = 0
+        val llm = object : LlmProvider {
+            override suspend fun complete(prompt: String): String = respond()
+            override suspend fun completeWithMessages(messages: List<Map<String, String>>): String = respond()
+            override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
+                respond().also { onToken(it) }
+            override fun info() = ProviderInfo("mock", "json-gate", ProviderType.LOCAL)
+            override fun close() {}
+            fun respond(): String = when (turn++) {
+                0 -> """
+                    Thought: 搜索插件。
+                    Action: plugin.search
+                    Action Input: {"query": "tavily", "force":}
+                """.trimIndent()
+                else -> "Final Answer: 完成"
+            }
+        }
+        val sm2 = SessionManager()
+        val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
+        val result = engine2.run("门卫测试", maxSteps = 3)
+        assertEquals("完成", result)
+        val history = sm2.getHistory(engine2.currentConversationId()!!)
+        val obs = history.joinToString("\n") { it.content }
+        assertTrue("Observation 应含 PARAM_FORMAT_ERROR: $obs", obs.contains("PARAM_FORMAT_ERROR"))
+        assertFalse("不得把整个 JSON 串当参数执行: $obs", obs.contains("搜索 \"{\"query"))
+    }
+
+    @Test
     fun `empty LLM response is retried once then succeeds`() = runBlocking {
         // v0.28.7: DeepSeek 偶发空流 (S-DONE len=0) → 自动重试一次, 不写空白 assistant 消息
         mockLlm.responseQueue.add("")

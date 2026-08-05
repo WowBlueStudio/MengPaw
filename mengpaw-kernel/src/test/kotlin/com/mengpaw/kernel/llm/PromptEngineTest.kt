@@ -120,6 +120,35 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `parse multi-key json keeps all keys`() {
+        // 多 key JSON 解析保留全部键 — AgentEngine 门卫以此为拦截依据 (值数 > 1 即参数错位风险)
+        val input = """
+            Action: plugin.install
+            Action Input: {"force": true, "id": "tavily-plugin"}
+        """.trimIndent()
+
+        val result = engine.parse(input)
+        assertEquals(1, result.actions.size)
+        assertEquals(2, result.actions.first().parameters.size)
+        assertEquals("true", result.actions.first().parameters["force"])
+        assertEquals("tavily-plugin", result.actions.first().parameters["id"])
+    }
+
+    @Test
+    fun `result discipline rules present in both prompts`() {
+        val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertTrue("中文提示词应禁止自编结果", zh.contains("禁止自编结果"))
+        assertTrue("中文提示词应要求 Error 时禁止声称成功", zh.contains("Result 含 Error 时禁止声称成功"))
+        assertTrue("中文提示词应要求写操作后验证", zh.contains("写操作后必须用查询命令验证"))
+        assertTrue("中文提示词应禁止 JSON 参数", zh.contains("禁止 JSON"))
+        val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
+        assertTrue("英文提示词应禁止编造结果", en.contains("never fabricate results"))
+        assertTrue("英文提示词应要求 Error 时不声称成功", en.contains("NEVER claim success"))
+        assertTrue("英文提示词应要求写操作后验证", en.contains("verify with a query command"))
+        assertTrue("英文提示词应禁止 JSON 参数", en.contains("JSON is NOT accepted"))
+    }
+
+    @Test
     fun `parse multiple actions with json tolerance`() {
         // 第二个 Action Input 非法 JSON → raw 回退（容错）
         val input = """

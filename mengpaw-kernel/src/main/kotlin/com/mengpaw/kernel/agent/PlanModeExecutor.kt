@@ -4,6 +4,8 @@
 package com.mengpaw.kernel
 
 import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.error.ErrorType
 import com.mengpaw.kernel.security.Sanitizer
@@ -137,8 +139,11 @@ class PlanModeExecutor(
             if (parsed.isFinal) return parsed.thought
             if (parsed.action != null) {
                 val cmd = "${parsed.action.name} ${parsed.action.parameters.values.joinToString(" ")}"
-                val result = pipelineManager.buildPipeline().execute(cmd, context)
-                val observation = if (result.success) result.output else "Error: ${result.error}"
+                val result = parsed.action.paramFormatError()?.let {
+                    ExecutionResult.fail(it, errorCode = ErrorCodes.PARAM_FORMAT_ERROR)
+                } ?: pipelineManager.buildPipeline().execute(cmd, context)
+                val observation = if (result.success) result.output
+                    else (result.errorCode?.let { "Error [$it]: ${result.error}" } ?: "Error: ${result.error}")
                 sessionManager.addMessage(stepSession.id, com.mengpaw.kernel.session.Message("assistant", "Command: $cmd\nResult: $observation"))
             }
         }

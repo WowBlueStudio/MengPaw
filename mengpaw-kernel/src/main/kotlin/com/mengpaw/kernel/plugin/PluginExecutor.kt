@@ -94,7 +94,7 @@ class PluginExecutor(
                     "  • 使用 plugin.list 查看已安装插件\n" +
                     "  • 检查网络连接 — 国内用户可能需要 VPN 访问 GitHub\n" +
                     "  • Gitee 镜像会自动启用，稍后重试",
-                    errorCode = ErrorCodes.ERR_INTERNAL
+                    errorCode = if (e is MarketplaceNetworkException) ErrorCodes.NETWORK_OFFLINE else ErrorCodes.ERR_INTERNAL
                 )
             }
         )
@@ -113,7 +113,7 @@ class PluginExecutor(
             onFailure = { ExecutionResult.fail(
                 "Search failed: ${it.message}\n" +
                 "💡 使用 plugin.marketplace 浏览全部插件，或 self.tools 查看已有命令",
-                errorCode = ErrorCodes.ERR_INTERNAL
+                errorCode = if (it is MarketplaceNetworkException) ErrorCodes.NETWORK_OFFLINE else ErrorCodes.ERR_INTERNAL
             ) }
         )
     }
@@ -140,7 +140,10 @@ class PluginExecutor(
             }
         } else {
             marketplaceClient.getPlugin(id).getOrElse {
-                return ExecutionResult.fail("Plugin not found in marketplace: $id", errorCode = ErrorCodes.ERR_NOT_FOUND)
+                return ExecutionResult.fail(
+                    "Plugin not found in marketplace: $id",
+                    errorCode = if (it is MarketplaceNetworkException) ErrorCodes.NETWORK_OFFLINE else ErrorCodes.ERR_NOT_FOUND
+                )
             }
         }
 
@@ -158,7 +161,12 @@ class PluginExecutor(
         // Download — uses entry.downloadUrl/mirrorUrl from whichever index it came from
         val destDir = File(ctx.workDir, "plugins")
         val downloaded = marketplaceClient.download(entry, destDir, onDownloadProgress).getOrElse {
-            return ExecutionResult.fail("Download failed: ${it.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+            val code = when (it) {
+                is MarketplaceDownloadException -> ErrorCodes.DOWNLOAD_FAILED
+                is MarketplaceNetworkException -> ErrorCodes.NETWORK_OFFLINE
+                else -> ErrorCodes.ERR_INTERNAL
+            }
+            return ExecutionResult.fail("Download failed: ${it.message}", errorCode = code)
         }
 
         // Attempt runtime loading via DexClassLoader
@@ -375,7 +383,10 @@ class PluginExecutor(
             ?: return ExecutionResult.fail("Not installed: $id", errorCode = ErrorCodes.ERR_NOT_FOUND)
 
         val entry = marketplaceClient.getPlugin(id).getOrElse {
-            return ExecutionResult.fail("Not found in marketplace: $id", errorCode = ErrorCodes.ERR_NOT_FOUND)
+            return ExecutionResult.fail(
+                "Not found in marketplace: $id",
+                errorCode = if (it is MarketplaceNetworkException) ErrorCodes.NETWORK_OFFLINE else ErrorCodes.ERR_NOT_FOUND
+            )
         }
 
         val update = pluginManager.checkUpdate(id, entry.version)
