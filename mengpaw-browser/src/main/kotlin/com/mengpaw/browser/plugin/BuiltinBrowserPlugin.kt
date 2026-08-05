@@ -99,7 +99,7 @@ class BuiltinBrowserPlugin(
             appendLine("|----|------|-----|------|")
             all.forEach { t ->
                 val active = if (t.isActive) "▶" else " "
-                val load = if (t.isLoading) "⏳" else "✓"
+                val load = if (t.isLoading) "…" else "✓"
                 appendLine("| $active ${t.id} | $load | ${t.url.take(50)} | ${t.title.take(30)} |")
             }
         })
@@ -554,8 +554,8 @@ class BuiltinBrowserPlugin(
             val result = b.screenshotFull(maxH)
             val r = ExecutionResult.ok(result)
             // Append follow-up hint for Agent
-            ExecutionResult.ok(result + "\n---\n💡 使用 browser.coord.click <x> <y> 在此截图坐标上点击。参考: skill.run browser-control")
-        } catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.screenshotFull"); ExecutionResult.fail("${e.message}\n💡 可降级: browser.screenshot (视口截图)", errorCode = ErrorCodes.ERR_INTERNAL) }
+            ExecutionResult.ok(result + "\n---\n使用 browser.coord.click <x> <y> 在此截图坐标上点击。参考: skill.run browser-control")
+        } catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.screenshotFull"); ExecutionResult.fail("${e.message}\n可降级: browser.screenshot (视口截图)", errorCode = ErrorCodes.ERR_INTERNAL) }
     }
 
     /** Tap at absolute page coordinates (from screenshotFull image). */

@@ -259,7 +259,7 @@ private fun AppRootContent(
                                             (view.context as? androidx.activity.ComponentActivity)?.lifecycleScope?.launch(Dispatchers.IO) {
                                                 startAcpForTwin(view.context, name)
                                             }
-                                            android.widget.Toast.makeText(view.context, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
+                                            android.widget.Toast.makeText(view.context, "记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
                                         },
                                         onFailure = { e ->
                                             android.util.Log.e("MengPawTwin", "激活失败: ${e.message}", e)
@@ -275,7 +275,7 @@ private fun AppRootContent(
                                             (view.context as? androidx.activity.ComponentActivity)?.lifecycleScope?.launch(Dispatchers.IO) {
                                                 startAcpForTwin(view.context, name)
                                             }
-                                            android.widget.Toast.makeText(view.context, "🧠 记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
+                                            android.widget.Toast.makeText(view.context, "记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
                                         },
                                         onFailure = { e2 ->
                                             android.util.Log.e("MengPawTwin", "二次激活失败: ${e2.message}", e2)

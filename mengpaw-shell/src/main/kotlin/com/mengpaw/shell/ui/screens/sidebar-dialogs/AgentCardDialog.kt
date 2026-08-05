@@ -128,7 +128,13 @@ fun AgentCardDialog(
                     Surface(color = ThemeColors.bgCardHigh, shape = RoundedCornerShape(ArcoRadius.sm),
                         modifier = Modifier.fillMaxWidth().heightIn(max = 140.dp)) {
                         Column(Modifier.padding(ArcoSpacing.sm).verticalScroll(rememberScrollState())) {
-                            mdFiles.forEach { fname -> Text("📄 $fname", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp) }
+                            mdFiles.forEach { fname ->
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 1.dp)) {
+                                    Icon(Icons.Outlined.Description, null, Modifier.size(12.dp), tint = ThemeColors.textSecondary)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(fname, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
+                                }
+                            }
                         }
                     }
                 }

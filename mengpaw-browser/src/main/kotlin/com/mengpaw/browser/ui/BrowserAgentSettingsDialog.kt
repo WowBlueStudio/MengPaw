@@ -5,6 +5,9 @@ package com.mengpaw.browser.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -56,7 +59,11 @@ fun BrowserAgentSettingsDialog(
 
                 // Section: Quick Click (experimental)
                 item {
-                    Text("🧪 实验性功能", style = MaterialTheme.typography.labelLarge, color = ThemeColors.brand, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(16.dp), tint = ThemeColors.brand)
+                        Spacer(Modifier.width(4.dp))
+                        Text("实验性功能", style = MaterialTheme.typography.labelLarge, color = ThemeColors.brand, fontWeight = FontWeight.Bold)
+                    }
                     Spacer(Modifier.height(4.dp))
                     Text("使用全页截图 + 坐标点击替代 CSS 选择器。Vision 模型友好，对 Canvas/Shadow DOM/验证码有效。",
                         style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
@@ -114,7 +121,11 @@ fun BrowserAgentSettingsDialog(
 
                 // Quick Click workflow tips
                 item {
-                    Text("📖 使用流程", fontWeight = FontWeight.Medium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.MenuBook, null, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
+                        Spacer(Modifier.width(4.dp))
+                        Text("使用流程", fontWeight = FontWeight.Medium)
+                    }
                     Spacer(Modifier.height(4.dp))
                     Text("1. browser.screenshot.full → 得到全页长图\n2. Vision 模型识别目标坐标\n3. browser.coord.click <x> <y>\n4. browser.coord.scroll <y> 验证位置",
                         style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, lineHeight = 18.sp)

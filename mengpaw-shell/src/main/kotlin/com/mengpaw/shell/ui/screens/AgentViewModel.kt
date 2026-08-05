@@ -34,7 +34,7 @@ import java.io.File
  * AgentViewModel 流式检测到完整 "Action: <tool>" 行后, 用该前缀推送运行中气泡;
  * ChatBubbles.WaitingIndicator 依此前缀显示"正在执行 X… Ns"而非"思考中… Ns"。
  */
-internal const val EXECUTING_TOOL_PREFIX = "⚙ 正在执行 "
+internal const val EXECUTING_TOOL_PREFIX = "正在执行 "
 
 /** 流式文本中的完整工具调用行 (多行锚定, 行尾须完整) — 半截工具名不匹配, 避免误报. */
 private val ACTION_LINE_REGEX = Regex("""(?m)^Action:\s*([\w.+\-]+)\s*$""")
@@ -295,7 +295,7 @@ class AgentViewModel : ViewModel() {
     /** Inject an Agent-pushed notification into the chat message list. */
     fun notifyAgentMessage(text: String) {
         val session = activeSession()
-        session.messages.value = session.messages.value + ChatMessageUi.System("📢 $text")
+        session.messages.value = session.messages.value + ChatMessageUi.System(text)
     }
 
     /** Update the system banner text (for localization). */
@@ -380,10 +380,10 @@ class AgentViewModel : ViewModel() {
 """.trimIndent()
                             val dreamResult = session.provider.complete(dreamPrompt)
                             session.messages.value = session.messages.value +
-                                ChatMessageUi.System("💤 Dream 完成:\n\n${dreamResult.take(500)}")
+                                ChatMessageUi.System("Dream 完成:\n\n${dreamResult.take(500)}")
                         } catch (e: Exception) {
                             session.messages.value = session.messages.value +
-                                ChatMessageUi.System("💤 Dream 异常: ${e.message?.take(120) ?: "未知错误"}")
+                                ChatMessageUi.System("Dream 异常: ${e.message?.take(120) ?: "未知错误"}")
                         }
                     }
                     // 不添加 AgentWithTrace，不锁定输入
@@ -709,9 +709,9 @@ class AgentViewModel : ViewModel() {
                 playbackJob?.cancel()
                 playbackJob?.join()
                 val errorMsg = if (e is OutOfMemoryError) {
-                    "⚠️ 内存不足，任务已中断。请清理会话历史后重试。"
+                    "内存不足，任务已中断。请清理会话历史后重试。"
                 } else {
-                    "⚠️ 执行出错：${e.message?.take(120) ?: "未知错误"} — 已完成的工作已自动记录，继续对话可恢复进度。"
+                    "执行出错：${e.message?.take(120) ?: "未知错误"} — 已完成的工作已自动记录，继续对话可恢复进度。"
                 }
                 session.messages.update { current ->
                     val mutable = current.toMutableList()
@@ -818,7 +818,7 @@ class AgentViewModel : ViewModel() {
 
         // Light system note so user knows something happened
         session.messages.value = session.messages.value + ChatMessageUi.System(
-            "⏰ ${trigger.action.take(40)}..."
+            "${trigger.action.take(40)}..."
         )
 
         viewModelScope.launch {
@@ -840,7 +840,7 @@ class AgentViewModel : ViewModel() {
 
         // Light system note so user knows something happened
         session.messages.value = session.messages.value + ChatMessageUi.System(
-            "🌐 正在提炼网页要点: ${url.take(40)}..."
+            "正在提炼网页要点: ${url.take(40)}..."
         )
 
         viewModelScope.launch {
@@ -974,7 +974,7 @@ class AgentViewModel : ViewModel() {
                     is AgentState.Error -> {
                         session.isRunning.value = false; _isRunning.value = false
                         session.inputEnabled.value = true; _inputEnabled.value = true
-                        session.messages.value = session.messages.value + ChatMessageUi.Agent("⚠️ ${state.message}")
+                        session.messages.value = session.messages.value + ChatMessageUi.Agent(state.message)
                     }
                 }
             }
@@ -1007,12 +1007,12 @@ class AgentViewModel : ViewModel() {
                             event.summary.contains("timeout", ignoreCase = true) ||
                                 event.summary.contains("超时", ignoreCase = true) ||
                                 event.summary.contains("timed out", ignoreCase = true) ->
-                                "ℹ️ 连接短暂中断，已自动记录恢复点。继续对话即可。"
+                                "连接短暂中断，已自动记录恢复点。继续对话即可。"
                             event.summary.contains("consecutive", ignoreCase = true) ||
                                 event.payload["consecutive"] == "true" ->
-                                "ℹ️ 连续错误，建议清理会话历史或检查 API 配置后重试。"
+                                "连续错误，建议清理会话历史或检查 API 配置后重试。"
                             else ->
-                                "ℹ️ 执行中断，已自动恢复。继续发送消息即可。"
+                                "执行中断，已自动恢复。继续发送消息即可。"
                         }
                         val session = sessions[_activeAgentName]
                         if (session != null && !_isRunning.value) {
@@ -1023,7 +1023,7 @@ class AgentViewModel : ViewModel() {
                         val session = sessions[_activeAgentName]
                         if (session != null) {
                             session.messages.value = session.messages.value +
-                                ChatMessageUi.System("🔄 已从上次中断处恢复，继续执行。")
+                                ChatMessageUi.System("已从上次中断处恢复，继续执行。")
                         }
                     }
                     else -> { /* no UI action needed */ }

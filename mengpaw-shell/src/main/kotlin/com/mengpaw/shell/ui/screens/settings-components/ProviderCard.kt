@@ -67,8 +67,8 @@ fun ProviderCard(
                             RadioButton(selected = selectedModel == model.name, onClick = { onSelectModel(model.name) }, modifier = Modifier.size(18.dp), colors = RadioButtonDefaults.colors(selectedColor = ThemeColors.brand))
                             Spacer(Modifier.width(8.dp))
                             Text(model.name, Modifier.weight(1f), fontSize = 13.sp)
-                            if (model.type == "多模态") Text("🖼", fontSize = 12.sp)
-                            else if (model.type.contains("全模态")) Text("🎤", fontSize = 12.sp)
+                            if (model.type == "多模态") Icon(Icons.Outlined.Image, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
+                            else if (model.type.contains("全模态")) Icon(Icons.Outlined.Mic, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
                         }
                     }
                     if (remoteModels.isNotEmpty()) {

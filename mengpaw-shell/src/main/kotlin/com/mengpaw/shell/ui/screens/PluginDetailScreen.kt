@@ -80,15 +80,30 @@ fun PluginDetailScreen(
 
                         // Status badge
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            val (statusText, statusColor) = when {
-                                plugin.isActive -> "✅ ${strings.activeBadge}" to ArcoColors.Green6
-                                plugin.isInstalled -> "📦 ${strings.installedBadge}" to ArcoColors.Orange6
-                                else -> "⬇️ ${strings.notInstalledBadge}" to ArcoColors.Gray6
+                            val statusIcon = when {
+                                plugin.isActive -> Icons.Outlined.CheckCircle
+                                plugin.isInstalled -> Icons.Outlined.Inventory2
+                                else -> Icons.Outlined.Download
+                            }
+                            val statusText = when {
+                                plugin.isActive -> strings.activeBadge
+                                plugin.isInstalled -> strings.installedBadge
+                                else -> strings.notInstalledBadge
+                            }
+                            val statusColor = when {
+                                plugin.isActive -> ArcoColors.Green6
+                                plugin.isInstalled -> ArcoColors.Orange6
+                                else -> ArcoColors.Gray6
                             }
                             Surface(shape = RoundedCornerShape(ArcoRadius.sm),
                                 color = statusColor.copy(alpha = 0.1f)) {
-                                Text(statusText, Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelSmall, color = statusColor)
+                                Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(statusIcon, null, Modifier.size(12.dp), tint = statusColor)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(statusText,
+                                        style = MaterialTheme.typography.labelSmall, color = statusColor)
+                                }
                             }
                             Spacer(Modifier.width(ArcoSpacing.sm))
                             Text("${strings.typePrefix}${plugin.type.name}", style = MaterialTheme.typography.labelSmall,

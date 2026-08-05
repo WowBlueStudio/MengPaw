@@ -163,9 +163,14 @@ fun CommandResultBubble(message: ChatMessageUi.CommandResult, strings: AppString
             modifier = Modifier.fillMaxWidth(0.9f)
         ) {
             Column(Modifier.padding(ArcoSpacing.lg)) {
-                Text(if (message.isError) "❌ ${strings.commandFailedLabel}" else "❯ ${strings.commandOutputLabel}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (message.isError) ArcoColors.Red6 else ThemeColors.textSecondary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(if (message.isError) Icons.Outlined.Error else Icons.Outlined.ChevronRight, null,
+                        Modifier.size(13.dp), tint = if (message.isError) ArcoColors.Red6 else ThemeColors.textSecondary)
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (message.isError) strings.commandFailedLabel else strings.commandOutputLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (message.isError) ArcoColors.Red6 else ThemeColors.textSecondary)
+                }
                 Spacer(Modifier.height(ArcoSpacing.xs))
                 SelectionContainer {
                     MarkdownText(
@@ -372,24 +377,24 @@ fun BubbleWrapper(
         ) { content() }
 
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-            DropdownMenuItem(text = { Text("📋 复制") }, onClick = {
+            DropdownMenuItem(text = { Text("复制") }, leadingIcon = { Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp)) }, onClick = {
                 (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
                     ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", bubbleText))
                 showMenu = false
             })
-            DropdownMenuItem(text = { Text("💥 大爆炸") }, onClick = { showBigBang = true; showMenu = false })
-            DropdownMenuItem(text = { Text("💬 引用") }, onClick = {
+            DropdownMenuItem(text = { Text("大爆炸") }, leadingIcon = { Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp)) }, onClick = { showBigBang = true; showMenu = false })
+            DropdownMenuItem(text = { Text("引用") }, leadingIcon = { Icon(Icons.Outlined.FormatQuote, null, Modifier.size(18.dp)) }, onClick = {
                 onQuote(viewModel.formatQuote(message)); showMenu = false
             })
             if (message is ChatMessageUi.User && viewModel.isLastUserMessage(message)) {
-                DropdownMenuItem(text = { Text("↩ 撤回") }, onClick = {
+                DropdownMenuItem(text = { Text("撤回") }, leadingIcon = { Icon(Icons.Outlined.Undo, null, Modifier.size(18.dp)) }, onClick = {
                     viewModel.retractLastUserMessage()?.let { onRetract(it) }; showMenu = false
                 })
             }
             // Image save for Agent messages
             val imgs = MARKDOWN_IMAGE_REGEX.findAll(bubbleText).toList()
             if (imgs.isNotEmpty()) {
-                DropdownMenuItem(text = { Text("💾 保存图片 (${imgs.size})") }, onClick = {
+                DropdownMenuItem(text = { Text("保存图片 (${imgs.size})") }, leadingIcon = { Icon(Icons.Outlined.SaveAlt, null, Modifier.size(18.dp)) }, onClick = {
                     imgs.forEach { m ->
                         val p = m.groupValues[1]
                         if (!p.startsWith("http")) try {
@@ -398,12 +403,12 @@ fun BubbleWrapper(
                     }
                     showMenu = false
                 })
-                DropdownMenuItem(text = { Text("✏️ 标注图片发回") }, onClick = {
+                DropdownMenuItem(text = { Text("标注图片发回") }, leadingIcon = { Icon(Icons.Outlined.Edit, null, Modifier.size(18.dp)) }, onClick = {
                     imgs.firstOrNull()?.groupValues?.get(1)?.let { if (!it.startsWith("http")) onQuote("标注图片: $it") }
                     showMenu = false
                 })
             }
-            DropdownMenuItem(text = { Text("📤 一键分享") }, onClick = {
+            DropdownMenuItem(text = { Text("一键分享") }, leadingIcon = { Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)) }, onClick = {
                 val si = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                     type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, bubbleText.take(500))
                 }

@@ -79,7 +79,11 @@ fun MissionMonitorOverlay(
     ) {
         // Top bar
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("🎯 Mission 监控", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.TrackChanges, null, Modifier.size(18.dp), tint = Color.White)
+                Spacer(Modifier.width(6.dp))
+                Text("Mission 监控", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
             Row {
                 IconButton(onClick = { showWorkers = !showWorkers }, modifier = Modifier.size(28.dp)) {
                     Icon(if (showWorkers) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff, "Workers", tint = Color.White, modifier = Modifier.size(18.dp))
@@ -113,7 +117,11 @@ fun MissionMonitorOverlay(
                     color = ArcoColors.Gray10.copy(alpha = 0.88f)
                 ) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("👷 Workers (${snapshot.workers.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Engineering, null, Modifier.size(16.dp), tint = Color.White)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Workers (${snapshot.workers.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                         Spacer(Modifier.height(8.dp))
                         if (snapshot.workers.isEmpty()) {
                             Text("等待 Worker 启动...", fontSize = 12.sp, color = ArcoColors.Gray6, modifier = Modifier.padding(8.dp))
@@ -133,7 +141,11 @@ fun MissionMonitorOverlay(
                     color = ArcoColors.Gray10.copy(alpha = 0.88f)
                 ) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("🔍 Verifier", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Search, null, Modifier.size(16.dp), tint = Color.White)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Verifier", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                         Spacer(Modifier.height(8.dp))
                         val v = snapshot.verifier
                         Text(v.summary, fontSize = 13.sp, color = when {
@@ -172,7 +184,11 @@ private fun WorkerCard(w: WorkerMonitor) {
         else -> Color.White.copy(alpha = 0.125f) to ArcoColors.Gray6
     }
     val icon = when (w.status) {
-        "verified" -> "✅"; "running" -> "▶️"; "failed" -> "❌"; "done" -> "👍"; else -> "⬜"
+        "verified" -> Icons.Outlined.CheckCircle
+        "running" -> Icons.Outlined.PlayArrow
+        "failed" -> Icons.Outlined.Error
+        "done" -> Icons.Outlined.ThumbUp
+        else -> Icons.Outlined.CropSquare
     }
 
     Surface(
@@ -182,7 +198,7 @@ private fun WorkerCard(w: WorkerMonitor) {
     ) {
         Column(Modifier.padding(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(icon, fontSize = 12.sp)
+                Icon(icon, null, Modifier.size(14.dp), tint = Color.White)
                 Spacer(Modifier.width(4.dp))
                 Text(w.id, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
                 if (w.progress > 0 && w.status == "running") {

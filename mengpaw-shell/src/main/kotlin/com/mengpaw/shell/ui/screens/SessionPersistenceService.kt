@@ -275,7 +275,7 @@ class SessionPersistenceService(
             val msgs = jsonToMessages(arrText)
             if (msgs.isNotEmpty()) {
                 val lastMsg = msgs.lastOrNull()
-                val endsWithError = lastMsg is ChatMessageUi.Agent && lastMsg.content.startsWith("⚠️ 执行出错")
+                val endsWithError = lastMsg is ChatMessageUi.Agent && lastMsg.content.startsWith("执行出错")
                 if (endsWithError) {
                     try { file.delete() } catch (_: Exception) {}
                     return false
@@ -286,7 +286,7 @@ class SessionPersistenceService(
                     val m = recovered[i]
                     if (m is ChatMessageUi.AgentWithTrace && m.isRunning) {
                         recovered[i] = ChatMessageUi.Agent(
-                            "⚠️ 智能体生成被打断，请回复指令以继续。",
+                            "智能体生成被打断，请回复指令以继续。",
                             executionMode = m.executionMode,
                             agentRef = m.agentRef
                         )
@@ -294,7 +294,7 @@ class SessionPersistenceService(
                     }
                 }
                 if (wasStuck) {
-                    recovered.add(ChatMessageUi.System("⚠️ 上次会话异常中断，已自动恢复。"))
+                    recovered.add(ChatMessageUi.System("上次会话异常中断，已自动恢复。"))
                 }
                 val session = sessions[getActiveAgentName()] ?: return false
                 session.messages.value = recovered

@@ -13,7 +13,7 @@ import java.io.File
 /**
  * 将 content:// URI 拷贝到 Agent 工作区，产出结构化附件 [AttachmentData]（v0.33.0+）。
  *
- * 改造前: 把 `📎 绝对路径` 文本插进输入框；
+ * 改造前: 把 `绝对路径` 文本插进输入框；
  * 改造后: 附件对象进 pendingAttachments, 气泡渲染卡片 + 发送时按类型挂二进制通道。
  */
 fun handleFilePicked(
@@ -58,7 +58,7 @@ fun handleFilePicked(
             val MAX_SIZE = 50L * 1024 * 1024
             if (target.length() > MAX_SIZE) {
                 target.delete()
-                onError("⚠️ 文件超过 50MB 上限，已丢弃")
+                onError("文件超过 50MB 上限，已丢弃")
             } else {
                 onAttachment(
                     AttachmentData(
@@ -72,10 +72,10 @@ fun handleFilePicked(
                 )
             }
         } else {
-            onError("⚠️ 文件读取失败")
+            onError("文件读取失败")
         }
     } catch (_: Exception) {
-        onError("⚠️ 文件处理失败")
+        onError("文件处理失败")
     }
 }
 
