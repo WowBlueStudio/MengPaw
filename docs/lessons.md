@@ -334,6 +334,14 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **方法论**：连接池共享的关键风险是"配置死而不知"——`requestTimeoutMillis` 在 Ktor 3 OkHttp 引擎是死配置（字节码实证），清配置时必须以"实测活超时"为准（readTimeout 防思考期误杀，无 callTimeout 防长流误杀）。
 - **前提条件**：共享客户端前先 grep 全部构造点确认超时/配置全走默认值，否则共享会吞掉自定义超时。
 
+### 14.9 Compose Dialog 内嵌 WebView (v0.31.0, md 预览 WebView 化)
+
+- **M3 AlertDialog 的 text 槽不能嵌 WebView**: text 槽被包在 `verticalScroll` + 无限高测量里, WebView 渲染成 ~150dp 小方块 + 双层滚动。必须换 `Dialog(usePlatformDefaultWidth=false)` + `Surface` 自定义布局, Box(weight 1f) 内 AndroidView。
+- **`Dialog`/`DialogProperties` 在 `androidx.compose.ui.window`**, 不在 material3 — material3 只有 AlertDialog/BasicAlertDialog, 编译报 Unresolved reference。
+- **WebView `allowFileAccess` API 30+ 默认 false**: targetSdk 35 下不开则 `file:///android_asset/` 子资源 (css/js) 静默加载失败。
+- **`loadDataWithBaseURL` 大内容 (~1.2M 字符) 有设备相关截断**: 超限回退 cacheDir 临时文件 + loadUrl, 模板内相对资源 replace 成绝对 asset 路径。
+- **模板替换标记用 HTML 注释**: commonmark 转义后不可能产生 `<!--`, 无碰撞; 花括号标记会与真实文档撞车 (转义不处理 `{}`)。
+
 ### 14.8 静默判定阈值与网络门卫 (v0.29.2, 高铁场景用户追问)
 
 - **对齐 Reasonix 阈值**：readTimeout 180s → 120s（静默判定）。余量论证：思考期 60s+ 无数据，120s 仍留 ~60s；Reasonix 以 120s 上线多年。加 `pingInterval(60s)`：HTTP/2 主动探活，半死连接 60s 内被发现（比静默超时早 60s），HTTP/1.1 无副作用。两者合计把"断连感知"追平 Reasonix。

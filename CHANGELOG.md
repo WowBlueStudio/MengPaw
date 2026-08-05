@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.31.0 (2026-08-05) — 工作区文档编辑/重置 + md 预览 md-reader 化 (WebView+CSS) + 框架提示词加固
+
+### 新增
+- **工作区文档「重置」按钮** (5874b5d): 8 份预置文档 (agents/heartbeat/modes/profile/soul/trigger/trumanshow/memory.md) 可重置为 APK 内置模板版 — `AgentDocs.resetDoc` 模板原子覆盖 (缺失回退 zh), 含路径穿越防护; 名单外文档保持可删除
+- **Notes 笔记目录树** (5874b5d): `{agent}/Notes/` 记忆之外的笔记区 (如其他 Agent 知识信息), 设置页 memory 节点下方固定显示, `AgentDocs.bootstrap` 预建
+- **工作区 md「编辑」按钮** (d282988): 所有 md 文档行可经系统选择器用其他软件打开 — FileProvider content URI + ACTION_VIEW (text/markdown, 回退 text/plain, 无可用应用 Toast 提示)
+- **浏览器 content:// md 打开** (d282988): intent-filter 补 content scheme (FileProvider/SAF 选择), `checkMdFile` 双通道 — 与编辑按钮闭环: 选择器选中浏览器即渲染
+- **md 预览 WebView 化** (5e1409f): 预览界面 UI/动画/CSS 完全复刻开源项目 md-reader — 双主题 CSS 变量 (系统深浅色跟随) + 代码块 12px 圆角/lang 标签/复制按钮 (hover 淡入, .copied 1s) + 引用彩色圆角块 (info/tip/success/warning/danger) + 表格 max-content 横滚 + 图片点击放大模态 (backdrop blur) + highlight.js v11 语法高亮 (core+19 语言裁剪版)
+- **预览页致谢底栏** (52f3ab7): md-reader / @md-reader/theme / highlight.js / Atom One 语法主题开源版权标注
+- **框架提示词加固** (5987591): 「结果纪律」规则 (Observation 必为命令输出, 禁止幻觉编造) + 错误码细分 (PARAM_FORMAT_ERROR/DOWNLOAD_FAILED/NETWORK_OFFLINE) + JSON 参数门卫 (4 执行器共享 ToolCall.paramFormatError) + Observation 注入 errorCode + plugins.json 清理 (tavily 条目移除)
+
+### 修复
+- **MarkdownText 代码块溢出** (5e1409f): 根因 — 100KB 预截断不感知 fence, 切点落在围栏内时闭合丢失, 后续整段被解析成巨型代码块 ("内容掉出代码块")。改完整解析 + 块边界预算截断, 每个块完整渲染, 截断时追加提示块 — 聊天气泡/设置页共享组件同时受益
+
+### 发行
+- Shell APK v0.31.0 (versionCode 31000) — 全量发布双远端 + GitHub Release
+- Browser APK v0.7.1 (versionCode 10, 独立版本节奏) — WebView 预览 + content:// md + 致谢底栏
+
 ## v0.30.0 (2026-08-05) — 固定前缀抽离 + 文件拆分收尾 + Reasonix 性能对照落地 + 网络状况门卫
 
 ### 架构完善
