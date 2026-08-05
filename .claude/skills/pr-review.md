@@ -5,7 +5,7 @@ description: 评审 GitHub Pull Request — 拉取 PR → 机器门禁（编译+
 
 # MengPaw PR 评审流程
 
-> 方法论来源：`docs/code-review-9-dimensions.md`（两轮全量审查沉淀）。评审结论 = 机器门禁 + 九维审查 + 分级输出，**最终合并不由 Claude 决定，由用户拍板**。
+> 方法论来源：v0.17.1 两轮全量审查沉淀（九维审查；原 `docs/code-review-9-dimensions.md` 已归档删除，git 历史可溯）。评审结论 = 机器门禁 + 九维审查 + 分级输出，**最终合并不由 Claude 决定，由用户拍板**。
 
 ## 0. 前置
 

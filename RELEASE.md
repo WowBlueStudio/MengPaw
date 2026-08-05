@@ -67,7 +67,14 @@ versionName = "X.Y.Z"
 
 ## 4. 构建 APK
 
+> v0.30.0 起：只构建本轮有变更的 APK（浏览器无改动则不重发）。两个都有变更才全量构建：
+
 ```bash
+# 仅 shell 有变更
+./gradlew :mengpaw-shell:assembleRelease
+# 仅 browser 有变更
+./gradlew :mengpaw-browser:assembleRelease
+# 两者都有变更
 ./gradlew :mengpaw-shell:assembleRelease :mengpaw-browser:assembleRelease
 ```
 

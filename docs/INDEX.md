@@ -8,21 +8,19 @@
 
 | 文件 | 大小 | 内容 | 何时读 |
 |------|:----:|------|--------|
-| `code-review-9-dimensions.md` | 12 KB | v0.17.1 九维审查总结：可维护性/可读性/健壮性等 102 项发现与修复 | 做代码审查时参考 |
-| `crash-prevention-guide.md` | 12 KB | 30+ 闪退案例：进程保活/空安全/文件 IO/生命周期/Compose 陷阱 | 遇到闪退或做稳定性修复时 |
-| `lessons.md` | 22 KB | v0.16.0~v0.29.2 开发经验（§14.7/14.8 含 Reasonix 对照：共享连接池/工具提前通知/静默判定阈值/网络门卫 SPI） | 做架构决策、写插件、碰编译坑或性能优化时 |
-| `PROTOCOL.md` | 8 KB | 框架通信协议：双轨架构(本机 MCP 9881 / 远程 ACP 9876)、连接器 SPI 开发指南、消息格式、接入清单 | 对接外部框架、写连接器插件时 |
+| `lessons.md` | 24 KB | v0.16.0~v0.29.2 开发经验（§14.7/14.8 含 Reasonix 对照：共享连接池/工具提前通知/静默判定阈值/网络门卫 SPI） | 做架构决策、写插件、碰编译坑或性能优化时 |
+| `crash-prevention-guide.md` | 10 KB | 30+ 闪退案例：进程保活/空安全/文件 IO/生命周期/Compose 陷阱 | 遇到闪退或做稳定性修复时 |
+| `PROTOCOL.md` | 7 KB | 框架通信协议：双轨架构(本机 MCP 9881 / 远程 ACP 9876)、连接器 SPI 开发指南、消息格式、接入清单 | 对接外部框架、写连接器插件时 |
+| `swarm-design.md` | 7 KB | 火种 (Swarm) 模式设计：规划器/Worker/Verifier/合成器、JIT 三闸门、Andon 协议 | 改火种模式或写多 Agent 任务时 |
 
 ## 参考速查（小体积，可常驻）
 
 | 文件 | 大小 | 内容 |
 |------|:----:|------|
-| `compilation-issues.md` | 1 KB | 10 类编译错误速查表 |
-| `audit-methodology.md` | 4 KB | 三层十二问审计方法论 |
 | `pyramid-investigation.md` | 6 KB | 金字塔彻查法：从现象逐层拆链路、证据排除、反模式与实战案例 | 功能"永远修不好"或做链路级排障时 |
-| `streaming-investigation-20260804.md` | 4 KB | 流式传输调查：链路全通、token 突发+节流致无打字机、R8 裁剪 Log.d 之谜、v0.28.4 代码状态 | 重启后继续流式修复、排流式问题时 |
-| `audit-records.md` | 3 KB | 各版本审校记录清单 |
-| `roadmap.md` | 2 KB | 开发路线图 Phase 1-10 |
+| `roadmap.md` | 2 KB | 开发路线图 Phase 1-10（Phase 1-6 完成，7-10 未来规划） |
+
+> 已归档（git 历史可溯）：九维审查总结→`.claude/skills/pr-review.md`；审计方法论→记忆 `bug-audit-methodology`；编译问题速查→`LESSONS.md`；流式调查记录→主文档 §4.1.1 定论；审校记录→`CHANGELOG.md`；make-skill 对比→`CHANGELOG.md` v0.26.2。
 
 ## 根目录文档
 
@@ -30,7 +28,7 @@
 |------|:----:|------|--------|
 | `MengPaw-Development-Guide.md` | 44 KB | 项目单一事实来源：架构总览、模块清单、CLI 参考、安全模型、插件开发（**在仓库根目录**，非 docs/） | 每次开发任务开始前 |
 | `README.md` | 8 KB | 项目介绍、快速开始、架构、核心概念 | 新开发者入门 |
-| `CONTRIBUTING.md` | 3 KB | 环境搭建、代码规范、构建命令 | 准备开发环境或提交 PR 时 |
+| `CONTRIBUTING.md` | 3 KB | 贡献指南：反馈渠道、版权让渡、PR 评审流程 | 准备提交 Issue/PR 时 |
 | `RELEASE.md` | 4 KB | 版本发布流程 | 做 release 时 |
 
 ## 法律文件

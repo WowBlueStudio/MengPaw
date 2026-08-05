@@ -94,7 +94,7 @@ Worker **不建完整 AgentEngine**（主循环 `runReActLoop` 耦合 ~15 个共
 - worker 的 LLM 异常 try/catch 转 `WorkerOutcome(error)`，不炸掉 `awaitAll`
 - `attachRunningJob` + `ensureActive`（Job.isActive）双保险，`stop()` 可达
 
-## 4. 十二问审计结论（docs/audit-methodology.md）
+## 4. 十二问审计结论（方法论见记忆 bug-audit-methodology）
 
 | 缺口 | 判定 | 修复 |
 |---|---|---|
