@@ -30,8 +30,10 @@ fun handleFilePicked(
         )
         dir.mkdirs()
         val mime = context.contentResolver.getType(uri)
-        // 原始文件名（content 无文件名时按 MIME 兜底扩展名）
-        val originalName = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "file"
+        // 原始文件名 — 必须查 DISPLAY_NAME: DocumentsUI 的 content:// URI lastPathSegment
+        // 是文档 ID 编号 (如 msf%3A12345) 不是文件名; 查不到再回退 lastPathSegment (FileProvider 路径)
+        val originalName = queryDisplayName(context, uri)
+            ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "file"
         val ext = when {
             originalName.contains('.') -> originalName.substringAfterLast('.')
             else -> mime?.let { m ->
@@ -76,3 +78,15 @@ fun handleFilePicked(
         onError("⚠️ 文件处理失败")
     }
 }
+
+/** 查 content:// URI 的真实显示文件名 (OpenableColumns.DISPLAY_NAME)。 */
+private fun queryDisplayName(context: Context, uri: Uri): String? = try {
+    context.contentResolver.query(
+        uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (idx >= 0) cursor.getString(idx)?.takeIf { it.isNotBlank() } else null
+        } else null
+    }
+} catch (_: Exception) { null }
