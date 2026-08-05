@@ -227,6 +227,7 @@ class BrowserActivity : ComponentActivity() {
         } catch (_: Exception) { null }
     }
 
+
     /** 处理浏览器 APK 收到的外部 Intent (OPEN_URL 重复打开 / OPEN_MD 提炼回传)。 */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -317,6 +318,29 @@ class BrowserActivity : ComponentActivity() {
             }
         }
     }
+}
+
+/** 拉取站内 .md URL 内容 — top-level 使 BrowserApp (类外) 可访问。
+ *  HttpURLConnection 一次性请求, 500K 截断对齐 readMdUri; 失败返回 null。 */
+private fun fetchUrlTextTop(url: String): String? {
+    return try {
+        val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        try {
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 15_000
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 MengPawBrowser/0.7")
+            conn.instanceFollowRedirects = true
+            if (conn.responseCode !in 200..299) return null
+            val charset = (conn.contentType ?: "")
+                .substringAfter("charset=", "").trim().ifBlank { "UTF-8" }
+            val text = conn.inputStream.bufferedReader(java.nio.charset.Charset.forName(charset))
+                .use { it.readText() }
+            text.take(500_000)
+        } finally {
+            conn.disconnect()
+        }
+    } catch (_: Exception) { null }
 }
 
 // ── Main Browser App ──────────────────────────────────────────────
@@ -651,6 +675,22 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                 )
                 // Pre-render: keep all WebViews alive, visibility-toggle instead of destroy
                 Box(Modifier.weight(1f).pullRefresh(pullState)) {
+                    // 站内 .md URL → 拉取 → 预览 (与 OPEN_MD 通道共用 mdContent/showMdViewer 状态)
+                    val mdFetchScope = rememberCoroutineScope()
+                    val appCtx = LocalContext.current
+                    fun fetchMarkdownUrl(url: String) {
+                        mdFetchScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            val text = runCatching { fetchUrlTextTop(url) }.getOrNull()
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                if (text != null) {
+                                    mdContent = text
+                                    showMdViewer = true
+                                } else {
+                                    Toast.makeText(appCtx, "无法加载 .md 文档", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
                     tabs.forEach { tab ->
                         val isActive = tab.id == activeTabId
                         androidx.compose.runtime.key(tab.id) {
@@ -658,7 +698,12 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                                 factory = { ctx ->
                                     val wv = webViewMap[tab.id]
                                     if (wv != null) wv
-                                    else createWebView(ctx, tab, isWide, adBlockEnabled, autoInjectBridge, updateTab, { imgs -> images = imgs; showImages = true }) { dy -> scrollOffset = (scrollOffset + dy).coerceIn(0, 500) }
+                                    else createWebView(
+                                        ctx, tab, isWide, adBlockEnabled, autoInjectBridge, updateTab,
+                                        { imgs -> images = imgs; showImages = true },
+                                        onScroll = { dy -> scrollOffset = (scrollOffset + dy).coerceIn(0, 500) },
+                                        onMarkdownDetected = { url -> fetchMarkdownUrl(url) }
+                                    )
                                 },
                                 update = { wv -> webViewMap[tab.id] = wv },
                                 modifier = Modifier

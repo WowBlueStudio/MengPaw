@@ -46,13 +46,18 @@ document.head.appendChild(s)})();
 
 // ── WebView Factory ──────────────────────────────────────────────
 
+/** .md URL 判定: 去 query/fragment 后后缀匹配 (导航级 O(len) 检查)。 */
+private fun isMarkdownUrl(url: String): Boolean =
+    url.substringBefore('?').substringBefore('#').endsWith(".md", ignoreCase = true)
+
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 fun createWebView(
     ctx: android.content.Context, tab: TabState, isWide: Boolean, adBlock: Boolean,
     autoInject: Boolean = true,
     updateTab: (Int, (TabState) -> TabState) -> Unit,
     onMediaDetected: (List<DetectedImage>) -> Unit,
-    onScroll: (Int) -> Unit = {}
+    onScroll: (Int) -> Unit = {},
+    onMarkdownDetected: (String) -> Unit = {}
 ): WebView = WebView(ctx).apply {
     settings.javaScriptEnabled = true
     settings.domStorageEnabled = true
@@ -184,9 +189,22 @@ fun createWebView(
                 android.util.Log.w("BrowserActivity", "Blocked unsafe URL scheme: ${url.take(80)}")
                 return true
             }
+            // In-page .md URL → intercept + render preview (navigation-level O(len) check only;
+            // no MIME probing in shouldInterceptRequest — that would slow every page load)
+            if (isMarkdownUrl(url)) {
+                onMarkdownDetected(url)
+                return true
+            }
             return false
         }
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+            // 兜底: loadUrl() 等编程式导航不走 shouldOverrideUrlLoading — 这里对所有加载检测
+            // (shouldOverrideUrlLoading 拦截时不会触发本回调, 不会重复拉取)
+            if (url != null && isMarkdownUrl(url)) {
+                view?.stopLoading()
+                onMarkdownDetected(url)
+                return
+            }
             url?.let { u -> updateTab(tab.id) { it.copy(url = u, isLoading = true) }; BrowserPluginRegistry.onPageStarted(u) }
         }
         override fun onPageFinished(view: WebView?, url: String?) {
@@ -233,6 +251,12 @@ fun createWebView(
             }
         }
         override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+            // 主帧 .md → 空响应 + 回调预览: 资源请求级检测覆盖全部加载路径
+            // (loadUrl/链接点击/刷新/重定向), 仅主帧一个请求做 O(len) 判断, 子资源零开销
+            if (request?.isForMainFrame == true && request.url != null && isMarkdownUrl(request.url.toString())) {
+                onMarkdownDetected(request.url.toString())
+                return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
+            }
             request?.let { BrowserPluginRegistry.shouldIntercept(it)?.let { return it } }
             if (adBlock && request?.url != null && isAdRequest(request.url.toString())) {
                 return WebResourceResponse("text/plain", "utf-8", null)

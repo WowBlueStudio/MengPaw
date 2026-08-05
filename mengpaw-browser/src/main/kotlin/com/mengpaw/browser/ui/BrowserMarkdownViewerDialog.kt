@@ -58,8 +58,8 @@ fun BrowserMarkdownViewerDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f)
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxSize().padding(5.dp)  // 近全屏: 边缘间隙 5dp
         ) {
             Column(Modifier.fillMaxSize()) {
                 Row(
