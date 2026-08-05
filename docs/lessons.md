@@ -1,6 +1,6 @@
 # MengPaw 开发经验教训
 
-> v0.16.0 ~ v0.29.2 开发经验。含性能优化、模式重构、命令检索、插件生态、发布审计、多Agent协作、编译坑、会话稳定性、UI、传输层与网络门卫（§14.7/14.8）共 33 条。
+> v0.16.0 ~ v0.29.2 主题经验（§1-14，33 条）+ v0.2.2~v0.23.0 历史教训浓缩库（§15，原根 LESSONS.md 118 条去重提炼为要点）。
 
 ---
 
@@ -341,4 +341,108 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **权限现实**：蜂窝 dBm 需 READ_PHONE_STATE（危险权限 + 运行时弹窗），拒绝；用免权限代理（onAvailable/onLost + VALIDATED + linkDownstreamBandwidthKbps）——对"避免注定失败的重试"目的足够。升级路径：WifiManager RSSI（ACCESS_WIFI_STATE 普通权限）。
 - **坑**：kernel 零 Android 依赖是硬约束——信号源必须走 SPI 注入（先例 KernelLog.logger）；provider 构造点有 7 处（AppRoot×2 / AgentSessionFactory×3 / DreamWorker×1），漏一处就静默退回无门卫路径。
 
-*最后更新: 2026-08-05 · 提炼自 v0.29.2 Reasonix 对照落地 + 高铁追问*
+
+---
+
+## 15. 历史教训浓缩库（v0.2.2 ~ v0.23.0，原根 LESSONS.md 去重提炼）
+
+> 原根目录 `LESSONS.md`（1088 行编号教训）2026-08-05 删除，118 条去重（含 3 对重复条目）并按主题浓缩为要点。
+> 已被 §1-14、记忆（bug-audit-methodology / no-broken-code-push / release-checklist / no-release-without-ask）、RELEASE.md 覆盖的条目不再重复。
+
+### 15.1 发布与流程
+
+- 编译通过才 push；发布前模拟器验证；hotfix 必须迭代版本号（v0.3.x 连续 4 版发布后崩溃教训）
+- release 前 grep 确认改动真正打包（v0.19.5 空壳 release 教训：声称移除实际没删）
+- tag ≠ release：`gh release create` 显式创建发布页；发布必带 APK（v0.2.2 漏传 APK 用户无下载链接）
+- `gh release --notes` 含特殊字符用 `--notes-file`（backtick 被 shell 当命令替换执行）
+- versionCode 用数学分解（`Y*1000+Z`），字符串截取跨位必错（0.10.0→"0100"=100 < 0.9.1=910 降级拒绝）
+- 对外分发 APK 必须 release key 签名（debug 签名全网通用，被 Play Protect 拦截）
+- 结构性修改用 Edit 工具逐段，不用 sed 行号（行号漂移连锁破坏，文件损坏需 git checkout）
+
+### 15.2 Kotlin / 编译
+
+- 第三方库 get/set 类型不一致 → Kotlin 只合成只读属性赋值报 val 错：javap 看真实签名 + Java 方法调用绕过（jsch 教训）
+- typealias 函数类型用 lambda 字面量不构造调用；需要 return 的函数一律块体（表达式体禁 return）
+- `when(subject)` 分支是"值与 subject 比较"语义——要写条件就放弃 subject 形式
+- 语句式 try-catch 每分支显式 return；catch 要用的变量声明在 try 前
+- 跨模块共享 data class 放 core；新模块必须加 ProGuard keep；companion object 同文件只能一个；sealed class 子类字段名统一
+- 引入 Java 库先写 5 行测试确认 Kotlin 映射（commonmark 用 getFirstChild/getNext 非 Iterable）
+- 编译时已知的类绝不用 `Class.forName`——直接 new（R8 混淆后类名变化，10 插件只装成 2-3 个）
+- 库模块 R8 比应用模块更危险；release APK 正常 8-13MB，过小（2MB）说明类被过度删除
+- kernel 层统一 kotlinx.serialization，shell 层才可用 org.json；新依赖能用 Regex 替代就不引入
+
+### 15.3 Compose / UI
+
+- LazyColumn 是嵌套滚动毒药：AnimatedVisibility/另一 ScrollState/item 内一律用 Column；一个方向只允许一个 scroll，排查崩溃逆序逐层去 scroll
+- `weight` 依赖固定父宽，horizontalScroll 内权重列宽为零 → `widthIn(min)`；Row 列对齐用 `width()` 精确宽（widthIn(min) 不保证）
+- DropdownMenu 是独立 Popup 窗口，与 TextField 同现抢焦点弹输入法——用内联 Surface
+- remember/LaunchedEffect/DisposableEffect 必须在顶层组合，不能在 if/when 分支内
+- IconButton 键盘焦点泄漏（Enter 触发新建会话）——输入区附近按钮用 pointerInput
+- 超过 30 个 item 静态列表用 LazyColumn + stable key（Column"少才安全"）；手写 Markdown 解析器是坑，用 commonmark
+- 手势方向是设计问题：右滑开左、左滑开右（手指来向），先原型再定
+- Compose scope 扩展（weight/align）不要显式 import（scope receiver 自带）；输入框清空后必须 requestFocus()
+- 闭包改 Compose 状态先快照再操作（ModalBottomSheet 重写教训）；数据源赋值顺序=UI 渲染顺序（StateFlow 赋值前依赖数据就绪）
+- 后台任务不能用共享引擎（DREAM 经 run() 致 UI 锁定）——独立实例或直接 LLM 调用
+- ViewModel 的 launch 默认 Main——文件 IO 必须 `withContext(Dispatchers.IO)`
+
+### 15.4 Android 平台
+
+- `startForeground()` 失败必须 stopSelf()——否则 5 秒后系统杀进程；`startForegroundService()` 从广播调用 Android 13+ 可能抛异常，所有调用点 try/catch
+- 每个 foregroundServiceType 配对应 `FOREGROUND_SERVICE_<TYPE>` 权限（Android 14+，OEM 延迟检查）
+- `registerReceiver()` 必须带 RECEIVER_EXPORTED/NOT_EXPORTED 标志（API 34+）
+- 国产 ROM 前台服务通知至少 IMPORTANCE_DEFAULT（LOW=没通知，进程被 LMK 优先回收）
+- FileProvider 三步缺一不可：file_paths.xml + Manifest `<provider>` + getUriForFile（多次踩坑）
+- `content://` URI 不能直接给 Agent——拷贝到工作区传绝对路径，50MB 检查在路径插入前
+- API 33+ 方法（NsdServiceInfo.setAttribute）必须 SDK_INT 判断静默回退；通知渠道删除在前台服务运行中被拒绝，先查存在再 try/catch
+- WakeLock 复用已有实例不新建；无线调试端口每次重开会变——连接信息记 memory 文件 + mDNS 发现
+
+### 15.5 数据 / 持久化
+
+- 任何覆盖写都原子写（tmp→rename）；Windows renameTo 不覆盖，必须显式 delete 目标（writeAtomic 漏删，§11.5）
+- 加载失败显式 delete 损坏文件，不依赖下次写入覆盖（否则崩溃循环）
+- 多租户存储先持久化 agentName 字段——JSONL 重读后要能回答过滤条件
+- 涉及持久化的 ID 必须在数据产生前分配（会话 ID 孤儿教训）；跨重启 ID 必须持久化（current_session.json 存 sessionId）
+- 空会话/空产物要有清理路径（messageCount ≤ 0 自动清理）；视图持久化兼容旧版本（load 时过滤无效枚举值）
+
+### 15.6 架构 / 设计
+
+- UI=纯展示+事件分派、运行时=所有副作用（AgentRuntime，主文档 §2.1）；Agent 唯一启动时机=用户第一条消息（主文档 §10）
+- 提示词模板独立于源码放 assets；模板→只读→工作区三层路径模型；提示词是目录 Skills 是正文
+- 假开关比没有开关更危险——安全功能必须真正接入执行链（integrityCheckEnabled 从未被读）
+- 写完接口→找实现→确认实例化→确认调用链四步（IntegrityGuard 从未被 new，路径保护是空操作）
+- 系统提示词是 Agent"功能说明书"：任何架构变更/文件重构必须同步更新；每次改模板查硬编码提示词是否矛盾（两套真理）
+- LLM 预训练知识会覆盖系统提示词——功能名称用训练数据没有的术语（斜杠命令 vs Normal/Deep/Dream）+ 否定语句；section 占比超 30% 警惕；过时 Few-shot 比没有更危险
+- 插件命令键不带命名空间前缀——PluginManager 会再加一次（twin.start 双写 Bug）；同名命令归属由构建决定不靠注册时序（§8.6）
+- 同步函数不返回虚假值——区分"已提交"和"已完成"（CompletableDeferred 桥接异步回调）
+- 硬编码延迟是对不确定性的投降——轮询/回调检测就绪；mDNS 不可靠：手动 fallback + 持续刷新扫描
+- 配置命令必须落到引擎 if/else 分支——返回文本不是实现（QoS 声明≠执行）；对等网络必须心跳（90s 无响应离线）
+- 配对是安全关键操作——UI 明确告知操作对象（确认弹窗显示设备名）；危险能力插件隔离（Root），plugin.disable 即紧急关停
+- 重命名枚举必须 grep 字符串形式（配置/JSON/文件名，PanelOrderStore "dream"→"silent" 丢项教训）
+- 卸载/移除模块三步：settings.gradle 移除 + grep 引用清零 + 物理删除目录（不留僵尸）
+- 模型列表 API 实时拉取 > 预置列表；换主题色=色板定义 + grep 全局替换 + 算法生成梯度 + 验证深色模式
+- 重试策略三要素：次数上限 + 错误分类（400/401/403 立即失败）+ 退避上限（maxRetries=19 等 27 分钟教训）
+
+### 15.7 记忆与 Agent 认知（架构部分已入主文档 §4.8）
+
+- 记忆必须有完整 CRUD + 底层安全守卫（entryId 唯一才执行）——删除能力不能靠 prompt
+- 新功能上线前做 Agent 认知层审计——Agent 不知道 = 功能白做（方法论已入记忆 bug-audit-methodology）
+- Skill 纯文件驱动零 Kotlin 改动扩展知识（改文件即生效不重新编译）；生成器产出的模板必须通过自己的校验器
+- 审计类命令语义是"输出报告"而非执行结果——先读实现再写断言（DevPlugin.audit 恒 success 教训）
+
+### 15.8 版本规则（用户定案）
+
+- X (0.X.0) 发布正式版递增；Y (0.0.Y) 变更底层逻辑递增；Z (0.0.Z) 修复漏洞/UI 递增
+- 提交指令自动化（版本号→CHANGELOG→Tag→Push→APK 上传）已由 .claude/skills/release.md 接管
+
+### 15.9 OEM 速查（国产 ROM 保活）
+
+| 厂商 | 适配要点 |
+|------|---------|
+| 小米 MIUI/HyperOS | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`；自启动须用户手动开启 |
+| 华为 HarmonyOS | `SCHEDULE_EXACT_ALARM` 声明；手机管家→启动管理→手动管理 |
+| OPPO ColorOS | 应用速冻——前台服务通知必须可见级别 |
+| vivo OriginOS | `WAKE_LOCK` + `FOREGROUND_SERVICE_DATA_SYNC` 双保险 |
+| 荣耀 MagicOS | 华为建议全用 + specialUse 前台服务类型 |
+
+
+*最后更新: 2026-08-05 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

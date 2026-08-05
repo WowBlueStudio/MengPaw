@@ -22,7 +22,7 @@ description: 发布 MengPaw 新版本 — 版本号/CHANGELOG/编译/签名验�
    ### 新增 / ### 修复 / ### 发行
    ```
    发行节固定含：APK 版本号、plugins.json 变更、测试数
-3. `docs/lessons.md` 末尾记录本次踩坑（项目惯例，随发布提交；历史编号教训见根 `LESSONS.md`，v0.23.0 起停更）
+3. `docs/lessons.md` 记录本次踩坑（项目惯例，随发布提交；历史教训浓缩库见 §15）
 
 ## 2. 测试与编译
 

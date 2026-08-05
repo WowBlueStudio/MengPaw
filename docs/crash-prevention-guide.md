@@ -333,7 +333,7 @@ Modifier.padding(start = 56.dp, end = 8.dp).padding(vertical = 4.dp)
 | 0.3.0 | WebView OOM | WebView.destroy() 未调用 | DisposableEffect 清理 |
 | 0.4.0 | ProGuard 缺失 | R8 混淆了反射调用的类 | ProGuard keep 规则 |
 | 0.5.0 | `!!` NPE | 多处 force unwrap | 替换为 `?.let` / `?: return` |
-| 0.6.0 | 编译失败 ×10 | scope 冲突 + import 缺失 + padding 错误 | 逐项修复见 LESSONS.md |
+| 0.6.0 | 编译失败 ×10 | scope 冲突 + import 缺失 + padding 错误 | 逐项修复见 docs/lessons.md §15 |
 | 0.7.0 | 进程被杀 | 无 WakeLock | ShellService 加 PARTIAL_WAKE_LOCK |
 | 0.7.0 | 触发器不触发 | start() 未调用 + onFire null | 接入 MainActivity + AgentViewModel |
 | 0.7.1 | 前台闪退 → 重启瞬间闪退循环 | 非原子 writeText() 崩溃时损坏 JSON 文件 | 原子写入 (tmp+rename) + 损坏文件删除 + 协程 try/catch + 启动时序调整 |

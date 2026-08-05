@@ -8,7 +8,7 @@
 
 | 文件 | 大小 | 内容 | 何时读 |
 |------|:----:|------|--------|
-| `lessons.md` | 24 KB | v0.16.0~v0.29.2 开发经验（§14.7/14.8 含 Reasonix 对照：共享连接池/工具提前通知/静默判定阈值/网络门卫 SPI） | 做架构决策、写插件、碰编译坑或性能优化时 |
+| `lessons.md` | 26 KB | 经验教训库：§1-14 主题经验（v0.16~v0.29.2，含 Reasonix 对照/网络门卫 SPI）+ §15 历史教训浓缩（v0.2.2~v0.23.0 原 118 条要点化） | 做架构决策、写插件、碰编译坑或性能优化时 |
 | `crash-prevention-guide.md` | 10 KB | 30+ 闪退案例：进程保活/空安全/文件 IO/生命周期/Compose 陷阱 | 遇到闪退或做稳定性修复时 |
 | `PROTOCOL.md` | 7 KB | 框架通信协议：双轨架构(本机 MCP 9881 / 远程 ACP 9876)、连接器 SPI 开发指南、消息格式、接入清单 | 对接外部框架、写连接器插件时 |
 | `swarm-design.md` | 7 KB | 火种 (Swarm) 模式设计：规划器/Worker/Verifier/合成器、JIT 三闸门、Andon 协议 | 改火种模式或写多 Agent 任务时 |
@@ -20,7 +20,7 @@
 | `pyramid-investigation.md` | 6 KB | 金字塔彻查法：从现象逐层拆链路、证据排除、反模式与实战案例 | 功能"永远修不好"或做链路级排障时 |
 | `roadmap.md` | 2 KB | 开发路线图 Phase 1-10（Phase 1-6 完成，7-10 未来规划） |
 
-> 已归档（git 历史可溯）：九维审查总结→`.claude/skills/pr-review.md`；审计方法论→记忆 `bug-audit-methodology`；编译问题速查→`LESSONS.md`；流式调查记录→主文档 §4.1.1 定论；审校记录→`CHANGELOG.md`；make-skill 对比→`CHANGELOG.md` v0.26.2。
+> 已归档（git 历史可溯）：九维审查总结→`.claude/skills/pr-review.md`；审计方法论→记忆 `bug-audit-methodology`；编译问题速查→`lessons.md` §15；流式调查记录→主文档 §4.1.1 定论；审校记录→`CHANGELOG.md`；make-skill 对比→`CHANGELOG.md` v0.26.2。
 
 ## 根目录文档
 
