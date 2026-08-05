@@ -550,7 +550,12 @@ class AgentEngine(
             conversationSessionId = session.id
         }
         sessionManager.agentName = agentName
-        val context = ExecutionContext(sessionId = session.id, agentName = agentName)
+        // FIX(自检报告 P0-2): workDir 指向 Agent 工作区而非 BASE — 此前 self.status 显示
+        // /data/user/0/.../files (BASE), 与 agent.read/ls 的工作区基准是两套路径体系。
+        val context = ExecutionContext(
+            sessionId = session.id, agentName = agentName,
+            workDir = "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName"
+        )
 
         // ★ Integrity check after session creation — terminal latch blocks corrupt sessions
         if (!checkIntegrity(session.id)) {

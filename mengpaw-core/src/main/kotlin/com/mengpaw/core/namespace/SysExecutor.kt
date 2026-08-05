@@ -94,6 +94,62 @@ object SysExecutor {
         appContext = context.applicationContext
     }
 
+    /** sys.* 命令中文同义词表 — 补 BM25 搜索索引用 (kernel 静态种子无 sys, 反射 Android API)。
+     *  缺失项回退命令名分词。 */
+    private val SYS_KEYWORDS_ZH = mapOf(
+        "device" to listOf("设备", "型号", "厂商", "系统", "安卓"),
+        "battery" to listOf("电量", "电池", "充电", "温度", "续航"),
+        "power" to listOf("电源", "省电", "功耗", "充电"),
+        "power.save" to listOf("省电", "省电模式", "功耗", "节能"),
+        "network" to listOf("网络", "信号", "数据", "蜂窝"),
+        "wifi" to listOf("WIFI", "无线", "热点"),
+        "wifi.enable" to listOf("开WIFI", "关WIFI", "切换无线"),
+        "bluetooth" to listOf("蓝牙", "配对"),
+        "location" to listOf("定位", "位置", "GPS", "坐标"),
+        "cpu" to listOf("CPU", "处理器", "占用", "性能"),
+        "memory" to listOf("内存", "RAM", "占用"),
+        "storage" to listOf("存储", "空间", "磁盘"),
+        "camera" to listOf("相机", "摄像头", "拍照"),
+        "sensors" to listOf("传感器", "陀螺仪", "加速计"),
+        "display" to listOf("屏幕", "分辨率", "亮度", "显示"),
+        "telephony" to listOf("电话", "运营商", "SIM", "信号"),
+        "screen.on" to listOf("亮屏", "唤醒屏幕", "开屏"),
+        "screen.off" to listOf("熄屏", "关屏", "锁屏"),
+        "screen.brightness" to listOf("亮度", "调亮度", "屏幕亮度"),
+        "volume" to listOf("音量", "声音", "媒体音量"),
+        "volume.set" to listOf("调音量", "设置音量", "静音"),
+        "vibrate" to listOf("震动", "振动", "马达"),
+        "ringtone.play" to listOf("铃声", "播放铃声", "响铃"),
+        "apps" to listOf("应用", "应用列表", "已安装", "APP"),
+        "app.launch" to listOf("打开应用", "启动", "启动应用", "运行"),
+        "app.uninstall" to listOf("卸载应用", "卸载"),
+        "app.info" to listOf("应用详情", "应用信息"),
+        "browser.open" to listOf("打开浏览器", "浏览器", "网页", "唤起"),
+        "clipboard" to listOf("剪贴板", "复制", "粘贴", "内容"),
+        "clipboard.set" to listOf("写剪贴板", "复制内容"),
+        "intent.open" to listOf("打开链接", "intent", "跳转", "协议"),
+        "intent.share" to listOf("分享", "分享文本", "转发"),
+        "intent.view" to listOf("查看", "打开文件"),
+        "notification.id" to listOf("通知ID", "通知标识"),
+        "notification.send" to listOf("发通知", "通知", "推送消息"),
+        "notification.cancel" to listOf("取消通知", "清除通知"),
+        "alarm.set" to listOf("闹钟", "定时提醒", "设置闹钟"),
+        "permission.list" to listOf("权限列表", "权限", "已授权"),
+        "permission.check" to listOf("检查权限", "权限状态"),
+        "permission.request" to listOf("申请权限", "请求权限", "授权"),
+        "overlay.show" to listOf("悬浮窗", "显示悬浮窗", "弹窗"),
+        "overlay.hide" to listOf("隐藏悬浮窗", "关闭悬浮窗"),
+        "overlay.update" to listOf("更新悬浮窗", "刷新悬浮窗"),
+        "calendar.add" to listOf("日历", "添加事件", "日程", "提醒"),
+        "calendar.list" to listOf("日历列表", "日程", "查看事件"),
+        "calendar.delete" to listOf("删除事件", "删除日程"),
+        "calendar.calendars" to listOf("日历账户", "日历列表"),
+        "screenshot" to listOf("截图", "截屏", "屏幕快照"),
+        "screenrecord.start" to listOf("录屏", "屏幕录制", "录视频", "开始录屏"),
+        "screenrecord.stop" to listOf("停止录屏", "结束录屏", "保存视频"),
+        "camera.photo" to listOf("拍照", "拍摄", "照片", "相机拍照")
+    )
+
     /** Set the current Activity reference for runtime permission dialogs. Uses WeakReference to prevent leaks. */
     fun setActivity(activity: Activity?) {
         currentActivity = activity?.let { WeakReference(it) }
@@ -163,6 +219,26 @@ object SysExecutor {
         "screenrecord.stop" to ScreenCaptureExecutor::screenRecordStop,
         "camera.photo" to ScreenCaptureExecutor::cameraPhoto,
     )
+
+    init {
+        // FIX(自检报告 P0-1): sys.* 命令补搜索索引 — kernel 静态种子无 sys (Android 反射实现),
+        // 此前"日历/屏幕/录音"等自然语言搜不到真实存在的命令, Agent 只能盲猜。
+        // 可用性过滤由 self.search 按注册表执行 (过滤层保证停用插件命令不外泄)。
+        try {
+            commands.keys.forEach { name ->
+                com.mengpaw.kernel.cli.CommandSearch.registerOrUpdate(
+                    com.mengpaw.kernel.cli.CommandIndex(
+                        fullName = "sys.$name",
+                        namespace = "sys",
+                        description = "系统命令 (Android 设备能力)",
+                        usage = "sys.$name",
+                        zhKeywords = SYS_KEYWORDS_ZH[name] ?: name.split("."),
+                        enKeywords = name.split(".")
+                    )
+                )
+            }
+        } catch (_: Exception) { /* 索引注册尽力而为 */ }
+    }
 
     /** Permission map for sys commands (used by UI / settings). */
     val PERMISSION_MAP = mapOf(

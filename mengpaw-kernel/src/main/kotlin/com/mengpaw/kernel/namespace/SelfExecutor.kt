@@ -375,7 +375,14 @@ object SelfExecutor {
                 appendLine("完整命令列表: self.tools [ns]")
             }
         )
-        val results = com.mengpaw.kernel.cli.CommandSearch.search(query, topK)
+        // FIX(自检报告 P0-1): 可用性过滤 — 索引含静态种子 (BuiltinCommandIndex) 与
+        // 动态注册条目, 种子条目在插件未安装/停用时命中但执行必败。按真实注册表过滤,
+        // 只返回当前可执行命令; 过滤后不足时从候选中补足 (保证 topK 稳定性)。
+        val registry = commandRegistry
+        val availableSet = registry?.list()?.toSet()
+        val all = com.mengpaw.kernel.cli.CommandSearch.search(query, topK * 3)
+        val results = if (availableSet == null) all.take(topK)
+                      else all.filter { it.fullName in availableSet }.take(topK)
         return ExecutionResult.ok(com.mengpaw.kernel.cli.CommandSearch.formatResults(results, query))
     }
 

@@ -40,6 +40,9 @@ class CommandRegistry {
         return commands[fullName]
     }
 
+    /** 命令是否已注册（搜索索引可用性过滤用 — 静态种子索引命中但执行器不存在的命令不外泄）。 */
+    fun has(fullName: String): Boolean = commands.containsKey(fullName)
+
     /**
      * List all registered commands, optionally filtered by namespace.
      */

@@ -411,11 +411,21 @@ class AgentExecutor(private val docManager: AgentDocManager) {
      * Resolve path with traversal protection (canonical path resolves ../ and symlinks).
      * 相对路径以 Agent 工作区 {AGENTS}/{agent}/ 为基准 — 提示词教的工作区相对语义
      * (agent.read profile.md) 由此成为现实。
+     * 前导 "/" 宽容 (FIX 自检报告 P0-2): Agent 常按 Unix 习惯写 "/Agent文档/MengPaw",
+     * Android 上被 File.isAbsolute 当根目录绝对路径 → 必然不存在。字面解析失败时,
+     * 去掉前导 / 按工作区重试; 真实系统绝对路径 (/data/...) 存在时不受影响。
      */
     private fun resolvePath(raw: String, agent: String): java.io.File? {
-        val file = if (java.io.File(raw).isAbsolute) java.io.File(raw)
-                   else java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$agent/$raw")
-        return try { file.canonicalFile } catch (_: Exception) { null }
+        val trimmed = raw.trim()
+        val file = if (java.io.File(trimmed).isAbsolute) java.io.File(trimmed)
+                   else java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$agent/$trimmed")
+        val canonical = try { file.canonicalFile } catch (_: Exception) { null }
+        if ((canonical == null || !canonical.exists()) && trimmed.startsWith("/") && trimmed.length > 1) {
+            val retry = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$agent/${trimmed.trimStart('/')}")
+            val retryCanonical = try { retry.canonicalFile } catch (_: Exception) { null }
+            if (retryCanonical != null && retryCanonical.exists()) return retryCanonical
+        }
+        return canonical
     }
 
     /** agent.read <path> — read any file (no restrictions beyond filesystem). */
@@ -424,7 +434,11 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         val path = args.joinToString(" ")
         val file = resolvePath(path, agentName(ctx))
             ?: return ExecutionResult.fail("路径无效: $path", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        if (!file.exists()) return ExecutionResult.fail("文件不存在: $path", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        if (!file.exists()) return ExecutionResult.fail(
+            // FIX(自检报告 P0-2): 输出解析后的真实路径 — Agent 盲试时能据此修正基准
+            "文件不存在: $path (解析为 ${file.absolutePath})\n" +
+            "工作区根: ${com.mengpaw.kernel.DataPaths.AGENTS}/${agentName(ctx)} — 相对路径以它为基准",
+            errorCode = ErrorCodes.ERR_NOT_FOUND)
         if (file.isDirectory) {
             val listing = file.listFiles()?.take(50)?.joinToString("\n") { f ->
                 "${if (f.isDirectory) "📁" else "📄"} ${f.name} (${if (f.isFile) "${f.length()}B" else "-"})"
@@ -445,7 +459,9 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         val defaultPath = "${com.mengpaw.kernel.DataPaths.AGENTS}/$agent"
         val path = if (args.isEmpty()) defaultPath else args.joinToString(" ")
         val dir = resolvePath(path, agent) ?: return ExecutionResult.fail("路径无效: $path")
-        if (!dir.exists()) return ExecutionResult.fail("路径不存在: $path")
+        if (!dir.exists()) return ExecutionResult.fail(
+            "路径不存在: $path (解析为 ${dir.absolutePath})\n" +
+            "工作区根: ${com.mengpaw.kernel.DataPaths.AGENTS}/$agent — 相对路径以它为基准")
         if (!dir.isDirectory) {
             // Single file — show its info
             return ExecutionResult.ok("📄 ${dir.name} — ${dir.length()}B — ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(dir.lastModified()))}")
