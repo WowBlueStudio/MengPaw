@@ -39,7 +39,8 @@ fun AgentSettingsContent(
     workspaceItems: List<FrameworkItem> = emptyList(),
     onRefreshWorkspace: (() -> Unit)? = null,
     onDeleteWorkspaceFile: ((String) -> Unit)? = null,     // 按文件名删除工作区文档（如 boost.md）
-    onResetWorkspaceFile: ((String) -> Unit)? = null       // 预置文档重置为 APK 内置版
+    onResetWorkspaceFile: ((String) -> Unit)? = null,      // 预置文档重置为 APK 内置版
+    onEditWorkspaceFile: ((String) -> Unit)? = null        // 用其他软件打开工作区文档
 ) {
     SectionHeader(state.strings.agentProviderModel)
     if (state.savedProviders.isEmpty()) {
@@ -487,6 +488,7 @@ fun AgentSettingsContent(
                     item = item,
                     onDeleteWorkspaceFile = onDeleteWorkspaceFile,
                     onResetWorkspaceFile = onResetWorkspaceFile,
+                    onEditWorkspaceFile = onEditWorkspaceFile,
                     strings = state.strings
                 )
             }
@@ -510,6 +512,7 @@ private fun WorkspaceItemRow(
     item: FrameworkItem,
     onDeleteWorkspaceFile: ((String) -> Unit)?,
     onResetWorkspaceFile: ((String) -> Unit)?,
+    onEditWorkspaceFile: ((String) -> Unit)?,
     strings: AppStrings,
     deletePrefix: String = ""
 ) {
@@ -545,6 +548,12 @@ private fun WorkspaceItemRow(
                     }
                     Spacer(Modifier.width(4.dp))
                 }
+                if (onEditWorkspaceFile != null && !isDirectory) {
+                    // 编辑按钮 — 所有 md 文档: 经系统选择器用其他软件打开 (含 MP 浏览器)
+                    IconButton(onClick = { onEditWorkspaceFile(deletePrefix + item.name) }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Outlined.Edit, strings.editDoc, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
+                    }
+                }
                 if (resettable) {
                     IconButton(onClick = { showResetConfirm = true }, modifier = Modifier.size(28.dp)) {
                         Icon(Icons.Outlined.RestartAlt, strings.resetDoc, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
@@ -567,6 +576,7 @@ private fun WorkspaceItemRow(
                                     item = child,
                                     onDeleteWorkspaceFile = onDeleteWorkspaceFile,
                                     onResetWorkspaceFile = onResetWorkspaceFile,
+                                    onEditWorkspaceFile = onEditWorkspaceFile,
                                     strings = strings,
                                     deletePrefix = "${item.name}/"
                                 )

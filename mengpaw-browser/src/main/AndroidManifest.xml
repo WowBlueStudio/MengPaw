@@ -40,16 +40,18 @@
                 <action android:name="com.mengpaw.action.OPEN_MD" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-            <!-- Open Markdown files -->
+            <!-- Open Markdown files — file:// (文件管理器) 与 content:// (FileProvider/SAF 选择) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="file" android:mimeType="text/markdown" />
+                <data android:scheme="content" android:mimeType="text/markdown" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="file" android:mimeType="text/plain" android:pathPattern=".*\\.md" />
+                <data android:scheme="content" android:mimeType="text/plain" android:pathPattern=".*\\.md" />
             </intent-filter>
         </activity>
     </application>

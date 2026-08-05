@@ -247,14 +247,19 @@ class BrowserActivity : ComponentActivity() {
     private fun checkMdFile(intent: Intent?): String? {
         if (intent?.action != android.content.Intent.ACTION_VIEW) return null
         val uri = intent.data ?: return null
-        // Only handle file:// URIs with .md extension
-        if (uri.scheme != "file") return null
-        val path = uri.path ?: return null
-        if (!path.endsWith(".md", ignoreCase = true) && intent.type != "text/markdown") return null
-        return try {
-            val file = java.io.File(path)
-            if (file.exists() && file.canRead()) file.readText().take(500_000) else null
-        } catch (_: Exception) { null }
+        // file:// — 直接读文件; content:// — 经 ContentResolver (FileProvider 共享 / SAF 选择)
+        return when (uri.scheme) {
+            "file" -> {
+                val path = uri.path ?: return null
+                if (!path.endsWith(".md", ignoreCase = true) && intent.type != "text/markdown") return null
+                try {
+                    val file = java.io.File(path)
+                    if (file.exists() && file.canRead()) file.readText().take(500_000) else null
+                } catch (_: Exception) { null }
+            }
+            "content" -> if (intent.type != "text/plain" || uri.toString().endsWith(".md", ignoreCase = true)) readMdUri(uri.toString()) else null
+            else -> null
+        }
     }
 
     private fun extractUrl(intent: Intent?): String? {

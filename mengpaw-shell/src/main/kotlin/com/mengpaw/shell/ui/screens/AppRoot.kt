@@ -3,6 +3,8 @@
 
 package com.mengpaw.shell.ui.screens
 
+import android.content.Context
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -64,6 +67,30 @@ private fun extractSummary(markdown: String): String {
     return ""
 }
 
+/**
+ * 用系统其他软件打开工作区 md 文档 — FileProvider 共享 + ACTION_VIEW。
+ * 优先 text/markdown MIME; 无处理器时回退 text/plain; 两者皆无 → Toast 提示。
+ * 选择器中出现 MP 浏览器时由浏览器自行渲染 (content:// md 支持见浏览器侧)。
+ */
+private fun openDocExternally(context: Context, file: java.io.File, strings: AppStrings) {
+    fun launch(mime: String): Boolean {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mime)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        if (intent.resolveActivity(context.packageManager) == null) return false
+        context.startActivity(intent)
+        return true
+    }
+    try {
+        if (launch("text/markdown") || launch("text/plain")) return
+        android.widget.Toast.makeText(context, strings.editOpenFailed, android.widget.Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(context, "${strings.editOpenFailed} ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppRoot(settingsViewModel: SettingsViewModel) {
@@ -96,6 +123,8 @@ private fun AppRootContent(
     var showSettings by remember { mutableStateOf(false) }
     var showLicense by remember { mutableStateOf(false) }
     var showAttribution by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
 
     if (showSplash) {
         WowBlueSplash(onFinished = { showSplash = false })
@@ -595,6 +624,11 @@ private fun AppRootContent(
                 val lang = if (settingsState.useChinese) "zh" else "en"
                 com.mengpaw.kernel.agent.AgentDocs.resetDoc(activeAgent, fileName, lang)
                 workspaceVersion++
+            },
+            onEditWorkspaceFile = { fileName ->
+                if (fileName == strings.workspaceMemoryFolder || fileName == strings.workspaceNotesFolder) return@SettingsScreen
+                openDocExternally(context,
+                    java.io.File(java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, activeAgent), fileName), strings)
             }
         )
     }
