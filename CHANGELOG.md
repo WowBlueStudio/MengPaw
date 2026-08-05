@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.29.1 (2026-08-04) — 固定前缀抽离: 斜杠命令 → modes.md + FewShot 移除 (待发版)
+## v0.30.0 (2026-08-05) — 固定前缀抽离 + 文件拆分收尾 + Reasonix 性能对照落地 + 网络状况门卫
 
 ### 架构完善
 - **斜杠命令节抽离**: 8 种执行模式说明从系统提示词移到工作区文档 `modes.md` (模板资产 zh/en, 老工作区 bootstrap v4 自动补种); 前缀留一行指引, 模型回答「有什么模式」用新命令 `agent.modes` 读取
@@ -8,9 +8,30 @@
 - **拼接契约 parity 测试锁定**: 段顺序 (identity→main→docs) + 分隔符测试, 防重构静默改变前缀字节导致缓存失效
 - **删除文件摘除固定字段**: agents.md 无条件注入改条件注入; 修复缓存 gate 误命中缺陷 (docCache.isNotEmpty() 无法感知单文件删除 → mtime 快照比对)
 - **工作区边界段 (zh+en)**: 明确 Agent 私有目录 (Agent文档/inbox/技能剧本/配置等, 用户不可见) vs 用户共享目录 (agent.output, 文件管理器可见)
+- **移除 v2/v3 迁移兼容包袱**: bootstrap 纯新建逻辑 — 无旧用户, 不再保留向后兼容迁移代码 (fb48657)
+- **文档文件名大小写统一**: BOOST.md→boost.md — 引导链路修复 (26badf1)
 
 ### 新增命令
 - `agent.modes` — 查看斜杠命令模式菜单 (modes.md); 已注册 self.search 索引/命令缓存/循环检测安全名单/CLI.md
+
+### 代码质量 (文件拆分收尾)
+- **MainActivity 50KB→11KB**: 初始化/生命周期拆至 AppInitializer, Compose 根拆至 AppRoot (第一轮)
+- **MainScreen 47.6KB→38.3KB + SidebarContent 44.8KB→29.4KB**: 第二轮拆分 — 头栏/侧栏/展开底表 → MainScreenHeader/SidebarContentData/TwinPairingDialogs 等 6 新文件, 全 ≤40KB 线内; 纯移动零行为变更 (9726207)
+- **AgentViewModel 54KB 不拆**: 纯逻辑 ≤60KB 线内, 委托重构高风险零重组收益 (用户拍板)
+
+### 性能优化 (Reasonix 对照落地, 用户文档驱动)
+- **共享 HTTP 客户端 `LlmHttpClient`**: ConnectionPool(8, 5min) + retryOnConnectionFailure + connect 20s/read 120s + pingInterval(60s) — 会话切换不再重建连接池重新握手 (2bdc68f)
+- **工具调用提前通知**: 流式中完整 `Action: <tool>` 行一落地即推送「⚙ 正在执行 X…」— 消除工具轮流式空屏
+- **前缀形状监测 `SystemPromptShape`**: 每轮 wire system prompt SHA-256, 形状变化即告警 — 自动前缀缓存失效可见 (对标 Reasonix cache_shape.go)
+- **死指标清理**: 删 AgentEngine/LlmRequestBuilder 恒 0 的 cacheHitTokens 系悬空链 + timeoutMs/socketTimeoutMs 死配置 (OkHttp 引擎不映射 requestTimeout)
+- **Fallback 缓存统计直通**: RemoteApi 补 lastUsage 解析 + fallback 成功后 usage 透传主 provider
+- **静默判定追平 Reasonix**: readTimeout 180s→120s (对齐 idle watchdog 阈值) + pingInterval(60s) HTTP/2 主动探活 — 半死连接 60s 内发现 (457f565)
+- **网络状况门卫 `NetworkConditionGate`** (用户高铁场景提议): Android 系统网络状态注入内核重试策略 — 断网失败快返 (不烧 6 次退避 + fallback 链), 弱网退避 ×3/×1.5; 免危险权限 (仅 ACCESS_NETWORK_STATE)
+
+### 内核改动
+- `NetworkConditionGate` SPI (kernel 零 Android 依赖, shell 注入 ConnectivityManager 实现) + `NetworkConditionMonitor` (7 处 provider 构造全量接线)
+- `SystemPromptShape` (LlmRequestBuilder) — 前缀形状 SHA-256 监测
+- `AdaptiveConfig`/`RemoteConfig` 删 timeoutMs/socketTimeoutMs; `LlmHttpClient` 共享单例; `close()` 转 no-op
 
 ## v0.29.0 (2026-08-04) — 搜索原生内置 + 插件发布架构迁移 + Gitee 全量镜像
 
