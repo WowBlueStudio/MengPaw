@@ -566,6 +566,17 @@ twin.lost <peer> / twin.recover <peer>
 
 **语音输入**: `VoiceInputButton` 按住录音松手直发 (input_audio 通道), 上滑/左滑取消, <300ms 丢弃, RECORD_AUDIO 运行时权限 (Manifest 已声明)。显隐判定 `VoiceCapability` (shell, 纯 UI 策略): 内置前缀 gpt-5/gpt-4o/qwen3-omni/qwen2.5-omni/qwen-omni/glm-4.5v/glm-5v/doubao-1.5-audio/doubao-audio + 关键词 omni/audio/voice/whisper/speech 兜底, 刻意排除 gemini (代理翻译 input_audio 不可靠会 400), `type=="全模态"` 兜底。不支持语音的模型不显示按钮 — 用户用 Android 输入法自带语音转译, 不做 ASR。
 
+### 4.1.4 工作区文档注入策略（架构定案 2026-08-05）
+
+**两类文件分治** — PromptEngine.buildSystemPrompt 组装顺序: `identity`(身份/模型) → `basePrompt`(核心原则/安全/工具) → `docsBlock`(工作区文档, system 尾部):
+
+| 类别 | 文件 | 方式 | 理由 |
+|------|------|------|------|
+| **常驻约束** | profile.md / agents.md / soul.md / memory/memory.md | **明文全文注入** (compactDoc: ≤12K 字符全量, 超长前 6K + `agent.read` 外链) | 行为约束必须每轮可见 — 提示词权重优先: 明文 = 每轮硬约束, 链接式 = 软约束靠 LLM 自觉读取, 约束性文件 LLM 倾向每轮都读 → 反而比明文更贵 (多完整调用轮次) 且遵循度漂移 |
+| **场景触发** | boost.md / heartbeat.md / trumanshow.md | **链接式** — 仅注入"工作区有该文件, 触发时去读"的引导语, 不注入全文 | 只在触发器到来时需要, 不常驻不占权重; 触发时读一次 (首次引导/CRON/伪人模式) |
+
+**反模式警告**: 不要把常驻文件改链接式以省流量 — system 尺寸的节省换不来权重崩塌 (soul/agents 是行为准则不是知识查询); 链接式文件的读取是 LLM 自由裁量, 无法保证每轮遵循。前缀缓存 (DeepSeek 50×) 对两类都正常命中 — system 稳定即可, 与注入方式无关。附件路径行同理 (user 消息正文, 见 §4.1.3)。
+
 ### 4.2 支持的服务商 (12)
 
 | 服务商 | Endpoint | 默认模型 | 缓存策略 |
