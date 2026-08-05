@@ -249,7 +249,9 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `plugin/` (3 文件) | BuiltinBrowserPlugin, BrowserPlugin, BrowserPluginRegistry |
 | `mcp/McpHttpServer.kt` | MCP HTTP 服务 |
 
-**Markdown 文档打开 (v0.31.0+)**: 浏览器注册 `ACTION_VIEW` intent-filter 双轨——`file://` (文件管理器) 与 `content://` (FileProvider/SAF 选择) × `text/markdown` / `text/plain`+`*.md`。`BrowserActivity.checkMdFile` 冷启动与 `onNewIntent` 双路径取 md 内容 (≤500KB), 弹 `BrowserMarkdownViewerDialog` (commonmark-java 渲染)。与 Shell 编辑按钮闭环: Shell 分享 content URI → 选择器选中 MP 浏览器 → 渲染。Shell 提炼回传走独立私有 action `com.mengpaw.action.OPEN_MD` (extra `md`/`mdUri`, 见 BrowserReturnWatcher)。
+**Markdown 文档打开 (v0.31.0+)**: 浏览器注册 `ACTION_VIEW` intent-filter 双轨——`file://` (文件管理器) 与 `content://` (FileProvider/SAF 选择) × `text/markdown` / `text/plain`+`*.md`。`BrowserActivity.checkMdFile` 冷启动与 `onNewIntent` 双路径取 md 内容 (≤500KB), 弹 `BrowserMarkdownViewerDialog`。Shell 提炼回传走独立私有 action `com.mengpaw.action.OPEN_MD` (extra `md`/`mdUri`, 见 BrowserReturnWatcher)。
+
+**md 预览 WebView 化 (md-reader 观感)**: `BrowserMarkdownViewerDialog` 由 Compose MarkdownText 改为 WebView 渲染, **UI/动画/CSS 完全复刻 md-reader 扩展** (github.com/md-reader/md-reader, MIT)。管线: `web/MdViewerHtml.kt` (commonmark-java 0.24.0 显式依赖 + GFM 扩展, escapeHtml/sanitizeUrls 防注入) → HTML 注入 `assets/markdown_viewer/viewer.html` 模板 (占位 `<!--__MENGPAW_MD_BODY__-->`, 用注释标记避免花括号撞车) → `web/MdViewerWebView.kt` 轻量 WebView (不复用网页浏览工厂; `allowFileAccess=true` 为 API 30+ targetSdk 35 必需)。样式: 双主题 CSS 变量 (`@media (prefers-color-scheme)` 跟随系统; 亮 #607cd2/#2d3d50/AtomOneLight, 暗 #6785e0/#b5b5b8/#1d253d)、代码块 12px 圆角双层背景 + lang 标签 (hover 0.2s 淡出) + 复制按钮 (hover 淡入, .copied 1s 换 ✓, file:// 下 execCommand fallback)、h2 下边框、引用 4px 左边框 + info/tip/success/warning/danger 彩色圆角块、表格 max-content 横滚 + thead 条纹、图片点击放大模态 (backdrop blur 10px + transform 0.3s)、hljs v11 语法高亮 (assets 内嵌裁剪版: core + 19 常用语言, ~210KB)。细节: 对话框用 Dialog+Surface (AlertDialog text 槽无限高测量会压扁 WebView); HTML 后台线程构建; >1.2M 字符走 cacheDir 文件回退 (data: URL 有截断风险)。
 
 
 ### 3.5 插件模块（21 个，plugins/ 目录，按 settings.gradle.kts 为准）
@@ -671,6 +673,8 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 **工作区文档重置 (v0.30.0+)**: 设置页工作区文件树中, 8 份预置文档 (agents.md / heartbeat.md / modes.md / profile.md / soul.md / trigger.md / trumanshow.md / memory/memory.md) 的按钮为「重置」——`AgentDocs.resetDoc` 从 APK 模板 (`{BASE}/agent-templates/{lang}/`, 缺失回退 zh) 原子覆盖写回预置版; 名单外文档 (中期/项目记忆、梦境文档 {date}_dream.md、boost.md 等) 保持可删除。
 
 **工作区文档编辑 (v0.31.0+)**: 所有 md 文档行均有「编辑」按钮——`FileProvider` (file_paths.xml 已映射 `Agent文档/`) 共享 content URI + `ACTION_VIEW` (优先 `text/markdown`, 无处理器回退 `text/plain`; 两者皆无 Toast 提示), 经系统选择器交给其他软件打开 (MP 浏览器也在候选之列, 选中即由浏览器渲染)。目录节点 (memory/Notes) 无按钮。
+
+**MarkdownText 截断语义 (v0.31.0+)**: `parseMarkdown` (design-system) 修复「内容掉出代码块」根因——旧实现 100KB 预截断在任意字符边界硬切, 切点落在 ``` 围栏内时闭合丢失, 后续整段被解析成巨型代码块。现改为**完整解析 + 块边界预算截断**: fence 在解析期必然闭合, 每个渲染的块永远完整; 超过 100K 字符预算 (按块渲染输出量度) 时在块边界停止并追加「…(内容过长，已截断)」提示块; 单块超预算整体跳过; 500 节点上限保留为防御。聊天气泡/设置页共享组件同时受益。
 
 ---
 

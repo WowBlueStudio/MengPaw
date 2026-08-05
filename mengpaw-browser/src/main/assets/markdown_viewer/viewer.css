@@ -1,0 +1,422 @@
+/*
+ * MD Reader 主题移植 (md-reader/md-reader + md-reader/theme, MIT)
+ * UI/动画/CSS 完全复刻: 双主题 CSS 变量 + CSS transition (无 JS 动画库)
+ */
+
+:root {
+  /* ── 亮色主题 (md-reader variable.less .light()) ── */
+  --color-white: #fff;
+  --color-primary: #607cd2;
+  --color-primary--hover: #4c68bb;
+  --color-primary-alpha-10: rgba(96, 124, 210, 0.1);
+  --color-important: #a16cfd;
+  --color-important-alpha-10: rgba(161, 108, 253, 0.1);
+  --color-success: #2fc178;
+  --color-success-alpha-10: rgba(47, 193, 120, 0.1);
+  --color-warning: #f6bb42;
+  --color-warning-alpha-10: rgba(246, 186, 66, 0.1);
+  --color-danger: #ff6767;
+  --color-danger-alpha-10: rgba(255, 103, 103, 0.1);
+  --color-mark: #fff07e;
+  --color-text-primary: #2d3d50;
+  --color-text-secondary: #586069;
+  --color-text-gray: #909090;
+  --color-border: #d0d7de;
+  --color-bg: #fff;
+  --color-thead-bg: #f6f8fa;
+  --color-code-bg: #f3f6ff;
+  --color-modal-bg: rgba(255, 255, 255, 0.6);
+  --opacity-img: 1;
+  color-scheme: light;
+
+  /* ── Atom One Light 代码块底色 ── */
+  --hljs-base: #fafafa;
+
+  /* ── Atom One Light 语法色 (mr-theme highlight/light.less) ── */
+  --hljs-mono-1: #383a42;
+  --hljs-mono-3: #8a9099;
+  --hljs-cyan: #0184bb;
+  --hljs-blue: #4078f2;
+  --hljs-purple: #a626a4;
+  --hljs-green: #50a14f;
+  --hljs-red: #e45649;
+  --hljs-red-2: #c3272c;
+  --hljs-orange: #c18401;
+  --hljs-orange-2: #986801;
+
+  --size-scrollbar: 6.5px;
+  --color-scrollbar-thumb: rgba(0, 0, 0, 0.25);
+  --color-scrollbar-thumb-hover: rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* ── 暗色主题 (md-reader variable.less .dark()) ── */
+    --color-white: #fff;
+    --color-primary: #6785e0;
+    --color-primary--hover: #7191f3;
+    --color-primary-alpha-10: rgba(103, 133, 224, 0.1);
+    --color-important: #9566e7;
+    --color-important-alpha-10: rgba(149, 102, 231, 0.1);
+    --color-success: #269f63;
+    --color-success-alpha-10: rgba(38, 159, 99, 0.1);
+    --color-warning: #e4af45;
+    --color-warning-alpha-10: rgba(228, 175, 69, 0.1);
+    --color-danger: #ee6262;
+    --color-danger-alpha-10: rgba(238, 98, 98, 0.1);
+    --color-mark: #fce79b;
+    --color-text-primary: #b5b5b8;
+    --color-text-secondary: #bbbbbb;
+    --color-text-gray: #909090;
+    --color-border: #30363d;
+    --color-bg: #131415;
+    --color-thead-bg: #222425;
+    --color-code-bg: #1d253d;
+    --color-modal-bg: rgba(0, 0, 0, 0.4);
+    --opacity-img: 0.8;
+    color-scheme: dark;
+
+    /* ── Atom One Dark 代码块底色 ── */
+    --hljs-base: #1d253d;
+
+    /* ── Atom One Dark 语法色 (mr-theme highlight/dark.less) ── */
+    --hljs-mono-1: #abb2bf;
+    --hljs-mono-3: #5c6370;
+    --hljs-cyan: #56b6c2;
+    --hljs-blue: #61afef;
+    --hljs-purple: #c678dd;
+    --hljs-green: #98c379;
+    --hljs-red: #e06c75;
+    --hljs-red-2: #be5046;
+    --hljs-orange: #d19a66;
+    --hljs-orange-2: #e5c07b;
+
+    --color-scrollbar-thumb: rgba(255, 255, 255, 0.25);
+    --color-scrollbar-thumb-hover: rgba(255, 255, 255, 0.35);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body.md-reader {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── 内容主体 (md-reader theme.less .md-reader__markdown-content) ── */
+.md-body {
+  padding: 20px 16px 40px;
+  margin: 0 auto;
+  color: var(--color-text-primary);
+  line-height: 1.7;
+  font-size: 16px;
+  word-break: break-word;
+}
+
+.md-body a {
+  text-decoration: underline;
+  cursor: pointer;
+  color: var(--color-primary);
+}
+.md-body a:hover,
+.md-body a:active { color: var(--color-primary--hover); }
+
+.md-body mark {
+  padding: 0 2px;
+  border-radius: 2px;
+  background-color: var(--color-mark);
+}
+
+.md-body hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 2.7rem 0;
+}
+
+.md-body img:not(.equation),
+.md-body video {
+  max-width: 100% !important;
+  margin: 0;
+}
+.md-body img:not(.equation) {
+  opacity: var(--opacity-img);
+  cursor: zoom-in;
+  border-radius: 6px;
+}
+
+/* ── 表格: max-content 横向滚动 + thead 条纹 (theme.less) ── */
+.md-body table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  overflow-x: auto;
+}
+.md-body thead { background: var(--color-thead-bg); text-align: left; }
+.md-body tr { border-top: 1px solid var(--color-border); }
+.md-body tr:nth-child(2n) { background: var(--color-thead-bg); }
+.md-body th,
+.md-body td {
+  border: 1px solid var(--color-border);
+  padding: 0.6em 1em;
+}
+
+/* ── 列表 ── */
+.md-body ol,
+.md-body ul { padding-left: 28px; }
+.md-body ol li,
+.md-body ul li { margin-bottom: 0.4em; }
+.md-body li.task-list-item { list-style: none; }
+
+.md-body p { margin-top: 16px; margin-bottom: 16px; }
+
+/* ── 引用块: 4px 左边框 + info/tip/success/warning/danger 彩色圆角块 (theme.less) ── */
+.md-body blockquote {
+  padding: 1px 18px;
+  margin: 22px 0;
+  border-left: 4px solid var(--color-border);
+}
+.md-body blockquote > :first-child { margin-top: 0; }
+.md-body blockquote > :last-child { margin-bottom: 0; }
+.md-body blockquote > p { margin: 10px 0; }
+.md-body blockquote.info,
+.md-body blockquote.tip,
+.md-body blockquote.success,
+.md-body blockquote.warning,
+.md-body blockquote.danger {
+  position: relative;
+  padding-left: 42px;
+  border-left: none;
+  border-radius: 12px;
+  background: var(--color-primary-alpha-10);
+}
+.md-body blockquote.tip { background: var(--color-primary-alpha-10); }
+.md-body blockquote.success { background: var(--color-success-alpha-10); }
+.md-body blockquote.warning { background: var(--color-warning-alpha-10); }
+.md-body blockquote.danger { background: var(--color-danger-alpha-10); }
+.md-body blockquote.info::before,
+.md-body blockquote.tip::before,
+.md-body blockquote.success::before,
+.md-body blockquote.warning::before,
+.md-body blockquote.danger::before {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  text-align: center;
+  width: 17px;
+  height: 17px;
+  line-height: 17px;
+  font-size: 13px;
+  border-radius: 50%;
+  color: var(--color-white);
+}
+.md-body blockquote.info::before { content: "i"; background: var(--color-text-gray); }
+.md-body blockquote.tip::before { content: "?"; background: var(--color-primary); }
+.md-body blockquote.success::before { content: "\2713"; font-size: 11px; background: var(--color-success); }
+.md-body blockquote.warning::before { content: "!"; background: var(--color-warning); }
+.md-body blockquote.danger::before { content: "\2715"; font-size: 10px; background: var(--color-danger); }
+
+/* ── 行内代码 / 代码块 (theme.less pre > code 结构) ── */
+.md-body code,
+.md-body pre {
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+.md-body code {
+  overflow-x: auto;
+  font-size: 0.88rem;
+  word-break: break-word;
+  padding: 0.065em 0.4em;
+  border-radius: 6px;
+  background: var(--color-code-bg);
+  color: var(--color-primary);
+}
+.md-body pre {
+  overflow: auto;
+  position: relative;
+  line-height: 1.6;
+  border-radius: 12px;
+  background: var(--hljs-base);
+}
+.md-body pre > code {
+  display: block;
+  overflow-x: auto;
+  font-size: 0.88rem;
+  padding: 0.67rem 1rem;
+  margin: 0;
+  word-break: normal;
+  -webkit-overflow-scrolling: touch;
+  background: var(--hljs-base);
+  color: var(--hljs-mono-1);
+}
+.md-body pre > code.hljs[lang] { min-height: 2.2em; }
+
+/* lang 标签: 右上角, hover 时淡出让位给复制按钮 (transition 0.2s) */
+.md-body pre > code.hljs[lang]::before {
+  content: attr(lang);
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  line-height: 1;
+  color: var(--color-text-gray);
+  opacity: 1;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.md-body pre > code.hljs[lang="bash"]::before { content: ""; }
+.md-body pre:hover > code.hljs[lang]::before { opacity: 0; }
+
+/* ── 复制按钮 (index.less .md-reader__btn--copy): hover 淡入, active scale, copied 换 ✓ ── */
+.md-body pre .copy-btn {
+  opacity: 0;
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  border-radius: 10px;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  z-index: 1;
+  background: none;
+  color: var(--color-text-gray);
+  transition: opacity 0.2s, background 0.1s, color 0.1s;
+}
+.md-body pre:hover .copy-btn { opacity: 1; }
+.md-body pre .copy-btn:hover { background: rgba(127, 127, 127, 0.15); }
+.md-body pre .copy-btn:active svg { transform: scale(0.95); }
+.md-body pre .copy-btn svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  transition: transform 0.1s;
+  transform-origin: center center;
+  pointer-events: none;
+}
+.md-body pre .copy-btn .icon-success { display: none; }
+.md-body pre .copy-btn.copied .icon-copy { display: none; }
+.md-body pre .copy-btn.copied .icon-success {
+  display: block;
+  color: var(--color-success);
+}
+
+/* ── 标题 (theme.less): h1 32 / h2 24 下边框 / h3 20 / h4 16 / h5 14 / h6 13 ── */
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4,
+.md-body h5,
+.md-body h6 {
+  line-height: 1.5;
+  padding-bottom: 5px;
+  margin-top: 35px;
+  margin-bottom: 10px;
+}
+.md-body h1 { font-size: 32px; margin: 1.3rem 0 5px; }
+.md-body h2 { font-size: 24px; padding-bottom: 8px; border-bottom: 1px solid var(--color-border); }
+.md-body h3 { font-size: 20px; padding-bottom: 0; }
+.md-body h4 { font-size: 16px; }
+.md-body h5 { font-size: 14px; }
+.md-body h6 { font-size: 13px; }
+.md-body h1 code,
+.md-body h2 code,
+.md-body h3 code,
+.md-body h4 code,
+.md-body h5 code,
+.md-body h6 code { font-size: inherit; }
+
+/* ── 图片放大模态 (index.less .md-reader__modal): backdrop blur + transform 0.3s ── */
+.md-body .img-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--color-modal-bg);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s, visibility 0.3s;
+  cursor: zoom-out;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.md-body .img-modal.opened { opacity: 1; visibility: visible; }
+.md-body .img-modal img {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: 8px;
+  transform: scale(0.85);
+  transition: transform 0.3s;
+  opacity: 1;
+  cursor: inherit;
+}
+.md-body .img-modal.opened img { transform: scale(1); }
+
+/* ── 细滚动条 (variable.less .scrollbar()) ── */
+.md-body ::-webkit-scrollbar,
+.md-body pre::-webkit-scrollbar {
+  width: var(--size-scrollbar);
+  height: var(--size-scrollbar);
+}
+.md-body ::-webkit-scrollbar-track { background: transparent; }
+.md-body ::-webkit-scrollbar-thumb {
+  border-radius: var(--size-scrollbar);
+  background: var(--color-scrollbar-thumb);
+}
+.md-body ::-webkit-scrollbar-thumb:hover { background: var(--color-scrollbar-thumb-hover); }
+
+/* ── Atom One 语法高亮 (hljs v11 类名) ── */
+.md-body .hljs-comment,
+.md-body .hljs-quote { color: var(--hljs-mono-3); font-style: italic; }
+.md-body .hljs-keyword,
+.md-body .hljs-selector-tag,
+.md-body .hljs-name,
+.md-body .hljs-template-tag { color: var(--hljs-purple); }
+.md-body .hljs-string,
+.md-body .hljs-addition,
+.md-body .hljs-attr,
+.md-body .hljs-regexp,
+.md-body .hljs-link { color: var(--hljs-green); }
+.md-body .hljs-number,
+.md-body .hljs-literal,
+.md-body .hljs-type,
+.md-body .hljs-meta,
+.md-body .hljs-deletion { color: var(--hljs-red); }
+.md-body .hljs-title,
+.md-body .hljs-title.function_,
+.md-body .hljs-section,
+.md-body .hljs-function .hljs-title { color: var(--hljs-blue); }
+.md-body .hljs-title.class_,
+.md-body .hljs-built_in { color: var(--hljs-orange); }
+.md-body .hljs-attribute,
+.md-body .hljs-symbol,
+.md-body .hljs-bullet,
+.md-body .hljs-selector-id,
+.md-body .hljs-selector-class,
+.md-body .hljs-selector-pseudo,
+.md-body .hljs-variable,
+.md-body .hljs-template-variable,
+.md-body .hljs-tag { color: var(--hljs-cyan); }
+.md-body .hljs-emphasis { font-style: italic; }
+.md-body .hljs-strong { font-weight: bold; }
+.md-body .hljs-params,
+.md-body .hljs-operator,
+.md-body .hljs-property { color: var(--hljs-mono-1); }
+
+@media (max-width: 720px) {
+  .md-body h1 { font-size: 24px; }
+  .md-body h2 { font-size: 20px; }
+  .md-body h3 { font-size: 18px; }
+  .md-body pre .copy-btn { display: none; }
+  .md-body pre > code.hljs[lang]::before { top: 5px; }
+}

@@ -87,19 +87,44 @@ private val mdParser: Parser = Parser.builder()
     .extensions(listOf(TablesExtension.create(), StrikethroughExtension.create()))
     .build()
 
+/** 渲染预算: 超过后按块边界截断 (每块完整, 不撕裂代码围栏)。 */
+private const val MAX_RENDER_CHARS = 100_000
+/** 节点数防御上限 (极端大文档兜底)。 */
+private const val MAX_BLOCKS = 500
+
 fun parseMarkdown(raw: String): List<MdBlock> {
     if (raw.isBlank()) return emptyList()
-    val safe = if (raw.length > 100_000) raw.take(100_000) + "\n\n...(truncated)" else raw
-    val document = mdParser.parse(safe)
+    // 完整解析 — 代码围栏在解析期必然闭合。旧实现 100KB 预截断在任意字符边界硬切,
+    // 切点落在 ``` 内时闭合围栏丢失, 后续整段 (含截断标记) 被解析成巨型代码块 —
+    // 「内容掉出代码块」根因。预算截断改为在块边界停, 每个加入的块永远完整。
+    val document = mdParser.parse(raw)
     val blocks = mutableListOf<MdBlock>()
+    var used = 0
     var count = 0
+    var truncated = false
     var child = document.firstChild
-    while (child != null && count++ < 500) {
+    while (child != null && count < MAX_BLOCKS) {
+        count++
         val block = convertNode(child)
-        if (block != null) blocks.add(block)
         child = child.next
+        if (block == null) continue
+        val len = blockLength(block)
+        if (used + len > MAX_RENDER_CHARS) { truncated = true; break }  // 块边界截断, 不撕裂代码块
+        blocks.add(block); used += len
     }
+    if (truncated) blocks.add(MdBlock.Paragraph(listOf(MdSegment("…(内容过长，已截断)"))))
     return blocks
+}
+
+/** 按渲染输出量度预算 (比 source span 更贴近实际开销)。 */
+private fun blockLength(b: MdBlock): Int = when (b) {
+    is MdBlock.CodeBlock -> b.code.length + b.languageHint.length + 32
+    is MdBlock.Table -> b.header.sumOf { it.length + 4 } + b.rows.sumOf { r -> r.sumOf { it.length + 4 } }
+    is MdBlock.BulletList -> b.items.sumOf { it.length + 4 }
+    is MdBlock.BlockQuote -> b.text.length + 8
+    is MdBlock.Heading -> b.text.length + 16
+    is MdBlock.Paragraph -> b.segments.sumOf { it.text.length + 2 }
+    MdBlock.HorizontalRule -> 8
 }
 
 private fun convertNode(node: Node): MdBlock? {

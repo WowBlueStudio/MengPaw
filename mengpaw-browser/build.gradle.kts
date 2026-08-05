@@ -103,6 +103,12 @@ dependencies {
     implementation(project(":mengpaw-core"))
 
     // Kotlin
+    // CommonMark md→HTML 渲染 (与 design-system 同版本; design-system 以 implementation 声明不传递)
+    implementation("org.commonmark:commonmark:0.24.0")
+    implementation("org.commonmark:commonmark-ext-gfm-tables:0.24.0")
+    implementation("org.commonmark:commonmark-ext-gfm-strikethrough:0.24.0")
+
+    // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
 
