@@ -67,6 +67,8 @@ object AgentDocs {
         if (!dir.exists()) dir.mkdirs()
         // Ensure long-term memory directory exists — 幂等，老工作区升级后也补建
         File(dir, "memory").mkdirs()
+        // Ensure Notes directory exists — 记忆之外的笔记 (如其他 Agent 知识信息)
+        File(dir, "Notes").mkdirs()
         // modes.md 补种 — 斜杠命令模式菜单文档 (模板资产)。
         // 无条件幂等: modes.md 缺失时从模板资产原子复制; 已存在文件不覆盖。
         if (!File(dir, "modes.md").exists()) {
@@ -88,6 +90,45 @@ object AgentDocs {
         }
         if (File(dir, "soul.md").exists()) return
         bootstrapper?.invoke(agentName, language)
+    }
+
+    /**
+     * 重置工作区文档为 APK 预置版（模板覆盖写，区别于 bootstrap 的"只补缺失"）。
+     * 模板路径 {BASE}/agent-templates/{language}/{relativePath}，language 模板缺失回退 zh。
+     * @param relativePath 相对工作区根的路径 (如 "agents.md" / "memory/memory.md")
+     * @return true = 已覆盖写回预置版; false = 模板不存在或写入失败 (原文件不被破坏)
+     */
+    fun resetDoc(agentName: String, relativePath: String, language: String = "zh"): Boolean {
+        // 防路径穿越: 仅允许 .md 相对路径
+        if (relativePath.contains("..") || relativePath.startsWith("/") || relativePath.startsWith("\\")) {
+            KernelLog.w("AgentDocs", "resetDoc: unsafe relativePath rejected: $relativePath")
+            return false
+        }
+        val target = File(File(DataPaths.AGENTS, agentName), relativePath)
+        var template = File(DataPaths.AGENT_TEMPLATES, "$language/$relativePath")
+        if (!template.exists()) template = File(DataPaths.AGENT_TEMPLATES, "zh/$relativePath")
+        if (!template.exists()) {
+            KernelLog.w("AgentDocs", "resetDoc: template missing for $relativePath ($agentName)")
+            return false
+        }
+        return try {
+            target.parentFile?.mkdirs()
+            val tmpFile = File(target.parentFile, "${target.name}.tmp")
+            tmpFile.writeText(template.readText())
+            // Windows 上 renameTo 覆盖已存在目标会失败 — 先删目标再原子改名
+            target.delete()
+            if (tmpFile.renameTo(target)) {
+                KernelLog.i("AgentDocs", "reset: $relativePath → built-in ($agentName)")
+                notifyDocChanged(agentName, target.absolutePath)
+                true
+            } else {
+                tmpFile.delete()
+                false
+            }
+        } catch (e: Exception) {
+            KernelLog.w("AgentDocs", "resetDoc $relativePath failed: ${e.message}")
+            false
+        }
     }
 
     // ── Document readers ──────────────────────────────────────────

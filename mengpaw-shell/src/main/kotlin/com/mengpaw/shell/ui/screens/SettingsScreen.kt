@@ -40,7 +40,9 @@ data class FrameworkItem(
     /** 插件英文名 — 显示为「中文名 (English)」; null 时只显示 name。 */
     val enName: String? = null,
     /** 子条目 — 非空时本条目为目录节点(点击展开子列表),空时为文档行(点击展开 docMarkdown)。 */
-    val children: List<FrameworkItem> = emptyList()
+    val children: List<FrameworkItem> = emptyList(),
+    /** 显式目录标记 — children 为空的目录(如空 Notes)也按目录节点渲染。 */
+    val isFolder: Boolean = false
 ) {
     /** UI 显示名 — 插件统一「中文名 (English)」中英对照格式。 */
     val displayName: String get() = enName?.let { "$name ($it)" } ?: name
@@ -78,7 +80,8 @@ fun SettingsScreen(
     agentSkillItems: List<FrameworkItem> = emptyList(),
     workspaceItems: List<FrameworkItem> = emptyList(),
     onRefreshWorkspace: (() -> Unit)? = null,
-    onDeleteWorkspaceFile: ((String) -> Unit)? = null
+    onDeleteWorkspaceFile: ((String) -> Unit)? = null,
+    onResetWorkspaceFile: ((String) -> Unit)? = null
 ) {
     val state by viewModel.state.collectAsState()
     val s = state.strings
@@ -135,7 +138,7 @@ fun SettingsScreen(
             ) {
                 when (selectedSection) {
                     0 -> AgentSettingsContent(state, viewModel, activeAgentEndpoint, activeAgentModel,
-                        onAgentSelectProvider, agentToolItems, agentSkillItems, workspaceItems, onRefreshWorkspace, onDeleteWorkspaceFile)
+                        onAgentSelectProvider, agentToolItems, agentSkillItems, workspaceItems, onRefreshWorkspace, onDeleteWorkspaceFile, onResetWorkspaceFile)
                     1 -> FrameworkSettingsContent(state, viewModel, onNavigateToPluginMarket, pluginItems, toolItems, skillItems)
                     2 -> SystemSettingsContent(onNavigateToLicense, onNavigateToAttribution, state, viewModel, onNavigateToPluginMarket)
                 }

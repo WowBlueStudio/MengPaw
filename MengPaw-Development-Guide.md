@@ -664,6 +664,10 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - 所有写入使用原子操作 (tmp → rename), 防崩溃损坏
 - 梦境模式 (`agent.dream`) 桥接中期→长期: 分析今日中期记忆, 产出结构化洞察——管道 (v0.22.0): 读全部中期分片 → 复制 `memory/backup/` → 提炼 `{agent}/{date}_dream.md` (同日多次追加) → 删除已整理分片 → 30 天前备份自动清理
 
+**Notes 笔记目录 (v0.30.0+)**: `{agent}/Notes/` 存放记忆之外的笔记——如其他 Agent 发来的知识信息。`AgentDocs.bootstrap` 预建目录, 设置页工作区文件树在 memory 节点下方固定显示 Notes 节点 (仅收 .md 子行), Agent 通过工作区文件命令 (`agent.write/read/ls/rm`) 读写, 不注入系统提示词。设计意图: 记忆 (memory/) 是需提炼保真的结构化知识, Notes 是低约束随手笔记区。
+
+**工作区文档重置 (v0.30.0+)**: 设置页工作区文件树中, 8 份预置文档 (agents.md / heartbeat.md / modes.md / profile.md / soul.md / trigger.md / trumanshow.md / memory/memory.md) 的按钮为「重置」——`AgentDocs.resetDoc` 从 APK 模板 (`{BASE}/agent-templates/{lang}/`, 缺失回退 zh) 原子覆盖写回预置版; 名单外文档 (中期/项目记忆、梦境文档 {date}_dream.md、boost.md 等) 保持可删除。
+
 ---
 
 ## 5. CLI 规范

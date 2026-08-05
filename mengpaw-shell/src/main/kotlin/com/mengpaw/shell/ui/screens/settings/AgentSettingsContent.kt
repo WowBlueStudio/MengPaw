@@ -38,7 +38,8 @@ fun AgentSettingsContent(
     agentSkillItems: List<FrameworkItem> = emptyList(),    // Agent 本地 Skills
     workspaceItems: List<FrameworkItem> = emptyList(),
     onRefreshWorkspace: (() -> Unit)? = null,
-    onDeleteWorkspaceFile: ((String) -> Unit)? = null      // 按文件名删除工作区文档（如 boost.md）
+    onDeleteWorkspaceFile: ((String) -> Unit)? = null,     // 按文件名删除工作区文档（如 boost.md）
+    onResetWorkspaceFile: ((String) -> Unit)? = null       // 预置文档重置为 APK 内置版
 ) {
     SectionHeader(state.strings.agentProviderModel)
     if (state.savedProviders.isEmpty()) {
@@ -485,6 +486,7 @@ fun AgentSettingsContent(
                 WorkspaceItemRow(
                     item = item,
                     onDeleteWorkspaceFile = onDeleteWorkspaceFile,
+                    onResetWorkspaceFile = onResetWorkspaceFile,
                     strings = state.strings
                 )
             }
@@ -492,23 +494,33 @@ fun AgentSettingsContent(
     }
 }
 
+/** 可重置为 APK 预置版的文档名单（相对工作区根路径）— 名单外文档保持可删除。 */
+private val RESET_DOCS = setOf(
+    "agents.md", "heartbeat.md", "modes.md", "profile.md",
+    "soul.md", "trigger.md", "trumanshow.md", "memory/memory.md"
+)
+
 /**
  * 工作区文件树单行 — 支持两级: 目录节点(children 非空)点击展开子列表,
  * 文档行(children 空)点击展开 Markdown 正文。
- * @param deletePrefix 相对工作区的路径前缀(子行传 "memory/"),根层为空。
+ * @param deletePrefix 相对工作区的路径前缀(子行传 "memory/" / "Notes/"),根层为空。
  */
 @Composable
 private fun WorkspaceItemRow(
     item: FrameworkItem,
     onDeleteWorkspaceFile: ((String) -> Unit)?,
+    onResetWorkspaceFile: ((String) -> Unit)?,
     strings: AppStrings,
     deletePrefix: String = ""
 ) {
     var expanded by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    val isDirectory = item.children.isNotEmpty()
-    // memory 目录节点只读容器; 文档行(含 memory 子文件)可删除
-    val deletable = onDeleteWorkspaceFile != null && !isDirectory
+    var showResetConfirm by remember { mutableStateOf(false) }
+    val isDirectory = item.isFolder || item.children.isNotEmpty()
+    // 预置文档(agents/heartbeat/modes/profile/soul/trigger/trumanshow/memory.md)可重置为内置版;
+    // 名单外文档(中期/项目记忆、梦境文档等)可删除; 目录节点(memory/Notes)两者皆无
+    val resettable = onResetWorkspaceFile != null && !isDirectory && (deletePrefix + item.name) in RESET_DOCS
+    val deletable = onDeleteWorkspaceFile != null && !isDirectory && !resettable
     Surface(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
             .clickable(enabled = isDirectory || item.docMarkdown.isNotBlank()) { expanded = !expanded },
@@ -533,7 +545,11 @@ private fun WorkspaceItemRow(
                     }
                     Spacer(Modifier.width(4.dp))
                 }
-                if (deletable) {
+                if (resettable) {
+                    IconButton(onClick = { showResetConfirm = true }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Outlined.RestartAlt, strings.resetDoc, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
+                    }
+                } else if (deletable) {
                     IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.size(28.dp)) {
                         Icon(Icons.Outlined.Delete, strings.delete, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
                     }
@@ -550,6 +566,7 @@ private fun WorkspaceItemRow(
                                 WorkspaceItemRow(
                                     item = child,
                                     onDeleteWorkspaceFile = onDeleteWorkspaceFile,
+                                    onResetWorkspaceFile = onResetWorkspaceFile,
                                     strings = strings,
                                     deletePrefix = "${item.name}/"
                                 )
@@ -575,6 +592,20 @@ private fun WorkspaceItemRow(
                 }) { Text(strings.delete, color = ArcoColors.Red6) }
             },
             dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(strings.cancel) } }
+        )
+    }
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text(strings.resetDoc, fontWeight = FontWeight.SemiBold, fontSize = 16.sp) },
+            text = { Text(strings.resetConfirm, fontSize = 13.sp, color = ThemeColors.textSecondary, lineHeight = 20.sp) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onResetWorkspaceFile?.invoke(deletePrefix + item.name)
+                    showResetConfirm = false
+                }) { Text(strings.resetDoc, color = ArcoColors.Blue6) }
+            },
+            dismissButton = { TextButton(onClick = { showResetConfirm = false }) { Text(strings.cancel) } }
         )
     }
 }

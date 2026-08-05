@@ -262,6 +262,8 @@ class AppStrings {
     var noWorkspaceDocs: String = ""
     var deleteDoc: String = ""
     var deleteConfirm: String = ""
+    var resetDoc: String = ""
+    var resetConfirm: String = ""
     var optimizedBadge: String = ""
     var apiReturned: String = ""
     // ── 枚举 label（中文名兜底用 enLabel 字段; 此处为共用 UI 文案）──
@@ -364,6 +366,8 @@ class AppStrings {
     var workspaceMemoryFolder: String = ""
     var workspaceMemoryHeader: String = ""
     var workspaceMemorySummary: String = ""
+    var workspaceNotesFolder: String = ""
+    var workspaceNotesSummary: String = ""
     var workspaceEmptyDoc: String = ""
 
     // ── 顶栏（会话模型标签）──
@@ -620,6 +624,8 @@ val EnglishStrings = AppStrings().apply {
     noWorkspaceDocs = "No workspace documents"
     deleteDoc = "Delete Document"
     deleteConfirm = "Delete this document? This cannot be undone."
+    resetDoc = "Reset Document"
+    resetConfirm = "Reset this document to the built-in version? Current changes will be lost."
     optimizedBadge = "Optimized"
     apiReturned = "From API"
     builtinCategory = "Built-in"
@@ -721,6 +727,8 @@ val EnglishStrings = AppStrings().apply {
     workspaceMemoryFolder = "memory"
     workspaceMemoryHeader = "## memory — Memory folder (triple-track)"
     workspaceMemorySummary = "Long-term %d · Mid-term %d · Project %d · %d docs"
+    workspaceNotesFolder = "Notes"
+    workspaceNotesSummary = "%d note(s)"
     workspaceEmptyDoc = "(empty)"
 
     // Top bar — session model label
@@ -977,6 +985,8 @@ val ChineseStrings = AppStrings().apply {
     noWorkspaceDocs = "工作区暂无文档"
     deleteDoc = "删除文档"
     deleteConfirm = "确定删除此文档？此操作不可恢复。"
+    resetDoc = "重置文档"
+    resetConfirm = "确定将此文档重置为预置版？当前修改将丢失。"
     optimizedBadge = "已优化"
     apiReturned = "API 返回"
     builtinCategory = "内置"
@@ -1078,6 +1088,8 @@ val ChineseStrings = AppStrings().apply {
     workspaceMemoryFolder = "memory"
     workspaceMemoryHeader = "## memory — 记忆目录（三重记忆）"
     workspaceMemorySummary = "长期 %d · 中期 %d · 项目 %d · 共 %d 个文档"
+    workspaceNotesFolder = "Notes"
+    workspaceNotesSummary = "共 %d 个文档"
     workspaceEmptyDoc = "（空文档）"
 
     // 顶栏 — 会话模型标签

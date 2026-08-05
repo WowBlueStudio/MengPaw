@@ -529,6 +529,7 @@ private fun AppRootContent(
                         add(FrameworkItem(
                             name = strings.workspaceMemoryFolder,
                             category = ItemCategory.BUILTIN,
+                            isFolder = true,
                             summary = String.format(strings.workspaceMemorySummary, longTerm, midTerm, project, memoryFiles.size),
                             children = memoryFiles.map { f ->
                                 FrameworkItem(
@@ -538,6 +539,25 @@ private fun AppRootContent(
                             }
                         ))
                     }
+                }
+                // Notes 笔记目录节点 — 记忆之外的笔记 (如其他 Agent 知识信息)。
+                // 目录预建于 AgentDocs.bootstrap; 始终显示 (空目录也显示摘要), 子行仅收 .md。
+                val notesDir = java.io.File(dir, "Notes")
+                if (notesDir.exists()) {
+                    val notesFiles = notesDir.listFiles { f -> f.isFile && f.extension == "md" }
+                        ?.sortedBy { it.name } ?: emptyList()
+                    add(FrameworkItem(
+                        name = strings.workspaceNotesFolder,
+                        category = ItemCategory.BUILTIN,
+                        isFolder = true,
+                        summary = String.format(strings.workspaceNotesSummary, notesFiles.size),
+                        children = notesFiles.map { f ->
+                            FrameworkItem(
+                                name = f.name,
+                                category = ItemCategory.BUILTIN,
+                                docMarkdown = try { f.readText() } catch (_: Exception) { "" })
+                        }
+                    ))
                 }
             }
             withContext(Dispatchers.Main) { workspaceItems = items }
@@ -565,9 +585,15 @@ private fun AppRootContent(
             workspaceItems = workspaceItems,
             onRefreshWorkspace = { workspaceVersion++ },
             onDeleteWorkspaceFile = { fileName ->
-                if (fileName == strings.workspaceMemoryFolder) return@SettingsScreen  // memory 目录节点只读(子文件行单独可删)
+                if (fileName == strings.workspaceMemoryFolder || fileName == strings.workspaceNotesFolder) return@SettingsScreen  // 目录节点只读(子文件行单独可删)
                 if (fileName == "boost.md") com.mengpaw.kernel.agent.AgentDocs.deleteBoost(activeAgent)
                 else java.io.File(java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, activeAgent), fileName).delete()
+                workspaceVersion++
+            },
+            onResetWorkspaceFile = { fileName ->
+                if (fileName == strings.workspaceMemoryFolder || fileName == strings.workspaceNotesFolder) return@SettingsScreen
+                val lang = if (settingsState.useChinese) "zh" else "en"
+                com.mengpaw.kernel.agent.AgentDocs.resetDoc(activeAgent, fileName, lang)
                 workspaceVersion++
             }
         )
