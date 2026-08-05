@@ -310,7 +310,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 |------|---------|------|
 | plugin-browser-push | browser.push | push, push.pending, push.accept, push.reject (4) |
 | plugin-browser-search | search | extract, summary, engines, clean, md, outputs, clear (7) |
-| plugin-browser-mcp | browser.mcp | tools, status, invoke (3) |
+| plugin-browser-mcp | browser | browser.mcp.tools/status/invoke (命令键自带 mcp. 前缀, ns=browser) |
 
 #### 工具链 (3)
 

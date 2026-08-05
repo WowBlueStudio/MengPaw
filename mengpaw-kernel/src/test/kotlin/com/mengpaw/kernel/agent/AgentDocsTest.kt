@@ -78,4 +78,51 @@ class AgentDocsTest {
         assertEquals("原文件不被破坏",
             "# 不可丢失的内容", File(File(DataPaths.AGENTS, "TestAgent"), "soul.md").readText())
     }
+
+    @Test
+    fun `countLongTermEntries excludes legacy template headings`() {
+        // 旧模板形态: 全部 ## 标题为教学章节 → 计数 0
+        writeWorkspace("TestAgent", "memory/memory.md",
+            "## 这个文件是什么\n教学内容\n## 示例\n示例内容")
+        assertEquals("旧模板教学章节不计入", 0, AgentDocs.countLongTermEntries("TestAgent"))
+        // 追加真实记忆 (时间戳标题, 非黑名单) → 计数 1
+        AgentDocs.appendLongTermMemory("TestAgent", "用户偏好: 开发文档特指 Dev Guide")
+        assertEquals("真实记忆计入", 1, AgentDocs.countLongTermEntries("TestAgent"))
+    }
+
+    @Test
+    fun `bootstrap migrates legacy memory template even when soul exists`() {
+        // 老工作区: soul.md 存在 (bootstrap 会早退), memory.md 仍是原样旧模板
+        writeTemplate("memory/memory.md", "zh", "## 新模板版记忆")
+        writeWorkspace("TestAgent", "soul.md", "# 已有灵魂")
+        writeWorkspace("TestAgent", "memory/memory.md",
+            "## 这个文件是什么\n## 这里记什么\n## 示例\n## 怎么写入（用命令，别直接编辑文件）\n## 不记什么")
+        AgentDocs.bootstrap("TestAgent")
+        // 迁移在 soul.md 早退之前执行 → memory.md 被模板池新版覆盖
+        assertEquals("旧模板应被迁移覆盖",
+            "## 新模板版记忆",
+            File(File(DataPaths.AGENTS, "TestAgent"), "memory/memory.md").readText())
+    }
+
+    @Test
+    fun `docManager bindAgent resolves docs under bound directory`() {
+        // FIX(自检报告 P0-2): 原硬编码 agent-001 读错目录, bindAgent 后命中真实工作区
+        writeWorkspace("WorkAgent", "profile.md", "# 工作区档案")
+        val mgr = AgentDocManager()
+        assertEquals("绑定前读默认 agent-001 目录, 应为空", "", mgr.getDoc(AgentDocType.PROFILE))
+        mgr.bindAgent("WorkAgent")
+        assertEquals("绑定后应命中工作区档案", "# 工作区档案", mgr.getDoc(AgentDocType.PROFILE))
+    }
+
+    @Test
+    fun `bootstrap does not migrate memory with real entries`() {
+        writeTemplate("memory/memory.md", "zh", "## 新模板版记忆")
+        writeWorkspace("TestAgent", "soul.md", "# 已有灵魂")
+        // 混合: 一条真实时间戳标题 + 教学章节残留 → 不应迁移
+        writeWorkspace("TestAgent", "memory/memory.md",
+            "## 2026-08-05 14:30\n真实记忆内容\n## 示例\n示例内容")
+        AgentDocs.bootstrap("TestAgent")
+        val after = File(File(DataPaths.AGENTS, "TestAgent"), "memory/memory.md").readText()
+        assertTrue("含真实记忆不迁移, 内容保留", after.contains("真实记忆内容"))
+    }
 }

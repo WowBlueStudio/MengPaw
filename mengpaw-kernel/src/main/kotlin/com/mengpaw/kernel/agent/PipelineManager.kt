@@ -8,6 +8,7 @@ import com.mengpaw.kernel.cli.Pipeline
 import com.mengpaw.kernel.namespace.SelfExecutor
 import com.mengpaw.kernel.plugin.PluginExecutor
 import com.mengpaw.kernel.plugin.PluginManager
+import com.mengpaw.kernel.plugin.pluginNamespaceFor
 import com.mengpaw.kernel.security.IntegrityProvider
 import com.mengpaw.kernel.security.NoOpIntegrityProvider
 
@@ -106,7 +107,7 @@ class PipelineManager(
 
         // Dynamic: register all active plugin commands
         pluginManager.getActivePlugins().forEach { plugin ->
-            val ns = plugin.metadata.id.removeSuffix("-plugin").removeSuffix("-ext")
+            val ns = pluginNamespaceFor(plugin.metadata.id)
             plugin.commands.forEach { (name, handler) ->
                 registry.register("$ns.$name", handler)
             }
@@ -127,8 +128,7 @@ class PipelineManager(
         val namespaces = mutableSetOf("self", "evolution", "agent", "plugin")
         additionalNamespaces.keys.forEach { namespaces.add(it) }
         pluginManager.getActivePlugins().forEach { plugin ->
-            val ns = plugin.metadata.id.removeSuffix("-plugin").removeSuffix("-ext")
-            namespaces.add(ns)
+            namespaces.add(pluginNamespaceFor(plugin.metadata.id))
         }
         return namespaces.sorted()
     }

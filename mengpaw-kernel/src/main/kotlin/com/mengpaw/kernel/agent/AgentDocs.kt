@@ -61,10 +61,26 @@ object AgentDocs {
         }
     }
 
+    /**
+     * 旧模板教学章节黑名单 — 判定"memory.md 仍是原样旧模板"用。
+     * 真实记忆的 `## ` 标题是时间戳 (如 "2026-08-05 14:30"), 天然不在黑名单,
+     * 因此"全部标题命中黑名单" ⇔ 文件从未被写入真实记忆, 永不误判迁移。
+     */
+    val TEMPLATE_HEADING_BLACKLIST = setOf(
+        // zh 旧模板 (v0.30.0 前) 教学章节
+        "这个文件是什么", "这里记什么", "示例", "怎么写入（用命令，别直接编辑文件）", "不记什么",
+        // en 旧模板教学章节
+        "What this file is", "What to record here", "Example",
+        "How to write (use commands, don't edit files directly)", "What NOT to record"
+    )
+
     /** Create default doc files for a new agent. */
     fun bootstrap(agentName: String, language: String = "zh") {
         val dir = File(DataPaths.AGENTS, agentName)
         if (!dir.exists()) dir.mkdirs()
+        // FIX(自检报告 P1-4): 旧工作区迁移 — memory.md 仍是原样旧模板 (全部 ## 标题命中
+        // 教学黑名单) 时, 覆盖为模板池新版 (瘦身模板)。幂等: 迁移后标题不再全黑名单, 自然跳过。
+        migrateLegacyMemoryTemplate(agentName, language)
         // Ensure long-term memory directory exists — 幂等，老工作区升级后也补建
         File(dir, "memory").mkdirs()
         // Ensure Notes directory exists — 记忆之外的笔记 (如其他 Agent 知识信息)
@@ -90,6 +106,28 @@ object AgentDocs {
         }
         if (File(dir, "soul.md").exists()) return
         bootstrapper?.invoke(agentName, language)
+    }
+
+    /**
+     * 旧模板迁移 — memory.md 的所有 `## ` 标题全部命中 [TEMPLATE_HEADING_BLACKLIST]
+     * （即文件仍为原样旧模板形态, 零条真实记忆）→ 用模板池新版覆盖写。
+     * 真实记忆标题 (时间戳) 不在黑名单, 文件一旦写过真实记忆永不触发。
+     */
+    private fun migrateLegacyMemoryTemplate(agentName: String, language: String) {
+        try {
+            val file = File(DataPaths.longTermMemoryFile(agentName))
+            if (!file.exists()) return
+            val headings = file.readText().lines().map { it.trim() }
+                .filter { it.startsWith("## ") }
+                .map { it.removePrefix("## ").trim() }
+            if (headings.isEmpty()) return
+            if (headings.all { it in TEMPLATE_HEADING_BLACKLIST }) {
+                resetDoc(agentName, "memory/memory.md", language)
+                KernelLog.i("AgentDocs", "migrate: legacy memory template → slim template ($agentName)")
+            }
+        } catch (e: Exception) {
+            KernelLog.w("AgentDocs", "migrateLegacyMemoryTemplate failed: ${e.message}")
+        }
     }
 
     /**
@@ -167,6 +205,15 @@ object AgentDocs {
             ErrorCollector.report(e, "AgentDocs.readLongTermMemory"); ""
         } else ""
     }
+
+    /**
+     * 长期记忆条目数 — 排除旧模板教学章节 (FIX(自检报告 P1-4): 此前裸数 ## 行,
+     * 旧模板 5 个教学章节被数成"5 条记忆")。新瘦身模板无 ## 标题, 自然为 0。
+     */
+    fun countLongTermEntries(agentName: String): Int =
+        readLongTermMemory(agentName).lines().count { l ->
+            l.startsWith("## ") && l.removePrefix("## ").trim() !in TEMPLATE_HEADING_BLACKLIST
+        }
 
     /**
      * Append to long-term memory — only for curated content.

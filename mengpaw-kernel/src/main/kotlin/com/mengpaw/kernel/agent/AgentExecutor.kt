@@ -82,8 +82,12 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     }
 
     private suspend fun cli(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        // FIX(自检报告 P0-2): 惰性生成 — CLI.md 缺失或插件活跃数变化时自动重生成,
+        // 插件 install/disable 后下次查询即拿到最新表, 不依赖任何插件变更钩子。
+        val pm = docManager.pluginManager
+        if (pm != null && docManager.cliDocStale(pm)) docManager.regenerateCliDoc(pm)
         val cliDoc = docManager.getDoc(AgentDocType.CLI)
-        return ExecutionResult.ok(cliDoc.ifEmpty { "(CLI.md not yet generated)" })
+        return ExecutionResult.ok(cliDoc.ifEmpty { "(CLI.md 尚未生成 — 插件系统未就绪)" })
     }
 
     private suspend fun profile(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -165,7 +169,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
                 appendLine("  - memory/ ${memFiles.size} 个分片 (${formatSize(memSize)})")
             }
             val ltm = java.io.File(com.mengpaw.kernel.DataPaths.longTermMemoryFile(agent))
-            if (ltm.exists()) appendLine("  - 长期记忆: ${formatSize(ltm.length())} (${AgentDocs.readLongTermMemory(agent).lines().count { it.startsWith("## ") }} 条)")
+            if (ltm.exists()) appendLine("  - 长期记忆: ${formatSize(ltm.length())} (${AgentDocs.countLongTermEntries(agent)} 条)")
             // Plugins
             val plugDir = java.io.File(com.mengpaw.kernel.DataPaths.PLUGIN_CACHE)
             val plugSize = dirSize(plugDir)
@@ -403,10 +407,14 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         // soul.md, profile.md, agents.md are deletable via agent.rm (Agent owns them)
     )
 
-    /** Resolve path with traversal protection (canonical path resolves ../ and symlinks). */
-    private fun resolvePath(raw: String): java.io.File? {
+    /**
+     * Resolve path with traversal protection (canonical path resolves ../ and symlinks).
+     * 相对路径以 Agent 工作区 {AGENTS}/{agent}/ 为基准 — 提示词教的工作区相对语义
+     * (agent.read profile.md) 由此成为现实。
+     */
+    private fun resolvePath(raw: String, agent: String): java.io.File? {
         val file = if (java.io.File(raw).isAbsolute) java.io.File(raw)
-                   else java.io.File(com.mengpaw.kernel.DataPaths.BASE, raw)
+                   else java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$agent/$raw")
         return try { file.canonicalFile } catch (_: Exception) { null }
     }
 
@@ -414,7 +422,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     private suspend fun readFile(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("用法: agent.read <path>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val path = args.joinToString(" ")
-        val file = resolvePath(path)
+        val file = resolvePath(path, agentName(ctx))
             ?: return ExecutionResult.fail("路径无效: $path", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         if (!file.exists()) return ExecutionResult.fail("文件不存在: $path", errorCode = ErrorCodes.ERR_NOT_FOUND)
         if (file.isDirectory) {
@@ -436,7 +444,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         val agent = agentName(ctx)
         val defaultPath = "${com.mengpaw.kernel.DataPaths.AGENTS}/$agent"
         val path = if (args.isEmpty()) defaultPath else args.joinToString(" ")
-        val dir = resolvePath(path) ?: return ExecutionResult.fail("路径无效: $path")
+        val dir = resolvePath(path, agent) ?: return ExecutionResult.fail("路径无效: $path")
         if (!dir.exists()) return ExecutionResult.fail("路径不存在: $path")
         if (!dir.isDirectory) {
             // Single file — show its info
@@ -468,7 +476,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             "先预览: agent.ls <path> 查看要删的文件。"
         )
         val path = pathArgs.joinToString(" ")
-        val file = resolvePath(path) ?: return ExecutionResult.fail("路径无效: $path")
+        val file = resolvePath(path, agentName(ctx)) ?: return ExecutionResult.fail("路径无效: $path")
         val canonical = file.absolutePath
         if (!file.exists()) return ExecutionResult.fail("文件不存在: $path")
         if (file.isDirectory && (file.listFiles()?.isNotEmpty() == true)) {
@@ -504,7 +512,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     private suspend fun makeDir(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("用法: agent.mkdir <path>")
         val path = args.joinToString(" ")
-        val dir = resolvePath(path) ?: return ExecutionResult.fail("路径无效: $path")
+        val dir = resolvePath(path, agentName(ctx)) ?: return ExecutionResult.fail("路径无效: $path")
         if (dir.exists()) return ExecutionResult.fail("已存在: $path")
         return try {
             dir.mkdirs()
@@ -547,7 +555,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         if (args.size < 2) return ExecutionResult.fail("用法: agent.write <path> <content>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val path = args.first()
         val content = args.drop(1).joinToString(" ")
-        val file = resolvePath(path)
+        val file = resolvePath(path, agentName(ctx))
             ?: return ExecutionResult.fail("路径无效: $path", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         // Deny-list check: block writes to system/app partitions
         val canonical = file.path

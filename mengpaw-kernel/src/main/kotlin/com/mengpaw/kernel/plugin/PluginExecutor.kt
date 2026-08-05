@@ -172,7 +172,7 @@ class PluginExecutor(
         // Attempt runtime loading via DexClassLoader
         val loadResult = loadPluginJar(downloaded, entry)
         return if (loadResult != null) {
-            val ns = entry.id.removeSuffix("-plugin").removeSuffix("-ext")
+            val ns = pluginNamespaceFor(entry.id)
             val cmdList = entry.commands.joinToString(", ") { it.removePrefix("$ns.") }
             val sourceNote = if (customIndexUrl != null) "\n来源: $customIndexUrl" else ""
             ExecutionResult.ok(
@@ -251,7 +251,7 @@ class PluginExecutor(
             optimizedDir.mkdirs()
 
             // Try multiple class name patterns: PascalCase by convention, then PluginMain fallback
-            val ns = entry.id.removeSuffix("-plugin").removeSuffix("-ext")
+            val ns = pluginNamespaceFor(entry.id)
             val pascalNs = ns.replaceFirstChar { it.uppercase() }
             val candidateNames = listOf(
                 "com.mengpaw.plugin.$ns.${pascalNs}Plugin",  // e.g. TavilyPlugin

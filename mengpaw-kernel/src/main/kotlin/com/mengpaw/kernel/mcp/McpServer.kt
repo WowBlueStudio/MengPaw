@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.mcp
 
 import com.mengpaw.kernel.plugin.PluginManager
+import com.mengpaw.kernel.plugin.pluginNamespaceFor
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 
@@ -28,7 +29,7 @@ class McpServer(private val pluginManager: PluginManager) {
     fun listTools(): List<McpTool> {
         val tools = mutableListOf<McpTool>()
         pluginManager.getActivePlugins().forEach { plugin ->
-            val ns = plugin.metadata.id.removeSuffix("-plugin").removeSuffix("-ext")
+            val ns = pluginNamespaceFor(plugin.metadata.id)
             plugin.commands.keys.forEach { cmd ->
                 tools.add(McpTool("$ns.$cmd", "${plugin.metadata.name}: $cmd",
                     mapOf("type" to "object", "properties" to emptyMap<String, Any>())))
@@ -96,7 +97,7 @@ class McpServer(private val pluginManager: PluginManager) {
             val ns = name.substring(0, dot)
             val cmd = name.substring(dot + 1)
             val plugin = pluginManager.getActivePlugins().find { p ->
-                p.metadata.id.removeSuffix("-plugin").removeSuffix("-ext") == ns
+                pluginNamespaceFor(p.metadata.id) == ns
             }
             val handler = plugin?.commands?.get(cmd)
             if (handler != null) {

@@ -119,6 +119,9 @@ class AgentSessionFactory(
 
         val engine = AgentEngine(
             llmProvider = provider,
+            // FIX(自检报告 P0-2): 注入全局插件管理器 — 此前用默认空实例,
+            // CLI.md 插件表恒为空, agent.cli 返回无插件参考。
+            pluginManager = com.mengpaw.kernel.plugin.PluginManager.globalInstance,
             middleware = AgentMiddleware.chain(memoryMw, tribeMw, agentToolsMw, conciseMw),
             postCallMiddleware = postMw,
             scrollContext = scroll,
@@ -128,6 +131,8 @@ class AgentSessionFactory(
             it.setAgentIdentity(name, framework, model)
             it.setAgentLanguage(globalAgentLang)
             it.configureCacheStrategy(globalEndpoint)
+            // FIX(自检报告 P0-2): 预热 CLI.md — 幂等 (插件活跃数比对, 配置反复 apply 不重复写盘)
+            it.ensureCliDoc()
             engineRef[0] = it  // postMw 延迟读引擎折叠档位（P2 修复）
         }
 

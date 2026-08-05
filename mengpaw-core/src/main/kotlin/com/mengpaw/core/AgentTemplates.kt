@@ -32,11 +32,28 @@ object AgentTemplates {
     private val SUPPORTED_LANGS = listOf("zh", "en")
     private val extracted = mutableSetOf<String>()
 
+    /** 模板池版本 — 模板内容变更时手动 bump（老设备升级后强制重新提取, 否则跳过已存在文件永不生效）。 */
+    private const val TEMPLATE_VERSION = "2"
+
     /**
      * Extract templates for all supported languages from APK assets.
      * Called once at app startup. Safe to call repeatedly.
      */
     fun init(context: Context) {
+        // FIX(自检报告 P1-4): 版本 marker — 提取逻辑跳过已存在文件, 无版本机制时
+        // 老设备升级后模板池仍是旧版 (bootstrap 复制与 resetDoc 都拿旧模板)。
+        val tplRoot = File(DataPaths.AGENT_TEMPLATES)
+        val marker = File(tplRoot, ".tpl-version")
+        val needsRefresh = !marker.exists() ||
+            try { marker.readText().trim() != TEMPLATE_VERSION } catch (_: Exception) { true }
+        if (needsRefresh) {
+            try {
+                // 模板池只读系统区, 清空重建安全
+                tplRoot.listFiles()?.forEach { if (it.name != ".tpl-version") it.deleteRecursively() }
+            } catch (_: Exception) {}
+            extracted.clear()
+        }
+
         for (lang in SUPPORTED_LANGS) {
             if (lang in extracted) continue
             val targetDir = File(DataPaths.AGENT_TEMPLATES, lang)
@@ -54,6 +71,10 @@ object AgentTemplates {
             } catch (e: Exception) {
                 KernelLog.w("AgentTemplates", "$lang template extraction failed: ${e.message}")
             }
+        }
+
+        if (needsRefresh) {
+            try { marker.parentFile?.mkdirs(); marker.writeText(TEMPLATE_VERSION) } catch (_: Exception) {}
         }
     }
 

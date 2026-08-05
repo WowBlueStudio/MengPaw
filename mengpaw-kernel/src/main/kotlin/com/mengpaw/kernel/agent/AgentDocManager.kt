@@ -5,6 +5,7 @@ package com.mengpaw.kernel.agent
 
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.plugin.PluginManager
+import com.mengpaw.kernel.plugin.pluginNamespaceFor
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -22,12 +23,39 @@ import java.util.Locale
  *   └── CLI.md         # Auto-generated command reference
  */
 class AgentDocManager(
-    private val agentId: String = "agent-001",
+    agentId: String = "agent-001",
     private val baseDir: String = com.mengpaw.kernel.DataPaths.AGENTS,
     /** Plugin manager for CLI doc generation. Can be set after construction. */
     @Volatile var pluginManager: PluginManager? = null
 ) {
+    // FIX(自检报告 P0-2): 原硬编码 "agent-001" — 模板写入 {AGENTS}/{name}/ 而命令层读
+    // {AGENTS}/agent-001/, 引导文件永不可见。生产会话经 AgentEngine.setAgentIdentity → bindAgent 绑定。
+    @Volatile
+    private var agentId: String = agentId
+
     private val agentDir: File get() = File(baseDir, agentId)
+
+    /** 将文档系统绑定到指定 Agent 工作区目录（生产会话在 setAgentIdentity 时调用）。 */
+    fun bindAgent(agentName: String) { agentId = agentName }
+
+    /**
+     * CLI.md 是否缺失/过期 — 读文件头 "活跃插件: N" 与当前激活数比对。
+     * 插件 install/disable 改变 activeCount 后下次查询即自愈, 零写开销。
+     */
+    fun cliDocStale(pluginManager: PluginManager?): Boolean {
+        val f = file(AgentDocType.CLI)
+        if (!f.exists()) return true
+        if (pluginManager == null) return false
+        val header = try { f.readText().take(200) } catch (_: Exception) { return true }
+        val stored = Regex("活跃插件:\\s*(\\d+)").find(header)?.groupValues?.get(1)?.toIntOrNull()
+        return stored == null || stored != pluginManager.activeCount()
+    }
+
+    /** 预热 CLI.md — 幂等 (计数比对, 配置反复 apply 不重复写盘)。 */
+    fun ensureCliDoc() {
+        val pm = pluginManager
+        if (pm != null && cliDocStale(pm)) regenerateCliDoc(pm)
+    }
 
     // ── Initialization ────────────────────────────────────────────────
 
@@ -151,7 +179,7 @@ class AgentDocManager(
             appendLine("## 插件命令 (按需安装)")
             appendLine()
             pluginManager.getActivePlugins().forEach { plugin ->
-                val ns = plugin.metadata.id.removeSuffix("-plugin").removeSuffix("-ext")
+                val ns = pluginNamespaceFor(plugin.metadata.id)
                 val perms = plugin.metadata.permissions.ifEmpty { listOf("无") }
                 appendLine("### $ns — ${plugin.metadata.name}")
                 appendLine("| 命令 | 用法 | 权限 |")

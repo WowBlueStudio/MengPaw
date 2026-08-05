@@ -170,6 +170,9 @@ foreach ($p in $plugins) {
     if ($p.status -in @("embedded", "deprecated")) { continue }
     $base = $p.id -replace '-plugin$', '' -replace '-ext$', ''
     if ($base -like 'memory-*') { $base = $base -replace '^memory-', '' }
+    # 与 PluginManager.pluginNamespaceFor 特例一致 (v0.31): 命令键自带前缀/短名
+    if ($base -eq 'browser-mcp') { $base = 'browser' }
+    if ($base -eq 'browser-search') { $base = 'search' }
     foreach ($cmd in @($p.commands)) {
         $prefix = $cmd -replace '^([^.]+)\..*$', '$1'
         if ($prefix -ne $base) {

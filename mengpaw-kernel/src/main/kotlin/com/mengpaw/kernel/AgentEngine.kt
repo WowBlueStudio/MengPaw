@@ -445,11 +445,23 @@ class AgentEngine(
         compactRatio = PipelineManager.compactRatioFor(model)
         toolResultManager = ToolResultManager(name)
         sessionManager.agentName = name
+        // FIX(自检报告 P0-2): 文档系统绑定到真实 Agent 工作区 — 此前 AgentDocManager
+        // 固定 agent-001, agent.docs/cli/modes 全读错目录。模板写入 {AGENTS}/{name}/,
+        // 此处同步后命令层与模板层目录一致。
+        agentDocManager.bindAgent(name)
         rebuildSystemPrompt()
     }
 
     fun setAgentLanguage(lang: PromptEngine.AgentLanguage) {
         if (lang != agentLanguage) { agentLanguage = lang; rebuildSystemPrompt() }
+    }
+
+    /**
+     * 预热 CLI.md — 幂等 (插件活跃数比对, 配置反复 apply 不重复写盘)。
+     * 会话创建时调用, 使 CLI.md 在会话就绪时已落盘 (agent.cli / agent.read cli.md 即见)。
+     */
+    fun ensureCliDoc() {
+        try { agentDocManager.ensureCliDoc() } catch (_: Exception) {}
     }
 
     private fun rebuildSystemPrompt() {

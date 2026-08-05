@@ -135,6 +135,26 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `parse empty object input maps to empty params`() {
+        // FIX(自检报告 P1-3): 显式 Action Input: {} → emptyMap(), 不再走 raw 兜底被门卫误拦
+        val explicit = engine.parse("""
+            Action: self.status
+            Action Input: {}
+        """.trimIndent())
+        assertEquals(1, explicit.actions.size)
+        assertTrue("显式 {} 应为空参数", explicit.actions.first().parameters.isEmpty())
+        assertNull("显式 {} 不应被门卫误拦", explicit.actions.first().paramFormatError())
+
+        // 省略 Action Input 行 → 同样空参数
+        val omitted = engine.parse("""
+            Action: self.status
+        """.trimIndent())
+        assertEquals(1, omitted.actions.size)
+        assertTrue("省略 Action Input 应为空参数", omitted.actions.first().parameters.isEmpty())
+        assertNull("省略 Action Input 不应被门卫误拦", omitted.actions.first().paramFormatError())
+    }
+
+    @Test
     fun `result discipline rules present in both prompts`() {
         val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
         assertTrue("中文提示词应禁止自编结果", zh.contains("禁止自编结果"))

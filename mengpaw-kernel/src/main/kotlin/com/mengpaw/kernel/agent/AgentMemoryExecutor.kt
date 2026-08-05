@@ -63,7 +63,7 @@ class AgentMemoryExecutor {
             appendLine()
             appendLine("中期记忆: agent.memory.mid — 查看按日期分片的对话记录")
         })
-        val lineCount = ltm.lines().count { it.startsWith("## ") }
+        val lineCount = AgentDocs.countLongTermEntries(agentName(ctx))
         return ExecutionResult.ok(buildString {
             appendLine("## 长期记忆 ($lineCount 条, 已注入系统提示词)")
             appendLine()
@@ -93,7 +93,7 @@ class AgentMemoryExecutor {
             appendLine("已写入长期记忆 ✅")
             appendLine("此内容将在下次对话中出现在系统提示词中")
             appendLine()
-            appendLine("当前长期记忆总数: ${AgentDocs.readLongTermMemory(agentName(ctx)).lines().count { it.startsWith("## ") }} 条")
+            appendLine("当前长期记忆总数: ${AgentDocs.countLongTermEntries(agentName(ctx))} 条")
         })
     }
 
@@ -153,7 +153,7 @@ class AgentMemoryExecutor {
     /** Memory statistics across all three tracks. */
     private suspend fun memoryStats(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val agent = agentName(ctx)
-        val longCount = AgentDocs.readLongTermMemory(agent).lines().count { it.startsWith("## ") }
+        val longCount = AgentDocs.countLongTermEntries(agent)
         val mid = AgentDocs.midTermStats(agent)
         val midCount = mid.values.sum()
         val projects = DataPaths.projectMemoryFiles(agent)
