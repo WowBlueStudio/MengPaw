@@ -4,6 +4,7 @@
 package com.mengpaw.shell.ui.screens
 
 import com.mengpaw.kernel.KernelLog
+import com.mengpaw.kernel.session.AttachmentData
 import com.mengpaw.shell.ui.screens.model.AgentSession
 import com.mengpaw.shell.ui.screens.model.AgentTrace
 import com.mengpaw.shell.ui.screens.model.ChatMessageUi
@@ -36,7 +37,9 @@ data class MessageData(
     val agentRef: String? = null,
     val traces: List<TraceData> = emptyList(),
     /** True for failed "!command" results (type="command"). Default false keeps old files compatible. */
-    val isError: Boolean = false
+    val isError: Boolean = false,
+    /** 结构化附件 (v0.33.0+) — 旧会话 JSON 无此键 → 默认空, 零迁移。 */
+    val attachments: List<AttachmentData> = emptyList()
 )
 
 @Serializable
@@ -365,7 +368,9 @@ class SessionPersistenceService(
     private fun messagesToJson(msgs: List<ChatMessageUi>): List<MessageData> {
         return msgs.mapNotNull { msg ->
             when (msg) {
-                is ChatMessageUi.User -> MessageData(type = "user", text = msg.content)
+                is ChatMessageUi.User -> MessageData(
+                    type = "user", text = msg.content, attachments = msg.attachments
+                )
                 is ChatMessageUi.Agent -> MessageData(
                     type = "agent", text = msg.content,
                     executionMode = msg.executionMode, agentRef = msg.agentRef
@@ -392,7 +397,7 @@ class SessionPersistenceService(
             dataList.mapNotNull { data ->
                 if (data.text.isBlank()) return@mapNotNull null
                 when (data.type) {
-                    "user" -> ChatMessageUi.User(data.text)
+                    "user" -> ChatMessageUi.User(data.text, attachments = data.attachments)
                     "agent" -> ChatMessageUi.Agent(data.text,
                         executionMode = data.executionMode?.ifEmpty { null },
                         agentRef = data.agentRef?.ifEmpty { null })

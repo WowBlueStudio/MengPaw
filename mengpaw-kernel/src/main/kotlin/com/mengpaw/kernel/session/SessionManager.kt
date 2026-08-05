@@ -17,7 +17,9 @@ data class Message(
     val content: String,
     val timestamp: Long = System.currentTimeMillis(),
     val localOnly: Boolean = false,
-    val interruptedTurn: InterruptedTurnRecovery? = null
+    val interruptedTurn: InterruptedTurnRecovery? = null,
+    // 结构化附件 (v0.33.0+): 旧会话 JSON 无此键 → 默认空列表, 零迁移
+    val attachments: List<AttachmentData> = emptyList()
 )
 
 /**

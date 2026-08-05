@@ -183,12 +183,12 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ## 3. 模块详解
 
-### 3.1 mengpaw-kernel（微内核，82 文件）
+### 3.1 mengpaw-kernel（微内核，84 文件）
 
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|
 | `agent/` | 22 | AgentExecutor, AgentEngineTypes, MissionModeExecutor, GoalModeExecutor, PlanModeExecutor, SwarmModeExecutor, DreamEngine, ToolResultManager, AgentProfile, PromptBuilder 等 |
-| `llm/` | 9 | AdaptiveLlmProvider, LlmProvider, LlmRequestBuilder, PromptEngine, RemoteApi, TranslateMiddleware, LlmHttpClient (共享 HTTP 客户端, v0.29.2) |
+| `llm/` | 11 | AdaptiveLlmProvider, LlmProvider, LlmRequestBuilder, PromptEngine, RemoteApi, TranslateMiddleware, LlmHttpClient (共享 HTTP 客户端, v0.29.2), **AttachmentPayload (v0.33.0+ 附件二进制键)** |
 | `cli/` | 9 | CliInterpreter, CommandRegistry, CommandExecutor, Pipeline, CommandSearch (BM25), CliAudit |
 | `acp/` | 8 | AcpProtocol, AcpServer, AcpCrypto, AcpTransport, DelegateHandler, McpOverAcpBridge, ShareMemoryHandler |
 | `session/` | 5 | SessionManager, History, Checkpoint |
@@ -217,7 +217,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)` |
 | `AndroidLogger.kt` | 桥接：`KernelLog.setLogger(AndroidLogger())` |
 
-### 3.3 mengpaw-shell（主应用，65 文件）
+### 3.3 mengpaw-shell（主应用，71 文件）
 
 | 文件 | 职责 |
 |------|------|
@@ -225,12 +225,13 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `AppInitializer.kt` | 关键路径初始化 (崩溃日志/DataPaths/插件管理器/SysExecutor/模板/日志器) |
 | `ui/screens/AppRoot.kt` | Compose 根 — 主题装配 + MainScreen/设置页/插件市场全屏层 |
 | `service/AgentRuntime.kt` | **NEW** UI/运行时分离 — 触发器桥接, 所有 IO 工作在此 |
-| `ui/screens/` (46 文件) | MainScreen (头栏/侧栏/底表拆至 MainScreenHeader·MainScreenSidebars·MainScreenExpandSheet), SidebarContent (数据拆至 SidebarContentData, 孪生对话框拆至 sidebar-dialogs/TwinPairingDialogs), settings/ (5 文件: AgentSettingsContent 等), AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SplashScreen |
+| `ui/screens/` (52 文件) | MainScreen (头栏/侧栏/底表拆至 MainScreenHeader·MainScreenSidebars·MainScreenExpandSheet), SidebarContent (数据拆至 SidebarContentData, 孪生对话框拆至 sidebar-dialogs/TwinPairingDialogs), settings/ (5 文件: AgentSettingsContent 等), AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SplashScreen, **AttachmentBubbles (v0.33.0+ 下行媒体卡片), VoiceRecorder, VoiceInputButton** |
 | `ui/components/` (7 文件) | BigBangPopup, FleetMonitorOverlay, TokenChart, TokenStatsCollector, NotifyBanner 等 |
 | `ui/AdaptiveLayout.kt` | WindowSizeClass 计算 |
 | `ui/localization/Strings.kt` | 中英双语注解 |
 | `service/` (7 文件) | ShellService, DreamWorker, EventReceiver, WakeReceiver 等 |
 
+**多模态附件 + 语音输入 (v0.33.0+)**: 附件数据模型 `kernel/session/AttachmentData` 单点定义 (type: image/audio/video/document/file, path 为 workspace 内绝对路径供 LLM fs 工具读)。上行: 文件选择 → `FilePickerUtils.handleFilePicked` 产出 AttachmentData (不再插 `📎 路径` 文本) → MainScreen `pendingAttachments` chips 预览行 → `submitTask(attachments)` → kernel `Message.attachments` → `History.getStructuredHistory` 经 `llm/AttachmentPayload.attachBinary` 挂 `_image`(data URI ≤8MB)/`_audio_data`+`_audio_format`(≤15MB) 键 (超限静默降级为路径文本)。下行: `AttachmentBubbles.extractMedia` 从 agent 文本提取 `![](path)`/`[name](path)`/`Saved to <path>` 为卡片 (图片 BitmapFactory 采样 ≤2048px 防 OOM + 全屏预览 Dialog; 音频 MediaPlayer 单实例播放器; 视频 MediaMetadataRetriever 封面帧 + VideoView Dialog; 文件 ACTION_VIEW FileProvider; 网络 URL HttpURLConnection 下载 cacheDir/media_cache 缓存)。语音: `VoiceInputButton` 透明底线性话筒 (发送按钮左侧), 按住录音 `VoiceRecorder` (MediaRecorder m4a/AAC, `DataPaths.RECORDINGS`), 松手直发 (input_audio 通道), 上滑/左滑取消, <300ms 丢弃; 按钮显隐由 `model/VoiceCapability.supportsVoice` 判定 (内置前缀清单 gpt-5/gpt-4o/qwen*-omni/glm-*v/doubao-*-audio + 关键词 omni/audio/voice/whisper/speech, 刻意排除 gemini; `ModelInfo.type=="全模态"` 兜底) — 不支持语音的模型不显示按钮, 用户用 Android 输入法自带语音转译。
 
 ### 3.4 mengpaw-browser（独立浏览器，33 文件）
 
@@ -550,6 +551,20 @@ twin.lost <peer> / twin.recover <peer>
 **前缀形状监测** `SystemPromptShape`(LlmRequestBuilder.kt, Reasonix cache_shape.go 对标): 每轮请求 wire 上 system prompt 做 SHA-256, 形状变化即 `W/CacheShape` 告警("cache prefix changed…自动前缀缓存将短暂失效")。调用点: 两个 provider 的 `buildRequestBody`(首条消息 role=system)。与 PromptEngine mtime 指纹缓存互补: 前者保证组装稳定, 后者实测 wire 形状。
 
 **Fallback 缓存统计直通**: RemoteApi 补齐 `lastUsage`(流式内联 usage + 非流式 parseResponse); `callWithRetryAndFallback` 在 fallback 服务成功后把 usage 透传给主 provider — 壳层 `session.provider.lastUsage` 不再恒 null, fallback 调用计入 TokenStatsCollector 缓存命中统计。
+
+### 4.1.3 多模态请求构建（v0.33.0+）
+
+**数据模型**: `kernel/session/AttachmentData` (@Serializable, 全字段默认值) — `Message.attachments` / `ChatMessageUi.User.attachments` / 持久化 `MessageData.attachments` 三处承载, 旧 JSON 无键 → 默认空列表, 零迁移。上行正文合成 `buildTaskContent`: document/file → `📎 path`(LLM fs 工具读, 与历史行为一致); image → `[图片附件] 📎 path`; audio → `[语音消息] 📎 path`。
+
+**上行管线**: FilePickerUtils(附件对象, 保留原名, 50MB 上限) → `submitTask(attachments)` (REACT 主链路; MISSION/GOAL/FLEET/SWARM 执行器签名不含附件不传; 带附件时跳过自动复杂度升级, 防静默丢附件) → AgentEngine.run → Message.attachments → `History.getStructuredHistory` 调 `AttachmentPayload.attachBinary` 追加 `_image`(data URI) / `_audio_data`(base64) / `_audio_format`(m4a/mp3/wav) 键 → 请求层构建 content 数组。
+
+**OpenAI 兼容 content 数组** (两处同构: `LlmRequestBuilder.buildRequest` + `AdaptiveLlmProvider.buildRequestBody`, RemoteApi 不支持降级为路径文本): `_image` 非空或 `_audio_data` 非空 → `content: [{type:"text"}, {type:"image_url", image_url:{url: dataURI}}, {type:"input_audio", input_audio:{data: base64, format}}]`。大小上限 8MB(图)/15MB(音频, OpenAI 历史 input_audio 25MB/请求留余量) — 超限静默跳过二进制仅文本标注。
+
+**已知成本与 P2**: 每轮请求重发全部历史图片/音频 base64 (对齐 ChatGPT 多模态历史行为, 服务端会缩放) — P2 仅最近一条 user 消息挂二进制键; 上行图片不缩图 (kernel 零 Android 依赖无 BitmapFactory, 靠 8MB 上限) — P2 shell 选图时预生成 thumb; 进程被杀恢复会话附件降级路径文本; 旧会话 `📎 path` 文本不迁移为卡片。
+
+**下行媒体**: 气泡层 `AttachmentBubbles.extractMedia` 提取规则 — ① `![alt](path)` 图片 (data:/javascript: 前缀排除) ② `[name](path)` 且扩展名命中 image/audio/video/document ③ `Saved to <path>`/`已保存到 <path>` 插件输出行 (本地路径须 exists)。提取后文本交 MarkdownText, 卡片垂直堆叠 maxWidth 260dp。渲染: 图片 `inJustDecodeBounds` 采样 ≤2048px + 全屏 Dialog; 音频 `AudioPlayerHolder` 单实例 MediaPlayer (同刻只播一条, 静态装饰波形, 进度轮询); 视频 MediaMetadataRetriever 封面帧 + VideoView Dialog; 文件扩展名图标 + MIME 配色, ACTION_VIEW FileProvider (对齐 ClipboardIntentExecutor); http(s) URL HttpURLConnection 下载 cacheDir/media_cache sha1 缓存。
+
+**语音输入**: `VoiceInputButton` 按住录音松手直发 (input_audio 通道), 上滑/左滑取消, <300ms 丢弃, RECORD_AUDIO 运行时权限 (Manifest 已声明)。显隐判定 `VoiceCapability` (shell, 纯 UI 策略): 内置前缀 gpt-5/gpt-4o/qwen3-omni/qwen2.5-omni/qwen-omni/glm-4.5v/glm-5v/doubao-1.5-audio/doubao-audio + 关键词 omni/audio/voice/whisper/speech 兜底, 刻意排除 gemini (代理翻译 input_audio 不可靠会 400), `type=="全模态"` 兜底。不支持语音的模型不显示按钮 — 用户用 Android 输入法自带语音转译, 不做 ASR。
 
 ### 4.2 支持的服务商 (12)
 

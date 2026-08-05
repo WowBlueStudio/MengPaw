@@ -373,10 +373,11 @@ class AdaptiveLlmProvider(
                 messages.forEach { msg ->
                     addJsonObject {
                         put("role", msg["role"] ?: "user")
-                        // Multimodal: if _image is present, build content array
-                        val imageUrl = msg["_image"]
+                        // Multimodal (v0.33.0+): _image → image_url, _audio_data → input_audio
+                        val imageUrl = msg["_image"]?.takeIf { it.isNotBlank() }
+                        val audioData = msg["_audio_data"]?.takeIf { it.isNotBlank() }
                         val textContent = msg["content"] ?: ""
-                        if (imageUrl != null && imageUrl.isNotBlank()) {
+                        if (imageUrl != null || audioData != null) {
                             putJsonArray("content") {
                                 if (textContent.isNotBlank()) {
                                     addJsonObject {
@@ -384,10 +385,21 @@ class AdaptiveLlmProvider(
                                         put("text", textContent)
                                     }
                                 }
-                                addJsonObject {
-                                    put("type", "image_url")
-                                    putJsonObject("image_url") {
-                                        put("url", imageUrl)
+                                imageUrl?.let {
+                                    addJsonObject {
+                                        put("type", "image_url")
+                                        putJsonObject("image_url") {
+                                            put("url", it)
+                                        }
+                                    }
+                                }
+                                audioData?.let {
+                                    addJsonObject {
+                                        put("type", "input_audio")
+                                        putJsonObject("input_audio") {
+                                            put("data", it)
+                                            put("format", msg["_audio_format"]?.takeIf { f -> f.isNotBlank() } ?: "m4a")
+                                        }
                                     }
                                 }
                             }

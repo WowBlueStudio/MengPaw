@@ -5,6 +5,7 @@ package com.mengpaw.kernel.session
 
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.KernelLog
+import com.mengpaw.kernel.llm.AttachmentPayload
 import com.mengpaw.kernel.llm.LlmProvider
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -406,8 +407,12 @@ $conversationText
     fun getStructuredHistory(sessionId: String): List<Map<String, String>> {
         return _sessions.value[sessionId]?.messages
             ?.filter { !it.localOnly }
-            ?.map {
-                mapOf("role" to it.role, "content" to it.content)
+            ?.map { msg ->
+                val base = mapOf("role" to msg.role, "content" to msg.content)
+                // 结构化附件 (v0.33.0+): 图片/音频挂二进制键, 供请求层构建 content 数组
+                if (msg.role == "user" && msg.attachments.isNotEmpty()) {
+                    AttachmentPayload.attachBinary(base, msg.attachments)
+                } else base
             } ?: emptyList()
     }
 

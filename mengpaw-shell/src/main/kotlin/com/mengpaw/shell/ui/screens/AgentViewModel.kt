@@ -13,6 +13,7 @@ import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.llm.LlmProvider
 import com.mengpaw.kernel.llm.PromptEngine
+import com.mengpaw.kernel.session.AttachmentData
 import com.mengpaw.shell.ui.screens.model.AgentSession
 import com.mengpaw.shell.ui.screens.model.AgentTrace
 import com.mengpaw.shell.ui.screens.model.ChatMessageUi
@@ -305,6 +306,9 @@ class AgentViewModel : ViewModel() {
         }
     }
 
+    /** 当前活动 Agent 的模型名 (v0.33.0+: 语音按钮能力判定用)。 */
+    fun activeModelName(): String = activeSession().modelName
+
     /**
      * Submit a task to the currently active agent.
      * Uses the active [inputTagManager.loopMode] to select engine execution strategy.
@@ -314,9 +318,11 @@ class AgentViewModel : ViewModel() {
         pluginViewModel: PluginViewModel? = null,
         maxSteps: Int = 50,
         executionMode: ExecutionMode? = null,
-        agentRef: String? = null
+        agentRef: String? = null,
+        attachments: List<AttachmentData> = emptyList()
     ) {
-        if (task.isBlank()) return
+        // v0.33.0+: 纯附件消息（语音）task 为空但带附件 — 放行
+        if (task.isBlank() && attachments.isEmpty()) return
         KernelLog.d("MengPawLatency", "T0 submitTask ${task.take(30)}")
         // ── Bang 命令: "!cmd" 绕过 Agent 直接执行 — 完整文本(含 ! 前缀)保留在用户消息 ──
         val trimmedTask = task.trimStart()
@@ -334,12 +340,12 @@ class AgentViewModel : ViewModel() {
         val sessionRunning = session.isRunning.value
         val isRunning = _isRunning.value
         if (sessionRunning || isRunning) {
-            _pendingTasks.value = _pendingTasks.value + PendingTask(task, maxSteps, executionMode, agentRef)
-            session.messages.value = session.messages.value + ChatMessageUi.User(task)
+            _pendingTasks.value = _pendingTasks.value + PendingTask(task, maxSteps, executionMode, agentRef, attachments)
+            session.messages.value = session.messages.value + ChatMessageUi.User(task, attachments)
             return
         }
 
-        session.messages.value = session.messages.value + ChatMessageUi.User(task)
+        session.messages.value = session.messages.value + ChatMessageUi.User(task, attachments)
         // 用户消息落盘 — 与回复完成落盘配对, 事件驱动无需 30s 定时
         sessionPersistence.saveCurrentSession()
 
@@ -579,7 +585,9 @@ class AgentViewModel : ViewModel() {
                 // Execute via the appropriate engine mode
                 val finalTask = recallPrefix + contextPrefix
                 // ── 自动复杂度检测: 无斜杠命令时评估是否升级模式 ──
-                if (executionMode == null) {
+                // v0.33.0+: 带附件（图片/语音）时不自动升级 — 目标模式执行器不接收附件,
+                // 升级会导致附件静默丢失
+                if (executionMode == null && attachments.isEmpty()) {
                     val detected = detectComplexity(actualTask)
                     if (detected != LoopMode.REACT && inputTagManager.activeTags.value.none { it is InputTag.Mode }) {
                         // 自动升级: 添加 UI 标签 (复用 AssistChip 体系)
@@ -602,13 +610,15 @@ class AgentViewModel : ViewModel() {
                     executionMode == ExecutionMode.MISSION -> session.engine.runWithMission(task = finalTask, onStep = onStep, onDelta = onDelta)
                     executionMode == ExecutionMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep, onDelta = onDelta)
                     // ── 显式斜杠命令结束, 以下为 loopMode 分发 ──
-                    inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta)
+                    // v0.33.0+: REACT 主链路透传附件 (历史经 getStructuredHistory 挂二进制键);
+                    // 目标模式 (GOAL/MISSION/FLEET/SWARM) 执行器签名不含附件 — 附件不传 (注释: P2)
+                    inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta, attachments = attachments)
                     inputTagManager.loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep, onDelta = onDelta)
                     inputTagManager.loopMode == LoopMode.MISSION || inputTagManager.loopMode == LoopMode.FLEET ->
                         session.engine.runWithFleet(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep, onDelta = onDelta)
                     inputTagManager.loopMode == LoopMode.SWARM ->
                         session.engine.runWithSwarm(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep, onDelta = onDelta)
-                    else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta)
+                    else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta, attachments = attachments)
                 }
 
                 // ── 尾段: run() 已返回 — 标记流结束, 等待播放器把剩余缓冲按节奏播完
@@ -776,7 +786,8 @@ class AgentViewModel : ViewModel() {
             val next = pending.first()
             _pendingTasks.value = pending.drop(1)
             submitTask(next.text, maxSteps = next.maxSteps,
-                executionMode = next.executionMode, agentRef = next.agentRef)
+                executionMode = next.executionMode, agentRef = next.agentRef,
+                attachments = next.attachments)
         }
     }
 

@@ -3,10 +3,13 @@
 
 package com.mengpaw.shell.ui.screens.model
 
+import com.mengpaw.kernel.session.AttachmentData
+
 /** 待办任务 — Agent 运行时用户输入的排队任务。 */
 data class PendingTask(
     val text: String,
     val maxSteps: Int = 50,
     val executionMode: ExecutionMode? = null,
-    val agentRef: String? = null
+    val agentRef: String? = null,
+    val attachments: List<AttachmentData> = emptyList()
 )

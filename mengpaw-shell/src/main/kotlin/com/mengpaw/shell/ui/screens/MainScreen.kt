@@ -4,14 +4,21 @@
 package com.mengpaw.shell.ui.screens
 
 import android.net.Uri
+import com.mengpaw.kernel.session.AttachmentData
 import com.mengpaw.shell.ui.screens.model.ChatMessageUi
 import com.mengpaw.shell.ui.screens.model.ExecutionMode
 import com.mengpaw.shell.ui.screens.model.InputTag
 import com.mengpaw.shell.ui.screens.model.PendingTask
+import com.mengpaw.shell.ui.screens.model.VoiceCapability
+import com.mengpaw.shell.ui.screens.model.buildTaskContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import com.mengpaw.shell.ui.components.MissionMonitorOverlay
@@ -120,21 +127,34 @@ fun MainScreen(
     // ── Panel order state ──────────────────────────────────────────
     var panelOrder by remember { mutableStateOf(com.mengpaw.shell.ui.components.PanelOrderStore.load()) }
 
-    // ── File picker launchers ──────────────────────────────────────
+    // ── File picker launchers (v0.33.0+: 产出结构化附件, 不再插文本进输入框) ──
     val context = androidx.compose.ui.platform.LocalContext.current
     var pendingUploadDir by remember { mutableStateOf("") }
+    var pendingAttachments by remember { mutableStateOf(listOf<AttachmentData>()) }
+    val onAttError: (String) -> Unit = { msg ->
+        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+    }
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> uri?.let { handleFilePicked(it, context, viewModel, pendingUploadDir) { p -> inputText = "$p$inputText" } } }
+    ) { uri: Uri? -> uri?.let {
+        handleFilePicked(it, context, pendingUploadDir,
+            onAttachment = { att -> pendingAttachments = pendingAttachments + att }, onError = onAttError)
+    } }
 
     val docPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? -> uri?.let { handleFilePicked(it, context, viewModel, pendingUploadDir) { p -> inputText = "$p$inputText" } } }
+    ) { uri: Uri? -> uri?.let {
+        handleFilePicked(it, context, pendingUploadDir,
+            onAttachment = { att -> pendingAttachments = pendingAttachments + att }, onError = onAttError)
+    } }
 
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? -> uri?.let { handleFilePicked(it, context, viewModel, pendingUploadDir) { p -> inputText = "$p$inputText" } } }
+    ) { uri: Uri? -> uri?.let {
+        handleFilePicked(it, context, pendingUploadDir,
+            onAttachment = { att -> pendingAttachments = pendingAttachments + att }, onError = onAttError)
+    } }
 
     val cameraUri = remember {
         val file = java.io.File(com.mengpaw.kernel.DataPaths.SCREENSHOTS, "camera_${System.currentTimeMillis()}.jpg")
@@ -149,7 +169,8 @@ fun MainScreen(
         ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && cameraUri != null) {
-            handleFilePicked(cameraUri, context, viewModel, pendingUploadDir) { p -> inputText = "$p$inputText" }
+            handleFilePicked(cameraUri, context, pendingUploadDir,
+                onAttachment = { att -> pendingAttachments = pendingAttachments + att }, onError = onAttError)
         }
     }
 
@@ -265,7 +286,7 @@ fun MainScreen(
                                         onNavigateToPlugins = onNavigateToPlugins
                                     ) {
                                         when (message) {
-                                            is ChatMessageUi.User -> UserBubble(message.content)
+                                            is ChatMessageUi.User -> UserBubble(message)
                                             is ChatMessageUi.Agent -> AgentBubble(message.content, displayAgentName,
                                                 executionMode = message.executionMode, agentRef = message.agentRef)
                                             is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message, displayAgentName)
@@ -319,6 +340,34 @@ fun MainScreen(
                                                 colors = AssistChipDefaults.assistChipColors(
                                                     containerColor = ThemeColors.brandContainer,
                                                     labelColor = ThemeColors.brand
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // ── 待发附件行 (v0.33.0+) — 文件选择后在此预览, 发送时随消息提交 ──
+                                if (pendingAttachments.isNotEmpty()) {
+                                    Row(
+                                        Modifier.fillMaxWidth()
+                                            .padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.xs),
+                                        horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)
+                                    ) {
+                                        pendingAttachments.forEach { att ->
+                                            AssistChip(
+                                                onClick = {},
+                                                label = { Text(att.name.ifBlank { att.path.substringAfterLast('/') }, style = MaterialTheme.typography.labelSmall) },
+                                                leadingIcon = {
+                                                    Icon(attachmentTypeIcon(att.type), null, Modifier.size(16.dp))
+                                                },
+                                                trailingIcon = {
+                                                    Icon(Icons.Filled.Close, strings.tagDismiss,
+                                                        Modifier.size(14.dp).clickable { pendingAttachments = pendingAttachments - att })
+                                                },
+                                                shape = RoundedCornerShape(ArcoRadius.sm),
+                                                colors = AssistChipDefaults.assistChipColors(
+                                                    containerColor = ThemeColors.surfaceContainerHigh,
+                                                    labelColor = ThemeColors.textPrimary
                                                 )
                                             )
                                         }
@@ -465,6 +514,15 @@ fun MainScreen(
 
             // ── Bottom input bar ──
             Box {
+            // v0.33.0+: 语音录制状态 — 能力判定 (不支持语音的模型不显示按钮,
+            // 用户用 Android 输入法自带语音转译); 录音时收起键盘
+            val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+            var isRecordingVoice by remember { mutableStateOf(false) }
+            var recordElapsedMs by remember { mutableLongStateOf(0L) }
+            val voiceSupported = VoiceCapability.supportsVoice(viewModel.activeModelName())
+            LaunchedEffect(isRecordingVoice) {
+                if (isRecordingVoice) keyboardController?.hide()
+            }
             Surface(shadowElevation = 8.dp, color = ThemeColors.bgPrimary) {
                 Row(
                     Modifier.fillMaxWidth()
@@ -487,17 +545,20 @@ fun MainScreen(
                     val keyMaxSteps = settingsState?.value?.maxSteps ?: 50
                     var lastSendTime by remember { mutableLongStateOf(0L) }
                     fun doSend() {
-                        if (inputText.isNotBlank()) {
+                        if (inputText.isNotBlank() || pendingAttachments.isNotEmpty()) {
                             val now = System.currentTimeMillis()
                             if (now - lastSendTime < 300) return  // debounce: prevent double-fire from onPreviewKeyEvent + IME
                             lastSendTime = now
                             val text = inputText; inputText = ""
+                            // v0.33.0+: 附件随消息发送 — 文本合成 `[图片附件] 📎 path` 标注
+                            val atts = pendingAttachments; pendingAttachments = emptyList()
                             // 发送后立即收起悬浮下拉 — 程序化清空输入不触发 onValueChange, 需手动关闭
                             showMentionDropdown = false; showBangDropdown = false
                             val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
                             val agentTag = activeTags.filterIsInstance<InputTag.AgentRef>().firstOrNull()
-                            viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps,
-                                executionMode = modeTag?.mode, agentRef = agentTag?.agentName)
+                            viewModel.submitTask(buildTaskContent(text, atts), pluginViewModel, maxSteps = keyMaxSteps,
+                                executionMode = modeTag?.mode, agentRef = agentTag?.agentName,
+                                attachments = atts)
                             inputFocus.requestFocus()
                         }
                     }
@@ -571,6 +632,24 @@ fun MainScreen(
                         minLines = 1, maxLines = 4,
                         keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Default),
                         keyboardActions = KeyboardActions(onSend = { doSend() }))
+                    // Voice button (v0.33.0+) — 透明底线性话筒, 按住录音松开发送;
+                    // 仅支持音频输入的模型显示 (VoiceCapability 判定)
+                    if (voiceSupported) {
+                        VoiceInputButton(
+                            supported = voiceSupported,
+                            strings = strings,
+                            onRecorded = { att ->
+                                // 按住发送语音 = 松手即发 — 录音文件直发模型 (input_audio 通道)
+                                val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
+                                val agentTag = activeTags.filterIsInstance<InputTag.AgentRef>().firstOrNull()
+                                viewModel.submitTask(buildTaskContent("", listOf(att)), pluginViewModel,
+                                    maxSteps = keyMaxSteps, executionMode = modeTag?.mode,
+                                    agentRef = agentTag?.agentName, attachments = listOf(att))
+                            },
+                            onRecordStateChanged = { rec -> isRecordingVoice = rec },
+                            onElapsed = { ms -> recordElapsedMs = ms }
+                        )
+                    }
                     // Send button — circular 44dp, animated ↑ icon
                     val scope = rememberCoroutineScope()
                     val arrowOffsetY = remember { Animatable(0f) }
@@ -581,8 +660,9 @@ fun MainScreen(
                             .background(ThemeColors.brand, CircleShape)
                             .clickable {
                                 val text = inputText
-                                if (text.isNotBlank()) {
+                                if (text.isNotBlank() || pendingAttachments.isNotEmpty()) {
                                     inputText = ""
+                                    val atts = pendingAttachments; pendingAttachments = emptyList()
                                     // 发送后立即收起悬浮下拉
                                     showMentionDropdown = false; showBangDropdown = false
                                     inputFocus.requestFocus()
@@ -594,8 +674,9 @@ fun MainScreen(
                                         launch { arrowAlpha.animateTo(0f, tween(280)) }
                                         // snap below, then submit
                                         arrowOffsetY.snapTo(60f)
-                                        viewModel.submitTask(text, pluginViewModel, maxSteps = keyMaxSteps,
-                                            executionMode = modeTag?.mode, agentRef = agentTag?.agentName)
+                                        viewModel.submitTask(buildTaskContent(text, atts), pluginViewModel, maxSteps = keyMaxSteps,
+                                            executionMode = modeTag?.mode, agentRef = agentTag?.agentName,
+                                            attachments = atts)
                                         // ↑ flies in from below
                                         launch { arrowOffsetY.animateTo(0f, tween(280)) }
                                         launch { arrowAlpha.animateTo(1f, tween(280)) }
@@ -615,6 +696,32 @@ fun MainScreen(
                     }
                 }
             } // close Surface (input bar)
+
+            // ── 录音指示条 (v0.33.0+) — 悬浮在输入栏上缘, 红点脉冲 + 计时 ──
+            // 全限定名: BoxScope 版 AnimatedVisibility (material3 裸名是 ColumnScope 版)
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isRecordingVoice,
+                modifier = Modifier.align(Alignment.TopCenter).padding(bottom = 8.dp)
+            ) {
+                Surface(shape = RoundedCornerShape(50), color = Color.Black.copy(alpha = 0.72f)) {
+                    Row(Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        val pulse = rememberInfiniteTransition(label = "recPulse")
+                        val pulseAlpha by pulse.animateFloat(
+                            initialValue = 1f, targetValue = 0.3f,
+                            animationSpec = infiniteRepeatable(tween(500), RepeatMode.Reverse),
+                            label = "recAlpha"
+                        )
+                        Box(Modifier.size(8.dp).background(Color(0xFFFF4D4F).copy(alpha = pulseAlpha), CircleShape))
+                        Spacer(Modifier.width(8.dp))
+                        Text("${strings.voiceReleaseToSend} · ${strings.voiceSlideToCancel}",
+                            color = Color.White, style = MaterialTheme.typography.labelSmall)
+                        Spacer(Modifier.width(8.dp))
+                        Text("${recordElapsedMs / 1000}s", color = Color.White.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
         } // close Box (input bar)
     } // close Column
 

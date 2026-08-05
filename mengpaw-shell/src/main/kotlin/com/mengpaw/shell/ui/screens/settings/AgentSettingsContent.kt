@@ -100,6 +100,7 @@ fun AgentSettingsContent(
                                     Text(model.name, Modifier.weight(1f), fontSize = 13.sp)
                                     if (model.type == "Coding") Text("💻", fontSize = 12.sp)
                                     else if (model.type == "多模态") Text("🖼", fontSize = 12.sp)
+                                    else if (model.type.contains("全模态")) Text("🎤", fontSize = 12.sp)
                                     else if (model.type.contains("思维链")) Text("🧠", fontSize = 12.sp)
                                 }
                             }

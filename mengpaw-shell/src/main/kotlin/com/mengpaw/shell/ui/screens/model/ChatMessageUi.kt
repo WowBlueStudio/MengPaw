@@ -3,6 +3,7 @@
 
 package com.mengpaw.shell.ui.screens.model
 
+import com.mengpaw.kernel.session.AttachmentData
 import com.mengpaw.shell.ui.screens.PluginSuggestion
 
 data class AgentTrace(
@@ -16,7 +17,10 @@ sealed class ChatMessageUi {
     abstract val stableId: String
     internal val createdAt: Long = java.lang.System.nanoTime()
 
-    data class User(val content: String) : ChatMessageUi() {
+    data class User(
+        val content: String,
+        val attachments: List<AttachmentData> = emptyList()
+    ) : ChatMessageUi() {
         override val stableId get() = "u_$createdAt"
     }
 

@@ -478,11 +478,13 @@ class AgentEngine(
 
     suspend fun run(
         task: String, maxSteps: Int = 50, onStep: ((TraceStep) -> Unit)? = null,
-        onDelta: ((String) -> Unit)? = null
+        onDelta: ((String) -> Unit)? = null,
+        attachments: List<AttachmentData> = emptyList()
     ): String {
         val guardedTask = if (com.mengpaw.kernel.security.PromptFirewall.checkUserPrompt(task) != null)
             com.mengpaw.kernel.security.PromptFirewall.wrapWithDefense(task) else task
-        return runReActLoop(task = guardedTask, maxSteps = maxSteps, onStep = onStep, onDelta = onDelta)
+        return runReActLoop(task = guardedTask, maxSteps = maxSteps, onStep = onStep, onDelta = onDelta,
+            attachments = attachments)
     }
 
     // ── Goal Mode (delegated to GoalModeExecutor) ────────────────────
@@ -506,7 +508,8 @@ class AgentEngine(
         maxSteps: Int,
         contextPrefix: String = "",
         onStep: ((TraceStep) -> Unit)? = null,
-        onDelta: ((String) -> Unit)? = null
+        onDelta: ((String) -> Unit)? = null,
+        attachments: List<AttachmentData> = emptyList()
     ): String {
         ErrorCollector.init()
 
@@ -549,7 +552,8 @@ class AgentEngine(
         _output.value = ""
 
         // Append user message to existing conversation history (Claude Code pattern)
-        sessionManager.addMessage(session.id, Message("user", task))
+        // 结构化附件 (v0.33.0+): 由 getStructuredHistory 挂 _image/_audio_data 二进制键
+        sessionManager.addMessage(session.id, Message("user", task, attachments = attachments))
         if (contextPrefix.isNotBlank()) {
             sessionManager.addMessage(session.id, Message("system", contextPrefix))
         }

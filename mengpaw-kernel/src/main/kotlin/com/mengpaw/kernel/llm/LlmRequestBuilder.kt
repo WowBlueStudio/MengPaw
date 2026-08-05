@@ -56,15 +56,29 @@ class LlmRequestBuilder(systemPrompt: String) {
             putJsonArray("messages") { full.forEach { msg ->
                 addJsonObject {
                     put("role", msg["role"] ?: "user")
-                    put("content", msg["content"] ?: "")
                     msg["_cache_control"]?.let { if (it.isNotBlank()) putJsonObject("cache_control") { put("type", "ephemeral") } }
-                    msg["_image"]?.let { img ->
-                        if (img.isNotBlank()) {
-                            putJsonArray("content") {
-                                addJsonObject { put("type", "text"); put("text", msg["content"] ?: "") }
-                                addJsonObject { put("type", "image_url"); putJsonObject("image_url") { put("url", img) } }
+                    // 多模态 content 数组 (v0.33.0+): _image → image_url, _audio_data → input_audio
+                    val image = msg["_image"]?.takeIf { it.isNotBlank() }
+                    val audioData = msg["_audio_data"]?.takeIf { it.isNotBlank() }
+                    if (image != null || audioData != null) {
+                        putJsonArray("content") {
+                            val text = msg["content"] ?: ""
+                            if (text.isNotBlank()) addJsonObject { put("type", "text"); put("text", text) }
+                            image?.let {
+                                addJsonObject { put("type", "image_url"); putJsonObject("image_url") { put("url", it) } }
+                            }
+                            audioData?.let {
+                                addJsonObject {
+                                    put("type", "input_audio")
+                                    putJsonObject("input_audio") {
+                                        put("data", it)
+                                        put("format", msg["_audio_format"]?.takeIf { f -> f.isNotBlank() } ?: "m4a")
+                                    }
+                                }
                             }
                         }
+                    } else {
+                        put("content", msg["content"] ?: "")
                     }
                 }
             }}

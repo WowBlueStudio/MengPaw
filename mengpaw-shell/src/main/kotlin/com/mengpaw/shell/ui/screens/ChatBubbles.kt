@@ -65,24 +65,32 @@ fun PluginSuggestionCard(suggestion: PluginSuggestion, onInstall: () -> Unit, on
 }
 
 // ── Bubbles ──
-/** Right-aligned, auto-width capped at 400dp, tail at bottom-right. */
+/** Right-aligned, auto-width capped at 400dp, tail at bottom-right.
+ *  v0.33.0+: 接收完整 User 消息 — 附件在文本下方渲染专用卡片。 */
 @Composable
-fun UserBubble(content: String) {
+fun UserBubble(message: ChatMessageUi.User) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Surface(
             shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm, ArcoRadius.lg),
             color = ThemeColors.brand,
             modifier = Modifier.widthIn(max = 400.dp)
         ) {
-            SelectionContainer {
-                MarkdownText(
-                    content = content,
-                    modifier = Modifier.padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md),
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
-                    inlineCodeColor = Color.White.copy(alpha = 0.9f),
-                    linkColor = Color.White,
-                    nestedScroll = true
-                )
+            Column(Modifier.padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md)) {
+                if (message.content.isNotBlank()) {
+                    SelectionContainer {
+                        MarkdownText(
+                            content = message.content,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
+                            inlineCodeColor = Color.White.copy(alpha = 0.9f),
+                            linkColor = Color.White,
+                            nestedScroll = true
+                        )
+                    }
+                }
+                if (message.attachments.isNotEmpty()) {
+                    Spacer(Modifier.height(ArcoSpacing.xs))
+                    AttachmentCardList(message.attachments, isUserSide = true)
+                }
             }
         }
     }
@@ -111,11 +119,13 @@ fun AgentBubbleHeader(
     }
 }
 
-/** Left-aligned, max 90% width, tail at bottom-left. */
+/** Left-aligned, max 90% width, tail at bottom-left.
+ *  v0.33.0+: content 先经 extractMedia 提取媒体引用 → 卡片渲染在文本下方。 */
 @Composable
 fun AgentBubble(content: String, agentName: String = "MengPaw",
     executionMode: String? = null, agentRef: String? = null
 ) {
+    val (cleanContent, media) = remember(content) { extractMedia(content) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
         Surface(
             shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm),
@@ -125,12 +135,18 @@ fun AgentBubble(content: String, agentName: String = "MengPaw",
             Column(Modifier.padding(ArcoSpacing.lg)) {
                 AgentBubbleHeader(agentName, executionMode, agentRef)
                 Spacer(Modifier.height(ArcoSpacing.xs))
-                SelectionContainer {
-                    MarkdownText(
-                        content = content,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary),
-                        nestedScroll = true
-                    )
+                if (cleanContent.isNotBlank()) {
+                    SelectionContainer {
+                        MarkdownText(
+                            content = cleanContent,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary),
+                            nestedScroll = true
+                        )
+                    }
+                }
+                if (media.isNotEmpty()) {
+                    Spacer(Modifier.height(ArcoSpacing.sm))
+                    AttachmentCardList(media, isUserSide = false)
                 }
             }
         }
@@ -194,15 +210,23 @@ fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: Strin
         }
 
         // ── Final answer bubble ──
+        // v0.33.0+: 运行中(流式)不提取媒体 — 文件/图片未落盘时无意义, 完成态提取一次
+        val (cleanFinal, mediaCards) = remember(message.finalContent) { extractMedia(message.finalContent) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
             Surface(shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm),
                 color = ThemeColors.bgCardHigh, modifier = Modifier.fillMaxWidth(0.9f)) {
                 Column(Modifier.padding(ArcoSpacing.lg)) {
                     AgentBubbleHeader(agentName = agentName, executionMode = message.executionMode, agentRef = message.agentRef)
                     Spacer(Modifier.height(ArcoSpacing.xs))
-                    SelectionContainer {
-                        MarkdownText(content = message.finalContent,
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary), nestedScroll = true)
+                    if (cleanFinal.isNotBlank()) {
+                        SelectionContainer {
+                            MarkdownText(content = cleanFinal,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary), nestedScroll = true)
+                        }
+                    }
+                    if (mediaCards.isNotEmpty() && !message.isRunning) {
+                        Spacer(Modifier.height(ArcoSpacing.sm))
+                        AttachmentCardList(mediaCards, isUserSide = false)
                     }
                     // ── 等待期反馈 (v0.28.6): 思考中 → spinner + 已等待秒数, 流式文本到达后自动消失
                     //    (v0.29.2): 工具轮显示 "正在执行 X… Ns" — 流式检测到 Action 行即推送 (Reasonix ③) ──

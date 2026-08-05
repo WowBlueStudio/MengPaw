@@ -25,6 +25,13 @@ class AppStrings {
     var stop: String = ""
     var send: String = ""
 
+    // Voice input (v0.33.0+)
+    var voiceInput: String = ""
+    var voiceReleaseToSend: String = ""
+    var voiceSlideToCancel: String = ""
+    var voiceTooShort: String = ""
+    var voicePermissionDenied: String = ""
+
     // Settings - LLM Provider
     var llmProvider: String = ""
     var apiEndpoint: String = ""
@@ -399,6 +406,11 @@ val EnglishStrings = AppStrings().apply {
     agentLabel = "Agent"
     stop = "Stop"
     send = "Send"
+    voiceInput = "Voice input"
+    voiceReleaseToSend = "Release to send"
+    voiceSlideToCancel = "Slide up to cancel"
+    voiceTooShort = "Too short to send"
+    voicePermissionDenied = "Microphone permission is required for voice input"
 
     llmProvider = "LLM Provider"
     apiEndpoint = "API Endpoint"
@@ -762,6 +774,11 @@ val ChineseStrings = AppStrings().apply {
     agentLabel = "Agent"
     stop = "停止"
     send = "发送"
+    voiceInput = "语音输入"
+    voiceReleaseToSend = "松开发送"
+    voiceSlideToCancel = "上滑取消"
+    voiceTooShort = "说话时间太短"
+    voicePermissionDenied = "需要麦克风权限才能使用语音输入"
 
     llmProvider = "LLM 提供商 (Provider)"
     apiEndpoint = "API 地址 (Endpoint)"
