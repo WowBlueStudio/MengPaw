@@ -362,6 +362,25 @@ body.md-reader {
 }
 .md-body .img-modal.opened img { transform: scale(1); }
 
+/* ── 致谢底栏 (md-reader 开源版权标注) ── */
+.md-reader-credit {
+  margin: 48px 16px 24px;
+  padding: 16px 18px;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--color-text-gray);
+}
+.md-reader-credit .credit-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+  color: var(--color-text-secondary);
+}
+.md-reader-credit a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
 /* ── 细滚动条 (variable.less .scrollbar()) ── */
 .md-body ::-webkit-scrollbar,
 .md-body pre::-webkit-scrollbar {
