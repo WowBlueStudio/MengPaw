@@ -85,6 +85,8 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 > `sys` 命名空间 (40 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。`evolution` 命名空间在内核注册 (PipelineManager)，默认实现由同捆插件 plugin-evolution 注册为 EvolutionProvider SPI。
 
+**插件命名空间权威推导 (v0.31.0 起, `pluginNamespaceFor` 全内核唯一来源)**: 插件 id 去 `-plugin`/`-ext` 后缀；`memory-*` 前缀插件取剩余部分 (memory-twin→`twin`)；特例 — `browser-mcp-plugin` 命令键自带 `mcp.` 前缀 → ns=`browser` (拼出 `browser.mcp.*`)，`browser-search-plugin` 命令键为短名 → ns=`search`。注册 (PluginManager/PipelineManager)、搜索索引、CLI.md 插件表、MCP 桥工具解析 (McpServer) 全部经此推导，严禁在别处再写 `removeSuffix` 特例。配套 `scripts/validate-plugins.ps1` 6c 交叉校验同规则。
+
 ### 2.4 依赖关系
 
 ```
@@ -662,6 +664,9 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
   ← 注入系统提示词, Agent 每次对话可见
   ← 仅三种来源: 用户说「记住」/ Agent 自主判断重要 / 梦境整理产出
   ← 永远精简, 防提示词膨胀降智
+  ← v0.31.0: 模板瘦身 (<500B 无 ## 教学章节); 旧模板自动迁移
+    (AgentDocs.bootstrap 判定全部标题命中教学黑名单即覆盖写); 计数口径
+    countLongTermEntries 排除教学章节, 旧模板残留不虚报"5 条记忆"
 
 中期记忆 (memory/memory_{date}.md)
   ← 按日期分片, 每日独立文件
