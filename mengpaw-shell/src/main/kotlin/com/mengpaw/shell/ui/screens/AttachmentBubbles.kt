@@ -14,6 +14,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -183,14 +186,15 @@ fun ImageAttachmentCard(att: AttachmentData, isUserSide: Boolean) {
     val bg = if (isUserSide) Color.White.copy(alpha = 0.15f) else ThemeColors.bgCardHigh
 
     Box(
-        Modifier.widthIn(max = 260.dp).clip(shape).background(bg)
+        // v0.34.0+: 图片占 100% 气泡宽度, 高度按原比例浮动 (aspectRatio), 不截断不露底色
+        Modifier.fillMaxWidth().clip(shape).background(bg)
             .clickable(enabled = bitmap != null) { showPreview = true }
     ) {
         when {
             bitmap != null -> Image(bitmap.asImageBitmap(), att.name, Modifier.fillMaxWidth()
-                .heightIn(max = 220.dp))
+                .aspectRatio(bitmap.width.toFloat() / bitmap.height.toFloat()))
             failed -> PlaceholderText("图片加载失败，点击重试") { retryKey++ }
-            else -> Box(Modifier.size(width = 180.dp, height = 120.dp), contentAlignment = Alignment.Center) {
+            else -> Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = ThemeColors.textSecondary)
             }
         }
@@ -427,19 +431,13 @@ fun VideoPlaybackDialog(path: String, name: String, onDismiss: () -> Unit) {
 }
 
 // ── 文件/文档卡片 ──────────────────────────────────────────────────
+// v0.34.0+: 仅显示文件名 (含扩展名) + 文件大小, 其余信息不显示; 点击打开保留
 
 @Composable
 fun FileAttachmentCard(att: AttachmentData, isUserSide: Boolean) {
     val context = LocalContext.current
     val fg = if (isUserSide) Color.White else ThemeColors.textPrimary
     val ext = att.path.substringAfterLast('.', "").lowercase()
-    val accent = when (ext) {
-        "pdf" -> ArcoColors.Red6
-        "doc", "docx" -> ArcoColors.Blue6
-        "xls", "xlsx", "csv" -> ArcoColors.Green6
-        "ppt", "pptx" -> ArcoColors.Orange6
-        else -> ThemeColors.textSecondary
-    }
     val sizeLabel = when {
         att.size >= 1024 * 1024 -> "%.1f MB".format(att.size / 1024.0 / 1024.0)
         att.size >= 1024 -> "%.0f KB".format(att.size / 1024.0)
@@ -447,12 +445,19 @@ fun FileAttachmentCard(att: AttachmentData, isUserSide: Boolean) {
         else -> ""
     }
 
+    var showMdPreview by remember(att.path) { mutableStateOf(false) }
     Row(
         Modifier.widthIn(max = 260.dp).clip(RoundedCornerShape(ArcoRadius.md))
             .background(if (isUserSide) Color.White.copy(alpha = 0.15f) else ThemeColors.bgCardHigh)
             .clickable {
-                // ACTION_VIEW + FileProvider (对齐 ClipboardIntentExecutor.intentView)
+                // v0.34.0+: md/markdown 文件 → 内置 MarkdownText 预览; 其余 → ACTION_VIEW
+                val isMarkdown = ext == "md" || ext == "markdown"
                 val file = File(att.path)
+                if (isMarkdown && file.exists()) {
+                    showMdPreview = true
+                    return@clickable
+                }
+                // ACTION_VIEW + FileProvider (对齐 ClipboardIntentExecutor.intentView)
                 if (file.exists()) {
                     try {
                         val uri = androidx.core.content.FileProvider.getUriForFile(
@@ -473,18 +478,59 @@ fun FileAttachmentCard(att: AttachmentData, isUserSide: Boolean) {
             .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(34.dp).background(accent.copy(alpha = 0.15f), RoundedCornerShape(ArcoRadius.sm)),
-            contentAlignment = Alignment.Center) {
-            Icon(attachmentTypeIcon(att.type), null, tint = accent, modifier = Modifier.size(20.dp))
-        }
-        Spacer(Modifier.width(8.dp))
-        Column(Modifier.weight(1f)) {
+        Column {
             Text(att.name.ifBlank { att.path.substringAfterLast('/') },
                 style = MaterialTheme.typography.bodySmall.copy(color = fg),
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (sizeLabel.isNotBlank()) {
-                Text("$sizeLabel · $ext", style = MaterialTheme.typography.labelSmall,
+                Text(sizeLabel, style = MaterialTheme.typography.labelSmall,
                     color = fg.copy(alpha = 0.6f))
+            }
+        }
+    }
+    if (showMdPreview) {
+        MdPreviewDialog(path = att.path, name = att.name, onDismiss = { showMdPreview = false })
+    }
+}
+
+/** md 文件预览 Dialog — MarkdownText 渲染 (v0.34.0+), 200K 字符截断防卡 UI。 */
+@Composable
+private fun MdPreviewDialog(path: String, name: String, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(ArcoRadius.lg),
+            color = ThemeColors.bgCardHigh,
+            modifier = Modifier.fillMaxWidth(0.92f).fillMaxHeight(0.85f)
+        ) {
+            Column {
+                // 标题行: 文件名 + 关闭
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(name, style = MaterialTheme.typography.titleSmall,
+                        color = ThemeColors.textPrimary, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Filled.Close, "关闭", tint = ThemeColors.textSecondary)
+                    }
+                }
+                HorizontalDivider(color = ThemeColors.border)
+                val content = remember(path) {
+                    try { File(path).readText().take(200_000) } catch (_: Exception) { "无法读取文件" }
+                }
+                SelectionContainer {
+                    com.mengpaw.design.components.MarkdownText(
+                        content = content,
+                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                            .padding(ArcoSpacing.lg),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary),
+                        nestedScroll = true
+                    )
+                }
             }
         }
     }
