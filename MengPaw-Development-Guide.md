@@ -87,6 +87,8 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 **插件命名空间权威推导 (v0.31.0 起, `pluginNamespaceFor` 全内核唯一来源)**: 插件 id 去 `-plugin`/`-ext` 后缀；`memory-*` 前缀插件取剩余部分 (memory-twin→`twin`)；特例 — `browser-mcp-plugin` 命令键自带 `mcp.` 前缀 → ns=`browser` (拼出 `browser.mcp.*`)，`browser-search-plugin` 命令键为短名 → ns=`search`。注册 (PluginManager/PipelineManager)、搜索索引、CLI.md 插件表、MCP 桥工具解析 (McpServer) 全部经此推导，严禁在别处再写 `removeSuffix` 特例。配套 `scripts/validate-plugins.ps1` 6c 交叉校验同规则。
 
+**命令搜索索引 (BM25) 机制 (v0.31.0 修复脱节)**: `CommandSearch` 索引 = `BuiltinCommandIndex` 静态种子 (~150 条精编中英同义词) + `PluginManager.registerSearchIndex` 动态条目 (插件激活) + `SysExecutor` 初始化补种 (50 条 sys.* 命令带中文同义词表, kernel 种子无法覆盖 Android 反射实现)。**可用性由 self.search 按真实注册表 (CommandRegistry.has) 过滤** — 种子命中但执行器不存在的命令 (插件未安装/停用) 不外泄, 过滤后不足时从候选中补足; 插件激活即恢复可搜, 无需动索引本身 (避免 removeByNamespace 破坏精编种子)。
+
 ### 2.4 依赖关系
 
 ```
