@@ -542,9 +542,9 @@ twin.lost <peer> / twin.recover <peer>
 - 并发安全: streamBuf/streamPlayed/streamFinished 统一 `synchronized(streamBuf)` 监视器; `traces` 用 `Collections.synchronizedList`(播放协程 toList 与 onStep add 跨线程); 播放器体 try/catch 保证 join() 永不抛
 - doTranslate(美系模型翻译)场景跳过 join/flush: 最终 replace 整段替换为中文, 英文逐字播放无意义
 
-**显示策略**(`computeStreamDisplayText`): 含 `Final Answer:` 只显标记后; 含 `Action:`(工具轮)不显样板(onStep 重置"思考中..."); 含 `Thought:` 显其后; 无标记全文流式。
+**显示策略**(`computeStreamDisplayText`): 含 `Final Answer:` 只显标记后; 含 `Action:`(工具轮)**流式显示 Thought 思考过程 + Action 命令行**(v0.3x 演进 — 原 v0.28.5 工具轮样板全隐藏, 思考过程不可见; 现 `substringAfter("Thought:")` + `substringBefore("\nAction Input:")`, 参数 JSON 不刷屏, 完整参数由执行后 trace 行承载); 含 `Thought:` 显其后; 无标记全文流式。
 
-**工具调用提前通知 (v0.29.2, Reasonix ③ 对标)**: 流式中完整 `Action: <tool>` 行一落地即推送 `⚙ 正在执行 X…` 到运行中气泡(`ACTION_LINE_REGEX` 多行锚定, 行尾须完整 — 半截工具名不误报; "Action Input:" 天然不匹配), 不等工具执行完成(onStep)。消除工具轮流式空屏。UI 侧 `WaitingIndicator` 按前缀显示"正在执行 X… Ns"替代"思考中… Ns"。状态纪律: 检测在 `synchronized(streamBuf)` 内计数, `pushDisplay` 在锁外调用; `announcedTools` 随 onStep 清空。
+**工具调用提前通知 (v0.29.2, Reasonix ③ 对标)**: 流式中完整 `Action: <tool>` 行一落地即推送 `⚙ 正在执行 X…` 到运行中气泡(`ACTION_LINE_REGEX` 多行锚定, 行尾须完整 — 半截工具名不误报; "Action Input:" 天然不匹配), 不等工具执行完成(onStep)。消除工具轮流式空屏。UI 侧 `WaitingIndicator` 按前缀显示"正在执行 X… Ns"替代"思考中… Ns"。状态纪律: 检测在 `synchronized(streamBuf)` 内计数, `pushDisplay` 在锁外调用; `announcedTools` 随 onStep 清空。**v0.3x 兜底化**: 工具轮思考过程已流式可见后, 仅当缓冲无 Thought 内容(极端短思考)才宣布 — 避免宣布行替换正在播放的思考轨迹。
 
 **发送前路径延迟优化 (v0.28.6)**: 实测 4-13s 决策链中, 客户端规则/构造毫秒级, 主体是服务端 prefill TTFB。优化清单:
 - "思考中..."气泡**前置**: 翻译/召回/引擎准备之前插入, 发送后 ~20ms 即有反馈(实测 T0→T1=23ms)

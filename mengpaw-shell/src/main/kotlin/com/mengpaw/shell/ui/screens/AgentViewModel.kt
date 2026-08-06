@@ -506,8 +506,10 @@ class AgentViewModel : ViewModel() {
 
                 // ── 流式显示策略 (缓冲每轮结束被清空, 轮间互不污染):
                 //  - 含 "Final Answer:" → 只显示标记后的答案部分
-                //  - 含 "Action:"(工具轮) → 不显示样板(Thought/Action 由 traces 消化;
-                //    工具执行后 onStep 重置为"思考中...")
+                //  - 含 "Action:"(工具轮) → 流式显示 Thought 思考过程 + Action 命令行,
+                //    Action Input 大参数截断 (由执行后 trace 行承载) — v0.3x 演进:
+                //    原设计 (v0.28.5) 工具轮样板全隐藏, 思考过程不可见, 执行中只有
+                //    "思考中..." 占位; 现让 Agent 的推理轨迹全程流式可见
                 //  - 含 "Thought:" → 隐藏思考样板, 只显示其后内容 (thought-only 轮)
                 //  - 无任何标记 → 流式显示全文 (parse Rule 3 纯文本答案, 必须流式显示)
                 fun computeStreamDisplayText(text: String): String {
@@ -516,7 +518,13 @@ class AgentViewModel : ViewModel() {
                     val hasThought = text.contains("Thought:", ignoreCase = true)
                     return when {
                         hasFinal -> text.substringAfter("Final Answer:", text)
-                        hasAction -> ""        // 工具轮: 不显示样板
+                        hasAction -> {
+                            // 工具轮: Thought 后内容截断在 Action Input 前 — 思考过程 +
+                            // Action 命令行流式可见, 参数 JSON 不刷屏 (流式中途 Input 未
+                            // 到达时完整显示; 一旦出现即截断)
+                            text.substringAfter("Thought:", text)
+                                .substringBefore("\nAction Input:", text)
+                        }
                         hasThought -> text.substringAfter("Thought:", text)
                         else -> text           // 纯文本答案流
                     }
@@ -539,7 +547,14 @@ class AgentViewModel : ViewModel() {
                         }
                     }
                     // 锁外推送 (锁纪律同 onStep/播放协程: pushDisplay 不在监视器内调用)
-                    newTool?.let { pushDisplay("$EXECUTING_TOOL_PREFIX$it…") }
+                    newTool?.let { tool ->
+                        // v0.3x: 工具轮思考过程已流式可见 — 仅当缓冲里尚无 Thought 内容时
+                        // (极端短思考) 才兜底宣布, 避免宣布行替换掉正在播放的 Thought 轨迹
+                        val base = synchronized(streamBuf) {
+                            computeStreamDisplayText(streamBuf.toString())
+                        }
+                        if (base.isBlank()) pushDisplay("$EXECUTING_TOOL_PREFIX$tool…")
+                    }
                 }
 
                 // 播放协程: 每 STREAM_PLAYBACK_INTERVAL_MS 把未播放增量推给 UI (打字机)
