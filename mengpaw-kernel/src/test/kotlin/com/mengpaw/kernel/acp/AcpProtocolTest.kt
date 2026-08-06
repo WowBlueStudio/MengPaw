@@ -100,15 +100,33 @@ class AcpProtocolTest {
     @Test fun `MCP_REQUEST without bridge returns error`() {
         ensureDataPaths()
         val server = AcpServer(AgentProfile(), sharedSecret = "test")
+        com.mengpaw.kernel.security.PromptFirewall.trust("cc", "test-fingerprint")
         val msg = McpOverAcpBridge.toolsList("cc")
 
         val result = runBlocking { server.handleMessage(Json.encodeToString(AcpMessage.serializer(), msg)) }
         assertFalse("Should fail without bridge: $result", result.success)
     }
 
+    @Test fun `MCP_REQUEST from untrusted peer is rejected`() {
+        // P0 fix: MCP tools/call 执行插件命令 — 未配对 peer 必须被拒 (之前无任何检查)
+        // 注意: 用独立 peerId "evil-peer" — 本类其他用例会 trust "cc", 共享 DataPaths 下
+        // 测试执行顺序不确定, 复用 "cc" 会产生顺序依赖。
+        ensureDataPaths()
+        val server = AcpServer(AgentProfile(), sharedSecret = "test")
+        val pm = com.mengpaw.kernel.plugin.PluginManager("0.12.12")
+        val mcpServer = com.mengpaw.kernel.mcp.McpServer(pm)
+        server.enableMcpBridge(mcpServer)
+
+        val msg = McpOverAcpBridge.toolsList("evil-peer") // 未配对
+        val result = runBlocking { server.handleMessage(Json.encodeToString(AcpMessage.serializer(), msg)) }
+        assertFalse("Untrusted MCP_REQUEST must be rejected: $result", result.success)
+        assertTrue(result.message.contains("auth_required"))
+    }
+
     @Test fun `MCP_REQUEST with bridge enabled returns tools`() {
         ensureDataPaths()
         val server = AcpServer(AgentProfile(), sharedSecret = "test")
+        com.mengpaw.kernel.security.PromptFirewall.trust("cc", "test-fingerprint")
         val pm = com.mengpaw.kernel.plugin.PluginManager("0.12.12")
         val mcpServer = com.mengpaw.kernel.mcp.McpServer(pm)
         server.enableMcpBridge(mcpServer)
@@ -116,6 +134,31 @@ class AcpProtocolTest {
         val msg = McpOverAcpBridge.toolsList("cc")
         val result = runBlocking { server.handleMessage(Json.encodeToString(AcpMessage.serializer(), msg)) }
         assertTrue("Bridge MCP should succeed: $result", result.success)
+    }
+
+    // ── P0 fix: peer IP 绑定 (msg.from 可伪造 → 敏感类型要求来源 IP 已绑定) ──
+
+    @Test fun `peer IP binding gates sensitive types`() {
+        ensureDataPaths()
+        val server = AcpServer(AgentProfile(), sharedSecret = "test")
+        com.mengpaw.kernel.security.PromptFirewall.trust("peer-a", "test-fingerprint")
+
+        // 未绑定 IP 的敏感请求被拒
+        assertFalse("未绑定 IP 必须拒绝", server.isPeerFromBoundIp("peer-a", "192.168.2.99"))
+
+        // 首次通信建立绑定后放行
+        server.bindPeerIp("peer-a", "192.168.2.7")
+        assertTrue("绑定后同 IP 放行", server.isPeerFromBoundIp("peer-a", "192.168.2.7"))
+
+        // 冒充尝试 (不同 IP) 被拒
+        assertFalse("不同 IP 冒充必须拒绝", server.isPeerFromBoundIp("peer-a", "10.0.0.5"))
+
+        // 换 IP 容错 (DHCP): 绑定集含新 IP 后放行
+        server.bindPeerIp("peer-a", "192.168.2.8")
+        assertTrue("DHCP 换 IP 后新 IP 放行", server.isPeerFromBoundIp("peer-a", "192.168.2.8"))
+
+        // 未知 peerId 恒拒绝
+        assertFalse("未知 peer 必须拒绝", server.isPeerFromBoundIp("ghost", "192.168.2.7"))
     }
 
     // ── 协议升级 (v0.22.1): requestId / 版本协商 / MCP 往返 ───────────
@@ -157,6 +200,7 @@ class AcpProtocolTest {
     @Test fun `bridge sends MCP_RESPONSE back for requestId requests`() = runBlocking {
         ensureDataPaths()
         val server = AcpServer(AgentProfile(), sharedSecret = "test")
+        com.mengpaw.kernel.security.PromptFirewall.trust("cc", "test-fingerprint")
         val pm = com.mengpaw.kernel.plugin.PluginManager("0.12.12")
         val mcpServer = com.mengpaw.kernel.mcp.McpServer(pm)
         server.enableMcpBridge(mcpServer)

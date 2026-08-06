@@ -45,6 +45,31 @@ class AcpServer(
     private val transports = mutableListOf<AcpTransport>()
     private val json = Json { ignoreUnknownKeys = true }
 
+    /**
+     * SECURITY (P0 fix): peerId → 已见来源 IP 集合。
+     * ACP 明文 HTTP 上 msg.from 完全可伪造 — 攻击者可冒充任意已配对 peer 的 agentId
+     * 通过 isTrusted 检查。因此敏感消息类型 (工作区同步/会话/REVOKE/MCP) 额外要求
+     * 消息来源 socket IP 与该 peerId 历史上通信过的 IP 匹配。
+     * 每 peer 保留最近 4 个 IP (DHCP 换地址容错)。
+     */
+    private val peerIpBindings = java.util.concurrent.ConcurrentHashMap<String, MutableSet<String>>()
+
+    /** 记录 peerId 的来源 IP (所有类型消息首次到达时调用, 配对流程即建立绑定)。 */
+    fun bindPeerIp(peerId: String, ip: String) {
+        if (peerId.isBlank() || ip.isBlank()) return
+        val set = peerIpBindings.getOrPut(peerId) { mutableSetOf() }
+        synchronized(set) {
+            if (set.add(ip)) while (set.size > 4) set.remove(set.first())
+        }
+    }
+
+    /** 敏感消息校验: peerId 必须曾从此 IP 通信过 (冒充尝试返回 false)。 */
+    fun isPeerFromBoundIp(peerId: String, ip: String): Boolean {
+        if (peerId.isBlank() || ip.isBlank()) return false
+        val set = peerIpBindings[peerId] ?: return false
+        synchronized(set) { return ip in set }
+    }
+
     /** Kernel-level handlers registered automatically — no plugin dependency needed. */
     val delegateHandler = DelegateHandler()
     val shareHandler = ShareMemoryHandler()
@@ -207,6 +232,12 @@ class AcpServer(
             }
             // MCP-over-ACP bridge — route to MCP handler
             AcpMessageType.MCP_REQUEST -> {
+                // SECURITY (P0 fix): MCP tools/call 直接执行插件命令 (绕过 Pipeline 命令过滤),
+                // 与工作区同步同级 — 必须已配对受信。IP 绑定校验由 transport 层完成。
+                if (!PromptFirewall.isTrusted(msg.from)) {
+                    return AcpResult(false, "auth_required",
+                        "MCP tools require paired trust. Complete twin pairing first.")
+                }
                 var mcpResult: AcpResult? = null
                 for (handler in handlers) {
                     if (AcpMessageType.MCP_REQUEST in handler.supportedTypes) {

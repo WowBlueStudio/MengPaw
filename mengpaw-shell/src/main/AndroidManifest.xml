@@ -51,6 +51,11 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
+    <!-- 设备内 MCP 桥认证: signature 级权限 — 仅同签名 (MengPaw) 的 APK 可写 token (P0 修复) -->
+    <permission
+        android:name="com.mengpaw.permission.MCP_BRIDGE"
+        android:protectionLevel="signature" />
+
     <application
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
@@ -105,6 +110,14 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- 设备内 MCP 桥 token 通道 (P0 修复) — 仅签名级权限可写, 浏览器进程经它注入认证 token -->
+        <provider
+            android:name=".mcp.BridgeTokenProvider"
+            android:authorities="com.mengpaw.bridge.token"
+            android:exported="true"
+            android:permission="com.mengpaw.permission.MCP_BRIDGE"
+            android:grantUriPermissions="false" />
     </application>
 
 </manifest>

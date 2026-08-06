@@ -12,6 +12,8 @@ import android.widget.TextView
 import com.mengpaw.core.namespace.SysExecutor
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Floating overlay window — show, hide, and update text. */
 internal object OverlayExecutor {
@@ -38,52 +40,60 @@ internal object OverlayExecutor {
         val colorStr = flags.find { it.startsWith("--color") }?.substringAfter("--color")?.trim() ?: "#FFFFFF"
         val color = try { android.graphics.Color.parseColor(colorStr) } catch (_: Exception) { android.graphics.Color.WHITE }
 
-        overlayView?.let { try { overlayManager?.removeView(it) } catch (_: Exception) {} }
+        // P0 fix: WindowManager/View 操作必须在主线程 — Agent 命令执行在
+        // Dispatchers.Default/IO (无 Looper), 直接操作必抛 RuntimeException
+        return withContext(Dispatchers.Main) {
+            overlayView?.let { try { overlayManager?.removeView(it) } catch (_: Exception) {} }
 
-        val tv = TextView(app).apply {
-            this.text = text
-            setTextColor(color)
-            textSize = size
-            setPadding(16, 8, 16, 8)
-            setBackgroundColor(android.graphics.Color.parseColor("#CC000000"))
-            alpha = 0.9f
+            val tv = TextView(app).apply {
+                this.text = text
+                setTextColor(color)
+                textSize = size
+                setPadding(16, 8, 16, 8)
+                setBackgroundColor(android.graphics.Color.parseColor("#CC000000"))
+                alpha = 0.9f
+            }
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                else WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                android.graphics.PixelFormat.TRANSLUCENT
+            ).apply { this.x = x; this.y = y; gravity = Gravity.TOP or Gravity.START }
+
+            overlayManager = app.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            overlayManager?.addView(tv, params)
+            overlayView = tv
+            ExecutionResult.ok(buildString {
+                appendLine("悬浮窗已显示 ✅")
+                appendLine("- 内容: \"$text\"")
+                appendLine("- 位置: ($x, $y)")
+                appendLine()
+                appendLine("更新内容: sys.overlay.update <新文本>")
+                appendLine("隐藏: sys.overlay.hide")
+            })
         }
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-            android.graphics.PixelFormat.TRANSLUCENT
-        ).apply { this.x = x; this.y = y; gravity = Gravity.TOP or Gravity.START }
-
-        overlayManager = app.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        overlayManager?.addView(tv, params)
-        overlayView = tv
-        return ExecutionResult.ok(buildString {
-            appendLine("悬浮窗已显示 ✅")
-            appendLine("- 内容: \"$text\"")
-            appendLine("- 位置: ($x, $y)")
-            appendLine()
-            appendLine("更新内容: sys.overlay.update <新文本>")
-            appendLine("隐藏: sys.overlay.hide")
-        })
     }
 
     suspend fun overlayHide(args: List<String>, ec: ExecutionContext): ExecutionResult {
         if (overlayView == null) return ExecutionResult.ok("悬浮窗未在显示")
-        try { overlayManager?.removeView(overlayView) } catch (_: Exception) {}
-        overlayView = null
-        overlayManager = null
-        return ExecutionResult.ok("悬浮窗已隐藏")
+        return withContext(Dispatchers.Main) {
+            try { overlayManager?.removeView(overlayView) } catch (_: Exception) {}
+            overlayView = null
+            overlayManager = null
+            ExecutionResult.ok("悬浮窗已隐藏")
+        }
     }
 
     suspend fun overlayUpdate(args: List<String>, ec: ExecutionContext): ExecutionResult {
         if (overlayView == null) return ExecutionResult.fail("悬浮窗未在显示。请先执行 sys.overlay.show")
         val text = args.joinToString(" ")
         if (text.isBlank()) return ExecutionResult.fail("用法: sys.overlay.update <文本>")
-        overlayView?.text = text
-        return ExecutionResult.ok("悬浮窗已更新: \"$text\"")
+        return withContext(Dispatchers.Main) {
+            overlayView?.text = text
+            ExecutionResult.ok("悬浮窗已更新: \"$text\"")
+        }
     }
 }

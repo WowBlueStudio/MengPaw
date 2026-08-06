@@ -50,7 +50,9 @@ enum class TaskStatus {
     /** 有效状态转换 — 非法转换抛出 IllegalArgumentException。 */
     fun canTransitionTo(next: TaskStatus): Boolean = when (this) {
         PENDING -> next in setOf(ASSIGNED, CANCELLED)
-        ASSIGNED -> next in setOf(RUNNING, CANCELLED)
+        // P0 fix: ASSIGNED 允许直接落终态 — 委派等待期间对端可完成/失败/超时
+        // (TribeDelegateEngine 等待结果路径与 handleTimeout 均从 ASSIGNED 转换)
+        ASSIGNED -> next in setOf(RUNNING, COMPLETED, FAILED, TIMED_OUT, CANCELLED)
         RUNNING -> next in setOf(COMPLETED, FAILED, TIMED_OUT)
         FAILED -> next in setOf(ASSIGNED, CANCELLED)    // retry = reassign
         TIMED_OUT -> next in setOf(ASSIGNED, CANCELLED) // retry = reassign

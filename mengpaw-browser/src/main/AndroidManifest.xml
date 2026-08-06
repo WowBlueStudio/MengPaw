@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 设备内 MCP 桥认证: 写入 Shell 进程 token 通道 (signature 级, 同签名自动授予) (P0 修复) -->
+    <uses-permission android:name="com.mengpaw.permission.MCP_BRIDGE" />
 
     <application
         android:allowBackup="false"

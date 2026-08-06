@@ -481,17 +481,17 @@ class BrowserBridge(
             dimsLatch.await(3, java.util.concurrent.TimeUnit.SECONDS)
 
             val dims = org.json.JSONObject(dimsJson.ifBlank { """{"w":${webView.width},"h":${webView.height}}""" })
-            val pageW = dims.optInt("w", webView.width).coerceAtLeast(1)
             val pageH = dims.optInt("h", webView.height).coerceAtMost(maxHeight).coerceAtLeast(1)
-            val vpHeight = webView.height.coerceAtLeast(1)
+            // P0 fix: 捕获宽度以 WebView 实际宽度为准 — capturePicture 移除后 draw 输出即视口
+            val drawW = webView.width.coerceAtLeast(1)
+            val drawH = webView.height.coerceAtLeast(1)
+            val vpHeight = drawH
             val segmentCount = minOf((pageH + vpHeight - 1) / vpHeight, MAX_SEGMENTS)
 
             val segments = mutableListOf<Bitmap>()
             var currentY = 0
-            val latch = java.util.concurrent.CountDownLatch(1)
 
             for (i in 0 until segmentCount) {
-                val segH = minOf(vpHeight, pageH - currentY)
                 // Scroll + wait for render via post queue
                 val segLatch = java.util.concurrent.CountDownLatch(1)
                 webView.post {
@@ -503,18 +503,23 @@ class BrowserBridge(
                 }
                 segLatch.await(500, java.util.concurrent.TimeUnit.MILLISECONDS)
 
-                val picture = webView.capturePicture()
-                val segBitmap = Bitmap.createBitmap(pageW, segH, Bitmap.Config.ARGB_8888)
-                val canvas = android.graphics.Canvas(segBitmap)
-                canvas.translate(0f, -currentY.toFloat())
-                picture.draw(canvas)
+                // P0 fix: capturePicture() 已在 API 33+ 移除 — 抛 NoSuchMethodError (Error 而非
+                // Exception, 逃过下方 catch 必崩)。改为主线程 View.draw — 滚动对齐后画当前视口段
+                // (语义等价: 每段 = 视口截图, 拼接为全页)。
+                val segBitmap = Bitmap.createBitmap(drawW, minOf(drawH, pageH - currentY), Bitmap.Config.ARGB_8888)
+                val drawLatch = java.util.concurrent.CountDownLatch(1)
+                webView.post {
+                    webView.draw(android.graphics.Canvas(segBitmap))
+                    drawLatch.countDown()
+                }
+                drawLatch.await(500, java.util.concurrent.TimeUnit.MILLISECONDS)
                 segments.add(segBitmap)
                 currentY += vpHeight
                 if (currentY >= pageH) break
             }
 
             // Stitch vertically
-            val stitched = Bitmap.createBitmap(pageW, minOf(pageH, segmentCount * vpHeight), Bitmap.Config.ARGB_8888)
+            val stitched = Bitmap.createBitmap(drawW, minOf(pageH, segmentCount * vpHeight), Bitmap.Config.ARGB_8888)
             val stitchCanvas = android.graphics.Canvas(stitched)
             var offsetY = 0
             for (seg in segments) { stitchCanvas.drawBitmap(seg, 0f, offsetY.toFloat(), null); offsetY += seg.height; seg.recycle() }
@@ -532,7 +537,7 @@ class BrowserBridge(
             // Scroll back to top
             webView.post { webView.scrollTo(0, 0) }
 
-            """{"ok":true,"path":"${finalFile.absolutePath}","width":$pageW,"totalHeight":${minOf(pageH, segmentCount * vpHeight)},"segments":$segmentCount,"fileSize":$fileSize}"""
+            """{"ok":true,"path":"${finalFile.absolutePath}","width":$drawW,"totalHeight":${minOf(pageH, segmentCount * vpHeight)},"segments":$segmentCount,"fileSize":$fileSize}"""
         } catch (e: Exception) {
             // Auto-fallback: try viewport screenshot
             return try {

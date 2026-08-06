@@ -208,6 +208,18 @@ class AcpHttpTransport(
                 writer.flush()
                 return
             }
+            // SECURITY (P0 fix): peer identity MUST be bound to the socket address —
+            // msg.from is spoofable plaintext, so an attacker on the LAN could claim
+            // any paired peer's agentId and pass isTrusted(). All messages establish
+            // an IP binding; sensitive types additionally require the source IP to be
+            // one this peerId has previously communicated from.
+            server.bindPeerIp(msg.from, remoteAddr)
+            if (msg.type in SENSITIVE_ACP_TYPES && !server.isPeerFromBoundIp(msg.from, remoteAddr)) {
+                val err = """{"result":"auth_required: peer identity not bound to source address","success":false}"""
+                writer.write("HTTP/1.1 403 Forbidden\r\nContent-Length: ${err.length}\r\n\r\n$err")
+                writer.flush()
+                return
+            }
             peerId = msg.from
 
             // Dispatch
@@ -241,3 +253,11 @@ class AcpHttpTransport(
 // NSD peer discovery is a future feature.
 // When needed, implement with android.net.nsd.NsdManager.
 // See: https://developer.android.com/training/connect-devices-wirelessly/nsd
+
+/** ACP 类型中需要 peer 身份可验证的消息 (工作区同步/会话/解绑/MCP — 均触及敏感数据或命令执行)。
+ * 与 AcpServer.processMessage 中的 isTrusted 分支一一对应, 此处补 IP 绑定校验。 */
+private val SENSITIVE_ACP_TYPES = setOf(
+    "WS_MANIFEST", "WS_PULL", "REVOKE",
+    "SESSION_HEAD", "SESSION_PULL", "SESSION_DELTA", "SESSION_ACK",
+    "MCP_REQUEST"
+)

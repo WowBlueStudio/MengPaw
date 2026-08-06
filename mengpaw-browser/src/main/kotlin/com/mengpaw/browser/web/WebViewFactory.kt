@@ -73,21 +73,10 @@ fun createWebView(
     try { CookieManager.getInstance().setAcceptThirdPartyCookies(this, false) } catch (_: Exception) { }
     try { CookieManager.getInstance().setAcceptCookie(true) } catch (_: Exception) { }
 
-    // Agent-to-browser bridge — enables Agent to control this WebView via JS
-    addJavascriptInterface(
-        com.mengpaw.browser.bridge.BrowserBridge(this) { bitmap ->
-            var path = ""
-            try {
-                val dir = java.io.File(com.mengpaw.kernel.DataPaths.SCREENSHOTS)
-                dir.mkdirs()
-                val file = java.io.File(dir, "browser_${System.currentTimeMillis()}.png")
-                java.io.FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 90, it) }
-                path = file.absolutePath
-            } catch (_: Exception) { }
-            path
-        },
-        "MengPaw"
-    )
+    // SECURITY (P0 fix): Agent 控制浏览器完全走 Kotlin 侧直接方法调用 (BrowserBridge 由
+    // BuiltinBrowserPlugin 持有), 网页 JS 从未引用 window.MengPaw — 原 addJavascriptInterface
+    // 注册是纯暴露面: 任意网页一行 JS 即可截屏填盘/调协程 API/泄露内部路径。
+    // 已移除。若未来需要页面主动回调, 必须按域名白名单 + 受限方法集重新设计。
 
     var lastScrollYLocal = 0
     setOnScrollChangeListener { _, _, scrollY, _, _ ->

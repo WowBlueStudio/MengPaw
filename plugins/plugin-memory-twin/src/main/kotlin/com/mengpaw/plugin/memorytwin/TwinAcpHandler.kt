@@ -77,8 +77,10 @@ class TwinAcpHandler(
         val localManifest = TwinWorkspace.buildManifest(agentName)
 
         // 解析对端清单 (哈希截断为 16 字符防超长 payload)
+        // P0 fix: relPath 必须消毒 — 对端可控, "../" 穿越可让本机读任意文件并回传
         val peerHashes = mutableMapOf<String, String>()
         for ((relPath, meta) in peerFiles.entries) {
+            if (sanitizeRelPath(relPath) == null) continue
             val hash = meta.jsonObject["hash"]?.jsonPrimitive?.content ?: ""
             if (hash.isNotBlank()) peerHashes[relPath] = hash
         }
@@ -95,7 +97,7 @@ class TwinAcpHandler(
                 }
             }
         }
-        // request: 本机没有但对端有的文件
+        // request: 本机没有但对端有的文件 (已消毒)
         val request = buildJsonArray {
             peerHashes.keys.forEach { relPath ->
                 if (relPath !in localManifest) add(JsonPrimitive(relPath))
@@ -118,9 +120,11 @@ class TwinAcpHandler(
         val files = buildJsonObject {
             paths.forEach { path ->
                 val relPath = path.jsonPrimitive?.content ?: return@forEach
-                val f = File(DataPaths.AGENTS, "$agentName/$relPath")
+                // P0 fix: 同 WS_MANIFEST — 穿越路径拒绝
+                val safe = sanitizeRelPath(relPath) ?: return@forEach
+                val f = File(DataPaths.AGENTS, "$agentName/$safe")
                 if (f.exists() && f.isFile) {
-                    try { put(relPath, JsonPrimitive(f.readText())) } catch (_: Exception) {}
+                    try { put(safe, JsonPrimitive(f.readText())) } catch (_: Exception) {}
                 }
             }
         }
@@ -190,10 +194,30 @@ class TwinAcpHandler(
 
     private suspend fun handleRevoke(msg: AcpMessage): AcpResult {
         val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }
-        val revokedPeerId = payload?.get("revokedPeerId")?.jsonPrimitive?.content ?: msg.from
+        val requested = payload?.get("revokedPeerId")?.jsonPrimitive?.content ?: ""
+        // P0 fix: REVOKE 只能撤销自己 — 此前任意可信 peer 可携带任意 revokedPeerId
+        // 解除/破坏其它 peer 的信任 (横向破坏)。解绑自身由 AcpServer 层 isTrusted +
+        // transport 层 IP 绑定双重保证发送者身份。
+        if (requested.isNotBlank() && requested != msg.from) {
+            return AcpResult(false, "revoke_denied", "REVOKE must target the sender peer")
+        }
+        val revokedPeerId = msg.from
         android.util.Log.w("MengPawTwin", "收到孪生解绑: from=${revokedPeerId}")
         syncEngine.onRevokeReceived(revokedPeerId)
         return AcpResult(true, "revoke_processed", "已处理 $revokedPeerId 的解绑请求")
+    }
+
+    /**
+     * P0 fix: 消毒对端提供的相对路径。
+     * 拒绝: 空白 / 绝对路径 / 含 `..` 段的路径 (反斜杠也防 — 双平台保险)。
+     * 未通过 → null, 调用方跳过该条目 (拒绝服务单文件, 不整包拒绝)。
+     */
+    private fun sanitizeRelPath(relPath: String): String? {
+        if (relPath.isBlank()) return null
+        if (relPath.startsWith("/") || relPath.startsWith("\\")) return null
+        if (relPath.contains(":")) return null  // Windows 盘符/URL scheme 保险
+        if (relPath.split('/', '\\').any { it == ".." }) return null
+        return relPath
     }
 
     private suspend fun handlePairConfirm(msg: AcpMessage): AcpResult {

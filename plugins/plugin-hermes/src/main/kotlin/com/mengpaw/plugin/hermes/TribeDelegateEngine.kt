@@ -67,8 +67,10 @@ class TribeDelegateEngine(
         targetAgentId: String,
         targetName: String
     ): ExecutionResult {
-        // Step 1: 写入 Kanban
-        val created = kanbanBoard.create(task)
+        // Step 1: 写入 Kanban (create 强制 PENDING; P0 fix: 立即转 ASSIGNED —
+        // 此前无任何 PENDING→ASSIGNED 转换点, 后续 COMPLETED/TIMED_OUT 转换必抛
+        // IllegalArgumentException, 委派核心链路全断)
+        val created = kanbanBoard.transition(kanbanBoard.create(task).id, TaskStatus.ASSIGNED)
         val deferred = CompletableDeferred<String>()
         pendingResults[created.id] = deferred
 

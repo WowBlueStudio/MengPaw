@@ -186,6 +186,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val f = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "auto_translate")
             if (f.exists()) _state.value = _state.value.copy(autoTranslate = f.readText().trim() == "true")
         } catch (_: Exception) {}
+        // P0 fix: 主题/语言持久化恢复 — 此前 cycleThemeMode/toggleLanguage 只改内存,
+        // 重启必回 LIGHT+中文默认
+        try {
+            val themeFile = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "theme_mode")
+            if (themeFile.exists()) {
+                ThemeMode.entries.firstOrNull { it.name == themeFile.readText().trim() }?.let {
+                    _state.value = _state.value.copy(themeMode = it)
+                }
+            }
+        } catch (_: Exception) {}
+        try {
+            val langFile = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "use_chinese")
+            if (langFile.exists()) {
+                _state.value = _state.value.copy(useChinese = langFile.readText().trim() != "false")
+            }
+        } catch (_: Exception) {}
     }
 
     /** Returns the first saved provider, or null if none configured. */
@@ -422,6 +438,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val modes = ThemeMode.entries
         val next = modes[(modes.indexOf(_state.value.themeMode) + 1) % modes.size]
         _state.value = _state.value.copy(themeMode = next)
+        // P0 fix: 持久化 — 此前重启即回 LIGHT
+        try {
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "theme_mode")
+            file.parentFile?.mkdirs()
+            file.writeText(next.name)
+        } catch (_: Exception) {}
     }
 
     fun cycleBackgroundMode() {
@@ -459,7 +481,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleLanguage() {
-        _state.value = _state.value.copy(useChinese = !_state.value.useChinese)
+        val next = !_state.value.useChinese
+        _state.value = _state.value.copy(useChinese = next)
+        // P0 fix: 持久化 — 此前重启即回中文
+        try {
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "use_chinese")
+            file.parentFile?.mkdirs()
+            file.writeText(next.toString())
+        } catch (_: Exception) {}
     }
 
     fun cycleAgentLanguage() {

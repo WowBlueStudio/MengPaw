@@ -34,6 +34,19 @@ object McpHttpServer {
     /** 工具执行器 — 由 BrowserActivity 注入 (内部处理主线程切换)。 */
     @Volatile private var toolHandler: ((String, Map<String, String>) -> String)? = null
 
+    /**
+     * P0 fix: 桥认证 token — 浏览器进程启动时生成 (32 字节 SecureRandom), 经签名级
+     * ContentProvider 写入 Shell 进程; 所有 /mcp 请求必须携带 `Authorization: Bearer <token>`。
+     * 空 token = 未建立安全通道 → 拒绝一切工具调用 (fail-closed)。
+     */
+    @Volatile private var authToken: String = ""
+
+    /** 设置认证 token (BrowserActivity 生成后调用)。 */
+    fun setAuthToken(token: String) { authToken = token }
+
+    /** 当前认证 token (调试/provider 用)。 */
+    fun currentToken(): String = authToken
+
     val isRunning: Boolean get() = running
 
     /** 启动 HTTP server (幂等)。 */
@@ -84,11 +97,14 @@ object McpHttpServer {
             val path = parts.getOrNull(1) ?: return
 
             var contentLength = 0
+            var authorization = ""
             while (true) {
                 val line = reader.readLine() ?: break
                 if (line.isEmpty()) break
                 if (line.startsWith("Content-Length:", ignoreCase = true)) {
                     contentLength = line.substringAfter(":").trim().toIntOrNull() ?: 0
+                } else if (line.startsWith("Authorization:", ignoreCase = true)) {
+                    authorization = line.substringAfter(":").trim()
                 }
             }
 
@@ -97,14 +113,24 @@ object McpHttpServer {
             val status: String
             when {
                 method == "GET" && path == "/health" -> {
+                    // 健康检查无敏感信息 — 免认证
                     response = """{"ok":true,"status":"online","tools":6}"""
                     status = "200 OK"
                 }
                 method == "POST" && path == "/mcp" -> {
-                    val body = CharArray(contentLength)
-                    if (contentLength > 0) reader.read(body, 0, contentLength)
-                    response = dispatchMcp(String(body))
-                    status = "200 OK"
+                    // P0 fix: 认证校验 — 无 token 或 token 不匹配 → 401 (fail-closed)。
+                    // 此前 127.0.0.1:9880 零认证, 设备上任意 app 可完全控制浏览器。
+                    val expected = authToken
+                    val provided = authorization.removePrefix("Bearer").trim()
+                    if (expected.isBlank() || provided != expected) {
+                        response = """{"ok":false,"error":"unauthorized: missing or invalid bridge token (重启主应用或从 MengPaw 打开浏览器)"}"""
+                        status = "401 Unauthorized"
+                    } else {
+                        val body = CharArray(contentLength)
+                        if (contentLength > 0) reader.read(body, 0, contentLength)
+                        response = dispatchMcp(String(body))
+                        status = "200 OK"
+                    }
                 }
                 else -> {
                     response = """{"ok":false,"error":"Not found: $method $path"}"""

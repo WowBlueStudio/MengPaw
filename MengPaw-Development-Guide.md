@@ -70,8 +70,8 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | mengpaw-kernel | JVM Library | 82 | 0.30.0 | 微内核：纯 Kotlin，零 Android 依赖 |
 | mengpaw-core | Android Library | 21 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 6 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
-| mengpaw-shell | APK | 65 | 0.30.0 (vc=30000) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
-| mengpaw-browser | APK | 33 | 0.7.0 (vc=9) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 33文件架构 |
+| mengpaw-shell | APK | 66 | 0.32.0 (vc=32000) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
+| mengpaw-browser | APK | 33 | 0.7.2 (vc=11) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 33文件架构 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
 
@@ -902,9 +902,18 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 Prompt 注入检测防火墙，位于 LLM 调用前最后一道防线。
 
+**ACP 信任模型 (P0 修复, v0.32.1+)**: 明文 HTTP 上 `msg.from` 完全可伪造 — 攻击者可冒充任意已配对 peer 的 agentId 通过 `isTrusted()`。两层加固：
+- **IP 绑定** (`AcpServer.bindPeerIp`/`isPeerFromBoundIp` + `AcpTransport`): 所有消息建立 peerId→来源 IP 绑定 (保留最近 4 个 IP, DHCP 容错); 敏感类型 (WS_MANIFEST/WS_PULL/REVOKE/SESSION_*/MCP_REQUEST) 额外要求消息来源 socket IP 在绑定集内, 冒充尝试 403 拒绝
+- **MCP_REQUEST 鉴权**: 该类型直达插件命令执行 (绕过 Pipeline 命令过滤), 与工作区同步同级要求已配对信任, 未配对 → `auth_required`
+
 ### 6.5 IntegrityGuard
 
 Fail-secure 完整性守护：启动时校验 APK 签名，检测篡改→安全模式。实现 `IntegrityProvider` 接口，可通过 kernel 的 `SecurityPolicy` 调用。
+
+**Fail-secure 修正 (P0, v0.32.1+)**: 此前多重签名分支只置 `initialized=true` 即返回 — `baselineHashes` 为空时 verify() 恒返回 true, 检测形同虚设。现修复为：
+- 多重签名 (可疑篡改) → `multiSignerTampered=true`, verify() 恒拒绝
+- 运行时复查: verify() 每次重新检查 signingInfo.hasMultipleSigners()
+- **无 baseline = 拒绝**: `baselineHashes.isEmpty()` → false (此前返回 initialized 恒 true)
 
 ### 6.6 插件安全
 
@@ -933,9 +942,21 @@ Fail-secure 完整性守护：启动时校验 APK 签名，检测篡改→安全
 - **频率限制**: CAPABILITY_ANNOUNCE 同 peerId 30 秒内最多 1 次弹窗
 - **委派鉴权**: `TWIN_DELEGATE` 需已配对信任才执行
 - **解绑清理**: UI 解除孪生时完整清理 `.trusted` / `.key` 文件 + FrameworkPeerStore 记录
+- **路径消毒 (P0, v0.32.1+)**: `WS_MANIFEST`/`WS_PULL` 的 relPath 来自对端, 拒绝空白/绝对路径/含 `..` 段/盘符, 防跨出工作区读写回传
+- **REVOKE 自限 (P0, v0.32.1+)**: 解绑请求只能撤销发送者自己 (`revokedPeerId` ≠ `msg.from` → 拒绝), 防可信 peer 横向破坏其它信任
 - **心跳保活**: 30 秒间隔双向 heartbeat → 90 秒无响应标记离线 → 自动停止向离线节点同步
 - **QoS 自适应**: WiFi 全量同步 60s / 移动网络仅关键记忆 300s / 按流量计费暂停自动同步
 - **手动 IP 容错**: mDNS 不可用时可通过 `twin.peer.add <ip>` 手动添加节点, 绕过多播隔离
+
+### 6.8 设备内 MCP 桥认证 (P0 修复, v0.32.1+)
+
+Shell ↔ 浏览器进程的 127.0.0.1:9880 HTTP 桥 (`McpHttpServer`/`BrowserMcpPlugin`) 此前**零认证** — 设备上任意 app 可连接回环端口完全控制浏览器。现修复为 Bearer token 认证：
+
+- **token 生成**: 浏览器进程 `BrowserActivity` 启动时生成 32 字节 SecureRandom token → `McpHttpServer.setAuthToken()`
+- **token 通道**: 浏览器经签名级 ContentProvider (`com.mengpaw.permission.MCP_BRIDGE`, protectionLevel=signature → 仅同签名 APK 可访问) 写入 Shell 进程 `BridgeTokenProvider` → 反射同步到 `BrowserMcpPlugin.bridgeToken`
+- **请求认证**: `BrowserMcpPlugin` 每次 /mcp 请求带 `Authorization: Bearer <token>`; 服务端 token 不匹配或为空 → **401 fail-closed** (无 token 时浏览器拒绝一切工具调用, 直到从 MengPaw 主应用打开浏览器建立通道)
+- `/health` 免认证 (仅在线状态, 无敏感信息)
+- 另: **JavaBridge 移除 (P0)**: `addJavascriptInterface("MengPaw")` 已删除 — 网页 JS 从未引用, Agent 控制全走 Kotlin 直接调用; 任意网页原本可截屏填盘/调协程 API/泄露内部路径
 
 ---
 

@@ -512,7 +512,17 @@ class BuiltinBrowserPlugin(
         val wv = webViewProvider() ?: return noBrowser()
         return try {
             val safe = args[0].replace("\\", "\\\\").replace("'", "\\'")
-            // Get element bounds via JS
+            // P0 fix: capturePicture() 已在 API 33+ 移除 (NoSuchMethodError 逃过 catch 必崩)。
+            // 新流程: scrollIntoView → 主线程 View.draw 视口 → 用视口坐标 rect 裁剪。
+            val scrollLatch = java.util.concurrent.CountDownLatch(1)
+            wv.post {
+                wv.evaluateJavascript(
+                    "(function(){var e=document.querySelector('$safe');if(e)e.scrollIntoView({block:'center'});})()", null
+                )
+                wv.post { scrollLatch.countDown() }
+            }
+            scrollLatch.await(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+            // 滚动后重新取 rect (getBoundingClientRect 为视口坐标)
             val rectJson = com.mengpaw.browser.bridge.BrowserBridge(wv).eval(
                 "(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});var r=e.getBoundingClientRect();return JSON.stringify({ok:true,x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.width),h:Math.round(r.height)});})()"
             )
@@ -520,12 +530,18 @@ class BuiltinBrowserPlugin(
             if (!json.optBoolean("ok", false)) {
                 return ExecutionResult.fail("Element not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
             }
-            // Full-page screenshot and crop
-            val picture = wv.capturePicture()
-            val fullBitmap = android.graphics.Bitmap.createBitmap(picture.width, picture.height, android.graphics.Bitmap.Config.ARGB_8888)
-            picture.draw(android.graphics.Canvas(fullBitmap))
-            val x = json.optInt("x", 0).coerceAtLeast(0)
-            val y = json.optInt("y", 0).coerceAtLeast(0)
+            // 视口截图 (主线程 draw)
+            val vpW = wv.width.coerceAtLeast(1)
+            val vpH = wv.height.coerceAtLeast(1)
+            val fullBitmap = android.graphics.Bitmap.createBitmap(vpW, vpH, android.graphics.Bitmap.Config.ARGB_8888)
+            val drawLatch = java.util.concurrent.CountDownLatch(1)
+            wv.post {
+                wv.draw(android.graphics.Canvas(fullBitmap))
+                drawLatch.countDown()
+            }
+            drawLatch.await(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+            val x = json.optInt("x", 0).coerceIn(0, vpW - 1)
+            val y = json.optInt("y", 0).coerceIn(0, vpH - 1)
             val w = minOf(json.optInt("w", fullBitmap.width), fullBitmap.width - x).coerceAtLeast(1)
             val h = minOf(json.optInt("h", fullBitmap.height), fullBitmap.height - y).coerceAtLeast(1)
             val cropped = android.graphics.Bitmap.createBitmap(fullBitmap, x, y, w, h)

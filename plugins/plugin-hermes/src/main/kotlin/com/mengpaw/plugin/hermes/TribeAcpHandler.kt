@@ -141,8 +141,12 @@ $text
             delegateMode = DelegateMode.ACP
         )
 
-        // 写入 Kanban
-        val created = kanbanBoard?.create(task) ?: task
+        // 写入 Kanban (create 强制 PENDING; P0 fix: 立即转 ASSIGNED — 否则后续
+        // RESULT 分支 COMPLETED/FAILED 转换必抛 IllegalArgumentException)
+        val created = kanbanBoard?.let { board ->
+            try { board.transition(board.create(task).id, TaskStatus.ASSIGNED) }
+            catch (e: Exception) { task }
+        } ?: task
 
         // 写入接收方自己的 inbox 保底（bug fix: 之前误写发送方目录）
         try {

@@ -52,6 +52,14 @@ class BrowserMcpPlugin : Plugin, McpToolProvider {
         @Volatile
         var serverUrl: String = "http://127.0.0.1:${com.mengpaw.kernel.ports.Ports.BROWSER_MCP}"
 
+        /**
+         * P0 fix: 桥认证 token — 浏览器进程生成, 经 Shell 的 BridgeTokenProvider
+         * (signature 权限) 写入, 反射同步到本字段。所有 /mcp 请求带 Bearer 头;
+         * 空 token 时服务端 401 (fail-closed)。
+         */
+        @Volatile
+        var bridgeToken: String = ""
+
         // ── 兼容保留 (旧反射绑定机制已废弃, 字段不再被赋值, 仅作 fallback) ──
         @JvmField
         var webViewProvider: (() -> WebView?)? = null
@@ -77,6 +85,8 @@ class BrowserMcpPlugin : Plugin, McpToolProvider {
         conn.requestMethod = "POST"
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "application/json")
+        // P0 fix: 桥认证 token (浏览器经 BridgeTokenProvider 注入)
+        if (bridgeToken.isNotBlank()) conn.setRequestProperty("Authorization", "Bearer $bridgeToken")
         conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
         if (conn.responseCode in 200..299) conn.inputStream.bufferedReader().readText() else null
     } catch (_: Exception) { null }

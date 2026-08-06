@@ -114,6 +114,21 @@ class BrowserActivity : ComponentActivity() {
         // 设备内 MCP 桥: 启动本地 HTTP server (127.0.0.1:9880), Shell 进程经它调 MCP 工具
         // (废弃旧反射静态字段绑定 — 插件类在 Shell 进程, 浏览器进程赋值互不可见)
         com.mengpaw.browser.mcp.McpHttpServer.start { tool, args -> runMcpTool(tool, args) }
+        // P0 fix: 桥认证 — 生成 32 字节随机 token, 经签名级 ContentProvider 写入 Shell 进程。
+        // 第三方 app 无签名权限无法读写; 无 token 时 McpHttpServer 对 /mcp 一律 401 (fail-closed)。
+        try {
+            val bytes = ByteArray(32)
+            java.security.SecureRandom().nextBytes(bytes)
+            val token = bytes.joinToString("") { "%02x".format(it) }
+            com.mengpaw.browser.mcp.McpHttpServer.setAuthToken(token)
+            val values = android.content.ContentValues().apply { put("token", token) }
+            contentResolver.update(
+                android.net.Uri.parse("content://com.mengpaw.bridge.token"),
+                values, null, null
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("MengPaw", "MCP bridge token 注入失败 (Shell 未运行?): ${e.message}")
+        }
         // Bind Quick Click toggle and screenshot settings to BuiltinBrowserPlugin
         val prefs = BrowserPrefs(this)
         com.mengpaw.browser.plugin.BuiltinBrowserPlugin.quickClickEnabled = { prefs.quickClickEnabled }

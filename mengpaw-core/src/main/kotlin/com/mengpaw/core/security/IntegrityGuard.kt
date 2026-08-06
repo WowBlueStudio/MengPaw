@@ -58,6 +58,15 @@ class IntegrityGuard(
     /** Whether init() has been called. */
     private var initialized = false
 
+    /**
+     * P0 fix (fail-secure): init 时检测到 APK 多重签名 → 视为篡改。
+     * 此前该分支只置 initialized=true 就 return — baselineHashes 为空时
+     * verify() 的 "no baselines = nothing to verify" 路径恒返回 true,
+     * 多重签名检测形同虚设。
+     */
+    @Volatile
+    private var multiSignerTampered = false
+
     /** Cached Android context for APK signature verification. */
     private var appContext: android.content.Context? = null
 
@@ -88,8 +97,9 @@ class IntegrityGuard(
                     val signingInfo = pm.getPackageInfo(packageName,
                         android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES).signingInfo
                     if (signingInfo != null && signingInfo.hasMultipleSigners()) {
-                        // Multiple signers may indicate tampering
-                        initialized = true // mark initialized but fail verify()
+                        // Multiple signers may indicate tampering — fail-secure (P0 fix)
+                        multiSignerTampered = true
+                        initialized = true
                         return
                     }
                     val certs = signingInfo?.apkContentsSigners ?: signingInfo?.signingCertificateHistory
@@ -133,33 +143,45 @@ class IntegrityGuard(
      */
     fun verify(): Boolean {
         if (!initialized) return false // Fail-secure: reject if never initialized
+        if (multiSignerTampered) return false // P0 fix: 多重签名视为篡改, 恒拒绝
 
-        // Android path: re-verify APK signature
+        // Android path: re-verify APK signature (并复查多重签名 — init 后安装态不应变化,
+        // 但运行时复查成本低, 防 init 时被绕过)
         val ctx = appContext
-        if (ctx != null && baselineHashes.containsKey("android:apk-signature")) {
-            return try {
-                val pm = ctx.packageManager
-                val currentHash = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                    val signingInfo = pm.getPackageInfo(ctx.packageName,
+        if (ctx != null) {
+            var signingInfo: android.content.pm.SigningInfo? = null
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                signingInfo = try {
+                    ctx.packageManager.getPackageInfo(ctx.packageName,
                         android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES).signingInfo
-                    val certs = signingInfo?.apkContentsSigners ?: signingInfo?.signingCertificateHistory
-                    if (certs == null || certs.isEmpty()) return false
-                    sha256(certs[0].toByteArray())
-                } else {
-                    @Suppress("DEPRECATION")
-                    val pkgInfo = pm.getPackageInfo(ctx.packageName,
-                        android.content.pm.PackageManager.GET_SIGNATURES)
-                    val sigs = pkgInfo.signatures
-                    if (sigs == null || sigs.isEmpty()) return false
-                    sha256(sigs[0].toByteArray())
-                }
-                val expectedHash = baselineHashes["android:apk-signature"] ?: return false
-                currentHash.equals(expectedHash, ignoreCase = true)
-            } catch (e: Exception) { false }
+                } catch (e: Exception) { return false }
+                if (signingInfo != null && signingInfo.hasMultipleSigners()) return false
+            }
+            if (baselineHashes.containsKey("android:apk-signature")) {
+                return try {
+                    val pm = ctx.packageManager
+                    val currentHash = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        val certs = signingInfo?.apkContentsSigners ?: signingInfo?.signingCertificateHistory
+                        if (certs == null || certs.isEmpty()) return false
+                        sha256(certs[0].toByteArray())
+                    } else {
+                        @Suppress("DEPRECATION")
+                        val pkgInfo = pm.getPackageInfo(ctx.packageName,
+                            android.content.pm.PackageManager.GET_SIGNATURES)
+                        val sigs = pkgInfo.signatures
+                        if (sigs == null || sigs.isEmpty()) return false
+                        sha256(sigs[0].toByteArray())
+                    }
+                    val expectedHash = baselineHashes["android:apk-signature"] ?: return false
+                    currentHash.equals(expectedHash, ignoreCase = true)
+                } catch (e: Exception) { false }
+            }
         }
 
         // Desktop path: check file hashes
-        if (baselineHashes.isEmpty()) return initialized // no baselines = nothing to verify
+        // P0 fix (fail-secure): 无 baseline = 无法验证 = 拒绝 (此前返回 initialized 恒 true,
+        // 签名异常/初始化失败场景下 verify() 静默放行)
+        if (baselineHashes.isEmpty()) return false
         trackedFiles.forEach { name ->
             val expected = baselineHashes[name] ?: return@forEach
             val file = File(coreDir, name)
