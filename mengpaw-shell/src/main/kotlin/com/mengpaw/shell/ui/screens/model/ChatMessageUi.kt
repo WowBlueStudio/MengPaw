@@ -42,6 +42,25 @@ sealed class ChatMessageUi {
         override val stableId get() = "t_$createdAt"
     }
 
+    /**
+     * 单步执行气泡 (v0.3x) — 每个 ReAct 步骤一个独立气泡:
+     * 思考折叠头 (Step N + 完整 thought, 展开全程可见) + 正文
+     * (运行中 = 流式文本, 完成后 = 工具结果 / 最终答案)。
+     * 最终答案 = 最后一步 (isFinal=true)。
+     */
+    data class AgentStep(
+        val step: Int,
+        val thought: String,
+        val action: String?,
+        val content: String,
+        val isRunning: Boolean = false,
+        val isFinal: Boolean = false,
+        val executionMode: String? = null,
+        val agentRef: String? = null
+    ) : ChatMessageUi() {
+        override val stableId get() = "st_${step}_$createdAt"
+    }
+
     data class System(val content: String) : ChatMessageUi() {
         override val stableId get() = "s_$createdAt"
     }

@@ -39,7 +39,12 @@ data class MessageData(
     /** True for failed "!command" results (type="command"). Default false keeps old files compatible. */
     val isError: Boolean = false,
     /** 结构化附件 (v0.33.0+) — 旧会话 JSON 无此键 → 默认空, 零迁移。 */
-    val attachments: List<AttachmentData> = emptyList()
+    val attachments: List<AttachmentData> = emptyList(),
+    /** AgentStep 步骤气泡 (v0.3x, type="agent_step") — 默认值兼容旧文件。 */
+    val step: Int = 0,
+    val thought: String = "",
+    val action: String = "",
+    val isFinal: Boolean = false
 )
 
 @Serializable
@@ -383,6 +388,12 @@ class SessionPersistenceService(
                     },
                     executionMode = msg.executionMode, agentRef = msg.agentRef
                 )
+                is ChatMessageUi.AgentStep -> MessageData(
+                    type = "agent_step", text = msg.content,
+                    step = msg.step, thought = msg.thought, action = msg.action ?: "",
+                    isFinal = msg.isFinal,
+                    executionMode = msg.executionMode, agentRef = msg.agentRef
+                )
                 is ChatMessageUi.CommandResult -> MessageData(
                     type = "command", text = msg.content, isError = msg.isError
                 )
@@ -411,6 +422,13 @@ class SessionPersistenceService(
                             executionMode = data.executionMode?.ifEmpty { null },
                             agentRef = data.agentRef?.ifEmpty { null })
                     }
+                    "agent_step" -> ChatMessageUi.AgentStep(
+                        step = data.step, thought = data.thought,
+                        action = data.action.ifEmpty { null },
+                        content = data.text, isRunning = false, isFinal = data.isFinal,
+                        executionMode = data.executionMode?.ifEmpty { null },
+                        agentRef = data.agentRef?.ifEmpty { null }
+                    )
                     "command" -> ChatMessageUi.CommandResult(data.text, isError = data.isError)
                     else -> null
                 }

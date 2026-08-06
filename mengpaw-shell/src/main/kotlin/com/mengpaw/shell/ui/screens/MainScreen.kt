@@ -290,6 +290,7 @@ fun MainScreen(
                                             is ChatMessageUi.Agent -> AgentBubble(message.content, displayAgentName,
                                                 executionMode = message.executionMode, agentRef = message.agentRef)
                                             is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message, displayAgentName)
+                                            is ChatMessageUi.AgentStep -> AgentStepBubble(message, displayAgentName)
                                             is ChatMessageUi.CommandResult -> CommandResultBubble(message, strings)
                                             is ChatMessageUi.Suggestion -> PluginSuggestionCard(message.suggestion,
                                                 onInstall = { pluginViewModel.installPlugin(message.suggestion.pluginId) },

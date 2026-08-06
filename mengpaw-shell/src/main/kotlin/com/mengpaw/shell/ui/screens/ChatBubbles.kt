@@ -184,7 +184,75 @@ fun CommandResultBubble(message: ChatMessageUi.CommandResult, strings: AppString
     }
 }
 
-// ── Agent Bubble with Trace (expandable thinking steps) ──
+// ── Agent Step Bubble (v0.3x): 每个 ReAct 步骤一个独立气泡 ──
+// 形态: [Step N 思考(折叠, 展开=完整思考全文+工具调用)] + 正文(中间输出/最终答案)
+// 默认展开 — 用户要求展开必须看到全程 (完整思考不截断)
+@Composable
+fun AgentStepBubble(message: ChatMessageUi.AgentStep, agentName: String = "MengPaw") {
+    var thinkingExpanded by remember { mutableStateOf(true) }
+
+    Column(Modifier.fillMaxWidth()) {
+        // ── 思考折叠头: 完整思考 + 工具调用, 点击折叠/展开 ──
+        if (message.thought.isNotBlank() || message.action != null) {
+            Column(Modifier.fillMaxWidth(0.95f).padding(bottom = 2.dp)
+                .clickable { thinkingExpanded = !thinkingExpanded }) {
+                Row(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (message.isFinal) "思考" else "Step ${message.step} 思考",
+                        style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
+                    Spacer(Modifier.width(4.dp))
+                    Icon(if (thinkingExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        null, Modifier.size(16.dp), tint = ThemeColors.brand)
+                }
+                AnimatedVisibility(visible = thinkingExpanded) {
+                    Column(Modifier.padding(start = ArcoSpacing.sm, end = ArcoSpacing.sm, bottom = ArcoSpacing.sm)) {
+                        // 完整思考全文 — 全程可见, 不截断
+                        Text(message.thought, style = MaterialTheme.typography.bodySmall,
+                            color = ThemeColors.textSecondary)
+                        // 工具调用行 (终端风格)
+                        if (message.action != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.Terminal, null, Modifier.size(14.dp),
+                                    tint = ThemeColors.textSecondary)
+                                Spacer(Modifier.width(4.dp))
+                                Text(message.action, fontSize = 12.sp, color = ThemeColors.textSecondary,
+                                    fontFamily = FontFamily.Monospace)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 正文: 等待态 / 流式 / 中间输出 / 最终答案 ──
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+            Surface(shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm),
+                color = ThemeColors.bgCardHigh, modifier = Modifier.fillMaxWidth(0.9f)) {
+                Column(Modifier.padding(ArcoSpacing.lg)) {
+                    AgentBubbleHeader(agentName = agentName, executionMode = message.executionMode, agentRef = message.agentRef)
+                    Spacer(Modifier.height(ArcoSpacing.xs))
+                    // 等待期反馈: 思考中/正在执行 → spinner + 秒数
+                    if (message.isRunning &&
+                        (message.content == "思考中..." || message.content.isBlank() ||
+                            message.content.startsWith(EXECUTING_TOOL_PREFIX))) {
+                        WaitingIndicator(message.content)
+                    } else if (message.content.isNotBlank()) {
+                        SelectionContainer {
+                            MarkdownText(content = message.content,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary),
+                                nestedScroll = true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Agent Bubble with Trace (legacy, 历史会话 agent_trace 兼容) ──
 @Composable
 fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: String = "MengPaw") {
     val traces = message.traces

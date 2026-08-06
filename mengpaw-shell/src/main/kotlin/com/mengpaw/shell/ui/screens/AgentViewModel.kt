@@ -353,8 +353,10 @@ class AgentViewModel : ViewModel() {
             // ── 执行模式分发变量（在 try 外，catch 中也需要）────
             val savedLoopMode = inputTagManager.loopMode
             val modePrefix = executionMode?.prefix
-            var runningMsgIndex = -1     // fast‑path index; verified against ref before use
-            var runningMsgRef: ChatMessageUi.AgentWithTrace? = null // identity guard for concurrent insertions
+            // v0.3x 步骤气泡: 当前运行 step 气泡 (每 ReAct 步骤独立气泡, 非单运行气泡+traces)
+            var runningStepIndex = -1     // fast‑path index; verified against ref before use
+            var runningStepRef: ChatMessageUi.AgentStep? = null // identity guard for concurrent insertions
+            var lastCompletedStep = 0     // 最近固化的 step 号 (多 Action 批内合并判定)
             var playbackJob: Job? = null // 流式播放协程句柄 (try 外声明, catch 路径可取消)
             try {
                 // /Mission /Goal /Fleet: 临时覆盖 loopMode
@@ -391,18 +393,15 @@ class AgentViewModel : ViewModel() {
                     return@launch
                 }
 
-                // ── "思考中..."气泡前置 (v0.28.6): 在翻译/召回/引擎准备之前插入,
-                // 用户发送后立即看到反馈, 4-13s 等待期有活动气泡 ──
-                // Track running message for O(1) updates + identity guard against concurrent insertions
-                val runningMsg = ChatMessageUi.AgentWithTrace(
-                    finalContent = "思考中...",
-                    traces = emptyList(),
-                    isRunning = true,
-                    executionMode = modePrefix,
-                    agentRef = agentRef
+                // ── "思考中..."步骤气泡前置 (v0.28.6): 在翻译/召回/引擎准备之前插入,
+                // 用户发送后立即看到反馈, 4-13s 等待期有活动气泡 (v0.3x: 首步占位) ──
+                val runningMsg = ChatMessageUi.AgentStep(
+                    step = 1, thought = "", action = null,
+                    content = "思考中...", isRunning = true,
+                    executionMode = modePrefix, agentRef = agentRef
                 )
-                runningMsgRef = runningMsg
-                runningMsgIndex = session.messages.value.size
+                runningStepRef = runningMsg
+                runningStepIndex = session.messages.value.size
                 session.messages.value = session.messages.value + runningMsg
                 KernelLog.d("MengPawLatency", "T1 bubble")
 
@@ -447,9 +446,6 @@ class AgentViewModel : ViewModel() {
                 // 直接传递用户任务，不包装回溯摘要。Agent 通过对话历史自然感知上下文。
                 val contextPrefix = actualTask
 
-                // 播放协程(主线程)与 onStep(engine 线程)并发读写 — 同步列表防 CME (v0.28.5)
-                val traces = java.util.Collections.synchronizedList(mutableListOf<AgentTrace>())
-
                 // ── 流式播放器: onDelta 只累积, 独立协程按节奏播放 (v0.28.5) ──
                 // 根因 (v0.28.4 彻查): DeepSeek 端点在 ~200ms 内突发全部增量,
                 // onDelta 直推 + 50ms 节流 → 只推 3 次, 观感 = 整段弹出。
@@ -464,28 +460,76 @@ class AgentViewModel : ViewModel() {
                 // 出现即推送 — 不等工具执行完成 (onStep), 消除工具轮流式空屏
                 var announcedTools = 0            // 已宣布的 Action 行数 (onStep 清零)
 
-                // 推送当前流式文本到运行中气泡 (播放协程 / onStep / flush 共用)
-                fun pushDisplay(displayText: String) {
+                // ── 步骤气泡管理 (v0.3x): 每个 ReAct 步骤一个独立气泡 ──
+                // 运行中: 流式文本 → 工具完成 (onStep) 固化 (思考折叠头 + 工具结果正文)
+                // → 下一步占位; 最终答案 = 最后一步 (isFinal)。
+                // 多 Action 批: 同 step 连续 onStep 合并 observation 到同一气泡。
+                fun pushStepDisplay(step: Int, thought: String, action: String?, content: String, isFinal: Boolean = false) {
                     session.messages.update { current ->
                         val mutable = current.toMutableList()
-                        val ridx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
-                        if (ridx >= 0) {
+                        val ridx = resolveRunningIndex(mutable, runningStepIndex, runningStepRef)
+                        val newMsg = if (ridx >= 0) {
                             // 替换后同步 ref/index — 快路径恒命中 (v0.28.4)
-                            val newMsg = ChatMessageUi.AgentWithTrace(
-                                displayText, traces.toList(),
-                                isRunning = true, executionMode = modePrefix, agentRef = agentRef
+                            (mutable[ridx] as ChatMessageUi.AgentStep).copy(
+                                step = step, thought = thought, action = action,
+                                content = content, isRunning = true, isFinal = isFinal
                             )
-                            runningMsgRef = newMsg
-                            runningMsgIndex = ridx
-                            mutable[ridx] = newMsg
+                        } else {
+                            ChatMessageUi.AgentStep(
+                                step, thought, action, content, isRunning = true, isFinal = isFinal,
+                                executionMode = modePrefix, agentRef = agentRef
+                            )
+                        }
+                        val target = if (ridx >= 0) ridx else mutable.size
+                        runningStepRef = newMsg
+                        runningStepIndex = target
+                        if (ridx >= 0) mutable[ridx] = newMsg else mutable.add(newMsg)
+                        mutable
+                    }
+                }
+
+                /** 固化当前运行 step (思考折叠头 + 工具结果) 并创建下一步占位气泡。 */
+                fun completeStep(trace: com.mengpaw.kernel.AgentEngine.TraceStep) {
+                    session.messages.update { current ->
+                        val mutable = current.toMutableList()
+                        val ridx = resolveRunningIndex(mutable, runningStepIndex, runningStepRef)
+                        if (ridx >= 0) {
+                            mutable[ridx] = (mutable[ridx] as ChatMessageUi.AgentStep).copy(
+                                thought = trace.thought, action = trace.action,
+                                content = trace.observation ?: "", isRunning = false
+                            )
+                        }
+                        val next = ChatMessageUi.AgentStep(
+                            trace.step + 1, "", null, "思考中...", isRunning = true,
+                            executionMode = modePrefix, agentRef = agentRef
+                        )
+                        runningStepRef = next
+                        runningStepIndex = mutable.size
+                        mutable.add(next)
+                        mutable
+                    }
+                }
+
+                /** 多 Action 批内合并: 同 step 后续 observation 追加到已固化气泡。 */
+                fun mergeBatchObservation(trace: com.mengpaw.kernel.AgentEngine.TraceStep) {
+                    session.messages.update { current ->
+                        val mutable = current.toMutableList()
+                        val idx = mutable.indexOfLast { it is ChatMessageUi.AgentStep && it.step == trace.step && !it.isRunning }
+                        if (idx >= 0) {
+                            val prev = mutable[idx] as ChatMessageUi.AgentStep
+                            val obs = if (prev.content.isBlank()) (trace.observation ?: "")
+                                else prev.content + "\n\n" + (trace.observation ?: "")
+                            mutable[idx] = prev.copy(
+                                content = obs,
+                                thought = if (prev.thought.isBlank()) trace.thought else prev.thought
+                            )
                         }
                         mutable
                     }
                 }
 
-                // Shared step callback for trace collection + token stats + UI update
+                // Shared step callback: 固化当前 step + 批内合并 + token stats
                 val onStep: (com.mengpaw.kernel.AgentEngine.TraceStep) -> Unit = { trace ->
-                    traces.add(AgentTrace(trace.step, trace.thought, trace.action, trace.observation))
                     session.provider.lastUsage?.let { usage ->
                         com.mengpaw.shell.ui.components.TokenStatsCollector.record(
                             model = session.modelName,
@@ -494,7 +538,12 @@ class AgentViewModel : ViewModel() {
                             cacheHitTokens = usage.cacheHitTokens
                         )
                     }
-                    pushDisplay("思考中...")
+                    if (trace.step == lastCompletedStep) {
+                        mergeBatchObservation(trace)
+                    } else {
+                        lastCompletedStep = trace.step
+                        completeStep(trace)
+                    }
                     // 工具轮结束 → 清空流式缓冲与播放进度, 下一轮从头累积
                     // (旧实现 buffer 跨轮永不清空, "Action:" 一旦出现即永久过滤后续纯文本增量)
                     synchronized(streamBuf) {
@@ -546,14 +595,17 @@ class AgentViewModel : ViewModel() {
                             newTool = matches.last().groupValues[1]
                         }
                     }
-                    // 锁外推送 (锁纪律同 onStep/播放协程: pushDisplay 不在监视器内调用)
+                    // 锁外推送 (锁纪律同 onStep/播放协程: pushStepDisplay 不在监视器内调用)
                     newTool?.let { tool ->
                         // v0.3x: 工具轮思考过程已流式可见 — 仅当缓冲里尚无 Thought 内容时
                         // (极端短思考) 才兜底宣布, 避免宣布行替换掉正在播放的 Thought 轨迹
                         val base = synchronized(streamBuf) {
                             computeStreamDisplayText(streamBuf.toString())
                         }
-                        if (base.isBlank()) pushDisplay("$EXECUTING_TOOL_PREFIX$tool…")
+                        if (base.isBlank()) {
+                            val cur = runningStepRef
+                            if (cur != null) pushStepDisplay(cur.step, cur.thought, cur.action, "$EXECUTING_TOOL_PREFIX$tool…")
+                        }
                     }
                 }
 
@@ -582,7 +634,8 @@ class AgentViewModel : ViewModel() {
                                 }
                             } ?: continue
                             if (displayText.isBlank()) continue // 工具轮样板: 不显示
-                            pushDisplay(displayText)
+                            val cur = runningStepRef
+                            if (cur != null) pushStepDisplay(cur.step, cur.thought, cur.action, displayText)
                         }
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
@@ -650,7 +703,10 @@ class AgentViewModel : ViewModel() {
                             streamPlayed < streamBuf.length && it.isNotBlank()
                         }
                     }
-                    if (flushText != null) pushDisplay(flushText)
+                    if (flushText != null) {
+                        val cur = runningStepRef
+                        if (cur != null) pushStepDisplay(cur.step, cur.thought, cur.action, flushText)
+                    }
                 }
 
                 // Translate result back to Chinese for US models
@@ -658,17 +714,20 @@ class AgentViewModel : ViewModel() {
 
                 session.messages.update { current ->
                     val mutable = current.toMutableList()
-                    val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
+                    val idx = resolveRunningIndex(mutable, runningStepIndex, runningStepRef)
                     if (idx >= 0) {
-                        val newMsg = ChatMessageUi.AgentWithTrace(
-                            finalContent = displayResult,
-                            traces = traces.toList(),
-                            isRunning = false,
-                            executionMode = modePrefix,
-                            agentRef = agentRef
+                        val prev = mutable[idx] as ChatMessageUi.AgentStep
+                        // final 轮无 onStep — 思考从流式缓冲提取 (Thought 段全文, 完整可见)
+                        val finalThought = synchronized(streamBuf) {
+                            streamBuf.toString().substringAfter("Thought:", "")
+                                .substringBefore("Final Answer:", "").trim()
+                        }
+                        val newMsg = prev.copy(
+                            content = displayResult, thought = finalThought,
+                            isRunning = false, isFinal = true
                         )
-                        runningMsgRef = newMsg
-                        runningMsgIndex = idx
+                        runningStepRef = newMsg
+                        runningStepIndex = idx
                         mutable[idx] = newMsg
                     } else {
                         mutable.add(ChatMessageUi.Agent(displayResult,
@@ -730,17 +789,12 @@ class AgentViewModel : ViewModel() {
                 }
                 session.messages.update { current ->
                     val mutable = current.toMutableList()
-                    val idx = resolveRunningIndex(mutable, runningMsgIndex, runningMsgRef)
+                    val idx = resolveRunningIndex(mutable, runningStepIndex, runningStepRef)
                     if (idx >= 0) {
-                        val newMsg = ChatMessageUi.AgentWithTrace(
-                            finalContent = errorMsg,
-                            traces = emptyList(),
-                            isRunning = false,
-                            executionMode = modePrefix,
-                            agentRef = agentRef
-                        )
-                        runningMsgRef = newMsg
-                        runningMsgIndex = idx
+                        val newMsg = (mutable[idx] as ChatMessageUi.AgentStep).copy(
+                            content = errorMsg, isRunning = false)
+                        runningStepRef = newMsg
+                        runningStepIndex = idx
                         mutable[idx] = newMsg
                     } else {
                         mutable.add(ChatMessageUi.Agent(errorMsg,
@@ -904,6 +958,7 @@ class AgentViewModel : ViewModel() {
                     when (msg) {
                         is ChatMessageUi.Agent -> msg.content
                         is ChatMessageUi.AgentWithTrace -> msg.finalContent
+                        is ChatMessageUi.AgentStep -> msg.content
                         else -> null
                     }
                 }?.take(200) ?: ""
@@ -945,6 +1000,7 @@ class AgentViewModel : ViewModel() {
             is ChatMessageUi.User -> "> 用户说: ${msg.content.take(200)}"
             is ChatMessageUi.Agent -> "> Agent 回复: ${msg.content.take(200)}"
             is ChatMessageUi.AgentWithTrace -> "> Agent 回复: ${msg.finalContent.take(200)}"
+            is ChatMessageUi.AgentStep -> "> Agent 步骤: ${msg.content.take(200)}"
             is ChatMessageUi.CommandResult -> "> 命令输出: ${msg.content.take(200)}"
             else -> ""
         }
@@ -993,7 +1049,8 @@ class AgentViewModel : ViewModel() {
                         // 此处 Error 监听再次追加 → 同源错误消息连弹两条。幂等检查防重。
                         val last = session.messages.value.lastOrNull()
                         val alreadyShown = (last is ChatMessageUi.Agent && last.content == state.message) ||
-                            (last is ChatMessageUi.AgentWithTrace && last.finalContent == state.message)
+                            (last is ChatMessageUi.AgentWithTrace && last.finalContent == state.message) ||
+                            (last is ChatMessageUi.AgentStep && last.content == state.message)
                         if (!alreadyShown) {
                             session.messages.value = session.messages.value + ChatMessageUi.Agent(state.message)
                         }
@@ -1056,7 +1113,7 @@ class AgentViewModel : ViewModel() {
 
     // ── Running-message index resolution with identity guard ──────────
     /**
-     * Resolves the index of the currently running [AgentWithTrace] message.
+     * Resolves the index of the currently running [ChatMessageUi.AgentStep] message.
      * Uses the fast-path [cachedIndex] verified by referential identity against [cachedRef];
      * falls back to linear scan only when a concurrent insertion (e.g. notifyAgentMessage)
      * shifted the list. Returns -1 if no running message is found.
@@ -1064,7 +1121,7 @@ class AgentViewModel : ViewModel() {
     private fun resolveRunningIndex(
         list: List<ChatMessageUi>,
         cachedIndex: Int,
-        cachedRef: ChatMessageUi.AgentWithTrace?
+        cachedRef: ChatMessageUi.AgentStep?
     ): Int {
         // Fast path: identity match at cached index (O(1) — normal case)
         if (cachedIndex in list.indices && list[cachedIndex] === cachedRef) return cachedIndex
@@ -1074,7 +1131,7 @@ class AgentViewModel : ViewModel() {
             if (found >= 0) return found
         }
         // Last resort: scan by type (shouldn't happen unless ref was GC'd)
-        return list.indexOfLast { it is ChatMessageUi.AgentWithTrace && it.isRunning }
+        return list.indexOfLast { it is ChatMessageUi.AgentStep && it.isRunning }
     }
 
     // ── Plugin suggestion logic (unchanged) ──
