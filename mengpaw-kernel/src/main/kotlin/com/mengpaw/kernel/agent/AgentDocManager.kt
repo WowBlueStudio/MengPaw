@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.agent
 
 import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.namespace.SelfExecutor
 import com.mengpaw.kernel.plugin.PluginManager
 import com.mengpaw.kernel.plugin.pluginNamespaceFor
 import java.io.File
@@ -32,6 +33,14 @@ class AgentDocManager(
     // {AGENTS}/agent-001/, 引导文件永不可见。生产会话经 AgentEngine.setAgentIdentity → bindAgent 绑定。
     @Volatile
     private var agentId: String = agentId
+
+    /**
+     * 实际注册的 agent.* 命令键 (AgentExecutor 构造时注入) — CLI.md agent 表按此
+     * 运行时生成, 与实现永不漂移 (此前硬编码 8/40 行, Agent 查 agent.cli 看不到
+     * read/write/ls 等 32 个命令 — 发现性铁律 v0.31.0)。
+     */
+    @Volatile
+    var registeredAgentCommands: List<String> = emptyList()
 
     private val agentDir: File get() = File(baseDir, agentId)
 
@@ -107,13 +116,12 @@ class AgentDocManager(
             appendLine("### self — Agent 自我管理")
             appendLine("| 命令 | 用法 | 说明 | 权限 |")
             appendLine("|------|------|------|------|")
-            appendLine("| self.status | self status | 运行状态 | 无 |")
-            appendLine("| self.config | self config [key=value] | 查看/修改配置 | 无 |")
-            appendLine("| self.stats | self stats | 系统统计 | 无 |")
-            appendLine("| self.version | self version | 版本信息 | 无 |")
-            appendLine("| self.avatar | self.avatar <path> | 设置头像 | 无 |")
-            appendLine("| self.theme | self.theme primary=#0E4397 surface=#FFFFFF | 修改主题色 | 无 |")
-            appendLine("| self.ports | self.ports [--json] | 端口/网络接口一览 | 无 |")
+            SelfExecutor.commands.keys.sorted().forEach { name ->
+                val full = "self.$name"
+                val d = SELF_COMMANDS.firstOrNull { it.first == name }
+                if (d != null) appendLine("| $full | ${d.second} | ${d.third} | 无 |")
+                else appendLine("| $full | $full | 见 self.search 获取用法 | 无 |")
+            }
             appendLine()
             appendLine("### evolution — Agent 进化 (从失败中学习)")
             appendLine("| 命令 | 用法 | 说明 | 权限 |")
@@ -151,30 +159,68 @@ class AgentDocManager(
             appendLine("### agent — Agent 文档")
             appendLine("| 命令 | 用法 | 说明 |")
             appendLine("|------|------|------|")
-            appendLine("| agent.cli | agent.cli | 查看本文档 |")
-            appendLine("| agent.docs | agent.docs | 列出所有文档 |")
-            appendLine("| agent.modes | agent.modes | 查看斜杠命令模式菜单 (modes.md) |")
-            appendLine("| agent.memory | agent.memory [关键词] | 记忆索引/搜索 |")
-            appendLine("| agent.audit | agent.audit [条数] | 命令审计日志 |")
-            appendLine("| agent.profile | agent.profile | 身份档案 |")
-            appendLine("| agent.dream | agent.dream | 梦境整理 — 中期记忆提炼为结构化洞察 (dream-plugin) |")
-            appendLine("| agent.browser-tools | agent.browser-tools | MP浏览器扩展能力 |")
+            registeredAgentCommands.forEach { name ->
+                val full = "agent.$name"
+                val d = AGENT_COMMANDS.firstOrNull { it.first == name }
+                if (d != null) appendLine("| $full | ${d.second} | ${d.third} |")
+                else appendLine("| $full | $full | 见 self.search $full 获取用法 |")
+            }
             appendLine()
 
-            appendLine("### sys — 系统信息")
+            appendLine("### sys — 系统信息 (Android 设备能力)")
             appendLine("| 命令 | 说明 | 权限 |")
             appendLine("|------|------|------|")
+            appendLine("| sys.device | 设备信息 (型号/厂商/SDK) | 无 |")
             appendLine("| sys.battery | 电量/充电/温度 | 无 |")
             appendLine("| sys.network | 网络类型/信号 | 无 |")
+            appendLine("| sys.wifi | WiFi 详情 | 无 |")
+            appendLine("| sys.wifi.enable | WiFi 开关 | 无 |")
+            appendLine("| sys.bluetooth | 蓝牙状态 | 无 |")
+            appendLine("| sys.location | GPS 定位 | **需位置权限** |")
             appendLine("| sys.cpu | CPU 使用率/核心 | 无 |")
             appendLine("| sys.memory | 内存用量 | 无 |")
             appendLine("| sys.storage | 存储空间 | 无 |")
-            appendLine("| sys.display | 屏幕参数 | 无 |")
+            appendLine("| sys.camera | 摄像头信息 | **需相机权限** |")
             appendLine("| sys.sensors | 传感器列表 | 无 |")
-            appendLine("| sys.clipboard | 剪贴板 | 无 |")
-            appendLine("| sys.location | GPS 定位 | **需位置权限** |")
-            appendLine("| sys.camera | 相机信息 | **需相机权限** |")
+            appendLine("| sys.display | 屏幕参数 | 无 |")
+            appendLine("| sys.telephony | 电话信息/运营商 | **需电话权限** |")
+            appendLine("| sys.power | 电源状态 | 无 |")
+            appendLine("| sys.power.save | 省电模式 | 无 |")
+            appendLine("| sys.screen.on | 亮屏/唤醒 | 无 |")
+            appendLine("| sys.screen.off | 熄屏 | 无 |")
+            appendLine("| sys.screen.brightness | 设置亮度 | 无 |")
+            appendLine("| sys.volume | 音量 | 无 |")
+            appendLine("| sys.volume.set | 设置音量 | 无 |")
+            appendLine("| sys.vibrate | 震动 | 无 |")
+            appendLine("| sys.ringtone.play | 播放铃声 | 无 |")
             appendLine("| sys.apps | 已安装应用 | **需应用列表权限** |")
+            appendLine("| sys.app.launch | 启动应用 | 无 |")
+            appendLine("| sys.app.uninstall | 卸载应用 | 无 |")
+            appendLine("| sys.app.info | 应用详情 | 无 |")
+            appendLine("| sys.browser.open | 打开浏览器 | 无 |")
+            appendLine("| sys.clipboard | 读取剪贴板 | 无 |")
+            appendLine("| sys.clipboard.set | 写入剪贴板 | 无 |")
+            appendLine("| sys.intent.open | 打开链接/应用 | 无 |")
+            appendLine("| sys.intent.share | 分享文本 | 无 |")
+            appendLine("| sys.intent.view | 查看文件 | 无 |")
+            appendLine("| sys.notification.id | 通知渠道 ID | **需通知权限** |")
+            appendLine("| sys.notification.send | 发送通知 | **需通知权限** |")
+            appendLine("| sys.notification.cancel | 取消通知 | 无 |")
+            appendLine("| sys.alarm.set | 设置闹钟 | 无 |")
+            appendLine("| sys.permission.list | 列出权限 | 无 |")
+            appendLine("| sys.permission.check | 检查权限 | 无 |")
+            appendLine("| sys.permission.request | 申请权限 | 无 |")
+            appendLine("| sys.overlay.show | 显示悬浮窗 | **需悬浮窗权限** |")
+            appendLine("| sys.overlay.hide | 隐藏悬浮窗 | 无 |")
+            appendLine("| sys.overlay.update | 更新悬浮窗 | 无 |")
+            appendLine("| sys.calendar.add | 添加日历事件 | **需日历权限** |")
+            appendLine("| sys.calendar.list | 列出日历事件 | **需日历权限** |")
+            appendLine("| sys.calendar.delete | 删除日历事件 | **需日历权限** |")
+            appendLine("| sys.calendar.calendars | 列出日历账户 | **需日历权限** |")
+            appendLine("| sys.screenshot | 截图 | 无 |")
+            appendLine("| sys.screenrecord.start | 开始录屏 | 无 |")
+            appendLine("| sys.screenrecord.stop | 停止录屏 | 无 |")
+            appendLine("| sys.camera.photo | 拍照 (需用户确认) | **需相机权限** |")
             appendLine()
 
             // ── Plugin commands ──
@@ -384,15 +430,27 @@ class AgentDocManager(
 
     companion object {
         /** Built-in self.* commands for CLI.md generation. */
-        val SELF_COMMANDS = listOf(
+        internal val SELF_COMMANDS = listOf(
             Triple("status", "self status", "Agent 运行状态"),
             Triple("config", "self config [key=value]", "查看/设置配置"),
             Triple("stats", "self stats", "内存/CPU/线程统计"),
-            Triple("version", "self version", "版本信息")
+            Triple("version", "self version", "版本信息"),
+            Triple("avatar", "self.avatar [name|file]", "切换头像"),
+            Triple("theme", "self.theme [light|dark|system]", "切换主题配色"),
+            Triple("mcp", "self.mcp", "MCP 协议配置/服务列表"),
+            Triple("trigger", "self.trigger [ls|add|rm]", "触发器管理 (Cron/Lifetime)"),
+            Triple("acp", "self.acp", "ACP 框架通讯状态/配对设备"),
+            Triple("tools", "self.tools [namespace]", "列出可用命令 (完整遍历)"),
+            Triple("ports", "self.ports [--json]", "端口/网络接口一览"),
+            Triple("search", "self.search <描述> [--top N]", "自然语言搜索命令 (BM25)"),
+            Triple("search.stats", "self.search.stats", "搜索索引统计"),
+            Triple("time", "self.time [format]", "当前日期时间"),
+            Triple("notify.message", "self.notify.message <text>", "推送消息给用户"),
+            Triple("notify.banner", "self.notify.banner <text> [--level]", "顶部横幅通知")
         )
 
         /** Built-in plugin.* commands. */
-        val PLUGIN_COMMANDS = listOf(
+        internal val PLUGIN_COMMANDS = listOf(
             Triple("marketplace", "plugin.marketplace [--refresh]", "拉取插件市场索引"),
             Triple("search", "plugin.search <query>", "搜索插件"),
             Triple("install", "plugin.install <id>", "安装插件"),
@@ -408,18 +466,47 @@ class AgentDocManager(
         )
 
         /** Built-in agent.* commands. */
-        val AGENT_COMMANDS = listOf(
+        internal val AGENT_COMMANDS = listOf(
             Triple("docs", "agent.docs", "列出所有文档"),
-            Triple("memory", "agent.memory", "查看记忆索引"),
-            Triple("memory.record", "agent.memory.record <content>", "手动记录"),
-            Triple("memory.read", "agent.memory.read <id>", "按 ID 读一条记忆 (三轨)"),
-            Triple("memory.search", "agent.memory.search <keywords>", "跨轨搜索记忆"),
-            Triple("memory.stats", "agent.memory.stats", "记忆统计"),
-            Triple("memory.write", "agent.memory.write <id> <content>", "按 ID 写长期记忆"),
             Triple("cli", "agent.cli", "查看 CLI 命令参考"),
-            Triple("profile", "agent.profile", "查看 Agent 档案"),
-            Triple("soul", "agent.soul", "查看 Agent 灵魂设定"),
-            Triple("browser-tools", "agent.browser-tools", "MP浏览器插件开发能力")
+            Triple("modes", "agent.modes", "斜杠命令模式菜单 (modes.md)"),
+            Triple("boost", "agent.boost", "阅读初始化引导 (新 Agent 第一步)"),
+            Triple("boost.delete", "agent.boost.delete", "删除引导加速文件"),
+            Triple("profile", "agent.profile", "查看身份档案"),
+            Triple("soul", "agent.soul", "查看灵魂设定"),
+            Triple("audit", "agent.audit [条数]", "命令审计日志"),
+            Triple("browser-tools", "agent.browser-tools", "MP浏览器扩展能力"),
+            Triple("dream", "agent.dream", "梦境整理 (中期→洞察→长期)"),
+            Triple("cleanup", "agent.cleanup", "清理过期文件"),
+            Triple("storage", "agent.storage", "存储占用/限额"),
+            Triple("sessions", "agent.sessions [keyword]", "搜索历史会话"),
+            Triple("session.delete", "agent.session.delete <id>", "删除历史会话"),
+            Triple("session.archive", "agent.session.archive <id>", "归档会话"),
+            Triple("session.current", "agent.session.current", "当前会话状态"),
+            Triple("read", "agent.read <路径>", "读取工作区文件 (只读)"),
+            Triple("write", "agent.write <路径> <内容>", "写入工作区文件 (原子)"),
+            Triple("ls", "agent.ls [路径]", "列出工作区目录"),
+            Triple("rm", "agent.rm <路径>", "删除工作区文件"),
+            Triple("mkdir", "agent.mkdir <路径>", "创建工作区目录"),
+            Triple("output", "agent.output", "输出目录管理 (HTML/MD/PDF)"),
+            Triple("memory", "agent.memory [关键词]", "记忆索引/搜索"),
+            Triple("memory.record", "agent.memory.record <内容>", "写中期记忆"),
+            Triple("memory.keep", "agent.memory.keep <内容>", "写长期记忆"),
+            Triple("memory.read", "agent.memory.read <id>", "按 ID 读一条 (三轨)"),
+            Triple("memory.search", "agent.memory.search <关键词> [--track long|mid|project]", "跨轨搜索记忆"),
+            Triple("memory.stats", "agent.memory.stats", "记忆统计"),
+            Triple("memory.write", "agent.memory.write <id> <内容>", "按 ID 写长期 (存在则更新)"),
+            Triple("memory.mid", "agent.memory.mid [日期]", "查看中期记忆"),
+            Triple("memory.project", "agent.memory.project [项目名]", "查看项目记忆"),
+            Triple("memory.project.save", "agent.memory.project.save <项目名> <内容>", "项目经验总结"),
+            Triple("memory.project.delete", "agent.memory.project.delete <项目名>", "删除项目分片"),
+            Triple("memory.mid.delete", "agent.memory.mid.delete <日期>", "删除中期分片"),
+            Triple("memory.rm", "agent.memory.rm <时间戳>", "删长期条目"),
+            Triple("memory.edit", "agent.memory.edit <时间戳> <内容>", "改长期条目"),
+            Triple("memory.mid.rm", "agent.memory.mid.rm <日期> <时间戳>", "删中期条目"),
+            Triple("memory.mid.edit", "agent.memory.mid.edit <日期> <时间戳> <内容>", "改中期条目"),
+            Triple("memory.project.rm", "agent.memory.project.rm <项目名> <时间戳>", "删项目条目"),
+            Triple("memory.project.edit", "agent.memory.project.edit <项目名> <时间戳> <内容>", "改项目条目")
         )
 
         /** 浏览器协作能力 — readable by Agent via CLI (v0.22.1 重写: 真实三通道, 移除未接线的 45 命令手册). */

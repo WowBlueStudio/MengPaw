@@ -44,13 +44,22 @@ object BuiltinCommandIndex {
         idx("self.tools", "列出指定命名空间下的所有可用命令 (完整遍历)", "self.tools [namespace]",
             listOf("工具", "命令", "列表", "命名空间", "所有", "可用", "帮助", "手册"),
             listOf("tools", "commands", "list", "namespace", "help", "available", "manual"))
+        idx("self.search", "用自然语言搜索可用命令 (BM25 索引, 同义词桥接)", "self.search <自然语言描述> [--top N]",
+            listOf("搜索", "查找", "命令", "发现", "自然语言", "帮助"),
+            listOf("search", "find", "command", "discover", "natural language", "help"))
+        idx("self.search.stats", "查看命令搜索索引统计 (条数/命名空间覆盖)", "self.search.stats",
+            listOf("搜索统计", "索引", "条数", "覆盖", "统计"),
+            listOf("search", "stats", "index", "coverage", "count"))
+        idx("self.ports", "查看网络端口与接口一览 (监听/外联/可配置)", "self.ports [--json]",
+            listOf("端口", "网络", "接口", "监听", "协议"),
+            listOf("ports", "network", "interface", "listen", "protocol"))
         idx("self.time", "获取当前日期时间 (支持多种格式)", "self.time [iso|date|time|timestamp]",
             listOf("时间", "日期", "当前", "时钟", "今天", "现在"),
             listOf("time", "date", "current", "now", "today", "clock"))
-        idx("notify.message", "Agent 主动向用户聊天推送一条消息 (System 角色)", "self.notify.message <text>",
+        idx("self.notify.message", "Agent 主动向用户聊天推送一条消息 (System 角色)", "self.notify.message <text>",
             listOf("通知", "推送", "消息", "提醒", "发送", "告知"),
             listOf("notify", "push", "message", "alert", "send", "inform"))
-        idx("notify.banner", "Agent 向用户显示顶部横幅通知 (4 秒消失)", "self.notify.banner <text> [--level info|success|warn|error]",
+        idx("self.notify.banner", "Agent 向用户显示顶部横幅通知 (4 秒消失)", "self.notify.banner <text> [--level info|success|warn|error]",
             listOf("横幅", "通知", "弹窗", "提示", "警告", "成功"),
             listOf("banner", "notify", "popup", "alert", "warning", "success"))
 
@@ -67,6 +76,9 @@ object BuiltinCommandIndex {
         idx("evolution.reactions", "查看用户反应档案 (用户如何纠正过我 — 用户分身数据源)", "evolution.reactions",
             listOf("用户", "反应", "纠正", "反馈", "档案", "偏好"),
             listOf("reactions", "correction", "feedback", "user"))
+        idx("evolution.mark-corrected", "标记某条失败模式已沉淀修正 (绩效闭环)", "evolution.mark-corrected <failure-id>",
+            listOf("标记", "已修正", "失败", "闭环", "绩效"),
+            listOf("mark", "corrected", "failure", "closed loop", "resolve"))
         idx("evolution.mark-corrected", "标记某条失败模式已沉淀修正 (绩效闭环)", "evolution.mark-corrected <failure-id>",
             listOf("修正", "标记", "教训", "已沉淀", "完成"),
             listOf("mark", "corrected", "fixed", "resolved"))
@@ -120,12 +132,27 @@ object BuiltinCommandIndex {
         idx("agent.memory.mid.delete", "删除指定日期的中期记忆分片", "agent.memory.mid.delete <日期>",
             listOf("删除", "中期记忆", "清理", "日"),
             listOf("delete", "mid", "remove", "clean", "daily"))
+        idx("agent.memory.mid.rm", "删除中期记忆中的一条指定条目 (按日期+时间戳)", "agent.memory.mid.rm <日期> <时间戳>",
+            listOf("删除", "中期记忆", "移除", "清理"),
+            listOf("remove", "mid", "delete", "entry", "clean"))
+        idx("agent.memory.mid.edit", "编辑中期记忆中的一条指定条目 (按日期+时间戳)", "agent.memory.mid.edit <日期> <时间戳> <新内容>",
+            listOf("编辑", "修改", "中期记忆", "更新"),
+            listOf("edit", "modify", "mid", "update", "entry"))
         idx("agent.memory.project", "查看项目记忆 (里程碑/闭环时总结的可复用方法论)", "agent.memory.project [项目名]",
             listOf("项目", "经验", "方法", "总结", "闭环", "里程碑", "Project"),
             listOf("project", "experience", "method", "summary", "milestone"))
         idx("agent.memory.project.save", "将里程碑总结写入项目记忆", "agent.memory.project.save <项目名> <内容>",
             listOf("保存", "项目经验", "总结", "方法", "Save", "写入"),
             listOf("save", "project", "summary", "method", "write", "experience"))
+        idx("agent.memory.project.delete", "删除一个项目记忆分片", "agent.memory.project.delete <项目名>",
+            listOf("删除", "项目", "清理", "移除"),
+            listOf("delete", "project", "remove", "clean"))
+        idx("agent.memory.project.rm", "从项目记忆中删除一条指定条目", "agent.memory.project.rm <项目名> <时间戳>",
+            listOf("删除", "项目记忆", "移除", "条目"),
+            listOf("remove", "project", "delete", "entry"))
+        idx("agent.memory.project.edit", "编辑项目记忆中的一条指定条目", "agent.memory.project.edit <项目名> <时间戳> <新内容>",
+            listOf("编辑", "修改", "项目记忆", "更新"),
+            listOf("edit", "modify", "project", "update", "entry"))
         idx("agent.memory.rm", "从长期记忆中删除一条指定条目", "agent.memory.rm <时间戳>",
             listOf("删除", "记忆", "移除", "清理", "Rm"),
             listOf("remove", "delete", "memory", "clean", "erase"))

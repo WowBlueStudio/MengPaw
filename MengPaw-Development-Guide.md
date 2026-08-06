@@ -89,7 +89,9 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 **命令搜索索引 (BM25) 机制 (v0.31.0 修复脱节)**: `CommandSearch` 索引 = `BuiltinCommandIndex` 静态种子 (~150 条精编中英同义词) + `PluginManager.registerSearchIndex` 动态条目 (插件激活) + `SysExecutor` 初始化补种 (50 条 sys.* 命令带中文同义词表, kernel 种子无法覆盖 Android 反射实现)。**可用性由 self.search 按真实注册表 (CommandRegistry.has) 过滤** — 种子命中但执行器不存在的命令 (插件未安装/停用) 不外泄, 过滤后不足时从候选中补足; 插件激活即恢复可搜, 无需动索引本身 (避免 removeByNamespace 破坏精编种子)。**中文整词组查询** (v0.31.0): 中文无空格分词, 自然语言词组 ("批量验证"/"添加日历事件") 整词作 token 此前 score=0 完全漏配 (自检报告 "日历/屏幕/录音" 搜不到 sys.* 的深层根因), 现对 3+ 字 CJK token 追加字符级双字滑动窗口 ("校验插件"→校验/验插/插件) — 词内任意双字独立命中, 英文与 2 字词不动 (原评分格局不变)。
 
-**框架特性发现性铁律 (v0.31.0, plugin.verify 教训)**: 代码存在 ≠ Agent 可触达。Agent 对框架能力的全部认知来源: `BuiltinCommandIndex` (self.search) / CLI.md 双表 (agent.cli) / 系统提示词「常用命令」/ `self.tools` (仅裸命令名, 无用法)。**任何特性必须同时出现在全部触达源, 缺一处即"代码存在但 Agent 无法直接触达"→ 盲试 → 自检必然误报**。案例: plugin.verify --all 代码自 v0.14.0 完整支持, 但索引/CLI.md 双表/提示词三缺, Agent 报告"自相矛盾"。新增命令或旗标时 (尤其 plugin.* 管理命令) 四源同步: ① BuiltinCommandIndex 条目 (usage 含全部旗标形态) ② AgentDocManager 管理命令表 + PLUGIN_COMMANDS ③ 提示词常用命令行 ④ 本 Guide §5.1。配套回归测试 PluginVerifyDiscoverabilityTest 锁死搜索可用性。
+**框架特性发现性铁律 (v0.31.0, plugin.verify 教训)**: 代码存在 ≠ Agent 可触达。Agent 对框架能力的全部认知来源: `BuiltinCommandIndex` (self.search) / CLI.md 双表 (agent.cli) / 系统提示词「常用命令」/ `self.tools` (仅裸命令名, 无用法)。**任何特性必须同时出现在全部触达源, 缺一处即"代码存在但 Agent 无法直接触达"→ 盲试 → 自检必然误报**。案例: plugin.verify --all 代码自 v0.14.0 完整支持, 但索引/CLI.md 双表/提示词三缺, Agent 报告"自相矛盾"。新增命令或旗标时 (尤其 plugin.* 管理命令) 四源同步: ① BuiltinCommandIndex 条目 (usage 含全部旗标形态) ② CLI.md ③ 提示词常用命令行 ④ 本 Guide §5.1。
+
+**CLI.md 完整性机制 (v0.31.0 全量对照修复)**: agent.cli 自称"主要命令参考"但覆盖率仅 49% (self 8/16, agent 8/40, sys 11/51 — 连 self.tools/self.search 发现入口和 agent.read/write/ls 工作区核心都不在)。修复: ① self/agent 表改为**运行时键集生成** — self 表遍历 `SelfExecutor.commands.keys`, agent 表遍历 `AgentDocManager.registeredAgentCommands` (AgentExecutor 构造 init 注入), 新增命令自动入手册, 永无双份维护; ② 描述表 SELF_COMMANDS/AGENT_COMMANDS/PLUGIN_COMMANDS (internal) 提供 usage/说明, 查不到的行降级提示"见 self.search <命令>"; ③ sys 表硬编码补全 51 条 (kernel 不能引用 core, 修改 sys.* 时需同步此表); ④ IndexCoverageTest 锁死三件事: 索引覆盖注册表 (无触达断裂)、索引无幽灵、CLI.md 描述表键集与注册键集双向一致。
 
 ### 2.4 依赖关系
 

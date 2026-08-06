@@ -25,6 +25,8 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     private val memoryExecutor = AgentMemoryExecutor()
 
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
+        // 注意: commands 键集是 CLI.md agent 表 (AgentDocManager.registeredAgentCommands) 的
+        // 唯一来源 — 新增/重命名命令后 CLI.md 自动反映, 无需双份维护 (发现性铁律 v0.31.0)。
         "docs" to ::docs,
         "cli" to ::cli,
         "modes" to ::modes,
@@ -48,6 +50,11 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         "mkdir" to ::makeDir,
         "output" to ::output
     ) + memoryExecutor.commands
+
+    init {
+        // 注入注册键集供 CLI.md agent 表动态生成 — 新增命令自动入手册
+        docManager.registeredAgentCommands = commands.keys.sorted()
+    }
 
     private suspend fun docs(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val docs = docManager.listDocs()
