@@ -214,6 +214,9 @@ object BuiltinCommandIndex {
         idx("plugin.auto", "管理插件自动更新策略 (开启/关闭/状态/空闲时自动)", "plugin.auto <wake|sleep|status|sleep-idle>",
             listOf("自动", "更新", "策略", "休眠", "唤醒"),
             listOf("auto", "update", "policy", "sleep", "wake"))
+        idx("plugin.verify", "校验已安装插件文件完整性 (单个或 --all 批量)", "plugin.verify <id> | plugin.verify --all",
+            listOf("验证", "校验", "检查", "完整性", "批量", "文件"),
+            listOf("verify", "check", "validate", "integrity", "batch", "file"))
 
         // ── framework: 框架协议 ──
         idx("framework.discover", "扫描局域网中发现 MengPaw 框架节点 (mDNS)", "framework.discover",

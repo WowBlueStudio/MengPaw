@@ -365,7 +365,7 @@ Skills 分为两层：
             ## 常用命令 (权威来源: self.tools)
             - self.search <描述> (首选命令查找) / self.tools [ns] (完整遍历) / self.ports (端口/网络接口) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
             - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
-            - plugin.marketplace/search/install/list/info / sys.permission.list/request
+            - plugin.marketplace/search/install/list/info/verify/auto / sys.permission.list/request
             - self.status/avatar/theme / sys.app.launch / sys.intent.open
 
             ## 插件
@@ -470,7 +470,7 @@ Skills 分为两层：
             ## Common Commands (authority: self.tools)
             - self.search <desc> (preferred) / self.tools [ns] (full listing) / self.ports (ports/network interfaces) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
             - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
-            - plugin.marketplace/search/install/list/info / sys.permission.list/request
+            - plugin.marketplace/search/install/list/info/verify/auto / sys.permission.list/request
             - self.status/avatar/theme / sys.app.launch / sys.intent.open
 
             ## Plugins

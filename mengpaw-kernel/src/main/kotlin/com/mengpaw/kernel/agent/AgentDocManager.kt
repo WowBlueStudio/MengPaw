@@ -144,6 +144,8 @@ class AgentDocManager(
             appendLine("| plugin.disable | plugin.disable <插件ID> | 停用 | 无 |")
             appendLine("| plugin.update | plugin.update <插件ID> | 检查更新 | 无 |")
             appendLine("| plugin.upgrade | plugin.upgrade --all | 升级全部 | 无 |")
+            appendLine("| plugin.verify | plugin.verify <插件ID> \\| plugin.verify --all | 校验插件文件完整性 | 无 |")
+            appendLine("| plugin.auto | plugin.auto <wake\\|sleep\\|status\\|sleep-idle> | 插件省电管理 | 无 |")
             appendLine()
 
             appendLine("### agent — Agent 文档")
@@ -400,7 +402,9 @@ class AgentDocManager(
             Triple("enable", "plugin.enable <id>", "启用插件"),
             Triple("disable", "plugin.disable <id>", "禁用插件"),
             Triple("update", "plugin.update <id>", "检查插件更新"),
-            Triple("upgrade", "plugin.upgrade --all", "升级全部插件")
+            Triple("upgrade", "plugin.upgrade --all", "升级全部插件"),
+            Triple("verify", "plugin.verify <id> | plugin.verify --all", "校验插件文件完整性"),
+            Triple("auto", "plugin.auto <wake|sleep|status|sleep-idle>", "插件省电管理")
         )
 
         /** Built-in agent.* commands. */

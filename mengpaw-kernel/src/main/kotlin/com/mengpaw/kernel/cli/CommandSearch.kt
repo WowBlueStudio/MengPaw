@@ -150,7 +150,19 @@ object CommandSearch {
         val raw = text.split(Regex("[\\s，。！？,.!?：:()（）/\\\\]+"))
             .map { it.trim() }
             .filter { it.length >= 2 }
-        return raw + buildBigrams(raw)
+        return raw + buildBigrams(raw) + raw.flatMap { cjkBigrams(it) }
+    }
+
+    /**
+     * CJK 字符级双字窗口 — "校验插件" → [校验, 验插, 插件].
+     * 中文无空格分词: 自然语言查询("批量验证"/"添加日历事件")整词作 token 会漏配
+     * 关键词/描述 (自检报告: "日历/屏幕/录音"搜不到 sys.* 的根因), 滑动窗口让
+     * 词内任意双字有独立命中机会. 英文与 2 字词不受影响 (保持原评分格局).
+     */
+    private fun cjkBigrams(word: String): List<String> {
+        if (word.length <= 2) return emptyList()
+        if (!word.any { it in '一'..'鿿' }) return emptyList()
+        return (0 until word.length - 1).map { word.substring(it, it + 2) }
     }
 
     /** 生成双词短语 (bigrams) — "网页 搜索" → "网页搜索" */
