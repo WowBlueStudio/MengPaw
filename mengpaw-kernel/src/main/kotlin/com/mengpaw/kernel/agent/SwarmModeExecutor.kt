@@ -8,13 +8,8 @@ import com.mengpaw.kernel.agent.SwarmResultCard
 import com.mengpaw.kernel.agent.SwarmRoles
 import com.mengpaw.kernel.agent.SwarmSubtask
 import com.mengpaw.kernel.agent.SwarmSubtaskStatus
-import com.mengpaw.kernel.cli.ErrorCodes
-import com.mengpaw.kernel.cli.ExecutionContext
-import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.llm.LlmProvider
 import com.mengpaw.kernel.security.PromptFirewall
-import com.mengpaw.kernel.security.Sanitizer
-import com.mengpaw.kernel.session.Message
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -23,9 +18,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 
 /**
  * 火种模式 (Swarm Mode) 执行器 — "星星之火，可以燎原"。
@@ -48,7 +40,8 @@ class SwarmModeExecutor(
 
     private enum class AndonAction { REDEPLOY, TERMINATE }
 
-    private val json = Json { ignoreUnknownKeys = true }
+    /** 零待命 Worker 执行器 (runWorker 拆自本类, 400 行文件拆分)。 */
+    private val workerRunner = SwarmWorkerRunner(agentEngine)
 
     /**
      * 火种模式主流程: 规划 → 并行执行+验证 → 合成。
@@ -140,7 +133,7 @@ class SwarmModeExecutor(
             // Andon 重派时切换角色 (可换 worker.alt 模型)
             val role = if (subtask.retryCount > 0 || feedback.isNotBlank()) retryRoleFor(subtask.role, roles) else subtask.role
             val provider = providerFor(role, roles)
-            val outcome = runWorker(subtask, provider, maxSteps, budget, feedback, onStep)
+            val outcome = workerRunner.runWorker(subtask, provider, maxSteps, budget, feedback, onStep)
 
             // 预算耗尽: 不可重试, 直接终止该子任务
             if (outcome.budgetExhausted) {
@@ -193,115 +186,6 @@ class SwarmModeExecutor(
         budget.exhausted -> AndonAction.TERMINATE
         subtask.retryCount >= maxRetries -> AndonAction.TERMINATE
         else -> AndonAction.REDEPLOY
-    }
-
-    // ── 轻量 Worker ReAct 循环 (零待命) ────────────────────────────
-
-    /**
-     * Worker 执行: 独立 Session (scope="swarm") + 轻量 ReAct 循环。
-     *
-     * 刻意精简的并发安全清单 (对照主 runReActLoop):
-     * - 不写 _state/_output/conversationSessionId — 状态由协调器主协程独占更新
-     * - 不调 promptEngine.detectLoop/trackResult (共享可变状态, 并行竞争)
-     * - 不调 EvolutionHook/checkpoint/上下文折叠 (短生命周期不需要)
-     */
-    private suspend fun runWorker(
-        subtask: SwarmSubtask,
-        provider: LlmProvider,
-        maxSteps: Int,
-        budget: SwarmBudget,
-        feedback: String,
-        onStep: ((AgentEngine.TraceStep) -> Unit)? = null
-    ): WorkerOutcome {
-        val swarmId = "swarm-" + subtask.id
-        // JIT/SMED: 独立会话, 不入 conversationSessionId, 用完即销毁
-        val session = sessionManager.createSession(
-            task = subtask.description,
-            metadata = mapOf("swarmId" to swarmId, "role" to subtask.role),
-            scope = "swarm",
-            agentId = agentEngine.agentName,
-            activate = false  // 零待命 worker 不抢占 activeSessionId（防折叠压缩错会话）
-        )
-        try {
-            val context = ExecutionContext(
-                sessionId = session.id,
-                agentName = agentEngine.agentName,
-                scope = "swarm"
-            )
-            val taskPrompt = if (feedback.isNotBlank()) {
-                com.mengpaw.kernel.agent.MissionSwarmPrompts.buildRetryPrompt(
-                    subtask.description, subtask.retryCount, feedback)
-            } else {
-                subtask.description
-            }
-            sessionManager.addMessage(session.id, Message("user", taskPrompt))
-            sessionManager.addMessage(session.id, Message("system",
-                "你是火种模式的并行 worker，只完成本子任务，不依赖其他 worker 的结果，也不写记忆。"))
-
-            var step = 0
-            var tokens = 0L
-            while (step < maxSteps) {
-                // stop() 可达检查 (与主循环同款: Job.isActive 成员属性)
-                val job = currentCoroutineContext()[Job]
-                if (job != null && !job.isActive) throw CancellationException("Swarm stopped")
-                // 闸1: 总预算 (实际步数, AtomicInteger CAS 无锁安全)
-                if (!budget.tryConsume()) {
-                    return WorkerOutcome("预算耗尽，停止执行", step, tokens, budgetExhausted = true)
-                }
-
-                val conversation = agentEngine.buildConversation(session.id)
-                val response = try {
-                    provider.completeWithMessages(conversation)
-                } catch (e: Exception) {
-                    return WorkerOutcome("", step, tokens, "LLM 错误: ${e.message}")
-                }
-                tokens += provider.lastUsage?.totalTokens?.toLong() ?: 0L
-                val sanitized = Sanitizer.sanitize(response)
-                sessionManager.addMessage(session.id, Message("assistant", sanitized))
-
-                val parsed = promptEngine.parse(sanitized)
-                if (parsed.isFinal) {
-                    return WorkerOutcome(parsed.thought, step + 1, tokens)
-                }
-                if (parsed.needsContinue) {
-                    sessionManager.addMessage(session.id, Message("user", "继续。输出 Action: <命令> 和 Action Input: <参数>。"))
-                    continue
-                }
-                // P2 修复: 多 Action 并行（与主循环/Mission worker 对齐 — 一次 LLM 输出多工具）
-                val actionList = parsed.actions.ifEmpty { listOfNotNull(parsed.action) }
-                if (actionList.isNotEmpty()) {
-                    val entries = coroutineScope {
-                        actionList.map { call ->
-                            async(KernelDispatchers.BACKGROUND) {
-                                val commandLine = "${call.name} ${call.parameters.values.joinToString(" ")}"
-                                val result = try {
-                                    val formatError = call.paramFormatError()
-                                    if (formatError != null) {
-                                        ExecutionResult.fail(formatError, errorCode = ErrorCodes.PARAM_FORMAT_ERROR)
-                                    } else {
-                                        withTimeout(60_000L) { pipelineManager.buildPipeline().execute(commandLine, context) }
-                                    }
-                                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                                    ExecutionResult.fail("命令超时 (60s): $commandLine", errorCode = ErrorCodes.ERR_INTERNAL)
-                                }
-                                // 防单条结果撑爆 worker 上下文
-                                val observation = (if (result.success) result.output
-                                    else (result.errorCode?.let { "Error [$it]: ${result.error}" } ?: "Error: ${result.error}"))
-                                    .take(com.mengpaw.kernel.agent.MissionSwarmPrompts.WORKER_OBSERVATION_MAX)
-                                onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, commandLine, observation))
-                                "Command: $commandLine\nResult: $observation"
-                            }
-                        }.awaitAll()
-                    }
-                    sessionManager.addMessage(session.id, Message("assistant", entries.joinToString("\n\n")))
-                }
-                step++
-            }
-            return WorkerOutcome("达到最大步数 ($maxSteps) 未完成", step, tokens, "max_steps")
-        } finally {
-            // 零待命: 销毁会话, 无跨任务记忆
-            sessionManager.deleteSession(session.id)
-        }
     }
 
     // ── Verifier (Worker-Verifier 模式) ────────────────────────────
@@ -400,12 +284,3 @@ class SwarmModeExecutor(
     private fun retryRoleFor(role: String, roles: Map<String, LlmProvider>): String =
         if (SwarmRoles.WORKER_ALT in roles) SwarmRoles.WORKER_ALT else role
 }
-
-/** Worker 循环返回值 — 协调器只消费此结构, 不看 Worker 内部日志。 */
-private data class WorkerOutcome(
-    val answer: String,
-    val stepsUsed: Int,
-    val tokensUsed: Long,
-    val error: String? = null,
-    val budgetExhausted: Boolean = false
-)

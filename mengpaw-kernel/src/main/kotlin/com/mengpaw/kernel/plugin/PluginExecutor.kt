@@ -11,18 +11,8 @@ import java.io.File
 
 /**
  * Built-in plugin.* CLI commands — plugin management is a core capability.
- *
- * Commands:
- *   plugin.marketplace [--refresh]  — fetch/reload marketplace index
- *   plugin.search <query>           — search plugins in marketplace
- *   plugin.install <id>             — download + verify + install + activate
- *   plugin.uninstall <id>           — deactivate + remove
- *   plugin.list                     — list installed plugins with status
- *   plugin.info <id>                — show plugin details and commands
- *   plugin.enable <id>              — activate a disabled plugin
- *   plugin.disable <id>             — deactivate but keep installed
- *   plugin.update <id>              — update to latest version
- *   plugin.upgrade --all            — upgrade all updatable plugins
+ * 命令集: marketplace/search/install/uninstall/list/info/enable/disable/
+ * update/upgrade/auto/verify。
  */
 class PluginExecutor(
     private val pluginManager: PluginManager,
@@ -205,10 +195,7 @@ class PluginExecutor(
         }
     }
 
-    /**
-     * Fetch a single plugin entry from a custom marketplace index URL.
-     * Downloads the remote plugins.json, parses it, and looks up [pluginId].
-     */
+    /** Fetch a single plugin entry from a custom marketplace index URL. */
     private suspend fun fetchFromCustomIndex(indexUrl: String, pluginId: String): Result<MarketplaceEntry> {
         return marketplaceClient.fetchIndexFrom(indexUrl).map { index ->
             index.plugins.find { it.id == pluginId }
@@ -330,8 +317,6 @@ class PluginExecutor(
             onFailure = { ExecutionResult.fail("Upgrade check failed: ${it.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
         )
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────
 
     /**
      * Auto power-save: enable plugins on demand, auto-suspend idle ones.

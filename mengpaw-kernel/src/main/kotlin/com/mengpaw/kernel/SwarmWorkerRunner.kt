@@ -1,0 +1,144 @@
+// SPDX-FileCopyrightText: 2026 深圳哇蓝文化科技有限公司 (ShenZhen wowblue culture and technology CO.,LTD.)
+// SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Commercial
+
+package com.mengpaw.kernel
+
+import com.mengpaw.kernel.agent.SwarmBudget
+import com.mengpaw.kernel.agent.SwarmSubtask
+import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.llm.LlmProvider
+import com.mengpaw.kernel.security.Sanitizer
+import com.mengpaw.kernel.session.Message
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.withTimeout
+
+/**
+ * 火种模式零待命 Worker 执行器 — 拆自 SwarmModeExecutor.runWorker
+ * (400 行文件拆分)。独立 Session (scope="swarm") + 轻量 ReAct 循环,
+ * 用完即销毁, 只回报 [WorkerOutcome] 结果卡片。
+ */
+internal class SwarmWorkerRunner(private val engine: AgentEngine) {
+
+    /**
+     * Worker 执行: 独立 Session (scope="swarm") + 轻量 ReAct 循环。
+     *
+     * 刻意精简的并发安全清单 (对照主 runReActLoop):
+     * - 不写 _state/_output/conversationSessionId — 状态由协调器主协程独占更新
+     * - 不调 promptEngine.detectLoop/trackResult (共享可变状态, 并行竞争)
+     * - 不调 EvolutionHook/checkpoint/上下文折叠 (短生命周期不需要)
+     */
+    internal suspend fun runWorker(
+        subtask: SwarmSubtask,
+        provider: LlmProvider,
+        maxSteps: Int,
+        budget: SwarmBudget,
+        feedback: String,
+        onStep: ((AgentEngine.TraceStep) -> Unit)? = null
+    ): WorkerOutcome {
+        val swarmId = "swarm-" + subtask.id
+        // JIT/SMED: 独立会话, 不入 conversationSessionId, 用完即销毁
+        val session = engine.getSessionManager().createSession(
+            task = subtask.description,
+            metadata = mapOf("swarmId" to swarmId, "role" to subtask.role),
+            scope = "swarm",
+            agentId = engine.agentName,
+            activate = false  // 零待命 worker 不抢占 activeSessionId（防折叠压缩错会话）
+        )
+        try {
+            val context = ExecutionContext(
+                sessionId = session.id,
+                agentName = engine.agentName,
+                scope = "swarm"
+            )
+            val taskPrompt = if (feedback.isNotBlank()) {
+                com.mengpaw.kernel.agent.MissionSwarmPrompts.buildRetryPrompt(
+                    subtask.description, subtask.retryCount, feedback)
+            } else {
+                subtask.description
+            }
+            engine.getSessionManager().addMessage(session.id, Message("user", taskPrompt))
+            engine.getSessionManager().addMessage(session.id, Message("system",
+                "你是火种模式的并行 worker，只完成本子任务，不依赖其他 worker 的结果，也不写记忆。"))
+
+            var step = 0
+            var tokens = 0L
+            while (step < maxSteps) {
+                // stop() 可达检查 (与主循环同款: Job.isActive 成员属性)
+                val job = currentCoroutineContext()[Job]
+                if (job != null && !job.isActive) throw CancellationException("Swarm stopped")
+                // 闸1: 总预算 (实际步数, AtomicInteger CAS 无锁安全)
+                if (!budget.tryConsume()) {
+                    return WorkerOutcome("预算耗尽，停止执行", step, tokens, budgetExhausted = true)
+                }
+
+                val conversation = engine.buildConversation(session.id)
+                val response = try {
+                    provider.completeWithMessages(conversation)
+                } catch (e: Exception) {
+                    return WorkerOutcome("", step, tokens, "LLM 错误: ${e.message}")
+                }
+                tokens += provider.lastUsage?.totalTokens?.toLong() ?: 0L
+                val sanitized = Sanitizer.sanitize(response)
+                engine.getSessionManager().addMessage(session.id, Message("assistant", sanitized))
+
+                val parsed = engine.getPromptEngine().parse(sanitized)
+                if (parsed.isFinal) {
+                    return WorkerOutcome(parsed.thought, step + 1, tokens)
+                }
+                if (parsed.needsContinue) {
+                    engine.getSessionManager().addMessage(session.id, Message("user", "继续。输出 Action: <命令> 和 Action Input: <参数>。"))
+                    continue
+                }
+                // P2 修复: 多 Action 并行（与主循环/Mission worker 对齐 — 一次 LLM 输出多工具）
+                val actionList = parsed.actions.ifEmpty { listOfNotNull(parsed.action) }
+                if (actionList.isNotEmpty()) {
+                    val entries = coroutineScope {
+                        actionList.map { call ->
+                            async(KernelDispatchers.BACKGROUND) {
+                                val commandLine = "${call.name} ${call.parameters.values.joinToString(" ")}"
+                                val result = try {
+                                    val formatError = call.paramFormatError()
+                                    if (formatError != null) {
+                                        ExecutionResult.fail(formatError, errorCode = ErrorCodes.PARAM_FORMAT_ERROR)
+                                    } else {
+                                        withTimeout(60_000L) { engine.getPipelineManager().buildPipeline().execute(commandLine, context) }
+                                    }
+                                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                                    ExecutionResult.fail("命令超时 (60s): $commandLine", errorCode = ErrorCodes.ERR_INTERNAL)
+                                }
+                                // 防单条结果撑爆 worker 上下文
+                                val observation = (if (result.success) result.output
+                                    else (result.errorCode?.let { "Error [$it]: ${result.error}" } ?: "Error: ${result.error}"))
+                                    .take(com.mengpaw.kernel.agent.MissionSwarmPrompts.WORKER_OBSERVATION_MAX)
+                                onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, commandLine, observation))
+                                "Command: $commandLine\nResult: $observation"
+                            }
+                        }.awaitAll()
+                    }
+                    engine.getSessionManager().addMessage(session.id, Message("assistant", entries.joinToString("\n\n")))
+                }
+                step++
+            }
+            return WorkerOutcome("达到最大步数 ($maxSteps) 未完成", step, tokens, "max_steps")
+        } finally {
+            // 零待命: 销毁会话, 无跨任务记忆
+            engine.getSessionManager().deleteSession(session.id)
+        }
+    }
+}
+
+/** Worker 循环返回值 — 协调器只消费此结构, 不看 Worker 内部日志。 */
+internal data class WorkerOutcome(
+    val answer: String,
+    val stepsUsed: Int,
+    val tokensUsed: Long,
+    val error: String? = null,
+    val budgetExhausted: Boolean = false
+)
