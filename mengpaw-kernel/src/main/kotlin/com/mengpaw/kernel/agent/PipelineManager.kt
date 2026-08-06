@@ -33,6 +33,53 @@ class PipelineManager(
         const val COMPACT_FORCE_RATIO = 0.95
         const val MIN_FOLD_TOKENS = 400
 
+        /**
+         * 框架层参数签名表 (自检报告 P0-3) — 内置命名空间的必选位置参数预校验。
+         * 只收录"必选参数不足必错"的命令; 0 参合法命令 (self.search 无参=统计, agent.ls
+         * 无参=工作区根, agent.memory.mid 无参=全部) 与 flag 形态命令 (plugin.verify --all)
+         * 一律不注册 — 由 handler 内部自查, 框架层不误拦。
+         * CliInterpreter 把 --flag 归入 flags, 故 minArgs 只数位置参数。
+         */
+        private val SELF_SIGNATURES = mapOf(
+            "avatar" to com.mengpaw.kernel.cli.CommandSignature("self.avatar <图片路径>", 1),
+            "notify.message" to com.mengpaw.kernel.cli.CommandSignature("self.notify.message <文本>", 1),
+            "notify.banner" to com.mengpaw.kernel.cli.CommandSignature("self.notify.banner <文本> [--level info|success|warn|error]", 1)
+        )
+
+        private val PLUGIN_SIGNATURES = mapOf(
+            "search" to com.mengpaw.kernel.cli.CommandSignature("plugin.search <关键词>", 1),
+            "install" to com.mengpaw.kernel.cli.CommandSignature("plugin.install <插件ID>", 1),
+            "uninstall" to com.mengpaw.kernel.cli.CommandSignature("plugin.uninstall <插件ID>", 1),
+            "info" to com.mengpaw.kernel.cli.CommandSignature("plugin.info <插件ID>", 1),
+            "enable" to com.mengpaw.kernel.cli.CommandSignature("plugin.enable <插件ID>", 1),
+            "disable" to com.mengpaw.kernel.cli.CommandSignature("plugin.disable <插件ID>", 1),
+            "update" to com.mengpaw.kernel.cli.CommandSignature("plugin.update <插件ID>", 1),
+            "auto" to com.mengpaw.kernel.cli.CommandSignature("plugin.auto <wake|sleep|status|sleep-idle>", 1)
+        )
+
+        private val AGENT_SIGNATURES = mapOf(
+            "read" to com.mengpaw.kernel.cli.CommandSignature("agent.read <路径>", 1),
+            "write" to com.mengpaw.kernel.cli.CommandSignature("agent.write <路径> <内容>", 2),
+            "rm" to com.mengpaw.kernel.cli.CommandSignature("agent.rm <路径> [--force]", 1),
+            "mkdir" to com.mengpaw.kernel.cli.CommandSignature("agent.mkdir <路径>", 1),
+            "session.delete" to com.mengpaw.kernel.cli.CommandSignature("agent.session.delete <id>", 1),
+            "session.archive" to com.mengpaw.kernel.cli.CommandSignature("agent.session.archive <id> [--unarchive]", 1),
+            "memory.record" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.record <内容>", 1),
+            "memory.keep" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.keep <内容>", 1),
+            "memory.read" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.read <id>", 1),
+            "memory.search" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.search <关键词> [--track long|mid|project]", 1),
+            "memory.write" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.write <id> <内容>", 2),
+            "memory.project.save" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.project.save <项目名> <内容>", 2),
+            "memory.project.delete" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.project.delete <项目名>", 1),
+            "memory.mid.delete" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.mid.delete <日期>", 1),
+            "memory.rm" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.rm <时间戳>", 1),
+            "memory.edit" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.edit <时间戳> <内容>", 2),
+            "memory.mid.rm" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.mid.rm <日期> <时间戳>", 2),
+            "memory.mid.edit" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.mid.edit <日期> <时间戳> <内容>", 3),
+            "memory.project.rm" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.project.rm <项目名> <时间戳>", 2),
+            "memory.project.edit" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.project.edit <项目名> <时间戳> <内容>", 3)
+        )
+
         /** 保守模型名单 — 旧/小模型有效窗口短，折叠阈值回落 0.8 防实际降智区工作。 */
         private val conservativeModelRegex = Regex(
             "(^|[^a-z0-9])(flash-mini|nano|lite|mini|7b|8b|13b)([^a-z0-9]|$)"
@@ -89,16 +136,16 @@ class PipelineManager(
         SelfExecutor.commandRegistry = registry
 
         // Built-in: self namespace (always available)
-        registry.registerNamespace("self", SelfExecutor.commands)
+        registry.registerNamespace("self", SelfExecutor.commands, SELF_SIGNATURES)
 
         // Built-in: evolution namespace (进化系统, always available)
         registry.registerNamespace("evolution", com.mengpaw.kernel.evolution.EvolutionExecutor.commands)
 
         // Built-in: plugin namespace (always available)
-        registry.registerNamespace("plugin", pluginExecutor.commands)
+        registry.registerNamespace("plugin", pluginExecutor.commands, PLUGIN_SIGNATURES)
 
         // Built-in: agent namespace (always available)
-        registry.registerNamespace("agent", agentExecutor.commands)
+        registry.registerNamespace("agent", agentExecutor.commands, AGENT_SIGNATURES)
 
         // Additional namespaces (e.g. "sys" from Android adapter)
         additionalNamespaces.forEach { (ns, commands) ->
@@ -109,7 +156,7 @@ class PipelineManager(
         pluginManager.getActivePlugins().forEach { plugin ->
             val ns = pluginNamespaceFor(plugin.metadata.id)
             plugin.commands.forEach { (name, handler) ->
-                registry.register("$ns.$name", handler)
+                registry.register("$ns.$name", null, handler)
             }
         }
 

@@ -262,23 +262,23 @@ class PromptEngineTest {
     }
 
     @Test
-    fun `system prompt contains network ports section with all ports`() {
+    fun `system prompt ports section is pointer not full table`() {
+        // 分层注入 (自检报告 P0-1): 端口表不再常驻提示词, 改为 self.ports 按需取
         val prompt = engine.buildSystemPrompt()
         assertTrue("提示词应含网络端口章节", prompt.contains("## 网络端口"))
-        assertTrue("提示词应含本机监听表", prompt.contains("本机监听"))
-        assertTrue("提示词应含外部服务默认端口表", prompt.contains("外部服务默认端口"))
-        com.mengpaw.kernel.ports.Ports.ALL.forEach {
-            assertTrue("提示词缺少端口 ${it.port}", prompt.contains("${it.port}"))
-        }
+        assertTrue("提示词应指向 self.ports 按需取", prompt.contains("self.ports"))
+        assertFalse("整张端口表不得常驻提示词", prompt.contains("### 本机监听"))
+        assertFalse("外部服务默认端口表不得常驻", prompt.contains("### 外部服务默认端口"))
         // 占位符必须被替换, 不得泄漏到提示词
         assertFalse(prompt.contains("__PORTS_TABLE__"))
     }
 
     @Test
-    fun `english system prompt contains network ports section`() {
+    fun `english system prompt ports section is pointer`() {
         val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH)
         assertTrue(prompt.contains("## Network Ports"))
-        assertTrue(prompt.contains("Locally listened"))
+        assertTrue(prompt.contains("self.ports"))
+        assertFalse("英文端口表不得常驻提示词", prompt.contains("Locally listened"))
         assertFalse(prompt.contains("__PORTS_TABLE__"))
     }
 
@@ -340,9 +340,10 @@ class PromptEngineTest {
     }
 
     @Test
-    fun `parity - ports placeholder never leaks and table is replaced`() {
+    fun `parity - ports placeholder never leaks and pointer is present`() {
         val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
         assertFalse("占位符不得泄漏到前缀", prompt.contains("__PORTS_TABLE__"))
-        assertTrue("端口表替换产物必须存在", prompt.contains("9876"))
+        assertTrue("self.ports 指针必须存在", prompt.contains("self.ports"))
+        assertFalse("端口具体值不得残留提示词", prompt.contains("9876"))
     }
 }

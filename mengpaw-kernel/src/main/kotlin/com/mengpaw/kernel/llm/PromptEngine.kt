@@ -277,8 +277,9 @@ Skills 分为两层：
 
         val prompt = buildString(identity.length + basePrompt.length + docsBlock.length + 2) {
             append(identity)
-            // 注入端口单一事实源表 (__PORTS_TABLE__ 占位符见 CHINESE_PROMPT/ENGLISH_PROMPT)
-            append(basePrompt.replace("__PORTS_TABLE__", com.mengpaw.kernel.ports.Ports.describe(if (lang == AgentLanguage.CHINESE) "zh" else "en")))
+            // 分层注入 (自检报告 P0-1): 端口表不再常驻提示词 — 需要时 `self.ports` 按需取,
+            // 每轮省下整张静态端口表 token。占位符已移除, 常量内直接为 self.ports 指针。
+            append(basePrompt)
             append('\n')
             append(docsBlock)
         }
@@ -384,22 +385,18 @@ Skills 分为两层：
             - `agent.sessions [kw]` 搜索历史。`agent.session.delete/archive/current` 管理。`agent.storage` 用量。
 
             ## 多 Agent 协作 (部落 Tribe)
-            - 需安装 tribe-plugin（默认未安装）。安装后可用 `tribe.status` 查看服务与看板 / `tribe.team invite <name> <role>` 组队 / `tribe.delegate <agent> <task>` 委派任务 / `tribe.task.*` 看板 / `tribe.ask <agent> <问题>` 直接询问。
-            - 并行拆解: `tribe.fleet <任务>` — LLM 分解子任务 → 并行委派 → 合成结果。
-            - 收件箱自动感知 — 有委派任务时注入待办提醒。
-            - 跨设备委派: 与孪生配对 (twin.status) 后 `tribe.delegate --mode acp` 走加密通道。
+            - 需安装 tribe-plugin（默认未安装）: 安装后 `self.tools tribe` 查看全部命令 (tribe.status/team/delegate/task.*/ask/fleet; 委派任务自动注入 inbox 提醒; 跨设备委派 twin 配对后 `--mode acp`)。
 
             ## 记忆孪生
             - 跨设备记忆同步。`twin.status/peers/sync` 管理。5连击 MengPaw 框架图标配对。详见 `self.tools twin`。
 
             ## 网络端口
-            __PORTS_TABLE__
+            - 端口/网络接口一览: `self.ports`（本机监听 / 外部服务默认端口 / 配置入口）。需要端口信息时先查它, 不要猜。
 
             ## 浏览器协作 (MP 浏览器, 独立 APK)
-            - 浏览器是独立应用, Agent 无法直接执行浏览器 CLI (45 条命令在浏览器 APK 内, 未对 Shell 开放)。
-            - **前台唤醒**: `sys.browser.open [url]` 唤起 MP 浏览器到前台 (带 url 则同时打开; 唤起后 MCP 工具自动可用)。
-            - **网页提炼**（需安装 browser-search-plugin）: 浏览器菜单「提炼网页要点」→ Agent 抓取转换 Markdown + 提炼要点 → 自动回传浏览器预览 (命令: search.clean/md/outputs/clear)。
-            - **浏览器 MCP 工具**（需安装 browser-mcp-plugin, 默认未安装）: 打开 MP 浏览器即自动启用 (设备内 HTTP 桥 127.0.0.1:9880)。`browser.mcp.tools` 查看 / `browser.mcp.status` 检查在线 / `browser.mcp.invoke <工具> <JSON参数>` 调用 (导航/截图/点击/输入/提取/执行脚本)。
+            - 浏览器是独立 APK, 其命令不向 Shell 开放。**前台唤醒**: `sys.browser.open [url]`。
+            - **网页提炼**（需安装 browser-search-plugin）: 浏览器菜单「提炼网页要点」→ 用 search.clean/md/outputs/clear 转档提炼。
+            - **浏览器 MCP**（需安装 browser-mcp-plugin, 默认未安装）: 打开浏览器自动启用 9880 桥。`browser.mcp.tools/status/invoke` 用法详见 `self.tools browser`。
 
             ## 响应格式（必须遵守）
             Thought: （思考）
@@ -489,22 +486,18 @@ Skills 分为两层：
             - `agent.sessions [kw]` search. `agent.session.delete/archive/current` manage. `agent.storage` usage. See `skill.run sessions`.
 
             ## Multi-Agent Collaboration (Tribe)
-            - Requires tribe-plugin (not bundled by default). After install: `tribe.status` for service/kanban / `tribe.team invite <name> <role>` / `tribe.delegate <agent> <task>` / `tribe.task.*` kanban / `tribe.ask <agent> <question>`.
-            - Parallel decomposition: `tribe.fleet <task>` — LLM splits into subtasks → parallel delegation → synthesis.
-            - Inbox auto-sense — pending delegations are injected as reminders.
-            - Cross-device delegation: after twin pairing (`twin.status`), `tribe.delegate --mode acp` uses the encrypted channel.
+            - Requires tribe-plugin (not bundled by default): after install, `self.tools tribe` lists all commands (tribe.status/team/delegate/task.*/ask/fleet; delegated tasks auto-inject inbox reminders; cross-device via `--mode acp` after twin pairing).
 
             ## Memory Twin
             - Cross-device sync. `twin.status/peers/sync` manage. 5-tap MengPaw icon to pair. See `skill.run twin-guide`.
 
             ## Network Ports
-            __PORTS_TABLE__
+            - Ports/network interfaces: `self.ports` (listened / outbound defaults / config entries). Query it first when you need port info — don't guess.
 
             ## Browser Collaboration (MP Browser, separate APK)
-            - Browser is a separate app; Agent cannot execute browser CLI directly (the 45 in-browser commands are not exposed to Shell).
-            - **Wake browser**: `sys.browser.open [url]` brings MP Browser to foreground (with url opens it; MCP tools become available once woken).
-            - **Page extract** (requires browser-search-plugin): Browser menu "Extract page highlights" → Agent fetches, converts to Markdown, summarizes → auto-relays back for preview (commands: search.clean/md/outputs/clear).
-            - **Browser MCP tools** (requires browser-mcp-plugin, not bundled by default): auto-enabled when MP Browser is open (in-device HTTP bridge 127.0.0.1:9880). `browser.mcp.tools` lists / `browser.mcp.status` checks / `browser.mcp.invoke <tool> <jsonArgs>` calls (navigate/screenshot/click/type/extract/eval).
+            - Browser is a separate APK; its commands are not exposed to Shell. **Wake browser**: `sys.browser.open [url]`.
+            - **Page extract** (requires browser-search-plugin): Browser menu "Extract page highlights" → convert/summarize via search.clean/md/outputs/clear.
+            - **Browser MCP** (requires browser-mcp-plugin, not bundled by default): auto-enabled once the browser is open (in-device HTTP bridge 127.0.0.1:9880). `browser.mcp.tools/status/invoke` usage: `self.tools browser`.
 
             ## Response Format (must follow)
             Thought: (your reasoning)

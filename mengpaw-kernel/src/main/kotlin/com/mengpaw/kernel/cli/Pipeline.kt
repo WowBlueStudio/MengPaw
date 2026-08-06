@@ -88,6 +88,14 @@ class Pipeline(
                     ErrorCodes.ERR_NOT_FOUND, trimmed, context, startTime
                 )
 
+            // P0-3(自检报告): 框架层参数签名预校验 — 必选参数不足即返回统一
+            // "期望 usage, 收到 N 参" 错误, 模型据此收敛重试 (此前错误文本散在各 handler,
+            // 无期望/收到对比, 模型盲猜重试浪费 token)
+            val signatureError = registry.validateArgs(parsed.command, parsed.args)
+            if (signatureError != null) {
+                return failAudit(signatureError, ErrorCodes.ERR_INVALID_INPUT, trimmed, context, startTime)
+            }
+
             val result = executor(parsed.args, context)
             // 非白名单命令（含写命令 agent.write/fs.write 等）成功 → 清空缓存,
             // 防"写入→立即读"命中写前旧快照（P1 修复: 写后读陈旧）

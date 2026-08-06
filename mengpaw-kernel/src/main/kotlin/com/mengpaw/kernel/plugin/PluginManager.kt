@@ -299,7 +299,7 @@ class PluginManager(
         val ns = namespaceFor(id)
         val r = registry ?: return
         plugin.commands.forEach { (name, handler) ->
-            r.register("$ns.$name", handler)
+            r.register("$ns.$name", null, handler)
         }
     }
 

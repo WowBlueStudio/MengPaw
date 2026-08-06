@@ -599,6 +599,8 @@ twin.lost <peer> / twin.recover <peer>
 
 **反模式警告**: 不要把常驻文件改链接式以省流量 — system 尺寸的节省换不来权重崩塌 (soul/agents 是行为准则不是知识查询); 链接式文件的读取是 LLM 自由裁量, 无法保证每轮遵循。前缀缓存 (DeepSeek 50×) 对两类都正常命中 — system 稳定即可, 与注入方式无关。附件路径行同理 (user 消息正文, 见 §4.1.3)。
 
+**静态参考数据分层（v0.32.1+, 自检报告 P0-1）**: 与反模式警告的边界 — 行为约束（soul/agents/profile/记忆）**必须**常驻明文, 纯参考数据（端口表）**不**常驻。v0.32.1 起整张网络端口表移出提示词, 改为一行指针: `端口/网络接口一览: self.ports`（`__PORTS_TABLE__` 占位符与注入逻辑删除, `self.ports` 成为端口单一事实源, CLI.md 端口章节保留供查阅）。同批压缩: Tribe 节（默认未安装, 4 行→1 行指针 `self.tools tribe`）、浏览器协作节（5 行→3 行, browser-mcp 默认未安装不展开 9880 细节）。TEMPLATE_HASH 自动失效缓存, 生产前缀缓存一次性失效。判断标准: 该内容 Agent 是否在每轮都需要它才能正确行动 — 参考数据按需取, 约束每轮给。
+
 ### 4.2 支持的服务商 (12)
 
 | 服务商 | Endpoint | 默认模型 | 缓存策略 |
@@ -800,6 +802,8 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 格式 `namespace.command arg1 arg2 "arg with spaces" --flag value`
 
 **参数格式（v0.30.0+ 门卫）**: Action Input 一律 CLI 纯文本，多个参数空格分隔，**禁止 JSON**。PromptEngine 的 tolerant JSON 解析对 `{` 开头参数会丢弃 key 只取值——单 key 碰巧兼容，多 key 会参数错位；JSON 解析失败则整个串当参数。AgentEngine 组装命令行前设门卫：raw 键以 `{` 开头 或 JSON 多值（>1 key）→ 返回 `PARAM_FORMAT_ERROR`，不执行。
+
+**参数签名预校验（v0.32.1+, 自检报告 P0-3）**: `CommandRegistry` 支持按命令声明 `CommandSignature(usage, minArgs)`（必选位置参数数；CliInterpreter 把 `--flag` 归入 flags，故 flag 形态命令如 `plugin.verify --all` 不注册签名）。`Pipeline.execute` 在调用 handler 前统一校验，参数不足即返回 `参数错误: 期望用法「<usage>」，收到 N 个参数`（`ERR_INVALID_INPUT`）——模型得到"期望 vs 收到"对比，收敛重试不再盲猜。签名表在 `PipelineManager` companion（self 3 条 / plugin 8 条 / agent 20 条），只收录"必选参数不足必错"的命令；0 参合法命令（`self.search` 无参=统计、`agent.ls` 无参=工作区根、`agent.memory.mid` 无参=全部）与插件/sys 命令由 handler 自查，框架层不误拦。注册 API 兼容：`register(fullName, signature?, executor)` 签名参数放 executor 之前以保尾 lambda 语法。
 
 **错误码体系** (`ErrorCodes`, 随 Observation 注入，模型可见 `Error [CODE]: ...`)：
 

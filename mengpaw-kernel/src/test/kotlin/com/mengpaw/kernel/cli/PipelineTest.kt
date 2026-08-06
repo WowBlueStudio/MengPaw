@@ -206,4 +206,51 @@ class PipelineTest {
         assertTrue(result.success)
         assertNull(result.errorCode)
     }
+
+    // ── P0-3 参数签名预校验 (自检报告: 参数无 schema, 错误反馈闭环弱) ─────
+
+    @Test
+    fun `signature rejects missing required args with unified format`() = runTest {
+        val registry = CommandRegistry()
+        val calls = java.util.concurrent.atomic.AtomicInteger(0)
+        registry.register("agent.read", CommandSignature("agent.read <路径>", 1)) { args, _ ->
+            calls.incrementAndGet(); ExecutionResult.ok("ok")
+        }
+        val pipeline = Pipeline(registry = registry)
+        val ctx = ExecutionContext(sessionId = "test", agentName = "MengPaw")
+        val result = pipeline.execute("agent.read", ctx)
+        assertFalse("必选参数不足应被框架层拦截", result.success)
+        assertTrue("错误须含期望用法", result.error?.contains("期望用法「agent.read <路径>」") == true)
+        assertTrue("错误须含收到参数数", result.error?.contains("收到 0 个参数") == true)
+        assertEquals("拦截在 handler 之前", 0, calls.get())
+        assertEquals(ErrorCodes.ERR_INVALID_INPUT, result.errorCode)
+    }
+
+    @Test
+    fun `signature passes when args sufficient`() = runTest {
+        val registry = CommandRegistry()
+        registry.register("agent.read", CommandSignature("agent.read <路径>", 1)) { _, _ -> ExecutionResult.ok("ok") }
+        val pipeline = Pipeline(registry = registry)
+        val result = pipeline.execute("agent.read profile.md", ExecutionContext(sessionId = "test"))
+        assertTrue("参数足够应放行执行", result.success)
+    }
+
+    @Test
+    fun `signature does not block multi-arg command`() = runTest {
+        // 位置参数下限校验: agent.write <路径> <内容> 需 2 参, 内容含空格经 tokenize 拆多段不误拦
+        val registry = CommandRegistry()
+        registry.register("agent.write", CommandSignature("agent.write <路径> <内容>", 2)) { _, _ -> ExecutionResult.ok("ok") }
+        val pipeline = Pipeline(registry = registry)
+        val result = pipeline.execute("agent.write profile.md 记住 这个 重点", ExecutionContext(sessionId = "test"))
+        assertTrue("参数多于下限应放行", result.success)
+    }
+
+    @Test
+    fun `signature never blocks unsigned command`() = runTest {
+        val registry = CommandRegistry()
+        registry.register("self.search") { _, _ -> ExecutionResult.ok("stats") }
+        val pipeline = Pipeline(registry = registry)
+        val result = pipeline.execute("self.search", ExecutionContext(sessionId = "test"))
+        assertTrue("无签名命令 (self.search 无参=统计) 不得被拦", result.success)
+    }
 }
