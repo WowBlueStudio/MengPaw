@@ -45,7 +45,7 @@ fun AgentCardDialog(
 
     val avatarFile = File(agentDir, "avatar.png")
     val avatarBitmap = remember(agentName) {
-        if (avatarFile.exists()) android.graphics.BitmapFactory.decodeFile(avatarFile.absolutePath) else null
+        if (avatarFile.exists()) decodeSampled(avatarFile.absolutePath, maxDim = 256) else null
     }
 
     AlertDialog(
@@ -142,7 +142,8 @@ fun AgentCardDialog(
         },
         confirmButton = {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                if (agentName != "MengPaw") {
+                // P2 修复: 默认主 Agent 不可删除 — 原字面量硬编码, 改用唯一事实源常量
+                if (agentName != com.mengpaw.shell.ui.screens.DEFAULT_AGENT_NAME) {
                     var showDeleteConfirm by remember { mutableStateOf(false) }
                     TextButton(onClick = { showDeleteConfirm = true },
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {

@@ -26,14 +26,22 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
-/** Atomic file write: write to tmp, then rename (crash-safe, prevents partial writes). */
+/**
+ * 标准原子写: 先写同目录 `.tmp`，再以 Files.move(REPLACE_EXISTING) 覆盖目标。
+ * POSIX(Android/Linux) 上等价于 rename(2)，原子替换且失败时原文件完好；
+ * Windows 上 File.renameTo 无法覆盖已存在目标(实测返回 false 且不动原文件)，
+ * 而 Files.move 可替换 —— 任何失败路径都不会先删原文件, 不会丢数据。
+ */
 private fun java.io.File.atomicWriteText(text: String) {
     val tmp = java.io.File(this.parentFile, "${this.name}.tmp")
     try {
         tmp.writeText(text)
-        if (this.exists()) this.delete()
-        tmp.renameTo(this)
+        java.nio.file.Files.move(
+            tmp.toPath(), this.toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+        )
     } catch (e: Exception) {
+        // 失败时原文件保持完好，仅清理残留 tmp 后向上抛, 由调用方上报
         try { tmp.delete() } catch (_: Exception) {}
         throw e
     }
@@ -112,6 +120,34 @@ class SessionManager {
             }
         _sessions.value = _sessions.value + (sessionId to session)
         return true
+    }
+
+    /**
+     * Replace in-place messages matching [predicate] with [transform]'s result.
+     * 与 addMessage/compressIfNeeded 同一监视器 — snipStaleToolResults 等
+     * 就地改写不得绕过锁与并行 worker 的 addMessage/后台预压缩竞态。
+     * @return 实际替换条数
+     */
+    @Synchronized
+    fun replaceMessages(
+        sessionId: String,
+        predicate: (Message) -> Boolean,
+        transform: (Message) -> Message
+    ): Int {
+        val session = _sessions.value[sessionId] ?: return 0
+        var count = 0
+        val list = session.messages
+        for (i in list.indices) {
+            val msg = list[i]
+            if (predicate(msg)) {
+                list[i] = transform(msg)
+                count++
+            }
+        }
+        if (count > 0) {
+            _sessions.value = _sessions.value + (sessionId to session)
+        }
+        return count
     }
 
     /**

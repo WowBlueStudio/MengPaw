@@ -10,6 +10,7 @@ import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Error type classification for structured reporting.
@@ -84,7 +85,8 @@ object ErrorCollector {
 
     private val buffer = ConcurrentLinkedQueue<ErrorEntry>()
     private val json = Json { prettyPrint = false; encodeDefaults = true }
-    private var nextId = 0L
+    /** 原子自增 ID 源 — 并行线程 report() 时 nextId++ 非原子会撞号 (P2 修复)。 */
+    private val nextId = AtomicLong(0L)
     private var originalUncaughtHandler: Thread.UncaughtExceptionHandler? = null
     private var initialized = false
 
@@ -119,7 +121,7 @@ object ErrorCollector {
                         val entry = json.decodeFromString<ErrorEntry>(line)
                         buffer.add(entry)
                         val seq = entry.id.removePrefix("err_").toLongOrNull()
-                        if (seq != null && seq >= nextId) nextId = seq + 1
+                        if (seq != null && seq >= nextId.get()) nextId.set(seq + 1)
                     } catch (_: Exception) { /* skip corrupted lines */ }
                 }
             }
@@ -156,7 +158,7 @@ object ErrorCollector {
         metadata: Map<String, String> = emptyMap()
     ): String {
         return try {
-            val id = "err_${nextId++}"
+            val id = "err_${nextId.getAndIncrement()}"
             val entry = ErrorEntry(
                 id = id,
                 timestamp = System.currentTimeMillis(),
@@ -226,7 +228,7 @@ object ErrorCollector {
     fun clear() {
         try {
             buffer.clear()
-            nextId = 0
+            nextId.set(0)
             logFile().delete()
         } catch (_: Exception) { }
     }

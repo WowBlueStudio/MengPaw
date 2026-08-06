@@ -32,9 +32,10 @@ fun BrowserPasswordDialog(
         title = { Text("密码管理 Passwords") },
         text = {
             Column {
+                // P2 fix: 原 "保存密码" Switch 是只写不读的假开关 — WebView 自 API 18 移除
+                // setSavePassword, 该开关写入的 pref 从不生效。改为固定说明, 不再提供无效开关。
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("保存密码")
-                    Switch(checked = prefs.savePasswords, onCheckedChange = { prefs.savePasswords = it })
+                    Text("保存密码 — 已停用", style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 // 诚实说明: 本应用不实现密码自动填充/长按保存 — 登录凭据由系统密码管理器负责

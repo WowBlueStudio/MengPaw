@@ -413,17 +413,23 @@ class AgentDocManager(
     private fun file(docType: AgentDocType): File = File(agentDir, docType.name.lowercase() + ".md")
 
     /**
-     * Write text to a file atomically: write to a .tmp sibling, then rename.
-     * Prevents file corruption if the process crashes mid-write.
+     * 标准原子写: 先写同目录 `.tmp`，再 Files.move(REPLACE_EXISTING) 覆盖。
+     * 不再"先删目标再 rename" — 失败时原文件保持完好，残留 tmp 清理后向上抛
+     * (调用方已各自 try/catch + ErrorCollector.report)。
      */
     private fun File.atomicWriteText(text: String) {
         parentFile?.mkdirs()
         val tmp = File(parentFile, "$name.tmp")
-        tmp.writeText(text)
-        // Delete target first — renameTo on Windows fails if target exists
-        this.delete()
-        tmp.renameTo(this)
-        if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+        try {
+            tmp.writeText(text)
+            java.nio.file.Files.move(
+                tmp.toPath(), this.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+        } catch (e: Exception) {
+            try { tmp.delete() } catch (_: Exception) {}
+            throw e
+        }
     }
 
     // ── Default document templates ────────────────────────────────────
@@ -536,10 +542,9 @@ class AgentDocManager(
 - `search.outputs` / `search.clear` — 输出管理
 - 浏览器菜单「提炼网页要点」→ Agent 处理 → 自动回传浏览器预览
 
-## 浏览器插件开发 (Browser Plugin API, 面向插件作者)
-- 钩子: onPageStarted / onPageFinished / shouldIntercept / injectScript / injectStyle / menuItems / onLongPress
-- 流程: 实现 BrowserPlugin 接口 → BrowserPluginRegistry.register(plugin) → 打包发布
-- 已安装浏览器插件: `plugin.list` 查看 browser- 前缀
+## 浏览器扩展 (2026-08-06: BrowserPluginRegistry 死代码已删除)
+- 浏览器进程内插件注册机制 (BrowserPlugin/BrowserPluginRegistry) 已移除 — register() 零调用, 插件与浏览器跨进程不可达
+- 浏览器能力统一经 9880 MCP 桥: `browser.mcp.tools` 列全部工具 + 内置 browser.* 命令 (44 条)
 
 ## Agent Skills
 - `skill.run browser-control` — 完整协作手册

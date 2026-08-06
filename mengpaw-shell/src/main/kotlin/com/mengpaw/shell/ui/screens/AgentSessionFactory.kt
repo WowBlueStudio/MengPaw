@@ -20,6 +20,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 /**
+ * 默认主 Agent 名 — 触发器任务 / 浏览器提炼 / 横幅切回 / 梦境整理 / 会话兜底等
+ * 目标 agent 逻辑的唯一事实源。
+ * (P2 修复: 原 "MengPaw" 字面量散落 shell 多处硬编码, 新增/改名需逐处找)
+ */
+const val DEFAULT_AGENT_NAME = "MengPaw"
+
+/**
  * Factory for creating agent sessions, agents, and providers.
  * Shared global configuration for LLM endpoints is stored here.
  */
@@ -150,13 +157,13 @@ class AgentSessionFactory(
         return AgentSession(name, framework, model, globalEndpoint, globalApiKey, provider, engine, msgs, scroll)
     }
 
-    /** Ensure the default "MengPaw" agent session always exists, with workspace files. */
+    /** Ensure the default agent session always exists, with workspace files. */
     fun ensureDefaultSession() {
-        if (!sessions.containsKey("MengPaw")) {
-            sessions["MengPaw"] = createSession("MengPaw", null)
+        if (!sessions.containsKey(DEFAULT_AGENT_NAME)) {
+            sessions[DEFAULT_AGENT_NAME] = createSession(DEFAULT_AGENT_NAME, null)
         }
         // Bootstrap workspace files if missing (safe: writeIfMissing won't overwrite existing).
-        com.mengpaw.kernel.agent.AgentDocs.bootstrap("MengPaw", if (globalAgentLang == PromptEngine.AgentLanguage.CHINESE) "zh" else "en")
+        com.mengpaw.kernel.agent.AgentDocs.bootstrap(DEFAULT_AGENT_NAME, if (globalAgentLang == PromptEngine.AgentLanguage.CHINESE) "zh" else "en")
     }
 
     /** Create a new agent with the given name and optional framework. */

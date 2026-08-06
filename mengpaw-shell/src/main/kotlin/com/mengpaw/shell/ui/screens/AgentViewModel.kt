@@ -40,6 +40,15 @@ internal const val EXECUTING_TOOL_PREFIX = "正在执行 "
 private val ACTION_LINE_REGEX = Regex("""(?m)^Action:\s*([\w.+\-]+)\s*$""")
 
 /**
+ * 运行中步骤气泡的跨线程索引+身份守卫 (P2 修复: 原局部 var 被主协程 / 引擎回调线程
+ * (onDelta/onStep) / 播放协程(Default) 三方读写, 无可见性保证 — @Volatile 立即可见)。
+ */
+private class RunningStepTracker {
+    @Volatile var index: Int = -1
+    @Volatile var ref: ChatMessageUi.AgentStep? = null
+}
+
+/**
  * ViewModel for the main agent chat screen.
  * Manages multiple agent sessions — each agent has its own AgentEngine and message history.
  */
@@ -64,7 +73,7 @@ class AgentViewModel : ViewModel() {
     private val bootstrappedAgents = mutableSetOf<String>()
 
     // ── Active agent state ──
-    private var _activeAgentName = "MengPaw"
+    private var _activeAgentName = DEFAULT_AGENT_NAME
 
     // ── 流式播放器节奏 (v0.28.5): token 突发到达时仍逐段播放, 维持打字机观感 ──
     private val STREAM_PLAYBACK_INTERVAL_MS = 50L  // 播放 tick 间隔
@@ -164,7 +173,7 @@ class AgentViewModel : ViewModel() {
     private val _pendingTasks = MutableStateFlow<List<PendingTask>>(emptyList())
     val pendingTasks: StateFlow<List<PendingTask>> = _pendingTasks.asStateFlow()
 
-    private val _activeAgent = MutableStateFlow("MengPaw")
+    private val _activeAgent = MutableStateFlow(DEFAULT_AGENT_NAME)
     val activeAgent: StateFlow<String> = _activeAgent.asStateFlow()
 
     /** Provider/model label for the active agent (shown under agent name). */
@@ -354,8 +363,8 @@ class AgentViewModel : ViewModel() {
             val savedLoopMode = inputTagManager.loopMode
             val modePrefix = executionMode?.prefix
             // v0.3x 步骤气泡: 当前运行 step 气泡 (每 ReAct 步骤独立气泡, 非单运行气泡+traces)
-            var runningStepIndex = -1     // fast‑path index; verified against ref before use
-            var runningStepRef: ChatMessageUi.AgentStep? = null // identity guard for concurrent insertions
+            // P2 修复: 局部 var 被三线程共享 → @Volatile 追踪器 (见 RunningStepTracker)
+            val runningStep = RunningStepTracker()
             var lastCompletedStep = 0     // 最近固化的 step 号 (多 Action 批内合并判定)
             var playbackJob: Job? = null // 流式播放协程句柄 (try 外声明, catch 路径可取消)
             try {
@@ -400,8 +409,8 @@ class AgentViewModel : ViewModel() {
                     content = "思考中...", isRunning = true,
                     executionMode = modePrefix, agentRef = agentRef
                 )
-                runningStepRef = runningMsg
-                runningStepIndex = session.messages.value.size
+                runningStep.ref = runningMsg
+                runningStep.index = session.messages.value.size
                 session.messages.value = session.messages.value + runningMsg
                 KernelLog.d("MengPawLatency", "T1 bubble")
 
@@ -459,6 +468,7 @@ class AgentViewModel : ViewModel() {
                 // 工具提前通知 (v0.29.2, Reasonix ③ 对标): 流式中完整 "Action: <tool>" 行
                 // 出现即推送 — 不等工具执行完成 (onStep), 消除工具轮流式空屏
                 var announcedTools = 0            // 已宣布的 Action 行数 (onStep 清零)
+                var scannedUpTo = 0               // 增量扫描水位 (onStep 随 buffer 清零)
 
                 // ── 步骤气泡管理 (v0.3x): 每个 ReAct 步骤一个独立气泡 ──
                 // 运行中: 流式文本 → 工具完成 (onStep) 固化 (思考折叠头 + 工具结果正文)
@@ -467,7 +477,7 @@ class AgentViewModel : ViewModel() {
                 fun pushStepDisplay(step: Int, thought: String, action: String?, content: String, isFinal: Boolean = false) {
                     session.messages.update { current ->
                         val mutable = current.toMutableList()
-                        val ridx = resolveRunningIndex(mutable, runningStepIndex, runningStepRef)
+                        val ridx = resolveRunningIndex(mutable, runningStep.index, runningStep.ref)
                         val newMsg = if (ridx >= 0) {
                             // 替换后同步 ref/index — 快路径恒命中 (v0.28.4)
                             (mutable[ridx] as ChatMessageUi.AgentStep).copy(
@@ -481,8 +491,8 @@ class AgentViewModel : ViewModel() {
                             )
                         }
                         val target = if (ridx >= 0) ridx else mutable.size
-                        runningStepRef = newMsg
-                        runningStepIndex = target
+                        runningStep.ref = newMsg
+                        runningStep.index = target
                         if (ridx >= 0) mutable[ridx] = newMsg else mutable.add(newMsg)
                         mutable
                     }
@@ -492,7 +502,7 @@ class AgentViewModel : ViewModel() {
                 fun completeStep(trace: com.mengpaw.kernel.AgentEngine.TraceStep) {
                     session.messages.update { current ->
                         val mutable = current.toMutableList()
-                        val ridx = resolveRunningIndex(mutable, runningStepIndex, runningStepRef)
+                        val ridx = resolveRunningIndex(mutable, runningStep.index, runningStep.ref)
                         if (ridx >= 0) {
                             mutable[ridx] = (mutable[ridx] as ChatMessageUi.AgentStep).copy(
                                 thought = trace.thought, action = trace.action,
@@ -503,8 +513,8 @@ class AgentViewModel : ViewModel() {
                             trace.step + 1, "", null, "思考中...", isRunning = true,
                             executionMode = modePrefix, agentRef = agentRef
                         )
-                        runningStepRef = next
-                        runningStepIndex = mutable.size
+                        runningStep.ref = next
+                        runningStep.index = mutable.size
                         mutable.add(next)
                         mutable
                     }
@@ -550,6 +560,7 @@ class AgentViewModel : ViewModel() {
                         streamBuf.clear()
                         streamPlayed = 0
                         announcedTools = 0        // 下一轮工具提前通知重新计数
+                        scannedUpTo = 0           // 增量扫描水位随缓冲清零 (P2 修复)
                     }
                 }
 
@@ -586,13 +597,19 @@ class AgentViewModel : ViewModel() {
                     var newTool: String? = null
                     synchronized(streamBuf) {
                         streamBuf.append(delta)
-                        // 工具提前通知: 扫描已累积缓冲中的完整 "Action: <tool>" 行 (多行锚定,
+                        // 工具提前通知 (P2 修复: 原每 delta 对整段缓冲 findAll 重扫 → O(n²);
+                        // 现只扫描"上次水位后可能完整的新行" — 从上一条换行处起扫, 跨界行完整可见;
+                        // 新匹配必然在本次增量内结束(range.last ≥ 水位), 已宣布的旧行被过滤)。
                         // 完整行才宣布 — 避免 "Action: l" 半截工具名误报; "Action Input:" 不匹配
-                        // 因为要求冒号紧跟 Action)。流式到达时行尾 \n 落地即命中。
-                        val matches = ACTION_LINE_REGEX.findAll(streamBuf).toList()
-                        if (matches.size > announcedTools) {
-                            announcedTools = matches.size
-                            newTool = matches.last().groupValues[1]
+                        // 因为要求冒号紧跟 Action。流式到达时行尾 \n 落地即命中。
+                        val start = streamBuf.lastIndexOf('\n', scannedUpTo - 1) + 1
+                        val newMatches = ACTION_LINE_REGEX.findAll(streamBuf, start)
+                            .filter { it.range.last >= scannedUpTo }
+                            .toList()
+                        scannedUpTo = streamBuf.length
+                        if (newMatches.isNotEmpty()) {
+                            announcedTools += newMatches.size
+                            newTool = newMatches.last().groupValues[1]
                         }
                     }
                     // 锁外推送 (锁纪律同 onStep/播放协程: pushStepDisplay 不在监视器内调用)
@@ -603,7 +620,7 @@ class AgentViewModel : ViewModel() {
                             computeStreamDisplayText(streamBuf.toString())
                         }
                         if (base.isBlank()) {
-                            val cur = runningStepRef
+                            val cur = runningStep.ref
                             if (cur != null) pushStepDisplay(cur.step, cur.thought, cur.action, "$EXECUTING_TOOL_PREFIX$tool…")
                         }
                     }
@@ -634,7 +651,7 @@ class AgentViewModel : ViewModel() {
                                 }
                             } ?: continue
                             if (displayText.isBlank()) continue // 工具轮样板: 不显示
-                            val cur = runningStepRef
+                            val cur = runningStep.ref
                             if (cur != null) pushStepDisplay(cur.step, cur.thought, cur.action, displayText)
                         }
                     } catch (e: kotlinx.coroutines.CancellationException) {
@@ -704,7 +721,7 @@ class AgentViewModel : ViewModel() {
                         }
                     }
                     if (flushText != null) {
-                        val cur = runningStepRef
+                        val cur = runningStep.ref
                         if (cur != null) pushStepDisplay(cur.step, cur.thought, cur.action, flushText)
                     }
                 }
@@ -714,7 +731,7 @@ class AgentViewModel : ViewModel() {
 
                 session.messages.update { current ->
                     val mutable = current.toMutableList()
-                    val idx = resolveRunningIndex(mutable, runningStepIndex, runningStepRef)
+                    val idx = resolveRunningIndex(mutable, runningStep.index, runningStep.ref)
                     if (idx >= 0) {
                         val prev = mutable[idx] as ChatMessageUi.AgentStep
                         // final 轮无 onStep — 思考从流式缓冲提取 (Thought 段全文, 完整可见)
@@ -726,8 +743,8 @@ class AgentViewModel : ViewModel() {
                             content = displayResult, thought = finalThought,
                             isRunning = false, isFinal = true
                         )
-                        runningStepRef = newMsg
-                        runningStepIndex = idx
+                        runningStep.ref = newMsg
+                        runningStep.index = idx
                         mutable[idx] = newMsg
                     } else {
                         mutable.add(ChatMessageUi.Agent(displayResult,
@@ -789,12 +806,12 @@ class AgentViewModel : ViewModel() {
                 }
                 session.messages.update { current ->
                     val mutable = current.toMutableList()
-                    val idx = resolveRunningIndex(mutable, runningStepIndex, runningStepRef)
+                    val idx = resolveRunningIndex(mutable, runningStep.index, runningStep.ref)
                     if (idx >= 0) {
                         val newMsg = (mutable[idx] as ChatMessageUi.AgentStep).copy(
                             content = errorMsg, isRunning = false)
-                        runningStepRef = newMsg
-                        runningStepIndex = idx
+                        runningStep.ref = newMsg
+                        runningStep.index = idx
                         mutable[idx] = newMsg
                     } else {
                         mutable.add(ChatMessageUi.Agent(errorMsg,
@@ -866,7 +883,7 @@ class AgentViewModel : ViewModel() {
      * Called by TriggerEngine.onFire when a CRON/SCHEDULE trigger fires.
      */
     fun submitTriggerTask(trigger: com.mengpaw.kernel.trigger.TriggerEngine.Trigger) {
-        val targetAgent = "MengPaw"
+        val targetAgent = DEFAULT_AGENT_NAME
         val session = sessions.getOrPut(targetAgent) { sessionFactory.createSession(targetAgent, null) }
 
         // Don't interrupt a running agent; queue to inbox for later pickup
@@ -904,7 +921,7 @@ class AgentViewModel : ViewModel() {
      * 会话忙碌时 submitTask 自动入 pending 队列。
      */
     fun submitBrowserExtract(url: String, taskId: String) {
-        val targetAgent = "MengPaw"
+        val targetAgent = DEFAULT_AGENT_NAME
         val session = sessions.getOrPut(targetAgent) { sessionFactory.createSession(targetAgent, null) }
 
         // Light system note so user knows something happened
@@ -1134,24 +1151,31 @@ class AgentViewModel : ViewModel() {
         return list.indexOfLast { it is ChatMessageUi.AgentStep && it.isRunning }
     }
 
-    // ── Plugin suggestion logic (unchanged) ──
+    // ── Plugin suggestion logic (P2 修复: 原硬编码 7 插件列表, 新增/改名需手动同步) ──
 
     private fun checkMissingPlugin(output: String): PluginSuggestion? {
-        val unknownRegex = Regex("Unknown command: (\\w+)\\.")
-        val match = unknownRegex.find(output) ?: return null
+        val match = PluginViewModel.UNKNOWN_COMMAND_REGEX.find(output) ?: return null
         val namespace = match.groupValues[1]
         val pluginId = "$namespace-plugin"
 
-        val knownPlugins = mapOf(
-            "fs" to PluginSuggestion("fs", "fs-plugin", "File System", "文件系统操作：cat, ls, write, rm 等", "fs.${match.value.substringAfter("$namespace.").take(20)}"),
-            "net" to PluginSuggestion("net", "net-plugin", "Network", "HTTP 网络请求：curl, get, post", "net.*"),
-            "memory" to PluginSuggestion("memory", "agent.memory", "Memory System", "三轨记忆 (内核): keep/record/read/search/stats/write", "agent.memory.*"),
-            "skill" to PluginSuggestion("skill", "skill-plugin", "Skill System", "可复用的 Agent 剧本系统", "skill.*"),
-            "ui" to PluginSuggestion("ui", "ui-plugin", "UI Automation", "界面操控：click, swipe, input 等", "ui.*"),
-            "proc" to PluginSuggestion("proc", "proc-plugin", "Process Management", "进程管理：ps, kill, exec", "proc.*"),
-            "clipboard" to PluginSuggestion("clipboard", "clipboard-plugin", "Clipboard", "剪贴板操作", "clipboard.*"),
-        )
+        val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+        // 已安装的插件不再提示"安装" — 注册表动态判定, 比硬编码列表感知安装状态
+        if (pm.get(pluginId) != null) return null
 
-        return knownPlugins[namespace]
+        // 内核内置能力 (memory → agent.memory.* 非插件, 注册表查不到): 保留专属映射
+        if (namespace == "memory") {
+            return PluginSuggestion("memory", "agent.memory", "Memory System",
+                "三轨记忆 (内核): keep/record/read/search/stats/write", "agent.memory.*")
+        }
+
+        // 动态来源: 捆绑插件注册表 (单一事实源 — 新增捆绑插件自动获得提示能力)
+        val info = com.mengpaw.shell.PluginRegistrar.BUILTIN_PLUGIN_INFO[pluginId] ?: return null
+        return PluginSuggestion(
+            namespace = namespace,
+            pluginId = pluginId,
+            pluginName = info.first,
+            description = info.second,
+            missingCommand = "$namespace.*"
+        )
     }
 }

@@ -92,12 +92,19 @@ object AgentDocs {
                 var template = File(DataPaths.AGENT_TEMPLATES, "$language/modes.md")
                 if (!template.exists()) template = File(DataPaths.AGENT_TEMPLATES, "zh/modes.md")
                 if (template.exists()) {
+                    val target = File(dir, "modes.md")
                     val tmpFile = File(dir, "modes.md.tmp")
                     tmpFile.writeText(template.readText())
-                    if (tmpFile.renameTo(File(dir, "modes.md"))) {
+                    try {
+                        // 标准原子写: 覆盖式移动, 失败保留原文件 (此处目标本不存在)
+                        java.nio.file.Files.move(
+                            tmpFile.toPath(), target.toPath(),
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                        )
                         KernelLog.i("AgentDocs", "migrate: seeded modes.md ($agentName)")
-                    } else {
-                        tmpFile.delete()
+                    } catch (e: Exception) {
+                        KernelLog.w("AgentDocs", "seed modes.md failed: ${e.message}")
+                        try { tmpFile.delete() } catch (_: Exception) {}
                     }
                 }
             } catch (e: Exception) {
@@ -149,21 +156,21 @@ object AgentDocs {
             KernelLog.w("AgentDocs", "resetDoc: template missing for $relativePath ($agentName)")
             return false
         }
+        val tmpFile = File(target.parentFile, "${target.name}.tmp")
         return try {
             target.parentFile?.mkdirs()
-            val tmpFile = File(target.parentFile, "${target.name}.tmp")
             tmpFile.writeText(template.readText())
-            // Windows 上 renameTo 覆盖已存在目标会失败 — 先删目标再原子改名
-            target.delete()
-            if (tmpFile.renameTo(target)) {
-                KernelLog.i("AgentDocs", "reset: $relativePath → built-in ($agentName)")
-                notifyDocChanged(agentName, target.absolutePath)
-                true
-            } else {
-                tmpFile.delete()
-                false
-            }
+            // 标准原子写: Files.move 覆盖 (Windows 上 renameTo 无法覆盖已存在目标,
+            // 旧"先删目标"写法在 rename 失败时会丢原文件)
+            java.nio.file.Files.move(
+                tmpFile.toPath(), target.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+            KernelLog.i("AgentDocs", "reset: $relativePath → built-in ($agentName)")
+            notifyDocChanged(agentName, target.absolutePath)
+            true
         } catch (e: Exception) {
+            try { tmpFile.delete() } catch (_: Exception) {}
             KernelLog.w("AgentDocs", "resetDoc $relativePath failed: ${e.message}")
             false
         }
@@ -234,9 +241,15 @@ object AgentDocs {
             val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "readExisting: ${e.message}"); "" } else ""
             val tmp = File(file.parentFile, "memory.tmp")
             tmp.writeText(existing + line)
-            file.delete() // ensure target removed (Windows: renameTo fails if target exists)
-            tmp.renameTo(file)
-            if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
+            // 标准原子写: 覆盖式移动, 失败保留原文件 (旧写法先删后搬, rename 失败即丢记忆)
+            try {
+                java.nio.file.Files.move(
+                    tmp.toPath(), file.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            } finally {
+                if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
+            }
             notifyDocChanged(agentName, file.absolutePath)
         } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup2: ${e.message}") }
     }
@@ -332,8 +345,15 @@ object AgentDocs {
                 val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "readExisting: ${e.message}"); "" } else ""
                 val tmp = File(file.parentFile, "memory.tmp")
                 tmp.writeText(existing + lines.toString())
-                tmp.renameTo(file)
-                if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
+                // 标准原子写: Files.move 覆盖 (renameTo 在 Windows 上无法覆盖已存在目标)
+                try {
+                    java.nio.file.Files.move(
+                        tmp.toPath(), file.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                    )
+                } finally {
+                    if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
+                }
             } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup2: ${e.message}") }
         }
         return count
@@ -395,8 +415,15 @@ object AgentDocs {
             val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "saveProjectMemory.read: ${e.message}"); "" } else header
             val tmp = File(file.parentFile, "project.tmp")
             tmp.writeText(existing + entry)
-            tmp.renameTo(file)
-            if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
+            // 标准原子写: Files.move 覆盖 (renameTo 在 Windows 上无法覆盖已存在目标)
+            try {
+                java.nio.file.Files.move(
+                    tmp.toPath(), file.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            } finally {
+                if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
+            }
         } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup2: ${e.message}") }
     }
 
@@ -485,10 +512,18 @@ object AgentDocs {
     private fun writeAtomic(file: File, content: String) {
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, "${file.name}.tmp")
-        tmp.writeText(content)
-        file.delete() // Windows: renameTo fails if target exists (同 appendLongTermMemory 的处理)
-        tmp.renameTo(file)
-        if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "writeAtomic.cleanup: ${e.message}") } }
+        try {
+            tmp.writeText(content)
+            // 标准原子写: Files.move 覆盖 (Windows 上 renameTo 无法覆盖已存在目标,
+            // 旧"先删目标"写法在 rename 失败时会丢原文件)
+            java.nio.file.Files.move(
+                tmp.toPath(), file.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+        } catch (e: Exception) {
+            try { tmp.delete() } catch (_: Exception) {}
+            KernelLog.w("AgentDocs", "writeAtomic: ${e.message}")
+        }
     }
 
     // ── Convenience wrappers (delegate to generic engine) ─────────

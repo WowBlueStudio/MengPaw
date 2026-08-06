@@ -73,55 +73,61 @@ class MissionModeExecutor(
         // stop() 可达 — 并行 worker 依赖父 Job 取消传播
         agentEngine.attachRunningJob(kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job])
 
-        // Step 2: Parallel execution with retry+verify per subtask (WIP gate)
-        val semaphore = Semaphore(maxParallel)
-        coroutineScope {
-            subtasks.map { sub ->
-                async(KernelDispatchers.BACKGROUND) {
-                    semaphore.withPermit {
-                        executeSubtask(sub, maxStepsPerSubtask, maxRetriesPerSubtask, llmProvider, onStep)
+        try {
+            // Step 2: Parallel execution with retry+verify per subtask (WIP gate)
+            val semaphore = Semaphore(maxParallel)
+            coroutineScope {
+                subtasks.map { sub ->
+                    async(KernelDispatchers.BACKGROUND) {
+                        semaphore.withPermit {
+                            executeSubtask(sub, maxStepsPerSubtask, maxRetriesPerSubtask, llmProvider, onStep)
+                        }
                     }
+                }.awaitAll()
+            }
+
+            // Step 3: LLM synthesis of all results
+            val verified = subtasks.count { it.status == SubtaskStatus.VERIFIED }
+            val failed = subtasks.count { it.status == SubtaskStatus.FAILED }
+            val parts = subtasks.joinToString("\n") { st ->
+                val icon = when (st.status) {
+                    SubtaskStatus.VERIFIED -> "✅"
+                    SubtaskStatus.DONE -> "👍"
+                    SubtaskStatus.FAILED -> "❌"
+                    else -> "⬜"
                 }
-            }.awaitAll()
-        }
-
-        // Step 3: LLM synthesis of all results
-        val verified = subtasks.count { it.status == SubtaskStatus.VERIFIED }
-        val failed = subtasks.count { it.status == SubtaskStatus.FAILED }
-        val parts = subtasks.joinToString("\n") { st ->
-            val icon = when (st.status) {
-                SubtaskStatus.VERIFIED -> "✅"
-                SubtaskStatus.DONE -> "👍"
-                SubtaskStatus.FAILED -> "❌"
-                else -> "⬜"
+                "$icon ${st.description}: ${st.output.take(300)}"
             }
-            "$icon ${st.description}: ${st.output.take(300)}"
-        }
-        val synthesisPrompt = MissionSwarmPrompts.buildSynthesisPrompt(
-            task = guardedTask, mode = "Mission", verified = verified, failed = failed,
-            total = subtasks.size, parts = parts
-        )
+            val synthesisPrompt = MissionSwarmPrompts.buildSynthesisPrompt(
+                task = guardedTask, mode = "Mission", verified = verified, failed = failed,
+                total = subtasks.size, parts = parts
+            )
 
-        val synthesis = try {
-            // v0.28.4: 合成阶段流式化 — 最终报告逐字输出
-            if (onDelta != null) {
-                llmProvider.completeStreaming(synthesisPrompt, onDelta)
-            } else {
-                llmProvider.complete(synthesisPrompt)
+            val synthesis = try {
+                // v0.28.4: 合成阶段流式化 — 最终报告逐字输出
+                if (onDelta != null) {
+                    llmProvider.completeStreaming(synthesisPrompt, onDelta)
+                } else {
+                    llmProvider.complete(synthesisPrompt)
+                }
+            } catch (_: Exception) {
+                parts
             }
-        } catch (_: Exception) {
-            parts
-        }
 
-        val report = buildString {
-            appendLine("## Mission: $task")
-            appendLine("子任务: ${subtasks.size} | ✅ $verified | 👍 ${subtasks.filter { it.status == SubtaskStatus.DONE }.size} | ❌ $failed")
-            appendLine()
-            appendLine(synthesis)
+            val report = buildString {
+                appendLine("## Mission: $task")
+                appendLine("子任务: ${subtasks.size} | ✅ $verified | 👍 ${subtasks.filter { it.status == SubtaskStatus.DONE }.size} | ❌ $failed")
+                appendLine()
+                appendLine(synthesis)
+            }
+            // 状态机复位: 任务结束必须 Finished（此前停留 Running, 引擎状态失真 — 同 Swarm 对齐）
+            agentEngine.updateAgentState(AgentState.Finished(report))
+            return report
+        } catch (e: CancellationException) {
+            // 取消传播契约: 必须先 rethrow; P2 — 状态机复位, 否则 _state 残留 Running
+            agentEngine.updateAgentState(AgentState.Idle)
+            throw e
         }
-        // 状态机复位: 任务结束必须 Finished（此前停留 Running, 引擎状态失真 — 同 Swarm 对齐）
-        agentEngine.updateAgentState(AgentState.Finished(report))
-        return report
     }
 
     /** Execute a single subtask with verification and retry. */

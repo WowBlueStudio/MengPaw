@@ -8,6 +8,7 @@ import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.security.IntegrityProvider
 import java.io.File
 import java.security.MessageDigest
+import java.util.Locale
 
 /**
  * Microkernel integrity guard — protects core files from accidental Agent tampering.
@@ -131,7 +132,8 @@ class IntegrityGuard(
     /** Compute SHA-256 of a byte array (for APK certificate). */
     private fun sha256(data: ByteArray): String {
         val digest = java.security.MessageDigest.getInstance("SHA-256")
-        return digest.digest(data).joinToString("") { "%02x".format(it) }
+        // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+        return digest.digest(data).joinToString("") { String.format(Locale.ROOT, "%02x", it) }
     }
 
     /**
@@ -259,7 +261,8 @@ class IntegrityGuard(
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(file.readBytes()).joinToString("") { "%02x".format(it) }
+        // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+        return digest.digest(file.readBytes()).joinToString("") { String.format(Locale.ROOT, "%02x", it) }
     }
 
     companion object {

@@ -26,10 +26,18 @@ class CheckpointManager(private val storageDir: String = com.mengpaw.kernel.Data
         dir.mkdirs()
         val file = File(dir, "${checkpoint.sessionId}_step_${checkpoint.step}.json")
         try {
+            // 标准原子写: tmp 写好后 Files.move(REPLACE_EXISTING) 覆盖。
+            // 失败时原 checkpoint 保持完好(不先删目标), 残留 tmp 一并清理。
             val tmp = File(dir, "${file.name}.tmp")
             tmp.writeText(json.encodeToString(checkpoint))
-            if (file.exists()) file.delete()
-            tmp.renameTo(file)
+            try {
+                java.nio.file.Files.move(
+                    tmp.toPath(), file.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            } finally {
+                if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+            }
         } catch (e: Exception) { ErrorCollector.report(e, "CheckpointManager.save") }
     }
 

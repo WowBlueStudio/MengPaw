@@ -104,16 +104,9 @@ internal object ClipboardIntentExecutor {
             app.startActivity(intent)
             return ExecutionResult.ok("Viewing: $path")
         } catch (e: Exception) {
-            try {
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(Uri.fromFile(file), mimeTypeFor(file.name))
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                app.startActivity(intent)
-                return ExecutionResult.ok("Viewing (direct): $path")
-            } catch (e2: Exception) {
-                return ExecutionResult.fail("View failed: ${e2.message}")
-            }
+            // P2 修复: 移除 Uri.fromFile 死回退 — minSdk 26 上它必然抛
+            // FileUriExposedException (Android 7+), 永远走异常分支, 纯死代码。
+            return ExecutionResult.fail("View failed: ${e.message}")
         }
     }
 }

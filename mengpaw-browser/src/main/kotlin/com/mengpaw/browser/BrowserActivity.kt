@@ -20,9 +20,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.SideEffect
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
-import android.view.KeyEvent
 import com.mengpaw.core.AndroidLogger
 import com.mengpaw.core.DataPathsInitializer
 import com.mengpaw.kernel.KernelLog
@@ -63,13 +61,11 @@ import com.mengpaw.browser.data.DetectedImage
 import com.mengpaw.browser.data.HistoryStore
 import com.mengpaw.browser.data.SearchEngine
 import com.mengpaw.browser.data.TabState
-import com.mengpaw.browser.plugin.BrowserElement
 import com.mengpaw.browser.service.GoogleTranslate
 import com.mengpaw.browser.util.downloadImage
 import com.mengpaw.browser.util.isAdRequest
 import com.mengpaw.browser.util.smartNavigate
 import com.mengpaw.browser.web.createWebView
-import com.mengpaw.browser.plugin.BrowserPluginRegistry
 import com.mengpaw.browser.ui.BrowserAgentSettingsDialog
 import com.mengpaw.browser.ui.BrowserBookmarkDialog
 import com.mengpaw.browser.ui.BrowserFindBar
@@ -108,9 +104,6 @@ class BrowserActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         DataPathsInitializer.initialize(this)
         KernelLog.setLogger(AndroidLogger())
-        // Bind shared PluginManager to BrowserPluginRegistry for active-state filtering
-        com.mengpaw.browser.plugin.BrowserPluginRegistry.pluginManager =
-            com.mengpaw.kernel.plugin.PluginManager.globalInstance
         // 设备内 MCP 桥: 启动本地 HTTP server (127.0.0.1:9880), Shell 进程经它调 MCP 工具
         // (废弃旧反射静态字段绑定 — 插件类在 Shell 进程, 浏览器进程赋值互不可见)
         com.mengpaw.browser.mcp.McpHttpServer.start { tool, args -> runMcpTool(tool, args) }
@@ -119,7 +112,7 @@ class BrowserActivity : ComponentActivity() {
         try {
             val bytes = ByteArray(32)
             java.security.SecureRandom().nextBytes(bytes)
-            val token = bytes.joinToString("") { "%02x".format(it) }
+            val token = bytes.joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) } // Locale.ROOT: 阿拉伯语设备 %02x 畸形 (P2)
             com.mengpaw.browser.mcp.McpHttpServer.setAuthToken(token)
             val values = android.content.ContentValues().apply { put("token", token) }
             contentResolver.update(
@@ -433,7 +426,8 @@ private fun fetchUrlTextTop(url: String): String? {
             conn.requestMethod = "GET"
             conn.connectTimeout = 15_000
             conn.readTimeout = 15_000
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 MengPawBrowser/0.7")
+            // P2 fix: UA 版本号不再硬编码 "0.7" — 随 BuildConfig.VERSION_NAME 自动同步
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 MengPawBrowser/${BuildConfig.VERSION_NAME}")
             conn.instanceFollowRedirects = true
             if (conn.responseCode !in 200..299) return null
             val charset = (conn.contentType ?: "")
@@ -539,7 +533,8 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                     tabs = tabs.map { if (it.id == id) it.copy(url = url) else it }
                     activeTabId = id
                     webViewMap[id]?.loadUrl(url)
-                } else {
+                } else if (tabs.size < maxTabs) {
+                    // P2 fix: Agent 路径 (browser.mcp.invoke tab/new) 同样受 maxTabs 上限约束
                     val newId = (tabs.maxOfOrNull { it.id } ?: -1) + 1
                     tabs = tabs + TabState(id = newId, url = url)
                     activeTabId = newId
@@ -606,6 +601,22 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
         }
     }
 
+    /**
+     * P2 fix: 统一开新 tab 入口 — maxTabs=5 上限真正生效。
+     * 此前 DesktopTabBar/BrowserTabDialog 只在 UI 上隐藏 "+" 按钮, TopBar 菜单 "新标签页"
+     * 与 Agent 桥 (browser.mcp.invoke tab/new) 可无限开 tab。达上限时提示, 不静默创建。
+     */
+    val openNewTab: () -> Unit = {
+        if (tabs.size >= maxTabs) {
+            Toast.makeText(ctx, "标签页已达上限 ($maxTabs)，请先关闭部分标签页", Toast.LENGTH_SHORT).show()
+        } else {
+            val newId = (tabs.maxOfOrNull { it.id } ?: 0) + 1
+            tabs = tabs + TabState(id = newId)
+            activeTabId = newId
+            isColdStart = true
+        }
+    }
+
     val updateTab = { id: Int, update: (TabState) -> TabState ->
         tabs = tabs.map { if (it.id == id) update(it) else it }
     }
@@ -640,6 +651,7 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                     adBlockEnabled = adBlockEnabled,
                     isBookmarked = prefs.isBookmarked(activeTab.url),
                     webViewMap = webViewMap,
+                    homeUrl = prefs.homeUrl,
                     onNavigate = { navigate(it) },
                     onBack = handleBack,
                     onShowTabs = { showTabs = !showTabs },
@@ -647,12 +659,7 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                     onRefresh = { webViewMap[activeTabId]?.reload() },
                     onGoForward = { webViewMap[activeTabId]?.goForward() },
                     onGoBack = { webViewMap[activeTabId]?.goBack() },
-                    onNewTab = {
-                        val newId = (tabs.maxOfOrNull { it.id } ?: 0) + 1
-                        tabs = tabs + TabState(id = newId)
-                        activeTabId = newId
-                        isColdStart = true
-                    },
+                    onNewTab = openNewTab,
                     onCloseTab = {
                         tabs = tabs.filter { it.id != activeTabId }
                         // P1 fix: 先脱离视图树再 destroy (attached destroy 风险)
@@ -709,12 +716,7 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                         tabs = tabs.filter { it.id != id }
                         if (activeTabId == id) activeTabId = tabs.first().id
                     },
-                    onNewTab = {
-                        val newId = (tabs.maxOfOrNull { it.id } ?: 0) + 1
-                        tabs = tabs + TabState(id = newId)
-                        activeTabId = newId
-                        isColdStart = true
-                    }
+                    onNewTab = openNewTab
                 )
             }
 
@@ -904,10 +906,7 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                         if (tabs.isEmpty()) { tabs = listOf(TabState(id = 0)); activeTabId = 0; isColdStart = true; showTabs = false }
                         else if (activeTabId == id) activeTabId = tabs.first().id
                     },
-                    onNewTab = {
-                        val newId = (tabs.maxOfOrNull { it.id } ?: 0) + 1
-                        tabs = tabs + TabState(id = newId); activeTabId = newId; isColdStart = true
-                    },
+                    onNewTab = openNewTab,
                     maxTabs = maxTabs
                 )
             }

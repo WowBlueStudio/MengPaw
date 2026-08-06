@@ -466,7 +466,8 @@ $taskDesc
                         val server = acpServer
                         if (server != null) {
                             val msg = com.mengpaw.kernel.acp.AcpMessage.shareMemory(agentId, "*", content.take(200))
-                            try { server.sendViaTransport(msg) } catch (_: Exception) {}
+                            // P2 修复: 空 catch 吞异常无日志 — 补 ErrorCollector (广播失败不阻断发布, 但要可审计)
+                            try { server.sendViaTransport(msg) } catch (e: Exception) { ErrorCollector.report(e, "TribePlugin.shareMemoryBroadcast") }
                         }
                     }
                     // 超阈值自动压缩
@@ -666,7 +667,9 @@ ${if (task.errorMessage != null) "## 错误\n${task.errorMessage}\n" else ""}
                     }
                 }.toString()
                 val msg = com.mengpaw.kernel.acp.AcpMessage.result(agentId, task.fromAgent, payload)
-                try { server.sendViaTransport(msg); forwardNote = "，结果已发回 ${task.fromAgent}" } catch (_: Exception) {}
+                // P2 修复: 空 catch 吞异常无日志 — 结果回传失败需要可审计 (forwardNote 维持不显示)
+                try { server.sendViaTransport(msg); forwardNote = "，结果已发回 ${task.fromAgent}" }
+                catch (e: Exception) { ErrorCollector.report(e, "TribePlugin.taskResultForward") }
             }
         }
 
@@ -708,7 +711,9 @@ $message
             val server = acpServer
             if (server != null) {
                 val msg = com.mengpaw.kernel.acp.AcpMessage.tribeChat(agentId, "*", message)
-                try { server.sendViaTransport(msg); broadcastCount = 1 } catch (_: Exception) {}
+                // P2 修复: 空 catch 吞异常无日志 — 广播失败要可审计 (broadcastCount 维持 0)
+                try { server.sendViaTransport(msg); broadcastCount = 1 }
+                catch (e: Exception) { ErrorCollector.report(e, "TribePlugin.chatBroadcast") }
             }
         }
         val note = if (broadcastCount > 0) "，已广播到局域网" else ""

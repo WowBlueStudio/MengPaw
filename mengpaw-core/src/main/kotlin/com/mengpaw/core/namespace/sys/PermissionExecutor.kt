@@ -23,15 +23,19 @@ internal object PermissionExecutor {
 
     private const val PERM_REQUEST_CODE = 9001
 
+    // ── 权限清单维护规则 (P2 修复, 防双源漂移) ──
+    // 本文件所有权限数组以 mengpaw-shell/AndroidManifest.xml 的 <uses-permission> 为唯一基准:
+    // 1. Manifest 未声明的权限不可被授予 — requestPermissions 直接抛 SecurityException,
+    //    不得列入 DIALOG/SETTINGS (曾漂移出 READ_PHONE_STATE/SEND_SMS/READ_CONTACTS/WRITE_SETTINGS, 已清除)
+    // 2. 新增可运行时申请的权限: 先声明于 Manifest, 再同步加入 DIALOG/SETTINGS 与 PERMISSION_LABELS
+    // 3. PERMISSION_LABELS 是 sys.permission.list 的输出清单 — 须与 Manifest 一一对应
+
     private val DIALOG_PERMISSIONS = setOf(
         Manifest.permission.POST_NOTIFICATIONS,
         Manifest.permission.CAMERA,
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.ACCESS_COARSE_LOCATION,
         Manifest.permission.RECORD_AUDIO,
-        Manifest.permission.READ_PHONE_STATE,
-        Manifest.permission.SEND_SMS,
-        Manifest.permission.READ_CONTACTS,
         Manifest.permission.READ_EXTERNAL_STORAGE,
         Manifest.permission.WRITE_EXTERNAL_STORAGE,
         Manifest.permission.READ_MEDIA_IMAGES,
@@ -41,7 +45,6 @@ internal object PermissionExecutor {
 
     private val SETTINGS_PERMISSIONS = setOf(
         Manifest.permission.SYSTEM_ALERT_WINDOW,
-        Manifest.permission.WRITE_SETTINGS,
         Manifest.permission.REQUEST_INSTALL_PACKAGES,
         Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
     )
@@ -58,10 +61,6 @@ internal object PermissionExecutor {
         Manifest.permission.POST_NOTIFICATIONS to "通知",
         Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS to "忽略电池优化",
         Manifest.permission.QUERY_ALL_PACKAGES to "查询应用列表",
-        Manifest.permission.READ_PHONE_STATE to "读取手机状态",
-        Manifest.permission.SEND_SMS to "发送短信",
-        Manifest.permission.READ_CONTACTS to "读取联系人",
-        Manifest.permission.WRITE_SETTINGS to "修改系统设置",
         Manifest.permission.REQUEST_INSTALL_PACKAGES to "安装应用",
         Manifest.permission.READ_CALENDAR to "读取日历",
         Manifest.permission.WRITE_CALENDAR to "写入日历",
@@ -73,7 +72,6 @@ internal object PermissionExecutor {
         Manifest.permission.CAMERA to "相机权限。使用 sys.permission.request CAMERA 申请。",
         Manifest.permission.ACCESS_FINE_LOCATION to "GPS 精确定位。使用 sys.permission.request ACCESS_FINE_LOCATION 申请。",
         Manifest.permission.RECORD_AUDIO to "录音权限。使用 sys.permission.request RECORD_AUDIO 申请。",
-        Manifest.permission.READ_PHONE_STATE to "读取手机状态（IMEI/运营商）。使用 sys.permission.request READ_PHONE_STATE 申请。",
     )
 
     private inline fun requireApp(): Context = SysExecutor.appContext
@@ -81,20 +79,11 @@ internal object PermissionExecutor {
 
     suspend fun permissionList(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val app = requireApp()
-        val perms = listOf(
-            Manifest.permission.ACCESS_FINE_LOCATION to "GPS 定位",
-            Manifest.permission.CAMERA to "相机",
-            Manifest.permission.RECORD_AUDIO to "录音",
-            Manifest.permission.READ_EXTERNAL_STORAGE to "读取存储",
-            Manifest.permission.WRITE_EXTERNAL_STORAGE to "写入存储",
-            Manifest.permission.SYSTEM_ALERT_WINDOW to "悬浮窗",
-            Manifest.permission.POST_NOTIFICATIONS to "通知",
-            Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS to "忽略电池优化",
-            Manifest.permission.QUERY_ALL_PACKAGES to "查询应用列表",
-            Manifest.permission.READ_PHONE_STATE to "读取手机状态",
-            Manifest.permission.SEND_SMS to "发送短信",
-            Manifest.permission.READ_CONTACTS to "读取联系人",
-        )
+        // P2 修复 (双源漂移): 原内联 perms 列表是 PERMISSION_LABELS 的手写子集,
+        // 缺 ACCESS_COARSE_LOCATION/READ_MEDIA_IMAGES/READ_CALENDAR/WRITE_CALENDAR/
+        // REQUEST_INSTALL_PACKAGES 共 6 项 — 两处各改各的必漂移。
+        // 现统一以 PERMISSION_LABELS 为唯一输出清单 (已按 Manifest 对齐, 见维护规则注释)。
+        val perms = PERMISSION_LABELS.toList()
         return ExecutionResult.ok(buildString {
             appendLine("| 权限 | 说明 | 状态 |")
             appendLine("|------|------|------|")

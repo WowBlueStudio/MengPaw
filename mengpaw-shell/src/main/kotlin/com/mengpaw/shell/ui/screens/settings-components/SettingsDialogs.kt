@@ -18,6 +18,12 @@ import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 
+// P2 修复: 原 (1000..9999).random() 4 位随机 ID 可碰撞 (触发器按 id 去重/增删) —
+// 改时间戳 + 单调计数器, 同毫秒内多次创建也不重复
+private val triggerIdSeq = java.util.concurrent.atomic.AtomicLong(0)
+private fun newTriggerId(prefix: String): String =
+    "$prefix-${System.currentTimeMillis()}-${triggerIdSeq.incrementAndGet()}"
+
 /** CRON 触发器 — 简洁输入，让用户找 Agent 配置时间参数。 */
 @Composable
 fun CronTriggerDialog(
@@ -54,7 +60,7 @@ fun CronTriggerDialog(
         },
         confirmButton = {
             Button(
-                onClick = { if (cronExpr.isNotBlank() && action.isNotBlank()) onConfirm("cron-${(1000..9999).random()}", cronExpr, action) },
+                onClick = { if (cronExpr.isNotBlank() && action.isNotBlank()) onConfirm(newTriggerId("cron"), cronExpr, action) },
                 enabled = cronExpr.isNotBlank() && action.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand), shape = RoundedCornerShape(ArcoRadius.md)
             ) { Text(strings.add, color = androidx.compose.ui.graphics.Color.White) }
@@ -99,7 +105,7 @@ fun LifetimeTriggerDialog(
         },
         confirmButton = {
             Button(
-                onClick = { if (config.isNotBlank() && action.isNotBlank()) onConfirm("chat-${(1000..9999).random()}", config, action) },
+                onClick = { if (config.isNotBlank() && action.isNotBlank()) onConfirm(newTriggerId("chat"), config, action) },
                 enabled = config.isNotBlank() && action.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand), shape = RoundedCornerShape(ArcoRadius.md)
             ) { Text(strings.add, color = androidx.compose.ui.graphics.Color.White) }

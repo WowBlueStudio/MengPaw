@@ -61,7 +61,9 @@ class PlanModeExecutor(
                 results.add("[OK] Step ${step.index + 1}: ${stepResult}")
                 step.status = PlanStepStatus.COMPLETED
             } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e  // 取消契约: 用户 stop() 不吞成步骤失败 (同 MissionModeExecutor 先例)
+                // 取消契约: 必须先 rethrow; P2 — 状态机复位, 否则 _state 残留 Running
+                agentEngine.updateAgentState(AgentState.Idle)
+                throw e
             } catch (e: Exception) {
                 ErrorCollector.report(ErrorType.AGENT_CRASH, "PlanModeExecutor",
                     "Step ${step.index + 1}: ${step.description}", throwable = e, agentName = agentEngine.agentName)

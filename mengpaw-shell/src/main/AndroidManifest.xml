@@ -96,11 +96,10 @@
             android:name=".service.WakeReceiver"
             android:exported="false" />
 
-        <receiver
-            android:name=".service.EventReceiver"
-            android:exported="false" />
-
         <!-- FileProvider — 相机拍照 / 文件选择器 URI 授权 -->
+        <!-- P2 修复 (死声明清理): EventReceiver 原在 Manifest 声明但无 intent-filter,
+            系统无法触发, 也无显式 Intent 指向它 — 实际生效路径是 MainActivity/ShellService
+            的 registerReceiver 动态注册 (EventReceiver.register()), 声明纯属冗余, 已移除 -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

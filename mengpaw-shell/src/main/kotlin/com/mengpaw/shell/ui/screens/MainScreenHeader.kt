@@ -3,7 +3,6 @@
 
 package com.mengpaw.shell.ui.screens
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -56,7 +55,7 @@ fun MainScreenHeader(
         ) {
             // Agent avatar — 44dp circle, 点击打开左侧栏
             val avatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$displayAgentName/avatar.png")
-            val avatarBitmap = remember(displayAgentName) { if (avatarFile.exists()) BitmapFactory.decodeFile(avatarFile.absolutePath) else null }
+            val avatarBitmap = remember(displayAgentName) { if (avatarFile.exists()) decodeSampled(avatarFile.absolutePath, maxDim = 256) else null }
             Box(modifier = Modifier.size(44.dp).clip(CircleShape)
                 .pointerInput(Unit) { detectTapGestures { onToggleLeftSidebar() } }) {
                 if (avatarBitmap != null) {

@@ -14,6 +14,13 @@ import java.util.Date
 import java.util.Locale
 
 /**
+ * P2 fix: 截图位图内存上限 — ARGB_8888 = 4B/px, 32MB ≈ 8.4M px。
+ * 超过上限的截图 (超大页面缝合图 / 超宽视口) 等比缩小绘制 (canvas.scale),
+ * 坐标空间随返回 JSON 尺寸同步缩放, 防止 Bitmap OOM。
+ */
+const val MAX_SCREENSHOT_PIXELS = 8 * 1024 * 1024
+
+/**
  * Java↔JavaScript bridge enabling Agent to control the browser.
  *
  * Registered via [WebView.addJavascriptInterface] as "MengPaw".
@@ -483,6 +490,9 @@ class BrowserBridge(
     /** Max segments for full-page screenshot (prevent OOM). ~20 viewports. */
     private val MAX_SEGMENTS = 30
 
+    /** P2 fix: 最近一次全页截图的缩放比 — coordClick/coordScroll 按此还原为页面坐标。 */
+    private var lastScreenshotScale = 1f
+
     @JavascriptInterface
     fun screenshotFull(maxHeight: Int = 15000): String {
         return try {
@@ -499,19 +509,36 @@ class BrowserBridge(
             val dims = org.json.JSONObject(dimsJson.ifBlank { """{"w":${webView.width},"h":${webView.height}}""" })
             val pageH = dims.optInt("h", webView.height).coerceAtMost(maxHeight).coerceAtLeast(1)
             // P0 fix: 捕获宽度以 WebView 实际宽度为准 — capturePicture 移除后 draw 输出即视口
-            val drawW = webView.width.coerceAtLeast(1)
-            val drawH = webView.height.coerceAtLeast(1)
+            val rawW = webView.width.coerceAtLeast(1)
+            val rawH = webView.height.coerceAtLeast(1)
+            // P2 fix: 位图内存上限防 OOM — 缝合图总像素超 MAX_SCREENSHOT_PIXELS (32MB) 时
+            // 整体等比缩小绘制 (canvas.scale), 返回 JSON 尺寸即实际位图尺寸, 坐标空间同步缩放;
+            // coordClick/coordScroll 经 lastScreenshotScale 还原为页面坐标。
+            val rawSegCount = minOf((pageH + rawH - 1) / rawH, MAX_SEGMENTS)
+            val rawStitchedH = minOf(pageH.toLong(), rawSegCount.toLong() * rawH)
+            val scale = if (rawW.toLong() * rawStitchedH > MAX_SCREENSHOT_PIXELS)
+                kotlin.math.sqrt(MAX_SCREENSHOT_PIXELS.toDouble() / (rawW.toLong() * rawStitchedH)).toFloat().coerceIn(0.2f, 1f)
+            else 1f
+            lastScreenshotScale = scale
+            val drawW = (rawW * scale).toInt().coerceAtLeast(1)
+            val drawH = (rawH * scale).toInt().coerceAtLeast(1)
             val vpHeight = drawH
-            val segmentCount = minOf((pageH + vpHeight - 1) / vpHeight, MAX_SEGMENTS)
+            val scaledPageH = (pageH * scale).toInt().coerceAtLeast(1)
+            val segmentCount = minOf((scaledPageH + vpHeight - 1) / vpHeight, MAX_SEGMENTS)
+            val stitchedH = minOf(scaledPageH, segmentCount * vpHeight)
+            // 极限兜底: 缩放下限 0.2 仍超内存上限的极端宽视口 — 直接报错引导用视口截图
+            if (drawW.toLong() * stitchedH > MAX_SCREENSHOT_PIXELS) {
+                throw IllegalStateException("页面尺寸过大 ($drawW×$stitchedH px) 超位图 32MB 上限，请改用 browser.screenshot (视口截图)")
+            }
 
             val segments = mutableListOf<Bitmap>()
-            var currentY = 0
+            var pageY = 0  // 页面坐标 (未缩放) — scrollTo 用页面像素
 
             for (i in 0 until segmentCount) {
                 // Scroll + wait for render via post queue
                 val segLatch = java.util.concurrent.CountDownLatch(1)
                 webView.post {
-                    webView.scrollTo(0, currentY)
+                    webView.scrollTo(0, pageY)
                     // Double-post ensures scroll happened before capture
                     webView.post {
                         segLatch.countDown()
@@ -522,20 +549,22 @@ class BrowserBridge(
                 // P0 fix: capturePicture() 已在 API 33+ 移除 — 抛 NoSuchMethodError (Error 而非
                 // Exception, 逃过下方 catch 必崩)。改为主线程 View.draw — 滚动对齐后画当前视口段
                 // (语义等价: 每段 = 视口截图, 拼接为全页)。
-                val segBitmap = Bitmap.createBitmap(drawW, minOf(drawH, pageH - currentY), Bitmap.Config.ARGB_8888)
+                val segBitmap = Bitmap.createBitmap(drawW, minOf(drawH, scaledPageH - i * vpHeight), Bitmap.Config.ARGB_8888)
                 val drawLatch = java.util.concurrent.CountDownLatch(1)
                 webView.post {
-                    webView.draw(android.graphics.Canvas(segBitmap))
+                    val c = android.graphics.Canvas(segBitmap)
+                    if (scale < 1f) c.scale(scale, scale)  // P2 fix: 超限时等比缩小绘制
+                    webView.draw(c)
                     drawLatch.countDown()
                 }
                 drawLatch.await(500, java.util.concurrent.TimeUnit.MILLISECONDS)
                 segments.add(segBitmap)
-                currentY += vpHeight
-                if (currentY >= pageH) break
+                pageY += rawH
+                if (pageY >= pageH) break
             }
 
             // Stitch vertically
-            val stitched = Bitmap.createBitmap(drawW, minOf(pageH, segmentCount * vpHeight), Bitmap.Config.ARGB_8888)
+            val stitched = Bitmap.createBitmap(drawW, stitchedH, Bitmap.Config.ARGB_8888)
             val stitchCanvas = android.graphics.Canvas(stitched)
             var offsetY = 0
             for (seg in segments) { stitchCanvas.drawBitmap(seg, 0f, offsetY.toFloat(), null); offsetY += seg.height; seg.recycle() }
@@ -553,7 +582,7 @@ class BrowserBridge(
             // Scroll back to top
             webView.post { webView.scrollTo(0, 0) }
 
-            """{"ok":true,"path":"${finalFile.absolutePath}","width":$drawW,"totalHeight":${minOf(pageH, segmentCount * vpHeight)},"segments":$segmentCount,"fileSize":$fileSize}"""
+            """{"ok":true,"path":"${finalFile.absolutePath}","width":$drawW,"totalHeight":$stitchedH,"segments":$segmentCount,"fileSize":$fileSize,"scale":$scale}"""
         } catch (e: Exception) {
             // Auto-fallback: try viewport screenshot
             return try {
@@ -576,9 +605,11 @@ class BrowserBridge(
     @JavascriptInterface
     fun coordClick(x: Int, y: Int): String {
         return try {
+            // P2 fix: 截图超限等比缩小后, Agent 坐标在缩放空间 — 按 lastScreenshotScale 还原为页面坐标
+            val s = lastScreenshotScale.coerceAtLeast(0.1f)
             val maxY = (webView.contentHeight - webView.height).coerceAtLeast(0)
-            val targetY = y.coerceAtLeast(0).coerceAtMost(webView.contentHeight)
-            val vpX = x.coerceAtLeast(0).coerceAtMost(webView.width)
+            val targetY = (y.toFloat() / s).toInt().coerceAtLeast(0).coerceAtMost(webView.contentHeight)
+            val vpX = (x.toFloat() / s).toInt().coerceAtLeast(0).coerceAtMost(webView.width)
 
             // Scroll to position and wait for render
             val scrollLatch = java.util.concurrent.CountDownLatch(1)
@@ -611,8 +642,10 @@ class BrowserBridge(
     @JavascriptInterface
     fun coordScroll(y: Int): String {
         return try {
+            // P2 fix: 与 coordClick 一致 — 缩放坐标还原为页面坐标
+            val s = lastScreenshotScale.coerceAtLeast(0.1f)
             val maxY = (webView.contentHeight - webView.height).coerceAtLeast(0)
-            val targetY = y.coerceIn(0, maxY)
+            val targetY = (y.toFloat() / s).toInt().coerceIn(0, maxY)
             val latch = java.util.concurrent.CountDownLatch(1)
             webView.post { webView.scrollTo(0, targetY); webView.post { latch.countDown() } }
             latch.await(200, java.util.concurrent.TimeUnit.MILLISECONDS)

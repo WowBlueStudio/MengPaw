@@ -38,6 +38,7 @@ import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.shell.ui.localization.AppStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 记忆孪生配对对话框组 (接收请求 / 验证码 / 5连击确认) — 从 SidebarContent.kt 拆出
@@ -63,10 +64,13 @@ fun TwinPairingDialogs(
     var twinPairFiles by remember { mutableStateOf<List<java.io.File>>(emptyList()) }
     LaunchedEffect(Unit) {
         while (true) {
-            val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
-            val files = if (inbox.exists())
-                inbox.listFiles()?.filter { it.name.startsWith("twin_pair_") && it.name.endsWith(".json") }?.toList() ?: emptyList()
-            else emptyList()
+            // P2: 目录枚举移到 IO 线程, 不再每 2 秒阻塞主线程
+            val files = withContext(Dispatchers.IO) {
+                val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX)
+                if (inbox.exists())
+                    inbox.listFiles()?.filter { it.name.startsWith("twin_pair_") && it.name.endsWith(".json") }?.toList() ?: emptyList()
+                else emptyList()
+            }
             twinPairFiles = files
             kotlinx.coroutines.delay(2000) // 每2秒检查一次
         }

@@ -252,6 +252,16 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `mutating memory subcommands are not exempt from loop detection`() {
+        // P2 修复: 旧前缀匹配豁免全部 memory 命令 — 写子命令不得豁免
+        repeat(4) { assertFalse(engine.detectLoop("agent.memory.keep 记住这个")) }
+        assertTrue(engine.detectLoop("agent.memory.keep 记住这个")) // 5th triggers
+        // agent.boost 前缀也不得连带豁免 agent.boost.delete
+        repeat(4) { assertFalse(engine.detectLoop("agent.boost.delete")) }
+        assertTrue(engine.detectLoop("agent.boost.delete"))
+    }
+
+    @Test
     fun `system prompt contains network ports section with all ports`() {
         val prompt = engine.buildSystemPrompt()
         assertTrue("提示词应含网络端口章节", prompt.contains("## 网络端口"))

@@ -55,5 +55,13 @@ object AppInitializer {
         com.mengpaw.core.SkillSeeds.ensure(context)
         com.mengpaw.kernel.agent.AgentDocs.bootstrapper = { name, lang -> com.mengpaw.core.AgentTemplates.bootstrapAgent(name, lang) }
         KernelLog.setLogger(AndroidLogger())
+        // P2 修复 (悬空链接线): IntegrityGuard.verify() 此前从未被调用 —
+        // init() 只建基线, 路径保护走 IntegrityProvider.validateCommand (Pipeline),
+        // 而签名完整性复核 verify() 无人调用。启动时复核一次并告警:
+        // 失败不阻断启动 (阻断有 boot-loop 风险), 仅记录日志供审计。
+        if (!com.mengpaw.core.security.IntegrityGuard.globalInstance.verify()) {
+            KernelLog.w("IntegrityGuard",
+                "APK 完整性校验失败 (fail-secure) — 签名基线缺失或不匹配, 详见 IntegrityGuard.getManifest()")
+        }
     }
 }

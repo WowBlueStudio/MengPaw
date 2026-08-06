@@ -249,15 +249,18 @@ object EvolutionStore {
         atomicWrite(file, old + content)
     }
 
-    /** 原子写入: tmp + rename, 失败时清理残留 tmp。 */
+    /** 原子写入: tmp + Files.move(REPLACE_EXISTING) 覆盖, 失败保留原文件并清理 tmp。 */
     private fun atomicWrite(file: File, content: String) {
         val tmp = File(file.parentFile, "${file.name}.tmp")
-        tmp.writeText(content)
-        if (!tmp.renameTo(file)) {
-            // rename 失败(如 Windows 目标被占用): 尝试删除目标后重试一次
-            try { file.delete() } catch (_: Exception) {}
-            if (!tmp.renameTo(file)) { tmp.delete() }
+        try {
+            tmp.writeText(content)
+            java.nio.file.Files.move(
+                tmp.toPath(), file.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+        } catch (e: Exception) {
+            try { tmp.delete() } catch (_: Exception) {}
+            throw e
         }
-        if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
     }
 }

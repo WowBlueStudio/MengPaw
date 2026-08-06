@@ -222,11 +222,14 @@ class FsPlugin : Plugin {
             }
 
             // Detect symlinks that escape the sandbox
-            if (canonical.path != absolute.canonicalPath) {
-                // If the canonical paths differ, there's a symlink involved.
-                // Re-verify the canonical path is still in the sandbox.
-                if (!canonical.path.startsWith(workDirPath + File.separator) && canonical.path != workDirPath) {
-                    return ResolvedPath.fail("Symlink escape blocked: $path -> ${canonical.path}")
+            // P2 修复: 原实现比较 canonical.path != absolute.canonicalPath —
+            // 两侧都是"已规范化"路径, 恒相等 → 检测恒假, 此分支从不触发。
+            // 改为比较 未解析路径 (absolutePath, 保留 symlink/..) 与 解析后路径
+            // (canonicalPath): 二者不同说明路径含 symlink 或 .., 需复核沙箱边界。
+            if (absolute.absolutePath != canonicalPath) {
+                // 路径中含 symlink 或 .. — 规范化后路径变化, 复核仍须在沙箱内
+                if (!canonicalPath.startsWith(workDirPath + File.separator) && canonicalPath != workDirPath) {
+                    return ResolvedPath.fail("Symlink escape blocked: $path -> $canonicalPath")
                 }
             }
 

@@ -4,8 +4,6 @@
 package com.mengpaw.kernel.llm
 
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlin.random.Random
 
 /**
@@ -25,13 +23,15 @@ import kotlin.random.Random
  */
 object LlmRateLimiter {
 
-    /** Maximum concurrent LLM API calls. User-configurable via settings. */
+    /** Maximum concurrent LLM API calls. User-configurable via settings (SettingsViewModel). */
     @Volatile var maxConcurrency: Int = 10
 
-    /** Fixed-size semaphore initialized at startup. Concurrency changes update only the
-     *  tracking field — the semaphore instance stays fixed to avoid race conditions
-     *  with in-flight permits. */
-    private val semaphore: Semaphore = Semaphore(10)
+    /** 在途调用计数 (锁保护) — 取代固定容量 Semaphore。 */
+    private val lock = Any()
+    private var inFlight = 0
+
+    /** 等待轮询间隔 (ms) — 许可释放后最多延迟这么久被唤醒。 */
+    private const val ACQUIRE_POLL_MS = 20L
 
     /** Timestamp of the most recent HTTP 429 response, used for coordinated backoff. */
     @Volatile private var last429Time: Long = 0L
@@ -54,10 +54,27 @@ object LlmRateLimiter {
 
     /**
      * Execute [block] under the concurrency limit.
+     *
+     * P2 修复: 原实现 Semaphore 固定 10 且 maxConcurrency 配置(设置页可调)从不生效 —
+     * 旋钮失效。kotlinx Semaphore 容量不可动态调整, 故改用锁保护的计数器:
+     * 每次进入实时读取 maxConcurrency, 支持运行中调整; 到达上限时轮询等待。
+     * 单用户场景并发 ≤5, 轮询无饥饿与公平性问题。
      */
     suspend fun <T> withLimit(block: suspend () -> T): T {
         await429Cooldown()
-        return semaphore.withPermit { block() }
+        while (true) {
+            val limit = maxConcurrency.coerceAtLeast(1)
+            val acquired = synchronized(lock) {
+                if (inFlight < limit) { inFlight++; true } else false
+            }
+            if (acquired) break
+            delay(ACQUIRE_POLL_MS)
+        }
+        try {
+            return block()
+        } finally {
+            synchronized(lock) { inFlight-- }
+        }
     }
 
     /**

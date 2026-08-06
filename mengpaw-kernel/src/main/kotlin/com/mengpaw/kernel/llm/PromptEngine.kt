@@ -55,7 +55,8 @@ class PromptEngine {
     // 并发重建时普通 HashMap 会竞争损坏
     private data class DocCache(var content: String, var lastModified: Long)
     private val docCache = java.util.concurrent.ConcurrentHashMap<String, DocCache>()
-    private var cachedSystemPrompt: String? = null
+    // @Volatile: invalidateDocCache 在命令执行线程写 null, 运行循环线程读 — 无 volatile 会读到陈旧引用
+    @Volatile private var cachedSystemPrompt: String? = null
     private var cachedPromptLang: AgentLanguage? = null
     private var cachedPromptAgent: String? = null
     private var cachedPromptFramework: String? = null
@@ -160,13 +161,18 @@ class PromptEngine {
         }
 
         // Return cached prompt if nothing changed — skip all disk I/O
-        if (agentName == cachedPromptAgent && lang == cachedPromptLang &&
+        // P2 修复 (TOCTOU): cachedSystemPrompt 只快照读取一次 —
+        // 旧写法在 :166 判非空后再于 return 处二次读字段, invalidateDocCache 恰在
+        // 两读之间置 null 会 NPE; 多字段分步读的跨代组合只会造成"重建"(安全方向),
+        // 快照保证返回的必是本次校验过的同一引用。
+        val cachedPrompt = cachedSystemPrompt
+        if (cachedPrompt != null &&
+            agentName == cachedPromptAgent && lang == cachedPromptLang &&
             framework == cachedPromptFramework && modelName == cachedPromptModel &&
             cachedTemplateHash == TEMPLATE_HASH &&
-            cachedSystemPrompt != null &&
             docMtimes == currentDocMtimes(agentName) // 文件删除/修改即失配 → 重建
         ) {
-            return cachedSystemPrompt!!
+            return cachedPrompt
         }
 
         // Read workspace docs with file-system cache (re-reads only when file changed)
@@ -641,10 +647,14 @@ Skills 分为两层：
 
     /**
      * Detect command loops (same command repeated 5+ times in recent window).
-     * Safe info/list commands are exempt.
+     * Safe info/list commands are exempt — 仅按命令名精确匹配。
+     * P2 修复: 旧前缀匹配 "agent.memory" 会豁免 agent.memory.write/edit/rm/delete
+     * 等全部写命令的循环检测 (agent.boost 亦连带豁免 agent.boost.delete);
+     * 改为取命令名首 token 精确比对 — 读命令带参数仍豁免, 写子命令不再豁免。
      */
     fun detectLoop(command: String): Boolean {
-        if (safeCommands.any { command.startsWith(it) }) return false
+        val commandName = command.substringBefore(' ').substringBefore('\t')
+        if (commandName in safeCommands) return false
         recentCommands.add(command)
         if (recentCommands.size > 8) recentCommands.removeFirst()
         return recentCommands.count { it == command } >= 5

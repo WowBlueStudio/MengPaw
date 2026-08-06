@@ -174,5 +174,6 @@ $summary
     /** SHA-256 十六进制摘要。 */
     fun sha256(text: String): String =
         MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
+            // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+            .joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
 }

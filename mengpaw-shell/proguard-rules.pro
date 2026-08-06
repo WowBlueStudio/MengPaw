@@ -68,7 +68,6 @@
 # These remain in mengpaw-core (Android adapters)
 -keep class com.mengpaw.core.security.Vault { *; }
 -keep class com.mengpaw.core.security.IntegrityGuard { *; }
--keep class com.mengpaw.core.security.StorageMonitor { *; }
 -keep class com.mengpaw.core.DataPathsInitializer { *; }
 -keep class com.mengpaw.core.AndroidLogger { *; }
 -keep class com.mengpaw.core.AgentTemplates { *; }

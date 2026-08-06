@@ -36,9 +36,13 @@ class BrowserPrefs(ctx: Context) {
         get() = p.getBoolean("history_enabled", true)
         set(v) = p.edit().putBoolean("history_enabled", v).apply()
 
-    var savePasswords: Boolean
-        get() = p.getBoolean("save_passwords", true)
-        set(v) = p.edit().putBoolean("save_passwords", v).apply()
+    // ── 主页 ──
+
+    /** 主页 URL (Home 按钮目标; P2 fix: 消除 BrowserTopBar 硬编码 baidu, 改为持久化设置)。 */
+    var homeUrl: String
+        get() = p.getString("home_url", "https://www.baidu.com") ?: "https://www.baidu.com"
+        set(v) = p.edit().putString("home_url", v).apply()
+    // 注意: savePasswords pref 已随 P2 修复移除 — WebView API 18+ 无密码保存能力, 假开关无意义
 
     // ── Agent Collaboration Settings ──
 

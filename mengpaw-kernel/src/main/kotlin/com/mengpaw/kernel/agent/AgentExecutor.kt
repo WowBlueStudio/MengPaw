@@ -307,12 +307,17 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             if (filtered.size == arr.size) return ExecutionResult.fail("Session not found: $id", errorCode = ErrorCodes.ERR_NOT_FOUND)
 
             val newJson = JsonArray(filtered)
-            // Atomic write updated history
+            // 标准原子写: tmp 写好后再覆盖 — rename 失败不丢原文件 (旧写法先删后搬)
             val tmp = java.io.File(historyFile.parentFile, "session_history.json.tmp")
             tmp.writeText(newJson.toString())
-            historyFile.delete() // ensure target removed for Windows compat
-            tmp.renameTo(historyFile)
-            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+            try {
+                java.nio.file.Files.move(
+                    tmp.toPath(), historyFile.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            } finally {
+                if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+            }
 
             // Delete session message file
             val sessionFile = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "sessions/$id.json")
@@ -346,10 +351,17 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             if (!found) return ExecutionResult.fail("Session not found: $id", errorCode = ErrorCodes.ERR_NOT_FOUND)
 
             val newJson = JsonArray(updated.map { JsonObject(it) })
+            // 标准原子写: Files.move 覆盖 (Windows 上 File.renameTo 无法覆盖已存在目标)
             val tmp = java.io.File(historyFile.parentFile, "session_history.json.tmp")
             tmp.writeText(newJson.toString())
-            tmp.renameTo(historyFile)
-            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+            try {
+                java.nio.file.Files.move(
+                    tmp.toPath(), historyFile.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            } finally {
+                if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+            }
 
             ExecutionResult.ok(if (unarchive) "会话 $id 已取消归档。" else "会话 $id 已归档。")
         } catch (e: Exception) {
@@ -591,11 +603,17 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         }
         return try {
             file.parentFile?.mkdirs()
-            // Atomic write via tmp+rename
+            // 标准原子写: tmp 写好后 Files.move(REPLACE_EXISTING) 覆盖 — 失败保留原文件
             val tmp = java.io.File(file.parentFile, "${file.name}.tmp")
             tmp.writeText(content)
-            if (file.exists()) file.delete()
-            tmp.renameTo(file)
+            try {
+                java.nio.file.Files.move(
+                    tmp.toPath(), file.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            } finally {
+                if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
+            }
             // 仅对系统提示词中的三个缓存文件触发精确失效
             val wsRoot = "${com.mengpaw.kernel.DataPaths.AGENTS}/${agentName(ctx)}"
             val cachedDocs = setOf("agents.md", "soul.md", "memory/memory.md")

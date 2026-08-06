@@ -54,7 +54,9 @@ class Vault(context: Context) {
         if (first != null) return Pair(first, true)
 
         KernelLog.w("Vault", "First attempt failed, retrying after short delay...")
-        // Brief pause — on some devices Keystore needs a moment after key migration
+        // Brief pause — on some devices Keystore needs a moment after key migration.
+        // 说明: 构造路径非挂起函数无法用 delay; 仅 Keystore 首次失败(如系统升级后)
+        // 的一次性 200ms 阻塞, 频率极低 — 保持原样 (P2 审查确认)。
         try { Thread.sleep(200) } catch (_: Exception) {}
 
         // Second attempt
@@ -197,8 +199,12 @@ internal class InMemoryPreferences : SharedPreferences {
             tmp.clear(); return this
         }
         override fun commit(): Boolean {
-            store.putAll(tmp); return true
+            apply(); return true
         }
-        override fun apply() { store.putAll(tmp) }
+        override fun apply() {
+            // P2 修复: put null 即删除 (对齐 Android SharedPreferences 语义)。
+            // 旧实现 store.putAll(tmp) 会把 null 值写进 map — contains() 恒 true。
+            tmp.forEach { (k, v) -> if (v == null) store.remove(k) else store[k] = v }
+        }
     }
 }

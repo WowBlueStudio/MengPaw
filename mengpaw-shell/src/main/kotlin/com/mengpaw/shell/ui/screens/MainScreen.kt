@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -76,11 +77,12 @@ fun MainScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
-    var inputText by remember { mutableStateOf("") }
+    // P2 修复: rememberSaveable — 输入框草稿/展开状态跨配置变更与进程重建保留
+    var inputText by rememberSaveable { mutableStateOf("") }
     val inputFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val listState = rememberLazyListState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var showExpandSheet by remember { mutableStateOf(false) }
+    var showExpandSheet by rememberSaveable { mutableStateOf(false) }
     var showMissionOverlay by remember { mutableStateOf(false) }
     // Reactive Mission state synced from kernel via listener
     var missionActiveState by remember { mutableStateOf(false) }
@@ -116,8 +118,8 @@ fun MainScreen(
     val agentFramework: String? = remember(displayAgentName) {
         agentViewModel?.frameworkFor(displayAgentName)
     }
-    var showLeftSidebar by remember { mutableStateOf(false) }
-    var showRightSidebar by remember { mutableStateOf(false) }
+    var showLeftSidebar by rememberSaveable { mutableStateOf(false) }
+    var showRightSidebar by rememberSaveable { mutableStateOf(false) }
     // Track previous isRunning to detect thinking→done transition
     var wasRunning by remember { mutableStateOf(false) }
 
@@ -336,7 +338,8 @@ fun MainScreen(
                         viewModel.notifyAgentMessage(text)
                     },
                     onBannerClick = {
-                        (agentViewModel ?: viewModel).switchAgent("MengPaw")
+                        // P2 修复: 横幅切回默认主 Agent — 原字面量硬编码, 改用唯一事实源常量
+                        (agentViewModel ?: viewModel).switchAgent(DEFAULT_AGENT_NAME)
                     }
                 )
 
@@ -505,6 +508,17 @@ fun MainScreen(
                     // Input field — soft keyboard Enter sends, Ctrl+Enter inserts newline
                     val keyMaxSteps = settingsState?.value?.maxSteps ?: 50
                     var lastSendTime by remember { mutableLongStateOf(0L) }
+                    // P2 修复: 统一发送入口 — 键盘 doSend / 语音松手即发 / 发送按钮 三处共用,
+                    // 原三份重复的"标签提取 + submitTask 调用"合并为一份 (语音路径不清空输入框, 只传附件)
+                    fun performSend(text: String, atts: List<AttachmentData>) {
+                        // 发送后立即收起悬浮下拉 — 程序化清空输入不触发 onValueChange, 需手动关闭
+                        showMentionDropdown = false; showBangDropdown = false
+                        val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
+                        val agentTag = activeTags.filterIsInstance<InputTag.AgentRef>().firstOrNull()
+                        viewModel.submitTask(buildTaskContent(text, atts), pluginViewModel, maxSteps = keyMaxSteps,
+                            executionMode = modeTag?.mode, agentRef = agentTag?.agentName,
+                            attachments = atts)
+                    }
                     fun doSend() {
                         if (inputText.isNotBlank() || pendingAttachments.isNotEmpty()) {
                             val now = System.currentTimeMillis()
@@ -513,13 +527,7 @@ fun MainScreen(
                             val text = inputText; inputText = ""
                             // v0.33.0+: 附件随消息发送 — 文本合成 `[图片附件] path` 标注
                             val atts = pendingAttachments; pendingAttachments = emptyList()
-                            // 发送后立即收起悬浮下拉 — 程序化清空输入不触发 onValueChange, 需手动关闭
-                            showMentionDropdown = false; showBangDropdown = false
-                            val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
-                            val agentTag = activeTags.filterIsInstance<InputTag.AgentRef>().firstOrNull()
-                            viewModel.submitTask(buildTaskContent(text, atts), pluginViewModel, maxSteps = keyMaxSteps,
-                                executionMode = modeTag?.mode, agentRef = agentTag?.agentName,
-                                attachments = atts)
+                            performSend(text, atts)
                             inputFocus.requestFocus()
                         }
                     }
@@ -591,7 +599,9 @@ fun MainScreen(
                         shape = RoundedCornerShape(ArcoRadius.lg),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ThemeColors.brand, unfocusedBorderColor = ThemeColors.border),
                         minLines = 1, maxLines = 4,
-                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Default),
+                        // P2 修复: 原 imeAction=Default → 软键盘 Enter 只插换行, 与注释
+                        // "soft keyboard Enter sends" 不符 — 改 Send 使软键盘 Enter 触发 doSend
+                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { doSend() }))
                     // Voice button (v0.33.0+) — 透明底线性话筒, 按住录音松开发送;
                     // 仅支持音频输入的模型显示 (VoiceCapability 判定)
@@ -600,12 +610,9 @@ fun MainScreen(
                             supported = voiceSupported,
                             strings = strings,
                             onRecorded = { att ->
-                                // 按住发送语音 = 松手即发 — 录音文件直发模型 (input_audio 通道)
-                                val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
-                                val agentTag = activeTags.filterIsInstance<InputTag.AgentRef>().firstOrNull()
-                                viewModel.submitTask(buildTaskContent("", listOf(att)), pluginViewModel,
-                                    maxSteps = keyMaxSteps, executionMode = modeTag?.mode,
-                                    agentRef = agentTag?.agentName, attachments = listOf(att))
+                                // 按住发送语音 = 松手即发 — 录音文件直发模型 (input_audio 通道);
+                                // 不清空输入框草稿 (P2 修复: 走统一 performSend, 语音路径仅传附件)
+                                performSend("", listOf(att))
                             },
                             onRecordStateChanged = { rec -> isRecordingVoice = rec },
                             onElapsed = { ms -> recordElapsedMs = ms }
@@ -624,20 +631,14 @@ fun MainScreen(
                                 if (text.isNotBlank() || pendingAttachments.isNotEmpty()) {
                                     inputText = ""
                                     val atts = pendingAttachments; pendingAttachments = emptyList()
-                                    // 发送后立即收起悬浮下拉
-                                    showMentionDropdown = false; showBangDropdown = false
                                     inputFocus.requestFocus()
-                                    val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
-                                    val agentTag = activeTags.filterIsInstance<InputTag.AgentRef>().firstOrNull()
                                     scope.launch {
                                         // ↑ flies upward and out
                                         launch { arrowOffsetY.animateTo(-60f, tween(280)) }
                                         launch { arrowAlpha.animateTo(0f, tween(280)) }
-                                        // snap below, then submit
+                                        // snap below, then submit (P2 修复: 走统一 performSend)
                                         arrowOffsetY.snapTo(60f)
-                                        viewModel.submitTask(buildTaskContent(text, atts), pluginViewModel, maxSteps = keyMaxSteps,
-                                            executionMode = modeTag?.mode, agentRef = agentTag?.agentName,
-                                            attachments = atts)
+                                        performSend(text, atts)
                                         // ↑ flies in from below
                                         launch { arrowOffsetY.animateTo(0f, tween(280)) }
                                         launch { arrowAlpha.animateTo(1f, tween(280)) }

@@ -6,13 +6,18 @@ package com.mengpaw.kernel.acp
 import com.mengpaw.kernel.security.PromptFirewall
 import kotlinx.serialization.json.*
 
-/** Atomic file write: write to tmp, then rename (crash-safe, prevents partial writes). */
+/**
+ * 标准原子写: 先写同目录 `.tmp`，再 Files.move(REPLACE_EXISTING) 覆盖。
+ * 失败时原文件保持完好 (旧"先删目标"写法在 rename 失败时会丢原文件)。
+ */
 private fun java.io.File.atomicWriteText(text: String) {
     val tmp = java.io.File(this.parentFile, "${this.name}.tmp")
     try {
         tmp.writeText(text)
-        if (this.exists()) this.delete()
-        tmp.renameTo(this)
+        java.nio.file.Files.move(
+            tmp.toPath(), this.toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+        )
     } catch (e: Exception) {
         try { tmp.delete() } catch (_: Exception) {}
         throw e

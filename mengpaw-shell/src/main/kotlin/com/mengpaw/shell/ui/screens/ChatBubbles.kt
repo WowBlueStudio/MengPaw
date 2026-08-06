@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -189,7 +190,8 @@ fun CommandResultBubble(message: ChatMessageUi.CommandResult, strings: AppString
 // 默认展开 — 用户要求展开必须看到全程 (完整思考不截断)
 @Composable
 fun AgentStepBubble(message: ChatMessageUi.AgentStep, agentName: String = "MengPaw") {
-    var thinkingExpanded by remember { mutableStateOf(true) }
+    // P2 修复: rememberSaveable — 思考折叠状态跨配置变更/滚动保留 (LazyColumn 有 stableId 键)
+    var thinkingExpanded by rememberSaveable { mutableStateOf(true) }
 
     Column(Modifier.fillMaxWidth()) {
         // ── 思考折叠头: 完整思考 + 工具调用, 点击折叠/展开 ──
@@ -259,7 +261,8 @@ fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: Strin
     // v0.3x: 运行结束不再自动折叠 — 用户需要看到完整结果 (此前结束时面板收起 +
     // finalContent 替换, 中间输出在视觉上"被最终答案覆盖"; 保留展开状态,
     // 完整思考过程/工具调用/结果全程可见, 用户可手动折叠长会话)
-    var thinkingExpanded by remember { mutableStateOf(true) }
+    // P2 修复: rememberSaveable — 思考折叠状态跨配置变更/滚动保留
+    var thinkingExpanded by rememberSaveable { mutableStateOf(true) }
 
     Column(Modifier.fillMaxWidth()) {
         // ── Thinking process (outside main bubble, visible while running) ──
@@ -338,7 +341,8 @@ private fun WaitingIndicator(waitingText: String) {
 fun TraceStepItem(trace: AgentTrace) {
     val actionLong = (trace.action?.length ?: 0) > 60
     val observationLong = (trace.observation?.length ?: 0) > 150
-    var mergedExpanded by remember { mutableStateOf(false) }
+    // P2 修复: rememberSaveable — 工具块折叠状态跨配置变更保留
+    var mergedExpanded by rememberSaveable { mutableStateOf(false) }
 
     Column(Modifier.fillMaxWidth().padding(vertical = 1.dp).padding(horizontal = ArcoSpacing.sm, vertical = 4.dp)) {
         // ── Thought: step number + brain icon, always fully visible ──

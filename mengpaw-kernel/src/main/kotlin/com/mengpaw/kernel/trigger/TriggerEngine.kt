@@ -5,6 +5,7 @@ package com.mengpaw.kernel.trigger
 
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.KernelLog
+import com.mengpaw.kernel.error.ErrorCollector
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -118,19 +119,24 @@ object TriggerEngine {
     }
 
     /**
-     * Write text to a file atomically: write to a .tmp sibling, then rename.
-     * On most file systems, rename() is atomic within the same directory, so
-     * a crash mid-write leaves either the old file intact or the new file complete
-     * — never a partially-written file.
+     * 标准原子写: 先写同目录 `.tmp`，再 Files.move(REPLACE_EXISTING) 覆盖。
+     * 同目录内 rename 原子, 崩溃时要么旧文件完好要么新文件完整；
+     * Windows 上 File.renameTo 无法覆盖已存在目标 (返回 false 且静默不更新),
+     * Files.move 可替换 — 失败时原文件保持完好。
      */
     private fun File.atomicWriteText(text: String) {
         parentFile?.mkdirs()
         val tmp = File(parentFile, "$name.tmp")
-        tmp.writeText(text)
-        tmp.renameTo(this)
-        // If rename fails (cross-device), fall back to direct write
-        if (tmp.exists()) {
+        try {
+            tmp.writeText(text)
+            java.nio.file.Files.move(
+                tmp.toPath(), this.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+        } catch (e: Exception) {
+            // 失败保留原文件, 清理残留 tmp 后上报
             try { tmp.delete() } catch (_: Exception) {}
+            ErrorCollector.report(e, "TriggerEngine.atomicWriteText")
         }
     }
 

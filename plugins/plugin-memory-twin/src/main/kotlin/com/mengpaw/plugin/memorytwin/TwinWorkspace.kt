@@ -77,12 +77,26 @@ object TwinWorkspace {
                 }
             }
 
-            // 原子写入
+            // 原子写入 (P2 修复): 原实现先 delete 原文件再 renameTo —
+            // renameTo 失败时原文件已丢、tmp 又被后续清理 = 数据双失。
+            // 改为: ① 直接 renameTo (POSIX rename 原子替换已有目标, 不预删)
+            //       ② 失败才回退 delete+rename (跨文件系统等场景)
+            //       ③ 再失败保留 tmp 待恢复并报错, 不删任何数据
             target.parentFile?.mkdirs()
             val tmp = File(target.parent, "${target.name}.tmp")
             tmp.writeText(content)
-            if (target.exists()) target.delete()
-            tmp.renameTo(target)
+            var renamed = false
+            try { renamed = tmp.renameTo(target) } catch (e: Exception) { ErrorCollector.report(e, "TwinWorkspace.renameTo($relPath)") }
+            if (!renamed) {
+                if (target.exists()) target.delete()
+                renamed = try { tmp.renameTo(target) } catch (e: Exception) { false }
+            }
+            if (!renamed) {
+                ErrorCollector.report(
+                    java.io.IOException("原子写失败 — 已保留 tmp 待恢复: $tmp -> $target"),
+                    "TwinWorkspace.applyWorkspaceFile($relPath)")
+                return "error"
+            }
             if (tmp.exists()) try { tmp.delete() } catch (_: Exception) {}
             // 触发 PromptEngine 缓存失效 (旧 rebuildMemoryDoc 缺失的关键钩子)
             AgentDocs.notifyDocChanged(agentName, target.absolutePath)

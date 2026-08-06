@@ -59,7 +59,8 @@ class PluginExecutor(
 
     private fun sha256Hex(bytes: ByteArray): String {
         val md = java.security.MessageDigest.getInstance("SHA-256")
-        return md.digest(bytes).joinToString("") { "%02x".format(it) }
+        // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+        return md.digest(bytes).joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
     }
 
     // ── Commands ──────────────────────────────────────────────────────
@@ -508,7 +509,8 @@ class PluginExecutor(
             val sizeMb = "%.1f".format(file.length() / 1_048_576.0)
             val sha = try {
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
-                digest.digest(file.readBytes()).joinToString("") { "%02x".format(it) }.take(16) + "..."
+                // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+                digest.digest(file.readBytes()).joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }.take(16) + "..."
             } catch (e: Exception) { KernelLog.w("PluginExecutor", "verifyOne sha: ${e.message}"); "n/a" }
             val odexInfo = if (odexExists) ", odex: ${odexCount} files" else ", odex: missing"
             "✅ $id v$version: ${file.name} (${sizeMb}MB, sha256=$sha$odexInfo)" to true

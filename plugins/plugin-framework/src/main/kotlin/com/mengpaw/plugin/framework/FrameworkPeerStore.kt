@@ -141,6 +141,7 @@ object FrameworkPeerStore {
         val input = "$name|$deviceId"
         val digest = MessageDigest.getInstance("SHA-256")
         return digest.digest(input.toByteArray()).take(8)
-            .joinToString("") { "%02x".format(it) }
+            // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+            .joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
     }
 }

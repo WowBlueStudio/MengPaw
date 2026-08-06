@@ -12,8 +12,6 @@ import android.webkit.WebResourceError
 import android.widget.Toast
 import com.mengpaw.browser.data.DetectedImage
 import com.mengpaw.browser.data.TabState
-import com.mengpaw.browser.plugin.BrowserElement
-import com.mengpaw.browser.plugin.BrowserPluginRegistry
 import com.mengpaw.browser.ui.theme.BrowserThemeConfig
 import com.mengpaw.browser.util.isAdRequest
 
@@ -49,6 +47,21 @@ document.head.appendChild(s)})();
 /** .md URL 判定: 去 query/fragment 后后缀匹配 (导航级 O(len) 检查)。 */
 private fun isMarkdownUrl(url: String): Boolean =
     url.substringBefore('?').substringBefore('#').endsWith(".md", ignoreCase = true)
+
+// ── ComfyUI 判定: 精确 host/端口匹配 (P2 fix — 原子串匹配会误伤 comfygallery/notcomfy 等域名) ──
+
+/**
+ * ComfyUI 判定: host 精确匹配 (comfyui 或 *.comfyui 整段标签) 或端口 == ComfyUI 默认端口。
+ * 原实现 `url.contains("comfy", ignoreCase=true)` 会把任意含 "comfy" 子串的域名都当 ComfyUI
+ * (误注入主题 CSS); 改为解析 URI 后逐段精确判定, 自定义端口的 ComfyUI 可通过 host 匹配覆盖。
+ */
+private fun isComfyUiUrl(raw: String): Boolean {
+    val uri = try { java.net.URI(raw) } catch (_: Exception) { return false }
+    val host = uri.host?.lowercase() ?: return false
+    val portOk = uri.port != -1 && uri.port == com.mengpaw.kernel.ports.Ports.COMFYUI
+    val hostOk = host == "comfyui" || host.endsWith(".comfyui")
+    return portOk || hostOk
+}
 
 /** HTML 特殊字符转义 — 错误页等拼接场景防注入 (恶意 URL/错误描述可携带 HTML/JS)。 */
 private fun escapeHtml(s: String): String = buildString(s.length) {
@@ -142,12 +155,6 @@ fun createWebView(
                 }
                 if (list.isNotEmpty()) {
                     onMediaDetected(list)
-                    // Also dispatch to plugins
-                    list.firstOrNull()?.let { img ->
-                        BrowserPluginRegistry.onLongPress(
-                            BrowserElement(type = img.mediaType.uppercase(), url = img.src, alt = img.alt, width = img.width, height = img.height)
-                        )
-                    }
                 }
             } catch (_: Exception) {}
         }
@@ -209,17 +216,11 @@ fun createWebView(
                 onMarkdownDetected(url)
                 return
             }
-            url?.let { u -> updateTab(tab.id) { it.copy(url = u, isLoading = true) }; BrowserPluginRegistry.onPageStarted(u) }
+            url?.let { u -> updateTab(tab.id) { it.copy(url = u, isLoading = true) } }
         }
         override fun onPageFinished(view: WebView?, url: String?) {
             updateTab(tab.id) { it.copy(isLoading = false, title = view?.title ?: "", canGoBack = view?.canGoBack() ?: false, canGoForward = view?.canGoForward() ?: false) }
             url?.let { u ->
-                view?.title?.let { t -> BrowserPluginRegistry.onPageFinished(u, t) }
-                // Inject plugin scripts
-                BrowserPluginRegistry.injectScripts(u)?.let { js -> evaluateJavascript(js, null) }
-                BrowserPluginRegistry.injectStyles(u)?.let { css ->
-                    evaluateJavascript("(function(){var s=document.createElement('style');s.textContent='$css';document.head.appendChild(s);})()", null)
-                }
                 // Hide app-banner elements
                 evaluateJavascript(HIDE_APP_BANNER_JS, null)
                 // Auto-inject __mp bridge for faster Agent commands (if enabled)
@@ -234,8 +235,8 @@ fun createWebView(
                         "};return JSON.stringify({ok:true,msg:'__mp injected (auto)'})" +
                         "}})()", null)
                 }
-                // ComfyUI theme following: inject MengPaw theme colors
-                if (u.contains(":${com.mengpaw.kernel.ports.Ports.COMFYUI}") || u.contains("comfyui", ignoreCase = true) || u.contains("comfy", ignoreCase = true)) {
+                // ComfyUI theme following: inject MengPaw theme colors (host/端口精确匹配, 见 isComfyUiUrl)
+                if (isComfyUiUrl(u)) {
                     val theme = BrowserThemeConfig.load(ctx)
                     val primary = "#" + java.lang.Long.toHexString(theme.primary).takeLast(6).uppercase()
                     evaluateJavascript("""
@@ -261,7 +262,6 @@ fun createWebView(
                 onMarkdownDetected(request.url.toString())
                 return WebResourceResponse("text/plain", "utf-8", java.io.ByteArrayInputStream(ByteArray(0)))
             }
-            request?.let { BrowserPluginRegistry.shouldIntercept(it)?.let { return it } }
             if (adBlock && request?.url != null && isAdRequest(request.url.toString())) {
                 return WebResourceResponse("text/plain", "utf-8", null)
             }

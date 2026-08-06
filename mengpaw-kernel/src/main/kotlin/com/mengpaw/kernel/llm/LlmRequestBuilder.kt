@@ -104,5 +104,6 @@ internal object SystemPromptShape {
     private fun sha256Hex(s: String): String =
         java.security.MessageDigest.getInstance("SHA-256")
             .digest(s.toByteArray())
-            .joinToString("") { "%02x".format(it) }
+            // Locale.ROOT: 默认 Locale 下 %02x 在阿拉伯语等设备上输出畸形 (P2 修复)
+            .joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
 }

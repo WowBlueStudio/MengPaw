@@ -53,7 +53,7 @@ mengpaw/
 │   ├── AgentEngine.kt          # ReAct + Plan-Execute 引擎
 │   └── DataPaths.kt            # 平台无关路径常量
 │
-├── mengpaw-core/               # Android 适配层 (6 文件)
+├── mengpaw-core/               # Android 适配层 (5 文件)
 │   ├── security/               # Vault (Keystore) / IntegrityGuard (APK 签名)
 │   └── namespace/              # SysExecutor (Android 系统信息)
 │

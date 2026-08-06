@@ -9,6 +9,7 @@ import android.content.Intent
 import com.mengpaw.kernel.DataPaths
 import android.content.IntentFilter
 import com.mengpaw.kernel.trigger.TriggerEngine
+import com.mengpaw.shell.ui.screens.DEFAULT_AGENT_NAME
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -123,7 +124,8 @@ class EventReceiver : BroadcastReceiver() {
                 val pending = goAsync()
                 workScope.launch {
                     try {
-                        val result = com.mengpaw.kernel.agent.DreamProviderRegistry.active().organize("MengPaw")
+                        // P2 修复: 梦境整理目标 = 默认主 Agent — 原字面量硬编码, 改用唯一事实源常量
+                        val result = com.mengpaw.kernel.agent.DreamProviderRegistry.active().organize(DEFAULT_AGENT_NAME)
                         android.util.Log.d("EventReceiver", "Dream: reviewed=${result.memoriesReviewed} archived=${result.archived}")
                     } catch (e: Exception) {
                         android.util.Log.w("EventReceiver", "Dream failed: ${e.message}")

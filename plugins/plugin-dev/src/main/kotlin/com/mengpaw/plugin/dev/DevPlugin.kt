@@ -467,7 +467,7 @@ class MyNetPlugin : Plugin {
         val hash = dir.walkTopDown().filter { it.isFile }.sortedBy { it.name }
             .fold(MessageDigest.getInstance("SHA-256")) { md, f ->
                 md.update(f.readBytes()); md
-            }.digest().joinToString("") { "%02x".format(it) }
+            }.digest().joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) } // Locale.ROOT: 阿拉伯语设备 %02x 畸形 (P2)
 
         // Create share bundle
         val shareDir = File(DataPaths.AGENTS, "acp/shares/$pluginId")

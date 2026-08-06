@@ -23,6 +23,10 @@ import java.net.Socket
  */
 object McpGateway {
 
+    /** MCP 请求体大小上限 (P2 修复: 原实现按 Content-Length 无上限 new CharArray,
+     *  恶意客户端可声称超大长度撑爆内存)。超限/非法长度直接 413 拒绝。 */
+    private const val MAX_MCP_BODY_BYTES = 4 * 1024 * 1024
+
     @Volatile private var running = false
     @Volatile private var serverSocket: ServerSocket? = null
     @Volatile private var serverThread: Thread? = null
@@ -88,7 +92,7 @@ object McpGateway {
                     response = """{"ok":true,"status":"online"}"""
                     status = "200 OK"
                 }
-                method == "POST" && path == "/mcp" -> {
+                method == "POST" && path == "/mcp" && contentLength in 0..MAX_MCP_BODY_BYTES -> {
                     val body = CharArray(contentLength)
                     if (contentLength > 0) reader.read(body, 0, contentLength)
                     val mcpServer = com.mengpaw.kernel.mcp.McpServer(
@@ -96,6 +100,11 @@ object McpGateway {
                     )
                     response = mcpServer.handleRequest(String(body))
                     status = "200 OK"
+                }
+                method == "POST" && path == "/mcp" -> {
+                    // 请求体超限 (或非法 Content-Length) — 拒绝, 不分配内存
+                    response = """{"jsonrpc":"2.0","error":{"code":-32600,"message":"Request body exceeds ${MAX_MCP_BODY_BYTES / (1024 * 1024)}MB limit"},"id":null}"""
+                    status = "413 Payload Too Large"
                 }
                 else -> {
                     response = """{"jsonrpc":"2.0","error":{"code":-32601,"message":"Not found: $method $path"},"id":null}"""

@@ -376,21 +376,23 @@ class AgentEngine(
      * @return number of messages snipped.
      */
     private fun snipStaleToolResults(sessionId: String, currentStep: Int): Int {
-        var count = 0
-        val session = sessionManager.getSession(sessionId) ?: return 0
         val threshold = currentStep - 3
         if (threshold <= 0) return 0
 
-        val messages = session.messages
-        for (i in messages.indices) {
-            val msg = messages[i]
-            if (msg.role == "assistant" && msg.content.startsWith("Command:") && msg.content.length > 120) {
-                // FIX: Actually replace the message content instead of just appending a system note
+        // P2 修复: 就地改写消息必须走 SessionManager 监视器 (replaceMessages 与
+        // addMessage/compressIfNeeded 同锁) — 旧实现直接改 session.messages[i],
+        // 与并行 worker 的 addMessage 或后台预压缩在同一列表上无锁竞态。
+        val count = sessionManager.replaceMessages(
+            sessionId,
+            predicate = { msg ->
+                msg.role == "assistant" && msg.content.startsWith("Command:") &&
+                    msg.content.length > 120
+            },
+            transform = { msg ->
                 val cmdName = msg.content.substringBefore("\n").take(50)
-                messages[i] = msg.copy(content = "[snip] $cmdName ... (result compressed, step < $threshold)")
-                count++
+                msg.copy(content = "[snip] $cmdName ... (result compressed, step < $threshold)")
             }
-        }
+        )
         if (count > 0) {
             // Update session state to reflect modified messages
             sessionManager.addMessage(sessionId, Message(
@@ -801,7 +803,14 @@ class AgentEngine(
             _state.value = AgentState.Finished(msg)
             return msg
         } catch (e: kotlinx.coroutines.CancellationException) {
-            // Re-throw to respect coroutine cancellation contract
+            // 取消传播契约: 必须先 rethrow (P1 已修, 禁止吞掉 CancellationException)。
+            // P2: 外部作用域取消(非 stop())时 _state 残留 Running — 若本 job 仍是
+            // 当前 runningJob 则复位 Idle; stop() 已复位或新 run 已挂新 job 时不覆盖。
+            val thisJob = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
+            if (runningJob === thisJob) {
+                _state.value = AgentState.Idle
+                runningJob = null
+            }
             throw e
         } catch (e: Exception) {
             // ★ Record completed tools as interrupted turn recovery (Reasonix Level 2)

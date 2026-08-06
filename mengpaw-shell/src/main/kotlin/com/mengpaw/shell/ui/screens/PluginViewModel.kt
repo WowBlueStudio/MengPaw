@@ -262,7 +262,7 @@ class PluginViewModel : ViewModel() {
                 }
             }
             val ctx = com.mengpaw.kernel.cli.ExecutionContext(
-                sessionId = "ui-install", agentName = "MengPaw",
+                sessionId = "ui-install", agentName = DEFAULT_AGENT_NAME,
                 workDir = com.mengpaw.kernel.DataPaths.PLUGIN_CACHE
             )
             updateInstallState(id, InstallState.Verifying)
@@ -306,10 +306,10 @@ class PluginViewModel : ViewModel() {
     /**
      * Analyze an error output to suggest a missing plugin.
      * Called by AgentViewModel when command execution fails with "Unknown command".
+     * (P2 修复: 正则预编译为共享常量 — 原每消息重复编译, 与 AgentViewModel.checkMissingPlugin 双份)
      */
     fun suggestPluginForCommand(errorOutput: String) {
-        val regex = Regex("Unknown command: (\\w+)\\.")
-        val match = regex.find(errorOutput) ?: return
+        val match = UNKNOWN_COMMAND_REGEX.find(errorOutput) ?: return
         val namespace = match.groupValues[1]
         val pluginId = "$namespace-plugin"
 
@@ -365,6 +365,12 @@ class PluginViewModel : ViewModel() {
     }
 
     companion object {
+        /**
+         * "Unknown command: <namespace>." 解析正则 — 预编译共享常量 (P2 修复).
+         * AgentViewModel.checkMissingPlugin 与 suggestPluginForCommand 共用, 避免每消息重复编译.
+         */
+        internal val UNKNOWN_COMMAND_REGEX = Regex("Unknown command: (\\w+)\\.")
+
         /**
          * Registry mapping plugin IDs to their fully-qualified class names.
          * Populated at app startup and auto-registered for builtin plugins from marketplace.

@@ -30,6 +30,7 @@ import kotlinx.serialization.json.*
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Automatic update plugin for MengPaw Shell and Browser.
@@ -62,6 +63,10 @@ class UpdatePlugin : Plugin {
     private var autoDownloadEnabled = false
     private var lastCheckTime = 0L
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    // P2 修复 (幂等保护): scheduleAutoCheck 由 onInstall 与 update.auto on 双路径触发,
+    // 无保护时每调一次就多跑一个 while 循环 (多份定时器同时扫更新)。
+    private val autoCheckStarted = AtomicBoolean(false)
     private var latestRelease: ReleaseInfo? = null
     private var downloadedApk: File? = null
 
@@ -318,19 +323,25 @@ class UpdatePlugin : Plugin {
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private fun scheduleAutoCheck() {
+        // CAS 幂等: 已有一个调度循环则不重复启动; 协程退出 (取消/异常) 后复位, 允许重新调度
+        if (!autoCheckStarted.compareAndSet(false, true)) return
         scope.launch {
-            while (isActive) {
-                delay(3_600_000) // Check every hour
-                if (isWifiConnected()) {
-                    try { check(emptyList(), ExecutionContext("auto")) } catch (_: Exception) { }
-                    val release = latestRelease
-                    if (autoDownloadEnabled && release != null) {
-                        val current = getCurrentVersion()
-                        if (current != null && compareVersions(release.tag.removePrefix("v"), current) > 0) {
-                            try { download(listOf("shell"), ExecutionContext("auto")) } catch (_: Exception) { }
+            try {
+                while (isActive) {
+                    delay(3_600_000) // Check every hour
+                    if (isWifiConnected()) {
+                        try { check(emptyList(), ExecutionContext("auto")) } catch (_: Exception) { }
+                        val release = latestRelease
+                        if (autoDownloadEnabled && release != null) {
+                            val current = getCurrentVersion()
+                            if (current != null && compareVersions(release.tag.removePrefix("v"), current) > 0) {
+                                try { download(listOf("shell"), ExecutionContext("auto")) } catch (_: Exception) { }
+                            }
                         }
                     }
                 }
+            } finally {
+                autoCheckStarted.set(false)
             }
         }
     }
@@ -423,7 +434,8 @@ class UpdatePlugin : Plugin {
 
     private fun sha256(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(bytes).joinToString("") { "%02x".format(it) }
+        // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+        return digest.digest(bytes).joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
     }
 
     private fun formatSize(bytes: Long): String = when {

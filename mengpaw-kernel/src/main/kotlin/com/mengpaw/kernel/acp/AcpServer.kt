@@ -11,13 +11,19 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/** Atomic file write: write to tmp, then rename (crash-safe, prevents partial writes). */
+/**
+ * 标准原子写: 先写同目录 `.tmp`，再 Files.move(REPLACE_EXISTING) 覆盖。
+ * POSIX 上等价 rename(2) 原子替换; Windows 上 File.renameTo 无法覆盖已存在目标,
+ * 旧"先删目标"写法在 rename 失败时会丢原文件 — 现失败时原文件保持完好。
+ */
 private fun java.io.File.atomicWriteText(text: String) {
     val tmp = java.io.File(this.parentFile, "${this.name}.tmp")
     try {
         tmp.writeText(text)
-        if (this.exists()) this.delete()
-        tmp.renameTo(this)
+        java.nio.file.Files.move(
+            tmp.toPath(), this.toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+        )
     } catch (e: Exception) {
         try { tmp.delete() } catch (_: Exception) {}
         throw e

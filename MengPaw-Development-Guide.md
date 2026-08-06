@@ -19,7 +19,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | 特征 | 说明 |
 |------|------|
 | 微内核 | `mengpaw-kernel` — 纯 Kotlin/JVM 模块，46 文件，零 Android 依赖，CLI/LLM/安全/会话/插件框架/Goal-Fleet 模式全部可脱离 Android 测试 |
-| 适配层 | `mengpaw-core` — 仅 6 个源文件，提供 Android 桥接（Vault 加密存储 / IntegrityGuard / SysExecutor）。移植到新平台只需重写这 6 个文件 |
+| 适配层 | `mengpaw-core` — 仅 5 个源文件，提供 Android 桥接（Vault 加密存储 / IntegrityGuard / SysExecutor）。移植到新平台只需重写这 5 个文件 |
 | 插件同级 | 内置功能 (`sys`) 与外挂插件同等地位，均实现 `Plugin` 接口，均只依赖 kernel |
 | 零 Python | 纯 Kotlin，无 Python 运行时 |
 | 多通道 | AIDL（系统集成）/ Unix Socket（Termux）/ HTTP（调试） |
@@ -61,7 +61,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 - **QwenPaw 风格初始化**: 安装时创建 workspace 文件 → 用户配置 API → 用户发第一条消息才启动 Agent。无后台静默初始化
 - Kernel 是纯 JVM 模块（`kotlin("jvm")`），可脱离 Android 在 JVM 上编译和测试
 - 内置功能与外挂插件**同级**：`sys` 命名空间通过 `AgentEngine.additionalNamespaces` 注入
-- `mengpaw-core` 仅含 Android 专有代码：Vault (Keystore 加密)、IntegrityGuard、StorageMonitor、SysExecutor、DataPathsInitializer、AndroidLogger
+- `mengpaw-core` 仅含 Android 专有代码：Vault (Keystore 加密)、IntegrityGuard、SysExecutor、DataPathsInitializer、AndroidLogger
 
 ### 2.2 模块清单
 
@@ -191,11 +191,11 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ## 3. 模块详解
 
-### 3.1 mengpaw-kernel（微内核，84 文件）
+### 3.1 mengpaw-kernel（微内核，83 文件）
 
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|
-| `agent/` | 22 | AgentExecutor, AgentEngineTypes, MissionModeExecutor, GoalModeExecutor, PlanModeExecutor, SwarmModeExecutor, DreamEngine, ToolResultManager, AgentProfile, PromptBuilder 等 |
+| `agent/` | 21 | AgentExecutor, AgentEngineTypes, MissionModeExecutor, GoalModeExecutor, PlanModeExecutor, SwarmModeExecutor, DreamEngine, ToolResultManager, AgentProfile 等 |
 | `llm/` | 11 | AdaptiveLlmProvider, LlmProvider, LlmRequestBuilder, PromptEngine, RemoteApi, TranslateMiddleware, LlmHttpClient (共享 HTTP 客户端, v0.29.2), **AttachmentPayload (v0.33.0+ 附件二进制键)** |
 | `cli/` | 9 | CliInterpreter, CommandRegistry, CommandExecutor, Pipeline, CommandSearch (BM25), CliAudit |
 | `acp/` | 8 | AcpProtocol, AcpServer, AcpCrypto, AcpTransport, DelegateHandler, McpOverAcpBridge, ShareMemoryHandler |
@@ -214,13 +214,12 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | 根 | 4 | AgentEngine, DataPaths, KernelLog, KernelDispatchers |
 
 
-### 3.2 mengpaw-core（Android 适配层，21 文件，下表为核心桥接）
+### 3.2 mengpaw-core（Android 适配层，20 文件，下表为核心桥接）
 
 | 文件 | 职责 |
 |------|------|
 | `security/Vault.kt` | API Key 加密存储 (EncryptedSharedPreferences + Android Keystore) |
 | `security/IntegrityGuard.kt` | APK 签名校验，实现 `IntegrityProvider` 接口 |
-| `security/StorageMonitor.kt` | 磁盘空间监控 (android.os.StatFs) |
 | `namespace/SysExecutor.kt` | 系统信息命令 (39 个，反射 Android API) |
 | `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)` |
 | `AndroidLogger.kt` | 桥接：`KernelLog.setLogger(AndroidLogger())` |
@@ -259,7 +258,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `ui/components/` (2 文件) | TabChip (标签样式), SearchEngineLogo (SVG) |
 | `ui/theme/BrowserThemeConfig.kt` | Agent 主题配置 |
 | `bridge/BrowserBridge.kt` | Java↔JS 双向桥 |
-| `plugin/` (3 文件) | BuiltinBrowserPlugin, BrowserPlugin, BrowserPluginRegistry |
+| `plugin/` (1 文件) | BuiltinBrowserPlugin (44 条 browser.* 命令, 经 9880 桥合流) |
 | `mcp/McpHttpServer.kt` | MCP HTTP 服务 |
 
 **Markdown 文档打开 (v0.31.0+)**: 浏览器注册 `ACTION_VIEW` intent-filter 双轨——`file://` (文件管理器) 与 `content://` (FileProvider/SAF 选择) × `text/markdown` / `text/plain`+`*.md`。`BrowserActivity.checkMdFile` 冷启动与 `onNewIntent` 双路径取 md 内容 (≤500KB), 弹 `BrowserMarkdownViewerDialog`。Shell 提炼回传走独立私有 action `com.mengpaw.action.OPEN_MD` (extra `md`/`mdUri`, 见 BrowserReturnWatcher)。
@@ -572,7 +571,7 @@ twin.lost <peer> / twin.recover <peer>
 
 **上行管线**: FilePickerUtils(附件对象, 保留原名, 50MB 上限) → `submitTask(attachments)` (REACT 主链路; MISSION/GOAL/FLEET/SWARM 执行器签名不含附件不传; 带附件时跳过自动复杂度升级, 防静默丢附件) → AgentEngine.run → Message.attachments → `History.getStructuredHistory` 调 `AttachmentPayload.attachBinary` 追加 `_image`(data URI) / `_audio_data`(base64) / `_audio_format`(m4a/mp3/wav) 键 → 请求层构建 content 数组。
 
-**OpenAI 兼容 content 数组** (两处同构: `LlmRequestBuilder.buildRequest` + `AdaptiveLlmProvider.buildRequestBody`, RemoteApi 不支持降级为路径文本): `_image` 非空或 `_audio_data` 非空 → `content: [{type:"text"}, {type:"image_url", image_url:{url: dataURI}}, {type:"input_audio", input_audio:{data: base64, format}}]`。大小上限 8MB(图)/15MB(音频, OpenAI 历史 input_audio 25MB/请求留余量) — 超限静默跳过二进制仅文本标注。
+**OpenAI 兼容 content 数组** (唯一实现: `AdaptiveLlmProvider.buildRequestBody` — LlmRequestBuilder.buildRequest 死双轨已于 P2 死代码清理删除; RemoteApi 不支持降级为路径文本): `_image` 非空或 `_audio_data` 非空 → `content: [{type:"text"}, {type:"image_url", image_url:{url: dataURI}}, {type:"input_audio", input_audio:{data: base64, format}}]`。大小上限 8MB(图)/15MB(音频, OpenAI 历史 input_audio 25MB/请求留余量) — 超限静默跳过二进制仅文本标注。
 
 **已知成本与 P2**: 每轮请求重发全部历史图片/音频 base64 (对齐 ChatGPT 多模态历史行为, 服务端会缩放) — P2 仅最近一条 user 消息挂二进制键; 上行图片不缩图 (kernel 零 Android 依赖无 BitmapFactory, 靠 8MB 上限) — P2 shell 选图时预生成 thumb; 进程被杀恢复会话附件降级路径文本; 旧会话 `📎 path` 文本不迁移为卡片。
 
@@ -977,6 +976,24 @@ Shell ↔ 浏览器进程的 127.0.0.1:9880 HTTP 桥 (`McpHttpServer`/`BrowserMc
 **假功能诚实化**: self.config 真实读写 CONFIG 目录; BatteryPowerExecutor 无权限如实报告+引导 (有权限写 low_power + 回读验证); NotificationExecutor id 统一 1002; DeviceExecutor 亮屏真实 3 秒; SensorLocationExecutor 真实枚举传感器; powerSaverEnabled 持久化接线; BrowserPasswordDialog API 33+ 不再调已移除方法 + 删除虚假声明; RenderPlugin 补 Replicate 异步轮询 (5s 间隔); waitForSelector 改 Kotlin 侧 100ms 轮询 (JS 忙等会饿死页面自身 JS); fastClick/fastType 复用 escapeJs 完整转义。
 
 **发现性修复**: PluginExecutor 下载路径统一 PLUGIN_CACHE (verify 不再误报缺失); PluginManager coreVersion 默认值接 MengPawVersion.FRAMEWORK (门禁恢复生效); DevPlugin metadata.commands 补全; SysExecutor 文档对齐 51; AgentProfile 版本去硬编码; mark-corrected 双组关键词合并; WebViewFactory 错误页 escapeHtml; TRIM_MEMORY 不再销毁 Compose 树内 WebView + 全部 destroy 点先 removeView。
+
+### 6.10 P2 加固 (v0.32.1+, 九维审查第二轮)
+
+**原子写标准模式 (10 文件/13 处)**: History/Checkpoint/AgentDocManager/AgentExecutor/AgentDocs/AcpServer/ShareMemoryHandler/DelegateHandler/EvolutionStore/TriggerEngine/TwinWorkspace — 原"先 delete 再 renameTo"(失败双失) 统一改为 ①写同目录 `.tmp` ②`Files.move(tmp, target, REPLACE_EXISTING)` 原子覆盖 (Windows 上 renameTo 无法覆盖已存在目标, 弃用)。AgentDocs.resetDoc/appendLongTermMemory 等 6 处一并接入。
+
+**Locale.ROOT 陷阱 (13 处)**: `"%02x".format` 无 Locale 参数在阿拉伯语设备输出畸形 — kernel (LlmRequestBuilder/AcpCrypto/PluginExecutor×2/PluginMarketplaceClient) + core (SkillSeeds×2/IntegrityGuard×2) + shell (AttachmentBubbles/AppRoot) + browser (BrowserActivity) + plugins (UpdatePlugin/DevPlugin/TribeMemoStore/FrameworkPeerStore) 全部补 `Locale.ROOT`。
+
+**健壮性**: ErrorCollector nextId → AtomicLong; PromptEngine cachedSystemPrompt @Volatile + 单次快照消除 TOCTOU NPE 窗口; LlmRateLimiter.maxConcurrency 真接线 (Semaphore 容量不可动态调, 改锁保护计数器实时读配置); safeCommands 前缀豁免改精确匹配 — `agent.memory.write/edit/rm/delete/keep` 不再豁免循环检测 (新增 2 条回归测试); 取消后 `_state` 残留 Running 修复 (AgentEngine/Mission/Swarm/Plan 四模式); Vault.apply put-null-即-remove 对齐 SharedPreferences 语义; ClipboardIntentExecutor 移除 Uri.fromFile 死回退 (minSdk 26 必抛); snipStaleToolResults 改经 SessionManager.replaceMessages 监视器 (与 addMessage/预压缩同锁)。
+
+**死代码清理**: 删 PromptBuilder.kt 整文件; LlmRequestBuilder.buildRequest 死双轨 (+toolToJson/anyToJson); AcpServer 4 死函数 (onDiscoverResponse/peerCount/writeBridgeTaskToInbox/cleanup); lastPromptTokens 死属性; StorageMonitor.kt 整文件; ProviderCard.kt; BrowserIcons.kt (37 图标); BrowserPluginRegistry+BrowserPlugin 死注册机制 (browser-tools.md 技能删除)。AgentMiddleware.chain 保留 — AgentSessionFactory 有生产调用, 审查误判已修正。
+
+**UI 细节 (shell)**: ComplexityDetector 11-12 分修正为 MISSION (评分正则预编译); "dashiscope" 拼写修正; targetAgent 硬编码 8 处 → `DEFAULT_AGENT_NAME` 唯一事实源; checkMissingPlugin 硬编码 7 插件 → 注册表动态读取; 发送逻辑三份合一 `performSend`; rememberSaveable 补 10 处 (输入草稿/侧栏/选中 tab/折叠状态); AppRoot 记忆孪生激活 runBlocking → lifecycleScope IO 协程; AgentViewModel 流式扫描 O(n²) → 增量水位 (scannedUpTo); 触发器 id random() → 时间戳+AtomicLong; 软键盘 Enter 改 ImeAction.Send (注释与实现一致)。
+
+**主线程 IO**: SidebarContent 裸 listFiles 每重组 → remember(refreshTick) 事件驱动重扫; 头像/预览 decodeFile 无采样 → decodeSampled 有界 (256/4096); TwinPairingDialogs 轮询 listFiles → Dispatchers.IO。
+
+**browser**: ComfyUI URL 子串匹配 → URI host/端口精确匹配; 截图 32MB 像素上限 + 等比缩放 (scale 字段回传, coordClick 坐标还原); UA 硬编码 → BuildConfig.VERSION_NAME; maxTabs 全路径收敛 (TopBar/DesktopTabBar/TabDialog/Agent 桥统一 openNewTab 守卫); 主页 URL 持久化 homeUrl 设置; SettingsDialog 不再重置默认引擎; savePasswords 假开关 → 固定说明; AdBlocker 子串误拦 → host 逐段精确匹配 (路径规则同步生效); SmartNavigate "3.14" 误判 → 末段无字母按搜索; Tab 键劫持放行 (NewTabPage)。
+
+**core/plugins**: IntegrityGuard.verify 接线 (AppInitializer 启动告警, 不阻断); PermissionExecutor 权限清单唯一源 (以 Manifest 为基准, 清 4 项未声明); ScreenCaptureExecutor 相机真实分辨率 (SCALER 查询, 失败回退 1920×1080); TribePlugin sendViaTransport 3 处空 catch → ErrorCollector.report; FsPlugin symlink 检测修正 (未解析 vs 解析路径比较); UpdatePlugin 自动检查幂等 (AtomicBoolean CAS); TavilyPlugin API Key XOR 混淆落盘 (插件零 Android 依赖, EncryptedSharedPreferences 不可达 — 混淆≠加密, 根治需 kernel 密钥存储桥); McpGateway 4MB 请求体上限 (413 不分配内存); TwinWorkspace 原子写; EventReceiver manifest 死声明删除。
 
 ---
 

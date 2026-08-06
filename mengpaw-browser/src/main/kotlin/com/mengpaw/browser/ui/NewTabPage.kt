@@ -3,7 +3,6 @@
 
 package com.mengpaw.browser.ui
 
-import android.view.KeyEvent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -18,7 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -78,16 +76,11 @@ fun NewTabPage(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
+                // P2 fix: 原 onPreviewKeyEvent 劫持 Tab 键循环切换引擎 — 输入框聚焦时 Tab 应
+                // 放行给系统做正常焦点遍历 (页面内 Tab 键不再被浏览器层拦截)。切换引擎请点击
+                // 左侧引擎图标 (leadingIcon), 或在下拉面板/设置中修改。
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .onPreviewKeyEvent { event ->
-                        if (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_TAB
-                            && event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN
-                        ) {
-                            onSearchEngineCycle()
-                            true
-                        } else false
-                    },
+                    .fillMaxWidth(),
                 placeholder = { Text("搜索关键词或输入网址...") },
                 leadingIcon = {
                     Box(Modifier.pointerInput(Unit) { detectTapGestures {

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -39,7 +40,8 @@ fun PluginMarketScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val installedCount by viewModel.installedCount.collectAsState()
     val activeCount by viewModel.activeCount.collectAsState()
-    var selectedTab by remember { mutableStateOf(0) }
+    // P2 修复: rememberSaveable — 选中的 tab 跨配置变更/进程重建保留
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
 
     LaunchedEffect(Unit) { viewModel.refreshMarketplace() }
 

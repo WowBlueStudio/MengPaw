@@ -575,4 +575,5 @@ private fun downloadToCache(context: android.content.Context, url: String): Stri
 
 private fun sha1(s: String): String =
     java.security.MessageDigest.getInstance("SHA-1").digest(s.toByteArray())
-        .joinToString("") { "%02x".format(it) }
+        // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+        .joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }

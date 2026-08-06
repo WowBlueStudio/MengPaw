@@ -3,7 +3,6 @@
 
 package com.mengpaw.shell.ui.screens
 
-import android.graphics.BitmapFactory
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -221,7 +220,7 @@ private fun AgentGroupItem(
             // Agent avatar — loads from disk, falls back to initial
             val agentAvatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$agentName/avatar.png")
             val agentAvatarBitmap = remember(agentName) {
-                if (agentAvatarFile.exists()) BitmapFactory.decodeFile(agentAvatarFile.absolutePath) else null
+                if (agentAvatarFile.exists()) decodeSampled(agentAvatarFile.absolutePath, maxDim = 256) else null
             }
             if (agentAvatarBitmap != null) {
                 Image(

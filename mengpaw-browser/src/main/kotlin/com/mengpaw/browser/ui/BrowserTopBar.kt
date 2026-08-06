@@ -30,7 +30,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.browser.data.TabState
-import com.mengpaw.browser.plugin.BrowserPluginRegistry
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
 
@@ -55,6 +54,8 @@ fun BrowserTopBar(
     adBlockEnabled: Boolean,
     isBookmarked: Boolean,
     webViewMap: MutableMap<Int, WebView>,
+    /** 主页 URL — 持久化设置 (BrowserPrefs.homeUrl), 不再硬编码 baidu */
+    homeUrl: String = "https://www.baidu.com",
     onNavigate: (String) -> Unit,
     onBack: () -> Unit,
     onShowTabs: () -> Unit,
@@ -153,7 +154,7 @@ fun BrowserTopBar(
                     if (isWide) {
                         // Visible nav buttons for keyboard+mouse on tablet
                         IconButton(
-                            onClick = { onNavigate("https://www.baidu.com") },
+                            onClick = { onNavigate(homeUrl) },
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(Icons.Default.Home, "主页", tint = ThemeColors.brand)
@@ -340,26 +341,6 @@ fun BrowserTopBar(
                             leadingIcon = { Icon(Icons.Default.SmartToy, null) },
                             onClick = { onShowAgentSettings(); menuExpanded = false }
                         )
-                        // Plugin-contributed menu items
-                        val pluginItems = remember { BrowserPluginRegistry.activeMenuItems() }
-                        if (pluginItems.isNotEmpty()) {
-                            HorizontalDivider()
-                            pluginItems.forEach { item ->
-                                DropdownMenuItem(
-                                    text = { Text(item.label) },
-                                    leadingIcon = { Icon(Icons.Default.Star, null) },
-                                    onClick = {
-                                        item.command.let { cmd ->
-                                            webViewMap[activeTabId]?.evaluateJavascript(
-                                                cmd,
-                                                null
-                                            )
-                                        }
-                                        menuExpanded = false
-                                    }
-                                )
-                            }
-                        }
                         HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text("关闭标签 Close Tab") },

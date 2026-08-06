@@ -118,11 +118,12 @@ fun BrowserSettingsDialog(
         confirmButton = {
             TextButton(onClick = {
                 prefs.engineKeys = engineKeys.toList()
-                if (engineKeys.isNotEmpty()) {
-                    val newDefault = SearchEngine.fromKey(engineKeys.first())
-                    prefs.setDefaultEngine(newDefault)
-                    onDefaultEngineChanged(newDefault)
-                }
+                // P2 fix: 保存不再把默认引擎重置为列表首项 — 用户当前默认仍在列表中则保留;
+                // 仅当当前默认被关闭 (移出列表) 时才顺延为列表首项。
+                val newDefault = if (engineKeys.any { it == searchEngine.key }) searchEngine
+                                 else SearchEngine.fromKey(engineKeys.firstOrNull() ?: searchEngine.key)
+                prefs.setDefaultEngine(newDefault)
+                onDefaultEngineChanged(newDefault)
                 onDismiss()
             }) { Text("保存") }
         },

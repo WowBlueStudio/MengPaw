@@ -91,14 +91,22 @@ fun SidebarContent(
     var showTwinConfirmDialog by remember { mutableStateOf(false) }
     var twinPairTarget by remember { mutableStateOf<FrameworkContact?>(null) }
 
-    // Discover agents from disk — no remember() so list stays fresh when agents are created/deleted
+    // Discover agents from disk — P2: remember(refreshTick) 替代裸 listFiles,
+    // 目录扫描只发生在 创建/切换 等事件后, 不再每次重组主线程 IO
+    var refreshTick by remember { mutableStateOf(0) }
+    val onCreateAgentWrapped: (String) -> Unit = { name -> onCreateAgent(name); refreshTick++ }
+    val onCreateAgentWithDetailsWrapped: (String, String, String) -> Unit = { name, wsFolder, intro ->
+        onCreateAgentWithDetails(name, wsFolder, intro); refreshTick++
+    }
     val agentsDir = File(com.mengpaw.kernel.DataPaths.AGENTS)
     // Exclude system dirs (inbox, team, acp, incubator) from agent list
     val systemDirs = setOf("inbox", "team", "acp", "incubator", "agent-001")
-    val discoveredAgents = try { agentsDir.listFiles()
-        ?.filter { it.isDirectory && it.name !in systemDirs && !it.name.startsWith(".") }
-        ?.map { it.name }?.sorted()
-        ?.ifEmpty { listOf("MengPaw") } ?: listOf("MengPaw") } catch (_: Exception) { listOf("MengPaw") }
+    val discoveredAgents = remember(refreshTick) {
+        try { agentsDir.listFiles()
+            ?.filter { it.isDirectory && it.name !in systemDirs && !it.name.startsWith(".") }
+            ?.map { it.name }?.sorted()
+            ?.ifEmpty { listOf("MengPaw") } ?: listOf("MengPaw") } catch (_: Exception) { listOf("MengPaw") }
+    }
 
     Column(Modifier.fillMaxHeight().width(280.dp).background(ThemeColors.bgPrimary).padding(ArcoSpacing.lg).verticalScroll(rememberScrollState())) {
         // ── Agents ──
@@ -124,10 +132,10 @@ fun SidebarContent(
                     .padding(vertical = ArcoSpacing.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Avatar — loads from agent dir, falls back to initial
+                // Avatar — loads from agent dir, falls back to initial (P2: decodeSampled 有界解码防大头像 OOM)
                 val agentAvatarFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$dirName/avatar.png")
                 val agentAvatarBitmap = remember(dirName) {
-                    if (agentAvatarFile.exists()) android.graphics.BitmapFactory.decodeFile(agentAvatarFile.absolutePath) else null
+                    if (agentAvatarFile.exists()) decodeSampled(agentAvatarFile.absolutePath, maxDim = 256) else null
                 }
                 if (agentAvatarBitmap != null) {
                     androidx.compose.foundation.Image(
@@ -519,7 +527,7 @@ fun SidebarContent(
             onDismiss = { showNewAgentDialog = false },
             onConfirm = { form ->
                 val wsFolder = form.workspaceFolder.ifBlank { form.name }
-                onCreateAgentWithDetails(form.name, wsFolder, form.intro)
+                onCreateAgentWithDetailsWrapped(form.name, wsFolder, form.intro)
                 showNewAgentDialog = false
             }
         )

@@ -701,7 +701,7 @@ class SessionPersistenceService(
         val all = _sessionHistory.value.filter { showSession(it) }
         return all
             .filter { it.framework == null }
-            .groupBy { it.agentName.ifBlank { "MengPaw" } }
+            .groupBy { it.agentName.ifBlank { DEFAULT_AGENT_NAME } }
             .map { (name, sessions) -> AgentSessionGroup(name, null, sessions.sortedByDescending { it.timestamp }) }
             .sortedByDescending { it.sessions.firstOrNull()?.timestamp ?: 0L }
     }

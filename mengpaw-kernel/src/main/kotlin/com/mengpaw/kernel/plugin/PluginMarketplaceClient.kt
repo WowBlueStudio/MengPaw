@@ -396,7 +396,8 @@ class PluginMarketplaceClient(
 
     private fun sha256(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(bytes).joinToString("") { "%02x".format(it) }
+        // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+        return digest.digest(bytes).joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
     }
 
     /** 将底层异常归类为网络/下载错误（逻辑异常如 SecurityException 保持原样）。 */

@@ -8,6 +8,7 @@ import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.KernelLog
 import java.io.File
 import java.security.MessageDigest
+import java.util.Locale
 
 /**
  * Bundled skill scripts manager — syncs skill .md files from APK assets
@@ -34,7 +35,8 @@ object SkillSeeds {
 
     private fun sha256(file: File): String? = try {
         MessageDigest.getInstance("SHA-256").digest(file.readBytes())
-            .joinToString("") { "%02x".format(it) }
+            // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+            .joinToString("") { String.format(Locale.ROOT, "%02x", it) }
     } catch (_: Exception) { null }
 
     /** Manifest format: one "sha256 filename" pair per line (no JSON dependency in core). */
@@ -84,7 +86,8 @@ object SkillSeeds {
                         if (!tmp.renameTo(seedFile)) { seedFile.writeBytes(bytes); tmp.delete() }
                     }
                     next[filename] = MessageDigest.getInstance("SHA-256").digest(bytes)
-                        .joinToString("") { "%02x".format(it) }
+                        // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+                        .joinToString("") { String.format(Locale.ROOT, "%02x", it) }
                 } catch (e: Exception) {
                     KernelLog.w("SkillSeeds", "Failed to sync seed $filename: ${e.message}")
                 }

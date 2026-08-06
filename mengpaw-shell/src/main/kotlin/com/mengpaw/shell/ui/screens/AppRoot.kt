@@ -33,7 +33,6 @@ import com.mengpaw.shell.ui.localization.ChineseStrings
 import com.mengpaw.shell.ui.localization.EnglishStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 /**
@@ -240,50 +239,24 @@ private fun AppRootContent(
                     onActivateMemoryTwin = {
                         val name = agentViewModel.activeAgent.value
                         try {
-                            android.util.Log.i("MengPawTwin", "激活开始: agent=$name")
-                            val plugin = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin()
-                            android.util.Log.i("MengPawTwin", "插件实例已创建")
-                            com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext = view.context
-                            com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.agentName = name
-                            android.util.Log.i("MengPawTwin", "依赖已注入")
-                            val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
-                            android.util.Log.i("MengPawTwin", "PluginManager: $pm")
-                            // Setup/initialization context — blocking is acceptable
-                            val installResult = runBlocking { pm.install(plugin) }
-                            android.util.Log.i("MengPawTwin", "install结果: ${installResult.isSuccess}")
-                            installResult.fold(
-                                onSuccess = {
-                                    runBlocking { pm.activate(plugin.metadata.id) }.fold(
-                                        onSuccess = {
-                                            android.util.Log.i("MengPawTwin", "插件激活成功")
-                                            (view.context as? androidx.activity.ComponentActivity)?.lifecycleScope?.launch(Dispatchers.IO) {
-                                                startAcpForTwin(view.context, name)
-                                            }
-                                            android.widget.Toast.makeText(view.context, "记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
-                                        },
-                                        onFailure = { e ->
-                                            android.util.Log.e("MengPawTwin", "激活失败: ${e.message}", e)
-                                            android.widget.Toast.makeText(view.context, "激活失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    )
-                                },
-                                onFailure = { e ->
-                                    android.util.Log.e("MengPawTwin", "安装失败: ${e.message}", e)
-                                    runBlocking { pm.activate(plugin.metadata.id) }.fold(
-                                        onSuccess = {
-                                            android.util.Log.i("MengPawTwin", "二次激活成功")
-                                            (view.context as? androidx.activity.ComponentActivity)?.lifecycleScope?.launch(Dispatchers.IO) {
-                                                startAcpForTwin(view.context, name)
-                                            }
-                                            android.widget.Toast.makeText(view.context, "记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
-                                        },
-                                        onFailure = { e2 ->
-                                            android.util.Log.e("MengPawTwin", "二次激活失败: ${e2.message}", e2)
-                                            android.widget.Toast.makeText(view.context, "激活失败: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    )
+                            // P2 修复: 原 runBlocking 在主线程执行插件安装/激活 (点击即卡 UI) —
+                            // 改 IO 协程; 主线程只保留兜底 Toast。安装完成前的依赖方 (插件列表/命令集)
+                            // 均为延迟加载, 未就绪时静默缺失, 无启动时序依赖。
+                            val activity = view.context as? androidx.activity.ComponentActivity
+                            val job = activity?.lifecycleScope?.launch(Dispatchers.IO) {
+                                try {
+                                    installAndActivateTwin(view.context, name)
+                                } catch (e: Exception) {
+                                    android.util.Log.e("MengPawTwin", "异常: ${e.message}", e)
+                                    com.mengpaw.kernel.error.ErrorCollector.report(e, "activateMemoryTwin")
+                                    withContext(Dispatchers.Main) {
+                                        android.widget.Toast.makeText(view.context, "异常: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 }
-                            )
+                            }
+                            if (job == null) {
+                                android.widget.Toast.makeText(view.context, "记忆孪生激活失败: 未找到宿主 Activity", android.widget.Toast.LENGTH_SHORT).show()
+                            }
                         } catch (e: Exception) {
                             android.util.Log.e("MengPawTwin", "异常: ${e.message}", e)
                             com.mengpaw.kernel.error.ErrorCollector.report(e, "activateMemoryTwin")
@@ -647,6 +620,58 @@ private fun AppRootContent(
     }
 }
 
+/**
+ * 记忆孪生激活: 安装/激活插件 + 启动 ACP 服务。
+ * 在 IO 协程中执行 (P2 修复: 原 AppRoot 内 runBlocking 主线程执行插件安装, 点击即卡 UI);
+ * 安装失败时兜底二次激活 (插件可能已安装未激活)。
+ */
+private suspend fun installAndActivateTwin(context: android.content.Context, name: String) {
+    android.util.Log.i("MengPawTwin", "激活开始: agent=$name")
+    val plugin = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin()
+    com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.appContext = context
+    com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.agentName = name
+    val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+    val installResult = pm.install(plugin)
+    installResult.fold(
+        onSuccess = {
+            pm.activate(plugin.metadata.id).fold(
+                onSuccess = {
+                    android.util.Log.i("MengPawTwin", "插件激活成功")
+                    startAcpForTwin(context, name)
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onFailure = { e ->
+                    android.util.Log.e("MengPawTwin", "激活失败: ${e.message}", e)
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "激活失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        },
+        onFailure = { e ->
+            android.util.Log.e("MengPawTwin", "安装失败: ${e.message}", e)
+            // 安装失败兜底: 可能已安装未激活 — 尝试二次激活
+            pm.activate(plugin.metadata.id).fold(
+                onSuccess = {
+                    android.util.Log.i("MengPawTwin", "二次激活成功")
+                    startAcpForTwin(context, name)
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "记忆孪生已激活", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onFailure = { e2 ->
+                    android.util.Log.e("MengPawTwin", "二次激活失败: ${e2.message}", e2)
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "激活失败: ${e2.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+    )
+}
+
 /** 启动 ACP 服务 + 注册 TwinAcpHandler (接收配对请求) — internal: MainActivity.autoRestoreTwinIfNeeded 也调用 */
 internal suspend fun startAcpForTwin(ctx: android.content.Context, agentName: String) {
     try {
@@ -655,7 +680,8 @@ internal suspend fun startAcpForTwin(ctx: android.content.Context, agentName: St
         val deviceFingerprint = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() } catch (_: Exception) { "device-${System.currentTimeMillis()}" }
         val sharedSecret = java.security.MessageDigest.getInstance("SHA-256")
             .digest("twin:$deviceFingerprint:$agentName".toByteArray())
-            .joinToString("") { "%02x".format(it) }
+            // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
+            .joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
         val server = com.mengpaw.kernel.acp.AcpServer(profile, com.mengpaw.kernel.ports.Ports.ACP, sharedSecret)
         val transport = com.mengpaw.kernel.acp.AcpHttpTransport(server, com.mengpaw.kernel.ports.Ports.ACP)
         server.registerTransport(transport)

@@ -74,45 +74,51 @@ class SwarmModeExecutor(
         agentEngine.attachRunningJob(currentCoroutineContext()[Job])
         agentEngine.updateAgentState(AgentState.Running("火种: 规划中", 0, 0))
 
-        // ── Phase 0: 规划器拆解 ──
-        val planner = providerFor(SwarmRoles.PLANNER, roles)
-        val subtasks = decompose(guardedTask, planner, maxSubtasks)
-        if (subtasks.isEmpty()) {
-            // 拆解失败兜底: 退化为单 Agent 执行 (同 Mission 策略)
-            return agentEngine.run(guardedTask, maxStepsPerSubtask * maxSubtasks, onStep, onDelta)
-        }
+        try {
+            // ── Phase 0: 规划器拆解 ──
+            val planner = providerFor(SwarmRoles.PLANNER, roles)
+            val subtasks = decompose(guardedTask, planner, maxSubtasks)
+            if (subtasks.isEmpty()) {
+                // 拆解失败兜底: 退化为单 Agent 执行 (同 Mission 策略)
+                return agentEngine.run(guardedTask, maxStepsPerSubtask * maxSubtasks, onStep, onDelta)
+            }
 
-        val budget = SwarmBudget(maxTotalSteps)
-        val semaphore = Semaphore(maxParallel)
-        agentEngine.updateAgentState(AgentState.Running("火种: ${subtasks.size} 个子任务", 0, subtasks.size))
+            val budget = SwarmBudget(maxTotalSteps)
+            val semaphore = Semaphore(maxParallel)
+            agentEngine.updateAgentState(AgentState.Running("火种: ${subtasks.size} 个子任务", 0, subtasks.size))
 
-        // ── Phase 1+2: 并行 Worker 执行 + Verifier 验证 (每子任务一个协程, WIP 闸限流) ──
-        val cards = coroutineScope {
-            subtasks.map { sub ->
-                async(KernelDispatchers.BACKGROUND) {
-                    semaphore.withPermit {
-                        runSubtaskPipeline(sub, roles, budget, maxStepsPerSubtask, maxRetriesPerSubtask, onStep)
+            // ── Phase 1+2: 并行 Worker 执行 + Verifier 验证 (每子任务一个协程, WIP 闸限流) ──
+            val cards = coroutineScope {
+                subtasks.map { sub ->
+                    async(KernelDispatchers.BACKGROUND) {
+                        semaphore.withPermit {
+                            runSubtaskPipeline(sub, roles, budget, maxStepsPerSubtask, maxRetriesPerSubtask, onStep)
+                        }
                     }
-                }
-            }.awaitAll()
-        }
+                }.awaitAll()
+            }
 
-        // ── Phase 3: 合成器汇总 (流式: 最终报告逐字输出) ──
-        val synthesis = synthesize(guardedTask, cards, providerFor(SwarmRoles.SYNTHESIZER, roles), onDelta)
-        val verified = cards.count { it.status == SwarmSubtaskStatus.VERIFIED }
-        val failed = cards.count { it.status == SwarmSubtaskStatus.FAILED }
-        val skipped = cards.count { it.status == SwarmSubtaskStatus.SKIPPED }
+            // ── Phase 3: 合成器汇总 (流式: 最终报告逐字输出) ──
+            val synthesis = synthesize(guardedTask, cards, providerFor(SwarmRoles.SYNTHESIZER, roles), onDelta)
+            val verified = cards.count { it.status == SwarmSubtaskStatus.VERIFIED }
+            val failed = cards.count { it.status == SwarmSubtaskStatus.FAILED }
+            val skipped = cards.count { it.status == SwarmSubtaskStatus.SKIPPED }
 
-        val report = buildString {
-            appendLine("## 火种模式: $guardedTask")
-            appendLine("子任务: ${cards.size} | ✅ $verified | ❌ $failed | ⏭️ $skipped | 总步数: ${budget.consumedSteps}")
-            appendLine()
-            cards.forEach { appendLine("${it.icon} ${it.subtaskId}: ${it.summary.take(300)}") }
-            appendLine()
-            append(synthesis)
+            val report = buildString {
+                appendLine("## 火种模式: $guardedTask")
+                appendLine("子任务: ${cards.size} | ✅ $verified | ❌ $failed | ⏭️ $skipped | 总步数: ${budget.consumedSteps}")
+                appendLine()
+                cards.forEach { appendLine("${it.icon} ${it.subtaskId}: ${it.summary.take(300)}") }
+                appendLine()
+                append(synthesis)
+            }
+            agentEngine.updateAgentState(AgentState.Finished(report))
+            return report
+        } catch (e: CancellationException) {
+            // 取消传播契约: 必须先 rethrow; P2 — 状态机复位, 否则 _state 残留 Running
+            agentEngine.updateAgentState(AgentState.Idle)
+            throw e
         }
-        agentEngine.updateAgentState(AgentState.Finished(report))
-        return report
     }
 
     // ── 单子任务流水线: JIT 看板 + Andon 协议 ──────────────────────

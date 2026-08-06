@@ -31,7 +31,6 @@
 -keep class com.mengpaw.core.AgentTemplates { *; }
 -keep class com.mengpaw.core.security.Vault { public *; }
 -keep class com.mengpaw.core.security.IntegrityGuard { public *; }
--keep class com.mengpaw.core.security.StorageMonitor { public *; }
 -keep class com.mengpaw.core.namespace.SysExecutor { public *; }
 
 # R8/Kotlin compatibility

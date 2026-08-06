@@ -18,6 +18,7 @@ import com.mengpaw.core.namespace.checkSelf
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.cli.ErrorCodes
+import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -82,10 +83,16 @@ internal object ScreenCaptureExecutor {
         }
         return try {
             proc.destroy()
-            Thread.sleep(1500)
+            // P2 修复: 挂起等待不再阻塞 IO 线程 (Thread.sleep → delay)
+            delay(1500)
             if (proc.isAlive) proc.destroyForcibly()
             screenRecordProcess = null
             ExecutionResult.ok("录屏已停止。文件在 ${com.mengpaw.kernel.DataPaths.SCREENSHOTS}/ 目录下。")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 取消契约: delay 可被取消 — 必须先 rethrow, 不吞成"停止异常"
+            try { proc.destroyForcibly() } catch (_: Exception) {}
+            screenRecordProcess = null
+            throw e
         } catch (e: Exception) {
             try { proc.destroyForcibly() } catch (_: Exception) {}
             screenRecordProcess = null
@@ -132,6 +139,17 @@ internal object ScreenCaptureExecutor {
             } ?: cm.cameraIdList.firstOrNull()
                 ?: return ExecutionResult.fail("未找到可用摄像头")
 
+            // P2 修复: 按 CameraCharacteristics 查询实际最大 JPEG 输出分辨率,
+            // 替代硬编码 1920×1080 (旧实现在不同传感器比例/小分辨率设备上缩放失真;
+            // 查询失败时回退到 1920×1080, 保证仍可拍照)
+            val photoSize = try {
+                cm.getCameraCharacteristics(cameraId)
+                    .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                    ?.getOutputSizes(android.graphics.ImageFormat.JPEG)
+                    ?.maxByOrNull { it.width.toLong() * it.height }
+            } catch (e: Exception) { null }
+                ?: android.util.Size(1920, 1080)
+
             val latch = CountDownLatch(1)
             var captureError: String? = null
             var capturedPath: String? = null
@@ -155,7 +173,8 @@ internal object ScreenCaptureExecutor {
                 override fun onOpened(device: CameraDevice) {
                     openedDevice = device
                     try {
-                        val reader = ImageReader.newInstance(1920, 1080, android.graphics.ImageFormat.JPEG, 1)
+                        val reader = ImageReader.newInstance(
+                            photoSize.width, photoSize.height, android.graphics.ImageFormat.JPEG, 1)
                         imageReader = reader
                         reader.setOnImageAvailableListener({ r ->
                             val image = r.acquireLatestImage()

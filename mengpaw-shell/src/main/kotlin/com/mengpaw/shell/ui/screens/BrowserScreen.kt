@@ -5,7 +5,6 @@ package com.mengpaw.shell.ui.screens
 import androidx.compose.material.icons.outlined.*
 
 import android.annotation.SuppressLint
-import android.graphics.BitmapFactory
 import android.graphics.Bitmap
 import android.net.http.SslError
 import android.webkit.JavascriptInterface
@@ -23,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -65,7 +65,7 @@ fun PreviewScreen(
 
 @Composable
 private fun ImagePreview(path: String) {
-    val bitmap = remember { BitmapFactory.decodeFile(path) }
+    val bitmap = remember { decodeSampled(path, maxDim = 4096) }
     if (bitmap == null) {
         Text("无法加载图片", color = com.mengpaw.design.theme.ThemeColors.textSecondary, modifier = Modifier.padding(ArcoSpacing.lg))
     } else {
@@ -118,8 +118,9 @@ fun BrowserScreen(
     url: String = "https://www.baidu.com",
     onNavigateBack: () -> Unit
 ) {
-    var currentUrl by remember { mutableStateOf(url) }
-    var inputUrl by remember { mutableStateOf(url) }
+    // P2 修复: rememberSaveable — 已加载地址/地址栏草稿跨配置变更保留
+    var currentUrl by rememberSaveable { mutableStateOf(url) }
+    var inputUrl by rememberSaveable { mutableStateOf(url) }
     var isLoading by remember { mutableStateOf(true) }
 
     Scaffold(topBar = {

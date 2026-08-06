@@ -69,22 +69,12 @@ browser.mcp.invoke browser_eval {"script":"document.querySelector('h1').textCont
 
 **浏览器提炼闭环**: 浏览器菜单「提炼网页要点」→ Agent 收到任务 → search.md 转换 → LLM 提炼要点 → 写回传文件 → Shell 自动回传浏览器预览。
 
-## 四、浏览器插件开发 (Browser Plugin API, 面向插件作者)
+## 四、浏览器扩展 (2026-08-06 更新)
 
-浏览器进程内扩展钩子 (浏览器 APK 内置 BrowserPluginRegistry):
-
-| 钩子 | 触发时机 | 用途 |
-|------|---------|------|
-| onPageStarted(url) | 页面开始加载 | 监听导航事件 |
-| onPageFinished(url, title) | 页面加载完成 | 注入 JS/CSS |
-| shouldIntercept(request) | 每个资源请求 | 广告拦截、请求修改 |
-| injectScript(url) | 每页加载后 | Tampermonkey 风格用户脚本 |
-| injectStyle(url) | 每页加载后 | 暗黑模式、自定义样式 |
-| menuItems() | 浏览器菜单打开时 | 添加自定义菜单项 |
-| onLongPress(element) | 长按页面元素 | 图片/视频/二维码处理 |
-
-流程: 实现 `BrowserPlugin` 接口 → `BrowserPluginRegistry.register(plugin)` → 打包发布。
-已安装浏览器插件: `plugin.list` 查看 browser- 前缀。
+> 浏览器进程内插件注册机制 (BrowserPlugin / BrowserPluginRegistry) 已删除 (P2 死代码清理:
+> register() 零调用、插件与浏览器跨进程不可达)。浏览器能力一律经 9880 MCP 桥暴露:
+> `browser.mcp.tools` 列出全部工具与内置 `browser.*` 命令 (44 条, BuiltinBrowserPlugin 合流)。
+> 需要新浏览器能力时, 在 shell/浏览器侧扩展 `BuiltinBrowserPlugin` 命令或 MCP 工具即可。
 
 ## 常见问题
 
