@@ -21,6 +21,15 @@ object AttachmentPayload {
     const val IMAGE_BINARY_MAX = 8L * 1024 * 1024
     const val AUDIO_BINARY_MAX = 15L * 1024 * 1024
 
+    // ── 二进制指纹缓存 (v0.32.1+ 重发成本修复) ───────────────────────────
+    // 同一附件 (path|size|mtime 指纹) 在同一进程内只 readBytes+base64 一次 —
+    // 多 step 对话循环中最近附件不再每 step 重复整文件读取与编码。
+    // 上限: 128 条或 ~64MB base64 总量, 超限整体清空 (简单策略, 防长期会话泄漏)。
+    private const val CACHE_MAX_ENTRIES = 128
+    private const val CACHE_MAX_TOTAL_BYTES = 64L * 1024 * 1024
+    private val binaryCache = HashMap<String, String>()
+    private var cacheBytes = 0L
+
     /**
      * 给 user 消息 map 追加二进制键。非 image/audio 附件或超限时原样返回。
      * 返回的 map 允许覆盖同键（有二进制时替换文本 content 键为 content 数组的铺垫由请求构建层完成）。
@@ -33,14 +42,14 @@ object AttachmentPayload {
             when (att.type) {
                 "image" -> {
                     if (file.length() <= IMAGE_BINARY_MAX) {
-                        val b64 = readBase64(file) ?: continue
+                        val b64 = cachedBase64(file) ?: continue
                         val mime = if (att.mimeType.isNotBlank()) att.mimeType else "image/jpeg"
                         result = result + ("_image" to "data:$mime;base64,$b64")
                     }
                 }
                 "audio" -> {
                     if (file.length() <= AUDIO_BINARY_MAX) {
-                        val b64 = readBase64(file) ?: continue
+                        val b64 = cachedBase64(file) ?: continue
                         val format = att.format.ifBlank { "m4a" }
                         result = result + ("_audio_data" to b64) + ("_audio_format" to format)
                     }
@@ -49,6 +58,25 @@ object AttachmentPayload {
             }
         }
         return result
+    }
+
+    /** 指纹命中的 base64; 未命中则锁外编码后写入缓存 (双检, 编码不进锁)。 */
+    private fun cachedBase64(file: File): String? {
+        val fp = "${file.path}|${file.length()}|${file.lastModified()}"
+        synchronized(binaryCache) {
+            binaryCache[fp]?.let { return it }
+        }
+        val b64 = readBase64(file) ?: return null
+        synchronized(binaryCache) {
+            binaryCache[fp]?.let { return it } // 并发窗口另一线程已写入
+            if (binaryCache.size >= CACHE_MAX_ENTRIES || cacheBytes >= CACHE_MAX_TOTAL_BYTES) {
+                binaryCache.clear()
+                cacheBytes = 0L
+            }
+            binaryCache[fp] = b64
+            cacheBytes += b64.length
+        }
+        return b64
     }
 
     private fun readBase64(file: File): String? = try {

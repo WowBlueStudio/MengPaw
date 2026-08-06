@@ -439,17 +439,23 @@ $conversationText
      * Used for prefix-cache-optimized LLM requests where messages[0] is the system prompt.
      *
      * ⚠️ Filters out [Message.localOnly] messages — recovery metadata must never reach the LLM.
+     *
+     * 附件二进制挂载策略 (v0.32.1+ 重发成本修复): **仅最后一条带附件的 user 消息**
+     * 挂 `_image`/`_audio_data` 二进制键 — 历史消息若每轮全量 base64 重发,
+     * 请求体轻易击穿上下文窗口 (2MB 图 ≈ 50 万 token/step, 10 step 一轮 ≈ 500 万 token)。
+     * 更早消息的视觉认知依赖 LLM 文本转述 (content 内已有 `[图片附件] 📎 path` 标注,
+     * 且每轮回答都含图的内容描述), 视觉上下文损失有限; 需要重看图时新对话补发即可。
      */
     fun getStructuredHistory(sessionId: String): List<Map<String, String>> {
-        return _sessions.value[sessionId]?.messages
-            ?.filter { !it.localOnly }
-            ?.map { msg ->
-                val base = mapOf("role" to msg.role, "content" to msg.content)
-                // 结构化附件 (v0.33.0+): 图片/音频挂二进制键, 供请求层构建 content 数组
-                if (msg.role == "user" && msg.attachments.isNotEmpty()) {
-                    AttachmentPayload.attachBinary(base, msg.attachments)
-                } else base
-            } ?: emptyList()
+        val messages = _sessions.value[sessionId]?.messages ?: return emptyList()
+        val filtered = messages.filter { !it.localOnly }
+        val lastAttachmentUser = filtered.lastOrNull { it.role == "user" && it.attachments.isNotEmpty() }
+        return filtered.map { msg ->
+            val base = mapOf("role" to msg.role, "content" to msg.content)
+            if (msg === lastAttachmentUser) {
+                AttachmentPayload.attachBinary(base, msg.attachments)
+            } else base
+        }
     }
 
     // ── Interrupted Turn Recovery (Reasonix Level 2) ─────────────────────

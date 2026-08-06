@@ -635,8 +635,11 @@ class AgentEngine(
                 }
                 emptyResponseCount = 0
 
-                val totalChars = llmRequestBuilder.currentSystemPrompt.length +
-                    sessionManager.getStructuredHistory(session.id).sumOf { (it["content"]?.length ?: 0) }
+                // v0.32.1+: 轻量字符统计 — 不再调 getStructuredHistory (该函数会对最近附件
+                // 做 base64, 此处仅需 content 长度校准 tok/char, 白做编码纯浪费)
+                val historyChars = sessionManager.getSession(session.id)?.messages
+                    ?.filter { !it.localOnly }?.sumOf { it.content.length } ?: 0
+                val totalChars = llmRequestBuilder.currentSystemPrompt.length + historyChars
                 val estimatedTokens = (totalChars * llmRequestBuilder.calibratedTokPerChar).toInt()
                 llmRequestBuilder.calibrateFromUsage(estimatedTokens, totalChars)
 
@@ -977,10 +980,9 @@ class AgentEngine(
             val lastUserIdx = mutableMessages.indexOfLast { it["role"] == "user" }
             if (lastUserIdx >= 0) {
                 val lastUser = mutableMessages[lastUserIdx]
-                mutableMessages[lastUserIdx] = mapOf(
-                    "role" to "user",
-                    "content" to "$block\n\n${lastUser["content"]}"
-                )
+                // v0.32.1+: lastUser + 覆盖 content — 重建 map 会丢 _image/_audio_data 键,
+                // 最后一条附件的多模态通道在恢复轮将整体丢失
+                mutableMessages[lastUserIdx] = lastUser + ("content" to "$block\n\n${lastUser["content"]}")
             }
             // Consume the recovery after injection so it doesn't fire again
             sessionManager.consumePendingRecovery(sessionId)

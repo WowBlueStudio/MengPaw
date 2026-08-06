@@ -573,7 +573,7 @@ twin.lost <peer> / twin.recover <peer>
 
 **OpenAI 兼容 content 数组** (唯一实现: `AdaptiveLlmProvider.buildRequestBody` — LlmRequestBuilder.buildRequest 死双轨已于 P2 死代码清理删除; RemoteApi 不支持降级为路径文本): `_image` 非空或 `_audio_data` 非空 → `content: [{type:"text"}, {type:"image_url", image_url:{url: dataURI}}, {type:"input_audio", input_audio:{data: base64, format}}]`。大小上限 8MB(图)/15MB(音频, OpenAI 历史 input_audio 25MB/请求留余量) — 超限静默跳过二进制仅文本标注。
 
-**已知成本与 P2**: 每轮请求重发全部历史图片/音频 base64 (对齐 ChatGPT 多模态历史行为, 服务端会缩放) — P2 仅最近一条 user 消息挂二进制键; 上行图片不缩图 (kernel 零 Android 依赖无 BitmapFactory, 靠 8MB 上限) — P2 shell 选图时预生成 thumb; 进程被杀恢复会话附件降级路径文本; 旧会话 `📎 path` 文本不迁移为卡片。
+**已知成本与 P2** (v0.32.1+ 已修复首项): ~~每轮请求重发全部历史图片/音频 base64~~ → **仅最后一条带附件的 user 消息挂二进制键** (`History.getStructuredHistory` latest-only — 历史附件每轮全量 base64 会击穿上下文窗口: 2MB 图 ≈ 50 万 token/step; 更早消息视觉认知依赖 LLM 文本转述); 同一附件多 step 经指纹缓存 (path|size|mtime, 128 条/64MB 上限, `AttachmentPayload`); 恢复轮注入保留二进制键 (AgentEngine recovery 不再重建 map 丢 `_image`); 上行图片不缩图 (kernel 零 Android 依赖无 BitmapFactory, 靠 8MB 上限) — 后续 P2: shell 选图时预生成 thumb; 进程被杀恢复会话附件降级路径文本; 旧会话 `📎 path` 文本不迁移为卡片。
 
 **下行媒体**: 气泡层 `AttachmentBubbles.extractMedia` 提取规则 — ① `![alt](path)` 图片 (data:/javascript: 前缀排除) ② `[name](path)` 且扩展名命中 image/audio/video/document ③ `Saved to <path>`/`已保存到 <path>` 插件输出行 (本地路径须 exists)。提取后文本交 MarkdownText, 卡片垂直堆叠 maxWidth 260dp。渲染: 图片 `inJustDecodeBounds` 采样 ≤2048px + 全屏 Dialog; 音频 `AudioPlayerHolder` 单实例 MediaPlayer (同刻只播一条, 静态装饰波形, 进度轮询); 视频 MediaMetadataRetriever 封面帧 + VideoView Dialog; 文件扩展名图标 + MIME 配色, ACTION_VIEW FileProvider (对齐 ClipboardIntentExecutor); http(s) URL HttpURLConnection 下载 cacheDir/media_cache sha1 缓存。
 
