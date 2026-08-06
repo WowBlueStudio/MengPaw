@@ -12,6 +12,7 @@
 | `crash-prevention-guide.md` | 10 KB | 30+ 闪退案例：进程保活/空安全/文件 IO/生命周期/Compose 陷阱 | 遇到闪退或做稳定性修复时 |
 | `PROTOCOL.md` | 7 KB | 框架通信协议：双轨架构(本机 MCP 9881 / 远程 ACP 9876)、连接器 SPI 开发指南、消息格式、接入清单 | 对接外部框架、写连接器插件时 |
 | `swarm-design.md` | 7 KB | 火种 (Swarm) 模式设计：规划器/Worker/Verifier/合成器、JIT 三闸门、Andon 协议 | 改火种模式或写多 Agent 任务时 |
+| `llm-multistage-dataflow.md` | 8 KB | LLM 多阶段输出数据流：ReAct 每回合 LLM/框架/UI 各环节实际收到的内容（parse 规则/Observation 组装/历史累积/边界防御） | 理解 Agent 循环、排查工具调用链路、调试 LLM 输出时 |
 
 ## 参考速查（小体积，可常驻）
 
