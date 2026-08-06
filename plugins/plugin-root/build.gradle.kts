@@ -19,4 +19,6 @@ android {
 
 dependencies {
     implementation(project(":mengpaw-kernel"))
+    // JVM 单测 (插件零测试补齐 — 危险命令拦截/转义/分词纯逻辑)
+    testImplementation("junit:junit:4.13.2")
 }

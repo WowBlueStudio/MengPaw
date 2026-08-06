@@ -496,21 +496,30 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (9 文件，全部在 mengpaw-kernel)
+### 3.7 测试 (15 模块 601 测试，v0.32.1+ 补齐结构性缺口)
 
-| 测试文件 | 内容 |
-|----------|------|
-| AgentEngineTest | PlanStep/TaskPlan/ReAct 循环/状态转换 |
-| AdaptiveLlmProviderTest | Provider 检测/配置/Fallback/异常 |
-| SecurityTest | 脱敏/策略/拦截 |
-| CliInterpreterTest | 分词/引号/转义/flags |
-| ManifestParserTest | 版本/兼容/加载 |
-| SessionManagerTest | 会话 CRUD/追踪 |
-| PipelineTest | 执行/安全/文件读写 |
-| PromptEngineTest | ReAct/中英文/循环检测 |
-| CommandRegistryTest | 注册/命名空间/列表 |
+| 模块 | 测试数 | 覆盖 |
+|------|-------|------|
+| mengpaw-kernel | 297 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm/mission |
+| mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
+| mengpaw-shell | 43 | ComplexityDetector 分档 (11 分 MISSION 回归)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵 |
+| plugin-hermes (tribe) | 34 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 (P0 回归) |
+| plugin-memory-twin | 34 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
+| plugin-browser-search | 27 | SSRF 校验全矩阵 (私有 IP/回环/云元数据/scheme 白名单)、引擎检测 |
+| plugin-agent-tools | 22 | 工具集解析 |
+| plugin-skill | 21 | 路径消毒 (../ 越界/反斜杠穿越)、frontmatter 解析、命令层落实 |
+| plugin-net | 15 | SSRF 黑名单矩阵、validateUrl scheme 白名单、代理字符串逻辑 |
+| plugin-framework | 14 | McpGateway 4MB 上限/非法 Content-Length 413、指纹 hex、peer JSON 往返 |
+| plugin-concise | 10 | 简洁模式 |
+| plugin-update | 12 | 版本比较、sha256 向量、镜像 URL、自动检查 CAS 幂等 |
+| plugin-root | 10 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 (execute 不测 — 真实 su) |
+| plugin-tavily | 8 | API Key 混淆往返/无明文窗口泄漏 |
+| plugin-fs | 9 | 沙箱边界、symlink 检测 (P2 回归, Windows 探测式 skip) |
 
-> Kernel 测试在 JVM 上运行（`./gradlew :mengpaw-kernel:test`），毫秒级反馈，无需模拟器。
+> 全部 JVM 本地单测（`testDebugUnitTest`，kernel 为 `:test`），毫秒级反馈，无需模拟器。
+> 测试补齐过程中修复 4 个生产缺陷：TwinAcpHandler TWIN_DELEGATE 信任门不可达
+> (requirements JsonArray 解析)、Vault.clear 静默失效、McpGateway 非法 Content-Length 应 413、
+> AttachmentBubbles 链接分支幻影卡片。
 
 ---
 

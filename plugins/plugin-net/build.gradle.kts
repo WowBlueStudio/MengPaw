@@ -30,4 +30,8 @@ dependencies {
     // Ktor HTTP client (required by NetExecutor)
     implementation("io.ktor:ktor-client-core:3.0.3")
     implementation("io.ktor:ktor-client-okhttp:3.0.3")
+
+    // JVM 单测 (SSRF 校验 / 命令纯逻辑)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }

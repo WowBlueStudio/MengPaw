@@ -77,12 +77,17 @@ fun extractMedia(content: String): Pair<String, List<AttachmentData>> {
         if (card != null) { cards.add(card); "" } else m.value
     }
     // 2. [name](path) — 仅扩展名命中媒体/document 才提取
+    //     (审查修复): 本地路径必须 exists 才提取 — 与文件头"保守"规则及分支 1 行为对齐,
+    //     否则 ![x](已删除文件.png) 会经链接分支漏出幻影卡片 (UI 渲染坏图)
     text = LINK_REGEX.replace(text) { m ->
         val name = m.groupValues[1].trim()
         val path = m.groupValues[2].trim()
         val ext = path.substringAfterLast('.', "").lowercase()
         val type = typeFromMime(null, path)
-        val keep = type in setOf("image", "audio", "video", "document") && !path.startsWith("data:") && !path.startsWith("javascript:")
+        val isRemote = path.startsWith("http://") || path.startsWith("https://")
+        val keep = type in setOf("image", "audio", "video", "document") &&
+            !path.startsWith("data:") && !path.startsWith("javascript:") &&
+            (isRemote || File(path).isFile)
         if (keep && name != path && name.isNotBlank() && name.length <= 60) {
             cards.add(
                 AttachmentData(

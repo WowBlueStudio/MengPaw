@@ -18,4 +18,7 @@ dependencies {
     implementation(project(":plugin-framework"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    // JVM 单测 (插件零测试补齐 — 状态机/看板/ACP 分发纯逻辑)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }

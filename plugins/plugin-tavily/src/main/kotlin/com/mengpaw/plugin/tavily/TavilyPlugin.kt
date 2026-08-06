@@ -73,14 +73,16 @@ class TavilyPlugin : Plugin {
                 if (stored.startsWith("obf:")) deobfuscate(stored.removePrefix("obf:")) else stored
             }.getOrDefault("")
 
-    /** 轻量混淆 (P2 折中, 见类头注释) — UTF-8 字节 XOR, 防"目录浏览即得明文"。 */
-    private fun obfuscate(plain: String): String {
+    /** 轻量混淆 (P2 折中, 见类头注释) — UTF-8 字节 XOR, 防"目录浏览即得明文"。
+     *  internal 为测试可见性 (编解码单测)。 */
+    internal fun obfuscate(plain: String): String {
         val bytes = plain.toByteArray(Charsets.UTF_8)
         for (i in bytes.indices) bytes[i] = (bytes[i].toInt() xor OBFUSCATION_KEY).toByte()
         return String(bytes, Charsets.ISO_8859_1) // 逐字节映射, 不经 UTF-8 校验
     }
 
-    private fun deobfuscate(encoded: String): String {
+    /** internal 为测试可见性 (编解码单测)。 */
+    internal fun deobfuscate(encoded: String): String {
         val bytes = encoded.toByteArray(Charsets.ISO_8859_1)
         for (i in bytes.indices) bytes[i] = (bytes[i].toInt() xor OBFUSCATION_KEY).toByte()
         return String(bytes, Charsets.UTF_8)

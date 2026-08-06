@@ -18,4 +18,7 @@ dependencies {
     implementation("io.ktor:ktor-client-core:3.0.3")
     implementation("io.ktor:ktor-client-okhttp:3.0.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+
+    // JVM 单测 (API key 混淆编解码)
+    testImplementation("junit:junit:4.13.2")
 }

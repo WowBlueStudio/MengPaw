@@ -26,4 +26,8 @@ android {
 
 dependencies {
     implementation(project(":mengpaw-kernel"))
+
+    // JVM 单测 (路径消毒 / 命令流 / frontmatter 解析)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }

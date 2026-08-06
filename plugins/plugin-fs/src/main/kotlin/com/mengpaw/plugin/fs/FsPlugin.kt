@@ -185,7 +185,8 @@ class FsPlugin : Plugin {
      * Container for a safely resolved file path.
      * [isFailure] is true if the path violates the sandbox.
      */
-    private data class ResolvedPath(val file: File, val isFailure: Boolean = false, val error: String = "") {
+    // internal 为测试可见性 — resolveSafe 的返回值类型
+    internal data class ResolvedPath(val file: File, val isFailure: Boolean = false, val error: String = "") {
         companion object {
             fun ok(file: File) = ResolvedPath(file, false)
             fun fail(error: String) = ResolvedPath(File("."), true, error)
@@ -201,7 +202,8 @@ class FsPlugin : Plugin {
      * 3. Canonical path (with .. and symlinks resolved) must start with workDir.
      * 4. Symlinks pointing outside the sandbox are rejected.
      */
-    private fun resolveSafe(path: String, ctx: ExecutionContext): ResolvedPath {
+    // internal 为测试可见性 — 纯路径解析逻辑 (P2 修复: symlink 真检测)
+    internal fun resolveSafe(path: String, ctx: ExecutionContext): ResolvedPath {
         // canonicalFile throws IOException if the directory doesn't exist — fall back to absoluteFile
         val workDir = try {
             File(ctx.workDir).canonicalFile

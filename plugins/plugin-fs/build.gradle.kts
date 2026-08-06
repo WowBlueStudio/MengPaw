@@ -27,4 +27,6 @@ android {
 dependencies {
     // Microkernel core (Plugin interface + CLI types only)
     implementation(project(":mengpaw-kernel"))
+    // JVM 单测 (插件零测试补齐 — 沙箱边界/symlink 检测纯逻辑)
+    testImplementation("junit:junit:4.13.2")
 }

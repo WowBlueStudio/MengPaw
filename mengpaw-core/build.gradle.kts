@@ -45,4 +45,8 @@ dependencies {
     // Encrypted SharedPreferences for secure API key storage
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.core:core-ktx:1.13.1")
+
+    // Testing (JVM 单元测试 — 仅纯逻辑, 不引入 Robolectric/mockito)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }

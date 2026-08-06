@@ -173,6 +173,7 @@ internal class InMemoryPreferences : SharedPreferences {
 
     internal inner class InMemoryEditor : SharedPreferences.Editor {
         private val tmp = mutableMapOf<String, Any?>()
+        private var cleared = false
 
         override fun putString(key: String, value: String?): SharedPreferences.Editor {
             tmp[key] = value; return this
@@ -196,15 +197,21 @@ internal class InMemoryPreferences : SharedPreferences {
             tmp[key] = null; return this
         }
         override fun clear(): SharedPreferences.Editor {
-            tmp.clear(); return this
+            tmp.clear()
+            // 测试暴露的真实缺陷: 仅清空 tmp 会让 apply() 无事可做 — store 永远清不掉,
+            // Vault.clear() 静默失效。对齐 Android 语义: clear() 标记全量删除, apply() 时先清 store。
+            cleared = true
+            return this
         }
         override fun commit(): Boolean {
             apply(); return true
         }
         override fun apply() {
+            if (cleared) store.clear()
             // P2 修复: put null 即删除 (对齐 Android SharedPreferences 语义)。
             // 旧实现 store.putAll(tmp) 会把 null 值写进 map — contains() 恒 true。
             tmp.forEach { (k, v) -> if (v == null) store.remove(k) else store[k] = v }
+            cleared = false
         }
     }
 }

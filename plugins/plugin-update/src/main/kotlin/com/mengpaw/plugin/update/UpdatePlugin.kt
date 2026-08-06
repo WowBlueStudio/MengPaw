@@ -66,7 +66,8 @@ class UpdatePlugin : Plugin {
 
     // P2 修复 (幂等保护): scheduleAutoCheck 由 onInstall 与 update.auto on 双路径触发,
     // 无保护时每调一次就多跑一个 while 循环 (多份定时器同时扫更新)。
-    private val autoCheckStarted = AtomicBoolean(false)
+    // internal 为测试可见性 (CAS 幂等单测)。
+    internal val autoCheckStarted = AtomicBoolean(false)
     private var latestRelease: ReleaseInfo? = null
     private var downloadedApk: File? = null
 
@@ -154,7 +155,8 @@ class UpdatePlugin : Plugin {
         }
     }
 
-    private fun formatCheckResult(current: String, release: ReleaseInfo): ExecutionResult {
+    /** internal 为测试可见性 (版本新旧判定单测)。 */
+    internal fun formatCheckResult(current: String, release: ReleaseInfo): ExecutionResult {
         val isNewer = compareVersions(release.tag.removePrefix("v"), current) > 0
         val sb = StringBuilder()
         sb.appendLine(if (isNewer) "🔔 发现新版本!" else "✅ 已是最新版本")
@@ -322,7 +324,8 @@ class UpdatePlugin : Plugin {
 
     // ── Helpers ─────────────────────────────────────────────────────────
 
-    private fun scheduleAutoCheck() {
+    /** internal 为测试可见性 (CAS 幂等单测)。 */
+    internal fun scheduleAutoCheck() {
         // CAS 幂等: 已有一个调度循环则不重复启动; 协程退出 (取消/异常) 后复位, 允许重新调度
         if (!autoCheckStarted.compareAndSet(false, true)) return
         scope.launch {
@@ -368,7 +371,8 @@ class UpdatePlugin : Plugin {
         } catch (_: Exception) { null }
     }
 
-    private fun compareVersions(a: String, b: String): Int {
+    /** internal 为测试可见性 (版本号比较单测)。 */
+    internal fun compareVersions(a: String, b: String): Int {
         val ap = a.split(".").map { it.toIntOrNull() ?: 0 }
         val bp = b.split(".").map { it.toIntOrNull() ?: 0 }
         for (i in 0 until maxOf(ap.size, bp.size)) {
@@ -432,13 +436,15 @@ class UpdatePlugin : Plugin {
         }
     }
 
-    private fun sha256(bytes: ByteArray): String {
+    /** internal 为测试可见性 (Locale.ROOT hex 输出单测)。 */
+    internal fun sha256(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256")
         // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
         return digest.digest(bytes).joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
     }
 
-    private fun formatSize(bytes: Long): String = when {
+    /** internal 为测试可见性 (格式化单测)。 */
+    internal fun formatSize(bytes: Long): String = when {
         bytes < 1024 -> "$bytes B"
         bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
         else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
@@ -472,10 +478,12 @@ class UpdatePlugin : Plugin {
         private const val GITHUB_API_URL = "https://api.github.com/repos/WowBlueStudio/MengPaw/releases/latest"
         private const val GITEE_API_URL = "https://gitee.com/api/v5/repos/WowBlueStudio/MengPaw/releases/latest"
         private const val GHPROXY_API_URL = "https://ghproxy.com/$GITHUB_API_URL"
-        /** Build a ghproxy URL for any GitHub-hosted download. */
-        private fun ghproxyDownload(githubUrl: String): String = "https://ghproxy.com/$githubUrl"
-        /** Build a Gitee download mirror URL from a GitHub download URL. */
-        private fun giteeDownload(githubUrl: String): String =
+        /** Build a ghproxy URL for any GitHub-hosted download.
+         *  internal 为测试可见性 (镜像 URL 单测)。 */
+        internal fun ghproxyDownload(githubUrl: String): String = "https://ghproxy.com/$githubUrl"
+        /** Build a Gitee download mirror URL from a GitHub download URL.
+         *  internal 为测试可见性 (镜像 URL 单测)。 */
+        internal fun giteeDownload(githubUrl: String): String =
             githubUrl.replace("github.com", "gitee.com")
     }
 }

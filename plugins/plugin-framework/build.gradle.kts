@@ -20,4 +20,9 @@ android {
 dependencies {
     implementation(project(":mengpaw-kernel"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+
+    // JVM 单测 (McpGateway 请求体上限 / FrameworkPeerStore 序列化)
+    testImplementation("junit:junit:4.13.2")
+    // Android 运行时用 SDK 内置 org.json；JVM 单测需要 maven 版（同 API）
+    testImplementation("org.json:json:20240303")
 }

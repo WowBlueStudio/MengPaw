@@ -323,8 +323,9 @@ class SkillPlugin : Plugin {
      * P1 修复: 技能名 → 技能文件路径解析消毒。
      * canonicalPath 前缀校验 — 拒绝含 `..` 段/绝对路径越过技能根目录的路径,
      * 防止 agent 通过 skill.run/rm 等读删工作区外文件。
+     * internal 为测试可见性 (路径消毒单测)。
      */
-    private fun skillFile(dir: File, name: String): File? {
+    internal fun skillFile(dir: File, name: String): File? {
         val file = File(dir, "$name.md")
         return try {
             val root = dir.canonicalPath
@@ -333,7 +334,8 @@ class SkillPlugin : Plugin {
         } catch (_: Exception) { null }
     }
 
-    private fun parseSkill(file: File): SkillDef? {
+    /** internal 为测试可见性 (frontmatter 解析单测)。 */
+    internal fun parseSkill(file: File): SkillDef? {
         if (!file.exists()) return null
         val text = try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.parseSkill"); return null }
         val fm = Regex("^---\\s*\n(.+?)\\n---", RegexOption.DOT_MATCHES_ALL).find(text.trimStart())
@@ -344,7 +346,8 @@ class SkillPlugin : Plugin {
         return SkillDef(name = props["name"] ?: file.nameWithoutExtension, description = props["description"] ?: "", enabled = props["enabled"]?.toBooleanStrictOrNull() ?: true, category = props["category"] ?: "general", content = content, rawText = text)
     }
 
-    private fun buildSkillTemplate(name: String, category: String, description: String): String {
+    /** internal 为测试可见性 (模板生成单测)。 */
+    internal fun buildSkillTemplate(name: String, category: String, description: String): String {
         val hints = when (category) {
             "dev" -> "## 执行步骤\n1. 分析代码结构\n2. 执行开发任务\n3. 验证结果\n4. 汇报完成情况"
             "office" -> "## 执行步骤\n1. 确认需求\n2. 使用 agent.write 生成文档\n3. 检查输出质量\n4. 交付确认\n\n使用 {{param}} 占位符实现参数化。"

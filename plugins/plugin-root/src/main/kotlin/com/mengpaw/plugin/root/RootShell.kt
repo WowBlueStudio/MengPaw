@@ -24,7 +24,8 @@ object RootShell {
     private val dateFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
     /** Catastrophic commands that are never allowed. */
-    private val BLOCKED_PATTERNS = listOf(
+    // internal 为测试可见性 — 纯正则表, 无状态
+    internal val BLOCKED_PATTERNS = listOf(
         Regex("""rm\s+-rf?\s+/\b"""),                       // rm -rf /
         Regex("""rm\s+-rf?\s+/\*\b"""),                     // rm -rf /*
         Regex("""rm\s+-rf?\s+/system\b"""),                 // rm -rf /system
@@ -46,7 +47,8 @@ object RootShell {
     )
 
     /** 简易 shell 分词: 处理单引号/双引号/反斜杠, 还原引号内容 (不做变量/通配展开)。 */
-    private fun tokenize(cmd: String): List<String> {
+    // internal 为测试可见性 — 纯函数, 无副作用
+    internal fun tokenize(cmd: String): List<String> {
         val tokens = mutableListOf<String>()
         val cur = StringBuilder()
         var inQuote: Char? = null
@@ -69,7 +71,8 @@ object RootShell {
     }
 
     /** 轻量路径规范化: 压缩重复斜杠, 展开 /. 与 /../ 段 (对齐 rm 实际解析行为)。 */
-    private fun normalizePath(p: String): String {
+    // internal 为测试可见性 — 纯函数, 无副作用
+    internal fun normalizePath(p: String): String {
         val parts = mutableListOf<String>()
         for (seg in p.split('/')) {
             when (seg) {
@@ -82,7 +85,8 @@ object RootShell {
     }
 
     /** 校验单个 rm 目标路径, 返回拦截原因; null = 放行。 */
-    private fun checkRmTarget(rawTarget: String): String? {
+    // internal 为测试可见性 — 纯函数, 无副作用
+    internal fun checkRmTarget(rawTarget: String): String? {
         val t = normalizePath(rawTarget.trim().trimEnd(';', '|', '&', ')', '>', '<', '`'))
         // 根目录本身 (rm -rf / 、rm -rf /*、/.. 归约回根)
         if (t == "/" || t == "/*") return "根目录"
@@ -93,7 +97,8 @@ object RootShell {
 
     /** 解析 rm 命令参数做规范校验 — 修复正则黑名单绕过 (rm -r -f /、rm -rf 根通配、引号包裹、路径拼接等)。
      *  返回拦截原因; null = 放行。 */
-    private fun checkRmCommand(command: String): String? {
+    // internal 为测试可见性 — 纯函数, 无副作用
+    internal fun checkRmCommand(command: String): String? {
         val tokens = tokenize(command)
         var i = 0
         while (i < tokens.size) {

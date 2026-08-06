@@ -58,8 +58,9 @@ class NetPlugin : Plugin {
         }
     }
 
-    /** Validate URL for SSRF protection. Returns null if valid, or error message. */
-    private suspend fun validateUrl(rawUrl: String): String? {
+    /** Validate URL for SSRF protection. Returns null if valid, or error message.
+     *  internal 为测试可见性 (SSRF 单测直连校验函数)。 */
+    internal suspend fun validateUrl(rawUrl: String): String? {
         val uri = try {
             val u = URI(rawUrl)
             // Require absolute URL
@@ -88,8 +89,9 @@ class NetPlugin : Plugin {
         }
     }
 
-    /** Check if an IP address is in a blocked (private/internal) range. */
-    private fun isBlockedAddress(addr: InetAddress): Boolean {
+    /** Check if an IP address is in a blocked (private/internal) range.
+     *  internal 为测试可见性 (SSRF 单测直连黑名单矩阵)。 */
+    internal fun isBlockedAddress(addr: InetAddress): Boolean {
         if (addr.isLoopbackAddress) return true        // 127.0.0.0/8, ::1
         if (addr.isLinkLocalAddress) return true        // 169.254.0.0/16
         if (addr.isSiteLocalAddress) return true        // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16

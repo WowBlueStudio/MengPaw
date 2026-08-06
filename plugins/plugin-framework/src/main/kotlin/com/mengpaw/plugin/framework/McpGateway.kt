@@ -25,7 +25,37 @@ object McpGateway {
 
     /** MCP 请求体大小上限 (P2 修复: 原实现按 Content-Length 无上限 new CharArray,
      *  恶意客户端可声称超大长度撑爆内存)。超限/非法长度直接 413 拒绝。 */
-    private const val MAX_MCP_BODY_BYTES = 4 * 1024 * 1024
+    internal const val MAX_MCP_BODY_BYTES = 4 * 1024 * 1024
+
+    /**
+     * 解析 Content-Length 头 (大小写不敏感)。缺失/非法/负数一律返回 null,
+     * 由 [routeRejection] 以 413 拒绝 — 对齐 P2 注释"非法长度直接 413"的意图
+     * (原实现 toIntOrNull ?: 0 把非法值当 0 受理, 与上限检查形同虚设)。
+     * internal 为测试可见性。
+     */
+    internal fun parseContentLength(line: String?): Int? {
+        if (line == null || !line.startsWith("Content-Length:", ignoreCase = true)) return null
+        return line.substringAfter(":").trim().toIntOrNull()?.takeIf { it >= 0 }
+    }
+
+    /**
+     * 纯路由判定 (internal 为测试可见性): 返回 null 表示 POST /mcp 且长度合法,
+     * 请求应被受理 (由调用方读取 body); 否则返回 (HTTP 状态行, 响应体)。
+     */
+    internal fun routeRejection(method: String, path: String, contentLength: Int?): Pair<String, String>? {
+        if (method == "GET" && path == "/health") {
+            return "200 OK" to """{"ok":true,"status":"online"}"""
+        }
+        if (method == "POST" && path == "/mcp" && contentLength != null && contentLength in 0..MAX_MCP_BODY_BYTES) {
+            return null // 受理
+        }
+        if (method == "POST" && path == "/mcp") {
+            // 请求体超限 (或非法/缺失 Content-Length) — 拒绝, 不分配内存
+            return "413 Payload Too Large" to
+                """{"jsonrpc":"2.0","error":{"code":-32600,"message":"Request body exceeds ${MAX_MCP_BODY_BYTES / (1024 * 1024)}MB limit"},"id":null}"""
+        }
+        return "404 Not Found" to """{"jsonrpc":"2.0","error":{"code":-32601,"message":"Not found: $method $path"},"id":null}"""
+    }
 
     @Volatile private var running = false
     @Volatile private var serverSocket: ServerSocket? = null
@@ -76,40 +106,29 @@ object McpGateway {
             val method = parts.getOrNull(0) ?: return
             val path = parts.getOrNull(1) ?: return
 
-            var contentLength = 0
+            var contentLength: Int? = null
             while (true) {
                 val line = reader.readLine() ?: break
                 if (line.isEmpty()) break
-                if (line.startsWith("Content-Length:", ignoreCase = true)) {
-                    contentLength = line.substringAfter(":").trim().toIntOrNull() ?: 0
-                }
+                parseContentLength(line)?.let { contentLength = it }
             }
 
+            val rejection = routeRejection(method, path, contentLength)
             val response: String
             val status: String
-            when {
-                method == "GET" && path == "/health" -> {
-                    response = """{"ok":true,"status":"online"}"""
-                    status = "200 OK"
-                }
-                method == "POST" && path == "/mcp" && contentLength in 0..MAX_MCP_BODY_BYTES -> {
-                    val body = CharArray(contentLength)
-                    if (contentLength > 0) reader.read(body, 0, contentLength)
-                    val mcpServer = com.mengpaw.kernel.mcp.McpServer(
-                        com.mengpaw.kernel.plugin.PluginManager.globalInstance
-                    )
-                    response = mcpServer.handleRequest(String(body))
-                    status = "200 OK"
-                }
-                method == "POST" && path == "/mcp" -> {
-                    // 请求体超限 (或非法 Content-Length) — 拒绝, 不分配内存
-                    response = """{"jsonrpc":"2.0","error":{"code":-32600,"message":"Request body exceeds ${MAX_MCP_BODY_BYTES / (1024 * 1024)}MB limit"},"id":null}"""
-                    status = "413 Payload Too Large"
-                }
-                else -> {
-                    response = """{"jsonrpc":"2.0","error":{"code":-32601,"message":"Not found: $method $path"},"id":null}"""
-                    status = "404 Not Found"
-                }
+            if (rejection != null) {
+                response = rejection.second
+                status = rejection.first
+            } else {
+                // 受理: 读取请求体 (长度已由 routeRejection 限定 0..MAX) 并转交内核 MCP Server
+                val len = contentLength ?: 0
+                val body = CharArray(len)
+                if (len > 0) reader.read(body, 0, len)
+                val mcpServer = com.mengpaw.kernel.mcp.McpServer(
+                    com.mengpaw.kernel.plugin.PluginManager.globalInstance
+                )
+                response = mcpServer.handleRequest(String(body))
+                status = "200 OK"
             }
 
             writer.write("HTTP/1.1 $status\r\n")

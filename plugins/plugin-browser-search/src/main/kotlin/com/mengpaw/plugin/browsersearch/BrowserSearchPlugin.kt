@@ -281,8 +281,9 @@ class BrowserSearchPlugin : Plugin {
         }
     }
 
-    /** SSRF 防护 (与 plugin-net 同模式): 仅 http/https、拒绝内网/回环/云元数据。 */
-    private suspend fun validateUrl(rawUrl: String): String? {
+    /** SSRF 防护 (与 plugin-net 同模式): 仅 http/https、拒绝内网/回环/云元数据。
+     *  internal 为测试可见性 (SSRF 单测直连校验函数)。 */
+    internal suspend fun validateUrl(rawUrl: String): String? {
         val uri = try {
             val u = URI(rawUrl)
             if (!u.isAbsolute) return "Only absolute URLs are allowed"
@@ -301,7 +302,8 @@ class BrowserSearchPlugin : Plugin {
         }
     }
 
-    private fun isBlockedAddress(addr: InetAddress): Boolean {
+    /** internal 为测试可见性 (SSRF 单测直连黑名单矩阵)。 */
+    internal fun isBlockedAddress(addr: InetAddress): Boolean {
         if (addr.isLoopbackAddress || addr.isLinkLocalAddress || addr.isSiteLocalAddress || addr.isAnyLocalAddress) return true
         val ip = addr.hostAddress ?: return false
         if (ip == "169.254.169.254") return true  // AWS / GCP metadata

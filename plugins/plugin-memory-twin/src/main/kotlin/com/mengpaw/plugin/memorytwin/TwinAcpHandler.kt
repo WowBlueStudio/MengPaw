@@ -161,7 +161,12 @@ class TwinAcpHandler(
     private suspend fun handleTwinDelegate(msg: AcpMessage): AcpResult {
         val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }
         val task = payload?.get("task")?.jsonPrimitive?.content ?: ""
-        val requirementsStr = payload?.get("requirements")?.jsonPrimitive?.content ?: "[]"
+        // 修复: twinDelegate 工厂默认把 requirements 作为 JsonArray 写入 (parseToJsonElement("[]")),
+        // 旧实现 .jsonPrimitive 直接抛异常 — 信任门永远不可达 (任何标准委派都返回 Handler error)。
+        // JsonPrimitive → 原串; 其它 JsonElement (JsonArray) → toString 还原数组文本。
+        val requirementsStr = payload?.get("requirements")?.let {
+            if (it is JsonPrimitive) it.content else it.toString()
+        } ?: "[]"
         // SECURITY: Only accept delegate tasks from trusted peers
         if (!com.mengpaw.kernel.security.PromptFirewall.isTrusted(msg.from)) {
             return AcpResult(false, "untrusted_delegate",
@@ -212,7 +217,8 @@ class TwinAcpHandler(
      * 拒绝: 空白 / 绝对路径 / 含 `..` 段的路径 (反斜杠也防 — 双平台保险)。
      * 未通过 → null, 调用方跳过该条目 (拒绝服务单文件, 不整包拒绝)。
      */
-    private fun sanitizeRelPath(relPath: String): String? {
+    // internal 为测试可见性 — 纯函数, 无副作用
+    internal fun sanitizeRelPath(relPath: String): String? {
         if (relPath.isBlank()) return null
         if (relPath.startsWith("/") || relPath.startsWith("\\")) return null
         if (relPath.contains(":")) return null  // Windows 盘符/URL scheme 保险
