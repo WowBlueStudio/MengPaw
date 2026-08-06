@@ -129,6 +129,8 @@ class MemoryTwinPlugin : Plugin {
 
     private lateinit var syncEngine: TwinSyncEngine
     private lateinit var acpHandler: TwinAcpHandler
+    /** P1 修复: handler 绑定的 engine — 引擎切换时需重建 handler 并重新注册。 */
+    private var handlerEngine: TwinSyncEngine? = null
     private var discovery: TwinDiscovery? = null
     private var isRunning = false
     /** P1.4: Auto-collect broadcast receiver (registered in cmdStart, unregistered in stopTwinService). */
@@ -178,17 +180,21 @@ class MemoryTwinPlugin : Plugin {
         )
 
         // 复用 MainActivity 激活时创建的 engine (双引擎债务修复, v0.22.0)
+        // P1 修复: (1) lateinit 未初始化即比较导致崩溃 — 先查初始化状态;
+        // (2) 复用路径 handler 未注册到 AcpServer — engine 就绪后统一确保已创建并注册
         val reused = activeEngine
-        if (reused != null && reused != syncEngine) {
-            syncEngine = reused
-            acpHandler = TwinAcpHandler(syncEngine)
-        }
         if (!::syncEngine.isInitialized) {
-            syncEngine = TwinSyncEngine(
+            syncEngine = reused ?: TwinSyncEngine(
                 serverSupplier = { acpServer }, transportSupplier = { acpTransport },
                 agentName = agentName, deviceId = deviceId, deviceName = deviceName
             )
+        } else if (reused != null && reused !== syncEngine) {
+            // 引擎被外部切换 (activeEngine 更新) — 跟随新引擎
+            syncEngine = reused
+        }
+        if (!::acpHandler.isInitialized || handlerEngine !== syncEngine) {
             acpHandler = TwinAcpHandler(syncEngine)
+            handlerEngine = syncEngine
             server.registerHandler(acpHandler)
         }
 
@@ -268,6 +274,8 @@ class MemoryTwinPlugin : Plugin {
     // ── Peer management ───────────────────────────────────────────
 
     private suspend fun cmdPeers(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        // P1 修复: isRunning 守卫 — 未启动时 syncEngine 未初始化
+        if (!isRunning) return ExecutionResult.ok("孪生服务未启动,请先执行 twin.start")
         val peers = syncEngine.getPeers()
         if (peers.isEmpty()) return ExecutionResult.ok(buildString {
             appendLine("(无已知孪生节点)")
@@ -291,6 +299,8 @@ class MemoryTwinPlugin : Plugin {
     }
 
     private suspend fun cmdPeerInfo(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        // P1 修复: isRunning 守卫 — 未启动时 syncEngine 未初始化
+        if (!isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
         val peerId = args.getOrNull(0) ?: return ExecutionResult.fail("用法: twin.peer.info <peer-id>")
         val peers = syncEngine.getPeers()
         val peer = peers.find { it.peerId == peerId || it.peerId.startsWith(peerId) }
@@ -467,6 +477,8 @@ class MemoryTwinPlugin : Plugin {
     }
 
     private suspend fun cmdSyncQos(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        // P1 修复: isRunning 守卫 — 未启动时 syncEngine 未初始化
+        if (!isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
         val mode = args.getOrNull(0)
         return when (mode?.lowercase()) {
             "wifi" -> {
@@ -509,6 +521,8 @@ class MemoryTwinPlugin : Plugin {
                 ExecutionResult.ok(card.toJson())
             }
             "--all" -> {
+                // P1 修复: isRunning 守卫 — 未启动时 syncEngine 未初始化
+                if (!isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
                 val collector = TwinCapabilityCollector(context, deviceId, deviceName,
                     mengpawVersion = com.mengpaw.kernel.AgentEngine.CORE_VERSION)
                 val selfCard = collector.collect(llmProvider, pluginNames,
@@ -530,6 +544,8 @@ class MemoryTwinPlugin : Plugin {
                 ExecutionResult.ok(sb.toString())
             }
             else -> {
+                // P1 修复: isRunning 守卫 — 未启动时 syncEngine 未初始化
+                if (!isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
                 val peers = syncEngine.getPeers()
                 val peer = peers.find { it.peerId == flag || it.peerId.startsWith(flag) }
                 val card = peer?.capabilityCard
@@ -550,6 +566,8 @@ class MemoryTwinPlugin : Plugin {
 
     private suspend fun cmdDelegate(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.size < 2) return ExecutionResult.fail("用法: twin.delegate <peer-id> <task>")
+        // P1 修复: isRunning 守卫 — 未启动时 syncEngine 未初始化
+        if (!isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
         val peerId = args[0]
         val task = args.drop(1).joinToString(" ")
         val peers = syncEngine.getPeers()
@@ -572,6 +590,8 @@ class MemoryTwinPlugin : Plugin {
     private suspend fun cmdRoute(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val task = args.joinToString(" ")
         if (task.isBlank()) return ExecutionResult.fail("用法: twin.route <任务描述>")
+        // P1 修复: isRunning 守卫 — 未启动时 syncEngine 未初始化
+        if (!isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
 
         val context = appContext ?: return ExecutionResult.fail("无法获取设备上下文")
         val collector = TwinCapabilityCollector(context, deviceId, deviceName,

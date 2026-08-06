@@ -17,6 +17,10 @@ object ScreenshotManager {
     private const val MAX_SCREENSHOTS = 50
     private val SCREENSHOTS_DIR = com.mengpaw.kernel.DataPaths.SCREENSHOTS
 
+    /** P1 修复: 会话 ID 消毒 — 替换路径分隔符/冒号/点, 防止穿越出截图目录。 */
+    private fun safeSessionId(sessionId: String): String =
+        sessionId.replace(Regex("[/\\\\:\\.]"), "_").take(64)
+
     /**
      * Generate a unique screenshot path for a session.
      */
@@ -27,7 +31,7 @@ object ScreenshotManager {
         val seq = counter.incrementAndGet()
         val dir = File(SCREENSHOTS_DIR)
         dir.mkdirs()
-        return "${SCREENSHOTS_DIR}/${sessionId}_${timestamp}_${seq}${safeSuffix}.png"
+        return "${SCREENSHOTS_DIR}/${safeSessionId(sessionId)}_${timestamp}_${seq}${safeSuffix}.png"
     }
 
     /**
@@ -36,7 +40,7 @@ object ScreenshotManager {
     fun cleanup(sessionId: String, keep: Int = MAX_SCREENSHOTS) {
         val dir = File(SCREENSHOTS_DIR)
         if (!dir.exists()) return
-        val files = dir.listFiles { it.name.startsWith(sessionId) }
+        val files = dir.listFiles { it.name.startsWith(safeSessionId(sessionId)) }
             ?.sortedBy { it.name }
             ?: return
         if (files.size > keep) {
@@ -50,6 +54,6 @@ object ScreenshotManager {
     fun cleanupAll(sessionId: String) {
         val dir = File(SCREENSHOTS_DIR)
         if (!dir.exists()) return
-        dir.listFiles { it.name.startsWith(sessionId) }?.forEach { it.delete() }
+        dir.listFiles { it.name.startsWith(safeSessionId(sessionId)) }?.forEach { it.delete() }
     }
 }

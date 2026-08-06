@@ -158,8 +158,10 @@ class PluginExecutor(
             pluginManager.uninstall(id)
         }
 
-        // Download — uses entry.downloadUrl/mirrorUrl from whichever index it came from
-        val destDir = File(ctx.workDir, "plugins")
+        // Download — uses entry.downloadUrl/mirrorUrl from whichever index it came from.
+        // 统一下载到 PLUGIN_CACHE: 与 plugin.verify 检查点、PluginManager.uninstall 清理、
+        // odex 目录 (jar 同级) 保持一致 — 此前写 workDir/plugins 导致安装后 verify 永远报缺失
+        val destDir = File(com.mengpaw.kernel.DataPaths.PLUGIN_CACHE)
         val downloaded = marketplaceClient.download(entry, destDir, onDownloadProgress).getOrElse {
             val code = when (it) {
                 is MarketplaceDownloadException -> ErrorCodes.DOWNLOAD_FAILED

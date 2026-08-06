@@ -54,8 +54,8 @@ class TwinSyncEngine(
     private var heartbeatJob: Job? = null
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** Known peers. */
-    private val peers = mutableMapOf<String, TwinPeerInfo>()
+    /** Known peers. P1 修复: 并发集合 — 心跳/同步协程与 ACP handler 线程共享。 */
+    private val peers = java.util.concurrent.ConcurrentHashMap<String, TwinPeerInfo>()
 
     /** QoS level: WIFI (full), MOBILE (key only), METERED (manual only). */
     @Volatile var qosLevel: QosLevel = QosLevel.WIFI
@@ -101,12 +101,17 @@ class TwinSyncEngine(
         heartbeatJob = scope.launch {
             while (isActive) {
                 try {
-                    val transport = transportSupplier() ?: return@launch
-                    peers.values.forEach { peer ->
-                        try {
-                            val msg = com.mengpaw.kernel.acp.AcpMessage.heartbeat(deviceId)
-                            transport.send(msg)
-                        } catch (_: Exception) { /* peer unreachable */ }
+                    val transport = transportSupplier()
+                    if (transport != null) {
+                        peers.values.forEach { peer ->
+                            try {
+                                val msg = com.mengpaw.kernel.acp.AcpMessage.heartbeat(deviceId)
+                                transport.send(msg)
+                            } catch (_: Exception) { /* peer unreachable */ }
+                        }
+                    } else {
+                        // P1 修复: 传输层暂不可用 — 等待下一轮重试, 不退出心跳循环
+                        android.util.Log.w("MengPawTwin", "心跳: ACP 传输层不可用, 30 秒后重试")
                     }
                     // Mark peers offline if no contact for 90 seconds
                     val cutoff = System.currentTimeMillis() - 90_000

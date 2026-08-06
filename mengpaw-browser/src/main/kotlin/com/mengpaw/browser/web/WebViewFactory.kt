@@ -50,6 +50,20 @@ document.head.appendChild(s)})();
 private fun isMarkdownUrl(url: String): Boolean =
     url.substringBefore('?').substringBefore('#').endsWith(".md", ignoreCase = true)
 
+/** HTML 特殊字符转义 — 错误页等拼接场景防注入 (恶意 URL/错误描述可携带 HTML/JS)。 */
+private fun escapeHtml(s: String): String = buildString(s.length) {
+    for (ch in s) {
+        when (ch) {
+            '&' -> append("&amp;")
+            '<' -> append("&lt;")
+            '>' -> append("&gt;")
+            '"' -> append("&quot;")
+            '\'' -> append("&#39;")
+            else -> append(ch)
+        }
+    }
+}
+
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 fun createWebView(
     ctx: android.content.Context, tab: TabState, isWide: Boolean, adBlock: Boolean,
@@ -156,9 +170,10 @@ fun createWebView(
             if (request?.isForMainFrame != true) return
             val failingUrl = request?.url?.toString() ?: view?.url ?: ""
             val desc = error?.description?.toString() ?: "未知错误"
+            // SECURITY: desc/failingUrl 来自不可信页面 (恶意 URL 可注入 HTML/JS) — 必须转义
             val html = "<html><body style='padding:40px;font-family:sans-serif;text-align:center'>" +
-                "<h2>页面加载失败</h2><p>${desc}</p>" +
-                "<p style='color:#888;font-size:14px'>${failingUrl.take(100)}</p></body></html>"
+                "<h2>页面加载失败</h2><p>${escapeHtml(desc)}</p>" +
+                "<p style='color:#888;font-size:14px'>${escapeHtml(failingUrl.take(100))}</p></body></html>"
             view?.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
         }
         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {

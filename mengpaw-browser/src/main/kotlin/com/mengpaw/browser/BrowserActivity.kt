@@ -149,10 +149,19 @@ class BrowserActivity : ComponentActivity() {
     }
 
     /**
-     * MCP 工具入口 (HTTP server 线程调用)。WebView 操作必须在主线程 —
-     * 非主线程调用时 post 到主线程并同步等待结果 (navigate 最坏阻塞 ~10s, 超时保护 25s)。
+     * MCP 工具入口 (HTTP server 线程调用)。
+     *
+     * P1 fix: 双路径分流 —
+     * - **内置 browser.* 命令** (BuiltinBrowserPlugin, 44 条): 后台线程直接执行。命令内部
+     *   经 webView.post 自行回主线程, 原 runOnUiThread 方案会让主线程阻塞在 evalJs 的
+     *   latch.await 上, post 的 runnable 永远排不上 → 每次调用 2s 超时 (隐形失效)。
+     * - **原生 6 工具** (navigate/screenshot/click/type/extract/eval): 保持主线程执行
+     *   (browser_screenshot 的 View.draw 必须主线程)。
      */
     private fun runMcpTool(toolName: String, args: Map<String, String>): String {
+        if (builtinBrowserPlugin.commands.containsKey(toolName)) {
+            return executeBuiltinTool(toolName, args)
+        }
         if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
             return executeMcpTool(toolName, args)
         }
@@ -169,6 +178,34 @@ class BrowserActivity : ComponentActivity() {
         }
         latch.await(25, java.util.concurrent.TimeUnit.SECONDS)
         return result
+    }
+
+    /**
+     * P1 fix: 内置 browser.* 命令执行器 (BuiltinBrowserPlugin 此前零实例化 — 44 条命令
+     * 全部不可达)。命令键直接作 MCP 工具名 (Agent 经 browser.mcp.invoke <命令> 调用)。
+     */
+    private fun executeBuiltinTool(toolName: String, args: Map<String, String>): String {
+        val handler = builtinBrowserPlugin.commands[toolName]
+            ?: return """{"ok":false,"error":"Unknown tool: $toolName"}"""
+        val positional = mcpArgsToPositional(args)
+        val ctx = com.mengpaw.kernel.cli.ExecutionContext(sessionId = "mcp", userId = "mcp")
+        return try {
+            // 命令为 suspend — 在 HTTP server 线程上 runBlocking 执行;
+            // 命令内部经 webView.post 自行回主线程, 无主线程死锁
+            val result = kotlinx.coroutines.runBlocking { handler(positional, ctx) }
+            if (result.success) result.output else result.error ?: "命令执行失败"
+        } catch (e: Exception) {
+            """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
+        }
+    }
+
+    /**
+     * P1 fix: MCP 参数 map → 内置命令位置参数列表。
+     * 按常见键序映射 (url/selector/text/x/y/...); 无命中键时按值序兜底 (单参数命令)。
+     */
+    private fun mcpArgsToPositional(args: Map<String, String>): List<String> {
+        val ordered = POS_ARG_KEYS.mapNotNull { args[it] }
+        return if (ordered.isNotEmpty()) ordered else args.values.toList()
     }
 
     /** MCP tool executor — 直接操作 WebView (必须在主线程调用)。 */
@@ -302,14 +339,65 @@ class BrowserActivity : ComponentActivity() {
     /** OPEN_MD 提炼回传回调: (title, url, md) → 弹 Markdown 预览。 */
     internal var onOpenMd: ((String, String, String) -> Unit)? = null
 
+    // ── P1 fix: BuiltinBrowserPlugin 接线 (此前零实例化, 44 条 browser.* 命令不可达) ──
+
+    /** BrowserApp (Compose) 暴露的标签页状态桥 — 命令经它操作真实 UI 状态。 */
+    interface BrowserStateBridge {
+        fun activeWebView(): WebView?
+        fun currentTabs(): List<TabState>
+        fun currentActiveTabId(): Int
+        fun switchTab(id: Int)
+        fun openTab(id: Int, url: String)
+        fun closeTab(id: Int)
+    }
+
+    /** 由 BrowserApp 的 SideEffect 每次重组赋值 (Compose state 可变)。 */
+    @Volatile
+    internal var browserState: BrowserStateBridge? = null
+
+    /** 内置浏览器命令插件 — 经 9880 桥暴露给 Agent (browser.mcp.invoke <命令>)。 */
+    private val builtinBrowserPlugin: com.mengpaw.browser.plugin.BuiltinBrowserPlugin by lazy {
+        com.mengpaw.browser.plugin.BuiltinBrowserPlugin(
+            webViewProvider = { browserState?.activeWebView() },
+            tabInfoProvider = {
+                val bs = browserState ?: return@BuiltinBrowserPlugin emptyList()
+                bs.currentTabs().map { t ->
+                    com.mengpaw.browser.plugin.BrowserTab(
+                        id = t.id, url = t.url, title = t.title,
+                        isLoading = t.isLoading, isActive = t.id == bs.currentActiveTabId()
+                    )
+                }
+            },
+            tabSwitcher = { id -> browserState?.switchTab(id) },
+            tabOpener = { id, url -> browserState?.openTab(id, url) },
+            tabCloser = { id -> browserState?.closeTab(id) }
+        )
+    }
+
+    companion object {
+        /** MCP map 参数 → 位置参数映射键序 (多参数命令按此顺序取)。 */
+        private val POS_ARG_KEYS = listOf(
+            "url", "selector", "text", "x", "y", "script", "value", "name",
+            "width", "height", "css", "n", "maxHeight", "type", "op", "key",
+            "domain", "target", "timeoutMs", "attribute"
+        )
+    }
+
+    /** 安全销毁 WebView: 先脱离视图树再 destroy (P1 fix — attached 时 destroy 有崩溃风险)。 */
+    private fun destroyWebViewSafe(wv: android.webkit.WebView?) {
+        if (wv == null) return
+        try {
+            (wv.parent as? android.view.ViewGroup)?.removeView(wv)
+        } catch (_: Exception) {}
+        try { wv.stopLoading(); wv.destroy() } catch (_: Exception) {}
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         // 设备内 MCP 桥停止
         com.mengpaw.browser.mcp.McpHttpServer.stop()
         // CRITICAL: Destroy all WebViews to free native renderer memory
-        webViewMapRef.values.forEach { wv ->
-            try { wv.stopLoading(); wv.destroy() } catch (_: Exception) { }
-        }
+        webViewMapRef.values.forEach { destroyWebViewSafe(it) }
         webViewMapRef.clear()
         try { android.webkit.CookieManager.getInstance().flush() } catch (_: Exception) { }
     }
@@ -324,12 +412,13 @@ class BrowserActivity : ComponentActivity() {
                 }
             }
             android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> {
-                // Destroy up to 3 least-recently-used inactive WebViews
-                var destroyed = 0
-                webViewMapRef.entries.toList().forEach { (_, wv) ->
-                    if (destroyed >= 3) return@forEach
-                    try { wv.stopLoading(); wv.destroy(); destroyed++ } catch (_: Exception) {}
+                // P1 fix: 不再 destroy — 所有 WebView 仍在 Compose 树 (AndroidView) 渲染中,
+                // destroy 后 UI 继续引用已销毁实例必崩, 且旧实现 destroy 后残留 map 引用。
+                // 改暂停全部 + 清缓存 (渲染内存的主要来源)。
+                webViewMapRef.values.forEach { wv ->
+                    try { wv.onPause() } catch (_: Exception) {}
                 }
+                try { webViewMapRef.values.firstOrNull()?.clearCache(true) } catch (_: Exception) {}
             }
         }
     }
@@ -436,7 +525,40 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
     var showAgentSettings by remember { mutableStateOf(false) }
     val webViewMap = remember { mutableMapOf<Int, WebView>() }
     // Sync WebView map to Activity for system back-key navigation
-    SideEffect { (ctx as? BrowserActivity)?.webViewMapRef = webViewMap }
+    // P1 fix: 同步浏览器状态桥 — 内置 browser.* 命令 (BuiltinBrowserPlugin) 经它操作真实 tab 状态
+    SideEffect {
+        val activity = ctx as? BrowserActivity ?: return@SideEffect
+        activity.webViewMapRef = webViewMap
+        activity.browserState = object : BrowserActivity.BrowserStateBridge {
+            override fun activeWebView(): WebView? = webViewMap[activeTabId]
+            override fun currentTabs(): List<TabState> = tabs
+            override fun currentActiveTabId(): Int = activeTabId
+            override fun switchTab(id: Int) { if (tabs.any { it.id == id }) activeTabId = id }
+            override fun openTab(id: Int, url: String) {
+                if (tabs.any { it.id == id }) {
+                    tabs = tabs.map { if (it.id == id) it.copy(url = url) else it }
+                    activeTabId = id
+                    webViewMap[id]?.loadUrl(url)
+                } else {
+                    val newId = (tabs.maxOfOrNull { it.id } ?: -1) + 1
+                    tabs = tabs + TabState(id = newId, url = url)
+                    activeTabId = newId
+                    isColdStart = false
+                }
+            }
+            override fun closeTab(id: Int) {
+                if (tabs.size <= 1) return  // 保持至少一个标签
+                val wv = webViewMap.remove(id)
+                if (wv != null) {
+                    // 先脱离视图树再 destroy (P1 fix — attached destroy 风险)
+                    try { (wv.parent as? android.view.ViewGroup)?.removeView(wv) } catch (_: Exception) {}
+                    try { wv.stopLoading(); wv.destroy() } catch (_: Exception) {}
+                }
+                tabs = tabs.filter { it.id != id }
+                activeTabId = tabs.firstOrNull()?.id ?: 0
+            }
+        }
+    }
 
     val activeTab = tabs.find { it.id == activeTabId } ?: tabs.first()
 
@@ -449,16 +571,24 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
     }
 
     // System back key: WebView history → close tab → return to Shell
+    // P1 fix: 安全销毁 (先脱离视图树再 destroy) — Activity 的 destroyWebViewSafe 是
+    // private, BrowserApp (类外 top-level) 不可访问, 此处内联同等逻辑
+    val destroyWv: (android.webkit.WebView?) -> Unit = { w ->
+        if (w != null) {
+            try { (w.parent as? android.view.ViewGroup)?.removeView(w) } catch (_: Exception) {}
+            try { w.stopLoading(); w.destroy() } catch (_: Exception) {}
+        }
+    }
     val handleBack: () -> Unit = {
         val wv = webViewMap[activeTabId]
         if (wv?.canGoBack() == true) { wv.goBack() }
         else {
             val remaining = tabs.filter { it.id != activeTabId }
             if (remaining.isNotEmpty()) {
-                wv?.destroy(); webViewMap.remove(activeTabId)
+                destroyWv(wv); webViewMap.remove(activeTabId)
                 tabs = remaining; activeTabId = remaining.first().id; isColdStart = false
             } else if (!isColdStart) {
-                webViewMap.values.forEach { it.destroy() }; webViewMap.clear()
+                webViewMap.values.forEach { destroyWv(it) }; webViewMap.clear()
                 tabs = listOf(TabState(id = 0)); activeTabId = 0; isColdStart = true
             } else {
                 try { ctx.startActivity(ctx.packageManager.getLaunchIntentForPackage("com.mengpaw.shell")); (ctx as? BrowserActivity)?.finish() }
@@ -525,7 +655,11 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                     },
                     onCloseTab = {
                         tabs = tabs.filter { it.id != activeTabId }
-                        webViewMap.remove(activeTabId)?.destroy()
+                        // P1 fix: 先脱离视图树再 destroy (attached destroy 风险)
+                        webViewMap.remove(activeTabId)?.let { wv ->
+                            try { (wv.parent as? android.view.ViewGroup)?.removeView(wv) } catch (_: Exception) {}
+                            try { wv.stopLoading(); wv.destroy() } catch (_: Exception) {}
+                        }
                         activeTabId = tabs.first().id
                     },
                     onShowTranslate = { showTranslate = true },
@@ -567,7 +701,11 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                         isColdStart = tabs.find { it.id == id }?.url.isNullOrBlank() ?: true
                     },
                     onTabClose = { id ->
-                        webViewMap.remove(id)?.destroy()
+                        // P1 fix: 先脱离视图树再 destroy (attached destroy 风险)
+                        webViewMap.remove(id)?.let { wv ->
+                            try { (wv.parent as? android.view.ViewGroup)?.removeView(wv) } catch (_: Exception) {}
+                            try { wv.stopLoading(); wv.destroy() } catch (_: Exception) {}
+                        }
                         tabs = tabs.filter { it.id != id }
                         if (activeTabId == id) activeTabId = tabs.first().id
                     },
@@ -757,7 +895,11 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                     prefs = prefs,
                     onTabSelected = { id, cold -> activeTabId = id; isColdStart = cold; showTabs = false },
                     onTabClose = { id ->
-                        webViewMap.remove(id)?.destroy()
+                        // P1 fix: 先脱离视图树再 destroy (attached destroy 风险)
+                        webViewMap.remove(id)?.let { wv ->
+                            try { (wv.parent as? android.view.ViewGroup)?.removeView(wv) } catch (_: Exception) {}
+                            try { wv.stopLoading(); wv.destroy() } catch (_: Exception) {}
+                        }
                         tabs = tabs.filter { it.id != id }
                         if (tabs.isEmpty()) { tabs = listOf(TabState(id = 0)); activeTabId = 0; isColdStart = true; showTabs = false }
                         else if (activeTabId == id) activeTabId = tabs.first().id

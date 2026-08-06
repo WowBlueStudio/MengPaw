@@ -27,6 +27,8 @@ class TribeHeartbeatMonitor(
 ) {
     /** 已知对端及其活跃时间。 */
     private val peers = mutableMapOf<String, PeerInfo>()
+    /** P1 修复: peers 并发访问锁 — 心跳协程/清理协程/ACP handler 多线程共享。 */
+    private val lock = Any()
     /** 心跳广播 Job。 */
     private var heartbeatJob: Job? = null
     /** 清理 Job。 */
@@ -68,20 +70,24 @@ class TribeHeartbeatMonitor(
 
     /** 由 [TribeAcpHandler] 收到 HEARTBEAT 时调用。 */
     fun onHeartbeat(from: String) {
-        val peer = peers[from]
-        if (peer != null) {
-            peer.lastSeen = System.currentTimeMillis()
-            peer.isOnline = true
-        } else {
-            // 首次发现的对端
-            peers[from] = PeerInfo(agentId = from, agentName = from, lastSeen = System.currentTimeMillis())
+        synchronized(lock) {
+            val peer = peers[from]
+            if (peer != null) {
+                peer.lastSeen = System.currentTimeMillis()
+                peer.isOnline = true
+            } else {
+                // 首次发现的对端
+                peers[from] = PeerInfo(agentId = from, agentName = from, lastSeen = System.currentTimeMillis())
+            }
         }
     }
 
     /** 获取当前在线对端。 */
     fun getOnlinePeers(): List<PeerInfo> {
         val now = System.currentTimeMillis()
-        return peers.values.filter { now - it.lastSeen < 120_000 }
+        synchronized(lock) {
+            return peers.values.filter { now - it.lastSeen < 120_000 }
+        }
     }
 
     /**
@@ -89,19 +95,25 @@ class TribeHeartbeatMonitor(
      * @return true 如果对端在线（120s 内有心跳）
      */
     fun isPeerOnline(agentId: String): Boolean {
-        val peer = peers[agentId] ?: return false
-        return System.currentTimeMillis() - peer.lastSeen < 120_000
+        synchronized(lock) {
+            val peer = peers[agentId] ?: return false
+            return System.currentTimeMillis() - peer.lastSeen < 120_000
+        }
     }
 
     /** 重置所有对端为离线（在 tribe.stop 时调用）。 */
     fun markAllOffline() {
-        peers.values.forEach { it.isOnline = false }
+        synchronized(lock) {
+            peers.values.forEach { it.isOnline = false }
+        }
     }
 
     /** 手动注册一个对端（与 ACP 发现联动）。 */
     fun registerPeer(agentId: String, agentName: String) {
-        if (agentId !in peers) {
-            peers[agentId] = PeerInfo(agentId = agentId, agentName = agentName)
+        synchronized(lock) {
+            if (agentId !in peers) {
+                peers[agentId] = PeerInfo(agentId = agentId, agentName = agentName)
+            }
         }
     }
 
@@ -118,12 +130,14 @@ class TribeHeartbeatMonitor(
     }
 
     private fun cleanupStalePeers() {
-        val now = System.currentTimeMillis()
-        val staleIds = peers.filter { now - it.value.lastSeen > 120_000 }.keys
-        staleIds.forEach { id ->
-            peers[id]?.isOnline = false
+        synchronized(lock) {
+            val now = System.currentTimeMillis()
+            val staleIds = peers.filter { now - it.value.lastSeen > 120_000 }.keys
+            staleIds.forEach { id ->
+                peers[id]?.isOnline = false
+            }
+            // 超过 300s 无响应的完全移除
+            peers.entries.removeAll { now - it.value.lastSeen > 300_000 }
         }
-        // 超过 300s 无响应的完全移除
-        peers.entries.removeAll { now - it.value.lastSeen > 300_000 }
     }
 }

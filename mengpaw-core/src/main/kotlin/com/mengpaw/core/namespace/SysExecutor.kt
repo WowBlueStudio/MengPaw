@@ -27,7 +27,7 @@ import com.mengpaw.core.namespace.sys.SensorLocationExecutor
 /**
  * Android system executor — exposes real device capabilities to Agent.
  *
- * ## Command groups (55+ commands)
+ * ## Command groups (51 commands)
  * Delegates to domain executors in [com.mengpaw.core.namespace.sys].
  *
  * ```
@@ -57,6 +57,7 @@ import com.mengpaw.core.namespace.sys.SensorLocationExecutor
  * sys.app.launch     启动应用
  * sys.app.uninstall  卸载应用
  * sys.app.info       应用详情
+ * sys.browser.open   打开浏览器/网页
  * sys.power          电源状态
  * sys.power.save     省电模式
  * sys.clipboard      读取剪贴板

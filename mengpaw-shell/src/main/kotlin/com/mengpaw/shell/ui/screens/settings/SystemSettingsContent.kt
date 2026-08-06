@@ -104,13 +104,15 @@ fun SystemSettingsContent(
     }
     Spacer(Modifier.height(ArcoSpacing.md))
 
-    var powerSaverEnabled by remember { mutableStateOf(false) }
+    // 修复: 原为局部 remember 状态 — 切换即丢且不接任何真实逻辑（假开关）。
+    // 接线到 SettingsViewModel 持久化设置（CONFIG/power_saver），重启恢复；
+    // 偏好同时经 self.config 对 Agent 可见。
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(state.strings.systemBackgroundPowerSaver, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             Text(state.strings.systemBackgroundPowerSaverDesc, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
         }
-        Switch(checked = powerSaverEnabled, onCheckedChange = { powerSaverEnabled = it })
+        Switch(checked = state.powerSaverEnabled, onCheckedChange = { viewModel.togglePowerSaver() })
     }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager

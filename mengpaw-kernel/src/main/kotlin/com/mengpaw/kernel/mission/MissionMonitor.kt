@@ -40,51 +40,67 @@ data class MissionSnapshot(
  * The shell layer wraps this with Compose-observable state for reactive UI.
  */
 object MissionMonitor {
-    val workers = mutableListOf<WorkerMonitor>()
+    // 并发安全: Mission 各 worker 协程并发 updateWorker, UI 线程直读快照 —
+    // workers/listeners 用 CopyOnWriteArrayList 无锁读 (UI 侧 toList 不 CME),
+    // 复合变更 (indexOfFirst+set / verifier 计数) 经 synchronized(this) 串行化
+    val workers = java.util.concurrent.CopyOnWriteArrayList<WorkerMonitor>()
+    @Volatile
     var verifier = VerifierMonitor()
         private set
+    @Volatile
     var missionActive = false
         private set
+    @Volatile
     var missionGoal = ""
         private set
 
-    private val listeners = mutableListOf<MissionListener>()
+    private val listeners = java.util.concurrent.CopyOnWriteArrayList<MissionListener>()
 
     fun addListener(l: MissionListener) { listeners.add(l) }
     fun removeListener(l: MissionListener) { listeners.remove(l) }
 
     private fun emit() {
-        val snapshot = MissionSnapshot(missionActive, missionGoal, workers.toList(), verifier)
+        // 锁内构建一致快照, 锁外回调监听器 — 慢监听器不阻塞其他 worker 的更新
+        val snapshot = synchronized(this) {
+            MissionSnapshot(missionActive, missionGoal, workers.toList(), verifier)
+        }
         listeners.toList().forEach { it(snapshot) }
     }
 
     fun reset() {
-        workers.clear(); verifier = VerifierMonitor()
-        missionActive = false; missionGoal = ""
+        synchronized(this) {
+            workers.clear(); verifier = VerifierMonitor()
+            missionActive = false; missionGoal = ""
+        }
         emit()
     }
 
     fun start(goal: String, workerCount: Int) {
-        reset(); missionActive = true; missionGoal = goal
-        verifier = verifier.copy(totalWorkers = workerCount)
+        synchronized(this) {
+            workers.clear(); verifier = VerifierMonitor()
+            missionActive = true; missionGoal = goal
+            verifier = verifier.copy(totalWorkers = workerCount)
+        }
         emit()
     }
 
     fun updateWorker(id: String, task: String, status: String, progress: Int = 0, output: String = "") {
-        val existing = workers.indexOfFirst { it.id == id }
-        val oldStatus = if (existing >= 0) workers[existing].status else ""
-        val w = WorkerMonitor(id, task, status, progress, output)
-        if (existing >= 0) workers[existing] = w else workers.add(w)
-        // Only count terminal transitions once (avoid double-counting on re-updates)
-        val v = verifier
-        val newVerified = v.verified + (if (status == "verified" && oldStatus != "verified") 1 else 0)
-        val newFailed = v.failed + (if (status == "failed" && oldStatus != "failed") 1 else 0)
-        verifier = v.copy(verified = newVerified, failed = newFailed)
+        synchronized(this) {
+            val existing = workers.indexOfFirst { it.id == id }
+            val oldStatus = if (existing >= 0) workers[existing].status else ""
+            val w = WorkerMonitor(id, task, status, progress, output)
+            if (existing >= 0) workers[existing] = w else workers.add(w)
+            // Only count terminal transitions once (avoid double-counting on re-updates)
+            val v = verifier
+            val newVerified = v.verified + (if (status == "verified" && oldStatus != "verified") 1 else 0)
+            val newFailed = v.failed + (if (status == "failed" && oldStatus != "failed") 1 else 0)
+            verifier = v.copy(verified = newVerified, failed = newFailed)
+        }
         emit()
     }
 
     fun stop() {
-        missionActive = false
+        synchronized(this) { missionActive = false }
         emit()
     }
 }

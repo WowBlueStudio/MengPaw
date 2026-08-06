@@ -403,13 +403,17 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     private val WRITE_BLOCKED_PREFIXES = listOf(
         "/system/", "/vendor/", "/product/", "/odm/",
         "/data/app/", // installed APKs
-        "/data/dalvik-cache/"
+        "/data/dalvik-cache/",
+        // P1 修复: 应用私有数据 (插件 AAR、会话库等) — agent 不可写
+        "/data/data/", "/data/user/"
     )
 
     /** Paths blocked from deletion — extends write blocked with critical agent files. */
     private val RM_BLOCKED_PREFIXES = listOf(
         "/system/", "/vendor/", "/product/", "/odm/",
         "/data/app/", "/data/dalvik-cache/",
+        // P1 修复: 应用私有数据 — agent 不可删
+        "/data/data/", "/data/user/",
         // Core agent files — use dedicated commands (agent.memory.rm, etc.) instead
         // soul.md, profile.md, agents.md are deletable via agent.rm (Agent owns them)
     )

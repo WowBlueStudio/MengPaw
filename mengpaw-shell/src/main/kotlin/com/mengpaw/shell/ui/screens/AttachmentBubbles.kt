@@ -410,13 +410,16 @@ fun VideoAttachmentCard(att: AttachmentData, isUserSide: Boolean) {
 @Composable
 fun VideoPlaybackDialog(path: String, name: String, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
+        // P1 修复: 持有 VideoView 引用, 关闭/销毁时 stopPlayback (内部释放 MediaPlayer)。
+        // 声明在 Dialog 层 (Box 外) — DisposableEffect 同层使用, 作用域一致。
+        val videoView = remember { mutableStateOf<VideoView?>(null) }
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.95f))) {
             AndroidView(
                 factory = { ctx ->
                     VideoView(ctx).apply {
                         setVideoPath(path)
                         setOnPreparedListener { it.isLooping = false; it.start() }
-                    }
+                    }.also { videoView.value = it }
                 },
                 modifier = Modifier.fillMaxSize().clickable(onClick = onDismiss),
                 update = { }
@@ -425,6 +428,13 @@ fun VideoPlaybackDialog(path: String, name: String, onDismiss: () -> Unit) {
                 .background(Color.Black.copy(alpha = 0.4f), CircleShape)
                 .clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Close, "关闭", tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+        }
+        // 对话框离开组合 (关闭/销毁) 时释放 MediaPlayer — 不释放则音频继续响
+        DisposableEffect(Unit) {
+            onDispose {
+                try { videoView.value?.stopPlayback() } catch (_: Exception) { }
+                videoView.value = null
             }
         }
     }

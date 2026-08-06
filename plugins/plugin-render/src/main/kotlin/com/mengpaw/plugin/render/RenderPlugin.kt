@@ -46,7 +46,11 @@ class RenderPlugin : Plugin {
     private val outputDir = File(DataPaths.RENDER_OUTPUTS).also { it.mkdirs() }
     private val jobs = mutableMapOf<String, RenderJob>()
 
-    data class RenderJob(val id: String, val backend: String, val model: String, val status: String, val resultUrl: String = "")
+    /** Replicate 轮询间隔与默认等待上限。 */
+    private val POLL_INTERVAL_MS = 5_000L
+    private val DEFAULT_WAIT_SEC = 120
+
+    data class RenderJob(val id: String, val backend: String, val model: String, val status: String, val resultUrl: String = "", val remoteId: String = "")
 
     // ── render.models ────────────────────────────────────────────
 
@@ -129,8 +133,57 @@ OpenAI DALL-E 模型:
         }
         val json = Json.parseToJsonElement(resp.bodyAsText()).jsonObject
         val predId = json["id"]?.jsonPrimitive?.content ?: return ExecutionResult.fail("Replicate: no prediction ID", errorCode = ErrorCodes.ERR_INTERNAL)
-        jobs[jobId] = RenderJob(jobId, "replicate", model, "processing", "")
-        return ExecutionResult.ok("Job $jobId submitted to Replicate ($model).\nTrack: render.status $jobId\nPrediction: $predId")
+        jobs[jobId] = RenderJob(jobId, "replicate", model, "processing", "", predId)
+
+        // 修复: 此前提交后从不轮询 — job 永远停在 processing, render.generate 核心链路不可用。
+        // 现在提交后原地轮询（wait 参数可调，默认 120s，上限 600s），期间 render.status 也会实时刷新远端。
+        val waitSec = params["wait"]?.toIntOrNull()?.coerceIn(1, 600) ?: DEFAULT_WAIT_SEC
+        val deadline = System.currentTimeMillis() + waitSec * 1000L
+        while (System.currentTimeMillis() < deadline) {
+            if (refreshReplicate(jobId, apiKey)) {
+                val job = jobs[jobId] ?: break
+                return if (job.status == "completed") {
+                    ExecutionResult.ok("Generated! URL: ${job.resultUrl}\nPreview: render.preview $jobId\nDownload with: fs.cp the_url path")
+                } else {
+                    ExecutionResult.fail("Replicate job failed", errorCode = ErrorCodes.ERR_INTERNAL)
+                }
+            }
+            try { Thread.sleep(POLL_INTERVAL_MS) } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return ExecutionResult.fail("轮询被中断", errorCode = ErrorCodes.ERR_INTERNAL)
+            }
+        }
+        return ExecutionResult.ok("Job $jobId 仍在生成（已等待 ${waitSec}s，可加 wait=秒 参数调长）。\n实时状态: render.status $jobId")
+    }
+
+    /**
+     * 单次查询 Replicate 远端状态并写回本地 job。
+     * 返回 true 表示任务已结束（完成/失败）；false 表示仍在处理或瞬时网络错误（下轮重试）。
+     */
+    private suspend fun refreshReplicate(jobId: String, apiKey: String): Boolean {
+        val job = jobs[jobId] ?: return true
+        if (job.remoteId.isEmpty()) return true
+        return try {
+            val resp = client.get("https://api.replicate.com/v1/predictions/${job.remoteId}") {
+                header("Authorization", "Token $apiKey")
+            }
+            if (!resp.status.isSuccess()) return false
+            val j = Json.parseToJsonElement(resp.bodyAsText()).jsonObject
+            when (j["status"]?.jsonPrimitive?.content) {
+                "succeeded" -> {
+                    val url = when (val out = j["output"]) {
+                        is JsonPrimitive -> out.content
+                        is JsonArray -> out.firstOrNull()?.let { (it as? JsonPrimitive)?.content }
+                        else -> null
+                    }
+                    if (url.isNullOrBlank()) { jobs[jobId] = job.copy(status = "failed"); return true }
+                    jobs[jobId] = job.copy(status = "completed", resultUrl = url)
+                    true
+                }
+                "failed", "canceled" -> { jobs[jobId] = job.copy(status = "failed"); true }
+                else -> false // starting/processing — 继续等待
+            }
+        } catch (e: Exception) { false }
     }
 
     private suspend fun submitStability(jobId: String, model: String, prompt: String, params: Map<String, String>): ExecutionResult {
@@ -174,7 +227,13 @@ OpenAI DALL-E 模型:
     private suspend fun status(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.ok(jobs.map { (id, j) -> "$id [${j.backend}] ${j.status}: ${j.model}" }.joinToString("\n").ifEmpty { "(No jobs)" })
         val job = jobs[args[0]] ?: return ExecutionResult.fail("Job not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
-        return ExecutionResult.ok("Job ${job.id}\nBackend: ${job.backend}\nModel: ${job.model}\nStatus: ${job.status}\nResult: ${job.resultUrl.ifEmpty { "(pending)" }}")
+        // 修复: replicate 任务此前查询永远停在 processing — 查询时实时刷新远端状态
+        if (job.backend == "replicate" && job.status == "processing" && job.remoteId.isNotEmpty()) {
+            val apiKey = System.getenv("REPLICATE_API_TOKEN")
+            if (apiKey != null) refreshReplicate(job.id, apiKey)
+        }
+        val cur = jobs[args[0]] ?: job
+        return ExecutionResult.ok("Job ${cur.id}\nBackend: ${cur.backend}\nModel: ${cur.model}\nStatus: ${cur.status}\nResult: ${cur.resultUrl.ifEmpty { "(pending)" }}")
     }
 
     private suspend fun preview(args: List<String>, ctx: ExecutionContext): ExecutionResult {

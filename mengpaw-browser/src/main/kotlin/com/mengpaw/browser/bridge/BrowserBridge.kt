@@ -149,27 +149,41 @@ class BrowserBridge(
 
     /**
      * Wait for an element matching the CSS selector to appear in the DOM.
-     * Polls every 200ms up to the specified timeout (default 5000ms).
+     * Polls every 100ms up to the specified timeout (default 5000ms).
      * Returns JSON: {"ok":true,"found":true} or {"ok":false,"error":"timeout"}
+     *
+     * 修复: 原实现 setTimeout 异步检查后立即返回 '__PENDING__' — evaluateJavascript
+     * 回调拿到的永远是中间态，真实结果永久丢失。改用 Kotlin 侧轮询: 每次调用都是
+     * 同步检查（JS 立即返回），间隔 100ms 重试；轮询间隙页面事件循环正常运转，
+     * 异步渲染的元素（SPA/网络回包后出现的节点）能被观察到。JS 内忙等则会饿死
+     * 页面自身 JS，异步出现的元素永远不会出现，故不采用。
      */
     @JavascriptInterface
     fun waitForSelector(selector: String, timeoutMs: Int = 5000): String {
         val safe = escapeJs(selector)
-        return evalJs("""
+        val total = timeoutMs.coerceIn(0, 30000)
+        val deadline = System.currentTimeMillis() + total
+        while (true) {
+            val r = evalJs("""
 (function(){try{
-  var timeout=$timeoutMs,interval=200,elapsed=0;
-  var sel='$safe';
-  function check(){
-    var el=document.querySelector(sel);
-    if(el)return JSON.stringify({ok:true,found:true,tag:el.tagName,visible:!!(el.offsetParent)});
-    elapsed+=interval;
-    if(elapsed>=timeout)return JSON.stringify({ok:false,error:'timeout: selector not found after '+timeout+'ms: '+sel});
-    setTimeout(check,interval);
-  }
-  setTimeout(check,0);
-  return '__PENDING__';
+  var el=document.querySelector('$safe');
+  if(el)return JSON.stringify({ok:true,found:true,tag:el.tagName,visible:!!(el.offsetParent)});
+  return JSON.stringify({ok:false,error:'not found yet'});
 }catch(e){return JSON.stringify({ok:false,error:e.message});}})()
-        """.trimIndent())
+            """.trimIndent())
+            val obj = try { org.json.JSONObject(r) } catch (_: Exception) { null }
+            if (obj?.optBoolean("found", false) == true) return r
+            val err = obj?.optString("error")
+            // 非"未找到"的错误（选择器非法/求值超时/webview 分离等）→ 如实返回，不再重试
+            if (err != null && err != "not found yet") return r
+            if (System.currentTimeMillis() >= deadline) {
+                return """{"ok":false,"error":"timeout: selector not found after ${total}ms: $safe"}"""
+            }
+            try { Thread.sleep(100) } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return """{"ok":false,"error":"interrupted"}"""
+            }
+        }
     }
 
     /**
@@ -407,13 +421,15 @@ class BrowserBridge(
      * Falls back to full script if __mp not available.
      */
     fun fastClick(selector: String): String {
-        val s = selector.replace("'", "\\'")
+        // 修复: 原实现只转义单引号 — '\' '"' 换行等均可注入。改用 escapeJs 完整转义
+        // （转义后的字符串在单引号 JS 字面量中同样安全，双引号转义无害）。
+        val s = escapeJs(selector)
         return evalJs("window.__mp?window.__mp.c('$s'):(function(){var e=document.querySelector('$s');if(!e)return JSON.stringify({ok:false});e.click();return JSON.stringify({ok:true})})()")
     }
 
     /** Fast-path type. */
     fun fastType(selector: String, text: String): String {
-        val s = selector.replace("'", "\\'"); val t = text.replace("'", "\\'")
+        val s = escapeJs(selector); val t = escapeJs(text)
         return evalJs("window.__mp?window.__mp.t('$s','$t'):(function(){var e=document.querySelector('$s');if(!e)return JSON.stringify({ok:false});e.focus();var d=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;d.call(e,'$t');e.dispatchEvent(new Event('input',{bubbles:true}));return JSON.stringify({ok:true})})()")
     }
 

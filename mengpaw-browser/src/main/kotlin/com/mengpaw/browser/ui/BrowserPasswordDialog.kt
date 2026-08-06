@@ -37,12 +37,18 @@ fun BrowserPasswordDialog(
                     Switch(checked = prefs.savePasswords, onCheckedChange = { prefs.savePasswords = it })
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text("已保存的密码会在登录时自动填充。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-                Text("长按页面中的登录表单可以选择保存凭据。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                // 诚实说明: 本应用不实现密码自动填充/长按保存 — 登录凭据由系统密码管理器负责
+                Text("登录凭据由系统密码管理器负责保存与填充，本应用不存储、不读取密码内容。", style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = {
-                    pwdDb.clearUsernamePassword()
-                    Toast.makeText(ctx, "已清除所有密码", Toast.LENGTH_SHORT).show()
+                    // P0 修复: clearUsernamePassword 在 API 33+ 已从框架移除（类上方法直接消失），
+                    // 调用即抛 NoSuchMethodError（Error 而非 Exception，必崩）— 参考 capturePicture 教训。
+                    if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        Toast.makeText(ctx, "Android 13+ 已移除 WebView 密码库，密码由系统密码管理器管理，无需清除", Toast.LENGTH_LONG).show()
+                    } else {
+                        pwdDb.clearUsernamePassword()
+                        Toast.makeText(ctx, "已清除所有密码", Toast.LENGTH_SHORT).show()
+                    }
                 }, modifier = Modifier.fillMaxWidth()) { Text("清除所有密码") }
             }
         },

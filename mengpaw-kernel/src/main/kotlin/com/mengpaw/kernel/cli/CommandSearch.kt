@@ -28,7 +28,9 @@ data class CommandIndex(
  *   - 子串命中 (非完整词) → +2 分 (模糊兜底)
  */
 object CommandSearch {
-    private val index = mutableListOf<CommandIndex>()
+    // 并发安全: search() 是 Agent 高频热路径 (无锁快照遍历), 注册仅插件安装/卸载时发生 —
+    // CopyOnWriteArrayList 快照迭代, 杜绝 search 与 register 并发 CME
+    private val index = java.util.concurrent.CopyOnWriteArrayList<CommandIndex>()
 
     /** 注册一条命令到索引. 同 fullName 已存在时不覆盖 (保护 BuiltinCommandIndex 精编关键词). */
     @Synchronized

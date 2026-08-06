@@ -7,8 +7,10 @@ package com.mengpaw.kernel.cli
  * Registry that maps command names (e.g. "fs.cat") to their executors.
  */
 class CommandRegistry {
-    private val commands = mutableMapOf<String, suspend (List<String>, ExecutionContext) -> ExecutionResult>()
-    private val namespaces = mutableMapOf<String, MutableMap<String, suspend (List<String>, ExecutionContext) -> ExecutionResult>>()
+    // 并发安全: find() 是 Agent 高频路径, 注册/卸载来自插件生命周期线程 —
+    // 底层 ConcurrentHashMap (computeIfAbsent 原子发布内层 map), 读写并发不挂死
+    private val commands = java.util.concurrent.ConcurrentHashMap<String, suspend (List<String>, ExecutionContext) -> ExecutionResult>()
+    private val namespaces = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, suspend (List<String>, ExecutionContext) -> ExecutionResult>>()
 
     /**
      * Register a command with full path like "fs.cat"
@@ -19,7 +21,7 @@ class CommandRegistry {
         commands[fullName] = executor
         val parts = fullName.split(".", limit = 2)
         if (parts.size == 2) {
-            namespaces.computeIfAbsent(parts[0]) { mutableMapOf() }[parts[1]] = executor
+            namespaces.computeIfAbsent(parts[0]) { java.util.concurrent.ConcurrentHashMap() }[parts[1]] = executor
         }
     }
 
@@ -34,7 +36,8 @@ class CommandRegistry {
     }
 
     /**
-     * Find a command by its full name. Read-only, thread-safe due to Map COW semantics.
+     * Find a command by its full name. Read-only — backed by ConcurrentHashMap,
+     * safe to call from AgentEngine threads while plugins install/uninstall concurrently.
      */
     fun find(fullName: String): (suspend (List<String>, ExecutionContext) -> ExecutionResult)? {
         return commands[fullName]

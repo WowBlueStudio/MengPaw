@@ -153,37 +153,63 @@ object AgentToolsStore {
         }
         val ssrfError = validateUrl(url)
         if (ssrfError != null) return Result.failure(IllegalArgumentException(ssrfError))
+        // 手动跟随重定向: 关闭自动重定向 (instanceFollowRedirects=false), 每跳 Location
+        // 目标重新过 SSRF 校验 — 防自动重定向到内网地址绕过私有 IP 黑名单, 最多 5 跳
+        var currentUrl = url
+        var redirects = 0
         try {
-            val conn = URL(url).openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 30_000
-            conn.readTimeout = 30_000
-            conn.instanceFollowRedirects = true
-            conn.setRequestProperty("User-Agent", "MengPaw/AgentTools")
-            try {
-                if (conn.responseCode !in 200..299) {
-                    return Result.failure(IllegalStateException("HTTP ${conn.responseCode}"))
-                }
-                val bytes = conn.inputStream.use { ins ->
-                    val buffer = java.io.ByteArrayOutputStream()
-                    val buf = ByteArray(8192)
-                    var total = 0
-                    while (true) {
-                        val n = ins.read(buf)
-                        if (n < 0) break
-                        total += n
-                        if (total > MAX_RAW_BYTES) {
-                            return Result.failure(IllegalStateException("响应超过 ${MAX_RAW_BYTES / 1024}KB 上限"))
+            while (true) {
+                val conn = URL(currentUrl).openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 30_000
+                conn.readTimeout = 30_000
+                conn.instanceFollowRedirects = false
+                conn.setRequestProperty("User-Agent", "MengPaw/AgentTools")
+                try {
+                    val code = conn.responseCode
+                    if (code in 300..399) {
+                        redirects++
+                        if (redirects > 5) {
+                            return Result.failure(IllegalStateException("重定向次数过多 (5 次上限)"))
                         }
-                        buffer.write(buf, 0, n)
+                        val location = conn.getHeaderField("Location")
+                            ?: return Result.failure(IllegalStateException("HTTP $code 缺少 Location"))
+                        val next = try {
+                            java.net.URI(currentUrl).resolve(location).toString()
+                        } catch (e: Exception) {
+                            return Result.failure(IllegalStateException("非法重定向目标: $location"))
+                        }
+                        val redirErr = validateUrl(next)
+                        if (redirErr != null) {
+                            return Result.failure(IllegalStateException("重定向目标被拒绝: $redirErr"))
+                        }
+                        currentUrl = next
+                        continue
                     }
-                    buffer.toByteArray()
+                    if (code !in 200..299) {
+                        return Result.failure(IllegalStateException("HTTP $code"))
+                    }
+                    val bytes = conn.inputStream.use { ins ->
+                        val buffer = java.io.ByteArrayOutputStream()
+                        val buf = ByteArray(8192)
+                        var total = 0
+                        while (true) {
+                            val n = ins.read(buf)
+                            if (n < 0) break
+                            total += n
+                            if (total > MAX_RAW_BYTES) {
+                                return Result.failure(IllegalStateException("响应超过 ${MAX_RAW_BYTES / 1024}KB 上限"))
+                            }
+                            buffer.write(buf, 0, n)
+                        }
+                        buffer.toByteArray()
+                    }
+                    val text = String(bytes, Charsets.UTF_8)
+                    if (text.isBlank()) return Result.failure(IllegalStateException("响应为空"))
+                    return Result.success(text)
+                } finally {
+                    conn.disconnect()
                 }
-                val text = String(bytes, Charsets.UTF_8)
-                if (text.isBlank()) return Result.failure(IllegalStateException("响应为空"))
-                return Result.success(text)
-            } finally {
-                conn.disconnect()
             }
         } catch (e: Exception) {
             return Result.failure(IllegalStateException("拉取失败: ${e.message}"))

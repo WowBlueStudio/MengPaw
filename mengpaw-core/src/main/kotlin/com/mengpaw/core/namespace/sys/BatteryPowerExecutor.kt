@@ -54,19 +54,56 @@ internal object BatteryPowerExecutor {
         })
     }
 
+    /**
+     * 切换省电模式。
+     * 用法: sys.power.save [true|false]（省略参数视为开启）
+     *
+     * 修复: 原实现解析 enable 后完全不用 — 无论开还是关都只打开设置页并返回成功，
+     * 语义与声明不符。Android 无公共 API 直接切换省电模式，故采用两级策略:
+     * - 无 WRITE_SETTINGS 权限: 打开系统省电设置页引导手动切换，如实报告当前状态。
+     * - 有 WRITE_SETTINGS: 写入全局设置 low_power（社区通行方案），写后回读
+     *   isPowerSaveMode 验证；OEM 不生效时如实告知并引导手动切换。
+     */
     suspend fun powerSave(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val app = SysExecutor.appContext ?: return ExecutionResult.fail("SysExecutor not initialized")
         val enable = args.firstOrNull()?.lowercase() != "false" && args.firstOrNull()?.lowercase() != "off"
+        val pm = app.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val current = pm.isPowerSaveMode
+
         if (!app.checkSelf(android.Manifest.permission.WRITE_SETTINGS)) {
             val intent = Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             app.startActivity(intent)
-            return ExecutionResult.ok("Opened battery saver settings. Toggle manually or grant WRITE_SETTINGS permission.")
+            return ExecutionResult.ok(buildString {
+                appendLine("省电模式当前状态: ${if (current) "开启" else "关闭"}")
+                appendLine("目标: ${if (enable) "开启" else "关闭"} — Android 无公共 API 直接切换，需 WRITE_SETTINGS 权限")
+                appendLine("已打开系统省电设置页，请手动${if (enable) "开启" else "关闭"}。")
+                appendLine("申请权限: sys.permission.request WRITE_SETTINGS")
+            })
         }
-        val pm = app.getSystemService(Context.POWER_SERVICE) as PowerManager
-        val intent = Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        app.startActivity(intent)
-        return ExecutionResult.ok("Opened battery saver settings (direct toggle requires system app).")
+
+        return try {
+            Settings.Global.putInt(app.contentResolver, "low_power", if (enable) 1 else 0)
+            // 等待 PowerManagerService 消费设置变更后再回读验证
+            kotlinx.coroutines.delay(300)
+            val actual = pm.isPowerSaveMode
+            if (actual == enable) {
+                ExecutionResult.ok("省电模式已${if (enable) "开启" else "关闭"}（验证通过）")
+            } else {
+                val intent = Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                app.startActivity(intent)
+                ExecutionResult.ok(buildString {
+                    appendLine("已写入设置但系统未生效（部分 OEM 设备不支持应用直接切换）")
+                    appendLine("当前状态: ${if (pm.isPowerSaveMode) "开启" else "关闭"}")
+                    appendLine("已打开系统省电设置页，请手动${if (enable) "开启" else "关闭"}。")
+                })
+            }
+        } catch (e: Exception) {
+            val intent = Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            app.startActivity(intent)
+            ExecutionResult.fail("省电模式切换失败: ${e.message}。已打开系统省电设置页，请手动切换。", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
     }
 }

@@ -29,8 +29,9 @@ class VoiceRecorder {
         val dir = File(DataPaths.RECORDINGS)
         dir.mkdirs()
         val file = File(dir, "voice_${System.currentTimeMillis()}.m4a")
+        var r: MediaRecorder? = null
         return try {
-            val r = MediaRecorder().apply {
+            r = MediaRecorder().apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
@@ -45,6 +46,8 @@ class VoiceRecorder {
             startTime = System.currentTimeMillis()
             true
         } catch (_: Exception) {
+            // P1 修复: 失败路径也要 release, 防止 MediaRecorder 资源泄漏 (录音多次后资源耗尽)
+            try { r?.release() } catch (_: Exception) { }
             try { file.delete() } catch (_: Exception) { }
             false
         }

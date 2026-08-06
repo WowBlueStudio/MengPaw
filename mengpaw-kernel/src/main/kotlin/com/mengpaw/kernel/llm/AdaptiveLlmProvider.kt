@@ -133,6 +133,7 @@ class AdaptiveLlmProvider(
                 if (provider !== this) this.lastUsage = provider.lastUsage
                 return result
             } catch (e: Exception) {
+                if (e is CancellationException) throw e  // 取消契约: 用户 stop() 不得被包装成"已重试 6 次"假错误
                 lastError = e
                 // Continue to next provider in the chain
             }
@@ -176,6 +177,7 @@ class AdaptiveLlmProvider(
                     provider.completeWithMessages(messages)
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e  // 取消契约: 用户 stop() 不进入重试退避
                 // Permanent errors — fail immediately, don't retry (ref: QwenPaw retry_chat_model.py)
                 if (e is LlmApiException && e.httpStatus in NON_RETRYABLE_STATUSES) throw e
                 // Report 429 for coordinated pause across all concurrent callers

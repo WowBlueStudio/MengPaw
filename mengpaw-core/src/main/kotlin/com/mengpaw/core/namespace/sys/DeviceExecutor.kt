@@ -59,9 +59,11 @@ internal object DeviceExecutor {
             PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
             "mengpaw:screen_on"
         )
+        // 修复: 原代码 acquire(3000) 后立即 release — 亮屏实际仅持续约 0 秒却宣称 3 秒。
+        // 正确用法: 不手动释放，由 3s 超时自动释放（PowerManagerService 持有引用），
+        // 屏幕保持点亮整整 3 秒。
         wl.acquire(3000)
-        wl.release()
-        return ExecutionResult.ok("Screen turned on (wake lock released after 3s)")
+        return ExecutionResult.ok("Screen turned on (wake lock auto-releases after 3s)")
     }
 
     suspend fun screenOff(args: List<String>, ec: ExecutionContext): ExecutionResult {

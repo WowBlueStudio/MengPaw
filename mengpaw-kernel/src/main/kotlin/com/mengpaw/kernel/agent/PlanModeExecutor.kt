@@ -9,6 +9,8 @@ import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.error.ErrorType
 import com.mengpaw.kernel.security.Sanitizer
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /**
  * Plan-mode executor: structured plan generation and step-by-step execution.
@@ -51,12 +53,15 @@ class PlanModeExecutor(
 
         val results = mutableListOf<String>()
         for (step in plan.steps) {
+            currentCoroutineContext().ensureActive()  // 取消契约: stop() 后立即中断剩余步骤
             step.status = PlanStepStatus.RUNNING
             agentEngine.updateAgentState(AgentState.Running("[Step ${step.index + 1}/${plan.totalSteps}] ${step.description}", step.index + 1, plan.totalSteps))
             try {
                 val stepResult = executePlanStep(step, maxStepsPerPlanStep, llmProvider, onDelta)
                 results.add("[OK] Step ${step.index + 1}: ${stepResult}")
                 step.status = PlanStepStatus.COMPLETED
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e  // 取消契约: 用户 stop() 不吞成步骤失败 (同 MissionModeExecutor 先例)
             } catch (e: Exception) {
                 ErrorCollector.report(ErrorType.AGENT_CRASH, "PlanModeExecutor",
                     "Step ${step.index + 1}: ${step.description}", throwable = e, agentName = agentEngine.agentName)

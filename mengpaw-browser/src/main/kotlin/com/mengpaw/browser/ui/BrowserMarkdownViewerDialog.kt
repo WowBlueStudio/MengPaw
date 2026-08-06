@@ -89,7 +89,11 @@ fun BrowserMarkdownViewerDialog(
                                     loadHtml(wv, h)
                                 }
                             },
-                            onRelease = { it.destroy() },  // 防 WebView 泄漏
+                            // P1 修复: destroy 前先从父容器移除, 防止 attached 状态销毁崩溃
+                            onRelease = { wv ->
+                                try { (wv.parent as? android.view.ViewGroup)?.removeView(wv) } catch (_: Exception) { }
+                                try { wv.destroy() } catch (_: Exception) { }
+                            },
                             modifier = Modifier.fillMaxSize()
                         )
                     }

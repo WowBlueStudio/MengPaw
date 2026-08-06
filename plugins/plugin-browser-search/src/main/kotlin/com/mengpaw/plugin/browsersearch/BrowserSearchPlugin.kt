@@ -63,7 +63,9 @@ class BrowserSearchPlugin : Plugin {
     private val client = HttpClient(OkHttp) {
         engine {
             config {
-                followRedirects(true)
+                // SECURITY: 关闭自动重定向 — 跟随前必须手动复查 Location 目标 (SSRF 防绕过:
+                // 重定向到内网/回环地址可绕过私有 IP 黑名单)
+                followRedirects(false)
             }
         }
         install(HttpTimeout) {
@@ -241,7 +243,27 @@ class BrowserSearchPlugin : Plugin {
             if (err != null) return null to err
             return try {
                 withContext(Dispatchers.IO) {
-                    client.get(source) { header("User-Agent", "Mozilla/5.0 (Linux; Android 13; MengPaw-Browser/0.20)") }.bodyAsText()
+                    // 手动跟随重定向: 每跳 Location 目标重新过 SSRF 校验, 最多 5 跳
+                    var url = source
+                    var redirects = 0
+                    var body = ""
+                    while (true) {
+                        val resp = client.get(url) { header("User-Agent", "Mozilla/5.0 (Linux; Android 13; MengPaw-Browser/0.20)") }
+                        if (resp.status.value in 300..399) {
+                            redirects++
+                            if (redirects > 5) throw IllegalStateException("重定向次数过多 (5 次上限)")
+                            val loc = resp.headers["Location"] ?: throw IllegalStateException("重定向响应缺少 Location")
+                            val next = try { java.net.URI(url).resolve(loc).toString() } catch (e: Exception) {
+                                throw IllegalStateException("非法重定向目标: $loc") }
+                            val redirErr = validateUrl(next)
+                            if (redirErr != null) throw IllegalStateException("重定向目标被拒绝: $redirErr")
+                            url = next
+                            continue
+                        }
+                        body = resp.bodyAsText()
+                        break
+                    }
+                    body
                 } to null
             } catch (e: Exception) {
                 ErrorCollector.report(e, "BrowserSearch.loadSource")

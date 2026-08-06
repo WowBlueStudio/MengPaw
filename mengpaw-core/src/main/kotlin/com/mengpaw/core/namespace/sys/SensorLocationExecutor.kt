@@ -69,13 +69,13 @@ internal object SensorLocationExecutor {
 
     suspend fun sensors(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val app = SysExecutor.appContext ?: return ExecutionResult.fail("SysExecutor not initialized")
-        return try {
-            val sm = app.getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager
-            val list = sm.getSensorList(android.hardware.Sensor.TYPE_ALL)
-            ExecutionResult.ok("Sensors (${list.size}):\n" + list.joinToString("\n") { "  ${it.name} — ${it.vendor}" })
-        } catch (e: Exception) {
-            ExecutionResult.ok("Sensors: Accelerometer, Gyroscope, Magnetometer, Proximity, Light, Pressure")
-        }
+        // 修复: 原实现失败时返回伪造的固定传感器列表（声称存在实际没有）。
+        // 改为真实枚举 SensorManager；服务不可用或失败时如实报错，不让 Agent 误信。
+        val sm = app.getSystemService(Context.SENSOR_SERVICE) as? android.hardware.SensorManager
+            ?: return ExecutionResult.fail("传感器服务不可用（设备无 SENSOR_SERVICE）", errorCode = ErrorCodes.ERR_INTERNAL)
+        val list = sm.getSensorList(android.hardware.Sensor.TYPE_ALL)
+        if (list.isEmpty()) return ExecutionResult.ok("(本机未发现任何传感器)")
+        return ExecutionResult.ok("Sensors (${list.size}):\n" + list.joinToString("\n") { "  ${it.name} — ${it.vendor}" })
     }
 
     suspend fun telephony(args: List<String>, ec: ExecutionContext): ExecutionResult {

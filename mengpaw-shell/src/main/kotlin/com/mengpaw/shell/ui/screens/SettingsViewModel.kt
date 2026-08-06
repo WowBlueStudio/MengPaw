@@ -147,6 +147,8 @@ data class SettingsState(
     val backgroundMode: BackgroundMode = BackgroundMode.NOTIFICATION,
     /** 自动翻译(美系模型) — opt-in, 默认关闭, 用户主动开启才加载 Google 翻译. */
     val autoTranslate: Boolean = false,
+    /** 后台省电偏好 — 持久化到 CONFIG/power_saver。目前为偏好记录（Agent 可经 self.config 读取），暂无主动节流实现。 */
+    val powerSaverEnabled: Boolean = false,
     val useChinese: Boolean = true,
     val agentLanguageMode: AgentLanguageMode = AgentLanguageMode.FOLLOW_UI,
     val loopMode: LoopMode = LoopMode.REACT,
@@ -185,6 +187,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         try {
             val f = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "auto_translate")
             if (f.exists()) _state.value = _state.value.copy(autoTranslate = f.readText().trim() == "true")
+        } catch (_: Exception) {}
+        // 省电偏好恢复 — 此前为 UI 局部 state，切换即丢且重启必回 false
+        try {
+            val f = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "power_saver")
+            if (f.exists()) _state.value = _state.value.copy(powerSaverEnabled = f.readText().trim() == "true")
         } catch (_: Exception) {}
         // P0 fix: 主题/语言持久化恢复 — 此前 cycleThemeMode/toggleLanguage 只改内存,
         // 重启必回 LIGHT+中文默认
@@ -475,6 +482,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _state.value = _state.value.copy(autoTranslate = next)
         try {
             val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "auto_translate")
+            file.parentFile?.mkdirs()
+            file.writeText(next.toString())
+        } catch (_: Exception) {}
+    }
+
+    /** 后台省电开关 — 修复: 此前仅 UI 局部 remember 状态，切换不持久化且不接任何逻辑。现持久化到 CONFIG/power_saver。 */
+    fun togglePowerSaver() {
+        val next = !_state.value.powerSaverEnabled
+        _state.value = _state.value.copy(powerSaverEnabled = next)
+        try {
+            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "power_saver")
             file.parentFile?.mkdirs()
             file.writeText(next.toString())
         } catch (_: Exception) {}

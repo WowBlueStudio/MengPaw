@@ -958,6 +958,26 @@ Shell ↔ 浏览器进程的 127.0.0.1:9880 HTTP 桥 (`McpHttpServer`/`BrowserMc
 - `/health` 免认证 (仅在线状态, 无敏感信息)
 - 另: **JavaBridge 移除 (P0)**: `addJavascriptInterface("MengPaw")` 已删除 — 网页 JS 从未引用, Agent 控制全走 Kotlin 直接调用; 任意网页原本可截屏填盘/调协程 API/泄露内部路径
 
+### 6.9 P1 加固 (v0.32.1+, 九维审查)
+
+**内置浏览器命令合流 (BuiltinBrowserPlugin 复活)**: 44 条 `browser.*` 命令此前零实例化全部不可达 (Agent 只有 6 个 MCP 工具)。现 `BrowserActivity` 经 `BrowserStateBridge` (Compose tab 状态桥) 实例化插件, 9880 桥 `runMcpTool` 双路径分流: 内置命令后台线程 runBlocking 执行 (顺带修复原 runOnUiThread 主线程 latch 死锁 — evalJs 的 post 永远排不上 → 每次 2s 超时), 原生 6 工具保持主线程 (View.draw 需主线程)。`BrowserMcpPlugin.getTools()` 追加 9 条工具 (tabs/tab/nav/content/screenshot.full/coord.click/wait.selector/cookies/storage)。命令键直接作 MCP 工具名, `browser.mcp.invoke <命令>` 调用。
+
+**取消传播契约扩展**: AdaptiveLlmProvider/RemoteApi/PlanModeExecutor/Pipeline 全部 catch 前置 `CancellationException rethrow` — stop() 不再报"已重试 6 次"假错误; RemoteApi 非流式补 HTTP 状态检查 (401/500 错误体不再进对话)。
+
+**并发无锁加固**: CommandSearch/TriggerEngine/MissionMonitor → CopyOnWriteArrayList; CommandRegistry → 双层 ConcurrentHashMap (注释同步修正); AcpServer peers/handlers 并发化; MissionMonitor 复合变更 synchronized + verifier 计数锁内, emit 锁内快照锁外回调。
+
+**路径消毒扩展**: AgentExecutor 保护名单补 `/data/data/` `/data/user/`; DataPaths 记忆文件复用 safeAgentDir; ScreenshotManager sessionId 消毒; NewAgentDialog 文件夹名对齐 safeAgentDir; SkillPlugin 7 命令 canonicalPath 前缀校验。
+
+**RootShell 安全 (plugin-root)**: ① stdout/stderr 双线程并行读防管道死锁; ② rm 黑名单规范化 — tokenize+normalizePath, `rm -r -f /`/引号包裹/路径拼接变体全拦截, 前缀对齐 AgentExecutor 名单; ③ shellQuote 单引号注入免疫 — RootPlugin 15 处参数拼接点全部套转义。
+
+**SSRF 手动跟随**: BrowserSearchPlugin/AgentToolsStore 关自动重定向, 每跳 Location 重过 validateUrl (scheme 白名单 + 私有 IP 黑名单), 5 跳上限; NetPlugin 已 followRedirects(false) 无需改。
+
+**资源泄漏**: ScreenCaptureExecutor 相机全链路 release (二次拍照不再失败); VoiceRecorder 失败路径补 release; VideoPlaybackDialog onDispose stopPlayback; McpClient.callStdio redirectErrorStream + 30s 超时 + finally destroy; UpdatePlugin APK 流式下载 (64KB 缓冲 + 512MB 上限) 替代 readBytes。
+
+**假功能诚实化**: self.config 真实读写 CONFIG 目录; BatteryPowerExecutor 无权限如实报告+引导 (有权限写 low_power + 回读验证); NotificationExecutor id 统一 1002; DeviceExecutor 亮屏真实 3 秒; SensorLocationExecutor 真实枚举传感器; powerSaverEnabled 持久化接线; BrowserPasswordDialog API 33+ 不再调已移除方法 + 删除虚假声明; RenderPlugin 补 Replicate 异步轮询 (5s 间隔); waitForSelector 改 Kotlin 侧 100ms 轮询 (JS 忙等会饿死页面自身 JS); fastClick/fastType 复用 escapeJs 完整转义。
+
+**发现性修复**: PluginExecutor 下载路径统一 PLUGIN_CACHE (verify 不再误报缺失); PluginManager coreVersion 默认值接 MengPawVersion.FRAMEWORK (门禁恢复生效); DevPlugin metadata.commands 补全; SysExecutor 文档对齐 51; AgentProfile 版本去硬编码; mark-corrected 双组关键词合并; WebViewFactory 错误页 escapeHtml; TRIM_MEMORY 不再销毁 Compose 树内 WebView + 全部 destroy 点先 removeView。
+
 ---
 
 ## 7. 插件开发

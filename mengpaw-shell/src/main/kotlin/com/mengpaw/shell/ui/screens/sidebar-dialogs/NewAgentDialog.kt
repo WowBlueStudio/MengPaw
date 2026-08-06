@@ -19,6 +19,15 @@ import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.shell.ui.localization.AppStrings
 
+/**
+ * P1 修复: 工作区文件夹名消毒 — 替换路径分隔符, 拒绝穿越段。
+ * 规则对齐 DataPaths.safeAgentDir ([/\\] → _), 中文等非分隔符字符保留。
+ */
+private fun sanitizeFolderName(raw: String): String {
+    val cleaned = raw.replace(Regex("[/\\\\]"), "_").trim()
+    return if (cleaned.isBlank() || cleaned == "." || cleaned == "..") "agent" else cleaned
+}
+
 @Composable
 fun NewAgentDialog(
     strings: AppStrings,
@@ -49,7 +58,8 @@ fun NewAgentDialog(
         },
         confirmButton = {
             Button(
-                onClick = { if (name.isNotBlank()) onConfirm(NewAgentForm(name = name.trim(), workspaceFolder = workspaceFolder.ifBlank { name }.trim(), intro = intro.trim())) },
+                // P1 修复: workspaceFolder 可能含路径分隔符/穿越段 — 保存前消毒
+                onClick = { if (name.isNotBlank()) onConfirm(NewAgentForm(name = name.trim(), workspaceFolder = sanitizeFolderName(workspaceFolder.ifBlank { name }), intro = intro.trim())) },
                 enabled = name.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
                 shape = RoundedCornerShape(ArcoRadius.md)
             ) { Text(strings.newAgentCreate, color = Color.White) }

@@ -7,6 +7,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
 
 /**
@@ -39,6 +40,11 @@ class RemoteApi(
             header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             setBody(requestBody)
         }
+        // HTTP error check — 401/500 等错误体 JSON 不得直接当回答进对话 (与下方流式路径一致)
+        if (!response.status.isSuccess()) {
+            val errorBody = try { response.bodyAsText() } catch (_: Exception) { "unknown" }
+            throw LlmApiException(response.status.value, "HTTP ${response.status.value}: ${errorBody.take(200)}")
+        }
         return parseResponse(response.bodyAsText())
     }
 
@@ -48,6 +54,11 @@ class RemoteApi(
             header(HttpHeaders.Authorization, "Bearer $apiKey")
             header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             setBody(requestBody)
+        }
+        // HTTP error check — 同上: 错误体不得冒充成功回答
+        if (!response.status.isSuccess()) {
+            val errorBody = try { response.bodyAsText() } catch (_: Exception) { "unknown" }
+            throw LlmApiException(response.status.value, "HTTP ${response.status.value}: ${errorBody.take(200)}")
         }
         return parseResponse(response.bodyAsText())
     }
@@ -89,6 +100,8 @@ class RemoteApi(
         while (!channel.isClosedForRead) {
             val line = try {
                 channel.readUTF8Line()?.trim()
+            } catch (e: CancellationException) {
+                throw e  // 取消契约: 用户 stop() 不得把半截响应当完整回答返回
             } catch (_: Exception) { break }
 
             if (line == null) break

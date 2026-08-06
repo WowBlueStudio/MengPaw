@@ -113,6 +113,8 @@ class Pipeline(
             Pipeline.addAuditEntry(entry)
             return result
 
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e  // 取消契约: 用户 stop() 不吞成 "Execution error" (同 AgentEngine.kt:804 先例)
         } catch (e: Exception) {
             ErrorCollector.report(e, "Pipeline.execute", context.sessionId, context.agentName)
             return failAudit(
@@ -149,11 +151,12 @@ class Pipeline(
     // ── Audit Trail ──────────────────────────────────────────────────
 
     /** Get recent audit entries (last N). */
-    fun getAuditLog(count: Int = 50): List<AuditEntry> = auditLog.takeLast(count)
+    fun getAuditLog(count: Int = 50): List<AuditEntry> =
+        synchronized(pipelineLock) { auditLog.takeLast(count) }
 
     /** Get audit entries for a specific session. */
     fun getSessionAudit(sessionId: String): List<AuditEntry> =
-        auditLog.filter { it.sessionId == sessionId }
+        synchronized(pipelineLock) { auditLog.filter { it.sessionId == sessionId } }
 
     /**
      * Clear the audit log. Only callable internally (e.g. from agent.audit command)

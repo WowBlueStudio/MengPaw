@@ -59,16 +59,54 @@ object SelfExecutor {
         )
     }
 
+    /**
+     * 读取/写入 Agent 配置 — 真实持久化到配置目录 (DataPaths.CONFIG)。
+     * 用法:
+     *   self.config                → 列出全部配置文件
+     *   self.config <key>          → 读取指定键
+     *   self.config <key> <value>  → 写入键值（持久化到 配置/<key>）
+     *
+     * 修复: 原实现返回硬编码假配置且写入即丢 — Agent 误信配置已修改（还可能被缓存）。
+     * 现改为读写真实配置文件，与 SettingsViewModel (theme_mode/background_mode 等) 同一存储。
+     */
     private suspend fun config(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val configDir = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG)
         if (args.isEmpty()) {
-            return ExecutionResult.ok(
-                "maxSteps = 50\n" +
-                "timeoutMs = 300000\n" +
-                "screenshotEnabled = true\n" +
-                "browserPoolSize = 4"
-            )
+            val files = configDir.listFiles()?.filter { it.isFile }?.sortedBy { it.name } ?: emptyList()
+            if (files.isEmpty()) {
+                return ExecutionResult.ok("(无配置文件)\n\n用法: self.config <key> <value> 创建配置项")
+            }
+            return ExecutionResult.ok(buildString {
+                appendLine("配置文件目录: ${configDir.absolutePath}")
+                files.forEach { f ->
+                    val value = f.readText().trim().replace("\n", "\\n")
+                    appendLine("${f.name} = $value")
+                }
+                appendLine("\n用法: self.config <key> [<value>] — 读/写配置项")
+            })
         }
-        return ExecutionResult.ok("Config: ${args.joinToString(" ")}")
+        val key = args[0]
+        // 路径安全校验 — 仅允许单段文件名，防目录穿越
+        if (key.isBlank() || key.length > 64 || key.contains("/") || key.contains("\\") ||
+            key == "." || key == ".." || key.startsWith(".")) {
+            return ExecutionResult.fail("非法配置键: '$key'（仅允许普通文件名）", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        }
+        if (args.size == 1) {
+            val f = java.io.File(configDir, key)
+            if (!f.exists()) {
+                return ExecutionResult.fail("配置不存在: $key（写入: self.config $key <value>）", errorCode = ErrorCodes.ERR_NOT_FOUND)
+            }
+            return ExecutionResult.ok("$key = ${f.readText().trim()}")
+        }
+        val value = args.drop(1).joinToString(" ")
+        return try {
+            configDir.mkdirs()
+            java.io.File(configDir, key).writeText(value)
+            ExecutionResult.ok("已写入配置 $key = $value（持久化于 ${configDir.absolutePath}/$key）")
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "SelfExecutor.config")
+            ExecutionResult.fail("写入失败: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
     }
 
     private suspend fun stats(args: List<String>, ctx: ExecutionContext): ExecutionResult {

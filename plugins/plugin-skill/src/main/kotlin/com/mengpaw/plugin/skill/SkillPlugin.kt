@@ -162,8 +162,9 @@ class SkillPlugin : Plugin {
             "Usage: skill.run <name> [key=value ...]", errorCode = ErrorCodes.ERR_INVALID_INPUT
         )
         val name = args[0]
-        var skill = parseSkill(File(localDir(ctx.agentName ?: ""), "$name.md"))
-        if (skill == null) skill = parseSkill(File(globalDir, "$name.md"))
+        // P1 修复: 路径消毒 — 拒绝越过技能根目录的名称
+        var skill = skillFile(localDir(ctx.agentName ?: ""), name)?.let { parseSkill(it) }
+        if (skill == null) skill = skillFile(globalDir, name)?.let { parseSkill(it) }
         if (skill == null) return ExecutionResult.fail(
             "Skill not found: $name\n本地和全局池均未找到。使用 skill.ls 查看全局池。", errorCode = ErrorCodes.ERR_NOT_FOUND
         )
@@ -195,8 +196,9 @@ class SkillPlugin : Plugin {
 
     private suspend fun info(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.info <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        var skill = parseSkill(File(localDir(ctx.agentName ?: ""), "${args[0]}.md"))
-        if (skill == null) skill = parseSkill(File(globalDir, "${args[0]}.md"))
+        // P1 修复: 路径消毒 — 拒绝越过技能根目录的名称
+        var skill = skillFile(localDir(ctx.agentName ?: ""), args[0])?.let { parseSkill(it) }
+        if (skill == null) skill = skillFile(globalDir, args[0])?.let { parseSkill(it) }
         if (skill == null) return ExecutionResult.fail("Skill not found: ${args[0]}", errorCode = ErrorCodes.ERR_NOT_FOUND)
         val placeholders = Regex("\\{\\{(.+?)}}").findAll(skill.content).map { it.groupValues[1] }.toList()
         return ExecutionResult.ok(buildString {
@@ -254,7 +256,9 @@ class SkillPlugin : Plugin {
     private suspend fun rm(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.rm <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val name = args[0]
-        val file = File(localDir(ctx.agentName ?: ""), "$name.md")
+        // P1 修复: 路径消毒 — 拒绝越过技能根目录的名称
+        val file = skillFile(localDir(ctx.agentName ?: ""), name)
+            ?: return ExecutionResult.fail("非法技能名: $name (不能包含路径分隔符或穿越段)", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         if (!file.exists()) return ExecutionResult.fail("本地未找到 Skill: $name\n使用 skill.ls --local 查看本地技能。", errorCode = ErrorCodes.ERR_NOT_FOUND)
         return try { file.delete(); ExecutionResult.ok("Skill '$name' 已从本地删除。") }
         catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.rm"); ExecutionResult.fail("删除失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
@@ -263,7 +267,9 @@ class SkillPlugin : Plugin {
     private suspend fun pull(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.pull <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val name = args[0]
-        val source = File(globalDir, "$name.md")
+        // P1 修复: 路径消毒 — 拒绝越过技能根目录的名称
+        val source = skillFile(globalDir, name)
+            ?: return ExecutionResult.fail("非法技能名: $name (不能包含路径分隔符或穿越段)", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         if (!source.exists()) return ExecutionResult.fail("全局池中未找到 Skill: $name\n使用 skill.ls 查看全局可用技能。", errorCode = ErrorCodes.ERR_NOT_FOUND)
         val targetDir = localDir(ctx.agentName ?: ""); val target = File(targetDir, "$name.md")
         if (target.exists()) return ExecutionResult.ok("Skill '$name' 已在本地。使用 skill.run $name 执行。")
@@ -274,7 +280,9 @@ class SkillPlugin : Plugin {
     private suspend fun push(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.push <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val name = args[0]
-        val source = File(localDir(ctx.agentName ?: ""), "$name.md")
+        // P1 修复: 路径消毒 — 拒绝越过技能根目录的名称
+        val source = skillFile(localDir(ctx.agentName ?: ""), name)
+            ?: return ExecutionResult.fail("非法技能名: $name (不能包含路径分隔符或穿越段)", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         if (!source.exists()) return ExecutionResult.fail("本地未找到 Skill: $name\n使用 skill.ls --local 查看本地技能。", errorCode = ErrorCodes.ERR_NOT_FOUND)
         val target = File(globalDir, "$name.md"); val exists = target.exists()
         return try { source.copyTo(target, overwrite = true); val msg = if (exists) "已覆盖" else "已上传"; ExecutionResult.ok("Skill '$name' $msg 到全局池。\n现在所有 Agent 都可通过 skill.run $name 使用。") }
@@ -301,13 +309,28 @@ class SkillPlugin : Plugin {
     }
 
     fun setEnabled(name: String, enabled: Boolean): Boolean {
-        val global = File(globalDir, "$name.md")
+        // P1 修复: 路径消毒 — 拒绝越过技能根目录的名称
+        val global = skillFile(globalDir, name) ?: return false
         if (global.exists()) {
             val text = try { global.readText() } catch (_: Exception) { return false }
             val newContent = text.replace(Regex("(?m)^enabled:\\s*(true|false)"), "enabled: $enabled")
             return try { global.writeText(newContent); true } catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.setEnabled"); false }
         }
         return false
+    }
+
+    /**
+     * P1 修复: 技能名 → 技能文件路径解析消毒。
+     * canonicalPath 前缀校验 — 拒绝含 `..` 段/绝对路径越过技能根目录的路径,
+     * 防止 agent 通过 skill.run/rm 等读删工作区外文件。
+     */
+    private fun skillFile(dir: File, name: String): File? {
+        val file = File(dir, "$name.md")
+        return try {
+            val root = dir.canonicalPath
+            val target = file.canonicalPath
+            if (target.startsWith("$root${File.separator}")) file else null
+        } catch (_: Exception) { null }
     }
 
     private fun parseSkill(file: File): SkillDef? {

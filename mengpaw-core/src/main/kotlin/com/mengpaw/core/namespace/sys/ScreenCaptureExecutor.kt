@@ -135,12 +135,28 @@ internal object ScreenCaptureExecutor {
             val latch = CountDownLatch(1)
             var captureError: String? = null
             var capturedPath: String? = null
+            // P1 修复: 持有相机资源引用, 结束后统一释放 — 不释放会导致摄像头占用, 二次拍照必败
+            var openedDevice: CameraDevice? = null
+            var imageReader: ImageReader? = null
+            var captureSession: CameraCaptureSession? = null
+
+            // 统一释放相机资源 (设备/ImageReader/会话), 标志置空防重复 close
+            fun releaseCamera() {
+                try { captureSession?.close() } catch (_: Exception) { }
+                captureSession = null
+                try { imageReader?.close() } catch (_: Exception) { }
+                imageReader = null
+                try { openedDevice?.close() } catch (_: Exception) { }
+                openedDevice = null
+            }
 
             val handler = Handler(Looper.getMainLooper())
             cm.openCamera(cameraId, object : CameraDevice.StateCallback() {
                 override fun onOpened(device: CameraDevice) {
+                    openedDevice = device
                     try {
                         val reader = ImageReader.newInstance(1920, 1080, android.graphics.ImageFormat.JPEG, 1)
+                        imageReader = reader
                         reader.setOnImageAvailableListener({ r ->
                             val image = r.acquireLatestImage()
                             if (image != null) {
@@ -161,6 +177,7 @@ internal object ScreenCaptureExecutor {
                         device.createCaptureSession(surfaces,
                             object : CameraCaptureSession.StateCallback() {
                                 override fun onConfigured(session: CameraCaptureSession) {
+                                    captureSession = session
                                     val req = device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
                                     req.addTarget(reader.surface)
                                     session.capture(req.build(), null, null)
@@ -175,11 +192,22 @@ internal object ScreenCaptureExecutor {
                         latch.countDown()
                     }
                 }
-                override fun onDisconnected(d: CameraDevice) { d.close(); latch.countDown() }
-                override fun onError(d: CameraDevice, e: Int) { d.close(); captureError = "Camera error: $e"; latch.countDown() }
+                override fun onDisconnected(d: CameraDevice) {
+                    openedDevice = null
+                    try { d.close() } catch (_: Exception) { }
+                    latch.countDown()
+                }
+                override fun onError(d: CameraDevice, e: Int) {
+                    openedDevice = null
+                    try { d.close() } catch (_: Exception) { }
+                    captureError = "Camera error: $e"
+                    latch.countDown()
+                }
             }, handler)
 
             latch.await(10, TimeUnit.SECONDS)
+            // 无论成败都释放相机资源 (含超时/异常路径)
+            releaseCamera()
 
             if (capturedPath != null) {
                 val size = File(outputPath).length()

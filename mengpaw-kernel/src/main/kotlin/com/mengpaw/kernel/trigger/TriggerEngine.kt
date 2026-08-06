@@ -38,7 +38,9 @@ import java.util.Random
  * and reloaded in [load]. Call load() once at app startup.
  */
 object TriggerEngine {
-    private val triggers = mutableListOf<Trigger>()
+    // 并发安全: 轮询协程 (start) 与系统唤醒 (onSystemWake)/UI 增删可并发 —
+    // CopyOnWriteArrayList 快照迭代, 杜绝 filter/replaceAll 与 add 并发 CME
+    private val triggers = java.util.concurrent.CopyOnWriteArrayList<Trigger>()
     private val random = Random()
     private var pollJob: Job? = null
     private var scope: CoroutineScope? = null

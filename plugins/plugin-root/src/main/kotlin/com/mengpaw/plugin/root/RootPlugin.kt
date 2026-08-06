@@ -170,25 +170,26 @@ class RootPlugin : Plugin {
 
     private suspend fun appsFreeze(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val pkg = args.firstOrNull() ?: return ExecutionResult.fail("用法: root.apps.freeze <包名>")
-        val result = RootShell.execute("pm disable $pkg")
+        // P1 修复: 参数经 shellQuote 转义, 防止注入 (; && $() 反引号等)
+        val result = RootShell.execute("pm disable ${RootShell.shellQuote(pkg)}")
         return ExecutionResult.ok(result.summary)
     }
 
     private suspend fun appsUnfreeze(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val pkg = args.firstOrNull() ?: return ExecutionResult.fail("用法: root.apps.unfreeze <包名>")
-        val result = RootShell.execute("pm enable $pkg")
+        val result = RootShell.execute("pm enable ${RootShell.shellQuote(pkg)}")
         return ExecutionResult.ok(result.summary)
     }
 
     private suspend fun appsUninstall(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val pkg = args.firstOrNull() ?: return ExecutionResult.fail("用法: root.apps.uninstall <包名>")
-        val result = RootShell.execute("pm uninstall --user 0 $pkg")
+        val result = RootShell.execute("pm uninstall --user 0 ${RootShell.shellQuote(pkg)}")
         return ExecutionResult.ok(result.summary)
     }
 
     private suspend fun appsData(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val pkg = args.firstOrNull() ?: return ExecutionResult.fail("用法: root.apps.data <包名>")
-        val result = RootShell.execute("du -sh /data/data/$pkg 2>/dev/null && ls -la /data/data/$pkg/ 2>/dev/null | head -20")
+        val result = RootShell.execute("du -sh ${RootShell.shellQuote("/data/data/$pkg")} 2>/dev/null && ls -la ${RootShell.shellQuote("/data/data/$pkg/")} 2>/dev/null | head -20")
         return ExecutionResult.ok(result.summary)
     }
 
@@ -198,13 +199,14 @@ class RootPlugin : Plugin {
 
     private suspend fun fsLs(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val path = args.firstOrNull() ?: return ExecutionResult.fail("用法: root.fs.ls <路径>")
-        val result = RootShell.execute("ls -la $path 2>&1 | head -50")
+        // P1 修复: 参数经 shellQuote 转义, 防止注入
+        val result = RootShell.execute("ls -la ${RootShell.shellQuote(path)} 2>&1 | head -50")
         return ExecutionResult.ok(result.summary)
     }
 
     private suspend fun fsCat(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val path = args.firstOrNull() ?: return ExecutionResult.fail("用法: root.fs.cat <路径>")
-        val result = RootShell.execute("cat $path 2>&1")
+        val result = RootShell.execute("cat ${RootShell.shellQuote(path)} 2>&1")
         return ExecutionResult.ok(result.summary)
     }
 
@@ -212,14 +214,14 @@ class RootPlugin : Plugin {
         if (args.size < 2) return ExecutionResult.fail("用法: root.fs.write <路径> <内容>")
         val path = args.first()
         val content = args.drop(1).joinToString(" ")
-        val escaped = content.replace("'", "'\\''")
-        val result = RootShell.execute("echo '$escaped' > $path 2>&1 && echo 'WRITE_OK'")
+        // P1 修复: 内容与路径均经 shellQuote 转义 (单引号包裹天然免疫 $() 反引号等)
+        val result = RootShell.execute("echo ${RootShell.shellQuote(content)} > ${RootShell.shellQuote(path)} 2>&1 && echo 'WRITE_OK'")
         return ExecutionResult.ok(result.summary)
     }
 
     private suspend fun fsStat(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val path = args.firstOrNull() ?: return ExecutionResult.fail("用法: root.fs.stat <路径>")
-        val result = RootShell.execute("stat $path 2>&1; echo '---'; ls -laZ $path 2>&1")
+        val result = RootShell.execute("stat ${RootShell.shellQuote(path)} 2>&1; echo '---'; ls -laZ ${RootShell.shellQuote(path)} 2>&1")
         return ExecutionResult.ok(result.summary)
     }
 
@@ -229,14 +231,15 @@ class RootPlugin : Plugin {
 
     private suspend fun systemProps(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val key = args.firstOrNull()
-        val cmd = if (key != null) "getprop $key" else "getprop"
+        // P1 修复: 参数经 shellQuote 转义, 防止注入
+        val cmd = if (key != null) "getprop ${RootShell.shellQuote(key)}" else "getprop"
         val result = RootShell.execute(cmd)
         return ExecutionResult.ok(result.summary)
     }
 
     private suspend fun systemSetprop(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.size < 2) return ExecutionResult.fail("用法: root.system.setprop <key> <value>")
-        val result = RootShell.execute("setprop ${args[0]} ${args[1]} 2>&1 && echo 'PROP_SET_OK'")
+        val result = RootShell.execute("setprop ${RootShell.shellQuote(args[0])} ${RootShell.shellQuote(args[1])} 2>&1 && echo 'PROP_SET_OK'")
         return ExecutionResult.ok(result.summary)
     }
 
@@ -250,13 +253,16 @@ class RootPlugin : Plugin {
             "add" -> {
                 if (args.size < 3) return ExecutionResult.fail("用法: root.system.hosts add <域名> <IP>")
                 val domain = args[1]; val ip = args[2]
-                val result = RootShell.execute("echo '$ip $domain' >> /system/etc/hosts 2>&1 && echo 'HOSTS_ADD_OK'")
+                // P1 修复: 域名/IP 经 shellQuote 转义, 防止注入
+                val result = RootShell.execute("echo ${RootShell.shellQuote("$ip $domain")} >> /system/etc/hosts 2>&1 && echo 'HOSTS_ADD_OK'")
                 ExecutionResult.ok(result.summary)
             }
             "remove" -> {
                 if (args.size < 2) return ExecutionResult.fail("用法: root.system.hosts remove <域名>")
                 val domain = args[1]
-                val result = RootShell.execute("sed -i '/$domain/d' /system/etc/hosts 2>&1 && echo 'HOSTS_REMOVE_OK'")
+                // P1 修复: sed 模式转义 (域名中的 / 需转义) + shellQuote 防注入
+                val sedPattern = "/" + domain.replace("/", "\\/") + "/d"
+                val result = RootShell.execute("sed -i ${RootShell.shellQuote(sedPattern)} /system/etc/hosts 2>&1 && echo 'HOSTS_REMOVE_OK'")
                 ExecutionResult.ok(result.summary)
             }
             else -> ExecutionResult.fail("用法: root.system.hosts [add|remove] <域名> [IP]")
@@ -269,7 +275,8 @@ class RootPlugin : Plugin {
 
     private suspend fun backupList(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val pkg = args.firstOrNull() ?: return ExecutionResult.fail("用法: root.backup.list <包名>")
-        val result = RootShell.execute("ls -laR /data/data/$pkg/ 2>&1 | head -40")
+        // P1 修复: 参数经 shellQuote 转义, 防止注入
+        val result = RootShell.execute("ls -laR ${RootShell.shellQuote("/data/data/$pkg/")} 2>&1 | head -40")
         return ExecutionResult.ok(result.summary)
     }
 
@@ -277,7 +284,7 @@ class RootPlugin : Plugin {
         val pkg = args.firstOrNull() ?: return ExecutionResult.fail("用法: root.backup.save <包名> [--to <路径>]")
         val dest = args.find { it.startsWith("--to") }?.substringAfter("--to")?.trim()
             ?: "/sdcard/${pkg}_backup_${System.currentTimeMillis().toString().takeLast(6)}.tar.gz"
-        val result = RootShell.execute("cd /data/data && tar czf $dest $pkg 2>&1 && echo 'BACKUP_OK: $dest'")
+        val result = RootShell.execute("cd /data/data && tar czf ${RootShell.shellQuote(dest)} ${RootShell.shellQuote(pkg)} 2>&1 && echo ${RootShell.shellQuote("BACKUP_OK: $dest")}")
         return ExecutionResult.ok(result.summary)
     }
 
@@ -286,7 +293,7 @@ class RootPlugin : Plugin {
         val pkg = args[0]
         val src = args.find { it.startsWith("--from") }?.substringAfter("--from")?.trim()
             ?: return ExecutionResult.fail("需要 --from <路径> 指定备份文件")
-        val result = RootShell.execute("cd /data/data && tar xzf $src 2>&1 && echo 'RESTORE_OK: $pkg'")
+        val result = RootShell.execute("cd /data/data && tar xzf ${RootShell.shellQuote(src)} 2>&1 && echo ${RootShell.shellQuote("RESTORE_OK: $pkg")}")
         return ExecutionResult.ok(result.summary)
     }
 

@@ -177,6 +177,8 @@ class TribePlugin : Plugin {
 
     private suspend fun cmdStop(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (!isRunning) return ExecutionResult.ok("部落协作未在运行。")
+        // P1 修复: 先停 handler 再停引擎 — 停止后 ACP 消息不再进入任务执行
+        tribeAcpHandler?.active = false
         delegateEngine.stop()
         heartbeatMonitor.stop()
         heartbeatMonitor.markAllOffline()

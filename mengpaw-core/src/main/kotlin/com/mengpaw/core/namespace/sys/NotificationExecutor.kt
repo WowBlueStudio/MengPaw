@@ -19,9 +19,12 @@ import com.mengpaw.kernel.cli.ErrorCodes
 /** Notification ID lookup, send, and cancel. */
 internal object NotificationExecutor {
 
+    /** 通知 ID 单一事实源 — 查询/发送/取消共用，避免错位（此前查询返回 1001 而实际发送 1002）。 */
+    private const val NOTIFICATION_ID = 1002
+
     suspend fun notificationId(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val channel = args.firstOrNull() ?: "mengpaw_agent"
-        return ExecutionResult.ok("Notification channel: $channel (id: 1001)")
+        return ExecutionResult.ok("Notification channel: $channel (id: $NOTIFICATION_ID)")
     }
 
     suspend fun notificationSend(args: List<String>, ec: ExecutionContext): ExecutionResult {
@@ -72,7 +75,7 @@ internal object NotificationExecutor {
                 .setAutoCancel(true)
                 .build()
 
-            NotificationManagerCompat.from(app).notify(1002, notification)
+            NotificationManagerCompat.from(app).notify(NOTIFICATION_ID, notification)
             return ExecutionResult.ok("Notification sent: $title")
         } catch (e: SecurityException) {
             return ExecutionResult.fail("需要 POST_NOTIFICATIONS 权限 (Android 13+)", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
@@ -83,7 +86,7 @@ internal object NotificationExecutor {
 
     suspend fun notificationCancel(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val app = SysExecutor.appContext ?: return ExecutionResult.fail("SysExecutor not initialized")
-        val id = args.firstOrNull()?.toIntOrNull() ?: 1002
+        val id = args.firstOrNull()?.toIntOrNull() ?: NOTIFICATION_ID
         NotificationManagerCompat.from(app).cancel(id)
         return ExecutionResult.ok("Notification #$id cancelled")
     }

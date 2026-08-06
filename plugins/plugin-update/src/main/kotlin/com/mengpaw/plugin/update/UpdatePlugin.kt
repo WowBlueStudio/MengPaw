@@ -191,24 +191,54 @@ class UpdatePlugin : Plugin {
 
             // Try primary URL → Gitee mirror → ghproxy
             val downloadUrls = listOf(url, giteeDownload(url), ghproxyDownload(url))
-            var downloadBytes: ByteArray? = null
+            var downloaded = false
             for (dUrl in downloadUrls) {
+                // 流式边下边写 (tmp + rename) — 此前 readBytes 把整个 APK 读进内存, 大包必 OOM
+                val tmpFile = File(downloadDir, "${apkFile.name}.part")
+                var conn: java.net.HttpURLConnection? = null
                 try {
-                    val conn = java.net.URL(dUrl).openConnection() as java.net.HttpURLConnection
+                    conn = java.net.URL(dUrl).openConnection() as java.net.HttpURLConnection
                     conn.connectTimeout = 15000; conn.readTimeout = 30000
                     conn.setRequestProperty("User-Agent", "MengPaw-Update/${metadata.version}")
                     val code = conn.responseCode
                     if (code in 200..299) {
-                        downloadBytes = conn.inputStream.use { it.readBytes() }
+                        // 大小上限检查: 预检 Content-Length + 实际写入计数双保险
+                        val declared = conn.contentLengthLong
+                        if (declared > MAX_APK_BYTES) {
+                            throw IllegalStateException("APK 超过 ${MAX_APK_BYTES / 1024 / 1024}MB 上限")
+                        }
+                        var total = 0L
+                        conn.inputStream.use { ins ->
+                            tmpFile.outputStream().use { out ->
+                                val buf = ByteArray(64 * 1024)
+                                while (true) {
+                                    val n = ins.read(buf)
+                                    if (n < 0) break
+                                    total += n
+                                    if (total > MAX_APK_BYTES) {
+                                        throw IllegalStateException("APK 超过 ${MAX_APK_BYTES / 1024 / 1024}MB 上限")
+                                    }
+                                    out.write(buf, 0, n)
+                                }
+                            }
+                        }
+                        if (!tmpFile.renameTo(apkFile)) {
+                            apkFile.delete()
+                            if (!tmpFile.renameTo(apkFile)) throw IllegalStateException("文件写入失败 (rename)")
+                        }
+                        downloaded = true
                         break
                     }
-                } catch (_: Exception) { /* try next */ }
+                } catch (_: Exception) {
+                    tmpFile.delete()  // 清理残片, 尝试下一源
+                } finally {
+                    try { conn?.disconnect() } catch (_: Exception) { }
+                }
             }
-            if (downloadBytes == null) {
+            if (!downloaded) {
                 return ExecutionResult.fail("下载失败 — 所有下载源均不可达。💡 建议检查网络或使用 VPN。", errorCode = ErrorCodes.ERR_INTERNAL)
             }
 
-            apkFile.writeBytes(downloadBytes)
             downloadedApk = apkFile
 
             ExecutionResult.ok("""
@@ -423,6 +453,9 @@ class UpdatePlugin : Plugin {
     companion object {
         /** Android Context — 由 Shell MainActivity.deferInit 注入 (替代失效的 getAppContext 反射)。 */
         @Volatile var appContext: Context? = null
+
+        /** APK 下载大小上限 (512MB) — 防异常响应撑爆存储, 流式写入时按字节计数。 */
+        private const val MAX_APK_BYTES = 512L * 1024 * 1024
 
         private const val GITHUB_API_URL = "https://api.github.com/repos/WowBlueStudio/MengPaw/releases/latest"
         private const val GITEE_API_URL = "https://gitee.com/api/v5/repos/WowBlueStudio/MengPaw/releases/latest"

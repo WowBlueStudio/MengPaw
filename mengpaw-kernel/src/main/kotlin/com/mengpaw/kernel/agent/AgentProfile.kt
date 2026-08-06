@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.agent
 
 import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.MengPawVersion
 import com.mengpaw.kernel.error.ErrorCollector
 import java.io.File
 
@@ -32,7 +33,7 @@ data class AgentProfile(
 - ID: $agentId
 - 定位: $position
 - 简介: $bio
-- 版本: 0.6.2
+- 版本: ${MengPawVersion.FRAMEWORK}
 
 ## 用户
 - 称呼: $userName

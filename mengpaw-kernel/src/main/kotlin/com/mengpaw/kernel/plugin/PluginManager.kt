@@ -5,6 +5,7 @@ package com.mengpaw.kernel.plugin
 
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.KernelLog
+import com.mengpaw.kernel.MengPawVersion
 import com.mengpaw.kernel.cli.CommandRegistry
 import java.io.File
 
@@ -36,7 +37,9 @@ fun pluginNamespaceFor(id: String): String {
  * - Track plugin status
  */
 class PluginManager(
-    private val coreVersion: String = "0.2.0"
+    // 默认取真实内核版本 (gradle 生成的 MengPawVersion) — 此前硬编码 "0.2.0" 使
+    // minCoreVersion/maxCoreVersion 门禁在未显式传参时完全失效 (任何插件都能通过)
+    private val coreVersion: String = MengPawVersion.FRAMEWORK
 ) {
     companion object {
         /** Shared global instance for cross-module access (Browser, Shell, TV). */

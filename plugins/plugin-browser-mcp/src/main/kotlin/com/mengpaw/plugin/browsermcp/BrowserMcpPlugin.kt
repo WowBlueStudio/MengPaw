@@ -116,6 +116,27 @@ class BrowserMcpPlugin : Plugin, McpToolProvider {
             emptyMap()),
         McpTool("browser_eval", "Execute JavaScript in the page",
             mapOf("script" to mapOf("type" to "string", "description" to "JavaScript code to execute"))),
+        // ── P1 fix: 内置 browser.* 命令合流 (BuiltinBrowserPlugin 经 9880 桥暴露) ──
+        McpTool("tabs", "List all browser tabs (id/url/title/loading state)",
+            emptyMap()),
+        McpTool("tab", "Switch to tab by id",
+            mapOf("n" to mapOf("type" to "int", "description" to "Tab id"))),
+        McpTool("nav", "Navigate to URL and auto-extract content (efficient single call)",
+            mapOf("url" to mapOf("type" to "string", "description" to "URL to open"))),
+        McpTool("content", "Extract structured page content (title, links, forms, text)",
+            emptyMap()),
+        McpTool("screenshot.full", "Full-page stitched screenshot for coordinate-based interaction",
+            mapOf("maxHeight" to mapOf("type" to "int", "description" to "Max page height in px (default 15000)"))),
+        McpTool("coord.click", "Tap at absolute page coordinates (from screenshot.full image)",
+            mapOf("x" to mapOf("type" to "int"), "y" to mapOf("type" to "int"))),
+        McpTool("wait.selector", "Wait for a CSS selector to appear (polling)",
+            mapOf("selector" to mapOf("type" to "string"), "timeoutMs" to mapOf("type" to "int", "description" to "Max wait, default 5000"))),
+        McpTool("cookies", "Get cookies for the current URL",
+            emptyMap()),
+        McpTool("storage", "Get/set/clear localStorage or sessionStorage",
+            mapOf("type" to mapOf("type" to "string", "description" to "local or session"),
+                "op" to mapOf("type" to "string", "description" to "get/set/clear"),
+                "key" to mapOf("type" to "string"), "value" to mapOf("type" to "string"))),
     )
 
     // ── CLI ─────────────────────────────────────────────────────────────

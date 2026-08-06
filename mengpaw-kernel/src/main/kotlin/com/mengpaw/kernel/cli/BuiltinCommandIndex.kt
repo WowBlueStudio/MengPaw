@@ -76,12 +76,11 @@ object BuiltinCommandIndex {
         idx("evolution.reactions", "查看用户反应档案 (用户如何纠正过我 — 用户分身数据源)", "evolution.reactions",
             listOf("用户", "反应", "纠正", "反馈", "档案", "偏好"),
             listOf("reactions", "correction", "feedback", "user"))
+        // 两组合并注册 (CommandSearch.register 同 fullName 已存在时不覆盖 —
+        // 此前第二组关键词 "修正/教训/已沉淀/完成/fixed/resolved" 被静默忽略, 永久失效)
         idx("evolution.mark-corrected", "标记某条失败模式已沉淀修正 (绩效闭环)", "evolution.mark-corrected <failure-id>",
-            listOf("标记", "已修正", "失败", "闭环", "绩效"),
-            listOf("mark", "corrected", "failure", "closed loop", "resolve"))
-        idx("evolution.mark-corrected", "标记某条失败模式已沉淀修正 (绩效闭环)", "evolution.mark-corrected <failure-id>",
-            listOf("修正", "标记", "教训", "已沉淀", "完成"),
-            listOf("mark", "corrected", "fixed", "resolved"))
+            listOf("标记", "已修正", "失败", "闭环", "绩效", "修正", "教训", "已沉淀", "完成"),
+            listOf("mark", "corrected", "failure", "closed loop", "resolve", "fixed", "resolved"))
 
         // ── agent: 文档/记忆管理 ──
         idx("agent.docs", "列出 Agent 工作区的所有文档文件 (Soul/Agents/Memory/Boost/Profile)", "agent.docs",

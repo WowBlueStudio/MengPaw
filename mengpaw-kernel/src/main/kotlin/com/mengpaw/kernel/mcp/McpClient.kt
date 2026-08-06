@@ -6,6 +6,9 @@ package com.mengpaw.kernel.mcp
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.ports.Ports
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.*
 
 /**
@@ -143,12 +146,29 @@ class McpConnection(val id: String, val config: McpConnectionConfig) {
 
     private suspend fun callStdio(tool: String, args: Map<String, String>): String {
         val pb = ProcessBuilder(config.command).apply { this.command().addAll(config.args) }
+        // P1 修复: stderr 合并进 stdout, 单通道读不会因管道填满互相堵死
+        pb.redirectErrorStream(true)
         val proc = pb.start()
         val req = buildJsonObject {
             put("method", "tools/call")
             putJsonObject("params") { put("name", tool); putJsonObject("arguments") { args.forEach { (k, v) -> put(k, v) } } }
         }
-        proc.outputStream.write("${req}\n".toByteArray()); proc.outputStream.flush()
-        return try { proc.inputStream.bufferedReader().readText().take(5000) } catch (e: Exception) { ErrorCollector.report(e, "McpClient.callStdio"); "" }
+        return try {
+            proc.outputStream.write("${req}\n".toByteArray()); proc.outputStream.flush()
+            // P1 修复: 读超时 + IO 线程, 防止子进程挂起导致永久阻塞
+            withContext(Dispatchers.IO) {
+                withTimeoutOrNull(30_000L) { proc.inputStream.bufferedReader().readText().take(5000) }
+            } ?: "Error: MCP stdio 调用超时 (30s)"
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "McpClient.callStdio")
+            ""
+        } finally {
+            // P1 修复: 无论成败都销毁子进程, 防止进程泄漏
+            try { proc.destroy() } catch (_: Exception) { }
+            if (proc.isAlive) { try { proc.destroyForcibly() } catch (_: Exception) { } }
+            try { proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) { }
+            try { proc.outputStream.close() } catch (_: Exception) { }
+            try { proc.inputStream.close() } catch (_: Exception) { }
+        }
     }
 }

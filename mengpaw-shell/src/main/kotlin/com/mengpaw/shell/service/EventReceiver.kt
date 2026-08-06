@@ -9,6 +9,10 @@ import android.content.Intent
 import com.mengpaw.kernel.DataPaths
 import android.content.IntentFilter
 import com.mengpaw.kernel.trigger.TriggerEngine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
@@ -29,6 +33,9 @@ class EventReceiver : BroadcastReceiver() {
     companion object {
         @Volatile
         private var registered: EventReceiver? = null
+
+        /** P1 修复: 重活 (梦境整理等) 的后台执行 scope — 与 onReceive 返回解耦。 */
+        private val workScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         // Android 14+ (targetSdk=35) no longer delivers CONNECTIVITY_CHANGE broadcast.
         // We use NetworkCallback instead — registered from ShellService.
@@ -111,11 +118,18 @@ class EventReceiver : BroadcastReceiver() {
             Intent.ACTION_POWER_CONNECTED -> {
                 TriggerEngine.onSystemWake()
                 // 触发梦境模式 — 整理记忆、归档、摘要
-                try {
-                    val result = com.mengpaw.kernel.agent.DreamProviderRegistry.active().organize("MengPaw")
-                    android.util.Log.d("EventReceiver", "Dream: reviewed=${result.memoriesReviewed} archived=${result.archived}")
-                } catch (e: Exception) {
-                    android.util.Log.w("EventReceiver", "Dream failed: ${e.message}")
+                // P1 修复: 原主线程同步执行重活 → ANR 风险; 改为 goAsync 保活 + 后台协程执行,
+                // goAsync 让系统等待 finish(), 避免 onReceive 返回即杀进程
+                val pending = goAsync()
+                workScope.launch {
+                    try {
+                        val result = com.mengpaw.kernel.agent.DreamProviderRegistry.active().organize("MengPaw")
+                        android.util.Log.d("EventReceiver", "Dream: reviewed=${result.memoriesReviewed} archived=${result.archived}")
+                    } catch (e: Exception) {
+                        android.util.Log.w("EventReceiver", "Dream failed: ${e.message}")
+                    } finally {
+                        pending.finish()
+                    }
                 }
                 context?.let { scheduleAgentTask(it, "power_connected",
                     "已接通电源。梦境整理完成。检查插件更新。") }

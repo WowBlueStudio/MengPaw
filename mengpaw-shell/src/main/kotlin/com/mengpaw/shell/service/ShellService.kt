@@ -93,6 +93,10 @@ class ShellService : Service() {
         // Register dream mode charging trigger
         try { powerReceiver = PowerConnectionReceiver.register(this) } catch (_: Exception) { }
         try { DreamWorker.schedule(this) } catch (_: Exception) { }
+
+        // P1 修复: onDestroy 中 EventReceiver.unregister 后永不重注册 → 广播事件全部丢失。
+        // 服务每次创建时重新注册 (register 内部幂等: 已注册则直接返回)。
+        try { EventReceiver.register(this) } catch (_: Exception) { }
     }
 
     override fun onDestroy() {

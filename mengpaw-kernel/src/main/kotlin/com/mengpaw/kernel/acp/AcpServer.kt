@@ -40,8 +40,10 @@ class AcpServer(
                 "Set a shared secret via AcpServer(profile, secret=\"your-secret\") to enable peer auth.")
         }
     }
-    private val peers = mutableMapOf<String, PeerAgent>()
-    private val handlers = mutableListOf<AcpHandler>()
+    // 并发安全: handleMessage 可被多协程/多 transport 并发调用 —
+    // peers 用 ConcurrentHashMap ([] 操作符/values 快照均可用), handlers 用 CopyOnWriteArrayList 快照遍历
+    private val peers = java.util.concurrent.ConcurrentHashMap<String, PeerAgent>()
+    private val handlers = java.util.concurrent.CopyOnWriteArrayList<AcpHandler>()
     private val transports = mutableListOf<AcpTransport>()
     private val json = Json { ignoreUnknownKeys = true }
 

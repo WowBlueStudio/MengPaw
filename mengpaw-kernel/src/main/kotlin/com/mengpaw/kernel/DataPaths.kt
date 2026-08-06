@@ -91,9 +91,10 @@ object DataPaths {
 
     // ── Two-tier memory ────────────────────────────────────────────
     /** Long-term memory file — injected into system prompt. Curated content only. */
-    fun longTermMemoryFile(agentName: String) = "$AGENTS/$agentName/memory/memory.md"
+    // P1 修复: agentName 可能含路径分隔符/穿越段 — 统一走 safeAgentDir 消毒
+    fun longTermMemoryFile(agentName: String) = "${safeAgentDir(agentName)}/memory/memory.md"
     /** Mid-term memory dir — dated files, NOT injected into prompt. */
-    fun midTermMemoryDir(agentName: String) = "$AGENTS/$agentName/memory"
+    fun midTermMemoryDir(agentName: String) = "${safeAgentDir(agentName)}/memory"
     /** Mid-term memory file for a specific date. */
     fun midTermMemoryFile(agentName: String, date: String) = "${midTermMemoryDir(agentName)}/memory_$date.md"
     /** Project memory file — reusable project completion patterns. */

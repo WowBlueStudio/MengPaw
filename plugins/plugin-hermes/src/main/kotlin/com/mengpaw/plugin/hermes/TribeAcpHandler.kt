@@ -40,6 +40,10 @@ class TribeAcpHandler(
     private val heartbeatMonitor: TribeHeartbeatMonitor?
 ) : AcpHandler {
 
+    /** P1 修复: 服务停止标志 — tribe.stop 后置 false, handler 拒绝继续处理消息。 */
+    @Volatile
+    var active: Boolean = true
+
     override val supportedTypes: List<AcpMessageType> = listOf(
         AcpMessageType.DELEGATE,
         AcpMessageType.RESULT,
@@ -51,6 +55,8 @@ class TribeAcpHandler(
     private val json = Json { ignoreUnknownKeys = true }
 
     override suspend fun handle(message: AcpMessage, server: AcpServer): AcpResult? {
+        // P1 修复: 已停止则拒绝处理 — 让内核或其他 handler 兜底
+        if (!active) return null
         return try {
             val type = AcpMessageType.valueOf(message.type)
             when (type) {

@@ -23,7 +23,14 @@ class DevPlugin : Plugin {
         version = "", // 内置插件, 随 Shell APK 版本更新
         description = "创建、审计、构建、分享自建插件——Agent 可自主扩展 MengPaw 功能",
         author = "MengPaw Core",
-        type = PluginType.NATIVE
+        type = PluginType.NATIVE,
+        // 全名 = 命名空间 "dev" + commands 键 (dev.plugin.create 等) —
+        // 此前为空数组违反自身 audit 规则 (metadata.commands 必须列出所有命令),
+        // 影响 CLI.md 生成与命令触达
+        commands = listOf(
+            "dev.plugin.create", "dev.plugin.audit", "dev.plugin.share",
+            "dev.plugin.examples", "dev.plugin.keywords", "dev.plugin.guide"
+        )
     )
 
     override val commands: Map<String, CommandHandler> = mapOf(
