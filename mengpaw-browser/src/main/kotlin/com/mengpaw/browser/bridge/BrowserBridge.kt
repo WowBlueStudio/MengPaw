@@ -9,9 +9,6 @@ import android.webkit.WebView
 import com.mengpaw.kernel.DataPaths
 import java.io.File
 import java.io.FileOutputStream
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * P2 fix: 截图位图内存上限 — ARGB_8888 = 4B/px, 32MB ≈ 8.4M px。
@@ -26,15 +23,22 @@ const val MAX_SCREENSHOT_PIXELS = 8 * 1024 * 1024
  * Registered via [WebView.addJavascriptInterface] as "MengPaw".
  * All methods return JSON strings for consistent parsing by Agent.
  *
- * ## Design references (MIT-licensed projects, architecture only):
- * - Kuri: token-efficient accessibility-tree-like snapshots
- * - WebDroid Agent: WebView JS bridge pattern for DOM manipulation
- * - native-devtools-mcp: structured element interaction
+ * v0.32.x (400 行文件拆分批次 2): JS 脚本常量拆至 [BrowserScripts.kt],
+ * 全页缝合截图/坐标交互拆至 [FullPageScreenshotter.kt]。
+ * 注意: @JavascriptInterface 方法必须保留在本类实例上 (addJavascriptInterface
+ * 注册对象), 拆分仅限实现委托与脚本常量。
  */
 class BrowserBridge(
     private val webView: WebView,
     private val onScreenshot: ((Bitmap) -> String)? = null
 ) {
+
+    private val screenshotter = FullPageScreenshotter(
+        webView = webView,
+        onScreenshot = onScreenshot,
+        unquoteJs = ::unquoteJs,
+        viewportFallback = ::screenshot
+    )
 
     /**
      * Click the first element matching a CSS selector.
@@ -42,17 +46,7 @@ class BrowserBridge(
      */
     @JavascriptInterface
     fun click(selector: String): String {
-        val safe = escapeJs(selector)
-        return evalJs("""
-            (function() {
-                try {
-                    var el = document.querySelector('$safe');
-                    if (!el) return JSON.stringify({ok:false,error:'Selector not found: $safe'});
-                    el.click();
-                    return JSON.stringify({ok:true,tag:el.tagName,text:(el.textContent||'').trim().substring(0,100)});
-                } catch(e) { return JSON.stringify({ok:false,error:e.message}); }
-            })()
-        """.trimIndent())
+        return evalJs(clickScript(escapeJs(selector)))
     }
 
     /**
@@ -61,21 +55,7 @@ class BrowserBridge(
      */
     @JavascriptInterface
     fun type(selector: String, text: String): String {
-        val safe = escapeJs(selector)
-        val safeText = escapeJs(text)
-        return evalJs("""
-            (function() {
-                try {
-                    var el = document.querySelector('$safe');
-                    if (!el) return JSON.stringify({ok:false,error:'Selector not found'});
-                    el.focus();
-                    var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                    nativeInputValueSetter.call(el, '$safeText');
-                    el.dispatchEvent(new Event('input', {bubbles:true}));
-                    return JSON.stringify({ok:true,tag:el.tagName,type:el.type||'text'});
-                } catch(e) { return JSON.stringify({ok:false,error:e.message}); }
-            })()
-        """.trimIndent())
+        return evalJs(typeScript(escapeJs(selector), escapeJs(text)))
     }
 
     /**
@@ -83,14 +63,7 @@ class BrowserBridge(
      */
     @JavascriptInterface
     fun scroll(x: Float, y: Float): String {
-        return evalJs("""
-            (function() {
-                try {
-                    window.scrollBy($x, $y);
-                    return JSON.stringify({ok:true,scrollX:window.scrollX,scrollY:window.scrollY});
-                } catch(e) { return JSON.stringify({ok:false,error:e.message}); }
-            })()
-        """.trimIndent())
+        return evalJs(scrollScript(x, y))
     }
 
     /**
@@ -100,58 +73,7 @@ class BrowserBridge(
      */
     @JavascriptInterface
     fun content(): String {
-        return evalJs("""
-            (function() {
-                try {
-                    // Links
-                    var links = [];
-                    document.querySelectorAll('a[href]').forEach(function(a) {
-                        var txt = (a.textContent||'').trim().substring(0,80);
-                        var href = a.href;
-                        if (txt && href && !href.startsWith('javascript:')) {
-                            links.push({text:txt, href:href});
-                        }
-                    });
-                    if (links.length > 50) links = links.slice(0,50);
-
-                    // Forms
-                    var forms = [];
-                    document.querySelectorAll('form').forEach(function(f) {
-                        var inputs = [];
-                        f.querySelectorAll('input,textarea,select').forEach(function(inp) {
-                            inputs.push({
-                                name: inp.name||inp.id||'',
-                                type: inp.type||inp.tagName.toLowerCase(),
-                                placeholder: inp.placeholder||''
-                            });
-                        });
-                        if (inputs.length>0) forms.push({id:f.id||'',action:f.action||'',inputs:inputs});
-                    });
-
-                    // Headings
-                    var headings = [];
-                    document.querySelectorAll('h1,h2,h3').forEach(function(h) {
-                        headings.push({tag:h.tagName,text:(h.textContent||'').trim().substring(0,120)});
-                    });
-
-                    // Body text (first 3000 chars of visible text)
-                    var body = document.body;
-                    var text = body ? (body.innerText||body.textContent||'').replace(/\s+/g,' ').trim().substring(0,3000) : '';
-
-                    return JSON.stringify({
-                        title: document.title||'',
-                        url: location.href,
-                        links: links,
-                        forms: forms,
-                        headings: headings,
-                        text: text,
-                        images: Array.from(document.querySelectorAll('img[src]')).slice(0,10).map(function(img) {
-                            return {src:img.src,alt:img.alt||'',width:img.naturalWidth,height:img.naturalHeight};
-                        })
-                    });
-                } catch(e) { return JSON.stringify({error:e.message}); }
-            })()
-        """.trimIndent())
+        return evalJs(contentScript())
     }
 
     /**
@@ -171,13 +93,7 @@ class BrowserBridge(
         val total = timeoutMs.coerceIn(0, 30000)
         val deadline = System.currentTimeMillis() + total
         while (true) {
-            val r = evalJs("""
-(function(){try{
-  var el=document.querySelector('$safe');
-  if(el)return JSON.stringify({ok:true,found:true,tag:el.tagName,visible:!!(el.offsetParent)});
-  return JSON.stringify({ok:false,error:'not found yet'});
-}catch(e){return JSON.stringify({ok:false,error:e.message});}})()
-            """.trimIndent())
+            val r = evalJs(waitForSelectorCheckScript(safe))
             val obj = try { org.json.JSONObject(r) } catch (_: Exception) { null }
             if (obj?.optBoolean("found", false) == true) return r
             val err = obj?.optString("error")
@@ -232,9 +148,9 @@ class BrowserBridge(
     fun storage(type: String, op: String, key: String? = null, value: String? = null): String {
         val storageType = if (type == "session") "sessionStorage" else "localStorage"
         return when (op) {
-            "get" -> evalJs("(function(){try{var v=${storageType}.getItem('${escapeJs(key ?: "")}');return v?JSON.stringify({ok:true,value:v}):JSON.stringify({ok:false,error:'not found'});}catch(e){return JSON.stringify({ok:false,error:e.message});}})()")
-            "set" -> evalJs("(function(){try{${storageType}.setItem('${escapeJs(key ?: "")}','${escapeJs(value ?: "")}');return JSON.stringify({ok:true});}catch(e){return JSON.stringify({ok:false,error:e.message});}})()")
-            "clear" -> evalJs("(function(){try{${storageType}.clear();return JSON.stringify({ok:true});}catch(e){return JSON.stringify({ok:false,error:e.message});}})()")
+            "get" -> evalJs(storageGetScript(storageType, escapeJs(key ?: "")))
+            "set" -> evalJs(storageSetScript(storageType, escapeJs(key ?: ""), escapeJs(value ?: "")))
+            "clear" -> evalJs(storageClearScript(storageType))
             else -> """{"ok":false,"error":"Unknown op: $op (use get/set/clear)"}"""
         }
     }
@@ -242,57 +158,49 @@ class BrowserBridge(
     /** Get element attribute value. */
     @JavascriptInterface
     fun attr(selector: String, attribute: String): String {
-        val safe = escapeJs(selector); val attr = escapeJs(attribute)
-        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});return JSON.stringify({ok:true,value:e.getAttribute('$attr')||''});})()")
+        return evalJs(attrScript(escapeJs(selector), escapeJs(attribute)))
     }
 
     /** Get element text content. */
     @JavascriptInterface
     fun text(selector: String): String {
-        val safe = escapeJs(selector)
-        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});return JSON.stringify({ok:true,text:(e.textContent||'').trim().substring(0,2000)});})()")
+        return evalJs(textScript(escapeJs(selector)))
     }
 
     /** Check if element is visible (has non-zero dimensions and is not hidden). */
     @JavascriptInterface
     fun visible(selector: String): String {
-        val safe = escapeJs(selector)
-        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});var r=e.getBoundingClientRect();var s=getComputedStyle(e);return JSON.stringify({ok:true,visible:!!(r.width&&r.height&&s.display!=='none'&&s.visibility!=='hidden')});})()")
+        return evalJs(visibleScript(escapeJs(selector)))
     }
 
     /** Check if element is enabled (not disabled). */
     @JavascriptInterface
     fun enabled(selector: String): String {
-        val safe = escapeJs(selector)
-        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});return JSON.stringify({ok:true,enabled:!e.disabled});})()")
+        return evalJs(enabledScript(escapeJs(selector)))
     }
 
     /** Select an option in a &lt;select&gt; element by value or visible text. */
     @JavascriptInterface
     fun select(selector: String, value: String): String {
-        val safe = escapeJs(selector); val v = escapeJs(value)
-        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});e.value='$v';e.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true,value:'$v'});})()")
+        return evalJs(selectScript(escapeJs(selector), escapeJs(value)))
     }
 
     /** Submit a form. */
     @JavascriptInterface
     fun submit(selector: String): String {
-        val safe = escapeJs(selector)
-        return evalJs("(function(){var e=document.querySelector('$safe');if(!e||e.tagName!=='FORM')return JSON.stringify({ok:false,error:'not a form'});e.submit();return JSON.stringify({ok:true});})()")
+        return evalJs(submitScript(escapeJs(selector)))
     }
 
     /** Check a checkbox or radio input. */
     @JavascriptInterface
     fun check(selector: String): String {
-        val safe = escapeJs(selector)
-        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});e.checked=true;e.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true});})()")
+        return evalJs(checkScript(escapeJs(selector)))
     }
 
     /** Uncheck a checkbox. */
     @JavascriptInterface
     fun uncheck(selector: String): String {
-        val safe = escapeJs(selector)
-        return evalJs("(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});e.checked=false;e.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true});})()")
+        return evalJs(uncheckScript(escapeJs(selector)))
     }
 
     /**
@@ -325,13 +233,7 @@ class BrowserBridge(
      * Timeout is set to 2s max; on timeout, returns error JSON.
      */
     private fun evalJs(script: String): String {
-        // Fast path: if __mp is injected, use synchronous JS evaluation
-        // Avoids the evaluateJavascript round-trip entirely
-        if (script.startsWith("window.__mp") || script.contains("__mp.")) {
-            // __mp calls are pure JS sync — still need evaluateJavascript but
-            // they complete in <10ms since no DOM traversal
-        }
-
+        // __mp calls are pure JS sync (<10ms, no DOM traversal) — fast path handled by caller scripts
         val latch = java.util.concurrent.CountDownLatch(1)
         var result = """{"ok":false,"error":"timeout"}"""
         try {
@@ -405,22 +307,7 @@ class BrowserBridge(
      */
     @JavascriptInterface
     fun inject(): String {
-        return evalJs("""
-(function(){
-  if(window.__mp&&window.__mp._v)return JSON.stringify({ok:true,msg:'already injected',v:window.__mp._v});
-  window.__mp={
-    _v:1,_cache:{},
-    c:function(s){var e=document.querySelector(s);if(!e)return JSON.stringify({ok:false,error:'not found:'+s});e.click();return JSON.stringify({ok:true,tag:e.tagName})},
-    t:function(s,v){var e=document.querySelector(s);if(!e)return JSON.stringify({ok:false});e.focus();var d=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;d.call(e,v);e.dispatchEvent(new Event('input',{bubbles:true}));return JSON.stringify({ok:true})},
-    sc:function(x,y){window.scrollBy(x,y);return JSON.stringify({ok:true,sx:window.scrollX,sy:window.scrollY})},
-    ct:function(){try{var ls=[];document.querySelectorAll('a[href]').forEach(function(a){var t=(a.textContent||'').trim().substring(0,80);if(t&&a.href&&!a.href.startsWith('javascript:'))ls.push({text:t,href:a.href})});return JSON.stringify({title:document.title,url:location.href,links:ls.slice(0,50),text:(document.body?document.body.innerText:'').replace(/\\s+/g,' ').trim().substring(0,3000)})}catch(e){return JSON.stringify({error:e.message})}},
-    q:function(w){var m={search:'input[type=search],input[name=q],input[name=query],#search,[role=search] input',main:'main,article,#content,.post,.article,[role=main]',nav:'nav,#nav,.navbar,.menu,[role=navigation]'};var s=m[w];if(!s)return JSON.stringify({ok:false});var e=document.querySelector(s);return e?JSON.stringify({ok:true,selector:s,tag:e.tagName,text:(e.textContent||'').trim().substring(0,200)}):JSON.stringify({ok:false})},
-    df:function(){var cur=window.__mp._cache._content||'';var raw=document.body?document.body.innerText:'';var fresh=raw.replace(/\\s+/g,' ').trim().substring(0,1000);window.__mp._cache._content=fresh;if(cur===fresh)return JSON.stringify({changed:false});return JSON.stringify({changed:true,added:fresh.substring(cur.length>0?this._lcs(cur,fresh):0)})},
-    _lcs:function(a,b){for(var i=0;i<Math.min(a.length,b.length)&&a[i]===b[i];i++);return i}
-  };
-  return JSON.stringify({ok:true,msg:'__mp persistent bridge injected. Use: __mp.c(sel) __mp.t(sel,val) __mp.sc(x,y) __mp.ct() __mp.q(type) __mp.df()'});
-})()
-        """.trimIndent())
+        return evalJs(injectScript())
     }
 
     /**
@@ -431,24 +318,24 @@ class BrowserBridge(
         // 修复: 原实现只转义单引号 — '\' '"' 换行等均可注入。改用 escapeJs 完整转义
         // （转义后的字符串在单引号 JS 字面量中同样安全，双引号转义无害）。
         val s = escapeJs(selector)
-        return evalJs("window.__mp?window.__mp.c('$s'):(function(){var e=document.querySelector('$s');if(!e)return JSON.stringify({ok:false});e.click();return JSON.stringify({ok:true})})()")
+        return evalJs(fastClickScript(s))
     }
 
     /** Fast-path type. */
     fun fastType(selector: String, text: String): String {
         val s = escapeJs(selector); val t = escapeJs(text)
-        return evalJs("window.__mp?window.__mp.t('$s','$t'):(function(){var e=document.querySelector('$s');if(!e)return JSON.stringify({ok:false});e.focus();var d=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;d.call(e,'$t');e.dispatchEvent(new Event('input',{bubbles:true}));return JSON.stringify({ok:true})})()")
+        return evalJs(fastTypeScript(s, t))
     }
 
     /** Fast-path content. Returns diff if cached, full content otherwise. */
     fun fastContent(): String {
-        return evalJs("window.__mp?window.__mp.ct():(function(){try{var ls=[];document.querySelectorAll('a[href]').forEach(function(a){var t=(a.textContent||'').trim().substring(0,80);if(t&&a.href)ls.push({text:t,href:a.href})});return JSON.stringify({title:document.title,url:location.href,links:ls.slice(0,50),text:(document.body?document.body.innerText:'').replace(/\\s+/g,' ').trim().substring(0,3000)})}catch(e){return JSON.stringify({error:e.message})}})()")
+        return evalJs(fastContentScript())
     }
 
     /** Fast-path diff — returns only changed text since last extraction. */
     @JavascriptInterface
     fun diff(): String {
-        return evalJs("window.__mp?window.__mp.df():JSON.stringify({changed:true,full:true,text:(document.body?document.body.innerText:'').replace(/\\s+/g,' ').trim().substring(0,1000)})")
+        return evalJs(diffScript())
     }
 
     /**
@@ -477,181 +364,33 @@ class BrowserBridge(
         }
     }
 
+    // ── Quick Click (委托 FullPageScreenshotter) ────────────────────────
+
     /**
      * Quick Click: capture a stitched full-page screenshot.
-     * Scrolls the page viewport-by-viewport, captures each segment via [WebView.capturePicture],
-     * and stitches them into ONE tall bitmap saved to DataPaths.SCREENSHOTS.
-     *
+     * 实现见 [FullPageScreenshotter.capture] — 视口逐段滚动截图拼接。
      * Returns JSON with the file path, total width, total height, and segment count.
-     * The Agent can then use [coordClick] to tap at absolute coordinates within this image.
-     *
-     * EXPERIMENTAL: enabled by default (BrowserPrefs.quickClickEnabled).
      */
-    /** Max segments for full-page screenshot (prevent OOM). ~20 viewports. */
-    private val MAX_SEGMENTS = 30
-
-    /** P2 fix: 最近一次全页截图的缩放比 — coordClick/coordScroll 按此还原为页面坐标。 */
-    private var lastScreenshotScale = 1f
-
     @JavascriptInterface
     fun screenshotFull(maxHeight: Int = 15000): String {
-        return try {
-            // Get page dimensions via JS with a render-complete latch
-            val dimsLatch = java.util.concurrent.CountDownLatch(1)
-            var dimsJson = ""
-            webView.post {
-                webView.evaluateJavascript(
-                    "(function(){return JSON.stringify({w:document.documentElement.scrollWidth||document.body.scrollWidth||${webView.width},h:Math.min(document.documentElement.scrollHeight||document.body.scrollHeight||${webView.height},$maxHeight)})})()"
-                ) { r -> dimsJson = unquoteJs(r); dimsLatch.countDown() }
-            }
-            dimsLatch.await(3, java.util.concurrent.TimeUnit.SECONDS)
-
-            val dims = org.json.JSONObject(dimsJson.ifBlank { """{"w":${webView.width},"h":${webView.height}}""" })
-            val pageH = dims.optInt("h", webView.height).coerceAtMost(maxHeight).coerceAtLeast(1)
-            // P0 fix: 捕获宽度以 WebView 实际宽度为准 — capturePicture 移除后 draw 输出即视口
-            val rawW = webView.width.coerceAtLeast(1)
-            val rawH = webView.height.coerceAtLeast(1)
-            // P2 fix: 位图内存上限防 OOM — 缝合图总像素超 MAX_SCREENSHOT_PIXELS (32MB) 时
-            // 整体等比缩小绘制 (canvas.scale), 返回 JSON 尺寸即实际位图尺寸, 坐标空间同步缩放;
-            // coordClick/coordScroll 经 lastScreenshotScale 还原为页面坐标。
-            val rawSegCount = minOf((pageH + rawH - 1) / rawH, MAX_SEGMENTS)
-            val rawStitchedH = minOf(pageH.toLong(), rawSegCount.toLong() * rawH)
-            val scale = if (rawW.toLong() * rawStitchedH > MAX_SCREENSHOT_PIXELS)
-                kotlin.math.sqrt(MAX_SCREENSHOT_PIXELS.toDouble() / (rawW.toLong() * rawStitchedH)).toFloat().coerceIn(0.2f, 1f)
-            else 1f
-            lastScreenshotScale = scale
-            val drawW = (rawW * scale).toInt().coerceAtLeast(1)
-            val drawH = (rawH * scale).toInt().coerceAtLeast(1)
-            val vpHeight = drawH
-            val scaledPageH = (pageH * scale).toInt().coerceAtLeast(1)
-            val segmentCount = minOf((scaledPageH + vpHeight - 1) / vpHeight, MAX_SEGMENTS)
-            val stitchedH = minOf(scaledPageH, segmentCount * vpHeight)
-            // 极限兜底: 缩放下限 0.2 仍超内存上限的极端宽视口 — 直接报错引导用视口截图
-            if (drawW.toLong() * stitchedH > MAX_SCREENSHOT_PIXELS) {
-                throw IllegalStateException("页面尺寸过大 ($drawW×$stitchedH px) 超位图 32MB 上限，请改用 browser.screenshot (视口截图)")
-            }
-
-            val segments = mutableListOf<Bitmap>()
-            var pageY = 0  // 页面坐标 (未缩放) — scrollTo 用页面像素
-
-            for (i in 0 until segmentCount) {
-                // Scroll + wait for render via post queue
-                val segLatch = java.util.concurrent.CountDownLatch(1)
-                webView.post {
-                    webView.scrollTo(0, pageY)
-                    // Double-post ensures scroll happened before capture
-                    webView.post {
-                        segLatch.countDown()
-                    }
-                }
-                segLatch.await(500, java.util.concurrent.TimeUnit.MILLISECONDS)
-
-                // P0 fix: capturePicture() 已在 API 33+ 移除 — 抛 NoSuchMethodError (Error 而非
-                // Exception, 逃过下方 catch 必崩)。改为主线程 View.draw — 滚动对齐后画当前视口段
-                // (语义等价: 每段 = 视口截图, 拼接为全页)。
-                val segBitmap = Bitmap.createBitmap(drawW, minOf(drawH, scaledPageH - i * vpHeight), Bitmap.Config.ARGB_8888)
-                val drawLatch = java.util.concurrent.CountDownLatch(1)
-                webView.post {
-                    val c = android.graphics.Canvas(segBitmap)
-                    if (scale < 1f) c.scale(scale, scale)  // P2 fix: 超限时等比缩小绘制
-                    webView.draw(c)
-                    drawLatch.countDown()
-                }
-                drawLatch.await(500, java.util.concurrent.TimeUnit.MILLISECONDS)
-                segments.add(segBitmap)
-                pageY += rawH
-                if (pageY >= pageH) break
-            }
-
-            // Stitch vertically
-            val stitched = Bitmap.createBitmap(drawW, stitchedH, Bitmap.Config.ARGB_8888)
-            val stitchCanvas = android.graphics.Canvas(stitched)
-            var offsetY = 0
-            for (seg in segments) { stitchCanvas.drawBitmap(seg, 0f, offsetY.toFloat(), null); offsetY += seg.height; seg.recycle() }
-
-            // Atomic write: tmp → rename
-            val dir = java.io.File(DataPaths.SCREENSHOTS)
-            dir.mkdirs()
-            val tmpFile = java.io.File(dir, "full_${System.currentTimeMillis()}.tmp")
-            val finalFile = java.io.File(dir, "full_${System.currentTimeMillis()}.png")
-            java.io.FileOutputStream(tmpFile).use { stitched.compress(Bitmap.CompressFormat.PNG, 85, it) }
-            val fileSize = tmpFile.length()
-            tmpFile.renameTo(finalFile)
-            stitched.recycle()
-
-            // Scroll back to top
-            webView.post { webView.scrollTo(0, 0) }
-
-            """{"ok":true,"path":"${finalFile.absolutePath}","width":$drawW,"totalHeight":$stitchedH,"segments":$segmentCount,"fileSize":$fileSize,"scale":$scale}"""
-        } catch (e: Exception) {
-            // Auto-fallback: try viewport screenshot
-            return try {
-                val fallback = screenshot()
-                """{"ok":true,"fallback":true,"note":"Full-page failed (${e.message?.take(80)}), captured viewport instead","viewport":$fallback}"""
-            } catch (_: Exception) {
-                """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}","hint":"Try browser.screenshot for viewport capture"}"""
-            }
-        }
+        return screenshotter.capture(maxHeight)
     }
 
     /**
-     * Quick Click: tap at absolute coordinates relative to the FULL page (not viewport).
-     * Uses [android.view.MotionEvent] dispatch for real touch simulation.
-     *
-     * Workflow: (1) browser.screenshot.full → { path, w, totalHeight }
-     *           (2) Agent/Vision sees the image, picks coordinates
-     *           (3) browser.coord.click x y → scrolls to y, taps at x
+     * Quick Click: tap at absolute coordinates relative to the FULL page.
+     * 实现见 [FullPageScreenshotter.tap] — 按最近截图缩放比还原页面坐标后派发触摸事件。
      */
     @JavascriptInterface
     fun coordClick(x: Int, y: Int): String {
-        return try {
-            // P2 fix: 截图超限等比缩小后, Agent 坐标在缩放空间 — 按 lastScreenshotScale 还原为页面坐标
-            val s = lastScreenshotScale.coerceAtLeast(0.1f)
-            val maxY = (webView.contentHeight - webView.height).coerceAtLeast(0)
-            val targetY = (y.toFloat() / s).toInt().coerceAtLeast(0).coerceAtMost(webView.contentHeight)
-            val vpX = (x.toFloat() / s).toInt().coerceAtLeast(0).coerceAtMost(webView.width)
-
-            // Scroll to position and wait for render
-            val scrollLatch = java.util.concurrent.CountDownLatch(1)
-            webView.post {
-                webView.scrollTo(0, minOf(targetY, maxY))
-                webView.post { scrollLatch.countDown() }
-            }
-            scrollLatch.await(300, java.util.concurrent.TimeUnit.MILLISECONDS)
-
-            val localY = (targetY - webView.scrollY).coerceIn(0, webView.height)
-            webView.post {
-                val downTime = android.os.SystemClock.uptimeMillis()
-                val downEvent = android.view.MotionEvent.obtain(downTime, downTime, android.view.MotionEvent.ACTION_DOWN, vpX.toFloat(), localY.toFloat(), 0)
-                val upEvent = android.view.MotionEvent.obtain(downTime, downTime + 80, android.view.MotionEvent.ACTION_UP, vpX.toFloat(), localY.toFloat(), 0)
-                webView.dispatchTouchEvent(downEvent)
-                webView.dispatchTouchEvent(upEvent)
-                downEvent.recycle()
-                upEvent.recycle()
-            }
-            """{"ok":true,"x":$vpX,"pageY":$targetY,"localY":$localY,"scrollY":${webView.scrollY}}"""
-        } catch (e: Exception) {
-            """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}","hint":"Use browser.coord.scroll <y> to verify position first"}"""
-        }
+        return screenshotter.tap(x, y)
     }
 
     /**
      * Quick Click: scroll to a specific y-coordinate in the full page.
-     * Useful for verifying position before clicking.
+     * 实现见 [FullPageScreenshotter.scrollToY]。
      */
     @JavascriptInterface
     fun coordScroll(y: Int): String {
-        return try {
-            // P2 fix: 与 coordClick 一致 — 缩放坐标还原为页面坐标
-            val s = lastScreenshotScale.coerceAtLeast(0.1f)
-            val maxY = (webView.contentHeight - webView.height).coerceAtLeast(0)
-            val targetY = (y.toFloat() / s).toInt().coerceIn(0, maxY)
-            val latch = java.util.concurrent.CountDownLatch(1)
-            webView.post { webView.scrollTo(0, targetY); webView.post { latch.countDown() } }
-            latch.await(200, java.util.concurrent.TimeUnit.MILLISECONDS)
-            """{"ok":true,"scrollY":${webView.scrollY},"contentHeight":${webView.contentHeight},"maxScrollY":$maxY}"""
-        } catch (e: Exception) {
-            """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
-        }
+        return screenshotter.scrollToY(y)
     }
 }
