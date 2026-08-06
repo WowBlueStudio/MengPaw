@@ -5,10 +5,6 @@ package com.mengpaw.plugin.errorreport
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
@@ -20,9 +16,6 @@ import com.mengpaw.kernel.plugin.PluginMetadata
 import com.mengpaw.kernel.plugin.PluginType
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
 import kotlinx.coroutines.*
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -39,6 +32,10 @@ import java.util.concurrent.TimeUnit
  * - CLI commands for Agent to view/manage errors
  * - Auto-upload on WiFi to Gitee/GitHub
  * - Auto-clean error files after app update
+ *
+ * ## 职责拆分 (批次3)
+ * 上传执行拆到 [ErrorReportUploader], WiFi 监视拆到 [ErrorReportWifiMonitor]
+ * (构造参数传依赖闭包), 主类保留 CLI 命令与配置, 公开 API 零变化。
  */
 class ErrorReportPlugin : Plugin {
 
@@ -72,9 +69,6 @@ class ErrorReportPlugin : Plugin {
         }
     }
 
-    private var connectivityManager: ConnectivityManager? = null
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null
-    private var uploadJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     // Configurable endpoint — Gitee issues API by default
@@ -83,6 +77,24 @@ class ErrorReportPlugin : Plugin {
     private var wifiOnly = true
     private var wifiConnected = false
     private var isUploading = false
+
+    // ── 职责委托 (批次3 拆分) ──────────────────────────────────────────
+
+    private val uploader = ErrorReportUploader(
+        scope = scope, client = client,
+        tokenProvider = { reportToken },
+        endpointProvider = { reportEndpoint },
+        wifiOnlyProvider = { wifiOnly },
+        wifiConnectedProvider = { wifiConnected },
+        uploadingProvider = { isUploading },
+        setUploading = { isUploading = it }
+    )
+
+    private val wifiMonitor = ErrorReportWifiMonitor(
+        appContextProvider = { appContext },
+        setWifiConnected = { wifiConnected = it },
+        onWifiConnected = { uploader.scheduleUpload() }
+    )
 
     // ── Lifecycle ───────────────────────────────────────────────────────
 
@@ -94,7 +106,7 @@ class ErrorReportPlugin : Plugin {
         checkAndCleanOnUpdate()
 
         // Register WiFi monitor
-        registerWifiMonitor()
+        wifiMonitor.register()
 
         // Load saved config
         loadConfig()
@@ -103,8 +115,8 @@ class ErrorReportPlugin : Plugin {
     }
 
     override suspend fun onUninstall() {
-        unregisterWifiMonitor()
-        uploadJob?.cancel()
+        wifiMonitor.unregister()
+        uploader.cancelScheduledUpload()
         client.close()
         scope.cancel()
     }
@@ -210,142 +222,13 @@ class ErrorReportPlugin : Plugin {
         if (reportToken.isEmpty()) {
             return ExecutionResult.fail("未配置上报 Token。请在插件目录下创建 config.properties: token=<your-gitee-token>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         }
-        val result = doUpload()
+        val result = uploader.doUpload()
         return if (result.isSuccess) {
             val (uploaded, failed) = result.getOrDefault(0 to 0)
             ExecutionResult.ok("上传完成: $uploaded 条成功, $failed 条失败")
         } else {
             ExecutionResult.fail("上传失败: ${result.exceptionOrNull()?.message}", errorCode = ErrorCodes.ERR_INTERNAL)
         }
-    }
-
-    // ── WiFi Monitor ────────────────────────────────────────────────────
-
-    private fun registerWifiMonitor() {
-        val ctx = appContext ?: return
-        connectivityManager = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            ?: return
-
-        val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                val caps = connectivityManager?.getNetworkCapabilities(network) ?: return
-                val isWifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-                // Also treat Ethernet as upload-safe
-                val isEthernet = caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-                if (isWifi || isEthernet) {
-                    wifiConnected = true
-                    scheduleUpload()
-                }
-            }
-
-            override fun onLost(network: Network) {
-                // Check if any other network is still WiFi
-                val allNetworks = connectivityManager?.allNetworks ?: emptyArray()
-                val stillWifi = allNetworks.any { net ->
-                    connectivityManager?.getNetworkCapabilities(net)
-                        ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-                }
-                if (!stillWifi) wifiConnected = false
-            }
-        }
-        networkCallback = callback
-
-        val request = NetworkRequest.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
-            .build()
-
-        try {
-            connectivityManager?.registerNetworkCallback(request, callback)
-        } catch (_: Exception) { }
-
-        // Check initial state
-        try {
-            val activeNetwork = connectivityManager?.activeNetwork
-            val caps = activeNetwork?.let { connectivityManager?.getNetworkCapabilities(it) }
-            wifiConnected = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true ||
-                caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
-        } catch (_: Exception) { }
-    }
-
-    private fun unregisterWifiMonitor() {
-        try {
-            networkCallback?.let { connectivityManager?.unregisterNetworkCallback(it) }
-        } catch (_: Exception) { }
-        networkCallback = null
-    }
-
-    // ── Upload ──────────────────────────────────────────────────────────
-
-    private fun scheduleUpload() {
-        if (wifiOnly && !wifiConnected) return
-        uploadJob?.cancel()
-        uploadJob = scope.launch {
-            delay(30_000) // 30s debounce — wait for network to stabilize
-            doUpload()
-        }
-    }
-
-    private suspend fun doUpload(): Result<Pair<Int, Int>> {
-        if (isUploading || reportToken.isEmpty()) return Result.failure(RuntimeException("Not configured"))
-        isUploading = true
-        var uploaded = 0
-        var failed = 0
-
-        try {
-            val pending = ErrorCollector.pendingUploads()
-            if (pending.isEmpty()) {
-                isUploading = false
-                return Result.success(0 to 0)
-            }
-
-            // Batch upload in groups of 10
-            val batch = pending.take(10)
-            val body = buildString {
-                appendLine("## MengPaw 错误报告")
-                appendLine()
-                appendLine("> 自动上报 · ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}")
-                appendLine()
-                batch.forEach { e ->
-                    appendLine("### ${e.id} — ${e.source}")
-                    appendLine("- **类型**: ${e.type.name}")
-                    appendLine("- **时间**: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(e.timestamp))}")
-                    appendLine("- **Agent**: ${e.agentName ?: "N/A"}")
-                    appendLine("- **消息**: ${e.message}")
-                    if (e.stackTrace.isNotBlank()) {
-                        appendLine("- **堆栈**:")
-                        appendLine("```")
-                        appendLine(e.stackTrace.take(1500))
-                        appendLine("```")
-                    }
-                    if (e.metadata.isNotEmpty()) {
-                        appendLine("- **元数据**: ${e.metadata.map { "${it.key}=${it.value}" }.joinToString(", ")}")
-                    }
-                    appendLine()
-                    appendLine("---")
-                    appendLine()
-                }
-            }
-
-            val response = client.post(reportEndpoint) {
-                contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $reportToken")
-                setBody("""{"title":"错误报告 ${batch.first().id}..${batch.last().id}","body":${buildJsonString(body)}}""")
-            }
-
-            if (response.status.isSuccess()) {
-                uploaded = batch.size
-                ErrorCollector.markReported(batch.map { it.id })
-            } else {
-                failed = batch.size
-            }
-        } catch (e: Exception) {
-            failed = ErrorCollector.pendingUploads().size.coerceAtMost(10)
-        } finally {
-            isUploading = false
-        }
-
-        return Result.success(uploaded to failed)
     }
 
     // ── Version Auto-Clean ──────────────────────────────────────────────
@@ -381,17 +264,6 @@ class ErrorReportPlugin : Plugin {
 
     private fun getPrefs(ctx: Context): SharedPreferences =
         ctx.getSharedPreferences("mengpaw_settings", Context.MODE_PRIVATE)
-
-    // ── Helpers ─────────────────────────────────────────────────────────
-
-    private fun buildJsonString(text: String): String {
-        return "\"" + text
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t") + "\""
-    }
 
     companion object {
         private const val KEY_LAST_VERSION = "error_last_version"

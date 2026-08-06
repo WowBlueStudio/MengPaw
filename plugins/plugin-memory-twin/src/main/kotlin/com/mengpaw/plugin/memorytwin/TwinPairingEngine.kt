@@ -3,14 +3,10 @@
 
 package com.mengpaw.plugin.memorytwin
 
-import com.mengpaw.kernel.acp.AcpCrypto
-import com.mengpaw.kernel.acp.AcpMessage
 import com.mengpaw.kernel.acp.AcpTransport
-import com.mengpaw.kernel.error.ErrorCollector
-import com.mengpaw.kernel.security.PromptFirewall
-import kotlinx.coroutines.*
-import java.security.MessageDigest
-import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 /**
  * Memory Twin pairing engine — short-code verification + fingerprint key exchange.
@@ -42,15 +38,26 @@ import java.util.UUID
  * - **Key derivation**: AcpCrypto.deriveKey(fpA, fpB) → both sides compute the same AES-256 key
  * - **Trust persistence**: PromptFirewall.trustWithKey() → .trusted + .key files on disk
  * - **Session timeout**: 120s auto-cleanup for stale sessions
+ *
+ * ## 职责拆分 (批次3)
+ * 协议步骤 / 会话存储 / 冷却限流 / 密码学工具拆到同包委托对象,
+ * 本对象保留公开 API 签名 (UI/ACP handler 不可感知任何变化):
+ * - [TwinPairingProtocol] — 4 步握手协议实现
+ * - [TwinPairingSessions] — 会话生命周期 (超时/取消/拒绝/清理)
+ * - [TwinPairingCooldown] — 配对限流 (P1.1)
+ * - [TwinPairingCrypto] — nonce / 验证码 / 签名纯函数
  */
 object TwinPairingEngine {
 
-    /** Active pairing sessions, keyed by sessionId. */
-    private val sessions = mutableMapOf<String, PairingSession>()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    private val sessionStore = TwinPairingSessions(scope)
+    private val cooldown = TwinPairingCooldown()
 
     /** Observable UI state for the current pairing flow. UI collects this to show dialogs. */
     val pairingUiState = kotlinx.coroutines.flow.MutableStateFlow(PairingUiState())
+
+    private val protocol = TwinPairingProtocol(sessionStore, cooldown, pairingUiState)
 
     // ── Data types ──────────────────────────────────────────────────
 
@@ -83,7 +90,7 @@ object TwinPairingEngine {
      * @property transport ACP transport for sending messages
      */
     data class PairingSession(
-        val sessionId: String = UUID.randomUUID().toString().take(8),
+        val sessionId: String = java.util.UUID.randomUUID().toString().take(8),
         val peerId: String,
         val myDeviceId: String,
         val myFingerprint: String,
@@ -107,54 +114,7 @@ object TwinPairingEngine {
         val error: String = ""
     )
 
-    // ── P1.1: Pairing cooldown / rate limiting ────────────────────────
-
-    /** Max pairing attempts within the window before locking. */
-    private const val MAX_ATTEMPTS = 3
-    /** Time window for counting attempts (milliseconds). */
-    private const val ATTEMPT_WINDOW_MS = 10 * 60 * 1000L // 10 minutes
-    /** Lock duration after exceeding max attempts (milliseconds). */
-    private const val LOCK_DURATION_MS = 30 * 60 * 1000L  // 30 minutes
-
-    /** PeerId → list of recent attempt timestamps (trimmed on each check). */
-    private val attemptHistory = mutableMapOf<String, MutableList<Long>>()
-    /** PeerId → when its lock expires (0 = not locked). */
-    private val lockExpiry = mutableMapOf<String, Long>()
-
-    /** Check if pairing is allowed for [peerId]; returns error message or null. */
-    private fun checkPairingCooldown(peerId: String): String? {
-        // Trim expired lock
-        val now = System.currentTimeMillis()
-        lockExpiry[peerId]?.let { expiry ->
-            if (now < expiry) {
-                val remainingMin = (expiry - now) / 60_000
-                return "配对冷却中 — 该设备在 $remainingMin 分钟后才可再次发起配对"
-            } else {
-                lockExpiry.remove(peerId)
-                attemptHistory.remove(peerId)
-            }
-        }
-        // Trim old attempts outside the window
-        val recent = attemptHistory.getOrPut(peerId) { mutableListOf() }
-        recent.removeAll { now - it > ATTEMPT_WINDOW_MS }
-        // Check limit
-        if (recent.size >= MAX_ATTEMPTS) {
-            lockExpiry[peerId] = now + LOCK_DURATION_MS
-            recent.clear()
-            return "配对请求过于频繁 — 该设备已被锁定 30 分钟（10 分钟内最多 3 次尝试）"
-        }
-        // Record this attempt
-        recent.add(now)
-        return null
-    }
-
-    /** Clear cooldown state for a peer (called on successful pairing). */
-    fun clearPairingCooldown(peerId: String) {
-        attemptHistory.remove(peerId)
-        lockExpiry.remove(peerId)
-    }
-
-    // ── Public API ──────────────────────────────────────────────────
+    // ── Public API (delegated to TwinPairingProtocol) ───────────────
 
     /**
      * Step ① (Initiator): Send CAPABILITY_ANNOUNCE with a random nonce.
@@ -172,50 +132,7 @@ object TwinPairingEngine {
         myFingerprint: String,
         capabilityCard: String,
         transport: AcpTransport
-    ): PairingUiState {
-        // P1.1: Check cooldown before allowing a new pairing attempt
-        val cooldownError = checkPairingCooldown(peerId)
-        if (cooldownError != null) {
-            android.util.Log.w("MengPawTwin", "配对被冷却期阻止: peer=$peerId")
-            return PairingUiState(error = cooldownError)
-        }
-
-        // Clean up any stale session for this peer
-        sessions.values.removeAll { it.peerId == peerId }
-
-        val nonceA = generateNonce()
-        val session = PairingSession(
-            sessionId = UUID.randomUUID().toString().take(8),
-            peerId = peerId,
-            myDeviceId = myDeviceId,
-            myFingerprint = myFingerprint,
-            nonceA = nonceA,
-            isInitiator = true,
-            transport = transport
-        )
-        sessions[session.sessionId] = session
-
-        // Send CAPABILITY_ANNOUNCE with nonce
-        val msg = AcpMessage.capabilityAnnounce(myDeviceId, peerId, capabilityCard, nonceA)
-        scope.launch {
-            try {
-                transport.send(msg)
-            } catch (e: Exception) {
-                ErrorCollector.report(e, "TwinPairingEngine.initiatePairing")
-                session.phase = PairingPhase.CANCELLED
-            }
-        }
-
-        // Schedule timeout
-        scheduleTimeout(session.sessionId)
-
-        android.util.Log.i("MengPawTwin", "配对发起: session=${session.sessionId} peer=$peerId nonce=${nonceA.take(12)}...")
-        return PairingUiState(
-            sessionId = session.sessionId,
-            peerId = peerId,
-            phase = PairingPhase.AWAITING_CHALLENGE
-        )
-    }
+    ): PairingUiState = protocol.initiatePairing(peerId, myDeviceId, myFingerprint, capabilityCard, transport)
 
     /**
      * Step ② (Responder): Handle incoming CAPABILITY_ANNOUNCE, generate challenge.
@@ -234,58 +151,7 @@ object TwinPairingEngine {
         myDeviceId: String,
         myFingerprint: String,
         transport: AcpTransport
-    ): PairingUiState {
-        // P1.1: Check cooldown before responding to a pairing request
-        val cooldownError = checkPairingCooldown(peerId)
-        if (cooldownError != null) {
-            android.util.Log.w("MengPawTwin", "对方配对被冷却期阻止: peer=$peerId")
-            return PairingUiState(error = cooldownError)
-        }
-
-        // Clean stale sessions for this peer
-        sessions.values.removeAll { it.peerId == peerId && it.isInitiator }
-
-        val nonceB = generateNonce()
-        val session = PairingSession(
-            sessionId = UUID.randomUUID().toString().take(8),
-            peerId = peerId,
-            myDeviceId = myDeviceId,
-            myFingerprint = myFingerprint,
-            nonceA = nonceA,
-            nonceB = nonceB,
-            isInitiator = false,
-            transport = transport
-        )
-        sessions[session.sessionId] = session
-
-        // Compute verification code
-        val code = computeVerificationCode(nonceA, nonceB)
-        session.verificationCode = code
-        session.phase = PairingPhase.AWAITING_CONFIRM
-
-        // Send PAIR_CHALLENGE back
-        val challenge = AcpMessage.pairChallenge(myDeviceId, peerId, myDeviceId, nonceB, myFingerprint)
-        scope.launch {
-            try {
-                transport.send(challenge)
-            } catch (e: Exception) {
-                ErrorCollector.report(e, "TwinPairingEngine.handleAnnounce")
-                session.phase = PairingPhase.CANCELLED
-            }
-        }
-
-        scheduleTimeout(session.sessionId)
-
-        android.util.Log.i("MengPawTwin", "配对挑战: session=${session.sessionId} peer=$peerId code=$code")
-        val state = PairingUiState(
-            sessionId = session.sessionId,
-            peerId = peerId,
-            phase = PairingPhase.AWAITING_CONFIRM,
-            verificationCode = code
-        )
-        pairingUiState.value = state
-        return state
-    }
+    ): PairingUiState = protocol.handleAnnounce(peerId, nonceA, myDeviceId, myFingerprint, transport)
 
     /**
      * Step ②/③ (Initiator): Handle PAIR_CHALLENGE from responder.
@@ -300,31 +166,7 @@ object TwinPairingEngine {
         peerId: String,
         nonceB: String,
         peerFingerprint: String
-    ): PairingUiState {
-        val session = sessions.values.find {
-            it.peerId == peerId && it.isInitiator && it.phase == PairingPhase.AWAITING_CHALLENGE
-        }
-        if (session == null) {
-            android.util.Log.w("MengPawTwin", "配对挑战: 未找到活跃会话 for $peerId")
-            return PairingUiState(error = "未找到活跃的配对会话，请重新发起配对")
-        }
-
-        session.nonceB = nonceB
-        session.peerFingerprint = peerFingerprint
-        val code = computeVerificationCode(session.nonceA, nonceB)
-        session.verificationCode = code
-        session.phase = PairingPhase.AWAITING_CONFIRM
-
-        android.util.Log.i("MengPawTwin", "收到挑战: session=${session.sessionId} peer=$peerId code=$code")
-        val state = PairingUiState(
-            sessionId = session.sessionId,
-            peerId = peerId,
-            phase = PairingPhase.AWAITING_CONFIRM,
-            verificationCode = code
-        )
-        pairingUiState.value = state
-        return state
-    }
+    ): PairingUiState = protocol.handleChallenge(peerId, nonceB, peerFingerprint)
 
     /**
      * Step ④ (Both sides): User confirmed codes match. Derive key + establish trust.
@@ -332,52 +174,7 @@ object TwinPairingEngine {
      * @param sessionId The pairing session ID
      * @return PairingUiState with phase=ESTABLISHED on success
      */
-    fun confirmPairing(sessionId: String): PairingUiState {
-        val session = sessions[sessionId]
-        if (session == null) {
-            return PairingUiState(error = "配对会话已过期，请重新发起配对")
-        }
-        if (session.phase != PairingPhase.AWAITING_CONFIRM) {
-            return PairingUiState(error = "配对会话状态异常: ${session.phase}")
-        }
-        if (session.peerFingerprint.isBlank()) {
-            return PairingUiState(error = "缺少对端设备指纹")
-        }
-
-        // Derive AES-256 key from both device fingerprints
-        AcpCrypto.deriveKey(session.myFingerprint, session.peerFingerprint, session.peerId)
-
-        // Persist trust
-        PromptFirewall.trustWithKey(session.peerId, session.peerFingerprint)
-
-        // Send PAIR_CONFIRM to peer
-        if (session.isInitiator) {
-            val confirmMsg = AcpMessage.pairConfirm(
-                session.myDeviceId, session.peerId,
-                session.myDeviceId, session.verificationCode,
-                computeSignature(session.myFingerprint, session.peerFingerprint)
-            )
-            scope.launch {
-                try {
-                    session.transport?.send(confirmMsg)
-                } catch (e: Exception) {
-                    ErrorCollector.report(e, "TwinPairingEngine.confirmPairing")
-                }
-            }
-        }
-
-        session.phase = PairingPhase.ESTABLISHED
-
-        // P1.1: Clear cooldown on successful pairing
-        clearPairingCooldown(session.peerId)
-
-        android.util.Log.i("MengPawTwin", "配对完成: session=$sessionId peer=${session.peerId}")
-        return PairingUiState(
-            sessionId = sessionId,
-            peerId = session.peerId,
-            phase = PairingPhase.ESTABLISHED
-        )
-    }
+    fun confirmPairing(sessionId: String): PairingUiState = protocol.confirmPairing(sessionId)
 
     /**
      * Step ④ (Responder): Handle PAIR_CONFIRM from initiator.
@@ -392,84 +189,29 @@ object TwinPairingEngine {
         peerId: String,
         verificationCode: String,
         signature: String
-    ): PairingUiState {
-        val session = sessions.values.find {
-            it.peerId == peerId && !it.isInitiator && it.phase == PairingPhase.AWAITING_CONFIRM
-        }
-        if (session == null) {
-            android.util.Log.w("MengPawTwin", "配对确认: 未找到活跃会话 for $peerId")
-            return PairingUiState(error = "未找到活跃的配对会话")
-        }
+    ): PairingUiState = protocol.handleConfirm(peerId, verificationCode, signature)
 
-        // Verify the confirmation code matches
-        if (verificationCode != session.verificationCode) {
-            android.util.Log.e("MengPawTwin", "验证码不匹配: expected=${session.verificationCode} got=$verificationCode")
-            session.phase = PairingPhase.CANCELLED
-            return PairingUiState(error = "验证码不匹配，配对失败")
-        }
-
-        // Verify signature
-        val expectedSig = computeSignature(session.peerFingerprint, session.myFingerprint)
-        if (signature != expectedSig) {
-            // For now, log but don't block — the verification code check is the primary MITM defense
-            android.util.Log.w("MengPawTwin", "签名不匹配: expected=$expectedSig got=$signature")
-        }
-
-        // Derive key and establish trust
-        AcpCrypto.deriveKey(session.myFingerprint, session.peerFingerprint, peerId)
-        PromptFirewall.trustWithKey(peerId, session.peerFingerprint)
-
-        session.phase = PairingPhase.ESTABLISHED
-
-        // P1.1: Clear cooldown on successful pairing
-        clearPairingCooldown(peerId)
-
-        android.util.Log.i("MengPawTwin", "配对确认完成: peer=$peerId")
-        return PairingUiState(
-            sessionId = session.sessionId,
-            peerId = peerId,
-            phase = PairingPhase.ESTABLISHED
-        )
-    }
+    // ── Public API (delegated to TwinPairingSessions) ───────────────
 
     /**
      * Cancel an active pairing session.
      */
-    fun cancelPairing(sessionId: String) {
-        sessions[sessionId]?.phase = PairingPhase.CANCELLED
-        sessions.remove(sessionId)
-        android.util.Log.i("MengPawTwin", "配对取消: $sessionId")
-    }
+    fun cancelPairing(sessionId: String) = sessionStore.cancel(sessionId)
 
     /**
      * Reject a pairing request (responder-side cancel).
      */
-    fun rejectPairing(peerId: String) {
-        sessions.values
-            .filter { it.peerId == peerId && !it.isInitiator }
-            .forEach { it.phase = PairingPhase.CANCELLED }
-        sessions.values.removeAll { it.peerId == peerId && !it.isInitiator }
-    }
+    fun rejectPairing(peerId: String) = sessionStore.reject(peerId)
 
     /**
      * Get the current pairing state for UI display.
      */
-    fun getSession(sessionId: String): PairingSession? = sessions[sessionId]
+    fun getSession(sessionId: String): PairingSession? = sessionStore.getSession(sessionId)
 
     /**
      * Find an active session for a given peer.
      */
-    fun getSessionForPeer(peerId: String): PairingSession? =
-        sessions.values.find { it.peerId == peerId && it.phase != PairingPhase.CANCELLED }
-
-    // ── Internal helpers ────────────────────────────────────────────
-
-    /** Generate a random 32-character hex nonce. */
-    private fun generateNonce(): String {
-        val bytes = ByteArray(16)
-        kotlin.random.Random.nextBytes(bytes)
-        return bytes.joinToString("") { "%02x".format(it) }
-    }
+    fun getSessionForPeer(peerId: String): PairingSession? = sessionStore.getSessionForPeer(peerId)
 
     /**
      * Compute a 6-digit verification code from two nonces.
@@ -477,40 +219,12 @@ object TwinPairingEngine {
      *
      * Algorithm: SHA-256(nonceA|nonceB) → first 3 bytes as hex → parse as int → mod 1,000,000
      */
-    fun computeVerificationCode(nonceA: String, nonceB: String): String {
-        val sorted = listOf(nonceA, nonceB).sorted()
-        val hash = MessageDigest.getInstance("SHA-256")
-            .digest("${sorted[0]}|${sorted[1]}".toByteArray(Charsets.UTF_8))
-        // Take first 3 bytes, convert to unsigned int, mod 1,000,000
-        val value = ((hash[0].toInt() and 0xFF) shl 16) or
-                    ((hash[1].toInt() and 0xFF) shl 8) or
-                    (hash[2].toInt() and 0xFF)
-        return (value % 1_000_000).toString().padStart(6, '0')
-    }
+    fun computeVerificationCode(nonceA: String, nonceB: String): String =
+        TwinPairingCrypto.computeVerificationCode(nonceA, nonceB)
 
-    /** Compute a signature for PAIR_CONFIRM verification. */
-    private fun computeSignature(myFp: String, peerFp: String): String {
-        val sorted = listOf(myFp, peerFp).sorted()
-        return java.security.MessageDigest.getInstance("SHA-256")
-            .digest("pair_confirm:${sorted[0]}|${sorted[1]}".toByteArray())
-            .joinToString("") { "%02x".format(it) }
-    }
-
-    /** Auto-cleanup stale sessions after 120 seconds. */
-    private fun scheduleTimeout(sessionId: String) {
-        scope.launch {
-            delay(120_000) // 2 minutes
-            val session = sessions[sessionId] ?: return@launch
-            if (session.phase != PairingPhase.ESTABLISHED) {
-                android.util.Log.i("MengPawTwin", "配对超时: $sessionId")
-                sessions.remove(sessionId)
-            }
-        }
-    }
+    /** Clear cooldown state for a peer (called on successful pairing). */
+    fun clearPairingCooldown(peerId: String) = cooldown.clearPairingCooldown(peerId)
 
     /** Clean up all expired sessions. */
-    fun cleanup() {
-        val cutoff = System.currentTimeMillis() - 120_000
-        sessions.values.removeAll { it.createdAt < cutoff && it.phase != PairingPhase.ESTABLISHED }
-    }
+    fun cleanup() = sessionStore.cleanup()
 }
