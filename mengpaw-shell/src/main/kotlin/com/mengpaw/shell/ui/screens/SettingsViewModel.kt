@@ -6,169 +6,14 @@ package com.mengpaw.shell.ui.screens
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.mengpaw.kernel.llm.PromptEngine
 import com.mengpaw.core.security.Vault
-import com.mengpaw.shell.ui.localization.AppStrings
-import com.mengpaw.shell.ui.localization.ChineseStrings
-import com.mengpaw.shell.ui.localization.EnglishStrings
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers; import kotlinx.coroutines.launch; import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.builtins.MapSerializer
-import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
 
-private val appJson = Json { ignoreUnknownKeys = true; prettyPrint = true }
-
-@Serializable
-private data class SavedProviderJson(
-    val preset: String,
-    val apiKey: String,
-    val endpoint: String,
-    val model: String,
-    val balance: String = ""
-)
-
-/**
- * Preset LLM providers with known endpoints and models.
- */
-data class ModelInfo(val name: String, val type: String) // type: "Chat" or "多模态"
-
-enum class LlmProviderPreset(
-    val label: String,
-    val enLabel: String,
-    val endpoint: String,
-    val defaultModel: String,
-    val apiKeyPrefix: String = "",
-    val models: List<ModelInfo> = emptyList()
-) {
-    // ═══ Presets verified against official docs — 2026-07-21 ═══
-    // Only top models listed here; full list fetched from API on key entry.
-    OPENAI("OpenAI", "OpenAI", "https://api.openai.com/v1/chat/completions", "gpt-5.4", "sk-",
-        listOf(ModelInfo("gpt-5.4", "旗舰"), ModelInfo("gpt-5.4-mini", "快速"), ModelInfo("gpt-5.4-nano", "轻量"),
-            ModelInfo("gpt-5", "前代"), ModelInfo("o4-mini", "思维链"))),
-    DEEPSEEK("DeepSeek", "DeepSeek", "https://api.deepseek.com/chat/completions", "deepseek-v4-flash", "sk-",
-        listOf(ModelInfo("deepseek-v4-flash", "快速"), ModelInfo("deepseek-v4-pro", "思维链"))),
-    KIMI("Kimi (月之暗面)", "Kimi (Moonshot)", "https://api.moonshot.cn/v1/chat/completions", "kimi-k3", "sk-",
-        listOf(ModelInfo("kimi-k3", "旗舰·1M上下文"), ModelInfo("kimi-k2.7-code", "Coding"),
-            ModelInfo("kimi-k2.6", "通用"), ModelInfo("kimi-k2.7-code-highspeed", "高速Coding"))),
-    GLM("GLM (智谱)", "GLM (Zhipu)", "https://open.bigmodel.cn/api/paas/v4/chat/completions", "glm-5.2", "",
-        listOf(ModelInfo("glm-5.2", "旗舰·1M上下文"), ModelInfo("glm-5.1", "Coding"),
-            ModelInfo("glm-5", "前代"), ModelInfo("glm-5-turbo", "高速"), ModelInfo("glm-5v-turbo", "多模态"))),
-    QWEN("DashScope", "DashScope", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", "qwen3.7-max", "sk-",
-        listOf(ModelInfo("qwen3.7-max", "旗舰·1M上下文"), ModelInfo("qwen3.6-35b-a3b", "开源MoE"),
-            ModelInfo("qwen3.5-plus", "均衡"), ModelInfo("qwen-flash", "快速"),
-            ModelInfo("qwen3-coder-plus", "Coding"), ModelInfo("qwq-plus", "思维链"),
-            ModelInfo("qwen3-vl-plus", "多模态"), ModelInfo("qwen3-omni-flash", "全模态"))),
-    GROK("Grok (xAI)", "Grok (xAI)", "https://api.x.ai/v1/chat/completions", "grok-4.3", "xai-",
-        listOf(ModelInfo("grok-4.5", "旗舰"), ModelInfo("grok-4.3", "推荐·1M上下文"),
-            ModelInfo("grok-4.20-reasoning", "思维链"), ModelInfo("grok-4.1-fast-non-reasoning", "快速"),
-            ModelInfo("grok-build-0.1", "Coding"))),
-    VOLCANO("火山引擎 (豆包)", "Volcano Engine (Doubao)", "https://ark.cn-beijing.volces.com/api/v3/chat/completions", "doubao-seed-2.0-pro", "",
-        listOf(ModelInfo("doubao-seed-2.0-pro", "旗舰"), ModelInfo("doubao-seed-2.0-lite", "均衡"),
-            ModelInfo("doubao-seed-2.0-mini", "轻量"), ModelInfo("doubao-seed-1.8", "前代"),
-            ModelInfo("doubao-seed-1.6-flash", "快速"), ModelInfo("doubao-seed-1.6-thinking", "思维链"),
-            ModelInfo("deepseek-v3-2", "DeepSeek托管"), ModelInfo("glm-4.7", "GLM托管"),
-            ModelInfo("(需创建接入点 ep-xxx)", "提示"))),
-    OPENMODEL("OpenModel", "OpenModel", "https://api.openmodel.ai/v1/chat/completions", "deepseek-v4-flash", "sk-",
-        listOf(ModelInfo("deepseek-v4-pro", "思维链"), ModelInfo("deepseek-v4-flash", "快速"),
-            ModelInfo("qwen3.7-max", "Qwen托管"), ModelInfo("gpt-5.4-mini", "OpenAI托管"),
-            ModelInfo("kimi-k3", "Kimi托管"), ModelInfo("glm-5.2", "GLM托管"),
-            ModelInfo("grok-4.5", "Grok托管"), ModelInfo("(更多模型见API返回)", "提示"))),
-    SELF_HOSTED("Self-Hosted (自建)", "Self-Hosted", "http://192.168.1.100:${com.mengpaw.kernel.ports.Ports.LLM_SELF}/v1/chat/completions", "local-model", "",
-        listOf(ModelInfo("local-model", "Chat"), ModelInfo("qwen2.5:7b", "Chat"), ModelInfo("llama3.1:8b", "Chat"))),
-    CUSTOM("Custom", "Custom", "", "", "", emptyList());
-}
-
-fun LlmProviderPreset.modelListDisplay(): List<ModelInfo> =
-    if (models.size <= 5) models else models.take(5)
-
-/**
- * Settings state for the app.
- */
-data class SavedProvider(
-    val preset: LlmProviderPreset,
-    val apiKey: String,
-    val endpoint: String,
-    val model: String,
-    val balance: String = ""
-)
-
-/** Agent language modes for controlling LLM output language. */
-enum class AgentLanguageMode(val labelKey: String) { FOLLOW_UI("followUi"), CHINESE("chinese"), ENGLISH("english") }
-
-/** Agent loop / execution mode. label/desc 中文 + enLabel/enDesc 英文（英文 UI 用）。 */
-enum class LoopMode(val label: String, val desc: String, val enLabel: String, val enDesc: String) {
-    REACT("React 模式", "标准问答，灵活高效",
-        "React Mode", "Standard Q&A, flexible and efficient"),
-    GOAL("Goal 模式", "单目标驱动，完成即停",
-        "Goal Mode", "Single goal, stops when done"),
-    MISSION("Mission 模式", "建立临时子 Agent 分解任务链，逐步执行",
-        "Mission Mode", "Decompose into subtask chain with temporary sub-agents"),
-    SWARM("火种模式", "星星之火，可以燎原：并行 Worker 协作，可按角色混合模型",
-        "Swarm Mode", "Parallel workers with role-based model routing"),
-    FLEET("步坦协同模式", "装甲集群推进+步兵协同清剿：多 Agent 编队协同，跨设备分布式执行复杂任务",
-        "Combined Arms Mode", "Multi-agent combined-arms coordination for distributed complex tasks")
-}
-
-/** 主题模式 — 亮色 / 暗色 / 跟随系统。 */
-enum class ThemeMode(val label: String, val enLabel: String) {
-    LIGHT("亮色", "Light"),
-    DARK("暗色", "Dark"),
-    SYSTEM("跟随系统", "System")
-}
-
-/** 后台运行策略。 */
-enum class BackgroundMode(val label: String, val desc: String, val enLabel: String, val enDesc: String) {
-    NOTIFICATION("通知栏常驻", "状态栏显示图标，保活最强，推荐", "Persistent Notification", "Status bar icon, strongest keep-alive (recommended)"),
-    SILENT("静默运行", "隐藏通知图标，前台服务仍在后台", "Silent Running", "Hidden notification icon, foreground service still active"),
-    FOREGROUND_ONLY("仅前台使用", "退出时释放服务，最省电", "Foreground Only", "Service released on exit, most battery-efficient")
-}
-
-data class SettingsState(
-    val selectedProvider: LlmProviderPreset = LlmProviderPreset.OPENAI,
-    val apiEndpoint: String = LlmProviderPreset.OPENAI.endpoint,
-    val apiKey: String = "",
-    val modelName: String = LlmProviderPreset.OPENAI.defaultModel,
-    val remoteModels: List<String> = emptyList(),
-    val remoteModelsFetched: Boolean = false,
-    val maxSteps: Int = 50,
-    val llmMaxConcurrency: Int = 10,
-    val commandTimeoutSec: Int = 60,
-    val timezone: String = java.util.TimeZone.getDefault().id,
-    val contextStrategy: String = "default",
-    val memoryBackend: String = "builtin",
-    val themeMode: ThemeMode = ThemeMode.LIGHT,
-    val showApiKey: Boolean = false,
-    val backgroundMode: BackgroundMode = BackgroundMode.NOTIFICATION,
-    /** 自动翻译(美系模型) — opt-in, 默认关闭, 用户主动开启才加载 Google 翻译. */
-    val autoTranslate: Boolean = false,
-    /** 后台省电偏好 — 持久化到 CONFIG/power_saver。目前为偏好记录（Agent 可经 self.config 读取），暂无主动节流实现。 */
-    val powerSaverEnabled: Boolean = false,
-    val useChinese: Boolean = true,
-    val agentLanguageMode: AgentLanguageMode = AgentLanguageMode.FOLLOW_UI,
-    val loopMode: LoopMode = LoopMode.REACT,
-    // API section state
-    val apiSectionExpanded: Boolean = false,
-    val savedProviders: List<SavedProvider> = emptyList(),
-    val isTesting: Boolean = false,
-    val balance: String = "",
-    /** 角色模型路由 — Fleet/火种各角色 → provider 快照（只配想覆盖的角色，缺省回退主模型）。 */
-    val swarmRoles: Map<String, SavedProvider> = emptyMap()
-) {
-    val strings: AppStrings get() = if (useChinese) ChineseStrings else EnglishStrings
-
-    /** Resolved Agent language: follow UI or user override. */
-    val effectiveAgentLanguage: com.mengpaw.kernel.llm.PromptEngine.AgentLanguage get() = when (agentLanguageMode) {
-        AgentLanguageMode.FOLLOW_UI -> PromptEngine.AgentLanguage.fromUiChinese(useChinese)
-        AgentLanguageMode.CHINESE -> PromptEngine.AgentLanguage.CHINESE
-        AgentLanguageMode.ENGLISH -> PromptEngine.AgentLanguage.ENGLISH
-    }
-}
+// 数据模型 → SettingsModels.kt; Vault 持久化 → SettingsProviderStore.kt;
+// 远程探测 → SettingsRemote.kt; CONFIG 文件 → SettingsConfigFiles.kt (2026-08-06, 批次4)
 
 /**
  * ViewModel for the settings screen.
@@ -177,6 +22,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     // SECURITY: Use encrypted Vault for API key persistence
     private val vault = Vault(application)
+    private val providerStore = SettingsProviderStore(vault)
 
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
@@ -185,28 +31,28 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         loadSavedProviders()
         // 自动翻译 opt-in: 配置文件不存在 → 默认关闭(用户未主动开启)
         try {
-            val f = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "auto_translate")
-            if (f.exists()) _state.value = _state.value.copy(autoTranslate = f.readText().trim() == "true")
+            val v = SettingsConfigFiles.readText("auto_translate")
+            if (v != null) _state.value = _state.value.copy(autoTranslate = v == "true")
         } catch (_: Exception) {}
         // 省电偏好恢复 — 此前为 UI 局部 state，切换即丢且重启必回 false
         try {
-            val f = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "power_saver")
-            if (f.exists()) _state.value = _state.value.copy(powerSaverEnabled = f.readText().trim() == "true")
+            val v = SettingsConfigFiles.readText("power_saver")
+            if (v != null) _state.value = _state.value.copy(powerSaverEnabled = v == "true")
         } catch (_: Exception) {}
         // P0 fix: 主题/语言持久化恢复 — 此前 cycleThemeMode/toggleLanguage 只改内存,
         // 重启必回 LIGHT+中文默认
         try {
-            val themeFile = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "theme_mode")
-            if (themeFile.exists()) {
-                ThemeMode.entries.firstOrNull { it.name == themeFile.readText().trim() }?.let {
+            val v = SettingsConfigFiles.readText("theme_mode")
+            if (v != null) {
+                ThemeMode.entries.firstOrNull { it.name == v }?.let {
                     _state.value = _state.value.copy(themeMode = it)
                 }
             }
         } catch (_: Exception) {}
         try {
-            val langFile = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "use_chinese")
-            if (langFile.exists()) {
-                _state.value = _state.value.copy(useChinese = langFile.readText().trim() != "false")
+            val v = SettingsConfigFiles.readText("use_chinese")
+            if (v != null) {
+                _state.value = _state.value.copy(useChinese = v != "false")
             }
         } catch (_: Exception) {}
     }
@@ -216,47 +62,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     /** Restore saved providers from encrypted Vault on app startup. */
     private fun loadSavedProviders() {
-        if (!vault.isAvailable) return
-        try {
-            val rawJson = vault.retrieve(VAULT_KEY_PROVIDERS)
-            if (rawJson.isNullOrBlank()) {
-                // Migration: old single-key format → new multi-provider format
-                migrateLegacyKey()
-                return
-            }
-            val jsonList = appJson.decodeFromString<List<SavedProviderJson>>(rawJson)
-            val providers = jsonList.map { p ->
-                SavedProvider(
-                    preset = try { LlmProviderPreset.valueOf(p.preset) } catch (_: Exception) { LlmProviderPreset.CUSTOM },
-                    apiKey = p.apiKey,
-                    endpoint = p.endpoint,
-                    model = p.model,
-                    balance = p.balance
-                )
-            }
-            // 角色模型路由配置（独立 Vault key，损坏则静默跳过）
-            var roles = emptyMap<String, SavedProvider>()
-            try {
-                val rolesRaw = vault.retrieve(VAULT_KEY_SWARM_ROLES)
-                if (!rolesRaw.isNullOrBlank()) {
-                    val rolesJson = appJson.decodeFromString<Map<String, SavedProviderJson>>(rolesRaw)
-                    roles = rolesJson.mapNotNull { (role, p) ->
-                        val sp = SavedProvider(
-                            preset = try { LlmProviderPreset.valueOf(p.preset) } catch (_: Exception) { LlmProviderPreset.CUSTOM },
-                            apiKey = p.apiKey, endpoint = p.endpoint, model = p.model, balance = p.balance
-                        )
-                        if (sp.endpoint.isBlank()) null else role to sp
-                    }.toMap()
+        when (val result = providerStore.restore()) {
+            is SettingsProviderStore.RestoreResult.Loaded -> {
+                if (result.providers.isNotEmpty() || result.roles.isNotEmpty()) {
+                    _state.value = _state.value.copy(savedProviders = result.providers, swarmRoles = result.roles)
                 }
-            } catch (e: Exception) {
-                com.mengpaw.kernel.KernelLog.w("SettingsVM", "角色路由配置解析失败（损坏则跳过）: ${e.message}")
             }
-            if (providers.isNotEmpty() || roles.isNotEmpty()) {
-                _state.value = _state.value.copy(savedProviders = providers, swarmRoles = roles)
+            is SettingsProviderStore.RestoreResult.Migrated -> {
+                result.provider?.let { _state.value = _state.value.copy(savedProviders = listOf(it)) }
             }
-        } catch (_: Exception) {
-            // Corrupted data or first launch — start fresh
-            migrateLegacyKey()
+            SettingsProviderStore.RestoreResult.Nothing -> {}
         }
     }
 
@@ -265,61 +80,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val roles = if (provider == null) _state.value.swarmRoles - role
         else _state.value.swarmRoles + (role to provider)
         _state.value = _state.value.copy(swarmRoles = roles)
-        persistSwarmRoles(roles)
-    }
-
-    /** Serialize and persist role routing to encrypted Vault. */
-    private fun persistSwarmRoles(roles: Map<String, SavedProvider>) {
-        if (!vault.isAvailable) return
-        val jsonMap = roles.mapValues { (_, p) ->
-            SavedProviderJson(
-                preset = p.preset.name, apiKey = p.apiKey,
-                endpoint = p.endpoint, model = p.model, balance = p.balance
-            )
-        }
-        vault.store(VAULT_KEY_SWARM_ROLES,
-            appJson.encodeToString(MapSerializer(String.serializer(), SavedProviderJson.serializer()), jsonMap))
-    }
-
-    /** Migrate old single-key Vault entries into the new multi-provider format. */
-    private fun migrateLegacyKey() {
-        val oldApiKey = vault.retrieve("api_key") ?: return
-        val oldEndpoint = vault.retrieve("api_endpoint") ?: ""
-        val oldModel = vault.retrieve("model_name") ?: ""
-        if (oldApiKey.isBlank()) return
-
-        // Detect preset from endpoint
-        val preset = LlmProviderPreset.entries.firstOrNull { it.endpoint == oldEndpoint }
-            ?: LlmProviderPreset.CUSTOM
-        val saved = SavedProvider(preset, oldApiKey, oldEndpoint, oldModel)
-        _state.value = _state.value.copy(savedProviders = listOf(saved))
-
-        // Save in new format, then clear old keys
-        persistProviders(listOf(saved))
-        try { vault.remove("api_key") } catch (_: Exception) {}
-        try { vault.remove("api_endpoint") } catch (_: Exception) {}
-        try { vault.remove("model_name") } catch (_: Exception) {}
-    }
-
-    /** Serialize and persist all saved providers to encrypted Vault. */
-    private fun persistProviders(providers: List<SavedProvider>) {
-        if (!vault.isAvailable) return
-        val jsonList = providers.map { p ->
-            SavedProviderJson(
-                preset = p.preset.name,
-                apiKey = p.apiKey,
-                endpoint = p.endpoint,
-                model = p.model,
-                balance = p.balance
-            )
-        }
-        vault.store(VAULT_KEY_PROVIDERS, appJson.encodeToString(ListSerializer(SavedProviderJson.serializer()), jsonList))
+        providerStore.persistSwarmRoles(roles)
     }
 
     companion object {
-        private const val VAULT_KEY_PROVIDERS = "saved_providers_json"
-        private const val VAULT_KEY_SWARM_ROLES = "swarm_roles_json"
-
         /** Fleet/火种角色模型路由 — 角色键与内核 SwarmRoles 单一事实源对齐。 */
         val SWARM_ROLES: List<String> = com.mengpaw.kernel.agent.SwarmRoles.ALL
 
@@ -362,40 +126,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         fetchModelsJob = viewModelScope.launch(Dispatchers.IO) {
             kotlinx.coroutines.delay(500) // wait for user to finish typing
             try {
-                val base = ep.substringBefore("/chat/completions")
-                    .substringBefore("/v1/chat")
-                    .substringBefore("/compatible-mode/v1")
-
-                // Try both common paths
-                val candidatePaths = listOf("$base/v1/models", "$base/models")
-                var models: List<String> = emptyList()
-
-                for (url in candidatePaths) {
-                    try {
-                        val client = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                        client.connectTimeout = 3000; client.readTimeout = 5000
-                        client.setRequestProperty("Authorization", "Bearer $key")
-                        val body = client.inputStream.bufferedReader().readText()
-                        client.disconnect()
-
-                        val parsed = Regex("\"id\"\\s*:\\s*\"([^\"]+)\"").findAll(body)
-                            .map { it.groupValues[1] }
-                            .filter { id ->
-                                id.length < 80 && !id.contains(":") &&
-                                !id.startsWith("dall-e") && !id.startsWith("whisper") &&
-                                !id.startsWith("tts") && !id.contains("embedding") &&
-                                !id.contains("moderation") && !id.contains("babbage") &&
-                                !id.contains("davinci")
-                            }
-                            .toList()
-
-                        if (parsed.isNotEmpty()) {
-                            models = parsed
-                            break
-                        }
-                    } catch (_: Exception) { /* try next URL */ }
-                }
-
+                val models = fetchModelsFromEndpoint(ep, key)
                 if (models.isNotEmpty()) {
                     val currentModel = _state.value.modelName
                     val currentInList = models.any { it.equals(currentModel, ignoreCase = true) }
@@ -447,9 +178,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _state.value = _state.value.copy(themeMode = next)
         // P0 fix: 持久化 — 此前重启即回 LIGHT
         try {
-            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "theme_mode")
-            file.parentFile?.mkdirs()
-            file.writeText(next.name)
+            SettingsConfigFiles.writeText("theme_mode", next.name)
         } catch (_: Exception) {}
     }
 
@@ -459,9 +188,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _state.value = _state.value.copy(backgroundMode = next)
         // 写入文件让 ShellService 读取
         try {
-            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "background_mode")
-            file.parentFile?.mkdirs()
-            file.writeText(next.name)
+            SettingsConfigFiles.writeText("background_mode", next.name)
         } catch (_: Exception) {}
     }
 
@@ -481,9 +208,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val next = !_state.value.autoTranslate
         _state.value = _state.value.copy(autoTranslate = next)
         try {
-            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "auto_translate")
-            file.parentFile?.mkdirs()
-            file.writeText(next.toString())
+            SettingsConfigFiles.writeText("auto_translate", next.toString())
         } catch (_: Exception) {}
     }
 
@@ -492,9 +217,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val next = !_state.value.powerSaverEnabled
         _state.value = _state.value.copy(powerSaverEnabled = next)
         try {
-            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "power_saver")
-            file.parentFile?.mkdirs()
-            file.writeText(next.toString())
+            SettingsConfigFiles.writeText("power_saver", next.toString())
         } catch (_: Exception) {}
     }
 
@@ -503,9 +226,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _state.value = _state.value.copy(useChinese = next)
         // P0 fix: 持久化 — 此前重启即回中文
         try {
-            val file = java.io.File(com.mengpaw.kernel.DataPaths.CONFIG, "use_chinese")
-            file.parentFile?.mkdirs()
-            file.writeText(next.toString())
+            SettingsConfigFiles.writeText("use_chinese", next.toString())
         } catch (_: Exception) {}
     }
 
@@ -544,7 +265,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         existing.removeAll { it.preset == entry.preset }
         existing.add(entry)
         // Persist all providers to encrypted Vault
-        persistProviders(existing)
+        providerStore.persistProviders(existing)
         // Also update legacy keys for DreamWorker backward compat
         vault.store("api_key", _state.value.apiKey)
         vault.store("api_endpoint", _state.value.apiEndpoint)
@@ -555,7 +276,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun removeProvider(preset: LlmProviderPreset) {
         val updated = _state.value.savedProviders.filter { it.preset != preset }
         _state.value = _state.value.copy(savedProviders = updated)
-        persistProviders(updated)
+        providerStore.persistProviders(updated)
     }
 
     fun editProvider(saved: SavedProvider) {
@@ -575,16 +296,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             try {
                 val ep = _state.value.apiEndpoint
                 if (ep.isBlank()) { _state.value = _state.value.copy(isTesting = false, balance = "N/A"); return@launch }
-                val base = ep.substringBefore("/chat/completions").substringBefore("/v1/chat")
-                val url = java.net.URL("$base/v1/models")
-                withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    val conn = url.openConnection() as java.net.HttpURLConnection
-                    conn.connectTimeout = 10000; conn.readTimeout = 10000
-                    val key = _state.value.apiKey
-                    if (key.isNotBlank()) conn.setRequestProperty("Authorization", "Bearer $key")
-                    val code = conn.responseCode
-                    conn.disconnect()
-                    val result = if (code in 200..299) "OK" else "Err $code"
+                withContext(Dispatchers.IO) {
+                    val result = testConnectionResult(ep, _state.value.apiKey)
                     _state.value = _state.value.copy(isTesting = false, balance = result)
                 }
             } catch (e: Exception) {

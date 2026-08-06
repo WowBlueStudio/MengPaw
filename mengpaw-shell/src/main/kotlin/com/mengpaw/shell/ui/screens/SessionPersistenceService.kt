@@ -4,56 +4,17 @@
 package com.mengpaw.shell.ui.screens
 
 import com.mengpaw.kernel.KernelLog
-import com.mengpaw.kernel.session.AttachmentData
 import com.mengpaw.shell.ui.screens.model.AgentSession
-import com.mengpaw.shell.ui.screens.model.AgentTrace
 import com.mengpaw.shell.ui.screens.model.ChatMessageUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 import java.io.File
 
-// ── JSON serialization helpers for persistence ──
-
-internal val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
-
-@Serializable
-data class SessionPersistenceData(
-    val sessionId: String = "",
-    val engineSessionId: String = "",
-    val messages: List<MessageData> = emptyList()
-)
-
-@Serializable
-data class MessageData(
-    val type: String,
-    val text: String,
-    val executionMode: String? = null,
-    val agentRef: String? = null,
-    val traces: List<TraceData> = emptyList(),
-    /** True for failed "!command" results (type="command"). Default false keeps old files compatible. */
-    val isError: Boolean = false,
-    /** 结构化附件 (v0.33.0+) — 旧会话 JSON 无此键 → 默认空, 零迁移。 */
-    val attachments: List<AttachmentData> = emptyList(),
-    /** AgentStep 步骤气泡 (v0.3x, type="agent_step") — 默认值兼容旧文件。 */
-    val step: Int = 0,
-    val thought: String = "",
-    val action: String = "",
-    val isFinal: Boolean = false
-)
-
-@Serializable
-data class TraceData(
-    val step: Int = 0,
-    val thought: String = "",
-    val action: String = "",
-    val observation: String = ""
-)
+// 序列化模型 → SessionPersistenceModels.kt; 序列化/磁盘 I/O/整理纯函数 → SessionPersistenceCodec.kt;
+// 保存队列 → SessionSaveEngine.kt (2026-08-06, >400 行文件拆分批次4)
 
 // ── Session persistence service ──
 
@@ -121,382 +82,119 @@ class SessionPersistenceService(
         }
     }
 
-    /** JSON file path for session persistence. */
-    private val sessionHistoryFile: File
-        get() = File(com.mengpaw.kernel.DataPaths.BASE, "session_history.json")
+    // ── Auto-save (队列/快照/落盘 → SessionSaveEngine.kt) ──
 
-    // ── Auto-save ──
-
-    // ── Save ──
-
-    /** 落盘快照: Main 线程捕获(不可变 List 引用), worker 线程序列化+写盘. */
-    private data class SaveSnapshot(
-        val msgs: List<ChatMessageUi>,
-        val engineSessionId: String,
-        val sessionId: String,
-        val agentName: String,
-        val framework: String?
+    private val saveEngine = SessionSaveEngine(
+        sessions = sessions,
+        getActiveAgentName = getActiveAgentName,
+        ensureSessionId = { ensureSessionId() },
+        currentSessionId = { currentSessionId },
+        historyHasId = { id -> _sessionHistory.value.any { it.id == id } },
+        appendHistory = { record ->
+            _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
+            saveSessionHistoryToDisk(_sessionHistory.value)
+        }
     )
 
-    /** 单线程执行器 — 序列化+文件写全移出 Main; FIFO 后写覆盖前写 (v0.28.6). */
-    private val saveExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
-        Thread(r, "session-save").apply { isDaemon = false }
-    }
-
-    /** 在途快照合并: 同一会话多次保存只留最新 (队列深度恒 ≤1). */
-    @Volatile private var pendingSave: SaveSnapshot? = null
-
     /** Persist active session messages so they survive process death. Main 仅快照, 不落盘. */
-    fun saveCurrentSession() {
-        try {
-            val session = sessions[getActiveAgentName()] ?: return
-            val msgs = session.messages.value.filter { it !is ChatMessageUi.System }
-            if (msgs.isEmpty()) return
-            ensureSessionId()
-            val snapshot = SaveSnapshot(
-                msgs = msgs,
-                engineSessionId = session.engine.currentConversationId() ?: "",
-                sessionId = currentSessionId,
-                agentName = getActiveAgentName(),
-                framework = session.framework
-            )
-            pendingSave = snapshot
-            try {
-                saveExecutor.execute { flushPendingSave() }
-            } catch (_: java.util.concurrent.RejectedExecutionException) {
-                // onCleared 已 shutdown — 最后快照直接同步兜底
-                pendingSave = null
-                doSave(snapshot)
-            }
-        } catch (e: Exception) { KernelLog.w("AgentVM", "saveCurrentSession: ${e.message}") }
-    }
-
-    /** worker 线程: 取最新快照落盘 (合并写入, 不重复写). */
-    private fun flushPendingSave() {
-        val s = pendingSave ?: return
-        pendingSave = null
-        doSave(s)
-    }
-
-    /** worker 线程: 序列化 + 原子写 + 会话历史更新 (单线程串行, .tmp 无并发). */
-    private fun doSave(s: SaveSnapshot) {
-        try {
-            val messagesData = messagesToJson(s.msgs)
-            // 仅当前会话快照写 current_session.json / 追加历史记录 —
-            // 已删除/已切换会话的迟到快照跳过 (防止"复活"幽灵会话)
-            val isCurrent = s.sessionId == currentSessionId
-            if (isCurrent) {
-                val wrapper = SessionPersistenceData(
-                    sessionId = s.sessionId,
-                    engineSessionId = s.engineSessionId,
-                    messages = messagesData
-                )
-                val file = File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
-                atomicWriteJson(file, json.encodeToString(SessionPersistenceData.serializer(), wrapper))
-                if (_sessionHistory.value.none { it.id == s.sessionId }) {
-                    val title = s.msgs.firstOrNull()?.let {
-                        when (it) { is ChatMessageUi.User -> it.content.take(40); else -> "" }
-                    } ?: "会话"
-                    val record = SessionRecord(
-                        id = s.sessionId,
-                        title = if (title.isNotBlank()) title else "会话",
-                        preview = s.msgs.lastOrNull()?.let {
-                            when (it) { is ChatMessageUi.Agent -> it.content.take(60); is ChatMessageUi.User -> it.content.take(60); else -> "" }
-                        } ?: "",
-                        timestamp = System.currentTimeMillis(),
-                        messageCount = s.msgs.size,
-                        agentName = s.agentName,
-                        framework = s.framework
-                    )
-                    _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
-                    saveSessionHistory()
-                }
-                // 归档写入 (切换/删除后不再写 — 防止幽灵文件)
-                val dir = File(com.mengpaw.kernel.DataPaths.BASE, "sessions")
-                dir.mkdirs()
-                atomicWriteJson(File(dir, "${s.sessionId}.json"),
-                    json.encodeToString(ListSerializer(MessageData.serializer()), messagesData))
-            }
-        } catch (e: Exception) { KernelLog.w("AgentVM", "updateHistory: ${e.message}") }
-    }
+    fun saveCurrentSession() = saveEngine.saveCurrentSession()
 
     /** 退出前兜底: 等待队列落盘 (onCleared 调用). */
-    fun flushSaveQueue() {
-        try {
-            saveExecutor.shutdown()
-            saveExecutor.awaitTermination(1, java.util.concurrent.TimeUnit.SECONDS)
-        } catch (_: Exception) {}
-    }
+    fun flushSaveQueue() = saveEngine.flushSaveQueue()
 
     /** Save a specific session's messages to a per-session file. 序列化+写盘也在 worker. */
-    private fun saveSessionById(sessionId: String, msgs: List<ChatMessageUi>) {
-        val nonSystem = msgs.filter { it !is ChatMessageUi.System }
-        if (nonSystem.isEmpty()) return
-        try {
-            saveExecutor.execute {
-                try {
-                    val dir = File(com.mengpaw.kernel.DataPaths.BASE, "sessions")
-                    dir.mkdirs()
-                    val messagesData = messagesToJson(nonSystem)
-                    atomicWriteJson(File(dir, "$sessionId.json"),
-                        json.encodeToString(ListSerializer(MessageData.serializer()), messagesData))
-                } catch (e: Exception) { KernelLog.w("AgentVM", "saveSessionById: ${e.message}") }
-            }
-        } catch (_: java.util.concurrent.RejectedExecutionException) {
-            // onCleared 后不再落盘 (snapshot 已由 flush 兜底)
-        }
-    }
+    private fun saveSessionById(sessionId: String, msgs: List<ChatMessageUi>) =
+        saveEngine.saveSessionById(sessionId, msgs)
 
-    // ── Load ──
-
-    /** Load a session's messages from its per-session file. */
-    private fun loadSessionMessages(sessionId: String): List<ChatMessageUi> {
-        try {
-            val file = File(com.mengpaw.kernel.DataPaths.BASE, "sessions/$sessionId.json")
-            if (!file.exists()) return emptyList()
-            val text = file.readText()
-            if (text.isBlank()) return emptyList()
-            return jsonToMessages(text)
-        } catch (_: Exception) { return emptyList() }
-    }
+    // ── Load (读取/恢复辅助 → SessionPersistenceCodec.kt) ──
 
     /** Restore last session messages from disk. Returns true if restored. */
     fun restoreCurrentSession(): Boolean {
         return try {
             val file = File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
-            if (!file.exists()) return false
-            val text = file.readText()
-            if (text.isBlank()) return false
-
-            var restoredId: String? = null
-            val arrText: String = try {
-                val wrapper = json.decodeFromString<SessionPersistenceData>(text)
-                restoredId = wrapper.sessionId.takeIf { it.isNotBlank() && it != "null" }
-                json.encodeToString(ListSerializer(MessageData.serializer()), wrapper.messages)
-            } catch (_: Exception) {
-                text
-            }
-
-            val msgs = jsonToMessages(arrText)
-            if (msgs.isNotEmpty()) {
-                val lastMsg = msgs.lastOrNull()
-                val endsWithError = lastMsg is ChatMessageUi.Agent && lastMsg.content.startsWith("执行出错")
-                if (endsWithError) {
+            when (val read = readCurrentSessionFile()) {
+                is CurrentSessionRead.Missing -> false
+                is CurrentSessionRead.Corrupt -> {
                     try { file.delete() } catch (_: Exception) {}
-                    return false
+                    false
                 }
-                val recovered = msgs.toMutableList()
-                var wasStuck = false
-                for (i in recovered.indices) {
-                    val m = recovered[i]
-                    if (m is ChatMessageUi.AgentWithTrace && m.isRunning) {
-                        recovered[i] = ChatMessageUi.Agent(
-                            "智能体生成被打断，请回复指令以继续。",
-                            executionMode = m.executionMode,
-                            agentRef = m.agentRef
-                        )
-                        wasStuck = true
+                is CurrentSessionRead.Ok -> {
+                    val msgs = read.msgs
+                    val lastMsg = msgs.lastOrNull()
+                    val endsWithError = lastMsg is ChatMessageUi.Agent && lastMsg.content.startsWith("执行出错")
+                    if (endsWithError) {
+                        try { file.delete() } catch (_: Exception) {}
+                        return false
                     }
-                }
-                if (wasStuck) {
-                    recovered.add(ChatMessageUi.System("上次会话异常中断，已自动恢复。"))
-                }
-                val session = sessions[getActiveAgentName()] ?: return false
-                session.messages.value = recovered
+                    val (recovered, wasStuck) = recoverInterruptedMessages(msgs)
+                    val session = sessions[getActiveAgentName()] ?: return false
+                    session.messages.value = recovered
 
-                // ── Engine session restore after process death ──
-                if (msgs.isNotEmpty()) {
-                    val engineMsgs = msgs.mapNotNull { msg ->
-                        when (msg) {
-                            is ChatMessageUi.User -> "user" to msg.content
-                            is ChatMessageUi.Agent -> "assistant" to msg.content
-                            is ChatMessageUi.AgentWithTrace -> {
-                                if (msg.isRunning) null
-                                else "assistant" to msg.finalContent
-                            }
-                            else -> null
+                    // ── Engine session restore after process death ──
+                    if (msgs.isNotEmpty()) {
+                        val engineMsgs = toEngineConversation(msgs)
+                        val (restoredId, prevEngineId) = readEngineSessionIds()
+                        val engineSessionId = restoredId ?: "sess_${System.currentTimeMillis()}"
+                        try {
+                            session.engine.restoreConversation(
+                                externalSessionId = engineSessionId,
+                                messages = engineMsgs,
+                                lastWasInterrupted = wasStuck,
+                                previousEngineSessionId = prevEngineId
+                            )
+                        } catch (_: Exception) { /* engine restore best-effort */ }
+                    }
+
+                    // Build sidebar record
+                    val preview = msgs.firstOrNull()?.let {
+                        when (it) {
+                            is ChatMessageUi.User -> it.content.take(40)
+                            is ChatMessageUi.Agent -> it.content.take(40)
+                            else -> ""
                         }
+                    } ?: ""
+                    val sessionId = read.sessionId ?: "sess_restored"
+
+                    val existingIndex = _sessionHistory.value.indexOfFirst { it.id == sessionId }
+                    val record = SessionRecord(
+                        id = sessionId, title = preview.ifBlank { "会话" }, preview = preview,
+                        timestamp = file.lastModified(), messageCount = msgs.size,
+                        agentName = getActiveAgentName()
+                    )
+
+                    if (existingIndex >= 0) {
+                        val mutable = _sessionHistory.value.toMutableList()
+                        mutable[existingIndex] = record
+                        _sessionHistory.value = mutable
+                    } else {
+                        _sessionHistory.value = (_sessionHistory.value.filter { it.id != sessionId } + record).takeLast(100)
                     }
-                    val restoredId = try {
-                        json.decodeFromString<SessionPersistenceData>(file.readText()).sessionId.takeIf { it.isNotBlank() && it != "null" }
-                    } catch (_: Exception) { null }
-                    val prevEngineId = try {
-                        json.decodeFromString<SessionPersistenceData>(file.readText()).engineSessionId.takeIf { it.isNotBlank() }
-                    } catch (_: Exception) { null }
-                    val engineSessionId = restoredId ?: "sess_${System.currentTimeMillis()}"
-                    try {
-                        session.engine.restoreConversation(
-                            externalSessionId = engineSessionId,
-                            messages = engineMsgs,
-                            lastWasInterrupted = wasStuck,
-                            previousEngineSessionId = prevEngineId
-                        )
-                    } catch (_: Exception) { /* engine restore best-effort */ }
+                    saveSessionHistoryToDisk(_sessionHistory.value)
+                    currentSessionId = sessionId
+                    true
                 }
-
-                // Build sidebar record
-                val preview = msgs.firstOrNull()?.let {
-                    when (it) {
-                        is ChatMessageUi.User -> it.content.take(40)
-                        is ChatMessageUi.Agent -> it.content.take(40)
-                        else -> ""
-                    }
-                } ?: ""
-                val sessionId = restoredId ?: "sess_restored"
-
-                val existingIndex = _sessionHistory.value.indexOfFirst { it.id == sessionId }
-                val record = SessionRecord(
-                    id = sessionId, title = preview.ifBlank { "会话" }, preview = preview,
-                    timestamp = file.lastModified(), messageCount = msgs.size,
-                    agentName = getActiveAgentName()
-                )
-
-                if (existingIndex >= 0) {
-                    val mutable = _sessionHistory.value.toMutableList()
-                    mutable[existingIndex] = record
-                    _sessionHistory.value = mutable
-                } else {
-                    _sessionHistory.value = (_sessionHistory.value.filter { it.id != sessionId } + record).takeLast(100)
-                }
-                saveSessionHistory()
-                currentSessionId = sessionId
             }
-            msgs.isNotEmpty()
         } catch (_: Exception) {
             try { File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json").delete() } catch (_: Exception) {}
             false
         }
     }
 
-    // ── Serialization helpers ──
-
-    private fun messagesToJson(msgs: List<ChatMessageUi>): List<MessageData> {
-        return msgs.mapNotNull { msg ->
-            when (msg) {
-                is ChatMessageUi.User -> MessageData(
-                    type = "user", text = msg.content, attachments = msg.attachments
-                )
-                is ChatMessageUi.Agent -> MessageData(
-                    type = "agent", text = msg.content,
-                    executionMode = msg.executionMode, agentRef = msg.agentRef
-                )
-                is ChatMessageUi.AgentWithTrace -> MessageData(
-                    type = "agent_trace", text = msg.finalContent,
-                    traces = msg.traces.map { t ->
-                        TraceData(step = t.step, thought = t.thought,
-                            action = t.action ?: "", observation = t.observation ?: "")
-                    },
-                    executionMode = msg.executionMode, agentRef = msg.agentRef
-                )
-                is ChatMessageUi.AgentStep -> MessageData(
-                    type = "agent_step", text = msg.content,
-                    step = msg.step, thought = msg.thought, action = msg.action ?: "",
-                    isFinal = msg.isFinal,
-                    executionMode = msg.executionMode, agentRef = msg.agentRef
-                )
-                is ChatMessageUi.CommandResult -> MessageData(
-                    type = "command", text = msg.content, isError = msg.isError
-                )
-                else -> null
-            }
-        }
-    }
-
-    private fun jsonToMessages(jsonStr: String): List<ChatMessageUi> {
-        return try {
-            val dataList: List<MessageData> = json.decodeFromString(jsonStr)
-            dataList.mapNotNull { data ->
-                if (data.text.isBlank()) return@mapNotNull null
-                when (data.type) {
-                    "user" -> ChatMessageUi.User(data.text, attachments = data.attachments)
-                    "agent" -> ChatMessageUi.Agent(data.text,
-                        executionMode = data.executionMode?.ifEmpty { null },
-                        agentRef = data.agentRef?.ifEmpty { null })
-                    "agent_trace" -> {
-                        val traces = data.traces.map { t ->
-                            AgentTrace(t.step, t.thought,
-                                t.action.ifEmpty { null },
-                                t.observation.ifEmpty { null })
-                        }
-                        ChatMessageUi.AgentWithTrace(data.text, traces, isRunning = false,
-                            executionMode = data.executionMode?.ifEmpty { null },
-                            agentRef = data.agentRef?.ifEmpty { null })
-                    }
-                    "agent_step" -> ChatMessageUi.AgentStep(
-                        step = data.step, thought = data.thought,
-                        action = data.action.ifEmpty { null },
-                        content = data.text, isRunning = false, isFinal = data.isFinal,
-                        executionMode = data.executionMode?.ifEmpty { null },
-                        agentRef = data.agentRef?.ifEmpty { null }
-                    )
-                    "command" -> ChatMessageUi.CommandResult(data.text, isError = data.isError)
-                    else -> null
-                }
-            }
-        } catch (_: Exception) { emptyList() }
-    }
-
-    private fun atomicWriteJson(file: File, jsonStr: String) {
-        file.parentFile?.mkdirs()
-        val tmp = File(file.parentFile, "${file.name}.tmp")
-        try {
-            tmp.writeText(jsonStr)
-            if (file.exists()) file.delete()
-            tmp.renameTo(file)
-        } catch (e: Exception) {
-            KernelLog.w("AgentVM", "atomicWriteJson: ${e.message}")
-            try { tmp.delete() } catch (_: Exception) {}
-        }
-    }
-
-    // ── Session history persistence ──
+    // ── Session history persistence (序列化/磁盘 I/O → SessionPersistenceCodec.kt) ──
 
     fun loadSessionHistory() {
-        try {
-            val file = sessionHistoryFile
-            if (file.exists()) {
-                val text = file.readText()
-                if (text.isNotBlank()) {
-                    _sessionHistory.value = json.decodeFromString<List<SessionRecord>>(text)
-                }
-            }
-        } catch (e: Exception) {
-            KernelLog.w("AgentViewModel", "Corrupted session_history.json, resetting: ${e.message}")
-            try { sessionHistoryFile.delete() } catch (_: Exception) {}
-        }
-    }
-
-    private fun saveSessionHistory() {
-        try {
-            val file = sessionHistoryFile
-            if (file.exists() && file.length() > 0) {
-                val bak = File(file.parentFile, "${file.name}.bak")
-                try { file.copyTo(bak, overwrite = true) } catch (_: Exception) {}
-            }
-            val jsonStr = json.encodeToString(ListSerializer(SessionRecord.serializer()), _sessionHistory.value)
-            file.parentFile?.mkdirs()
-            val tmp = File(file.parentFile, "${file.name}.tmp")
-            tmp.writeText(jsonStr)
-            tmp.renameTo(file)
-            if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
-        } catch (e: Exception) {
-            KernelLog.w("AgentViewModel", "Failed to save session history: ${e.message}")
-        }
+        _sessionHistory.value = loadSessionHistoryFromDisk()
     }
 
     fun cleanupOrphanSessions() {
         try {
             val sessionsDir = File(com.mengpaw.kernel.DataPaths.BASE, "sessions")
             val before = _sessionHistory.value.size
-            _sessionHistory.value = _sessionHistory.value.filter { record ->
-                val sessionFile = File(sessionsDir, "${record.id}.json")
-                if (!sessionFile.exists() && record.id != currentSessionId) return@filter false
-                if (record.messageCount <= 0 && record.id != currentSessionId) return@filter false
-                true
-            }
-            val removed = before - _sessionHistory.value.size
+            val cleaned = cleanupOrphanRecords(_sessionHistory.value, sessionsDir, currentSessionId)
+            _sessionHistory.value = cleaned
+            val removed = before - cleaned.size
             if (removed > 0) {
-                saveSessionHistory()
+                saveSessionHistoryToDisk(cleaned)
                 KernelLog.i("AgentViewModel", "Cleaned $removed orphan session records")
             }
         } catch (_: Exception) {}
@@ -504,27 +202,11 @@ class SessionPersistenceService(
 
     fun dedupSessionHistory() {
         try {
-            val records = _sessionHistory.value.toMutableList()
-            val seen = mutableMapOf<String, SessionRecord>()
-            val toRemove = mutableSetOf<String>()
-            for (record in records.sortedByDescending { it.timestamp }) {
-                val key = "${record.agentName}|${record.title}"
-                val existing = seen[key]
-                if (existing != null) {
-                    if (record.timestamp >= existing.timestamp) {
-                        toRemove.add(existing.id)
-                        seen[key] = record
-                    } else {
-                        toRemove.add(record.id)
-                    }
-                } else {
-                    seen[key] = record
-                }
-            }
-            if (toRemove.isNotEmpty()) {
-                _sessionHistory.value = records.filter { it.id !in toRemove }
-                saveSessionHistory()
-                KernelLog.i("AgentViewModel", "Deduped ${toRemove.size} duplicate session records")
+            val (cleaned, removed) = dedupRecords(_sessionHistory.value)
+            if (removed > 0) {
+                _sessionHistory.value = cleaned
+                saveSessionHistoryToDisk(cleaned)
+                KernelLog.i("AgentViewModel", "Deduped $removed duplicate session records")
             }
         } catch (_: Exception) {}
     }
@@ -574,7 +256,7 @@ class SessionPersistenceService(
                 framework = session?.framework
             )
             _sessionHistory.value = (_sessionHistory.value + record).takeLast(100)
-            saveSessionHistory()
+            saveSessionHistoryToDisk(_sessionHistory.value)
         }
         // 新会话保持空列表 — 去掉"新会话已创建。"占位提示 (用户要求, 2026-08-04)
         sessions[getActiveAgentName()]?.messages?.value = emptyList()
@@ -591,7 +273,7 @@ class SessionPersistenceService(
             val target = if (record.framework != null) "${record.framework}/${record.agentName}" else record.agentName
             onSwitchAgent(target)
         }
-        val loaded = loadSessionMessages(record.id)
+        val loaded = loadSessionMessagesFromDisk(record.id)
         if (loaded.isNotEmpty()) {
             currentSessionId = record.id
             sessions[getActiveAgentName()]?.messages?.value = loaded
@@ -611,7 +293,7 @@ class SessionPersistenceService(
             if (it.id == id) it.copy(compacted = true, compactedSummary = "已压缩: ${it.preview.take(100)}")
             else it
         }
-        saveSessionHistory()
+        saveSessionHistoryToDisk(_sessionHistory.value)
     }
 
     /** Repair a session — fixes truncated markdown / unclosed syntax caused by abnormal interruption. */
@@ -624,23 +306,8 @@ class SessionPersistenceService(
         for (i in msgs.indices) {
             val msg = msgs[i]
             if (msg is ChatMessageUi.Agent) {
-                var text = msg.content
-                val fenceCount = text.count { it == '`' } / 3
-                if (fenceCount % 2 != 0) {
-                    text = text.trimEnd() + "\n```"
-                    changed = true
-                }
-                val boldCount = text.split("**").size - 1
-                if (boldCount % 2 != 0) {
-                    text = text.trimEnd() + "**"
-                    changed = true
-                }
-                val italicCount = text.replace("**", "").count { it == '*' }
-                if (italicCount % 2 != 0) {
-                    text = text.trimEnd() + "*"
-                    changed = true
-                }
-                if (changed) msgs[i] = ChatMessageUi.Agent(text)
+                val text = repairMarkdown(msg.content)
+                if (text != msg.content) { msgs[i] = ChatMessageUi.Agent(text); changed = true }
             }
         }
         if (changed) {
@@ -648,14 +315,14 @@ class SessionPersistenceService(
             _sessionHistory.value = _sessionHistory.value.map {
                 if (it.id == id) it.copy(compactedSummary = "已修复: ${it.preview.take(60)}") else it
             }
-            saveSessionHistory()
+            saveSessionHistoryToDisk(_sessionHistory.value)
         }
     }
 
     /** Delete a session record — 全量清理, 不残留任何磁盘/内存痕迹。 */
     fun deleteSession(id: String) {
         _sessionHistory.value = _sessionHistory.value.filter { it.id != id }
-        saveSessionHistory()
+        saveSessionHistoryToDisk(_sessionHistory.value)
         // ① 会话消息文件 sessions/$id.json
         try {
             val file = File(com.mengpaw.kernel.DataPaths.BASE, "sessions/$id.json")

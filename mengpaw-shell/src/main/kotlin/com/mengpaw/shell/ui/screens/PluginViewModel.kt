@@ -10,65 +10,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
 
-/**
- * Install progress state for UI rendering.
- */
-sealed class InstallState {
-    data object Idle : InstallState()
-    data class Downloading(val progress: Float) : InstallState()
-    data object Verifying : InstallState()
-    data class Installing(val step: String) : InstallState()
-    data class Done(val pluginId: String) : InstallState()
-    data class Failed(val error: String) : InstallState()
-}
-
-/**
- * Plugin suggestion triggered when Agent tries to use an uninstalled command.
- */
-data class PluginSuggestion(
-    val namespace: String,
-    val pluginId: String,
-    val pluginName: String,
-    val description: String,
-    val missingCommand: String
-)
-
-/**
- * Whether a plugin can be installed from the marketplace.
- */
-enum class PluginAvailability {
-    /** Already compiled into the APK — no download needed. */
-    BUILTIN,
-    /** Available for download from the marketplace. */
-    DOWNLOADABLE,
-    /** Listed but not yet released. */
-    UNAVAILABLE,
-    /** 已嵌入引擎 — 内置功能，不可卸载 */
-    EMBEDDED
-}
-
-/**
- * UI-ready plugin item combining marketplace info with install status.
- */
-data class PluginUiItem(
-    val id: String,
-    val name: String,
-    val version: String,
-    val description: String,
-    val type: PluginType,
-    val author: String,
-    val permissions: List<String>,
-    val commands: List<String>,
-    val isInstalled: Boolean,
-    val isActive: Boolean,
-    val installState: InstallState = InstallState.Idle,
-    val availability: PluginAvailability = PluginAvailability.BUILTIN,
-    /** 插件英文名 — 显示为「中文名 (English)」; null 时只显示 name。 */
-    val enName: String? = null
-) {
-    /** UI 显示名 — 插件统一「中文名 (English)」中英对照格式。 */
-    val displayName: String get() = enName?.let { "$name ($it)" } ?: name
-}
+// 数据模型 (InstallState/PluginSuggestion/PluginAvailability/PluginUiItem) → PluginModels.kt;
+// 类注册表 → PluginClassRegistry.kt (2026-08-06, >400 行文件拆分批次4)
 
 /**
  * ViewModel bridging the plugin system to Compose UI.
@@ -132,7 +75,7 @@ class PluginViewModel : ViewModel() {
                         entry.status == "embedded" -> PluginAvailability.EMBEDDED
                         entry.status == "deprecated" -> PluginAvailability.UNAVAILABLE
                         // Only pluginClassRegistry reflects actually compiled-in plugins
-                        pluginClassRegistry.containsKey(entry.id) -> PluginAvailability.BUILTIN
+                        PluginClassRegistry.pluginClassRegistry.containsKey(entry.id) -> PluginAvailability.BUILTIN
                         entry.isDownloadable -> PluginAvailability.DOWNLOADABLE
                         else -> PluginAvailability.UNAVAILABLE
                     }
@@ -201,11 +144,11 @@ class PluginViewModel : ViewModel() {
         index.plugins.forEach { entry ->
             // Only register if the class was already registered at startup (MainActivity)
             // OR if we can actually load the class via reflection
-            if (pluginClassRegistry.containsKey(entry.id)) return@forEach
-            val className = builtinPluginClass(entry.id) ?: return@forEach
+            if (PluginClassRegistry.pluginClassRegistry.containsKey(entry.id)) return@forEach
+            val className = PluginClassRegistry.builtinPluginClass(entry.id) ?: return@forEach
             try {
                 Class.forName(className)
-                PluginViewModel.registerPluginClass(entry.id, className)
+                PluginClassRegistry.registerPluginClass(entry.id, className)
             } catch (_: ClassNotFoundException) { /* not in this build */ }
         }
     }
@@ -226,7 +169,7 @@ class PluginViewModel : ViewModel() {
             }
 
             // Builtin plugins: determined by local class registry, NOT remote JSON status
-            val isBuiltin = pluginClassRegistry.containsKey(id)
+            val isBuiltin = PluginClassRegistry.pluginClassRegistry.containsKey(id)
             if (isBuiltin) {
                 updateInstallState(id, InstallState.Installing("正在激活 ${entry.name}..."))
                 val plugin = createPluginInstance(entry)
@@ -309,7 +252,7 @@ class PluginViewModel : ViewModel() {
      * (P2 修复: 正则预编译为共享常量 — 原每消息重复编译, 与 AgentViewModel.checkMissingPlugin 双份)
      */
     fun suggestPluginForCommand(errorOutput: String) {
-        val match = UNKNOWN_COMMAND_REGEX.find(errorOutput) ?: return
+        val match = PluginClassRegistry.UNKNOWN_COMMAND_REGEX.find(errorOutput) ?: return
         val namespace = match.groupValues[1]
         val pluginId = "$namespace-plugin"
 
@@ -340,7 +283,7 @@ class PluginViewModel : ViewModel() {
      * implement the Plugin interface and are from allowed packages.
      */
     private fun createPluginInstance(entry: MarketplaceEntry): Plugin? {
-        val className = pluginClassRegistry[entry.id] ?: return null
+        val className = PluginClassRegistry.pluginClassRegistry[entry.id] ?: return null
         return try {
             val clazz = Class.forName(className)
 
@@ -368,47 +311,21 @@ class PluginViewModel : ViewModel() {
         /**
          * "Unknown command: <namespace>." 解析正则 — 预编译共享常量 (P2 修复).
          * AgentViewModel.checkMissingPlugin 与 suggestPluginForCommand 共用, 避免每消息重复编译.
+         * (实现移至 PluginClassRegistry.kt — 批次4)
          */
-        internal val UNKNOWN_COMMAND_REGEX = Regex("Unknown command: (\\w+)\\.")
+        internal val UNKNOWN_COMMAND_REGEX get() = PluginClassRegistry.UNKNOWN_COMMAND_REGEX
 
         /**
          * Registry mapping plugin IDs to their fully-qualified class names.
          * Populated at app startup and auto-registered for builtin plugins from marketplace.
          */
-        val pluginClassRegistry = mutableMapOf<String, String>()
+        val pluginClassRegistry get() = PluginClassRegistry.pluginClassRegistry
 
         /** Register a known plugin class for instantiation. */
-        fun registerPluginClass(pluginId: String, className: String) {
-            pluginClassRegistry[pluginId] = className
-        }
-
-        /** Mapping from plugin ID to known builtin class name. */
-        private val BUILTIN_CLASSES = mapOf(
-            "fs-plugin" to "com.mengpaw.plugin.fs.FsPlugin",
-            "net-plugin" to "com.mengpaw.plugin.net.NetPlugin",
-            "framework-plugin" to "com.mengpaw.plugin.framework.FrameworkPlugin",
-            "skill-plugin" to "com.mengpaw.plugin.skill.SkillPlugin",
-            "clipboard-plugin" to "com.mengpaw.plugin.clipboard.ClipboardPlugin",
-            "tavily-plugin" to "com.mengpaw.plugin.tavily.TavilyPlugin",
-            "tribe-plugin" to "com.mengpaw.plugin.hermes.TribePlugin",
-            "hermes-plugin" to "com.mengpaw.plugin.hermes.TribePlugin",
-            "render-plugin" to "com.mengpaw.plugin.render.RenderPlugin",
-            "comfy-plugin" to "com.mengpaw.plugin.comfy.ComfyPlugin",
-            "translate-plugin" to "com.mengpaw.plugin.translate.TranslatePlugin",
-            "dev-plugin" to "com.mengpaw.plugin.dev.DevPlugin",
-            "error-report-plugin" to "com.mengpaw.plugin.errorreport.ErrorReportPlugin",
-            "browser-push-plugin" to "com.mengpaw.plugin.browserpush.BrowserPushPlugin",
-            "browser-search-plugin" to "com.mengpaw.plugin.browsersearch.BrowserSearchPlugin",
-            "browser-mcp-plugin" to "com.mengpaw.plugin.browsermcp.BrowserMcpPlugin",
-            "update-plugin" to "com.mengpaw.plugin.update.UpdatePlugin",
-            "memory-twin-plugin" to "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin",
-            "root-plugin" to "com.mengpaw.plugin.root.RootPlugin",
-            "dream-plugin" to "com.mengpaw.plugin.dream.DreamPlugin",
-            "evolution-plugin" to "com.mengpaw.plugin.evolution.EvolutionPlugin",
-            "concise-plugin" to "com.mengpaw.plugin.concise.ConcisePlugin"
-        )
+        fun registerPluginClass(pluginId: String, className: String) =
+            PluginClassRegistry.registerPluginClass(pluginId, className)
 
         /** Look up the class name for a builtin plugin by its ID. */
-        fun builtinPluginClass(pluginId: String): String? = BUILTIN_CLASSES[pluginId]
+        fun builtinPluginClass(pluginId: String): String? = PluginClassRegistry.builtinPluginClass(pluginId)
     }
 }
