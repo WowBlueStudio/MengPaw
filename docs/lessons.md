@@ -350,6 +350,16 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **坑**：kernel 零 Android 依赖是硬约束——信号源必须走 SPI 注入（先例 KernelLog.logger）；provider 构造点有 7 处（AppRoot×2 / AgentSessionFactory×3 / DreamWorker×1），漏一处就静默退回无门卫路径。
 
 
+### 14.10 400 行文件拆分项目方法论 (v0.33.0，37 文件 → 127 文件收官)
+
+- **拆分铁律**：纯平移禁止重写；公开 API 签名零变化；同包提取（private 外移改 internal）；新文件必带 SPDX 双许可头；嵌套类型被外部以 `Outer.Nested` 限定引用时原位保留（先 grep 消费面再动手）；`@JavascriptInterface` 方法必须留在 addJavascriptInterface 注册对象实例上（只能外移实现委托/脚本常量）；delegate-object 模式 = 构造器闭包注入 + 共享 lock 保持监视器语义。
+- **测试守护的隐性约束**：`PromptGhostReferenceTest` 从 `PromptEngine.kt` 源文件提取模板常量做幽灵引用扫描 —— 模板常量字符串绝不能移出该文件，否则测试仍绿但覆盖静默失效。
+- **5 批次并行 agent 模式**：按模块边界分区（kernel/browser/plugins/shell+design），互不越界；每个 agent 自带编译+测试验证，交叉编译双向确认；并行 Gradle 锁竞争（"Waiting to acquire"）遇锁等待重试非错误。
+- **Kotlin 坑**：`lateinit var` 后备字段跨类不可赋值/`isInitialized` 跨类不可用（内部方法桥接）；`const val` 不允许声明在类内；internal 属性与同签 internal 函数 JVM 层撞车（`getX()$module`——属性保持 private 调既有 getter）；类内成员扩展函数跨类不可解析（提为同包顶层 internal 扩展）；注释内 `*/` 提前终止块注释；同名顶层 internal 函数与类内 private 成员自然遮蔽无冲突。
+- **Compose 坑**：`Modifier.weight` 要求 ColumnScope 接收者；BoxScope 版 `AnimatedVisibility` 需全限定名；`@OptIn(ExperimentalMaterialApi)` 必须带；被移动的状态变量与监听器整体迁移防快照失效；面板 composable 提取时公开签名不动。
+- **bash 链式命令陷阱**：同一 `&&` 链里先覆盖源文件再 sed 提取，后续文件全部取到空内容 —— 先提取所有区块到 /tmp 再组装。
+- **验证口径**：kernel 是纯 JVM 模块用 `:mengpaw-kernel:test`（非 testDebugUnitTest）；判定成功看 exit code 或产物，不靠管道 tail（管道吞退出码）。
+
 ---
 
 ## 15. 历史教训浓缩库（v0.2.2 ~ v0.23.0，原根 LESSONS.md 去重提炼）

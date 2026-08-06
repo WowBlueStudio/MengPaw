@@ -191,27 +191,29 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ## 3. 模块详解
 
-### 3.1 mengpaw-kernel（微内核，83 文件）
+### 3.1 mengpaw-kernel（微内核，119 文件）
 
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|
-| `agent/` | 21 | AgentExecutor, AgentEngineTypes, MissionModeExecutor, GoalModeExecutor, PlanModeExecutor, SwarmModeExecutor, DreamEngine, ToolResultManager, AgentProfile 等 |
-| `llm/` | 11 | AdaptiveLlmProvider, LlmProvider, LlmRequestBuilder, PromptEngine, RemoteApi, TranslateMiddleware, LlmHttpClient (共享 HTTP 客户端, v0.29.2), **AttachmentPayload (v0.33.0+ 附件二进制键)** |
+| `agent/` | 32 | AgentExecutor (+ AgentFileCommands/AgentStorageCommands/AgentSessionCommands), AgentEngineTypes, MissionModeExecutor, GoalModeExecutor, PlanModeExecutor, SwarmModeExecutor, DreamEngine, ToolResultManager, AgentProfile, AgentDocManager (+ CliDocGenerator/AgentCliDocTables), AgentDocs (+ AgentDocsMemory/AgentDocsBootstrap/AgentDocsReaders/AgentDocsListeners), AgentMemoryExecutor (+ AgentMemoryReadCommands/AgentMemoryMutateCommands) 等 |
+| `llm/` | 15 | AdaptiveLlmProvider (+ LlmPayload/SseStreamParser), LlmProvider, LlmRequestBuilder, PromptEngine (+ PromptSystemBuilder/ReActParser/ReActTypes — 模板常量留在 PromptEngine 供 PromptGhostReferenceTest 扫描), RemoteApi, TranslateMiddleware, LlmHttpClient (共享 HTTP 客户端, v0.29.2), **AttachmentPayload (v0.33.0+ 附件二进制键)** |
 | `cli/` | 9 | CliInterpreter, CommandRegistry, CommandExecutor, Pipeline, CommandSearch (BM25), CliAudit |
 | `acp/` | 8 | AcpProtocol, AcpServer, AcpCrypto, AcpTransport, DelegateHandler, McpOverAcpBridge, ShareMemoryHandler |
-| `session/` | 5 | SessionManager, History, Checkpoint |
-| `security/` | 5 | Sanitizer, SecurityPolicy, PromptFirewall, IntegrityProvider |
+| `session/` | 10 | SessionManager, History (+ SessionCompression/SessionEventLog/SessionIntegrity), Checkpoint |
+| `security/` | 6 | Sanitizer, SecurityPolicy, PromptFirewall, IntegrityProvider |
 | `evolution/` | 5 | EvolutionProvider (SPI), EvolutionExecutor, EvolutionGuide, EvolutionHook, EvolutionStore |
-| `plugin/` | 4 | Plugin, PluginManager, PluginExecutor, PluginMarketplaceClient |
-| `namespace/` | 3 | SelfExecutor, ScreenshotManager, NotifyBus |
+| `plugin/` | 7 | Plugin, PluginManager, PluginExecutor (+ PluginRuntimeLoader), PluginMarketplaceClient (+ MarketplaceTypes/GeoRouter) |
+| `namespace/` | 8 | SelfExecutor (+ SelfAcpCommands/SelfTriggerCommands/SelfMcpCommands/AcpHolder/AgentTheme), ScreenshotManager, NotifyBus |
 | `mcp/` | 2 | McpServer, McpClient |
-| `trigger/` | 1 | TriggerEngine |
+| `trigger/` | 3 | TriggerEngine (+ ScheduleSlots/CronAlarmScheduler) |
 | `mission/` | 1 | FleetMonitor |
 | `error/` | 1 | ErrorCollector |
 | `extension/` | 1 | ManifestParser |
 | `spi/` | 1 | FrameworkAdapter (连接器 SPI, v0.23.0) |
 | `ports/` | 1 | Ports (端口单一事实源, self.ports) |
-| 根 | 4 | AgentEngine, DataPaths, KernelLog, KernelDispatchers |
+| 根 | 9 | AgentEngine (+ AgentRuntime/AgentReActLoop/AgentConversation — 400 行拆分批次 5), SwarmModeExecutor (+ SwarmWorkerRunner), DataPaths, KernelLog, KernelDispatchers |
+
+> 全部源文件 ≤400 行（v0.33.0 拆分收官）—— 拆分方法论: 同包提取 / 公开 API 零变化 / delegate-object 构造闭包注入 + 共享锁。
 
 
 ### 3.2 mengpaw-core（Android 适配层，20 文件，下表为核心桥接）
@@ -224,20 +226,20 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)` |
 | `AndroidLogger.kt` | 桥接：`KernelLog.setLogger(AndroidLogger())` |
 
-### 3.3 mengpaw-shell（主应用，71 文件）
+### 3.3 mengpaw-shell（主应用，116 文件）
 
 | 文件 | 职责 |
 |------|------|
 | `MainActivity.kt` | 入口 + 生命周期 + URL 处理 + 延迟初始化 (v0.29.1: 初始化拆至 AppInitializer, Compose 根拆至 AppRoot) |
 | `AppInitializer.kt` | 关键路径初始化 (崩溃日志/DataPaths/插件管理器/SysExecutor/模板/日志器) |
-| `ui/screens/AppRoot.kt` | Compose 根 — 主题装配 + MainScreen/设置页/插件市场全屏层 |
+| `ui/screens/AppRoot.kt` | Compose 根 (v0.33.0: 拆出 AppRootSettingsItems/AppRootTwin/AppRootMdDocs) — 主题装配 + MainScreen/设置页/插件市场全屏层 |
 | `service/AgentRuntime.kt` | **NEW** UI/运行时分离 — 触发器桥接, 所有 IO 工作在此 |
-| `ui/screens/` (52 文件) | MainScreen (头栏/侧栏/底表拆至 MainScreenHeader·MainScreenSidebars·MainScreenExpandSheet), SidebarContent (数据拆至 SidebarContentData, 孪生对话框拆至 sidebar-dialogs/TwinPairingDialogs), settings/ (AgentSettingsContent + AgentBoostPanel 引导进度面板 v0.32.1+ 等), AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SplashScreen, **ChatBubbles (AgentStepBubble 每步骤气泡 v0.32.0+ + AttachmentBubbles 下行媒体卡片), VoiceRecorder, VoiceInputButton** |
+| `ui/screens/` (65 文件) | MainScreen (v0.33.0 拆出 MainScreenInputBar/CommandDropdown/Pickers/ScrollBehavior; 头栏/侧栏/底表拆至 MainScreenHeader·MainScreenSidebars·MainScreenExpandSheet), SidebarContent (拆出 SidebarFrameworkDirectory/SidebarAgentList/SidebarContacts; 数据拆至 SidebarContentData, 孪生对话框拆至 sidebar-dialogs/TwinPairingDialogs), AgentViewModel (v0.33.0 拆出 TaskExecutionPipeline/TaskExecutionHelpers/StreamPlaybackBuffer/SessionChatController/AgentTaskInbox/StepBubbleWriter/SessionMessageCenter/StreamStepTracker), PluginViewModel (拆出 PluginModels/PluginClassRegistry), settings/ (AgentSettingsContent v0.33.0 拆出 ProviderModel/Params/Triggers/Tools/Skills/WorkspaceFiles/WorkspaceItemRow 7 面板 + AgentBoostPanel 引导进度面板 v0.32.1+), SessionPersistenceService (拆出 SessionSaveEngine/Codec/Models), SettingsViewModel (拆出 SettingsModels/ProviderStore/Remote/ConfigFiles), HistorySidebar (拆出 HistorySidebarGroups/SessionItem), ChatBubbles (拆出 ChatProcessBubbles/ChatBubbleMenu; AgentStepBubble 每步骤气泡 v0.32.0+ + AttachmentBubbles 下行媒体卡片拆出 AudioCard/PreviewDialogs/Extractor/Downloader), PluginMarketScreen, PluginDetailScreen, SettingsScreen, BrowserScreen, SplashScreen, VoiceRecorder, VoiceInputButton |
 
 **引导进度面板 (v0.32.1+, 自检报告 P2-13, `AgentBoostPanel.kt`)**: 设置页 Agent 区顶部 4 项打勾 — 身份 (profile.md 有名字, 兼容模板 `- **名字：**` 与 AgentProfile `- 名称:` 两格式) / 头像 (avatar.png) / 主题 (AGENTS/theme.md 全局文件) / 灵魂 (soul.md)。全完成 → 绿色对勾"已完成初始化"; 未完成 → "已完成 n/4 · 未完成: 缺失项"; 四项齐但 boost.md 仍在 → 橙色提示可在工作区文件删除 (引导完成标记语义)。数据/UI 分离 (`AgentBoostStatus` 数据类, 纯函数判定可单测); `remember(agentName)` 进设置页读一次不轮询, 关闭再进重建自动刷新。
 | `ui/components/` (7 文件) | BigBangPopup, FleetMonitorOverlay, TokenChart, TokenStatsCollector, NotifyBanner 等 |
 | `ui/AdaptiveLayout.kt` | WindowSizeClass 计算 |
-| `ui/localization/Strings.kt` | 中英双语注解 |
+| `ui/localization/` (3 文件) | AppStrings + EnglishStrings/ChineseStrings (v0.33.0: 原 Strings.kt 1157 行按顶层声明拆分, `strings.xxx` 引用零改动) |
 | `service/` (7 文件) | ShellService, DreamWorker, EventReceiver, WakeReceiver 等 |
 
 **多模态附件 + 语音输入 (v0.32.0+)**: 附件数据模型 `kernel/session/AttachmentData` 单点定义 (type: image/audio/video/document/file, path 为 workspace 内绝对路径供 LLM fs 工具读)。上行: 文件选择 → `FilePickerUtils.handleFilePicked` 产出 AttachmentData (不再插 `📎 路径` 文本) → MainScreen `pendingAttachments` 待发栏 → `submitTask(attachments)` → kernel `Message.attachments` → `History.getStructuredHistory` 经 `llm/AttachmentPayload.attachBinary` 挂 `_image`(data URI ≤8MB)/`_audio_data`+`_audio_format`(≤15MB) 键 (超限静默降级为路径文本)。路径是 user 消息正文的一部分 (非前缀拼接), 随历史每轮计入上下文。
@@ -246,11 +248,11 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 **UI emoji 约定 (v0.31.0 清理)**: UI 文本 (系统气泡/菜单/徽标/按钮) 禁用装饰性 emoji — 纯装饰的移除, 承载语义的 (状态/图标) 换 `Icons.Outlined` 线性图标 (会话/模型/系统/搜索/发送/截图/浏览器/云/复制/箭头/失败/成功/导出/时钟/恢复/分享/刷新/语音/挂起/检查/暂停/删除/保存/编辑/目录/书签/链接/用户/设置/锁/播放)。规则: 有语义用图标, 无语义直接删除, 不保留裸 emoji; Agent 生成的文本 (模型输出) 不受限。列表变更时同步本段落。
 
-### 3.4 mengpaw-browser（独立浏览器，33 文件）
+### 3.4 mengpaw-browser（独立浏览器，42 文件）
 
 | 目录/文件 | 职责 |
 |-----------|------|
-| `BrowserActivity.kt` | 薄 Activity — 生命周期、MCP、返回键、onTrimMemory |
+| `BrowserActivity.kt` | 薄 Activity — 生命周期、MCP、返回键、onTrimMemory (v0.33.0: 主 UI 拆出 BrowserApp + BrowserAppDialogs + BrowserContentArea + BrowserMcpTools) |
 | `data/` (3 文件) | BrowserTypes, BrowserPrefs (含书签+会话持久化), HistoryStore |
 | `service/GoogleTranslate.kt` | 免费翻译客户端 |
 | `web/WebViewFactory.kt` | WebView 工厂 + App横幅CSS屏蔽 + onReceivedError |
@@ -259,8 +261,8 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `ui/` (15 文件) | 13 弹窗/条 (AgentSettings/Bookmark/FindBar/History/Icons/ImagePicker/MarkdownViewer/Password/ReaderMode/Settings/Tab/TopBar/Translate) + DesktopTabBar + NewTabPage |
 | `ui/components/` (2 文件) | TabChip (标签样式), SearchEngineLogo (SVG) |
 | `ui/theme/BrowserThemeConfig.kt` | Agent 主题配置 |
-| `bridge/BrowserBridge.kt` | Java↔JS 双向桥 |
-| `plugin/` (1 文件) | BuiltinBrowserPlugin (44 条 browser.* 命令, 经 9880 桥合流) |
+| `bridge/` (3 文件) | BrowserBridge (Java↔JS 双向桥, @JavascriptInterface 方法保留注册对象) + BrowserScripts (JS 脚本常量) + FullPageScreenshotter (全页缝合截图/坐标交互) |
+| `plugin/` (5 文件) | BuiltinBrowserPlugin (壳, 44 条 browser.* 命令, 经 9880 桥合流) + BrowserCommandContext + BrowserTabCommands/BrowserPageCommands/BrowserQueryCommands (命令按域拆分) |
 | `mcp/McpHttpServer.kt` | MCP HTTP 服务 |
 
 **Markdown 文档打开 (v0.31.0+)**: 浏览器注册 `ACTION_VIEW` intent-filter 双轨——`file://` (文件管理器) 与 `content://` (FileProvider/SAF 选择) × `text/markdown` / `text/plain`+`*.md`。`BrowserActivity.checkMdFile` 冷启动与 `onNewIntent` 双路径取 md 内容 (≤500KB), 弹 `BrowserMarkdownViewerDialog`。Shell 提炼回传走独立私有 action `com.mengpaw.action.OPEN_MD` (extra `md`/`mdUri`, 见 BrowserReturnWatcher)。
@@ -498,24 +500,26 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (15 模块 601 测试，v0.32.1+ 补齐结构性缺口)
+### 3.7 测试 (15 模块 616 测试，v0.33.0 实测快照：kernel 337 + shell 50 + 插件 229，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 297 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm/mission |
+| mengpaw-kernel | 337 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm/mission |
 | mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
-| mengpaw-shell | 43 | ComplexityDetector 分档 (11 分 MISSION 回归)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵 |
+| mengpaw-shell | 50 | ComplexityDetector 分档 (11 分 MISSION 回归)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵 |
 | plugin-hermes (tribe) | 34 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 (P0 回归) |
 | plugin-memory-twin | 34 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
 | plugin-browser-search | 27 | SSRF 校验全矩阵 (私有 IP/回环/云元数据/scheme 白名单)、引擎检测 |
 | plugin-agent-tools | 22 | 工具集解析 |
 | plugin-skill | 21 | 路径消毒 (../ 越界/反斜杠穿越)、frontmatter 解析、命令层落实 |
 | plugin-net | 15 | SSRF 黑名单矩阵、validateUrl scheme 白名单、代理字符串逻辑 |
+| plugin-tavily | 15 | API Key 混淆往返/无明文窗口泄漏 |
 | plugin-framework | 14 | McpGateway 4MB 上限/非法 Content-Length 413、指纹 hex、peer JSON 往返 |
-| plugin-concise | 10 | 简洁模式 |
 | plugin-update | 12 | 版本比较、sha256 向量、镜像 URL、自动检查 CAS 幂等 |
+| plugin-concise | 10 | 简洁模式 |
 | plugin-root | 10 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 (execute 不测 — 真实 su) |
-| plugin-tavily | 8 | API Key 混淆往返/无明文窗口泄漏 |
+| plugin-fs | 9 | 路径消毒、cp/mv/stat 语义 |
+| plugin-dev | 6 | 审计/示例/支持拆分后的行为保持 |
 | plugin-fs | 9 | 沙箱边界、symlink 检测 (P2 回归, Windows 探测式 skip) |
 
 > 全部 JVM 本地单测（`testDebugUnitTest`，kernel 为 `:test`），毫秒级反馈，无需模拟器。

@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.33.0 (2026-08-06) — 400 行文件拆分收官 — 37 超长文件按职责拆为 127 文件全模块瘦身
+
+### 代码质量
+- **400 行文件拆分项目收官**（5 批次, 12 次验证提交）: 全部源码文件 ≤400 行, 无行为改动（纯平移）:
+  - **kernel (14 → 49 文件)**: 批次1 History/TriggerEngine/AdaptiveLlmProvider/PluginExecutor + 批次5 AgentEngine (1033→400)/PromptEngine/AgentExecutor/AgentDocManager/AgentDocs/SelfExecutor/AgentMemoryExecutor/PluginMarketplaceClient/SwarmModeExecutor
+  - **browser (3 → 13)**: BrowserActivity (934) / BuiltinBrowserPlugin (665) / BrowserBridge (657) — @JavascriptInterface 方法保留注册对象实例, 仅脚本常量/截图器外移
+  - **plugins (7 → 33)**: TribePlugin (821→151) / MemoryTwinPlugin / TwinSyncEngine / TwinPairingEngine (嵌套类型因 shell 限定引用保留) / DevPlugin / UpdatePlugin / ErrorReportPlugin
+  - **shell/design (13 → 47)**: AppRoot / MainScreen / SessionPersistenceService / SettingsViewModel / AttachmentBubbles / HistorySidebar / SidebarContent / ChatBubbles / PluginViewModel / MarkdownText / AgentViewModel (1181) / AgentSettingsContent / Strings (1157, 拆 AppStrings/EnglishStrings/ChineseStrings 引用零改动)
+- **拆分方法论沉淀**: 同包提取 / 公开 API 签名零变化 / delegate-object 构造闭包注入 + 共享锁 / Compose 状态提升与 ColumnScope 接收者 / private→internal 可见性外移 / 嵌套类型消费方兼容检查
+- **关键逻辑平移保留**（测试守护）: P0-1 幽灵命令文案 (模板常量留在 PromptEngine 供 PromptGhostReferenceTest 扫描) / P0-2 resolvePath 基准 + CLI.md 惰性生成 / P1-4 教学标题黑名单 / P1-5 WrittenGuard 自动摘要 / P1-6 引导状态机 / 每 ReAct 步骤气泡 (TraceStep 嵌套原位) / P2-12 Telemetry.recordLlm 遥测路径 / TEMPLATE_HASH 机制
+
+### 修复
+- **v0.32.0 界面闪退根因归档**（master 已修复, 随本版携带）: `sys.overlay.*` Agent 路径非主线程 addView 必崩 (withContext(Main) 修复) / Tribe 看板 delegate 状态机死锁 / MemoryTwinPlugin lateinit 崩溃 / 多模态附件全量 base64 重发内存压力 (latest-only 挂载)
+
+### 发行
+- Shell APK v0.33.0 (versionCode 33000) — 全量发布双远端 + GitHub Release
+- 测试: kernel 337 + shell 全部 + 插件 86 tests 全绿 (0 failures / 0 errors)
+- plugins.json 无变更
+
 ## v0.32.0 (2026-08-06) — Agent 触达全链路修复 + 每 ReAct 步骤气泡（思考全程可见）+ 多模态附件/语音
 
 ### 内核改动
