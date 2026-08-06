@@ -188,8 +188,10 @@ fun CommandResultBubble(message: ChatMessageUi.CommandResult, strings: AppString
 @Composable
 fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: String = "MengPaw") {
     val traces = message.traces
+    // v0.3x: 运行结束不再自动折叠 — 用户需要看到完整结果 (此前结束时面板收起 +
+    // finalContent 替换, 中间输出在视觉上"被最终答案覆盖"; 保留展开状态,
+    // 完整思考过程/工具调用/结果全程可见, 用户可手动折叠长会话)
     var thinkingExpanded by remember { mutableStateOf(true) }
-    LaunchedEffect(message.isRunning) { if (!message.isRunning) thinkingExpanded = false }
 
     Column(Modifier.fillMaxWidth()) {
         // ── Thinking process (outside main bubble, visible while running) ──
