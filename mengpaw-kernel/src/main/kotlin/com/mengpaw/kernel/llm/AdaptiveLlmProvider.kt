@@ -216,6 +216,7 @@ class AdaptiveLlmProvider(
         stream: Boolean,
         onToken: ((String) -> Unit)?
     ): String {
+        val requestStart = System.currentTimeMillis()  // P2-12(自检报告): LLM 耗时统计锚点
         val requestBody = buildRequestBody(messages, stream)
         KernelLog.d("MengPawLatency", "S-OPEN ${apiEndpoint.take(48)}")
         val response = client.post(apiEndpoint) {
@@ -235,7 +236,7 @@ class AdaptiveLlmProvider(
 
         // ── Streaming path: SSE line-by-line (Reasonix readStream pattern) ──
         if (stream && onToken != null) {
-            return consumeSseStream(response, onToken)
+            return consumeSseStream(response, onToken, requestStart)
         }
 
         // ── Non-streaming path ──
@@ -252,6 +253,11 @@ class AdaptiveLlmProvider(
         // 合并双次 JSON 解析: 一次 parseToJsonElement 同时提取 usage 和 content
         val (parsedContent, usage) = parseBody(body)
         lastUsage = usage
+        // P2-12(自检报告): token/耗时统计 — 非流式响应 usage 直录 (API 无 usage 时记 0)
+        com.mengpaw.kernel.Telemetry.recordLlm(
+            usage?.promptTokens ?: 0, usage?.completionTokens ?: 0,
+            System.currentTimeMillis() - requestStart
+        )
         return parsedContent
     }
 
@@ -271,7 +277,8 @@ class AdaptiveLlmProvider(
      */
     private suspend fun consumeSseStream(
         response: HttpResponse,
-        onToken: (String) -> Unit
+        onToken: (String) -> Unit,
+        requestStart: Long  // P2-12(自检报告): 流式耗时统计锚点
     ): String {
         val channel = response.bodyAsChannel()
         val fullContent = StringBuilder()
@@ -303,12 +310,18 @@ class AdaptiveLlmProvider(
 
                 // Capture usage from inline usage event (some APIs include it in last chunk)
                 json["usage"]?.jsonObject?.let { u ->
-                    lastUsage = TokenUsage(
+                    val usage = TokenUsage(
                         promptTokens = u["prompt_tokens"]?.jsonPrimitive?.int ?: 0,
                         completionTokens = u["completion_tokens"]?.jsonPrimitive?.int ?: 0,
                         totalTokens = u["total_tokens"]?.jsonPrimitive?.int ?: 0,
                         cacheHitTokens = u["prompt_cache_hit_tokens"]?.jsonPrimitive?.int ?: 0,
                         cacheMissTokens = u["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
+                    )
+                    lastUsage = usage
+                    // P2-12(自检报告): token/耗时统计 — 部分 API 仅在末块内联 usage
+                    com.mengpaw.kernel.Telemetry.recordLlm(
+                        usage.promptTokens, usage.completionTokens,
+                        System.currentTimeMillis() - requestStart
                     )
                 }
 

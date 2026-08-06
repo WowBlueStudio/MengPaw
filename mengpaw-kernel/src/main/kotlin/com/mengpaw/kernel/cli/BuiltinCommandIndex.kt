@@ -104,18 +104,28 @@ object BuiltinCommandIndex {
         idx("agent.boost.delete", "删除 Agent 引导加速文件", "agent.boost.delete",
             listOf("删除", "Boost", "引导", "清理"),
             listOf("delete", "remove", "boost", "clean"))
+        // memory.* 三轨入口化 (P2-10): 20+ 子命令曾稀释 BM25 — self.search "记忆" 返回
+        // 整页近义词条目。现按三轨分组, 同组搜索只保留得分最高一条 (组内共享入口关键词):
+        // memory.long = 长期记忆入口 (keep/write/edit/rm/read), memory.mid = 中期记忆入口
+        // (record/mid*), memory.project = 项目记忆入口 (project*), memory.core = 核心入口
+        // (memory + 梦境 — 梦境本质是记忆管理整理通道); memory.search/stats 不分组,
+        // 作为独立入口出现在通用"记忆"查询结果中。
         idx("agent.memory", "查看长期记忆 (已注入系统提示词, 最重要的记忆)", "agent.memory [query]",
             listOf("记忆", "长期", "查看", "已记住", "读记忆", "Memory"),
-            listOf("memory", "long-term", "view", "remember", "read", "recall"))
+            listOf("memory", "long-term", "view", "remember", "read", "recall"),
+            group = "memory.core")
         idx("agent.memory.keep", "将重要信息写入长期记忆 (注入系统提示词)", "agent.memory.keep <内容>",
             listOf("持久化", "保存", "记住", "存储", "记录", "写记忆", "Keep", "重要"),
-            listOf("persist", "save", "remember", "store", "write memory", "keep", "important"))
+            listOf("persist", "save", "remember", "store", "write memory", "keep", "important"),
+            group = "memory.long")
         idx("agent.memory.record", "记录对话摘要到中期记忆 (按日分片, 不注入提示词)", "agent.memory.record <内容>",
             listOf("记录", "中期", "摘要", "对话", "日志", "临时", "日记"),
-            listOf("record", "mid-term", "summary", "log", "note", "daily", "journal"))
+            listOf("record", "mid-term", "summary", "log", "note", "daily", "journal"),
+            group = "memory.mid")
         idx("agent.memory.read", "按 ID 读取一条记忆 (跨长期/中期/项目三轨)", "agent.memory.read <id>",
             listOf("读", "读取", "条目", "时间戳", "单条", "Read"),
-            listOf("read", "entry", "timestamp", "single", "fetch"))
+            listOf("read", "entry", "timestamp", "single", "fetch"),
+            group = "memory.long")
         idx("agent.memory.search", "跨轨搜索记忆 (长期/中期/项目, 默认全轨)", "agent.memory.search <关键词> [--track long|mid|project]",
             listOf("搜索", "检索", "查找", "关键词", "查询", "Search"),
             listOf("search", "query", "find", "keyword", "lookup"))
@@ -124,40 +134,52 @@ object BuiltinCommandIndex {
             listOf("stats", "count", "overview", "report", "summary"))
         idx("agent.memory.write", "按指定 ID 写长期记忆 (已存在则更新)", "agent.memory.write <id> <内容>",
             listOf("写入", "指定", "更新", "标题", "Write", "存储"),
-            listOf("write", "update", "store", "title", "create"))
+            listOf("write", "update", "store", "title", "create"),
+            group = "memory.long")
         idx("agent.memory.mid", "查看/搜索中期记忆 (按日期分片, 需要时查阅)", "agent.memory.mid [日期|关键词]",
             listOf("中期", "记忆", "日", "历史", "查阅", "过往", "回顾"),
-            listOf("mid", "history", "daily", "review", "past", "query"))
+            listOf("mid", "history", "daily", "review", "past", "query"),
+            group = "memory.mid")
         idx("agent.memory.mid.delete", "删除指定日期的中期记忆分片", "agent.memory.mid.delete <日期>",
             listOf("删除", "中期记忆", "清理", "日"),
-            listOf("delete", "mid", "remove", "clean", "daily"))
+            listOf("delete", "mid", "remove", "clean", "daily"),
+            group = "memory.mid")
         idx("agent.memory.mid.rm", "删除中期记忆中的一条指定条目 (按日期+时间戳)", "agent.memory.mid.rm <日期> <时间戳>",
             listOf("删除", "中期记忆", "移除", "清理"),
-            listOf("remove", "mid", "delete", "entry", "clean"))
+            listOf("remove", "mid", "delete", "entry", "clean"),
+            group = "memory.mid")
         idx("agent.memory.mid.edit", "编辑中期记忆中的一条指定条目 (按日期+时间戳)", "agent.memory.mid.edit <日期> <时间戳> <新内容>",
             listOf("编辑", "修改", "中期记忆", "更新"),
-            listOf("edit", "modify", "mid", "update", "entry"))
+            listOf("edit", "modify", "mid", "update", "entry"),
+            group = "memory.mid")
         idx("agent.memory.project", "查看项目记忆 (里程碑/闭环时总结的可复用方法论)", "agent.memory.project [项目名]",
-            listOf("项目", "经验", "方法", "总结", "闭环", "里程碑", "Project"),
-            listOf("project", "experience", "method", "summary", "milestone"))
+            listOf("项目", "记忆", "经验", "方法", "总结", "闭环", "里程碑", "Project"),
+            listOf("project", "experience", "method", "summary", "milestone"),
+            group = "memory.project")
         idx("agent.memory.project.save", "将里程碑总结写入项目记忆", "agent.memory.project.save <项目名> <内容>",
             listOf("保存", "项目经验", "总结", "方法", "Save", "写入"),
-            listOf("save", "project", "summary", "method", "write", "experience"))
+            listOf("save", "project", "summary", "method", "write", "experience"),
+            group = "memory.project")
         idx("agent.memory.project.delete", "删除一个项目记忆分片", "agent.memory.project.delete <项目名>",
             listOf("删除", "项目", "清理", "移除"),
-            listOf("delete", "project", "remove", "clean"))
+            listOf("delete", "project", "remove", "clean"),
+            group = "memory.project")
         idx("agent.memory.project.rm", "从项目记忆中删除一条指定条目", "agent.memory.project.rm <项目名> <时间戳>",
-            listOf("删除", "项目记忆", "移除", "条目"),
-            listOf("remove", "project", "delete", "entry"))
+            listOf("删除", "移除", "条目"),
+            listOf("remove", "project", "delete", "entry"),
+            group = "memory.project")
         idx("agent.memory.project.edit", "编辑项目记忆中的一条指定条目", "agent.memory.project.edit <项目名> <时间戳> <新内容>",
-            listOf("编辑", "修改", "项目记忆", "更新"),
-            listOf("edit", "modify", "project", "update", "entry"))
+            listOf("编辑", "修改", "更新"),
+            listOf("edit", "modify", "project", "update", "entry"),
+            group = "memory.project")
         idx("agent.memory.rm", "从长期记忆中删除一条指定条目", "agent.memory.rm <时间戳>",
             listOf("删除", "记忆", "移除", "清理", "Rm"),
-            listOf("remove", "delete", "memory", "clean", "erase"))
+            listOf("remove", "delete", "memory", "clean", "erase"),
+            group = "memory.long")
         idx("agent.memory.edit", "编辑长期记忆中的一条指定条目", "agent.memory.edit <时间戳> <新内容>",
             listOf("编辑", "修改", "记忆", "更新", "Edit"),
-            listOf("edit", "modify", "update", "memory", "change"))
+            listOf("edit", "modify", "update", "memory", "change"),
+            group = "memory.long")
         idx("agent.session.delete", "删除指定历史会话", "agent.session.delete <id>",
             listOf("删除", "会话", "历史", "清理"),
             listOf("delete", "session", "history", "remove"))
@@ -175,7 +197,8 @@ object BuiltinCommandIndex {
             listOf("browser", "WebView", "tools", "mcp", "commands", "control"))
         idx("agent.dream", "触发梦境模式: 分析中期记忆 → 提炼洞察 → 写入长期记忆", "agent.dream",
             listOf("梦境", "整理", "压缩", "归档", "分析", "回顾", "Dream", "记忆管理"),
-            listOf("dream", "compress", "archive", "analyze", "review", "organize", "memory"))
+            listOf("dream", "compress", "archive", "analyze", "review", "organize", "memory"),
+            group = "memory.core")
         idx("agent.cleanup", "清理过期文件 (30 天旧截图/收件箱/临时文件)", "agent.cleanup",
             listOf("清理", "删除", "过期", "临时", "空间", "释放", "Cleanup"),
             listOf("cleanup", "clean", "delete", "purge", "free space", "temp"))
@@ -196,6 +219,9 @@ object BuiltinCommandIndex {
         idx("agent.write", "在工作区中写入文件 (原子操作 tmp→rename)", "agent.write <路径> <内容>",
             listOf("写入", "写文件", "创建", "保存", "Write", "生成文件"),
             listOf("write", "create", "save", "file", "generate", "output"))
+        idx("agent.policy", "per-agent 命令前缀级授权 — 多 Agent 场景按 agent 放开受限命令 (blockList 恒优先)", "agent.policy [allow|deny <前缀> [--to <agent>]]",
+            listOf("权限", "授权", "策略", "命令权限", "放行", "限制", "多Agent"),
+            listOf("permission", "policy", "grant", "allow", "deny", "access"))
         idx("agent.ls", "列出工作区中的文件和目录", "agent.ls [路径]",
             listOf("列表", "目录", "列出", "文件", "浏览", "Ls", "Dir"),
             listOf("list", "ls", "dir", "files", "directory", "browse"))
@@ -254,7 +280,8 @@ object BuiltinCommandIndex {
         idx("framework.add", "手动添加框架节点 (mDNS 发现不可用时)", "framework.add <name> <address> [port] [--type <type>]",
             listOf("添加", "手动", "节点", "IP", "地址", "通讯录"),
             listOf("add", "manual", "node", "peer", "address", "contact"))
-        idx("framework.trust", "信任指定框架节点 (允许任务委派和记忆共享, 需 --yes 确认)", "framework.trust <fingerprint> [--yes]",
+        // 描述刻意不带"记忆"二字 — 避免通用"记忆"查询混入 framework 结果 (P2-10 收敛)
+        idx("framework.trust", "信任指定框架节点 (允许任务委派与数据共享, 需 --yes 确认)", "framework.trust <fingerprint> [--yes]",
             listOf("信任", "授权", "允许", "框架", "节点", "配对", "确认"),
             listOf("trust", "authorize", "allow", "peer", "pair", "accept", "confirm"))
         idx("framework.untrust", "取消信任指定框架节点", "framework.untrust <peer>",
@@ -284,7 +311,8 @@ object BuiltinCommandIndex {
 
     private fun idx(
         fullName: String, description: String, usage: String = "",
-        zhKeywords: List<String> = emptyList(), enKeywords: List<String> = emptyList()
+        zhKeywords: List<String> = emptyList(), enKeywords: List<String> = emptyList(),
+        group: String = ""
     ) {
         val parts = fullName.split(".", limit = 2)
         CommandSearch.register(
@@ -294,7 +322,8 @@ object BuiltinCommandIndex {
                 description = description,
                 usage = if (usage.isNotBlank()) usage else fullName,
                 zhKeywords = zhKeywords,
-                enKeywords = enKeywords
+                enKeywords = enKeywords,
+                searchGroup = group
             )
         )
     }

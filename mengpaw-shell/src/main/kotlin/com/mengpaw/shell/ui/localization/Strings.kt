@@ -169,6 +169,16 @@ class AppStrings {
     var agentWorkspaceFiles: String = ""
     var agentAutoTranslate: String = ""
     var agentAutoTranslateDesc: String = ""
+    // Agent 引导进度 (P2-13)
+    var agentBoostPanel: String = ""
+    var agentBoostPanelDesc: String = ""
+    var agentBoostDone: String = ""
+    var agentBoostProgress: String = ""
+    var agentBoostItemIdentity: String = ""
+    var agentBoostItemAvatar: String = ""
+    var agentBoostItemTheme: String = ""
+    var agentBoostItemSoul: String = ""
+    var agentBoostHint: String = ""
 
     // Settings - Framework
     var frameworkAddProvider: String = ""
@@ -542,6 +552,17 @@ val EnglishStrings = AppStrings().apply {
     agentTriggerScheduled = "Scheduled"
     agentWorkspaceFiles = "Workspace Files"
 
+    // Agent Onboarding Progress (P2-13)
+    agentBoostPanel = "Onboarding Progress"
+    agentBoostPanelDesc = "Agent initialization checklist — identity / avatar / theme / soul"
+    agentBoostDone = "Onboarding complete"
+    agentBoostProgress = "Completed %1\$d/4 · Missing: %2\$s"
+    agentBoostItemIdentity = "Identity"
+    agentBoostItemAvatar = "Avatar"
+    agentBoostItemTheme = "Theme"
+    agentBoostItemSoul = "Soul"
+    agentBoostHint = "boost.md is still in the workspace — delete it in Workspace Files once onboarding is done"
+
     // Settings - Framework
     frameworkAddProvider = "Add API Provider"
     frameworkApiProvider = "API Provider"
@@ -909,6 +930,17 @@ val ChineseStrings = AppStrings().apply {
     agentTriggers = "定时任务 & 触发器"
     agentTriggerScheduled = "定时"
     agentWorkspaceFiles = "工作区文件"
+
+    // Agent 引导进度 (P2-13)
+    agentBoostPanel = "引导进度"
+    agentBoostPanelDesc = "Agent 初始化引导四项 — 身份 / 头像 / 主题 / 灵魂"
+    agentBoostDone = "已完成初始化"
+    agentBoostProgress = "已完成 %1\$d/4 · 未完成：%2\$s"
+    agentBoostItemIdentity = "身份"
+    agentBoostItemAvatar = "头像"
+    agentBoostItemTheme = "主题"
+    agentBoostItemSoul = "灵魂"
+    agentBoostHint = "引导文档 boost.md 仍在工作区 — 确认引导完成后可在「工作区文件」中删除"
 
     // Settings - Framework
     frameworkAddProvider = "新增API供应商"

@@ -15,7 +15,10 @@ data class CommandIndex(
     val description: String,        // LLM 友好的简短描述
     val usage: String = "",         // 用法示例, 如 "agent.memory.keep <内容>"
     val zhKeywords: List<String> = emptyList(),  // 中文同义词树枝
-    val enKeywords: List<String> = emptyList()   // 英文同义词树枝
+    val enKeywords: List<String> = emptyList(),  // 英文同义词树枝
+    /** 同轨检索组 (P2-10) — 组内命令共享入口关键词, 搜索时同组只保留得分最高一条。
+     *  用于 memory.* 20+ 子命令按三轨收敛 (long/mid/project), 防 BM25 稀释; 空串不分组。 */
+    val searchGroup: String = ""
 )
 
 /**
@@ -103,8 +106,19 @@ object CommandSearch {
         return index.map { cmd -> cmd to score(cmd, tokens) }
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
+            .distinctByGroup()
             .take(topK)
             .map { it.first }
+    }
+
+    /**
+     * 同轨去重 (P2-10): 同一 searchGroup 只保留得分最高的一条。
+     * 排序稳定 (sortedByDescending 稳定), 同分时先注册者胜 → 轨道根命令 (如
+     * agent.memory.mid / agent.memory.project) 自然成为入口; 无分组命令不受影响。
+     */
+    private fun List<Pair<CommandIndex, Int>>.distinctByGroup(): List<Pair<CommandIndex, Int>> {
+        val seen = HashSet<String>()
+        return filter { (cmd, _) -> cmd.searchGroup.isBlank() || seen.add(cmd.searchGroup) }
     }
 
     /**

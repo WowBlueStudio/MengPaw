@@ -232,7 +232,9 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `AppInitializer.kt` | 关键路径初始化 (崩溃日志/DataPaths/插件管理器/SysExecutor/模板/日志器) |
 | `ui/screens/AppRoot.kt` | Compose 根 — 主题装配 + MainScreen/设置页/插件市场全屏层 |
 | `service/AgentRuntime.kt` | **NEW** UI/运行时分离 — 触发器桥接, 所有 IO 工作在此 |
-| `ui/screens/` (52 文件) | MainScreen (头栏/侧栏/底表拆至 MainScreenHeader·MainScreenSidebars·MainScreenExpandSheet), SidebarContent (数据拆至 SidebarContentData, 孪生对话框拆至 sidebar-dialogs/TwinPairingDialogs), settings/ (5 文件: AgentSettingsContent 等), AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SplashScreen, **ChatBubbles (AgentStepBubble 每步骤气泡 v0.32.0+ + AttachmentBubbles 下行媒体卡片), VoiceRecorder, VoiceInputButton** |
+| `ui/screens/` (52 文件) | MainScreen (头栏/侧栏/底表拆至 MainScreenHeader·MainScreenSidebars·MainScreenExpandSheet), SidebarContent (数据拆至 SidebarContentData, 孪生对话框拆至 sidebar-dialogs/TwinPairingDialogs), settings/ (AgentSettingsContent + AgentBoostPanel 引导进度面板 v0.32.1+ 等), AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SplashScreen, **ChatBubbles (AgentStepBubble 每步骤气泡 v0.32.0+ + AttachmentBubbles 下行媒体卡片), VoiceRecorder, VoiceInputButton** |
+
+**引导进度面板 (v0.32.1+, 自检报告 P2-13, `AgentBoostPanel.kt`)**: 设置页 Agent 区顶部 4 项打勾 — 身份 (profile.md 有名字, 兼容模板 `- **名字：**` 与 AgentProfile `- 名称:` 两格式) / 头像 (avatar.png) / 主题 (AGENTS/theme.md 全局文件) / 灵魂 (soul.md)。全完成 → 绿色对勾"已完成初始化"; 未完成 → "已完成 n/4 · 未完成: 缺失项"; 四项齐但 boost.md 仍在 → 橙色提示可在工作区文件删除 (引导完成标记语义)。数据/UI 分离 (`AgentBoostStatus` 数据类, 纯函数判定可单测); `remember(agentName)` 进设置页读一次不轮询, 关闭再进重建自动刷新。
 | `ui/components/` (7 文件) | BigBangPopup, FleetMonitorOverlay, TokenChart, TokenStatsCollector, NotifyBanner 等 |
 | `ui/AdaptiveLayout.kt` | WindowSizeClass 计算 |
 | `ui/localization/Strings.kt` | 中英双语注解 |
@@ -601,6 +603,8 @@ twin.lost <peer> / twin.recover <peer>
 
 **静态参考数据分层（v0.32.1+, 自检报告 P0-1）**: 与反模式警告的边界 — 行为约束（soul/agents/profile/记忆）**必须**常驻明文, 纯参考数据（端口表）**不**常驻。v0.32.1 起整张网络端口表移出提示词, 改为一行指针: `端口/网络接口一览: self.ports`（`__PORTS_TABLE__` 占位符与注入逻辑删除, `self.ports` 成为端口单一事实源, CLI.md 端口章节保留供查阅）。同批压缩: Tribe 节（默认未安装, 4 行→1 行指针 `self.tools tribe`）、浏览器协作节（5 行→3 行, browser-mcp 默认未安装不展开 9880 细节）。TEMPLATE_HASH 自动失效缓存, 生产前缀缓存一次性失效。判断标准: 该内容 Agent 是否在每轮都需要它才能正确行动 — 参考数据按需取, 约束每轮给。
 
+**身份未就绪提醒 (v0.32.1+, 自检报告 P1-6)**: 引导状态机以**纯文本规则判定, 零状态存储**实现 — profile.md 名字未填时 docsBlock 追加「身份未就绪」提醒段 (zh/en 按 lang 分支), 填好后 mtime 失配触发 buildSystemPrompt 缓存重建, 提醒段自动消失。判定 `PromptEngine.hasFilledName` 兼容两种格式 (模板 `- **名字：**` 与 AgentProfile `- 名称:`, 正则取**首个**名字行 — 模板中身份段在用户资料段之前); 值清洗: 去 `**`/括号后为空、命中占位集合 (模板占位 + 未命名/未设置/待填写/n/a/tbd 等) 视为未填。与 boost.md 完全独立。
+
 ### 4.2 支持的服务商 (12)
 
 | 服务商 | Endpoint | 默认模型 | 缓存策略 |
@@ -625,6 +629,8 @@ twin.lost <peer> / twin.recover <peer>
 - `awaitCompressionIfNeeded`(在途则不阻塞放行 — 快照一致, 压缩与请求并发无害; 无在途且仍超阈值才同步兜底)
 - `compressionScope` 独立于 runningJob(随引擎生灭), **刻意不在 stop() 取消** — submitTask 每轮先 stop, 取消会杀死在途压缩(浪费一次 LLM 调用 + 历史压不下去)
 - 并发契约: 消息列表替换在 `synchronized(this)` 监视器内(与 addMessage/recordInterruptedTurn 共用); LLM 调用窗口内新增消息用**身份 diff**(`IdentityHashMap`)保留 — 200 条上限的 removeAt(0) 会破坏旧 `afterSnap.drop()` 下标对齐逻辑
+
+**自动摘要落地中期记忆 (v0.32.1+, 自检报告 P1-5)**: 压缩成功即把 LLM 已生成的结构化摘要写入当期中期记忆分片 (`memory_{date}.md`) — **零新增 LLM 调用**(复用 `compressIfNeeded` 产出, 它是一切压缩路径的主汇聚点: 主路径/后台预压缩/同步兜底全经它)。写入复用 `AgentDocs.appendMidTermMemory` 队列, 与 `agent.memory.record` 完全同一落盘路径/格式, 条目以 blockquote 标注来源 `> [自动摘要 · 会话 {id} #{n}]` 与模型自觉记录可区分。幂等: `AutoSummaryMemory.WrittenGuard`(会话 id + 压缩序号双 key, `ConcurrentHashMap.merge` 原子分配, 进程内单调); 范围守卫: `swarm`/`mission` 零待命 worker 会话不写(与 AgentMemoryExecutor 写屏蔽一致, 防 worker 噪音注入); 失败静默不阻塞压缩主路径。
 
 ### 4.4 翻译中间件
 
@@ -727,6 +733,8 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - 所有写入使用原子操作 (tmp → rename), 防崩溃损坏
 - 梦境模式 (`agent.dream`) 桥接中期→长期: 分析今日中期记忆, 产出结构化洞察——管道 (v0.22.0): 读全部中期分片 → 复制 `memory/backup/` → 提炼 `{agent}/{date}_dream.md` (同日多次追加) → 删除已整理分片 → 30 天前备份自动清理
 
+**三轨检索收敛 (v0.32.1+, 自检报告 P2-10)**: `self.search` (BM25) 对 memory.* 20 子命令的分轨去重——`CommandSearch.search()` 按 `CommandIndex.searchGroup` 同组只留得分最高一条 (稳定排序保先注册的轨道根命令胜出)。分组: `memory.long`(keep/write/edit/rm/read) / `memory.mid`(record/mid*) / `memory.project`(project*) / `memory.core`(agent.memory + agent.dream); `memory.search/stats` 不分组作独立入口。`self.search 记忆` 从 ~19 条收敛到恰好 6 条 (agent.memory / memory.keep / memory.mid / memory.project / memory.search / memory.stats), 精确查询不破坏 ("删除记忆"仍命中 agent.memory.rm)。关键词微调: project 族补"记忆" (根命令同分胜出), framework.trust 描述 "记忆共享"→"数据共享" (唯一漏网 +5 desc 命中)。
+
 **Notes 笔记目录 (v0.30.0+)**: `{agent}/Notes/` 存放记忆之外的笔记——如其他 Agent 发来的知识信息。`AgentDocs.bootstrap` 预建目录, 设置页工作区文件树在 memory 节点下方固定显示 Notes 节点 (仅收 .md 子行), Agent 通过工作区文件命令 (`agent.write/read/ls/rm`) 读写, 不注入系统提示词。设计意图: 记忆 (memory/) 是需提炼保真的结构化知识, Notes 是低约束随手笔记区。
 
 **工作区文档重置 (v0.30.0+)**: 设置页工作区文件树中, 8 份预置文档 (agents.md / heartbeat.md / modes.md / profile.md / soul.md / trigger.md / trumanshow.md / memory/memory.md) 的按钮为「重置」——`AgentDocs.resetDoc` 从 APK 模板 (`{BASE}/agent-templates/{lang}/`, 缺失回退 zh) 原子覆盖写回预置版; 名单外文档 (中期/项目记忆、梦境文档 {date}_dream.md、boost.md 等) 保持可删除。
@@ -742,23 +750,30 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 ### 5.1 内置命名空间（kernel）
 
 #### self — Agent 自我管理 (16)
-`status` | `config [key=value]` | `stats` | `version` | `avatar` | `theme` | `mcp` | `trigger` | `acp` | `tools [namespace]` | `ports [--json]` | `search <query> [--top N]` | `search.stats` | `time [format]` | `notify.message <text>` | `notify.banner <text> [--level]`
+`status` | `config [key=value]` | `stats [events --tail N]` | `version` | `avatar` | `theme` | `mcp` | `trigger` | `acp` | `tools [namespace]` | `ports [--json]` | `search <query> [--top N]` | `search.stats` | `time [format]` | `notify.message <text>` | `notify.banner <text> [--level]`
+> `self.stats` 遥测 (v0.32.1+, 自检报告 P2-12): 追加 `Tokens: prompt=X completion=Y total=Z` 与 `Latency: last=Nms avg=Mms (K requests)` (真实 usage 源 — AdaptiveLlmProvider 非流式成功响应与流式内联 usage 事件处记录); `self.stats events [--tail N]` 输出 `{BASE}/events.jsonl` 尾部 (JSON lines, 原子追加, 512KB 封顶截尾, Sanitizer 脱敏; Pipeline 成功路径与 failAudit 均写命令事件)。
 
 #### evolution — 进化系统 (5, 内核注册, 提供者由同捆插件 plugin-evolution 提供)
 `audit` | `report <描述>` | `learn.command <命令> <描述> [--keywords 词,词]` | `reactions` | `mark-corrected <id>`
 > 失败钩子归系统 (ErrorCollector.onReport): 命令失败/循环/崩溃自动写入失败模式库 (`{AGENTS}/{agent}/evolution/failures.jsonl`), 下次 LLM 调用注入金字塔省察引导 (L1 事实→L2 归因→L3 用户视角→L4 进化)。用户纠正 (shell 层识别) 写入用户反应档案 `reactions.md`。处置: 指令错→`learn.command`/`self.search`, 常识错→`agent.memory.keep`, 行为错→`agent.write soul.md`, 框架错→`report`。实现经 EvolutionProvider SPI 可替换 (同捆插件 plugin-evolution 注册内核默认, 第三方覆盖后卸载回退)。
 
+> **内置预防种子 (v0.32.1+, 自检报告 P1-4)**: `EvolutionStore.SEED_PATTERNS` 7 条新手错误种子 (自然语言当路径 agent.read/agent.ls、写后不验证 agent.write、缺 Action Input agent.memory.keep、JSON 当 Action Input、shell 原生命令 ls/dir/cat、agent.rm 删除前不确认) — `recordFailure` 命中时失败记录 message 附 `[种子] 命中内置种子模式 #N` 标注, `evolution.audit` 输出"常见错误预防清单"。**复现检测**: `detectRecurrenceDefect()` — 同 agent 同命令前缀 + 同错误码 ≥2 次, 且存在同前缀 `markCorrected=true` 教训 → 自动升级框架缺陷: 写 `{AGENTS}/{agent}/evolution/feedback/YYYYMMDD_HHmmss.md` (与 evolution.report 同通道) + NotifyBus 推送, message 附 `[缺陷] 沉淀修正后同型错误仍复发 N 次`, `autoFeedbackKeys` 每进程每 key 只写一次防刷屏。
+
 
 #### agent — 文档 + 内存 + 工作区 (27+)
 **文档 (3)**：`docs` | `cli` | `profile` | `soul` | `boost` | `boost.delete`
+> `agent.docs` 展示 frontmatter 元数据 (v0.32.1+, 自检报告 P2-8): 逐文档读文件头 2KB 内 `---` 块提取模板同款 `summary`/`read_when`（缩进列表），输出 `name — summary [read_when]`；无 frontmatter 退化为纯文件名。
 
 **记忆三轨 (18)**：`memory` (看长期) | `memory.keep <内容>` (写长期) | `memory.write <id> <内容>` (指定 ID 写/更新) | `memory.read <id>` (按 ID 读单条) | `memory.search <关键词> [--track long|mid|project]` (跨轨搜索) | `memory.stats` (统计) | `memory.rm <时间戳>` | `memory.edit <时间戳> <内容>` | `memory.mid [日期]` (看中期) | `memory.record <内容>` (写中期) | `memory.mid.delete <日期>` | `memory.mid.rm <日期> <时间戳>` | `memory.mid.edit <日期> <时间戳> <内容>` | `memory.project [名称]` (看项目) | `memory.project.save <名称> <内容>` | `memory.project.rm <名称> <时间戳>` | `memory.project.edit <名称> <时间戳> <内容>` | `memory.project.delete <名称>`
 
-**其他 (5+)**：`audit` | `browser-tools` | `dream` | `cleanup` | `storage`
+**其他 (6+)**：`audit` | `browser-tools` | `dream` | `cleanup` | `storage` | `policy`
+
+**权限策略 (v0.32.1+, 自检报告 P1-7)**：`policy`（列出全部授权）| `policy allow <前缀> [--to <agent>]`（放行受限命令, 默认目标为自己）| `policy deny <前缀> [--to <agent>]`（收回）。per-agent 授权表持久化 `{BASE}/配置/policy.json`（原子写）。优先级铁律: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。
 
 **会话 (4)**：`sessions [keyword] [limit]` | `session.delete <id>` | `session.archive <id>` | `session.current`
 
 **工作区文件 (6)**：`read <path>` | `write <path> <content>` | `ls [path]` | `rm <path>` | `mkdir <path>` | `output`
+> `agent.write --from <源文件>` (v0.32.1+, 自检报告 P2-11): 从本地文件导入内容 (resolvePath 解析/存在性校验/拒目录/5MB 防 OOM 上限/UTF-8)。参数不足错误信息补充引用规则: 内容含空格用引号包裹, 多行用 `--from 从文件导入`。
 
 
 #### plugin — 插件管理 (12 + 5)
@@ -845,6 +860,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 #### tavily — AI 搜索 (3)（内置）
 `search <query> [--max=N]` | `extract <url>` | `setup <key>`（配置/查看 API Key，存 `{BASE}/配置/tavily.json`，env `TAVILY_API_KEY` 优先）
 > v0.28.7 起内置：随 APK 自动安装激活，Agent 原生即有搜索能力（FewShot 示例 2 演示直接使用）
+> **key 脱敏 (v0.32.1+, 自检报告 P2-9)**: `setup` 三种 key 来源 — `--from-file <路径>`（读首行 trim，推荐）/ `--from-clipboard`（插件层无系统剪贴板能力，明确报错引导 --from-file）/ 内联 `<key>`（兼容保留）。所有成功/状态消息只回显 `key 长度 N`，key 原文仅进混淆存储。已知边界: 内联命令原文仍会进 kernel 审计 (Sanitizer 不覆盖 `tvly-` 前缀, 内核冻结期未加规则 — 根治需 kernel Sanitizer 增 `tvly-` 规则)。
 
 #### hermes — 多智能体 (6)
 `team` | `discover` | `delegate <agent> <task>` | `ask <agent> <question>` | `memo <content>` | `role <agent> <role>`
@@ -897,6 +913,8 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 ### 6.1 三层拦截（始终强制执行，不可关闭）
 
 命令 → ① SecurityPolicy.isAllowed()（白名单 + 黑名单 + 15 条危险模式）→ ② IntegrityGuard.validateCommand()（路径保护，接入 Pipeline 指令链）→ ③ 执行
+
+**per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
 
 
 ### 6.2 Vault

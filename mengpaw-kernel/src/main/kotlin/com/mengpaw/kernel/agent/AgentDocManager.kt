@@ -95,7 +95,47 @@ class AgentDocManager(
 
     fun getDocPath(docType: AgentDocType): String = file(docType).absolutePath
 
-    fun listDocs(): List<String> = AgentDocType.entries.map { it.name.lowercase() + ".md" }
+    /**
+     * 列出全部文档 (自检报告 P2-8): 每行带文件头 frontmatter 元数据 (summary / read_when),
+     * 无 frontmatter 的文件退化为纯文件名。轻量: 只读文件头 2KB。
+     */
+    fun listDocs(): List<String> = AgentDocType.entries.map { docType ->
+        val name = docType.name.lowercase() + ".md"
+        val (summary, readWhen) = frontmatterOf(file(docType))
+        when {
+            summary == null -> name
+            readWhen.isEmpty() -> "$name — $summary"
+            else -> "$name — $summary [${readWhen.joinToString(" / ")}]"
+        }
+    }
+
+    /**
+     * 提取 markdown 文件头 frontmatter (--- 包裹的 YAML 块, 前 2KB 内)。
+     * 字段名照模板: summary (单行字符串) / read_when (缩进列表)。
+     * @return (summary, read_when 列表) — 无 frontmatter 或解析失败时 summary 为 null。
+     */
+    private fun frontmatterOf(f: File): Pair<String?, List<String>> {
+        if (!f.exists()) return null to emptyList()
+        val head = try { f.readText().take(2048) } catch (_: Exception) { return null to emptyList() }
+        if (!head.startsWith("---")) return null to emptyList()
+        val closeIdx = head.indexOf("\n---", 3)
+        if (closeIdx < 0) return null to emptyList()
+        var summary: String? = null
+        val readWhen = mutableListOf<String>()
+        var inReadWhen = false
+        head.substring(3, closeIdx).lineSequence().forEach { line ->
+            val t = line.trim()
+            when {
+                t.startsWith("summary:") ->
+                    summary = t.removePrefix("summary:").trim().trim('"').trim('\'')
+                t.startsWith("read_when:") -> inReadWhen = true
+                t.startsWith("- ") && inReadWhen -> readWhen.add(t.removePrefix("- ").trim())
+                t.isEmpty() -> { /* 空行不打断 read_when 块 */ }
+                else -> inReadWhen = false
+            }
+        }
+        return summary to readWhen
+    }
 
     // ── CLI reference ─────────────────────────────────────────────────
 
@@ -439,7 +479,7 @@ class AgentDocManager(
         internal val SELF_COMMANDS = listOf(
             Triple("status", "self status", "Agent 运行状态"),
             Triple("config", "self config [key=value]", "查看/设置配置"),
-            Triple("stats", "self stats", "内存/CPU/线程统计"),
+            Triple("stats", "self.stats [events [--tail N]]", "内存/CPU/线程 + token/耗时统计 + 事件流"),
             Triple("version", "self version", "版本信息"),
             Triple("avatar", "self.avatar [name|file]", "切换头像"),
             Triple("theme", "self.theme [light|dark|system]", "切换主题配色"),
@@ -490,7 +530,8 @@ class AgentDocManager(
             Triple("session.archive", "agent.session.archive <id>", "归档会话"),
             Triple("session.current", "agent.session.current", "当前会话状态"),
             Triple("read", "agent.read <路径>", "读取工作区文件 (只读)"),
-            Triple("write", "agent.write <路径> <内容>", "写入工作区文件 (原子)"),
+            Triple("write", "agent.write <路径> <内容> | agent.write <路径> --from <源文件>", "写入工作区文件 (原子; --from 从文件导入多行内容)"),
+            Triple("policy", "agent.policy [allow|deny <前缀> [--to <agent>]]", "命令前缀级授权 (per-agent, 多Agent隔离)"),
             Triple("ls", "agent.ls [路径]", "列出工作区目录"),
             Triple("rm", "agent.rm <路径>", "删除工作区文件"),
             Triple("mkdir", "agent.mkdir <路径>", "创建工作区目录"),

@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.evolution
 
 import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.namespace.NotifyBus
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -50,6 +51,24 @@ data class UserReaction(
 )
 
 /**
+ * 内置"新手常见错误"种子 — 预置失败模式, 非真实失败记录。
+ * 新 Agent 首次 evolution.audit 即可看到常见错误及教训, 不必等失败模式库从零积累。
+ * 命中判定: command == prefix 或 command 以 "prefix." 开头 (如 "agent.read" 命中 "agent.read").
+ */
+data class SeedPattern(
+    val id: Int,
+    /** 命中前缀 (可多个) — 如 "agent.read"; 原生命令种子用 ["ls","dir","cat"]。 */
+    val prefixes: List<String>,
+    /** 错误描述 — 常见错误长什么样。 */
+    val description: String,
+    /** 教训 — 正确做法。 */
+    val lesson: String
+) {
+    fun matches(command: String): Boolean =
+        prefixes.any { command == it || command.startsWith("$it.") }
+}
+
+/**
  * 进化系统存储层 — 失败模式库 + 用户反应档案。
  *
  * ## Design(仿 ErrorCollector)
@@ -76,11 +95,42 @@ object EvolutionStore {
     private val repeatIndex = mutableMapOf<String, Int>()
     private val lock = Any()
 
+    /**
+     * 内置失败模式种子库 — 新手常见错误预防清单 (P1-4)。
+     * 非真实失败记录: 不进 repeatIndex, 不写 failures.jsonl; 命中命令前缀时,
+     * 失败记录 message 自动附"命中内置种子模式 #N"教训提示, stats/audit 列表展示。
+     */
+    val SEED_PATTERNS: List<SeedPattern> = listOf(
+        SeedPattern(1, listOf("agent.read"), "把自然语言描述当文件路径写进 agent.read",
+            "agent.read 的参数是工作区内真实文件路径 (如 agents/xxx.md); 不确定路径先 agent.ls 列出, 不要传自然语言描述"),
+        SeedPattern(2, listOf("agent.ls"), "把自然语言描述当目录路径写进 agent.ls",
+            "agent.ls 参数是目录路径; 不带参数即列出工作区根目录, 先列目录确认结构再定位文件"),
+        SeedPattern(3, listOf("agent.write"), "写操作后没有读回验证",
+            "agent.write 后必须用 agent.read 读回验证内容落盘正确, 再继续依赖该文件的后续步骤"),
+        SeedPattern(4, listOf("agent.memory.keep"), "调用命令没带 Action Input (缺必需参数)",
+            "命令调用必须带全参数 (Action Input): agent.memory.keep <内容> 的内容不可省略; 拿不准用法先 agent.cli"),
+        SeedPattern(5, listOf("agent.memory"), "把 JSON 对象直接当 Action Input 粘贴",
+            "Action Input 是位置参数 (如 <路径> <内容>), 不是 JSON 对象; 结构化数据先 agent.write 写成文件再引用"),
+        SeedPattern(6, listOf("ls", "dir", "cat"), "用 shell 原生命令 dir/ls/cat 操作工作区文件",
+            "工作区文件操作用 agent.read/agent.ls/agent.write (带沙箱校验), 不要用 shell 原生命令; shell 只用于系统级任务"),
+        SeedPattern(7, listOf("agent.rm"), "删除文件前没有确认目标",
+            "agent.rm 不可逆; 删除前先 agent.ls 确认路径与目标确实是该文件, 再执行")
+    )
+
+    /** 已自动升级为框架缺陷的 key (agent|prefix|errorCode) — 每进程只写一次, 防刷屏。 */
+    private val autoFeedbackKeys = mutableSetOf<String>()
+
     // ── 失败记录 ────────────────────────────────────────────────────
 
     /**
      * 记录一次失败。返回创建的条目(带 repeatCount)。
      * agentName 为空时落到 "default" 档案。
+     *
+     * 附带两路自动提示 (P1-4):
+     * 1. 命令前缀命中内置种子 → message 附"命中内置种子模式 #N: <教训>"。
+     * 2. 已沉淀修正 (markCorrected) 的同前缀错误仍复发 ≥2 次 → 自动升级为框架缺陷,
+     *    写入 evolution.report 同款反馈通道 (feedback 目录 md 落盘 + NotifyBus 推送),
+     *    message 附落盘路径提示。
      */
     fun recordFailure(
         agentName: String?,
@@ -95,13 +145,24 @@ object EvolutionStore {
             val entry = synchronized(lock) {
                 val count = (repeatIndex[key] ?: 0) + 1
                 repeatIndex[key] = count
+                val cmd = command.take(120)
+                // 1) 种子命中提示 — 内置失败模式对照自查, 新手错误就地消化
+                val seedHint = matchSeeds(cmd).joinToString("; ") {
+                    "命中内置种子模式 #${it.id}: ${it.lesson}"
+                }
+                // 2) 复现缺陷检测 — 沉淀修正后同型错误仍复发 → 自动升级框架缺陷
+                val defectHint = detectRecurrenceDefect(agent, cmd, errorCode, count)
                 val e = EvolutionFailure(
                     id = "evo_${nextId++}",
                     timestamp = System.currentTimeMillis(),
                     agentName = agent,
-                    command = command.take(120),
+                    command = cmd,
                     errorCode = errorCode.take(60),
-                    message = message.take(300),
+                    message = buildString {
+                        append(message.take(300))
+                        if (seedHint.isNotEmpty()) append("\n[种子] $seedHint")
+                        if (defectHint != null) append("\n[缺陷] $defectHint")
+                    }.take(600),
                     source = source.take(60),
                     repeatCount = count
                 )
@@ -114,6 +175,68 @@ object EvolutionStore {
         } catch (_: Exception) {
             EvolutionFailure("evo_err", System.currentTimeMillis(), agentFileOf(agentName), command, errorCode, message, source)
         }
+    }
+
+    /** 命令前缀命中种子 → 返回匹配的种子列表 (可能多条)。永不抛异常。 */
+    fun matchSeeds(command: String): List<SeedPattern> =
+        try { SEED_PATTERNS.filter { it.matches(command) } } catch (_: Exception) { emptyList() }
+
+    // ── 复现缺陷检测 (P1-4 沉淀闭环验证) ─────────────────────────────
+
+    /**
+     * 沉淀修正后同型错误仍复发 → 自动升级为框架缺陷 (沉淀闭环失效)。
+     * 触发条件: 同 agent 同命令前缀 + 同错误码出现 ≥2 次, 且存在 markCorrected=true
+     * 的同前缀记录 (缓冲优先, 丢失后回退扫描 failures.jsonl)。
+     * 自动写入 evolution.report 同款反馈通道 (feedback 目录 md 落盘 + NotifyBus 推送),
+     * 返回落盘路径提示; 未触发或已写过返回 null。永不抛异常。
+     */
+    private fun detectRecurrenceDefect(agent: String, command: String, errorCode: String, count: Int): String? {
+        if (count < 2) return null
+        val prefix = commandPrefixOf(command)
+        if (prefix.isBlank() || !hasCorrectedLesson(agent, prefix)) return null
+        val key = "$agent|$prefix|$errorCode"
+        if (!autoFeedbackKeys.add(key)) return null
+        return try {
+            val dir = File(DataPaths.evolutionFeedbackDir(agent))
+            dir.mkdirs()
+            val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+            val file = File(dir, "$ts.md")
+            atomicWrite(file, buildString {
+                appendLine("# 框架缺陷反馈 (自动升级)")
+                appendLine()
+                appendLine("- 触发: 失败模式沉淀修正后仍复发")
+                appendLine("- 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}")
+                appendLine("- Agent: $agent")
+                appendLine()
+                appendLine("## 问题描述")
+                appendLine("命令 $command [$errorCode] 在标记已修正 (evolution.mark-corrected) 后仍复现 $count 次 — 沉淀闭环失效, 疑似框架缺陷 (命令实现/文档/引导文案问题)。")
+                appendLine("请核查该命令实现、BuiltinCommandIndex 关键词与进化引导文案。")
+            })
+            NotifyBus.message("⚠️ Agent 发现疑似框架缺陷 (修正后仍复发): ${file.absolutePath}")
+            "沉淀修正后同型错误仍复发 $count 次, 已自动升级为框架缺陷反馈, 落盘: ${file.absolutePath}"
+        } catch (_: Exception) {
+            // 写入失败也计入 autoFeedbackKeys — 不重试刷屏
+            null
+        }
+    }
+
+    /** command 前缀 — 取命名空间级前缀: "agent.memory.keep" → "agent.memory"; "fs.cat" → "fs"。 */
+    private fun commandPrefixOf(command: String): String =
+        command.substringBeforeLast(".", missingDelimiterValue = command)
+
+    /** 是否存在已沉淀修正 (corrected=true) 的同前缀记录 — 缓冲优先, 回退 failures.jsonl。 */
+    private fun hasCorrectedLesson(agent: String, prefix: String): Boolean {
+        if (buffer.toList().any { it.agentName == agent && it.corrected && it.command.startsWith(prefix) }) return true
+        return try {
+            val file = failuresFile(agent)
+            if (!file.exists()) return false
+            file.readLines().any { line ->
+                try {
+                    json.decodeFromString<EvolutionFailure>(line)
+                        .let { it.corrected && it.command.startsWith(prefix) }
+                } catch (_: Exception) { false }
+            }
+        } catch (_: Exception) { false }
     }
 
     /**
@@ -206,6 +329,12 @@ object EvolutionStore {
                     repeated.take(5).forEach { f ->
                         appendLine("- ${f.command} [${f.errorCode}] ×${f.repeatCount}${if (f.corrected) " ✅已修正" else ""}")
                     }
+                }
+                appendLine()
+                appendLine("### 常见错误预防清单 (内置预防种子 — 非真实失败记录)")
+                appendLine("新手常见错误预防, 命中对应命令前缀时失败记录自动附教训提示:")
+                SEED_PATTERNS.forEach { s ->
+                    appendLine("- 种子#${s.id} [${s.prefixes.joinToString("/")}]: ${s.description} → ${s.lesson}")
                 }
                 appendLine()
                 appendLine("未沉淀的失败模式: 用 agent.memory.keep / agent.memory.project.save 沉淀教训, 再 evolution.mark-corrected <id> 标记已修正")

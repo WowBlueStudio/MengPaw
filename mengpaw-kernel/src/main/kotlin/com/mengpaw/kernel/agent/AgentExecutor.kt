@@ -48,12 +48,84 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         "ls" to ::listFiles,
         "rm" to ::deleteFile,
         "mkdir" to ::makeDir,
-        "output" to ::output
+        "output" to ::output,
+        "policy" to ::policy
     ) + memoryExecutor.commands
 
     init {
         // 注入注册键集供 CLI.md agent 表动态生成 — 新增命令自动入手册
         docManager.registeredAgentCommands = commands.keys.sorted()
+    }
+
+    // ── P1-7(自检报告): 命令前缀级权限策略 ─────────────────────────────
+
+    /** 授权前缀形态校验 — 命令名形式 (小写字母/数字/点/下划线/中划线)。 */
+    private val PREFIX_PATTERN = Regex("^[a-z0-9][a-z0-9.\\-_]*$")
+
+    /**
+     * agent.policy — per-agent 命令前缀级授权 (自检报告 P1-7)。
+     * 多 Agent(tribe) 场景按 agent 粒度放开"受限但未硬禁"的命令 (blockList 恒优先, 不可绕过)。
+     * 用法:
+     *   agent.policy                                  → 列出全部授权
+     *   agent.policy allow <命令前缀> [--to <agent>]  → 给指定 agent (默认自己) 授权命令前缀
+     *   agent.policy deny <命令前缀> [--to <agent>]   → 收回授权
+     */
+    private suspend fun policy(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val policy = com.mengpaw.kernel.security.PolicyStore.sharedPolicy()
+        if (args.isEmpty()) {
+            val grants = policy.allAgentPolicies()
+            if (grants.isEmpty()) {
+                return ExecutionResult.ok(buildString {
+                    appendLine("(无任何 agent 级授权)")
+                    appendLine("用法: agent.policy allow <命令前缀> [--to <agent>] — 给指定 agent (默认自己) 放开受限命令;")
+                    appendLine("      agent.policy deny <命令前缀> [--to <agent>] — 收回授权。")
+                    appendLine("示例: agent.policy allow sys.screenshot --to 研究员")
+                })
+            }
+            return ExecutionResult.ok(buildString {
+                appendLine("Agent 级命令前缀授权:")
+                grants.toSortedMap().forEach { (agent, prefixes) ->
+                    appendLine("  • $agent: ${prefixes.joinToString(", ")}")
+                }
+                appendLine("(全局禁用命令如 proc.exec 不受授权影响, 恒拒绝)")
+            })
+        }
+        val action = args[0]
+        if (action != "allow" && action != "deny") {
+            return ExecutionResult.fail(
+                "用法: agent.policy allow|deny <命令前缀> [--to <agent>]\n" +
+                "示例: agent.policy allow sys.screenshot --to 研究员",
+                errorCode = ErrorCodes.ERR_INVALID_INPUT
+            )
+        }
+        val prefix = args.getOrNull(1)?.trim().orEmpty()
+        if (prefix.isBlank() || prefix.length > 64 || !PREFIX_PATTERN.matches(prefix)) {
+            return ExecutionResult.fail(
+                "非法命令前缀: '$prefix' — 应为命令名形式 (如 sys.screenshot / net.curl)",
+                errorCode = ErrorCodes.ERR_INVALID_INPUT
+            )
+        }
+        val toIdx = args.indexOf("--to")
+        val target = if (toIdx >= 0 && toIdx + 1 < args.size && args[toIdx + 1].isNotBlank()) {
+            args[toIdx + 1]
+        } else agentName(ctx)
+        if (target.isBlank()) {
+            return ExecutionResult.fail("无法确定目标 agent — 请用 --to <agent> 指定", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        }
+
+        if (action == "allow") policy.grantAgent(target, prefix) else policy.revokeAgent(target, prefix)
+        val persisted = com.mengpaw.kernel.security.PolicyStore.save()
+        return ExecutionResult.ok(buildString {
+            appendLine("已${if (action == "allow") "授权" else "收回"} '$prefix' ${if (action == "allow") "给" else "自"} $target")
+            appendLine("当前授权: ${policy.agentPolicies(target).joinToString(", ").ifEmpty { "无" }}")
+            if (action == "allow") {
+                val blockedHit = policy.getBlockList().any { prefix.startsWith(it) || it.startsWith(prefix) }
+                if (blockedHit) {
+                    appendLine("⚠️ 注意: 该前缀命中全局禁用表 (${policy.getBlockList().joinToString(", ")}), 授权不会生效")
+                }
+            }
+            if (!persisted) appendLine("⚠️ 持久化失败 — 授权仅本次运行生效")
+        })
     }
 
     private suspend fun docs(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -589,11 +661,50 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         })
     }
 
-    /** agent.write <path> <content> — write file. Blocked on system/app paths only. */
+    /** P2-11(自检报告): 引用/转义规则 — 内容含空格用引号包裹, 多行/大段用 --from 从文件导入。 */
+    private val WRITE_USAGE = buildString {
+        appendLine("用法: agent.write <路径> <内容>")
+        appendLine("  - 内容含空格: 用引号包裹 → agent.write a.md \"Hello World\"")
+        appendLine("  - 多行/大段内容: 从文件导入 → agent.write a.md --from 草稿.md")
+    }
+
+    /** --from 导入源文件体积上限 (防 OOM — 5MB 足覆盖日常草稿/报告)。 */
+    private val MAX_FROM_BYTES = 5 * 1024 * 1024
+
+    /**
+     * agent.write <path> <content> — write file. Blocked on system/app paths only.
+     * P2-11(自检报告): 支持 `--from <源文件>` 从文件导入多行/大段内容 (UTF-8);
+     * 引用规则: 内容含空格用引号包裹, 多行用 --from。
+     */
     private suspend fun writeFile(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.size < 2) return ExecutionResult.fail("用法: agent.write <path> <content>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val path = args.first()
-        val content = args.drop(1).joinToString(" ")
+        val fromIdx = args.indexOf("--from")
+        val sourcePath = if (fromIdx >= 0 && fromIdx + 1 < args.size) args[fromIdx + 1] else null
+        val pathArgs = if (fromIdx >= 0) args.filterIndexed { i, _ -> i != fromIdx && i != fromIdx + 1 } else args
+
+        val path = pathArgs.firstOrNull()?.trim().orEmpty()
+        if (path.isBlank()) return ExecutionResult.fail(WRITE_USAGE, errorCode = ErrorCodes.ERR_INVALID_INPUT)
+
+        // 内容来源: --from 读源文件 (读宽松: 只需存在且非目录 — 与 agent.read 同级策略)
+        val content = if (sourcePath != null) {
+            val src = resolvePath(sourcePath, agentName(ctx))
+                ?: return ExecutionResult.fail("源路径无效: $sourcePath", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+            if (!src.exists()) return ExecutionResult.fail(
+                "源文件不存在: $sourcePath (解析为 ${src.absolutePath})",
+                errorCode = ErrorCodes.ERR_NOT_FOUND)
+            if (src.isDirectory) return ExecutionResult.fail(
+                "源路径是目录: $sourcePath — 请指定文件", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+            if (src.length() > MAX_FROM_BYTES) return ExecutionResult.fail(
+                "源文件过大: ${src.length() / 1024}KB (上限 ${MAX_FROM_BYTES / 1024}KB)", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+            try {
+                src.readText()
+            } catch (e: Exception) {
+                return ExecutionResult.fail("读取源文件失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+            }
+        } else {
+            if (pathArgs.size < 2) return ExecutionResult.fail(WRITE_USAGE, errorCode = ErrorCodes.ERR_INVALID_INPUT)
+            pathArgs.drop(1).joinToString(" ")
+        }
+
         val file = resolvePath(path, agentName(ctx))
             ?: return ExecutionResult.fail("路径无效: $path", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         // Deny-list check: block writes to system/app partitions
@@ -623,6 +734,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
             val isOutput = canonical.startsWith(com.mengpaw.kernel.DataPaths.OUTPUT)
             val msg = buildString {
                 append("已写入: $path (${content.length} 字符)")
+                if (sourcePath != null) append(" ← $sourcePath")
                 if (isOutput) {
                     append("\n\n📱 用户可在文件管理器的 ${com.mengpaw.kernel.DataPaths.OUTPUT} 找到此文件")
                 }

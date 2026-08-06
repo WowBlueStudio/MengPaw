@@ -3,10 +3,12 @@
 
 package com.mengpaw.kernel.cli
 
+import com.mengpaw.kernel.Telemetry
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.error.ErrorType
 import com.mengpaw.kernel.security.IntegrityProvider
 import com.mengpaw.kernel.security.NoOpIntegrityProvider
+import com.mengpaw.kernel.security.PolicyStore
 import com.mengpaw.kernel.security.SecurityPolicy
 
 /**
@@ -18,7 +20,8 @@ import com.mengpaw.kernel.security.SecurityPolicy
 class Pipeline(
     private val interpreter: CliInterpreter = CliInterpreter(),
     private val registry: CommandRegistry = CommandRegistry(),
-    private val securityPolicy: SecurityPolicy = SecurityPolicy(),
+    // P1-7(自检报告): 默认共享全局策略实例 — agent.policy 授权即刻生效 (grant 表全局一致)
+    private val securityPolicy: SecurityPolicy = PolicyStore.sharedPolicy(),
     private val maxCommandsPerSecond: Int = 30,
     /** 只读命令结果缓存（白名单 + 短 TTL）；null = 关闭。 */
     private val resultCache: CommandResultCache? = null
@@ -47,10 +50,18 @@ class Pipeline(
                 return failAudit("Empty command", ErrorCodes.ERR_INVALID_INPUT, trimmed, context, startTime)
             }
 
+            // P2-11/P1-7 前置修复: CliInterpreter 把 --flag 归入 flags, 但 handler 只收 args —
+            // 历史上 --force/--dry-run/--level/--top/--confirm 等 flag 全被吞掉 (框架级 bug,
+            // sys.camera.photo --confirm / agent.rm --force / self.search --top 全部失效)。
+            // 现将 flags 按原顺序平铺回 args (--key [value]), 签名预校验与 handler 均按合并后参数。
+            val mergedArgs = parsed.args + parsed.flags.flatMap { (k, v) ->
+                if (v == "true") listOf("--$k") else listOf("--$k", v)
+            }
+
             // ── Result cache: 白名单只读命令命中直接返回（跳过限流/安全/执行）──
             val cacheable = resultCache != null && parsed.command in CommandResultCache.CACHEABLE
             if (cacheable) {
-                val cacheKey = resultCache!!.keyFor(parsed.command, parsed.args, context.agentName, context.sessionId)
+                val cacheKey = resultCache!!.keyFor(parsed.command, mergedArgs, context.agentName, context.sessionId)
                 val cached = resultCache.get(cacheKey)
                 if (cached != null) {
                     synchronized(pipelineLock) {
@@ -67,8 +78,8 @@ class Pipeline(
                 return failAudit(rateLimitError, "ERR_RATE_LIMIT", trimmed, context, startTime)
             }
 
-            // Security policy check
-            if (!securityPolicy.isAllowed(trimmed)) {
+            // Security policy check — P1-7: 传入 agentName 走 per-agent 授权表
+            if (!securityPolicy.isAllowed(trimmed, context.agentName)) {
                 return failAudit(
                     "Command '${parsed.command}' is blocked by security policy",
                     ErrorCodes.ERR_PERMISSION_DENIED, trimmed, context, startTime
@@ -76,7 +87,7 @@ class Pipeline(
             }
 
             // Integrity guard: block writes to protected paths
-            val integrityError = integrityProvider.validateCommand(parsed.command, parsed.args)
+            val integrityError = integrityProvider.validateCommand(parsed.command, mergedArgs)
             if (integrityError != null) {
                 return failAudit(integrityError, ErrorCodes.ERR_PERMISSION_DENIED, trimmed, context, startTime)
             }
@@ -91,12 +102,12 @@ class Pipeline(
             // P0-3(自检报告): 框架层参数签名预校验 — 必选参数不足即返回统一
             // "期望 usage, 收到 N 参" 错误, 模型据此收敛重试 (此前错误文本散在各 handler,
             // 无期望/收到对比, 模型盲猜重试浪费 token)
-            val signatureError = registry.validateArgs(parsed.command, parsed.args)
+            val signatureError = registry.validateArgs(parsed.command, mergedArgs)
             if (signatureError != null) {
                 return failAudit(signatureError, ErrorCodes.ERR_INVALID_INPUT, trimmed, context, startTime)
             }
 
-            val result = executor(parsed.args, context)
+            val result = executor(mergedArgs, context)
             // 非白名单命令（含写命令 agent.write/fs.write 等）成功 → 清空缓存,
             // 防"写入→立即读"命中写前旧快照（P1 修复: 写后读陈旧）
             // 注: resultCache 可能为 null（未启用缓存的 Pipeline）— 双重判空
@@ -106,7 +117,7 @@ class Pipeline(
             // 只读命令成功结果写入缓存（同会话键）
             if (cacheable && result.success) {
                 resultCache!!.put(
-                    resultCache.keyFor(parsed.command, parsed.args, context.agentName, context.sessionId),
+                    resultCache.keyFor(parsed.command, mergedArgs, context.agentName, context.sessionId),
                     result
                 )
             }
@@ -119,6 +130,8 @@ class Pipeline(
                 if (auditLog.size > MAX_AUDIT_ENTRIES) auditLog.removeAt(0)
             }
             Pipeline.addAuditEntry(entry)
+            // P2-12(自检报告): 命令事件 → events.jsonl (缓存命中早返, 不经过这里)
+            Telemetry.recordCommand(trimmed, true, System.currentTimeMillis() - startTime, context.agentName)
             return result
 
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -187,6 +200,8 @@ class Pipeline(
             ))
             if (auditLog.size > MAX_AUDIT_ENTRIES) auditLog.removeAt(0)
         }
+        // P2-12(自检报告): 失败命令事件 → events.jsonl (含限流/安全拦截/未知命令)
+        Telemetry.recordCommand(command, false, System.currentTimeMillis() - startTime, context.agentName)
         return ExecutionResult.fail(error, errorCode = errorCode)
     }
 

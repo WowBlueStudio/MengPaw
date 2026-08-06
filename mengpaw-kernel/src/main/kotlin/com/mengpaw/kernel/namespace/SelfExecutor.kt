@@ -109,14 +109,38 @@ object SelfExecutor {
         }
     }
 
+    /**
+     * self.stats — 内存/CPU/线程 + P2-12(自检报告) token 消耗与耗时统计。
+     * 子命令: self.stats events [--tail N] — 命令/LLM 事件流 (JSON lines, events.jsonl)。
+     */
     private suspend fun stats(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.firstOrNull() == "events") {
+            val tailIdx = args.indexOf("--tail")
+            val n = if (tailIdx >= 0 && tailIdx + 1 < args.size) {
+                args[tailIdx + 1].toIntOrNull()?.coerceIn(1, 500) ?: 20
+            } else 20
+            val lines = com.mengpaw.kernel.Telemetry.tailEvents(n)
+            if (lines.isEmpty()) {
+                return ExecutionResult.ok(buildString {
+                    appendLine("(事件流为空 — 命令与 LLM 请求事件将追加到 ${com.mengpaw.kernel.Telemetry.eventsFile.absolutePath})")
+                    appendLine("用法: self.stats events [--tail N]")
+                })
+            }
+            return ExecutionResult.ok(buildString {
+                appendLine("事件流 (尾部 ${lines.size} 条):")
+                lines.forEach { appendLine("  $it") }
+                appendLine("文件: ${com.mengpaw.kernel.Telemetry.eventsFile.absolutePath}")
+            })
+        }
         val runtime = Runtime.getRuntime()
         val usedMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
         val totalMb = runtime.totalMemory() / (1024 * 1024)
         return ExecutionResult.ok(
             "Memory: ${usedMb}MB / ${totalMb}MB\n" +
             "Processors: ${runtime.availableProcessors()}\n" +
-            "Threads: ${Thread.activeCount()}"
+            "Threads: ${Thread.activeCount()}\n" +
+            com.mengpaw.kernel.Telemetry.tokenSummary() + "\n" +
+            com.mengpaw.kernel.Telemetry.latencySummary()
         )
     }
 

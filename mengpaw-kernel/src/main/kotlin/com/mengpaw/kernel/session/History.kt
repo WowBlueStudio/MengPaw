@@ -5,6 +5,7 @@ package com.mengpaw.kernel.session
 
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.KernelLog
+import com.mengpaw.kernel.agent.AgentDocs
 import com.mengpaw.kernel.llm.AttachmentPayload
 import com.mengpaw.kernel.llm.LlmProvider
 import kotlinx.coroutines.launch
@@ -223,7 +224,34 @@ class SessionManager {
             _sessions.value = _sessions.value + (sessionId to session)
         }
         KernelLog.d("MengPawLatency", "SUM-END done msgs=${session.messages.size}")
+        // P1-5: 会话收尾自动摘要 → 中期记忆 — 压缩成功即把摘要自动写入当期中期分片,
+        // 规则触发而非模型自觉 agent.memory.record (长对话末尾模型常忘写)。
+        writeCompactionSummaryToMidTerm(sessionId, session.scope, summary)
         return true
+    }
+
+    // ── P1-5 自动摘要落地中期记忆 (best-effort, 失败静默) ──
+
+    private val autoSummaryGuard = AutoSummaryMemory.WrittenGuard()
+
+    /**
+     * 把压缩摘要追加写入当期中期记忆分片 (memory_{date}.md)。
+     * - 复用 AgentDocs.appendMidTermMemory 写入队列 — 与 agent.memory.record 同一
+     *   落盘路径/格式, LLM 响应返回后由 AgentEngine.flushMidTermMemoryQueue 刷盘;
+     * - 幂等: AutoSummaryMemory.WrittenGuard 以 会话 id + 折叠次数 去重;
+     * - 零待命并行 worker (swarm/mission) 不写 — 与 AgentMemoryExecutor 写屏蔽一致,
+     *   防止 worker 对话向 Agent 中期记忆注入噪音;
+     * - 写入失败静默 (best-effort), 不放异常, 不阻塞压缩主路径。
+     */
+    private fun writeCompactionSummaryToMidTerm(sessionId: String, scope: String, summary: String) {
+        if (scope == "swarm" || scope == "mission" || summary.isBlank()) return
+        try {
+            val round = autoSummaryGuard.nextOrdinal(sessionId)
+            if (!autoSummaryGuard.shouldWrite(sessionId, round)) return
+            AgentDocs.appendMidTermMemory(agentName, AutoSummaryMemory.buildEntry(summary, sessionId, round))
+        } catch (e: Exception) {
+            KernelLog.w("History", "writeCompactionSummaryToMidTerm: ${e.message}")
+        }
     }
 
     // ── 后台预压缩 (v0.28.6): 接近阈值提前后台压缩, buildConversation 主请求不阻塞 ──

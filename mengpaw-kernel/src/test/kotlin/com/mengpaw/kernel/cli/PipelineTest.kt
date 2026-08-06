@@ -6,10 +6,18 @@ package com.mengpaw.kernel.cli
 import com.mengpaw.kernel.namespace.SelfExecutor
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Test
 import java.io.File
 
 class PipelineTest {
+
+    @Before
+    fun initPaths() {
+        // P2-12(自检报告): Pipeline 事件落盘指向临时目录 — 避免开发机根目录生成 /sdcard
+        com.mengpaw.kernel.DataPaths.initialize(System.getProperty("java.io.tmpdir") + "/mengpaw_pipeline_test")
+        com.mengpaw.kernel.Telemetry.eventsFile = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "events.jsonl")
+    }
 
     private fun createPipeline(): Pipeline {
         val registry = CommandRegistry()

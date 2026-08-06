@@ -23,8 +23,11 @@ import java.io.File
  * Tavily is an AI-optimized search API that returns structured results
  * instead of HTML pages. Ideal for Agent-driven research.
  *
- * API key 配置: `tavily.setup <key>` 写入 `{BASE}/配置/tavily.json` (DataPaths.CONFIG),
- * 优先级 env `TAVILY_API_KEY` > 配置文件。
+ * API key 配置: `tavily.setup` 写入 `{BASE}/配置/tavily.json` (DataPaths.CONFIG),
+ * 优先级 env `TAVILY_API_KEY` > 配置文件。三种 key 来源:
+ *   - `tavily.setup <key>`            内联传参 (兼容旧用法 — 但命令原文会进会话历史/审计日志)
+ *   - `tavily.setup --from-file <路径>` 从文件首行读取 (推荐 — key 不进入会话历史)
+ *   - `tavily.setup --from-clipboard` 插件层无系统剪贴板能力, 明确报错并引导 --from-file
  *
  * ## API key 存储安全 (P2 折中, 2026-08-06)
  * 红线: 插件只依赖 mengpaw-kernel (纯 JVM, 零 Android 依赖) → 无法直接用
@@ -33,6 +36,13 @@ import java.io.File
  * 折中: 落盘前做轻量混淆 (XOR), 并兼容旧明文配置 (见 apiKey getter)。
  * 注意: 混淆 ≠ 加密 — XOR 密钥常量在 APK 内, 反编译可还原, 仅防"顺目录浏览"级泄露。
  * 根治方案: kernel 增加密钥存储抽象 (桥接 core 的 Vault) 后迁移, 届时删除本折中。
+ *
+ * ## key 脱敏 (P2-9, 2026-08-06)
+ * kernel Pipeline 的审计日志会原样记录命令文本 (仅输出经 Sanitizer 脱敏),
+ * 而 kernel Sanitizer 覆盖 sk-/sk-ant-/AIza/bearer/Base64 — 不含 tavily 的 tvly-
+ * 前缀 (kernel 冻结不可改)。因此插件层策略:
+ *  1. 所有成功/状态消息只回显 key 长度, key 原文仅进存储;
+ *  2. 引导用户用 --from-file / --from-clipboard, 让 key 根本不进入命令文本。
  */
 class TavilyPlugin : Plugin {
     override val metadata = PluginMetadata(
@@ -63,7 +73,7 @@ class TavilyPlugin : Plugin {
     /**
      * API key: env 优先, 其次配置文件 (tavily.setup 写入)。
      * 配置值带 "obf:" 前缀 → 反混淆读取; 无前缀 → 旧版本明文配置, 向后兼容。
-     * 确认无明文日志输出: 本文件所有日志/返回值仅显示 take(4)...takeLast(4) 掩码。
+     * 确认无明文日志输出: 本文件所有日志/返回值仅回显 key 长度 (P2-9)。
      */
     private val apiKey: String get() =
         System.getenv("TAVILY_API_KEY")?.takeIf { it.isNotBlank() }
@@ -89,28 +99,68 @@ class TavilyPlugin : Plugin {
     }
 
     private val keyError: String
-        get() = "Tavily API key 未配置。用 `tavily.setup <key>` 写入配置 (或设置环境变量 TAVILY_API_KEY)。"
+        get() = "Tavily API key 未配置。用 `tavily.setup --from-file <路径>` 写入配置 (key 不进会话历史) 或设置环境变量 TAVILY_API_KEY。"
 
     // ── tavily.setup ────────────────────────────────────────────────────
-
-    private suspend fun setup(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val key = args.firstOrNull()?.trim()
-        return if (key.isNullOrBlank()) {
-            val configured = apiKey.isNotBlank()
-            ExecutionResult.ok(
-                if (configured) "Tavily API key 已配置 (${apiKey.take(4)}...${apiKey.takeLast(4)})\n用 `tavily.setup <新key>` 更新, 传空串清除。"
-                else "Tavily API key 未配置。用法: `tavily.setup <key>`"
-            )
-        } else {
-            try {
-                configFile.parentFile.mkdirs()
-                // P2 修复: 落盘混淆存储 (XOR + "obf:" 前缀), 替代明文写入
-                configFile.writeText(buildJsonObject { put("apiKey", "obf:" + obfuscate(key)) }.toString())
-                ExecutionResult.ok("Tavily API key 已保存到 ${configFile.absolutePath} (${key.take(4)}...${key.takeLast(4)})")
-            } catch (e: Exception) {
-                ExecutionResult.fail("保存失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
-            }
+    // P2-9 (2026-08-06): key 来源三选一 —
+    //   --from-file <路径>     推荐: key 只出现在文件系统, 命令文本/会话历史/审计日志不落 key
+    //   --from-clipboard       插件层无系统剪贴板能力 (纯 JVM kernel), 明确报错引导 --from-file
+    //   内联 <key>             兼容旧用法 — 但命令原文会被 kernel Pipeline 审计日志原样记录,
+    //                          Sanitizer 不覆盖 tvly- 前缀 (kernel 冻结), 故输出零明文+长度回显
+    // internal 为测试可见性 (key 来源/脱敏单测)。
+    internal suspend fun setup(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.contains("--from-clipboard")) {
+            return ExecutionResult.fail(
+                "插件层无系统剪贴板访问能力 (插件仅依赖纯 JVM kernel, 无 Android 剪贴板 API)。" +
+                "请改用 `tavily.setup --from-file <路径>` — key 从文件读取, 不进入会话历史/审计日志。",
+                errorCode = ErrorCodes.ERR_INVALID_INPUT)
         }
+        val fromFileIdx = args.indexOf("--from-file")
+        if (fromFileIdx >= 0) {
+            val path = args.getOrNull(fromFileIdx + 1)
+            if (path.isNullOrBlank()) {
+                return ExecutionResult.fail(
+                    "用法: `tavily.setup --from-file <路径>` — key 从文件首行读取, 不进入会话历史/审计日志。",
+                    errorCode = ErrorCodes.ERR_INVALID_INPUT)
+            }
+            val file = File(path)
+            if (!file.isFile) {
+                return ExecutionResult.fail(
+                    "key 文件不存在或不是文件: $path (用 `--from-file` 时 key 不进入会话历史/审计日志)",
+                    errorCode = ErrorCodes.ERR_INVALID_INPUT)
+            }
+            val key = try {
+                file.bufferedReader(Charsets.UTF_8).use { it.readLine() }?.trim().orEmpty()
+            } catch (e: Exception) {
+                return ExecutionResult.fail("读取 key 文件失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+            }
+            if (key.isBlank()) {
+                return ExecutionResult.fail("key 文件首行为空: $path", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+            }
+            return storeKey(key)
+        }
+
+        val key = args.firstOrNull()?.trim()
+        if (key.isNullOrBlank()) {
+            val configured = apiKey.isNotBlank()
+            return ExecutionResult.ok(
+                if (configured) "Tavily API key 已配置 (key 长度 ${apiKey.length})\n用 `tavily.setup --from-file <路径>` 更新, 传空串清除。"
+                else "Tavily API key 未配置。用法: `tavily.setup --from-file <路径>` 或 `tavily.setup <key>`"
+            )
+        }
+        return storeKey(key)
+    }
+
+    /** 落盘 (混淆存储) + 只回显 key 长度的成功消息 — key 原文不进任何输出 (P2-9)。 */
+    private fun storeKey(key: String): ExecutionResult = try {
+        configFile.parentFile?.mkdirs()
+        // P2 修复: 落盘混淆存储 (XOR + "obf:" 前缀), 替代明文写入
+        configFile.writeText(buildJsonObject { put("apiKey", "obf:" + obfuscate(key)) }.toString())
+        ExecutionResult.ok(
+            "Tavily API key 已保存 (key 长度 ${key.length})。提示: 内联传参会把 key 留在会话历史, 建议用 `--from-file`。"
+        )
+    } catch (e: Exception) {
+        ExecutionResult.fail("保存失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
     }
 
     private suspend fun search(args: List<String>, ctx: ExecutionContext): ExecutionResult {

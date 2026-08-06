@@ -207,6 +207,32 @@ class PromptEngine {
 """
                 )
             }
+            // ── 身份状态机 (自检报告 P1-6): profile.md 名字未填 → 每轮持续提醒, 填完自动消失 ──
+            // 与 boost 软引导独立 (boost 是流程引导, 这里是状态机): 纯文本规则判定
+            // hasFilledName, 无额外状态存储 — 名字一经填写, profile.md mtime 失配
+            // 触发提示词重建, 本段即消失 (可验证状态机)。
+            if (profileDoc.isNotBlank() && !hasFilledName(profileDoc)) {
+                append(
+                    if (lang == AgentLanguage.CHINESE)
+"""
+## ⚠️ 身份未就绪 — 你还没有名字
+
+你的身份档案（profile.md）中名字未设置。请用 `agent.read profile.md` 查看、`agent.write profile.md` 填写名字（第一行 `名字: xxx` 格式）。
+
+设置完成后本提醒自动消失。
+
+"""
+                    else
+"""
+## ⚠️ Identity not ready — you don't have a name yet
+
+Your identity file (profile.md) has no name set. Use `agent.read profile.md` to view it and `agent.write profile.md` to fill in your name (first line `Name: xxx`).
+
+This reminder disappears automatically once the name is set.
+
+"""
+                )
+            }
             // ── HEARTBEAT: non-empty heartbeat.md → inject CRON task guidance ──
             if (heartbeatDoc.isNotBlank()) {
                 append(
@@ -315,6 +341,41 @@ Skills 分为两层：
             "profile.md", "agents.md", "soul.md", "memory/memory.md",
             "boost.md", "heartbeat.md", "trumanshow.md"
         )
+
+        // ── P1-6 引导状态机: profile.md 名字判定 (纯函数) ──
+        // 兼容两种格式: 模板格式 (`- **名字：**` / `- **Name:**`, 值空或占位) 与
+        // AgentProfile.toMarkdown 格式 (`- 名称: xxx`)。取首个名字行 —
+        // 模板中身份段 (名字) 在用户资料段之前, toMarkdown 仅一行 名称。
+        private val NAME_LINE_REGEX =
+            Regex("""^[-*]\s*(?:\*\*)?\s*(?:名字|名称|name)\s*[:：]\s*(.*)$""", RegexOption.IGNORE_CASE)
+
+        /** 名字行值命中以下占位 → 视为未填写 (中英模板占位 + 常见"未填"字样, 小写比对)。 */
+        private val UNFILLED_NAME_PLACEHOLDERS = setOf(
+            // zh 模板占位与未填字样
+            "挑个你喜欢的", "未命名", "未设置", "待填写", "待定", "占位", "暂无", "无", "未知",
+            // en 模板占位与未填字样
+            "pick one you like", "your name", "your name here", "name", "n/a", "tbd", "unknown"
+        )
+
+        /**
+         * 判定 profile.md 文本中身份名字是否已填写。
+         * 未填 = 名字行缺失 / 值为空 / 值命中占位符集合。
+         * 填完即不再命中 → 提醒自动消失, 无需额外状态存储 (可验证状态机 —
+         * profile.md 一经修改, mtime 失配触发提示词重建, 提醒段即消失)。
+         */
+        internal fun hasFilledName(profileText: String): Boolean {
+            val line = profileText.lines().firstOrNull { NAME_LINE_REGEX.containsMatchIn(it) }
+                ?: return false
+            val raw = NAME_LINE_REGEX.find(line)?.groupValues?.get(1) ?: return false
+            var v = raw.trim()
+            v = v.removePrefix("**").removeSuffix("**").trim()
+            v = v.removePrefix("*").removeSuffix("*").trim()
+            if ((v.startsWith("(") && v.endsWith(")")) || (v.startsWith("（") && v.endsWith("）"))) {
+                v = v.substring(1, v.length - 1).trim()
+            }
+            if (v.isBlank()) return false
+            return v.lowercase() !in UNFILLED_NAME_PLACEHOLDERS
+        }
 
         val CHINESE_PROMPT = """
             你是檬爪 MengPaw

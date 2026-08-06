@@ -346,4 +346,68 @@ class PromptEngineTest {
         assertTrue("self.ports 指针必须存在", prompt.contains("self.ports"))
         assertFalse("端口具体值不得残留提示词", prompt.contains("9876"))
     }
+
+    // ── P1-6 引导状态机: 身份未就绪提醒 ─────────────────────────────
+
+    @Test
+    fun `identity reminder injected when profile name is unfilled`() {
+        // 模板格式 profile.md — 身份段名字行为空 (值命中占位符) → 提示词应持续注入提醒;
+        // 用户资料段的第二个名字行已填也不得误判为"身份已就绪" (取首个名字行)。
+        val dir = File(DataPaths.AGENTS, "MengPaw")
+        dir.mkdirs()
+        val doc = File(dir, "profile.md")
+        doc.writeText(
+            """
+            |## 身份
+            |
+            |- **名字：** *（挑个你喜欢的）*
+            |- **定位：** *（AI？机器人？）*
+            |
+            |## 用户资料
+            |
+            |- **名字：** 小明
+            """.trimMargin()
+        )
+        engine.invalidateDocCache("MengPaw")
+        try {
+            val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+            assertTrue("名字未填时应注入中文提醒", zh.contains("身份未就绪"))
+            assertTrue("中文提醒应给出填写指引", zh.contains("名字: xxx"))
+            assertTrue("中文提醒应指明填写工具", zh.contains("agent.write profile.md"))
+            val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
+            assertTrue("名字未填时应注入英文提醒", en.contains("Identity not ready"))
+            assertTrue("英文提醒应给出填写指引", en.contains("Name: xxx"))
+        } finally {
+            doc.delete()
+            engine.invalidateDocCache("MengPaw")
+        }
+    }
+
+    @Test
+    fun `identity reminder disappears when profile name is filled`() {
+        // toMarkdown 格式 profile.md — 名称行已填真实名字 → 提醒必须消失
+        val dir = File(DataPaths.AGENTS, "MengPaw")
+        dir.mkdirs()
+        val doc = File(dir, "profile.md")
+        doc.writeText(
+            """
+            |# 关系设定
+            |
+            |## 自身
+            |- 名称: 小爪
+            |- ID: agent-001
+            |- 定位: 使魔
+            """.trimMargin()
+        )
+        engine.invalidateDocCache("MengPaw")
+        try {
+            val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+            assertFalse("名字已填时不得注入中文提醒", zh.contains("身份未就绪"))
+            val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
+            assertFalse("名字已填时不得注入英文提醒", en.contains("Identity not ready"))
+        } finally {
+            doc.delete()
+            engine.invalidateDocCache("MengPaw")
+        }
+    }
 }
