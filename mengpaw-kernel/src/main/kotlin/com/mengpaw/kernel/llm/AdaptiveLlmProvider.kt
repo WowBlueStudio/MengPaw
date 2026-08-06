@@ -9,28 +9,6 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import io.ktor.utils.io.*
-import kotlinx.serialization.json.*
-
-/**
- * Fallback provider entry for automatic degradation.
- */
-data class FallbackEntry(
-    val apiEndpoint: String,
-    val apiKey: String,
-    val model: String = "gpt-4.1"
-)
-
-/**
- * Token usage data extracted from LLM API response.
- */
-data class TokenUsage(
-    val promptTokens: Int,
-    val completionTokens: Int,
-    val totalTokens: Int,
-    val cacheHitTokens: Int = 0,
-    val cacheMissTokens: Int = 0
-)
 
 /**
  * Unified multi-model LLM provider supporting OpenAI, DeepSeek, Kimi, GLM, Qwen APIs.
@@ -39,6 +17,9 @@ data class TokenUsage(
  * - Automatic retry with exponential backoff
  * - Fallback chain: primary → fallback[0] → fallback[1] → ...
  * - Response format normalization
+ *
+ * v0.32.x (400 行文件拆分批次 1): 请求/响应格式拆至 [LlmPayload.kt] (buildRequestBody/
+ * parseBody/buildAuthHeader + TokenUsage/FallbackEntry), SSE 解析拆至 [SseStreamParser.kt]。
  */
 class AdaptiveLlmProvider(
     private val apiEndpoint: String,
@@ -217,10 +198,10 @@ class AdaptiveLlmProvider(
         onToken: ((String) -> Unit)?
     ): String {
         val requestStart = System.currentTimeMillis()  // P2-12(自检报告): LLM 耗时统计锚点
-        val requestBody = buildRequestBody(messages, stream)
+        val requestBody = buildRequestBody(model, config, messages, stream)
         KernelLog.d("MengPawLatency", "S-OPEN ${apiEndpoint.take(48)}")
         val response = client.post(apiEndpoint) {
-            header(HttpHeaders.Authorization, buildAuthHeader())
+            header(HttpHeaders.Authorization, buildAuthHeader(providerType, apiKey))
             header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
             setBody(requestBody)
         }
@@ -236,7 +217,14 @@ class AdaptiveLlmProvider(
 
         // ── Streaming path: SSE line-by-line (Reasonix readStream pattern) ──
         if (stream && onToken != null) {
-            return consumeSseStream(response, onToken, requestStart)
+            return consumeSseStream(response, onToken, requestStart) { usage ->
+                lastUsage = usage
+                // P2-12(自检报告): token/耗时统计 — 部分 API 仅在末块内联 usage
+                com.mengpaw.kernel.Telemetry.recordLlm(
+                    usage.promptTokens, usage.completionTokens,
+                    System.currentTimeMillis() - requestStart
+                )
+            }
         }
 
         // ── Non-streaming path ──
@@ -259,207 +247,6 @@ class AdaptiveLlmProvider(
             System.currentTimeMillis() - requestStart
         )
         return parsedContent
-    }
-
-    // ── SSE Streaming (Reasonix readStream pattern) ─────────────────────────
-
-    /**
-     * Consume an SSE streaming response line by line.
-     *
-     * Architecture (matching Reasonix ② SSE 解析层):
-     *   bufio.Scanner(resp.Body) → data: line → json.Unmarshal → onToken(delta.content)
-     *
-     * Handles:
-     * - OpenAI-compatible `data: {...}` events with `choices[0].delta.content`
-     * - DeepSeek `reasoning_content` delta
-     * - `[DONE]` terminator
-     * - Inline `usage` in the final event
-     */
-    private suspend fun consumeSseStream(
-        response: HttpResponse,
-        onToken: (String) -> Unit,
-        requestStart: Long  // P2-12(自检报告): 流式耗时统计锚点
-    ): String {
-        val channel = response.bodyAsChannel()
-        val fullContent = StringBuilder()
-        var firstToken = true
-
-        while (!channel.isClosedForRead) {
-            val line = try {
-                channel.readUTF8Line()?.trim()
-            } catch (e: CancellationException) {
-                throw e   // 取消契约: 绝不吞 CancellationException — 否则用户 stop() 会被包装成重试
-            } catch (e: Exception) {
-                // v0.28.4: 异常中断不再静默 break — 首 token 前超时(推理思考期)抛 LlmApiException
-                // 触发 executeWithRetry 重试 + fallback 链; 已有内容则返回部分(重试会导致 onToken 重复推送)
-                if (fullContent.isEmpty()) {
-                    throw LlmApiException(response.status.value,
-                        "Stream interrupted before first token: ${e.message}")
-                }
-                break
-            }
-
-            if (line == null) break
-            if (line.isEmpty() || !line.startsWith("data:")) continue
-
-            val data = line.removePrefix("data:").trim()
-            if (data == "[DONE]") break
-
-            try {
-                val json = Json.parseToJsonElement(data).jsonObject
-
-                // Capture usage from inline usage event (some APIs include it in last chunk)
-                json["usage"]?.jsonObject?.let { u ->
-                    val usage = TokenUsage(
-                        promptTokens = u["prompt_tokens"]?.jsonPrimitive?.int ?: 0,
-                        completionTokens = u["completion_tokens"]?.jsonPrimitive?.int ?: 0,
-                        totalTokens = u["total_tokens"]?.jsonPrimitive?.int ?: 0,
-                        cacheHitTokens = u["prompt_cache_hit_tokens"]?.jsonPrimitive?.int ?: 0,
-                        cacheMissTokens = u["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
-                    )
-                    lastUsage = usage
-                    // P2-12(自检报告): token/耗时统计 — 部分 API 仅在末块内联 usage
-                    com.mengpaw.kernel.Telemetry.recordLlm(
-                        usage.promptTokens, usage.completionTokens,
-                        System.currentTimeMillis() - requestStart
-                    )
-                }
-
-                // ── 双格式 delta 提取 ──
-                // OpenAI 兼容: {choices:[{delta:{content|reasoning_content}}]}
-                // Anthropic 兼容: {type:"content_block_delta", delta:{type:"text_delta", text}}
-                //   (api.deepseek.com/anthropic 等 Anthropic Messages SSE 格式)
-                val openAiDelta = json["choices"]?.jsonArray
-                    ?.firstOrNull()?.jsonObject
-                    ?.get("delta")?.jsonObject
-
-                if (openAiDelta != null) {
-                    // Visible text delta (OpenAI standard)
-                    openAiDelta["content"]?.jsonPrimitive?.contentOrNull?.let { text ->
-                        if (text.isNotEmpty()) {
-                            if (firstToken) { firstToken = false; KernelLog.d("MengPawLatency", "S-FIRST") }
-                            fullContent.append(text)
-                            onToken(text)
-                        }
-                    }
-                    // Reasoning delta (DeepSeek reasoning_content)
-                    openAiDelta["reasoning_content"]?.jsonPrimitive?.contentOrNull?.let { text ->
-                        if (text.isNotEmpty()) onToken(text)
-                    }
-                } else {
-                    // Anthropic content_block_delta: delta.text (text_delta)
-                    val text = json["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
-                    if (!text.isNullOrEmpty()) {
-                        if (firstToken) { firstToken = false; KernelLog.d("MengPawLatency", "S-FIRST") }
-                        fullContent.append(text)
-                        onToken(text)
-                    }
-                    // Anthropic 事件名校验: 只处理 content_block_delta, 跳过 message_start/message_delta/ping
-                    // (无 delta.text 的事件自然被上面的 null 检查跳过)
-                }
-            } catch (_: Exception) {
-                // Skip malformed SSE lines (same resilience as Reasonix readStream)
-            }
-        }
-
-        KernelLog.d("MengPawLatency", "S-DONE len=${fullContent.length}")
-        return fullContent.toString()
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────
-
-    private fun buildAuthHeader(): String = when (providerType) {
-        "glm" -> apiKey  // GLM uses bare API key (no Bearer prefix)
-        else -> "Bearer $apiKey"
-    }
-
-    private fun buildRequestBody(messages: List<Map<String, String>>, stream: Boolean = false): String {
-        // 前缀形状监测 (v0.29.2, Reasonix cache_shape.go 对标): system prompt 变化即告警 —
-        // 自动前缀缓存将短暂失效 (DeepSeek 命中省 ~50 倍成本)
-        val firstMsg = messages.firstOrNull()
-        if (firstMsg?.get("role") == "system") SystemPromptShape.monitor(firstMsg["content"] ?: "")
-
-        val json = buildJsonObject {
-            put("model", model)
-            put("max_tokens", config.maxTokens)
-            put("temperature", config.temperature)
-            put("stream", stream)
-            putJsonArray("messages") {
-                messages.forEach { msg ->
-                    addJsonObject {
-                        put("role", msg["role"] ?: "user")
-                        // Multimodal (v0.33.0+): _image → image_url, _audio_data → input_audio
-                        val imageUrl = msg["_image"]?.takeIf { it.isNotBlank() }
-                        val audioData = msg["_audio_data"]?.takeIf { it.isNotBlank() }
-                        val textContent = msg["content"] ?: ""
-                        if (imageUrl != null || audioData != null) {
-                            putJsonArray("content") {
-                                if (textContent.isNotBlank()) {
-                                    addJsonObject {
-                                        put("type", "text")
-                                        put("text", textContent)
-                                    }
-                                }
-                                imageUrl?.let {
-                                    addJsonObject {
-                                        put("type", "image_url")
-                                        putJsonObject("image_url") {
-                                            put("url", it)
-                                        }
-                                    }
-                                }
-                                audioData?.let {
-                                    addJsonObject {
-                                        put("type", "input_audio")
-                                        putJsonObject("input_audio") {
-                                            put("data", it)
-                                            put("format", msg["_audio_format"]?.takeIf { f -> f.isNotBlank() } ?: "m4a")
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            put("content", textContent)
-                        }
-                        // Inject cache_control annotation for supported providers
-                        if (msg["_cache_control"] == "ephemeral") {
-                            putJsonObject("cache_control") {
-                                put("type", "ephemeral")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return json.toString()
-    }
-
-    /**
-     * 合并解析 LLM 响应体: 一次 Json.parseToJsonElement 同时提取 content 和 usage.
-     * 取代之前两次独立解析 (parseUsage + parseResponse), 减少 GC 压力.
-     * @return Pair(content, usage) — content 绝不会为 null, usage 可能为 null
-     */
-    private fun parseBody(body: String): Pair<String, TokenUsage?> {
-        return try {
-            val root = Json.parseToJsonElement(body).jsonObject
-            // 1. 提取 usage
-            val usage = root["usage"]?.jsonObject?.let { u ->
-                val pt = u["prompt_tokens"]?.jsonPrimitive?.int ?: 0
-                val ct = u["completion_tokens"]?.jsonPrimitive?.int ?: 0
-                val tt = u["total_tokens"]?.jsonPrimitive?.int ?: (pt + ct)
-                val ch = u["prompt_cache_hit_tokens"]?.jsonPrimitive?.int ?: 0
-                val cm = u["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
-                TokenUsage(pt, ct, tt, ch, cm)
-            }
-            // 2. 提取 content (OpenAI / GLM 格式)
-            val content = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.let { c ->
-                c["message"]?.jsonObject?.get("content")?.jsonPrimitive?.content
-                    ?: c["delta"]?.jsonObject?.get("content")?.jsonPrimitive?.content
-            } ?: root["data"]?.jsonArray?.firstOrNull()?.jsonObject?.get("content")?.jsonPrimitive?.content
-            Pair(content ?: body, usage)
-        } catch (_: Exception) {
-            Pair(body, null)
-        }
     }
 
     // ── Fallback Provider Factory ─────────────────────────────────────────

@@ -11,7 +11,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.util.Random
 
 /**
  * Trigger engine — CRON scheduler + SCHEDULE "daily alarm" random triggers.
@@ -37,14 +36,19 @@ import java.util.Random
  * ## Persistence
  * Triggers are saved to {DataPaths.BASE}/triggers.json on every mutation
  * and reloaded in [load]. Call load() once at app startup.
+ *
+ * v0.32.x (400 行文件拆分批次 1): AlarmManager 反射注册拆至 [CronAlarmScheduler],
+ * SCHEDULE 槽位生成/匹配拆至 [ScheduleSlotEngine]。
  */
 object TriggerEngine {
     // 并发安全: 轮询协程 (start) 与系统唤醒 (onSystemWake)/UI 增删可并发 —
     // CopyOnWriteArrayList 快照迭代, 杜绝 filter/replaceAll 与 add 并发 CME
     private val triggers = java.util.concurrent.CopyOnWriteArrayList<Trigger>()
-    private val random = Random()
     private var pollJob: Job? = null
     private var scope: CoroutineScope? = null
+
+    /** SCHEDULE 槽位引擎 — 每日槽位生成/匹配状态归它持有。 */
+    private val scheduleSlots = ScheduleSlotEngine(onFire = ::fireTrigger)
 
     /** Fuzzy window in minutes — CRON fires any time within [target, target+window]. */
     var cronFuzzyWindowMinutes: Int = 5
@@ -181,40 +185,10 @@ object TriggerEngine {
     fun list(): List<Trigger> = triggers.toList()
     fun clear() { triggers.clear(); pollJob?.cancel(); save() }
 
-    // ── System wake & AlarmManager ───────────────────────────────────
+    // ── System wake & AlarmManager (委托 [CronAlarmScheduler]) ────────
 
     fun registerSystemWake(context: Any? /* android.content.Context */, intervalMinutes: Int = 10) {
-        if (context == null) return
-        try {
-            val ctxClass = Class.forName("android.content.Context")
-            val alarmClass = Class.forName("android.app.AlarmManager")
-            val intentClass = Class.forName("android.content.Intent")
-            val pendingIntentClass = Class.forName("android.app.PendingIntent")
-
-            val alarmManager = ctxClass.getMethod("getSystemService", String::class.java)
-                .invoke(context, "alarm")
-
-            val intent = intentClass.getConstructor(ctxClass, Class.forName("java.lang.Class"))
-                .newInstance(context, Class.forName("com.mengpaw.shell.service.WakeReceiver"))
-
-            val pendingIntent = pendingIntentClass.getMethod("getBroadcast",
-                ctxClass, Int::class.javaPrimitiveType, intentClass, Int::class.javaPrimitiveType)
-                .invoke(null, context, 0, intent,
-                    pendingIntentClass.getField("FLAG_IMMUTABLE").getInt(null) or
-                    pendingIntentClass.getField("FLAG_UPDATE_CURRENT").getInt(null))
-
-            val intervalMs = (intervalMinutes.coerceAtLeast(5) * 60 * 1000).toLong()
-            alarmManager?.javaClass?.getMethod("setInexactRepeating",
-                Int::class.javaPrimitiveType, Long::class.javaPrimitiveType,
-                Long::class.javaPrimitiveType, pendingIntentClass)
-                ?.invoke(alarmManager,
-                    alarmClass.getField("ELAPSED_REALTIME_WAKEUP").getInt(null),
-                    intervalMs, intervalMs, pendingIntent)
-
-            KernelLog.d("TriggerEngine", "System wake registered every ${intervalMinutes}min")
-        } catch (e: Exception) {
-            KernelLog.w("TriggerEngine", "AlarmManager not available: ${e.message}")
-        }
+        CronAlarmScheduler.registerSystemWake(context, intervalMinutes)
     }
 
     fun registerCronAlarm() {
@@ -222,65 +196,37 @@ object TriggerEngine {
             KernelLog.d("TriggerEngine", "Cron alarm skipped: no Context stored")
             return
         }
-        try {
-            val now = java.util.Calendar.getInstance()
-            var nextTime = Long.MAX_VALUE
+        val nextTime = computeNextCronTime() ?: return
+        CronAlarmScheduler.scheduleExact(ctx, nextTime, "cron")
+    }
 
-            triggers.filter { it.enabled && it.type == TriggerType.CRON }.forEach { trigger ->
-                val parts = trigger.config.split(" ").take(5)
-                if (parts.size < 5) return@forEach
-                val target = java.util.Calendar.getInstance().apply {
-                    set(java.util.Calendar.SECOND, 0)
-                    set(java.util.Calendar.MILLISECOND, 0)
-                    if (parts[1] != "*") set(java.util.Calendar.HOUR_OF_DAY, parts[1].toIntOrNull() ?: get(java.util.Calendar.HOUR_OF_DAY))
-                    if (parts[0] != "*") set(java.util.Calendar.MINUTE, parts[0].toIntOrNull() ?: get(java.util.Calendar.MINUTE))
-                    if (timeInMillis <= now.timeInMillis) add(java.util.Calendar.DAY_OF_MONTH, 1)
-                }
-                if (target.timeInMillis < nextTime) nextTime = target.timeInMillis
+    /** 纯计算: 下一个启用的 CRON 触发时刻 (秒/毫秒清零)。无启用的 CRON → null。 */
+    private fun computeNextCronTime(): Long? {
+        val now = java.util.Calendar.getInstance()
+        var nextTime = Long.MAX_VALUE
+
+        triggers.filter { it.enabled && it.type == TriggerType.CRON }.forEach { trigger ->
+            val parts = trigger.config.split(" ").take(5)
+            if (parts.size < 5) return@forEach
+            val target = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+                if (parts[1] != "*") set(java.util.Calendar.HOUR_OF_DAY, parts[1].toIntOrNull() ?: get(java.util.Calendar.HOUR_OF_DAY))
+                if (parts[0] != "*") set(java.util.Calendar.MINUTE, parts[0].toIntOrNull() ?: get(java.util.Calendar.MINUTE))
+                if (timeInMillis <= now.timeInMillis) add(java.util.Calendar.DAY_OF_MONTH, 1)
             }
-
-            if (nextTime == Long.MAX_VALUE) return
-
-            val ctxClass = Class.forName("android.content.Context")
-            val alarmClass = Class.forName("android.app.AlarmManager")
-            val intentClass = Class.forName("android.content.Intent")
-            val pendingIntentClass = Class.forName("android.app.PendingIntent")
-
-            val alarmManager = ctxClass.getMethod("getSystemService", String::class.java).invoke(ctx, "alarm")
-            val intent = intentClass.getConstructor(ctxClass, Class.forName("java.lang.Class"))
-                .newInstance(ctx, Class.forName("com.mengpaw.shell.service.WakeReceiver"))
-            intent.javaClass.getMethod("putExtra", String::class.java, String::class.java)
-                .invoke(intent, "wake_reason", "cron")
-
-            val pendingIntent = pendingIntentClass.getMethod("getBroadcast",
-                ctxClass, Int::class.javaPrimitiveType, intentClass, Int::class.javaPrimitiveType)
-                .invoke(null, ctx, 1001, intent,
-                    pendingIntentClass.getField("FLAG_IMMUTABLE").getInt(null) or
-                    pendingIntentClass.getField("FLAG_UPDATE_CURRENT").getInt(null))
-
-            try {
-                alarmManager?.javaClass?.getMethod("setExact",
-                    Int::class.javaPrimitiveType, Long::class.javaPrimitiveType, pendingIntentClass)
-                    ?.invoke(alarmManager,
-                        alarmClass.getField("RTC_WAKEUP").getInt(null), nextTime, pendingIntent)
-            } catch (_: Exception) {
-                alarmManager?.javaClass?.getMethod("set",
-                    Int::class.javaPrimitiveType, Long::class.javaPrimitiveType, pendingIntentClass)
-                    ?.invoke(alarmManager,
-                        alarmClass.getField("RTC_WAKEUP").getInt(null), nextTime, pendingIntent)
-            }
-
-            KernelLog.d("TriggerEngine", "Next Cron wake: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(nextTime))}")
-        } catch (e: Exception) {
-            KernelLog.w("TriggerEngine", "Cron alarm registration failed: ${e.message}")
+            if (target.timeInMillis < nextTime) nextTime = target.timeInMillis
         }
+
+        return if (nextTime == Long.MAX_VALUE) null else nextTime
     }
 
     /** Called by WakeReceiver / EventReceiver when the system wakes. */
     fun onSystemWake() {
         val now = System.currentTimeMillis()
         triggers.filter { it.enabled && it.type == TriggerType.CRON }.forEach { checkCron(it, now) }
-        triggers.filter { it.enabled && it.type == TriggerType.SCHEDULE }.forEach { checkSchedule(it, now) }
+        triggers.filter { it.enabled && it.type == TriggerType.SCHEDULE }
+            .forEach { scheduleSlots.check(it, now, scheduleFuzzyWindowMinutes) }
         onWake?.invoke()
         registerCronAlarm()
     }
@@ -324,129 +270,6 @@ object TriggerEngine {
         fireTrigger(t)
     }
 
-    // ── Internal: SCHEDULE daily alarm slots ─────────────────────────
-    //
-    // Design: each day, for each SCHEDULE trigger, generate N random
-    // minute-precise time slots within the active window (e.g. 08:00–22:00),
-    // each at least `interval` minutes apart. Config format:
-    //   "HH:MM-HH:MM,count=N,interval=M"
-    // Defaults: window=08:00-22:00, count=3, interval=60
-    // The poll loop (every 30s) checks if "now" falls within a ±5 min fuzzy
-    // window of any unused slot. When matched, fire once and mark the slot used.
-    // Slots regenerate at midnight.
-
-    private val dailySlots = mutableMapOf<String, MutableList<String>>()
-    private val firedSlots = mutableMapOf<String, MutableSet<String>>()
-    private var slotDay = -1
-
-    private data class ScheduleConfig(
-        val windowStartMin: Int = 8 * 60,
-        val windowEndMin: Int = 22 * 60,
-        val count: Int = 3,
-        val minInterval: Int = 60
-    )
-
-    private fun parseScheduleConfig(config: String): ScheduleConfig {
-        val parts = config.split(",")
-        if (parts.isEmpty()) return ScheduleConfig()
-
-        val range = parts[0].split("-")
-        val windowStartMin = if (range.size == 2) {
-            val sh = range[0].split(":").getOrNull(0)?.toIntOrNull() ?: 8
-            val sm = range[0].split(":").getOrNull(1)?.toIntOrNull() ?: 0
-            sh * 60 + sm
-        } else 8 * 60
-
-        val windowEndMin = if (range.size == 2) {
-            val eh = range[1].split(":").getOrNull(0)?.toIntOrNull() ?: 22
-            val em = range[1].split(":").getOrNull(1)?.toIntOrNull() ?: 0
-            eh * 60 + em
-        } else 22 * 60
-
-        var count = 3
-        var minInterval = 60
-        for (i in 1 until parts.size) {
-            val kv = parts[i].split("=")
-            if (kv.size == 2) {
-                when (kv[0].trim().lowercase()) {
-                    "count" -> count = kv[1].toIntOrNull() ?: 3
-                    "interval" -> minInterval = kv[1].toIntOrNull() ?: 60
-                }
-            }
-        }
-
-        return ScheduleConfig(
-            windowStartMin = windowStartMin.coerceIn(0, 24 * 60 - 1),
-            windowEndMin = windowEndMin.coerceIn(1, 24 * 60),
-            count = count.coerceIn(1, 24),
-            minInterval = minInterval.coerceIn(15, 8 * 60)
-        )
-    }
-
-    private fun checkSchedule(t: Trigger, now: Long) {
-        val cal = java.util.Calendar.getInstance().apply { timeInMillis = now }
-        val today = cal.get(java.util.Calendar.DAY_OF_YEAR)
-        if (today != slotDay) {
-            dailySlots.clear()
-            firedSlots.clear()
-            slotDay = today
-        }
-
-        if (t.id !in dailySlots) {
-            dailySlots[t.id] = generateScheduleSlots(t.config).toMutableList()
-            firedSlots[t.id] = mutableSetOf()
-            KernelLog.d("TriggerEngine", "Daily SCHEDULE [${t.id}] slots: ${dailySlots[t.id]}")
-        }
-
-        val currentTotalMin = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
-        val slots = dailySlots[t.id] ?: return
-        val fired = firedSlots[t.id] ?: return
-
-        for (slot in slots) {
-            if (slot in fired) continue
-
-            val slotParts = slot.split(":")
-            val slotTotalMin = slotParts[0].toInt() * 60 + slotParts[1].toInt()
-
-            val diff = kotlin.math.abs(currentTotalMin - slotTotalMin)
-            val diffWrap = kotlin.math.abs(currentTotalMin + 24 * 60 - slotTotalMin)
-            val minDiff = minOf(diff, diffWrap)
-
-            if (minDiff <= scheduleFuzzyWindowMinutes) {
-                fired.add(slot)
-                fireTrigger(t)
-                return
-            }
-        }
-    }
-
-    private fun generateScheduleSlots(config: String): List<String> {
-        val cfg = parseScheduleConfig(config)
-        if (cfg.windowEndMin <= cfg.windowStartMin) return emptyList()
-        val available = cfg.windowEndMin - cfg.windowStartMin
-        val minRequired = cfg.count * cfg.minInterval
-        if (minRequired > available) {
-            val adjustedCount = (available / cfg.minInterval).coerceAtLeast(1)
-            KernelLog.w("TriggerEngine", "Schedule $config needs $minRequired min but only $available available, using count=$adjustedCount")
-            return generateScheduleSlots("${config.split(",")[0]},count=$adjustedCount,interval=${cfg.minInterval}")
-        }
-
-        val slots = mutableListOf<Int>()
-        var attempt = 0
-        while (attempt < cfg.count * 20 && slots.size < cfg.count) {
-            val randMin = cfg.windowStartMin + random.nextInt(available)
-            val tooClose = slots.any { kotlin.math.abs(randMin - it) < cfg.minInterval }
-            if (!tooClose) {
-                slots.add(randMin)
-            }
-            attempt++
-        }
-
-        return slots.sorted().map { totalMin ->
-            "${(totalMin / 60).toString().padStart(2, '0')}:${(totalMin % 60).toString().padStart(2, '0')}"
-        }
-    }
-
     // ── Internal: fire + background loop ─────────────────────────────
 
     private fun fireTrigger(trigger: Trigger) {
@@ -469,7 +292,7 @@ object TriggerEngine {
                     snapshot.filter { it.enabled }.forEach { trigger ->
                         when (trigger.type) {
                             TriggerType.CRON -> { checkCron(trigger, now); hasActiveJobs = true }
-                            TriggerType.SCHEDULE -> { checkSchedule(trigger, now); hasActiveJobs = true }
+                            TriggerType.SCHEDULE -> { scheduleSlots.check(trigger, now, scheduleFuzzyWindowMinutes); hasActiveJobs = true }
                         }
                     }
                     delay(if (hasActiveJobs) 30_000L else 300_000L)

@@ -55,14 +55,6 @@ class PluginExecutor(
         "verify" to ::verify
     )
 
-    // ── Utilities ──────────────────────────────────────────────────────
-
-    private fun sha256Hex(bytes: ByteArray): String {
-        val md = java.security.MessageDigest.getInstance("SHA-256")
-        // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
-        return md.digest(bytes).joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
-    }
-
     // ── Commands ──────────────────────────────────────────────────────
 
     private suspend fun marketplace(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -172,8 +164,8 @@ class PluginExecutor(
             return ExecutionResult.fail("Download failed: ${it.message}", errorCode = code)
         }
 
-        // Attempt runtime loading via DexClassLoader
-        val loadResult = loadPluginJar(downloaded, entry)
+        // Attempt runtime loading via DexClassLoader (实现见 PluginRuntimeLoader)
+        val loadResult = PluginRuntimeLoader.load(pluginManager, downloaded, entry)
         return if (loadResult != null) {
             val ns = pluginNamespaceFor(entry.id)
             val cmdList = entry.commands.joinToString(", ") { it.removePrefix("$ns.") }
@@ -221,85 +213,6 @@ class PluginExecutor(
         return marketplaceClient.fetchIndexFrom(indexUrl).map { index ->
             index.plugins.find { it.id == pluginId }
                 ?: throw NoSuchElementException("Plugin '$pluginId' not found in custom marketplace at $indexUrl")
-        }
-    }
-
-    /**
-     * Attempts to load a plugin JAR/DEX at runtime using DexClassLoader.
-     *
-     * On Android, dynamically loaded code must be in DEX format (not raw JAR class files).
-     * Plugins distributed via the marketplace should be packaged as DEX-containing JARs.
-     * Returns a success message on load, or null if loading is not possible.
-     */
-    private suspend fun loadPluginJar(jarFile: File, entry: MarketplaceEntry): String? {
-        return try {
-            // ── SHA256 integrity verification BEFORE loading ──
-            // Verify that the downloaded JAR matches the expected checksum from
-            // the marketplace index. This prevents loading tampered/malicious code.
-            if (entry.checksum.isNotBlank()) {
-                val expected = entry.checksum.removePrefix("sha256:")
-                if (!expected.matches(Regex("^[0-9a-fA-F]+$"))) {
-                    KernelLog.w("PluginExecutor", "Unexpected checksum format: ${expected.take(16)}...")
-                }
-                val actual = sha256Hex(jarFile.readBytes())
-                if (!actual.equals(expected, ignoreCase = true)) {
-                    KernelLog.w("PluginExecutor", "SHA256 mismatch for ${entry.id}: expected $expected, got $actual")
-                    return "Integrity check failed for ${entry.id}: JAR checksum does not match marketplace entry. The file may be corrupted or tampered."
-                }
-            } else {
-                KernelLog.w("PluginExecutor", "No checksum in marketplace entry for ${entry.id} — skipping integrity verification (UNTRUSTED)")
-            }
-
-            val optimizedDir = File(jarFile.parentFile, "odex-${entry.id}")
-            optimizedDir.mkdirs()
-
-            // Try multiple class name patterns: PascalCase by convention, then PluginMain fallback
-            val ns = pluginNamespaceFor(entry.id)
-            val pascalNs = ns.replaceFirstChar { it.uppercase() }
-            val candidateNames = listOf(
-                "com.mengpaw.plugin.$ns.${pascalNs}Plugin",  // e.g. TavilyPlugin
-                "com.mengpaw.plugin.$ns.PluginMain",          // legacy
-            )
-
-            // Use DexClassLoader via reflection (Android-only; safe fallback on JVM)
-            var pluginInstance: Any? = null
-            var loadedClass: String? = null
-            try {
-                val dexLoaderClass = Class.forName("dalvik.system.DexClassLoader")
-                val dexLoader = dexLoaderClass.getConstructor(
-                    String::class.java, String::class.java, String::class.java, ClassLoader::class.java
-                ).newInstance(jarFile.absolutePath, optimizedDir.absolutePath, null, Plugin::class.java.classLoader)
-                for (name in candidateNames) {
-                    try {
-                        val pluginClass = dexLoaderClass.getMethod("loadClass", String::class.java).invoke(dexLoader, name) as Class<*>
-                        pluginInstance = pluginClass.getDeclaredConstructor().newInstance()
-                        loadedClass = name
-                        break
-                    } catch (_: ClassNotFoundException) { KernelLog.w("PluginExecutor", "class not found in candidate list"); /* try next */ }
-                }
-            } catch (_: ClassNotFoundException) {
-                KernelLog.w("PluginExecutor", "DexClassLoader not available (JVM/desktop)")
-                null // dalvik not available (JVM/desktop) — JAR loading not supported
-            }
-
-            if (pluginInstance == null) return null
-            if (pluginInstance !is Plugin) {
-                return "Plugin class $loadedClass does not implement Plugin interface"
-            }
-
-            pluginManager.install(pluginInstance).getOrThrow()
-            pluginManager.activate(entry.id).getOrThrow()
-
-            "Downloaded and activated ${entry.id} v${entry.version} (runtime-loaded via DexClassLoader)"
-        } catch (e: ClassNotFoundException) {
-            KernelLog.w("PluginExecutor", "loadPluginJar(${entry.id}): dalvik DexClassLoader not available (JVM/desktop)")
-            null
-        } catch (e: NoClassDefFoundError) {
-            KernelLog.w("PluginExecutor", "loadPluginJar(${entry.id}): missing class dependency: ${e.message}")
-            null
-        } catch (e: Exception) {
-            KernelLog.w("PluginExecutor", "loadPluginJar(${entry.id}): ${e::class.simpleName}: ${e.message}")
-            null
         }
     }
 
@@ -471,7 +384,7 @@ class PluginExecutor(
         if (args.contains("--all")) {
             val all = pluginManager.listAll()
             if (all.isEmpty()) return ExecutionResult.ok("(No plugins installed)")
-            val results = all.map { (plugin, _) -> verifyOne(plugin.metadata.id, plugin.metadata.version) }
+            val results = all.map { (plugin, _) -> PluginRuntimeLoader.verifyOne(plugin.metadata.id, plugin.metadata.version) }
             val ok = results.count { it.second }
             return ExecutionResult.ok(
                 "Verified ${results.size} plugins: $ok OK, ${results.size - ok} missing\n" +
@@ -485,38 +398,8 @@ class PluginExecutor(
         val id = args[0]
         val plugin = pluginManager.get(id)
             ?: return ExecutionResult.fail("Plugin not found: $id", errorCode = ErrorCodes.ERR_NOT_FOUND)
-        val (msg, ok) = verifyOne(id, plugin.metadata.version)
+        val (msg, ok) = PluginRuntimeLoader.verifyOne(id, plugin.metadata.version)
         return if (ok) ExecutionResult.ok(msg) else ExecutionResult.fail(msg, errorCode = ErrorCodes.ERR_NOT_FOUND)
-    }
-
-    /** Check one plugin's files on disk. Returns (message, isOk). */
-    private fun verifyOne(id: String, version: String): Pair<String, Boolean> {
-        val cacheDir = java.io.File(com.mengpaw.kernel.DataPaths.PLUGIN_CACHE)
-        val jarFile = java.io.File(cacheDir, "$id-$version.jar")
-        val aarFile = java.io.File(cacheDir, "$id-$version.aar")
-        val odexDir = java.io.File(cacheDir, "odex-$id")
-
-        val file = when {
-            jarFile.exists() -> jarFile
-            aarFile.exists() -> aarFile
-            else -> null
-        }
-
-        val odexExists = odexDir.exists() && odexDir.isDirectory
-        val odexCount = if (odexExists) odexDir.listFiles()?.size ?: 0 else 0
-
-        return if (file != null) {
-            val sizeMb = "%.1f".format(file.length() / 1_048_576.0)
-            val sha = try {
-                val digest = java.security.MessageDigest.getInstance("SHA-256")
-                // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
-                digest.digest(file.readBytes()).joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }.take(16) + "..."
-            } catch (e: Exception) { KernelLog.w("PluginExecutor", "verifyOne sha: ${e.message}"); "n/a" }
-            val odexInfo = if (odexExists) ", odex: ${odexCount} files" else ", odex: missing"
-            "✅ $id v$version: ${file.name} (${sizeMb}MB, sha256=$sha$odexInfo)" to true
-        } else {
-            "❌ $id v$version: no JAR/AAR found in ${cacheDir.absolutePath}" to false
-        }
     }
 
     private fun statusIcon(status: PluginStatus): String = when (status) {

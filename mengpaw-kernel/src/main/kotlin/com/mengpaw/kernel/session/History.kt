@@ -4,49 +4,13 @@
 package com.mengpaw.kernel.session
 
 import com.mengpaw.kernel.DataPaths
-import com.mengpaw.kernel.KernelLog
-import com.mengpaw.kernel.agent.AgentDocs
 import com.mengpaw.kernel.llm.AttachmentPayload
 import com.mengpaw.kernel.llm.LlmProvider
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonObject
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.UUID
-
-/**
- * 标准原子写: 先写同目录 `.tmp`，再以 Files.move(REPLACE_EXISTING) 覆盖目标。
- * POSIX(Android/Linux) 上等价于 rename(2)，原子替换且失败时原文件完好；
- * Windows 上 File.renameTo 无法覆盖已存在目标(实测返回 false 且不动原文件)，
- * 而 Files.move 可替换 —— 任何失败路径都不会先删原文件, 不会丢数据。
- */
-private fun java.io.File.atomicWriteText(text: String) {
-    val tmp = java.io.File(this.parentFile, "${this.name}.tmp")
-    try {
-        tmp.writeText(text)
-        java.nio.file.Files.move(
-            tmp.toPath(), this.toPath(),
-            java.nio.file.StandardCopyOption.REPLACE_EXISTING
-        )
-    } catch (e: Exception) {
-        // 失败时原文件保持完好，仅清理残留 tmp 后向上抛, 由调用方上报
-        try { tmp.delete() } catch (_: Exception) {}
-        throw e
-    }
-}
 
 /**
  * Manages Agent sessions and conversation history.
@@ -54,6 +18,12 @@ private fun java.io.File.atomicWriteText(text: String) {
  * v0.17: QwenPaw-style structured compaction with no-data-loss archive.
  * Compressed raw messages are saved to dialog/YYYY-MM-DD.jsonl before compaction.
  * The compact_summary includes a path reference so Agent can recall full history.
+ *
+ * v0.32.x (400 行文件拆分批次 1): 重职责已拆出到同包委托 —
+ *   [SessionCompressor] (压缩/保留策略/归档/后台预压缩/自动摘要落地中期记忆)
+ *   [SessionEventLog]   (会话事件 JSONL 持久化 + 内存总线广播)
+ *   [SessionIntegrity]  (中断恢复 + 完整性检查/修复)
+ * 公开 API 签名不变; 所有委托与 [SessionManager] 共用 this 锁, 竞态语义不变。
  */
 class SessionManager {
 
@@ -64,6 +34,32 @@ class SessionManager {
 
     private val _activeSessionId = MutableStateFlow<String?>(null)
     val activeSessionId: StateFlow<String?> = _activeSessionId.asStateFlow()
+
+    // ── 职责委托 (锁共用 this — 见类注释) ──────────────────────────────
+
+    private lateinit var compressor: SessionCompressor
+    private lateinit var eventLog: SessionEventLog
+    private lateinit var integrity: SessionIntegrity
+
+    init {
+        compressor = SessionCompressor(
+            lock = this,
+            sessionProvider = { id -> _sessions.value[id] },
+            activeSessionIdProvider = { _activeSessionId.value },
+            updateSession = { id, s -> _sessions.value = _sessions.value + (id to s) },
+            agentNameProvider = { agentName }
+        )
+        eventLog = SessionEventLog(
+            lock = this,
+            dialogDirProvider = { DataPaths.dialogArchiveDir(agentName) },
+            agentNameProvider = { agentName }
+        )
+        integrity = SessionIntegrity(
+            lock = this,
+            sessionProvider = { id -> _sessions.value[id] },
+            updateSession = { id, s -> _sessions.value = _sessions.value + (id to s) }
+        )
+    }
 
     /**
      * Create a new session for a given task.
@@ -93,7 +89,7 @@ class SessionManager {
         _sessions.value = _sessions.value + (session.id to session)
         if (activate) _activeSessionId.value = session.id
         // Emit lifecycle event (matching OpenClaw "created" event kind)
-        recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+        eventLog.recordSessionEvent(session.id, SessionEventBus.SessionEvent(
             kind = SessionEventBus.EventKind.SESSION_CREATED,
             sessionId = session.id,
             agentName = agentName,
@@ -160,307 +156,68 @@ class SessionManager {
 
     /**
      * Compress conversation history if it exceeds the message budget.
-     * QwenPaw-style: archives raw messages to dialog/YYYY-MM-DD.jsonl before compaction;
-     * produces a structured summary with Goal/Progress/KeyDecisions/NextSteps/CriticalContext.
-     * When over [maxMessages] (default 50), uses [llmProvider] to generate a structured summary
-     * and replaces older messages. Retains recent conversation groups:
-     * MIN_KEEP_GROUPS groups unconditionally + more up to the token budget
-     * (window × coherence tier 8%/15%/25% — see [splitRetention]).
-     *
-     * @param specificSessionId If provided, compress this session. Otherwise use active session.
-     * @return true if compaction was performed.
+     * 实现见 [SessionCompressor.compressIfNeeded]。
      */
-    suspend fun compressIfNeeded(llmProvider: LlmProvider, maxMessages: Int = 50, specificSessionId: String? = null): Boolean {
-        val sessionId = specificSessionId ?: _activeSessionId.value ?: return false
-        val session = _sessions.value[sessionId] ?: return false
-        if (session.messages.size <= maxMessages) return false
-        KernelLog.d("MengPawLatency", "SUM-START $sessionId msgs=${session.messages.size}")
-
-        // ── 保留策略: MIN 组数保底 + MAX token 预算（连贯性档位）──
-        // 从最近往回按问答组（user 消息为界）累积保留原文:
-        //   - MIN_KEEP_GROUPS 组无条件保留（原文优先, 即使超预算）
-        //   - 预算内继续累积直到用尽（预算 = 窗口 × 连贯性档位 8%/15%/25%）
-        // 组数随问答大小自动浮动: 大问答保留组数少, 小问答保留多
-        // Snapshot BEFORE the suspend LLM call to avoid losing concurrently-added messages
-        val snapshot = session.messages.toList()
-        val budgetTokens = (com.mengpaw.kernel.PipelineManager.DEFAULT_CONTEXT_WINDOW *
-            retentionBudgetRatio(snapshot)).toInt()
-        val (toKeep, toCompress) = splitRetention(snapshot, budgetTokens)
-        if (toCompress.isEmpty()) { KernelLog.d("MengPawLatency", "SUM-END none"); return false }
-
-        // ── QwenPaw-style: archive raw messages before compaction ──
-        archiveRawMessages(toCompress)
-
-        // ── QwenPaw-style: structured summary (长度与保留原文反相关 — 目标占用率 ~60%) ──
-        val keptTokens = toKeep.sumOf { (it.content.length * TOK_PER_CHAR).toInt() }
-        val summary = summarizeMessagesStructured(
-            llmProvider, toCompress, summaryBudgetCharsFor(keptTokens))
-
-        // ── Build compact_summary with dialog path reference ──
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        val dialogRef = "dialog/$today.jsonl"
-        val summaryMsg = Message(
-            role = "system",
-            content = buildString {
-                append("[📋 对话摘要]\n")
-                append(summary)
-                append("\n[完整历史: $dialogRef — 需要时用 agent.read 查阅]")
-            }
-        )
-
-        // Preserve any messages added during the LLM call — v0.28.6 异步化竞态加固:
-        // 在监视器内以快照为基准做身份 diff (addMessage 的 200 条 removeAt(0) 会破坏
-        // 下标对齐, 旧实现 afterSnap.drop(snapshot.size) 在 monitor 外读还有丢消息窗口)
-        synchronized(this) {
-            val current = session.messages.toList()
-            // 身份 Set (IdentityHashMap — 相等内容不误判为"新消息")
-            val snapshotIds = java.util.IdentityHashMap<Message, Boolean>()
-            snapshot.forEach { snapshotIds[it] = true }
-            val concurrentNew = current.filter { !snapshotIds.containsKey(it) }
-            session.messages.clear()
-            session.messages.add(summaryMsg)
-            session.messages.addAll(toKeep)
-            if (concurrentNew.isNotEmpty()) session.messages.addAll(concurrentNew)
-            _sessions.value = _sessions.value + (sessionId to session)
-        }
-        KernelLog.d("MengPawLatency", "SUM-END done msgs=${session.messages.size}")
-        // P1-5: 会话收尾自动摘要 → 中期记忆 — 压缩成功即把摘要自动写入当期中期分片,
-        // 规则触发而非模型自觉 agent.memory.record (长对话末尾模型常忘写)。
-        writeCompactionSummaryToMidTerm(sessionId, session.scope, summary)
-        return true
-    }
-
-    // ── P1-5 自动摘要落地中期记忆 (best-effort, 失败静默) ──
-
-    private val autoSummaryGuard = AutoSummaryMemory.WrittenGuard()
-
-    /**
-     * 把压缩摘要追加写入当期中期记忆分片 (memory_{date}.md)。
-     * - 复用 AgentDocs.appendMidTermMemory 写入队列 — 与 agent.memory.record 同一
-     *   落盘路径/格式, LLM 响应返回后由 AgentEngine.flushMidTermMemoryQueue 刷盘;
-     * - 幂等: AutoSummaryMemory.WrittenGuard 以 会话 id + 折叠次数 去重;
-     * - 零待命并行 worker (swarm/mission) 不写 — 与 AgentMemoryExecutor 写屏蔽一致,
-     *   防止 worker 对话向 Agent 中期记忆注入噪音;
-     * - 写入失败静默 (best-effort), 不放异常, 不阻塞压缩主路径。
-     */
-    private fun writeCompactionSummaryToMidTerm(sessionId: String, scope: String, summary: String) {
-        if (scope == "swarm" || scope == "mission" || summary.isBlank()) return
-        try {
-            val round = autoSummaryGuard.nextOrdinal(sessionId)
-            if (!autoSummaryGuard.shouldWrite(sessionId, round)) return
-            AgentDocs.appendMidTermMemory(agentName, AutoSummaryMemory.buildEntry(summary, sessionId, round))
-        } catch (e: Exception) {
-            KernelLog.w("History", "writeCompactionSummaryToMidTerm: ${e.message}")
-        }
-    }
-
-    // ── 后台预压缩 (v0.28.6): 接近阈值提前后台压缩, buildConversation 主请求不阻塞 ──
-    // 关键路径顺序: schedule(µs 返回, 启动后台压缩) → await(在途则放行, 否则同步兜底)
-    private val inFlightCompressions = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>()
+    suspend fun compressIfNeeded(llmProvider: LlmProvider, maxMessages: Int = 50, specificSessionId: String? = null): Boolean =
+        compressor.compressIfNeeded(llmProvider, maxMessages, specificSessionId)
 
     /** 消息数 ≥ threshold-margin 且无在途压缩时, 在 [scope] 后台启动压缩. µs 级返回. */
     fun scheduleCompressionIfNeeded(
         sessionId: String,
-        scope: kotlinx.coroutines.CoroutineScope,
+        scope: CoroutineScope,
         llmProvider: LlmProvider,
         threshold: Int = 50,
         margin: Int = 8
-    ) {
-        val session = _sessions.value[sessionId] ?: return
-        if (session.messages.size < threshold - margin) return
-        if (inFlightCompressions.containsKey(sessionId)) return
-        inFlightCompressions[sessionId] = scope.launch {
-            try {
-                compressIfNeeded(llmProvider, threshold, sessionId)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (_: Exception) {
-            } finally {
-                inFlightCompressions.remove(sessionId)
-            }
-        }
-    }
+    ) = compressor.scheduleCompressionIfNeeded(sessionId, scope, llmProvider, threshold, margin)
 
-    /**
-     * 关键路径兜底: 在途压缩不 join (本轮放行 — 快照一致, 压缩与请求并发无害);
-     * 无在途且仍超阈值时同步压缩 (最终兜底, 确保消息预算).
-     */
+    /** 关键路径兜底: 在途压缩不 join (本轮放行); 无在途且仍超阈值时同步压缩. */
     suspend fun awaitCompressionIfNeeded(
         llmProvider: LlmProvider,
         threshold: Int = 50,
         sessionId: String
-    ): Boolean {
-        val inFlight = inFlightCompressions[sessionId]
-        if (inFlight != null && inFlight.isActive) return false
-        return compressIfNeeded(llmProvider, threshold, sessionId)
-    }
+    ): Boolean = compressor.awaitCompressionIfNeeded(llmProvider, threshold, sessionId)
+
+    /** 会话生命周期事件: JSONL 持久化 + 内存总线广播. 实现见 [SessionEventLog.recordSessionEvent]. */
+    @Synchronized
+    fun recordSessionEvent(sessionId: String, event: SessionEventBus.SessionEvent) =
+        eventLog.recordSessionEvent(sessionId, event)
+
+    /** 列出 seq 之后的事件 (1 基序). 实现见 [SessionEventLog.listEventsSince]. */
+    fun listEventsSince(sessionId: String, afterSeq: Int = 0, limit: Int = 50): List<SessionEventBus.SessionEvent> =
+        eventLog.listEventsSince(sessionId, afterSeq, limit)
+
+    /** 裁剪过期事件日志 (30 天 / 5000 行策略). 实现见 [SessionEventLog.pruneSessionEvents]. */
+    fun pruneSessionEvents(sessionId: String, maxAgeDays: Int = 30, maxLines: Int = 5000) =
+        eventLog.pruneSessionEvents(sessionId, maxAgeDays, maxLines)
 
     /**
-     * Archive raw messages to dialog/YYYY-MM-DD.jsonl before compaction.
-     * Guarantees no data loss — Agent can always retrieve full history via read_file.
+     * Record an interrupted assistant turn as a LocalOnly message.
+     * 实现见 [SessionIntegrity.recordInterruptedTurn]。
      */
-    private fun archiveRawMessages(messages: List<Message>) {
-        try {
-            val dir = java.io.File(DataPaths.dialogArchiveDir(agentName)).also { it.mkdirs() }
-            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-            val file = java.io.File(dir, "$today.jsonl")
-            // JSONL append — one line per message, chronologically
-            val lines = messages.map { msg ->
-                buildJsonObject {
-                    put("role", msg.role)
-                    put("content", msg.content)
-                    put("timestamp", msg.timestamp)
-                }.toString()
-            }
-            // Append to JSONL file
-            file.appendText(lines.joinToString("\n") + "\n")
-        } catch (e: Exception) {
-            KernelLog.w("History", "archiveRawMessages: ${e.message}")
-        }
-    }
+    @Synchronized
+    fun recordInterruptedTurn(
+        sessionId: String,
+        completedTools: List<InterruptedToolSummary>,
+        interruptedTools: List<String>,
+        hasPartialText: Boolean,
+        hasPartialReasoning: Boolean
+    ) = integrity.recordInterruptedTurn(
+        sessionId, completedTools, interruptedTools, hasPartialText, hasPartialReasoning
+    )
 
-    /**
-     * QwenPaw-style structured summary via LLM.
-     * Produces: Goal / Progress / KeyDecisions / NextSteps / CriticalContext.
-     * Merges with any existing summary for incremental updates.
-     */
-    private suspend fun summarizeMessagesStructured(
-        llmProvider: LlmProvider,
-        messages: List<Message>,
-        summaryBudgetChars: Int = 600
-    ): String {
-        val conversationText = messages.joinToString("\n") { "[${it.role}] ${it.content.take(500)}" }
+    /** Check whether the given session has a pending (un-consumed) interrupted turn recovery. */
+    fun hasPendingRecovery(sessionId: String): Boolean = integrity.hasPendingRecovery(sessionId)
 
-        // Check for existing compact_summary in the messages (merge case)
-        val existingSummary = messages.firstOrNull { it.role == "system" && it.content.startsWith("[📋") }
-        val mergeInstruction = if (existingSummary != null) {
-            "\n## 已有摘要 (合并基础)\n${existingSummary.content}\n\n请将新对话合并到已有摘要中，更新各字段。"
-        } else ""
+    /** Consume the pending interrupted turn recovery. 实现见 [SessionIntegrity.consumePendingRecovery]. */
+    @Synchronized
+    fun consumePendingRecovery(sessionId: String): Boolean = integrity.consumePendingRecovery(sessionId)
 
-        val summaryPrompt = listOf(
-            mapOf(
-                "role" to "user",
-                "content" to """
-提取以下对话历史的结构化摘要。输出纯文本(不要JSON/Markdown标题/代码块)，严格按此格式:
+    /** Verify session data integrity. 实现见 [SessionIntegrity.checkSessionIntegrity]. */
+    fun checkSessionIntegrity(sessionId: String): Boolean = integrity.checkSessionIntegrity(sessionId)
 
-目标: <一句话描述用户想要达成什么>
-进展: <已完成/进行中/被阻塞的具体事项>
-关键决策: <做出的决策及其理由，用分号分隔>
-下一步: <接下来要做什么>
-关键上下文: <继续任务必须知道的信息：文件路径、函数名、关键技术栈、错误信息>
-
-规则:
-- 保留精确的文件路径、函数名、命令名和错误消息
-- "进展"和"关键上下文"不超过各3个要点
-- 如果用户只做了一个简单查询，摘要应同样简短
-- 每行前面不要加"- "列表符号，直接写字段名和内容
-$mergeInstruction
-
-## 对话记录
-$conversationText
-""".trimIndent()
-            )
-        )
-        return try {
-            llmProvider.completeWithMessages(summaryPrompt).take(summaryBudgetChars)
-        } catch (e: Exception) {
-            KernelLog.w("History", "summarize failed: ${e.message}")
-            "目标: (参见完整历史)\n进展: 对话已压缩\n关键决策: 无\n下一步: 继续对话\n关键上下文: 见 dialog/归档文件"
-        }
-    }
-
-    // ── 保留策略: MIN 组数保底 + token 预算 ──────────────────────────
-
-    /** token/字符 粗估系数（同 LlmRequestBuilder.FALLBACK_TOK_PER_CHAR）。 */
-    private val TOK_PER_CHAR = 0.25
-    /** 至少保留的问答组数（原文优先保底 — 即使超预算）。 */
-    private val MIN_KEEP_GROUPS = 3
-
-    /**
-     * 从最近往回按问答组（user 消息为界）切分保留原文。
-     * @return Pair(保留原文, 待压缩) — 保持原顺序。
-     */
-    private fun splitRetention(messages: List<Message>, budgetTokens: Int): Pair<List<Message>, List<Message>> {
-        val keep = mutableListOf<Message>()
-        var keptTokens = 0
-        var groups = 0
-        var idx = messages.size - 1
-        while (idx >= 0) {
-            // 收集一组: 从 idx 往回直到（不含）上一个 user 消息
-            val group = mutableListOf<Message>()
-            var boundary = idx
-            while (boundary >= 0) {
-                group.add(0, messages[boundary])
-                if (messages[boundary].role == "user") break
-                boundary--
-            }
-            val groupTokens = group.sumOf { (it.content.length * TOK_PER_CHAR).toInt() }
-            // MIN 保底（原文优先）或预算内 → 保留; 否则停止
-            if (groups < MIN_KEEP_GROUPS || keptTokens + groupTokens <= budgetTokens) {
-                keep.addAll(0, group)
-                keptTokens += groupTokens
-                groups++
-                idx = boundary - 1
-            } else {
-                break
-            }
-        }
-        val toCompress = messages.dropLast(keep.size)
-        return keep to toCompress
-    }
-
-    /**
-     * 连贯性信号 → 保留预算档位（轻量启发式, 零 LLM 开销）。
-     * 高 25%: 工作深度（最近 ~40 条消息内同一 Command 命令 ≥3 次）或调试态（最近 ~20 条含错误关键字）
-     * 中 15%: 产出规模（最近消息平均 >2000 字符）
-     * 低 8%: 默认（普通问答, 主题轮换快）
-     */
-    private fun retentionBudgetRatio(messages: List<Message>): Double {
-        val recent = messages.takeLast(40)
-        // 工作深度: 同一命令出现 >= 3 次
-        val cmds = recent.filter { it.role == "assistant" && it.content.startsWith("Command:") }
-            .map { it.content.substringAfter("Command: ").substringBefore("\n").take(40) }
-        if (cmds.groupingBy { it }.eachCount().values.any { it >= 3 }) return 0.25
-        // 调试态: 最近 5 组（~20 条）含错误关键字
-        val debugMarkers = listOf("Error", "失败", "超时", "再试", "修正")
-        if (recent.takeLast(20).any { m -> debugMarkers.any { m.content.contains(it) } }) return 0.25
-        // 产出规模: 平均消息 > 2000 字符
-        val avgSize = recent.map { it.content.length }.average()
-        return if (avgSize > 2000) 0.15 else 0.08
-    }
-
-    /**
-     * 摘要长度反相关 — 保留原文越多摘要越短。
-     * 预算 = 0.6×窗口 − 保留原文 token 折算字符, 上下限 [300, 1200]。
-     * 注: 1200 字符上限 ≈ 300 token, 对 131K 窗口占比极小 — "60% 目标占用率"
-     * 仅在保留原文接近窗口上限时才有意义; 实际约束是"摘要不喧宾夺主"。
-     */
-    private fun summaryBudgetCharsFor(keptTokens: Int): Int {
-        val targetTokens = (com.mengpaw.kernel.PipelineManager.DEFAULT_CONTEXT_WINDOW * 0.60).toInt()
-        val summaryTokens = targetTokens - keptTokens
-        return (summaryTokens / TOK_PER_CHAR).toInt().coerceIn(300, 1200)
-    }
-
-    /**
-     * Deprecated — kept for backward compatibility.
-     * Calls the LLM to produce a simple summary. Prefer [summarizeMessagesStructured].
-     */
-    @Deprecated("Use summarizeMessagesStructured for QwenPaw-style structured output")
-    private suspend fun summarizeMessages(
-        llmProvider: LlmProvider,
-        messages: List<Message>
-    ): String {
-        val conversationText = messages.joinToString("\n") { "[${it.role}] ${it.content}" }
-        val summaryPrompt = listOf(
-            mapOf(
-                "role" to "user",
-                "content" to "Summarize the following conversation history concisely. " +
-                    "Capture key decisions, actions taken, important context, and outcomes. " +
-                    "Keep the summary under 500 words.\n\n$conversationText"
-            )
-        )
-        return llmProvider.completeWithMessages(summaryPrompt)
-    }
+    /** Repair minor session integrity issues. 实现见 [SessionIntegrity.repairSessionIntegrity]. */
+    @Synchronized
+    fun repairSessionIntegrity(sessionId: String): Boolean = integrity.repairSessionIntegrity(sessionId)
 
     /**
      * Get the structured conversation history as a list of role/content maps.
@@ -484,284 +241,6 @@ $conversationText
                 AttachmentPayload.attachBinary(base, msg.attachments)
             } else base
         }
-    }
-
-    // ── Interrupted Turn Recovery (Reasonix Level 2) ─────────────────────
-
-    /**
-     * Record an interrupted assistant turn as a LocalOnly message.
-     * Stored in session history for backwards scanning; filtered out by getStructuredHistory().
-     *
-     * Matching Reasonix [recordInterruptedDisplay] in agent.go (line 140).
-     */
-    @Synchronized
-    fun recordInterruptedTurn(
-        sessionId: String,
-        completedTools: List<InterruptedToolSummary>,
-        interruptedTools: List<String>,
-        hasPartialText: Boolean,
-        hasPartialReasoning: Boolean
-    ) {
-        val session = _sessions.value[sessionId] ?: return
-        val recovery = InterruptedTurnRecovery(
-            pending = true,
-            completedTools = completedTools,
-            interruptedTools = interruptedTools,
-            droppedPartialText = hasPartialText,
-            droppedPartialReasoning = hasPartialReasoning
-        )
-        session.messages.add(Message(
-            role = "system",
-            content = "interrupted-turn-recovery",
-            localOnly = true,
-            interruptedTurn = recovery
-        ))
-        _sessions.value = _sessions.value + (sessionId to session)
-    }
-
-    /**
-     * Check whether the given session has a pending (un-consumed) interrupted turn recovery.
-     */
-    fun hasPendingRecovery(sessionId: String): Boolean {
-        return _sessions.value[sessionId]?.messages?.let { msgs ->
-            com.mengpaw.kernel.session.findPendingRecovery(msgs) != null
-        } ?: false
-    }
-
-    /**
-     * Consume the pending interrupted turn recovery by setting [InterruptedTurnRecovery.pending] to false.
-     * Called by AgentEngine.buildConversation() after the recovery block has been injected.
-     *
-     * @return true if a pending recovery was found and consumed.
-     */
-    @Synchronized
-    fun consumePendingRecovery(sessionId: String): Boolean {
-        val session = _sessions.value[sessionId] ?: return false
-        for (i in session.messages.indices.reversed()) {
-            val m = session.messages[i]
-            if (m.localOnly && m.interruptedTurn != null && m.interruptedTurn.pending) {
-                session.messages[i] = m.copy(
-                    interruptedTurn = m.interruptedTurn.copy(pending = false)
-                )
-                _sessions.value = _sessions.value + (sessionId to session)
-                return true
-            }
-        }
-        return false
-    }
-
-    // ── Durable Session Event Log (matching OpenClaw session_state_events table) ──
-
-    /**
-     * Record a session lifecycle event to both the in-memory bus and the durable JSONL log.
-     *
-     * Architecture (matching OpenClaw recordSessionStateEvent):
-     *   1. Append to {agentName}/sessions/{sessionId}.event.log (JSONL, one line per event)
-     *   2. Emit to SessionEventBus (in-memory, for subscribers)
-     *
-     * The event log file uses line count as a natural auto-increment sequence:
-     *   line 1 = seq 1, line 2 = seq 2, etc. (matching OpenClaw's INTEGER PRIMARY KEY AUTOINCREMENT)
-     */
-    @Synchronized
-    fun recordSessionEvent(sessionId: String, event: SessionEventBus.SessionEvent) {
-        // 1. Durable write to event log
-        try {
-            val dir = java.io.File(DataPaths.dialogArchiveDir(agentName)).also { it.mkdirs() }
-            val logFile = java.io.File(dir, "${sessionId}.event.log")
-            val logLine = buildJsonObject {
-                put("kind", event.kind.name)
-                put("ts", event.timestamp)
-                put("summary", event.summary)
-                if (event.payload.isNotEmpty()) {
-                    putJsonObject("payload") {
-                        event.payload.forEach { (k, v) -> put(k, v) }
-                    }
-                }
-            }.toString()
-            java.io.FileWriter(logFile, true).use { fw ->
-                fw.write(logLine + "\n")
-                fw.flush()
-            }
-        } catch (e: Exception) {
-            KernelLog.w("History", "recordSessionEvent: ${e.message}")
-        }
-        // 2. In-memory broadcast
-        SessionEventBus.emit(event)
-    }
-
-    /**
-     * List all session events that occurred after the given sequence number.
-     * Sequence numbers correspond to 1-indexed lines in the event log.
-     *
-     * Matching OpenClaw listSessionStateEventsSince(sessionKey, agentId, afterSequence, limit).
-     *
-     * @return list of events, newest first; empty list if log is missing or corrupted.
-     */
-    fun listEventsSince(sessionId: String, afterSeq: Int = 0, limit: Int = 50): List<SessionEventBus.SessionEvent> {
-        try {
-            val dir = java.io.File(DataPaths.dialogArchiveDir(agentName))
-            val logFile = java.io.File(dir, "${sessionId}.event.log")
-            if (!logFile.exists()) return emptyList()
-
-            return logFile.useLines { lines ->
-                lines.drop(afterSeq).take(limit).mapNotNull { line ->
-                    try {
-                        val root = Json.parseToJsonElement(line).jsonObject
-                        val kindName = root["kind"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                        val kind = try { SessionEventBus.EventKind.valueOf(kindName) } catch (_: Exception) { return@mapNotNull null }
-                        val summary = root["summary"]?.jsonPrimitive?.content ?: ""
-                        val ts = root["ts"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-                        val payload = mutableMapOf<String, String>()
-                        root["payload"]?.jsonObject?.let { payloadObj ->
-                            for ((k, v) in payloadObj) {
-                                try { payload[k] = v.jsonPrimitive.content } catch (_: Exception) { }
-                            }
-                        }
-                        SessionEventBus.SessionEvent(
-                            kind = kind,
-                            sessionId = sessionId,
-                            agentName = agentName,
-                            summary = summary,
-                            payload = payload,
-                            timestamp = ts
-                        )
-                    } catch (_: Exception) { null }
-                }.toList()
-            }
-        } catch (e: Exception) {
-            KernelLog.w("History", "listEventsSince: ${e.message}")
-            return emptyList()
-        }
-    }
-
-    // ── Event Log Pruning (matching OpenClaw pruneSessionStateEvents) ──
-
-    /**
-     * Prune old session events from the JSONL log.
-     * Removes events older than [maxAgeDays] and keeps at most [maxLines] most recent lines.
-     * Called periodically (e.g. during compression or at startup) to prevent unbounded growth.
-     *
-     * Matching OpenClaw pruneSessionStateEvents() — 30 day / 50000 row policy.
-     */
-    @Synchronized
-    fun pruneSessionEvents(sessionId: String, maxAgeDays: Int = 30, maxLines: Int = 5000) {
-        try {
-            val dir = java.io.File(DataPaths.dialogArchiveDir(agentName))
-            val logFile = java.io.File(dir, "${sessionId}.event.log")
-            if (!logFile.exists() || logFile.length() == 0L) return
-
-            val lines = logFile.useLines { it.toList() }
-            if (lines.size <= maxLines) return  // still under limit
-
-            val cutoff = System.currentTimeMillis() - maxAgeDays * 24L * 3600 * 1000L
-            val pruned = lines.filter { line ->
-                try {
-                    val root = Json.parseToJsonElement(line).jsonObject
-                    val ts = root["ts"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-                    ts >= cutoff
-                } catch (_: Exception) { true }  // keep unparseable lines
-            }.takeLast(maxLines)
-
-            if (pruned.size < lines.size) {
-                logFile.atomicWriteText(pruned.joinToString("\n") + "\n")
-            }
-        } catch (e: Exception) {
-            KernelLog.w("History", "pruneSessionEvents: ${e.message}")
-        }
-    }
-
-    // ── Session Integrity Check (matching OpenClaw assertSqliteIntegrity) ──
-
-    /**
-     * Verify session data integrity. Checks:
-     * - No [localOnly] messages leaked between non-local messages
-     * - The last message is structurally complete (not truncated JSON)
-     * - Event log is parseable (non-destructive check)
-     *
-     * Matching OpenClaw assertSqliteIntegrity + terminal latch pattern.
-     */
-    fun checkSessionIntegrity(sessionId: String): Boolean {
-        val session = _sessions.value[sessionId] ?: return false
-        val msgs = session.messages
-        if (msgs.isEmpty()) return true
-
-        for (i in msgs.indices) {
-            val msg = msgs[i]
-            // localOnly messages should only appear after another localOnly, or at boundaries
-            if (msg.localOnly && msg.interruptedTurn != null) {
-                // An interrupted_turn message must have a "user" message after it eventually
-                // (if the session continued), otherwise it's a dangling interrupt record
-                val hasUserAfter = msgs.drop(i + 1).any { it.role == "user" && !it.localOnly }
-                val isLastMsg = i == msgs.lastIndex
-                // Dangling interrupt at end of session is acceptable (pending recovery)
-                if (!hasUserAfter && !isLastMsg) {
-                    // localOnly message in the middle of history with no subsequent user message
-                    // suggests a compaction or history reordering issue
-                    return false
-                }
-            }
-            // Content should not be blank for non-system messages
-            if (msg.role == "assistant" && msg.content.isBlank() && msg.interruptedTurn == null) {
-                return false
-            }
-        }
-        return true
-    }
-
-    /**
-     * Repair minor session integrity issues:
-     * - Remove orphan [localOnly] messages with no user message after them (except at end)
-     * - Truncate messages to the 200-message history limit (matching addMessage)
-     */
-    @Synchronized
-    fun repairSessionIntegrity(sessionId: String): Boolean {
-        val session = _sessions.value[sessionId] ?: return false
-        var changed = false
-        val msgs = session.messages.toMutableList()
-
-        // Remove orphan localOnly (not at end, no user after)
-        val toRemove = mutableSetOf<Int>()
-        for (i in msgs.indices) {
-            val msg = msgs[i]
-            if (msg.localOnly && msg.interruptedTurn != null) {
-                val hasUserAfter = msgs.drop(i + 1).any { it.role == "user" && !it.localOnly }
-                val isLastMsg = i == msgs.lastIndex
-                if (!hasUserAfter && !isLastMsg) {
-                    toRemove.add(i)
-                    changed = true
-                }
-            }
-        }
-        // v0.28.7: 清理空白 assistant 消息 (空响应产物) — 否则 checkSessionIntegrity 永久失败,
-        // 完整性 latch 锁死后续所有轮次。kernel 层 assistant 消息仅在完成后写入,
-        // 不存在"运行中"占位, 空白必为已完成空轮 → 可安全移除。
-        for (i in msgs.indices) {
-            val msg = msgs[i]
-            if (msg.role == "assistant" && msg.content.isBlank() && msg.interruptedTurn == null && !msg.localOnly) {
-                toRemove.add(i)
-                changed = true
-            }
-        }
-        toRemove.sortedDescending().forEach { msgs.removeAt(it) }
-
-        // Enforce 200-message history limit (match addMessage behavior)
-        if (msgs.size > 200) {
-            // Keep last 200 messages, but preserve the first system message
-            val systemMsgs = msgs.filter { it.role == "system" }
-            val nonSystemTarget = msgs.filter { it.role != "system" }.takeLast(200 - systemMsgs.size.coerceAtMost(10))
-            session.messages.clear()
-            session.messages.addAll(systemMsgs.take(5)) // keep at most 5 system messages
-            session.messages.addAll(nonSystemTarget)
-            changed = true
-        } else if (changed) {
-            session.messages.clear()
-            session.messages.addAll(msgs)
-        }
-
-        if (changed) {
-            _sessions.value = _sessions.value + (sessionId to session)
-        }
-        return changed
     }
 
     // ── Schema Migration (matching OpenClaw schema migration pattern) ──
