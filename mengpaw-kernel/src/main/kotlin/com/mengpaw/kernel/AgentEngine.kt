@@ -636,7 +636,6 @@ class AgentEngine(
                 val totalChars = llmRequestBuilder.currentSystemPrompt.length +
                     sessionManager.getStructuredHistory(session.id).sumOf { (it["content"]?.length ?: 0) }
                 val estimatedTokens = (totalChars * llmRequestBuilder.calibratedTokPerChar).toInt()
-                llmRequestBuilder.lastPromptTokens = estimatedTokens
                 llmRequestBuilder.calibrateFromUsage(estimatedTokens, totalChars)
 
                 val postResult = postCallMiddleware.onPostCall(sanitized, step + 1, totalChars, estimatedTokens)

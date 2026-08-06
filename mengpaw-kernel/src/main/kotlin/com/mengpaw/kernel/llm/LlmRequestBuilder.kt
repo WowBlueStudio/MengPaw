@@ -4,7 +4,6 @@
 package com.mengpaw.kernel.llm
 
 import com.mengpaw.kernel.KernelLog
-import kotlinx.serialization.json.*
 
 /**
  * Builds LLM API requests optimized for cross-provider prompt caching.
@@ -26,8 +25,6 @@ class LlmRequestBuilder(systemPrompt: String) {
         }
     }
 
-    var lastPromptTokens: Int = 0; internal set
-
     var calibratedTokPerChar: Double = FALLBACK_TOK_PER_CHAR; private set
 
     fun calibrateFromUsage(promptTokens: Int, totalChars: Int) {
@@ -44,54 +41,6 @@ class LlmRequestBuilder(systemPrompt: String) {
             mapOf("role" to "system", "content" to _systemPrompt, "_cache_control" to "ephemeral")
         else mapOf("role" to "system", "content" to _systemPrompt)
         return listOf(sys) + messages
-    }
-
-    fun buildRequest(messages: List<Map<String, String>>, tools: List<Map<String, Any>>? = null,
-                     streaming: Boolean = false, model: String, maxTokens: Int = 4096,
-                     temperature: Double = 0.7): String {
-        val full = buildMessages(messages)
-        return buildJsonObject {
-            put("model", model); put("max_tokens", maxTokens)
-            put("temperature", temperature); put("stream", streaming)
-            putJsonArray("messages") { full.forEach { msg ->
-                addJsonObject {
-                    put("role", msg["role"] ?: "user")
-                    msg["_cache_control"]?.let { if (it.isNotBlank()) putJsonObject("cache_control") { put("type", "ephemeral") } }
-                    // 多模态 content 数组 (v0.33.0+): _image → image_url, _audio_data → input_audio
-                    val image = msg["_image"]?.takeIf { it.isNotBlank() }
-                    val audioData = msg["_audio_data"]?.takeIf { it.isNotBlank() }
-                    if (image != null || audioData != null) {
-                        putJsonArray("content") {
-                            val text = msg["content"] ?: ""
-                            if (text.isNotBlank()) addJsonObject { put("type", "text"); put("text", text) }
-                            image?.let {
-                                addJsonObject { put("type", "image_url"); putJsonObject("image_url") { put("url", it) } }
-                            }
-                            audioData?.let {
-                                addJsonObject {
-                                    put("type", "input_audio")
-                                    putJsonObject("input_audio") {
-                                        put("data", it)
-                                        put("format", msg["_audio_format"]?.takeIf { f -> f.isNotBlank() } ?: "m4a")
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        put("content", msg["content"] ?: "")
-                    }
-                }
-            }}
-            if (tools != null && tools.isNotEmpty()) putJsonArray("tools") { tools.forEach { add(toolToJson(it)) } }
-        }.toString()
-    }
-
-    private fun toolToJson(t: Map<String, Any>): JsonElement = buildJsonObject { t.forEach { (k, v) -> put(k, anyToJson(v)) } }
-    private fun anyToJson(v: Any): JsonElement = when (v) {
-        is String -> JsonPrimitive(v); is Number -> JsonPrimitive(v); is Boolean -> JsonPrimitive(v)
-        is Map<*, *> -> buildJsonObject { @Suppress("UNCHECKED_CAST") (v as Map<String, Any>).forEach { (k, v2) -> put(k, anyToJson(v2)) } }
-        is List<*> -> buildJsonArray { v.forEach { if (it != null) add(anyToJson(it)) } }
-        else -> JsonPrimitive(v.toString())
     }
 
     companion object {

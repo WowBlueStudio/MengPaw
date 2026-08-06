@@ -107,14 +107,6 @@ class AcpServer(
         return peers.values.toList()
     }
 
-    fun onDiscoverResponse(from: PeerAgent, authToken: String = ""): Boolean {
-        if (sharedSecret.isNotEmpty() && authToken != sharedSecret) {
-            return false
-        }
-        peers[from.agentId] = from
-        return true
-    }
-
     /** Directly register a peer without auth (for internal use by sync engines). */
     fun registerPeer(peer: PeerAgent) {
         peers[peer.agentId] = peer
@@ -284,32 +276,6 @@ class AcpServer(
     fun getPeers(): List<PeerAgent> = peers.values.toList()
         .filter { System.currentTimeMillis() - it.lastSeen < 60_000 }
 
-    fun peerCount(): Int = getPeers().size
-
-    /** Write a Claude Code bridge task to the Agent's inbox. */
-    private fun writeBridgeTaskToInbox(from: String, payload: String) {
-        try {
-            val data = try { json.parseToJsonElement(payload).jsonObject } catch (_: Exception) { null }
-            val task = data?.get("task")?.jsonPrimitive?.content ?: payload
-            val replyTo = data?.get("replyTo")?.jsonPrimitive?.content ?: ""
-            val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX).also { it.mkdirs() }
-            val taskFile = java.io.File(inbox, "claude_task_${System.currentTimeMillis()}.md")
-            val content = """# Claude Code 任务
-> 来自: $from
-> 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())}
-> 回复: $replyTo
-
-$task
-
----
-完成后将结果写入工作区，并用 `agent.write` 回复。
-""".trimIndent()
-            taskFile.atomicWriteText(content)
-        } catch (e: Exception) {
-            com.mengpaw.kernel.KernelLog.w("AcpServer", "writeBridgeTaskToInbox: ${e.message}")
-        }
-    }
-
     private fun writePushToInbox(from: String, payload: String) {
         try {
             val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX).also { it.mkdirs() }
@@ -330,12 +296,6 @@ $task
             taskFile.atomicWriteText(content)
         } catch (e: Exception) {
             com.mengpaw.kernel.KernelLog.w("AcpServer", "writePushToInbox: ${e.message}")
-        }
-    }
-
-    fun cleanup() {
-        peers.entries.removeAll { (_, peer) ->
-            System.currentTimeMillis() - peer.lastSeen > 120_000
         }
     }
 }
