@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.32.0 (2026-08-06) — Agent 触达全链路修复 + 每 ReAct 步骤气泡（思考全程可见）+ 多模态附件/语音
+
+### 内核改动
+- **Agent 自检报告四项框架修复** (f0d7332): ① 提示词去幽灵 — 未捆绑插件 (tribe/root/browser-search/browser-mcp) 命令全部条件化标注「需安装」, 纯幽灵示例移除 ② 命名空间推导权威化 `pluginNamespaceFor` — browser-mcp 插件正确映射 ns=browser (命令键自带 mcp. 前缀), 6 处调用点统一 ③ `parse()` 空参数放行 — 省略 Action Input / 显式 `{}` → emptyMap, `self.status` 不再 PARAM_FORMAT_ERROR (ToolCall 唯一构造点一处覆盖) ④ 记忆模板瘦身 (<500B 无教学标题) + TEMPLATE_VERSION 迁移 (老工作区自动重置) + 计数去模板黑名单
+- **agentId 动态化 + CLI.md 惰性生成** (f0d7332/6243152): `AgentDocManager.bindAgent` 会话绑定 + stale 检测 (活跃插件数比对) 自动再生; CLI.md 三表运行时生成 — self 表遍历 SelfExecutor.commands, agent 表由 AgentExecutor init 注入注册键 (新增命令自动入手册), sys 表硬编码 51 行, 描述查 internal Triple 表 (缺失 fallback "见 self.search")
+- **resolvePath 基准目录修正** (f0d7332): 相对路径基准 `{BASE}/` → `{AGENTS}/{agent}/` — 提示词教的工作区相对语义 (`agent.read profile.md`) 成为现实, 附带修复写文件缓存失效判定
+- **自检报告二轮** (f5d41b9): 搜索索引可用性脱节修复 (静态种子与 registry.has 过滤一致化) + 路径两套体系统一
+- **plugin.verify 发现性断裂** (086b15d): `--all` 批量分支自 v0.14.0 存在但索引/CLI.md/提示词三触达源缺失 — 补齐 + BM25 中文双字窗口 `cjkBigrams` (3+ 字符 CJK token 展开字符级 bigram, "校验插件"类短语可命中, 双字保持原始评分)
+- **全量触达审计** (6243152): 索引补 11 条缺失 (self.ports/self.search/self.search.stats/agent.memory.mid.edit/mid.rm/project.delete/project.rm/project.edit/evolution.mark-corrected + self.notify.* 修正) — 隐性断裂根因: seed fullName 与注册全名不匹配被可用性过滤必杀
+- **提示词幽灵引用检测测试** (fe7b611): `PromptGhostReferenceTest` 从源码提取 namespace.command 引用对照注册 key — 第三触达源 (提示词) 锁死, 程序化生成链路 (sys 补种/插件索引/CLI.md 动态表) 重构免疫, 手工种子/提示词引用有测试守护
+
+### 功能增强
+- **每 ReAct 步骤独立气泡** (210276b/cc41633, #45 收尾): 思考折叠头 (完整 thought 默认展开, 展开全程可见不截断) + 工具调用行 + 中间输出气泡 → 下一步 → 最终答案气泡 — 中间输出不再被最终答案覆盖; 多 Action 批按 step 合并 observation; 最终轮思考从流式缓冲提取; 错误路径/引用格式化适配; 持久化 `agent_step` 类型 (新字段默认值零迁移, 旧 agent_trace 兼容渲染)
+- **工具轮思考过程流式可见** (4f72554): 思考+Action 命令行流式播放, 工具宣布降级兜底 (仅短思考时)
+- **多模态附件气泡 + 语音输入** (f968c5a/69e76da/1e25cb2): 附件全链路结构化 — AttachmentData 上行 content 数组 (`_image` dataURI ≤8MB / `_input_audio` base64 ≤15MB), 下行媒体卡片 (图片采样 ≤2048px + 全屏, 音频单实例播放器, 视频封面帧, 文件 ACTION_VIEW); 语音按住录音松手直发 (VoiceCapability 模型判定显隐, 上滑/左滑取消, <300ms 丢弃); 待发栏统一一行 (缩略图/文档名称块/语音条块 + 斜杠/@标签合并); 图片气泡全宽原比例浮动 + 文件卡片精简 + md 内置预览
+- **附件文件名取 DISPLAY_NAME** (b0b9360): DocumentsUI content URI lastPathSegment 是文档 ID 非文件名
+- **browser: md 预览大纲按钮 + 站内 .md URL 渲染 + 近全屏预览** (dd4b5cf): md-reader 导航 + 站内 md 链接直接渲染 (browser APK v0.7.2)
+
+### 修复
+- **错误双弹 + Dialog 无限高度闪退** (ff3e54a, shell+browser): 重复错误展示去重 + 全屏对话框高度约束
+
+### 代码质量
+- **UI emoji 全部替换为 Icons.Outlined 线性图标** (5261bda, shell+browser): 有语义用图标, 无语义直接删除 — 规范沉淀 Dev Guide §3.3
+- **附件路径行 📎 前缀移除** (7ca8442): 纯视觉标记非语法, 路径裸行保留
+- **工作区文档注入策略定案** (02f5c2f): Dev Guide §4.1.4 常驻明文/场景链接式分治
+- **LLM 多阶段输出数据流文档** (879d15d): docs/llm-multistage-dataflow.md — 每轮 LLM/框架/UI 各环节实际收到内容
+
+### 发行
+- Shell APK v0.32.0 (versionCode 32000) — 全量发布双远端 + GitHub Release
+- Browser APK v0.7.2 (versionCode 11, 独立版本节奏) — md 预览大纲 + 站内 md URL + 近全屏
+- 测试: kernel + plugin-agent-tools 285 tests 全绿 (0 failures / 0 errors)
+- plugins.json 无变更 (v0.31.0 已清理)
+
 ## v0.31.0 (2026-08-05) — 工作区文档编辑/重置 + md 预览 md-reader 化 (WebView+CSS) + 框架提示词加固
 
 ### 新增

@@ -233,15 +233,15 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `AppInitializer.kt` | 关键路径初始化 (崩溃日志/DataPaths/插件管理器/SysExecutor/模板/日志器) |
 | `ui/screens/AppRoot.kt` | Compose 根 — 主题装配 + MainScreen/设置页/插件市场全屏层 |
 | `service/AgentRuntime.kt` | **NEW** UI/运行时分离 — 触发器桥接, 所有 IO 工作在此 |
-| `ui/screens/` (52 文件) | MainScreen (头栏/侧栏/底表拆至 MainScreenHeader·MainScreenSidebars·MainScreenExpandSheet), SidebarContent (数据拆至 SidebarContentData, 孪生对话框拆至 sidebar-dialogs/TwinPairingDialogs), settings/ (5 文件: AgentSettingsContent 等), AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SplashScreen, **AttachmentBubbles (v0.33.0+ 下行媒体卡片), VoiceRecorder, VoiceInputButton** |
+| `ui/screens/` (52 文件) | MainScreen (头栏/侧栏/底表拆至 MainScreenHeader·MainScreenSidebars·MainScreenExpandSheet), SidebarContent (数据拆至 SidebarContentData, 孪生对话框拆至 sidebar-dialogs/TwinPairingDialogs), settings/ (5 文件: AgentSettingsContent 等), AgentViewModel, PluginViewModel, PluginMarketScreen, PluginDetailScreen, SettingsScreen, SettingsViewModel, BrowserScreen, HistorySidebar, SplashScreen, **ChatBubbles (AgentStepBubble 每步骤气泡 v0.32.0+ + AttachmentBubbles 下行媒体卡片), VoiceRecorder, VoiceInputButton** |
 | `ui/components/` (7 文件) | BigBangPopup, FleetMonitorOverlay, TokenChart, TokenStatsCollector, NotifyBanner 等 |
 | `ui/AdaptiveLayout.kt` | WindowSizeClass 计算 |
 | `ui/localization/Strings.kt` | 中英双语注解 |
 | `service/` (7 文件) | ShellService, DreamWorker, EventReceiver, WakeReceiver 等 |
 
-**多模态附件 + 语音输入 (v0.33.0+)**: 附件数据模型 `kernel/session/AttachmentData` 单点定义 (type: image/audio/video/document/file, path 为 workspace 内绝对路径供 LLM fs 工具读)。上行: 文件选择 → `FilePickerUtils.handleFilePicked` 产出 AttachmentData (不再插 `📎 路径` 文本) → MainScreen `pendingAttachments` 待发栏 → `submitTask(attachments)` → kernel `Message.attachments` → `History.getStructuredHistory` 经 `llm/AttachmentPayload.attachBinary` 挂 `_image`(data URI ≤8MB)/`_audio_data`+`_audio_format`(≤15MB) 键 (超限静默降级为路径文本)。路径是 user 消息正文的一部分 (非前缀拼接), 随历史每轮计入上下文。
+**多模态附件 + 语音输入 (v0.32.0+)**: 附件数据模型 `kernel/session/AttachmentData` 单点定义 (type: image/audio/video/document/file, path 为 workspace 内绝对路径供 LLM fs 工具读)。上行: 文件选择 → `FilePickerUtils.handleFilePicked` 产出 AttachmentData (不再插 `📎 路径` 文本) → MainScreen `pendingAttachments` 待发栏 → `submitTask(attachments)` → kernel `Message.attachments` → `History.getStructuredHistory` 经 `llm/AttachmentPayload.attachBinary` 挂 `_image`(data URI ≤8MB)/`_audio_data`+`_audio_format`(≤15MB) 键 (超限静默降级为路径文本)。路径是 user 消息正文的一部分 (非前缀拼接), 随历史每轮计入上下文。
 
-**待发栏 (v0.34.0+, `PendingAttachmentsBar.kt`)**: 输入栏 Surface 容器内、输入框顶部的一行统一待发区 — 斜杠命令/@agent 标签 (AssistChip 样式) + 附件块按序靠左 FlowRow 排列, 无内容整行隐藏 (AnimatedVisibility)。附件块: 图片 → 原比例缩略图 (最大高度 40dp, `decodeSampled` maxDim=512 复用, 右上角半透明 X); 音频 → 语音条样式块 (波形装饰 + 文件名 + X); 文档/视频/文件 → 图标+文件名名称块 + X。语音按钮录音松手直发语音条 (不进待发栏); 附件/标签不同步进输入框文本, 发送时结构化提交。下行: `AttachmentBubbles.extractMedia` 从 agent 文本提取 `![](path)`/`[name](path)`/`Saved to <path>` 为卡片 (图片 BitmapFactory 采样 ≤2048px 防 OOM + 全屏预览 Dialog; 音频 MediaPlayer 单实例播放器; 视频 MediaMetadataRetriever 封面帧 + VideoView Dialog; 文件 ACTION_VIEW FileProvider; 网络 URL HttpURLConnection 下载 cacheDir/media_cache 缓存)。语音: `VoiceInputButton` 透明底线性话筒 (发送按钮左侧), 按住录音 `VoiceRecorder` (MediaRecorder m4a/AAC, `DataPaths.RECORDINGS`), 松手直发 (input_audio 通道), 上滑/左滑取消, <300ms 丢弃; 按钮显隐由 `model/VoiceCapability.supportsVoice` 判定 (内置前缀清单 gpt-5/gpt-4o/qwen*-omni/glm-*v/doubao-*-audio + 关键词 omni/audio/voice/whisper/speech, 刻意排除 gemini; `ModelInfo.type=="全模态"` 兜底) — 不支持语音的模型不显示按钮, 用户用 Android 输入法自带语音转译。
+**待发栏 (v0.32.0+, `PendingAttachmentsBar.kt`)**: 输入栏 Surface 容器内、输入框顶部的一行统一待发区 — 斜杠命令/@agent 标签 (AssistChip 样式) + 附件块按序靠左 FlowRow 排列, 无内容整行隐藏 (AnimatedVisibility)。附件块: 图片 → 原比例缩略图 (最大高度 40dp, `decodeSampled` maxDim=512 复用, 右上角半透明 X); 音频 → 语音条样式块 (波形装饰 + 文件名 + X); 文档/视频/文件 → 图标+文件名名称块 + X。语音按钮录音松手直发语音条 (不进待发栏); 附件/标签不同步进输入框文本, 发送时结构化提交。下行: `AttachmentBubbles.extractMedia` 从 agent 文本提取 `![](path)`/`[name](path)`/`Saved to <path>` 为卡片 (图片 BitmapFactory 采样 ≤2048px 防 OOM + 全屏预览 Dialog; 音频 MediaPlayer 单实例播放器; 视频 MediaMetadataRetriever 封面帧 + VideoView Dialog; 文件 ACTION_VIEW FileProvider; 网络 URL HttpURLConnection 下载 cacheDir/media_cache 缓存)。语音: `VoiceInputButton` 透明底线性话筒 (发送按钮左侧), 按住录音 `VoiceRecorder` (MediaRecorder m4a/AAC, `DataPaths.RECORDINGS`), 松手直发 (input_audio 通道), 上滑/左滑取消, <300ms 丢弃; 按钮显隐由 `model/VoiceCapability.supportsVoice` 判定 (内置前缀清单 gpt-5/gpt-4o/qwen*-omni/glm-*v/doubao-*-audio + 关键词 omni/audio/voice/whisper/speech, 刻意排除 gemini; `ModelInfo.type=="全模态"` 兜底) — 不支持语音的模型不显示按钮, 用户用 Android 输入法自带语音转译。
 
 **UI emoji 约定 (v0.31.0 清理)**: UI 文本 (系统气泡/菜单/徽标/按钮) 禁用装饰性 emoji — 纯装饰的移除, 承载语义的 (状态/图标) 换 `Icons.Outlined` 线性图标 (会话/模型/系统/搜索/发送/截图/浏览器/云/复制/箭头/失败/成功/导出/时钟/恢复/分享/刷新/语音/挂起/检查/暂停/删除/保存/编辑/目录/书签/链接/用户/设置/锁/播放)。规则: 有语义用图标, 无语义直接删除, 不保留裸 emoji; Agent 生成的文本 (模型输出) 不受限。列表变更时同步本段落。
 
@@ -542,9 +542,11 @@ twin.lost <peer> / twin.recover <peer>
 - 并发安全: streamBuf/streamPlayed/streamFinished 统一 `synchronized(streamBuf)` 监视器; `traces` 用 `Collections.synchronizedList`(播放协程 toList 与 onStep add 跨线程); 播放器体 try/catch 保证 join() 永不抛
 - doTranslate(美系模型翻译)场景跳过 join/flush: 最终 replace 整段替换为中文, 英文逐字播放无意义
 
-**显示策略**(`computeStreamDisplayText`): 含 `Final Answer:` 只显标记后; 含 `Action:`(工具轮)**流式显示 Thought 思考过程 + Action 命令行**(v0.3x 演进 — 原 v0.28.5 工具轮样板全隐藏, 思考过程不可见; 现 `substringAfter("Thought:")` + `substringBefore("\nAction Input:")`, 参数 JSON 不刷屏, 完整参数由执行后 trace 行承载); 含 `Thought:` 显其后; 无标记全文流式。
+**流式文本路径**(`computeStreamDisplayText`, 演进自 v0.28.5): 含 `Final Answer:` 只显标记后; 含 `Action:`(工具轮) 流式显示 Thought 思考过程 + Action 命令行 (`substringAfter("Thought:")` + `substringBefore("\nAction Input:")`, 参数 JSON 不刷屏, 完整参数由执行后 observation 承载); 含 `Thought:` 显其后; 无标记全文流式。
 
-**工具调用提前通知 (v0.29.2, Reasonix ③ 对标)**: 流式中完整 `Action: <tool>` 行一落地即推送 `⚙ 正在执行 X…` 到运行中气泡(`ACTION_LINE_REGEX` 多行锚定, 行尾须完整 — 半截工具名不误报; "Action Input:" 天然不匹配), 不等工具执行完成(onStep)。消除工具轮流式空屏。UI 侧 `WaitingIndicator` 按前缀显示"正在执行 X… Ns"替代"思考中… Ns"。状态纪律: 检测在 `synchronized(streamBuf)` 内计数, `pushDisplay` 在锁外调用; `announcedTools` 随 onStep 清空。**v0.3x 兜底化**: 工具轮思考过程已流式可见后, 仅当缓冲无 Thought 内容(极端短思考)才宣布 — 避免宣布行替换正在播放的思考轨迹。
+**每步骤气泡 (v0.32.0, `ChatMessageUi.AgentStep` + `AgentStepBubble`)**: 每个 ReAct 步骤一个独立气泡 — 折叠头 (Step N/思考 + **完整 thought, 默认展开, 展开全程可见不截断**) + 工具调用行 (monospace Action) + 正文 (运行中 = 流式文本/思考中占位, 完成 = 工具结果 observation / 最终答案)。多 Action 批按 step 号合并 observation 到同一步骤气泡 (`mergeBatchObservation` + `lastCompletedStep` 追踪, onStep 分派); 最终答案 = 最后一步 (isFinal=true, 思考从 streamBuf 提取 — 最终轮无 onStep); 错误路径复制当前步骤为错误正文; 持久化 `agent_step` 类型 (新增字段全默认值零迁移), 旧 `AgentWithTrace` 保留兼容渲染。用户可见形态: 思考+工具调用 → 中间输出气泡 → 下一步思考折叠 → … → 最终答案气泡, 每步折叠区可展开回看全程。
+
+**工具调用提前通知 (v0.29.2, Reasonix ③ 对标)**: 流式中完整 `Action: <tool>` 行一落地即推送 `⚙ 正在执行 X…` 到运行中气泡(`ACTION_LINE_REGEX` 多行锚定, 行尾须完整 — 半截工具名不误报; "Action Input:" 天然不匹配), 不等工具执行完成(onStep)。消除工具轮流式空屏。UI 侧 `WaitingIndicator` 按前缀显示"正在执行 X… Ns"替代"思考中… Ns"。状态纪律: 检测在 `synchronized(streamBuf)` 内计数, `pushDisplay` 在锁外调用; `announcedTools` 随 onStep 清空。**v0.32.0 兜底化**: 工具轮思考过程已流式可见后, 仅当缓冲无 Thought 内容(极端短思考)才宣布 — 避免宣布行替换正在播放的思考轨迹; 宣布行经 `pushStepDisplay` 写入运行中的 AgentStep 气泡。
 
 **发送前路径延迟优化 (v0.28.6)**: 实测 4-13s 决策链中, 客户端规则/构造毫秒级, 主体是服务端 prefill TTFB。优化清单:
 - "思考中..."气泡**前置**: 翻译/召回/引擎准备之前插入, 发送后 ~20ms 即有反馈(实测 T0→T1=23ms)
@@ -564,9 +566,9 @@ twin.lost <peer> / twin.recover <peer>
 
 **Fallback 缓存统计直通**: RemoteApi 补齐 `lastUsage`(流式内联 usage + 非流式 parseResponse); `callWithRetryAndFallback` 在 fallback 服务成功后把 usage 透传给主 provider — 壳层 `session.provider.lastUsage` 不再恒 null, fallback 调用计入 TokenStatsCollector 缓存命中统计。
 
-### 4.1.3 多模态请求构建（v0.33.0+）
+### 4.1.3 多模态请求构建（v0.32.0）
 
-**数据模型**: `kernel/session/AttachmentData` (@Serializable, 全字段默认值) — `Message.attachments` / `ChatMessageUi.User.attachments` / 持久化 `MessageData.attachments` 三处承载, 旧 JSON 无键 → 默认空列表, 零迁移。上行正文合成 `buildTaskContent`: document/file → 裸路径行 (LLM fs 工具读); image → `[图片附件] <path>`; audio → `[语音消息] <path>` — 路径是 user 消息 content 正文 (非前缀拼接), 随历史每轮计入上下文 token; 📎 已于 0.33.x 移除 (纯视觉标记, 非语法)。
+**数据模型**: `kernel/session/AttachmentData` (@Serializable, 全字段默认值) — `Message.attachments` / `ChatMessageUi.User.attachments` / 持久化 `MessageData.attachments` 三处承载, 旧 JSON 无键 → 默认空列表, 零迁移。上行正文合成 `buildTaskContent`: document/file → 裸路径行 (LLM fs 工具读); image → `[图片附件] <path>`; audio → `[语音消息] <path>` — 路径是 user 消息 content 正文 (非前缀拼接), 随历史每轮计入上下文 token; 📎 已于 0.32.0 移除 (纯视觉标记, 非语法)。
 
 **上行管线**: FilePickerUtils(附件对象, 保留原名, 50MB 上限) → `submitTask(attachments)` (REACT 主链路; MISSION/GOAL/FLEET/SWARM 执行器签名不含附件不传; 带附件时跳过自动复杂度升级, 防静默丢附件) → AgentEngine.run → Message.attachments → `History.getStructuredHistory` 调 `AttachmentPayload.attachBinary` 追加 `_image`(data URI) / `_audio_data`(base64) / `_audio_format`(m4a/mp3/wav) 键 → 请求层构建 content 数组。
 
