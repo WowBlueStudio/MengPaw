@@ -10,7 +10,7 @@ plugins {
 val mengpawVersion: String = project.findProperty("mengpaw.version") as? String ?: "0.0.0"
 
 // 浏览器独立版本节奏 (不跟随主项目 mengpaw.version) — 单点数据源, 版本迭代只改这里
-val browserVersion: String = "0.7.2"
+val browserVersion: String = "0.7.3"
 
 android {
     namespace = "com.mengpaw.browser"
@@ -20,7 +20,7 @@ android {
         applicationId = "com.mengpaw.browser"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
+        versionCode = 12
         versionName = browserVersion
     }
 

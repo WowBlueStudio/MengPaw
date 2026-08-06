@@ -16,7 +16,8 @@
 
 ### 发行
 - Shell APK v0.33.0 (versionCode 33000) — 全量发布双远端 + GitHub Release
-- 测试: kernel 337 + shell 全部 + 插件 86 tests 全绿 (0 failures / 0 errors)
+- Browser APK v0.7.3 (versionCode 12, 独立版本节奏) — 400 行拆分批次 2 (BrowserActivity 934→269 + BrowserApp/BrowserAppDialogs/BrowserContentArea/BrowserMcpTools, BuiltinBrowserPlugin 665→67 + 命令按域 4 文件, BrowserBridge 657→396 + BrowserScripts/FullPageScreenshotter), @JavascriptInterface 方法保留注册对象
+- 测试: kernel 337 + shell 50 + 插件 229 = 616 tests 全绿 (0 failures / 0 errors)
 - plugins.json 无变更
 
 ## v0.32.0 (2026-08-06) — Agent 触达全链路修复 + 每 ReAct 步骤气泡（思考全程可见）+ 多模态附件/语音
