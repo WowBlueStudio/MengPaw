@@ -243,6 +243,8 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 **待发栏 (v0.34.0+, `PendingAttachmentsBar.kt`)**: 输入栏 Surface 容器内、输入框顶部的一行统一待发区 — 斜杠命令/@agent 标签 (AssistChip 样式) + 附件块按序靠左 FlowRow 排列, 无内容整行隐藏 (AnimatedVisibility)。附件块: 图片 → 原比例缩略图 (最大高度 40dp, `decodeSampled` maxDim=512 复用, 右上角半透明 X); 音频 → 语音条样式块 (波形装饰 + 文件名 + X); 文档/视频/文件 → 图标+文件名名称块 + X。语音按钮录音松手直发语音条 (不进待发栏); 附件/标签不同步进输入框文本, 发送时结构化提交。下行: `AttachmentBubbles.extractMedia` 从 agent 文本提取 `![](path)`/`[name](path)`/`Saved to <path>` 为卡片 (图片 BitmapFactory 采样 ≤2048px 防 OOM + 全屏预览 Dialog; 音频 MediaPlayer 单实例播放器; 视频 MediaMetadataRetriever 封面帧 + VideoView Dialog; 文件 ACTION_VIEW FileProvider; 网络 URL HttpURLConnection 下载 cacheDir/media_cache 缓存)。语音: `VoiceInputButton` 透明底线性话筒 (发送按钮左侧), 按住录音 `VoiceRecorder` (MediaRecorder m4a/AAC, `DataPaths.RECORDINGS`), 松手直发 (input_audio 通道), 上滑/左滑取消, <300ms 丢弃; 按钮显隐由 `model/VoiceCapability.supportsVoice` 判定 (内置前缀清单 gpt-5/gpt-4o/qwen*-omni/glm-*v/doubao-*-audio + 关键词 omni/audio/voice/whisper/speech, 刻意排除 gemini; `ModelInfo.type=="全模态"` 兜底) — 不支持语音的模型不显示按钮, 用户用 Android 输入法自带语音转译。
 
+**UI emoji 约定 (v0.31.0 清理)**: UI 文本 (系统气泡/菜单/徽标/按钮) 禁用装饰性 emoji — 纯装饰的移除, 承载语义的 (状态/图标) 换 `Icons.Outlined` 线性图标 (会话/模型/系统/搜索/发送/截图/浏览器/云/复制/箭头/失败/成功/导出/时钟/恢复/分享/刷新/语音/挂起/检查/暂停/删除/保存/编辑/目录/书签/链接/用户/设置/锁/播放)。规则: 有语义用图标, 无语义直接删除, 不保留裸 emoji; Agent 生成的文本 (模型输出) 不受限。列表变更时同步本段落。
+
 ### 3.4 mengpaw-browser（独立浏览器，33 文件）
 
 | 目录/文件 | 职责 |
