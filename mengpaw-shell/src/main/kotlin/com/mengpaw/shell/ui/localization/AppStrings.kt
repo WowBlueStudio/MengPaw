@@ -387,6 +387,8 @@ class AppStrings {
     var workspaceMemorySummary: String = ""
     var workspaceNotesFolder: String = ""
     var workspaceNotesSummary: String = ""
+    var workspaceEvolutionFolder: String = ""
+    var workspaceEvolutionSummary: String = ""
     var workspaceEmptyDoc: String = ""
 
     // ── 顶栏（会话模型标签）──

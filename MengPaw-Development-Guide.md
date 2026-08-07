@@ -994,7 +994,7 @@ Prompt 注入检测防火墙（ACP GUEST 命令级黑白名单 + 信任管理）
 - **无主档案改道**: `DataPaths.EVOLUTION = "{BASE}/进化档案"` 顶层目录; `evolutionDir/evolutionFailuresFile/evolutionReactionsFile/evolutionFeedbackDir` 接受 `String?`, null/空白/**保留字 "default"** 一律归进化档案/ — `Agent文档/` 只允许真 Agent 工作区。有主 Agent 的进化档案仍留各自工作区
 - **统一判定**: `DataPaths.isAgentWorkspaceDir(name)` 成为 Agent 列表唯一事实源（系统目录集合: inbox/team/acp/incubator/agent-001/default/twin + 点前缀）; 7 处扫描点全部替换散落名单
 - **启动迁移**: `EvolutionStore.migrateLegacyDefaultDir()` 在 MainActivity.onCreate（AppInitializer 之后、setContent 之前）执行 — 旧 `Agent文档/default/evolution/` → 进化档案/（不覆盖新数据）, 删除 default/ 下误生成的模板与目录; 幂等, 永不抛异常
-- **工作区文档可见性**: `agent.docs` 在存在进化档案时追加 `evolution/ — 进化档案` 行（失败模式库/用户反应/框架反馈）; `agent.ls` 本就直接列出工作区目录。无档案时不显示（防空目录噪音）
+- **工作区文档可见性**: ① `agent.docs` 在存在进化档案时追加 `evolution/ — 进化档案` 行（失败模式库/用户反应/框架反馈）; ② 设置页工作区文件树与 memory/Notes 同款目录节点 — `isFolder=true` 节点 `evolution`, summary 统计「失败模式 %d · 用户反应 %d · 框架反馈 %d · 共 %d 个文件」（含 feedback/ 子目录文件）, 子行收全部文件（failures.jsonl 等非 md 档案也可读）; 目录节点只读（三处兜底 `return@SettingsScreen` 同 memory/Notes）。有档案才显示（防空目录噪音）; `agent.ls` 本就直接列出工作区目录。
 
 **铁律**: 今后新增「Agent文档/ 下所有目录 = Agent」的扫描逻辑一律复用 `DataPaths.isAgentWorkspaceDir`, 禁止自写排除名单; 无主系统数据（非 Agent 专属）绝不写入 Agent文档/ 下。
 

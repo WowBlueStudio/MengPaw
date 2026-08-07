@@ -371,6 +371,8 @@ val ChineseStrings = AppStrings().apply {
     workspaceMemorySummary = "长期 %d · 中期 %d · 项目 %d · 共 %d 个文档"
     workspaceNotesFolder = "Notes"
     workspaceNotesSummary = "共 %d 个文档"
+    workspaceEvolutionFolder = "evolution"
+    workspaceEvolutionSummary = "失败模式 %d · 用户反应 %d · 框架反馈 %d · 共 %d 个文件"
     workspaceEmptyDoc = "（空文档）"
 
     // 顶栏 — 会话模型标签

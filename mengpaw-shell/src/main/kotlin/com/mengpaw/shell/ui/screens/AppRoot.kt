@@ -266,19 +266,22 @@ private fun AppRootContent(
             workspaceItems = settingsItems.workspaceItems,
             onRefreshWorkspace = settingsItems.refreshWorkspace,
             onDeleteWorkspaceFile = { fileName ->
-                if (fileName == strings.workspaceMemoryFolder || fileName == strings.workspaceNotesFolder) return@SettingsScreen  // 目录节点只读(子文件行单独可删)
+                if (fileName == strings.workspaceMemoryFolder || fileName == strings.workspaceNotesFolder
+                    || fileName == strings.workspaceEvolutionFolder) return@SettingsScreen  // 目录节点只读(子文件行单独可删)
                 if (fileName == "boost.md") com.mengpaw.kernel.agent.AgentDocs.deleteBoost(activeAgent)
                 else java.io.File(java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, activeAgent), fileName).delete()
                 settingsItems.refreshWorkspace()
             },
             onResetWorkspaceFile = { fileName ->
-                if (fileName == strings.workspaceMemoryFolder || fileName == strings.workspaceNotesFolder) return@SettingsScreen
+                if (fileName == strings.workspaceMemoryFolder || fileName == strings.workspaceNotesFolder
+                    || fileName == strings.workspaceEvolutionFolder) return@SettingsScreen
                 val lang = if (settingsState.useChinese) "zh" else "en"
                 com.mengpaw.kernel.agent.AgentDocs.resetDoc(activeAgent, fileName, lang)
                 settingsItems.refreshWorkspace()
             },
             onEditWorkspaceFile = { fileName ->
-                if (fileName == strings.workspaceMemoryFolder || fileName == strings.workspaceNotesFolder) return@SettingsScreen
+                if (fileName == strings.workspaceMemoryFolder || fileName == strings.workspaceNotesFolder
+                    || fileName == strings.workspaceEvolutionFolder) return@SettingsScreen
                 openDocExternally(context,
                     java.io.File(java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, activeAgent), fileName), strings)
             }

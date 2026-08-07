@@ -371,6 +371,8 @@ val EnglishStrings = AppStrings().apply {
     workspaceMemorySummary = "Long-term %d · Mid-term %d · Project %d · %d docs"
     workspaceNotesFolder = "Notes"
     workspaceNotesSummary = "%d note(s)"
+    workspaceEvolutionFolder = "evolution"
+    workspaceEvolutionSummary = "Failures %d · Reactions %d · Feedback %d · %d files"
     workspaceEmptyDoc = "(empty)"
 
     // Top bar — session model label

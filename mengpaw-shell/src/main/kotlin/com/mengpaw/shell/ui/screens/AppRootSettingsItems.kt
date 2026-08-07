@@ -306,6 +306,30 @@ internal fun rememberAppRootSettingsItems(
                         }
                     ))
                 }
+                // evolution 进化档案目录节点 — 失败模式库/用户反应/框架反馈 (与 memory/Notes 同款)。
+                // 动态生成目录: 有档案才显示 (防空目录噪音); 子行收全部文件 (failures.jsonl 等非 md 档案也可读)。
+                val evolutionDir = java.io.File(dir, "evolution")
+                if (evolutionDir.exists()) {
+                    val evolutionFiles = evolutionDir.listFiles { f -> f.isFile && !f.name.endsWith(".tmp") }
+                        ?.sortedBy { it.name } ?: emptyList()
+                    val failures = evolutionFiles.count { it.name == "failures.jsonl" }
+                    val reactions = evolutionFiles.count { it.name == "reactions.md" }
+                    val feedback = java.io.File(evolutionDir, "feedback").listFiles()?.count { it.isFile } ?: 0
+                    if (evolutionFiles.isNotEmpty() || feedback > 0) {
+                        add(FrameworkItem(
+                            name = strings.workspaceEvolutionFolder,
+                            category = ItemCategory.BUILTIN,
+                            isFolder = true,
+                            summary = String.format(strings.workspaceEvolutionSummary, failures, reactions, feedback, evolutionFiles.size + feedback),
+                            children = evolutionFiles.map { f ->
+                                FrameworkItem(
+                                    name = f.name,
+                                    category = ItemCategory.BUILTIN,
+                                    docMarkdown = try { f.readText() } catch (_: Exception) { "" })
+                            }
+                        ))
+                    }
+                }
             }
             withContext(Dispatchers.Main) { workspaceItems = items }
         }
