@@ -218,7 +218,8 @@ fun FrameworkSettingsContent(
         expanded = toolsExpanded, onToggle = { toolsExpanded = !toolsExpanded })
     AnimatedVisibility(visible = toolsExpanded) {
         Column {
-            FrameworkItemSection("", Icons.Outlined.Terminal, toolItems, state.strings)
+            // 专用面板: 全量命令按来源分组(核心/插件) — 通用 FrameworkItemSection 的 内置/官方 标签已退役
+            GlobalToolPoolPanel(items = toolItems, strings = state.strings)
         }
     }
     Spacer(Modifier.height(ArcoSpacing.lg))

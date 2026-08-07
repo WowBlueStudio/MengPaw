@@ -20,6 +20,18 @@ import kotlinx.coroutines.withContext
 // 插件/命令/技能/工作区列表: 全部 remember/LaunchedEffect/DisposableEffect 原样迁移,
 // 状态归本 composable 所有, 刷新回调经 holder 暴露 (行为与拆分前逐行一致)。
 
+/**
+ * CLI 命令来源分类 (v0.34.1) — 全局工具面板标签语义: 核心/插件。
+ * 内核命名空间 = PipelineManager 内置 (self/evolution/agent/plugin/security) + core 适配层 (sys);
+ * 其余命名空间 (插件注册) 一律标插件 (未知来源防御, 缺省安全)。
+ */
+internal val CORE_TOOL_NAMESPACES = setOf("self", "evolution", "agent", "plugin", "security", "sys")
+
+internal fun toolSourceFor(fullName: String): String {
+    val ns = fullName.substringBefore(".")
+    return if (ns in CORE_TOOL_NAMESPACES) "core" else "plugin"
+}
+
 /** 设置页六类列表 + 工作区刷新回调。 */
 data class AppRootSettingsItems(
     val pluginItems: List<FrameworkItem>,
@@ -81,81 +93,22 @@ internal fun rememberAppRootSettingsItems(
         }
     }
 
-    // ── CLI commands: built-in curated + dynamic plugin commands
+    // ── CLI 命令: 全量动态列表 (v0.34.1 起不再手工精选)
+    // 数据源 = CommandSearch 索引 (engine.listCommands, 内核+插件命令全部, ~150 条),
+    // 标签按来源: 内核命名空间 → 核心 (core), 其余 (插件注册) → 插件 (plugin)。
+    // 此前手工精选 40 条快照永远滞后于注册表, McpServer.listTools 与插件命令同源
+    // (同为 ACTIVE 插件命令包装) 造成重复 — 两者均已移除。
     val toolItems = remember(activeAgent, agentViewModel.activeNamespaces().hashCode()) {
-        val engine = agentViewModel.activeEngine()
-        val selfTools = listOf(
-            FrameworkItem("self.status", ItemCategory.BUILTIN, "Agent 运行状态查询 (Agent runtime status)", ""),
-            FrameworkItem("self.config [key=value]", ItemCategory.BUILTIN, "查看或修改 Agent 配置 (View or modify Agent config)", ""),
-            FrameworkItem("self.stats", ItemCategory.BUILTIN, "内存/CPU/线程统计信息 (Memory/CPU/thread stats)", ""),
-            FrameworkItem("self.version", ItemCategory.BUILTIN, "MengPaw 版本号 (MengPaw version)", ""),
-            FrameworkItem("self.time [format]", ItemCategory.BUILTIN, "当前时间 (Current time)", ""),
-            FrameworkItem("self.tools [namespace]", ItemCategory.BUILTIN, "列出所有可用命令 (List all available commands)", ""),
-            FrameworkItem("self.notify.message <text>", ItemCategory.BUILTIN, "Agent 推送消息到聊天 (Push a message to chat)", "", isWowBlue = true),
-            FrameworkItem("self.notify.banner <text> [--level]", ItemCategory.BUILTIN, "Agent 推送通知横幅 (Push a notification banner)", "", isWowBlue = true),
-            FrameworkItem("self.avatar <path>", ItemCategory.BUILTIN, "设置 Agent 头像 (Set Agent avatar)", "", isWowBlue = true),
-            FrameworkItem("self.theme primary=#xxx surface=#xxx", ItemCategory.BUILTIN, "修改主题色 (Change theme colors)", "", isWowBlue = true),
-            FrameworkItem("self.trigger add|list|remove|topics", ItemCategory.BUILTIN, "CRON/LIFETIME 触发器 (CRON/LIFETIME triggers)", "", isWowBlue = true),
-        )
-        val agentTools = listOf(
-            FrameworkItem("agent.cli", ItemCategory.BUILTIN, "查阅完整 CLI.md 命令参考 (Read the full CLI.md reference)", ""),
-            FrameworkItem("agent.docs", ItemCategory.BUILTIN, "列出所有 Agent 文档 (List all Agent docs)", ""),
-            FrameworkItem("agent.memory [query]", ItemCategory.BUILTIN, "记忆索引/搜索 (Memory index/search)", "", isWowBlue = true),
-            FrameworkItem("agent.memory.record <content>", ItemCategory.BUILTIN, "手动记录一条记忆 (Manually record a memory)", "", isWowBlue = true),
-            FrameworkItem("agent.profile", ItemCategory.BUILTIN, "查看 Agent 身份档案 (View Agent profile)", ""),
-            FrameworkItem("agent.soul", ItemCategory.BUILTIN, "查看 Agent 灵魂设定 (View Agent soul)", ""),
-            FrameworkItem("agent.audit [N]", ItemCategory.BUILTIN, "查看最近 N 条命令审计日志 (View recent N command audit logs)", "", isWowBlue = true),
-            FrameworkItem("agent.browser-tools", ItemCategory.BUILTIN, "MP浏览器插件开发能力参考 (MP Browser plugin dev reference)", "", isWowBlue = true),
-            FrameworkItem("agent.dream", ItemCategory.BUILTIN, "触发梦境整理 (Trigger dream consolidation)", "", isWowBlue = true),
-            FrameworkItem("agent.cleanup", ItemCategory.BUILTIN, "清理过期文件和归档记忆 (Clean expired files and archived memory)", "", isWowBlue = true),
-            FrameworkItem("agent.storage", ItemCategory.BUILTIN, "工作区存储空间报告 (Workspace storage report)", "", isWowBlue = true),
-            FrameworkItem("agent.boost", ItemCategory.BUILTIN, "首次引导初始化 (First-run bootstrap)", "", isWowBlue = true),
-            FrameworkItem("agent.boost.delete", ItemCategory.BUILTIN, "删除引导文件 (Delete bootstrap file)", "", isWowBlue = true),
-            FrameworkItem("agent.modes", ItemCategory.BUILTIN, "斜杠命令模式菜单 (Slash command mode menu)", "", isWowBlue = true),
-        )
-        val pluginTools = listOf(
-            FrameworkItem("plugin.marketplace [--refresh]", ItemCategory.BUILTIN, "浏览插件市场 (Browse plugin market)", ""),
-            FrameworkItem("plugin.search <query>", ItemCategory.BUILTIN, "搜索可用插件 (Search available plugins)", ""),
-            FrameworkItem("plugin.install <id>", ItemCategory.BUILTIN, "下载+验证+安装+激活插件 (Download+verify+install+activate plugin)", ""),
-            FrameworkItem("plugin.uninstall <id>", ItemCategory.BUILTIN, "卸载插件 (Uninstall plugin)", ""),
-            FrameworkItem("plugin.list", ItemCategory.BUILTIN, "列出已安装插件 (List installed plugins)", ""),
-            FrameworkItem("plugin.info <id>", ItemCategory.BUILTIN, "查看插件详情 (View plugin details)", ""),
-            FrameworkItem("plugin.enable <id>", ItemCategory.BUILTIN, "启用插件 (Enable plugin)", ""),
-            FrameworkItem("plugin.disable <id>", ItemCategory.BUILTIN, "停用插件 (Disable plugin)", ""),
-            FrameworkItem("plugin.update <id>", ItemCategory.BUILTIN, "检查插件更新 (Check plugin updates)", ""),
-            FrameworkItem("plugin.upgrade --all", ItemCategory.BUILTIN, "升级全部插件 (Upgrade all plugins)", ""),
-        )
-        val sysTools = listOf(
-            FrameworkItem("sys.battery", ItemCategory.BUILTIN, "电量/充电状态/温度 (Battery/charging/temperature)", "", isWowBlue = true),
-            FrameworkItem("sys.network", ItemCategory.BUILTIN, "网络类型/信号强度 (Network type/signal strength)", "", isWowBlue = true),
-            FrameworkItem("sys.cpu", ItemCategory.BUILTIN, "CPU 使用率/核心数 (CPU usage/cores)", "", isWowBlue = true),
-            FrameworkItem("sys.memory", ItemCategory.BUILTIN, "内存使用量 (Memory usage)", "", isWowBlue = true),
-            FrameworkItem("sys.storage", ItemCategory.BUILTIN, "存储空间使用情况 (Storage usage)", "", isWowBlue = true),
-            FrameworkItem("sys.display", ItemCategory.BUILTIN, "屏幕参数 (Display parameters)", "", isWowBlue = true),
-            FrameworkItem("sys.sensors", ItemCategory.BUILTIN, "传感器列表 (Sensor list)", "", isWowBlue = true),
-            FrameworkItem("sys.clipboard", ItemCategory.BUILTIN, "剪贴板内容 (Clipboard content)", "", isWowBlue = true),
-            FrameworkItem("sys.location", ItemCategory.BUILTIN, "GPS 定位 (GPS location)", "", isWowBlue = true),
-            FrameworkItem("sys.camera", ItemCategory.BUILTIN, "相机信息 (Camera info)", "", isWowBlue = true),
-            FrameworkItem("sys.apps", ItemCategory.BUILTIN, "已安装应用列表 (Installed apps list)", "", isWowBlue = true),
-        )
-        val mcpTools = if (engine != null) try {
-            com.mengpaw.kernel.mcp.McpServer(engine.getPluginManager())
-                .listTools().map { FrameworkItem(it.name, ItemCategory.OFFICIAL, it.description, "") }
-        } catch (_: Exception) { emptyList() } else emptyList()
-        // Built-in curated lists
-        selfTools + agentTools + pluginTools + sysTools + mcpTools +
-        // Dynamic plugin commands from installed plugins
+        val engine = agentViewModel.activeEngine() ?: return@remember emptyList()
         try {
-            val pm = engine?.getPluginManager()
-            if (pm != null) {
-                pm.listAll().filter { (_, status) -> status == com.mengpaw.kernel.plugin.PluginStatus.ACTIVE }
-                    .flatMap { (plugin, _) ->
-                        val ns = plugin.metadata.id.replace(Regex("-(plugin|ext)$"), "")
-                        plugin.commands.keys.map { cmd ->
-                            FrameworkItem("$ns.$cmd", ItemCategory.OFFICIAL, plugin.metadata.description, "")
-                        }
-                    }
-            } else emptyList()
+            engine.listCommands().map { info ->
+                FrameworkItem(
+                    name = info.name,
+                    category = ItemCategory.BUILTIN, // 徽标由 GlobalToolPoolPanel 按 source 渲染
+                    summary = info.description,
+                    source = toolSourceFor(info.name)
+                )
+            }
         } catch (_: Exception) { emptyList() }
     }
 
