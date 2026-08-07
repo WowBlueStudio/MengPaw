@@ -31,7 +31,7 @@ fun AgentSettingsContent(
     onRefreshWorkspace: (() -> Unit)? = null,
     onDeleteWorkspaceFile: ((String) -> Unit)? = null,     // 按文件名删除工作区文档（如 boost.md）
     onResetWorkspaceFile: ((String) -> Unit)? = null,      // 预置文档重置为 APK 内置版
-    onEditWorkspaceFile: ((String) -> Unit)? = null,       // 用其他软件打开工作区文档
+    onOpenWorkspaceFile: ((String) -> Unit)? = null,       // 用其他软件打开工作区文档 (预览)
     activeAgentName: String = "MengPaw"                    // 当前主 Agent — 引导进度按它读取
 ) {
     // ── Agent 引导进度 (P2-13): 身份/头像/主题/灵魂 四项打勾, 进入设置页读一次 ──
@@ -76,6 +76,6 @@ fun AgentSettingsContent(
         onRefreshWorkspace = onRefreshWorkspace,
         onDeleteWorkspaceFile = onDeleteWorkspaceFile,
         onResetWorkspaceFile = onResetWorkspaceFile,
-        onEditWorkspaceFile = onEditWorkspaceFile,
+        onOpenWorkspaceFile = onOpenWorkspaceFile,
     )
 }

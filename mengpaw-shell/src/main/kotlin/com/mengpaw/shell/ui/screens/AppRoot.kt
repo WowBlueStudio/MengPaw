@@ -279,7 +279,7 @@ private fun AppRootContent(
                 com.mengpaw.kernel.agent.AgentDocs.resetDoc(activeAgent, fileName, lang)
                 settingsItems.refreshWorkspace()
             },
-            onEditWorkspaceFile = { fileName ->
+            onOpenWorkspaceFile = { fileName ->
                 if (fileName == strings.workspaceMemoryFolder || fileName == strings.workspaceNotesFolder
                     || fileName == strings.workspaceEvolutionFolder) return@SettingsScreen
                 openDocExternally(context,

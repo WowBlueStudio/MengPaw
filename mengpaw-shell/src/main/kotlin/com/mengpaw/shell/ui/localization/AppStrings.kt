@@ -281,7 +281,7 @@ class AppStrings {
     var deleteConfirm: String = ""
     var resetDoc: String = ""
     var resetConfirm: String = ""
-    var editDoc: String = ""
+    var openDoc: String = ""
     var editOpenFailed: String = ""
     var optimizedBadge: String = ""
     var apiReturned: String = ""

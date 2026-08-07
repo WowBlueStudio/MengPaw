@@ -27,11 +27,13 @@ import com.mengpaw.design.components.MarkdownText
 import com.mengpaw.design.components.SectionHeader
 import com.mengpaw.shell.ui.localization.AppStrings
 
-/** 工作区文件树单行 — 目录展开/文档正文/删除/重置/编辑 (自 AgentSettingsContent 拆分). */
+/** 工作区文件树单行 — 目录展开/文档正文/删除/重置/打开 (自 AgentSettingsContent 拆分). */
 private val RESET_DOCS = setOf(
     "agents.md", "heartbeat.md", "modes.md", "profile.md",
     "soul.md", "trigger.md", "trumanshow.md", "memory/memory.md"
 )
+/** 只读文档 — 框架生成/框架语义文件, 禁止删除/重置 (打开预览仍允许): cli.md 命令参考自动生成, modes.md 模式菜单由框架维护. */
+private val READONLY_DOCS = setOf("cli.md", "modes.md")
 
 /**
  * 工作区文件树单行 — 支持两级: 目录节点(children 非空)点击展开子列表,
@@ -43,7 +45,7 @@ internal fun WorkspaceItemRow(
     item: FrameworkItem,
     onDeleteWorkspaceFile: ((String) -> Unit)?,
     onResetWorkspaceFile: ((String) -> Unit)?,
-    onEditWorkspaceFile: ((String) -> Unit)?,
+    onOpenWorkspaceFile: ((String) -> Unit)?,
     strings: AppStrings,
     deletePrefix: String = ""
 ) {
@@ -51,10 +53,11 @@ internal fun WorkspaceItemRow(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
     val isDirectory = item.isFolder || item.children.isNotEmpty()
+    val readOnly = (deletePrefix + item.name) in READONLY_DOCS
     // 预置文档(agents/heartbeat/modes/profile/soul/trigger/trumanshow/memory.md)可重置为内置版;
-    // 名单外文档(中期/项目记忆、梦境文档等)可删除; 目录节点(memory/Notes)两者皆无
-    val resettable = onResetWorkspaceFile != null && !isDirectory && (deletePrefix + item.name) in RESET_DOCS
-    val deletable = onDeleteWorkspaceFile != null && !isDirectory && !resettable
+    // 名单外文档(中期/项目记忆、梦境文档等)可删除; 目录节点(memory/Notes)与只读文档(cli.md/modes.md)皆无删除/重置
+    val resettable = onResetWorkspaceFile != null && !isDirectory && !readOnly && (deletePrefix + item.name) in RESET_DOCS
+    val deletable = onDeleteWorkspaceFile != null && !isDirectory && !resettable && !readOnly
     Surface(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
             .clickable(enabled = isDirectory || item.docMarkdown.isNotBlank()) { expanded = !expanded },
@@ -79,10 +82,10 @@ internal fun WorkspaceItemRow(
                     }
                     Spacer(Modifier.width(4.dp))
                 }
-                if (onEditWorkspaceFile != null && !isDirectory) {
-                    // 编辑按钮 — 所有 md 文档: 经系统选择器用其他软件打开 (含 MP 浏览器)
-                    IconButton(onClick = { onEditWorkspaceFile(deletePrefix + item.name) }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Outlined.Edit, strings.editDoc, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
+                if (onOpenWorkspaceFile != null && !isDirectory) {
+                    // 打开按钮 — 所有文档(含只读): 经系统选择器用其他软件打开 (含 MP 浏览器, 预览为主)
+                    IconButton(onClick = { onOpenWorkspaceFile(deletePrefix + item.name) }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Outlined.OpenInNew, strings.openDoc, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
                     }
                 }
                 if (resettable) {
@@ -107,7 +110,7 @@ internal fun WorkspaceItemRow(
                                     item = child,
                                     onDeleteWorkspaceFile = onDeleteWorkspaceFile,
                                     onResetWorkspaceFile = onResetWorkspaceFile,
-                                    onEditWorkspaceFile = onEditWorkspaceFile,
+                                    onOpenWorkspaceFile = onOpenWorkspaceFile,
                                     strings = strings,
                                     deletePrefix = "${item.name}/"
                                 )

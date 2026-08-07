@@ -35,7 +35,7 @@ internal fun AgentWorkspaceFilesPanel(
     onRefreshWorkspace: (() -> Unit)?,
     onDeleteWorkspaceFile: ((String) -> Unit)?,
     onResetWorkspaceFile: ((String) -> Unit)?,
-    onEditWorkspaceFile: ((String) -> Unit)?,
+    onOpenWorkspaceFile: ((String) -> Unit)?,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         SectionHeader(state.strings.agentWorkspaceFiles)
@@ -55,7 +55,7 @@ internal fun AgentWorkspaceFilesPanel(
                     item = item,
                     onDeleteWorkspaceFile = onDeleteWorkspaceFile,
                     onResetWorkspaceFile = onResetWorkspaceFile,
-                    onEditWorkspaceFile = onEditWorkspaceFile,
+                    onOpenWorkspaceFile = onOpenWorkspaceFile,
                     strings = state.strings
                 )
             }
