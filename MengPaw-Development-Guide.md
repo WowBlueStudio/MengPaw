@@ -504,13 +504,14 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (15 模块 748 测试，v0.34.1 实测快照：kernel 409 + shell 63 + 插件 231，0 failures)
+### 3.7 测试 (16 模块 765 测试，v0.34.1+Codex 交接实测快照：kernel 409 + core 45 + shell 63 + browser 17 + 插件 231，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
 | mengpaw-kernel | 409 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm/mission、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级) |
 | mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
 | mengpaw-shell | 63 | ComplexityDetector 分档 (11 分 MISSION 回归)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵、extractSkillSource frontmatter 解析、toolSourceFor 来源分类 |
+| mengpaw-browser | 17 | **smartNavigate 智能导航 (v0.34.1+ 交接首测: URL/域名/纯数字不误判/关键词编码/fromKey 回退)**、AdBlocker 规则 (域名精确匹配/子域继承/路径规则/模式命中/非法 URL 降级) |
 | plugin-hermes (tribe) | 34 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 (P0 回归) |
 | plugin-memory-twin | 34 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
 | plugin-browser-search | 27 | SSRF 校验全矩阵 (私有 IP/回环/云元数据/scheme 白名单)、引擎检测 |
@@ -523,6 +524,7 @@ twin.lost <peer> / twin.recover <peer>
 | plugin-concise | 10 | 简洁模式 |
 | plugin-root | 10 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 (execute 不测 — 真实 su) |
 | plugin-fs | 9 | 路径消毒、cp/mv/stat 语义 |
+| plugin-dev | 6 | dev.plugin 审计/关键词链路 |
 | plugin-dev | 6 | 审计/示例/支持拆分后的行为保持 |
 | plugin-fs | 9 | 沙箱边界、symlink 检测 (P2 回归, Windows 探测式 skip) |
 
