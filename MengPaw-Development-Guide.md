@@ -282,6 +282,8 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 > 插件数统一口径：**21 模块**（settings.gradle.kts；外部连接器已移至独立仓库 mengpaw-connectors，见下）| **14 内置**（BUILTIN_PLUGIN_IDS，含 v0.29.0 内置的 tavily；mengpaw-shell 打包）| **plugins.json 29 条目**（13 builtin + 14 remote + 2 embedded）
 
+> **内置插件无版本号原则（设计定案）**：内置插件随 shell APK 一起发布，版本跟随 shell，不会陈旧、不会单独更新——因此内置插件**不维护、不展示、不对照版本号**（PluginMetadata.version 对内置插件无语义；巡检/审查若报「内置插件版本不一致」为伪问题）。版本号仅对远程插件（plugins.json 条目 + tag `plugins-v*`）有意义，见连接器一致性铁律。
+
 #### 基础功能 (6)
 
 | 模块 | 命名空间 | 命令 | 捆绑 |
