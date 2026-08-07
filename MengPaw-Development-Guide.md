@@ -25,7 +25,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | 多通道 | AIDL（系统集成）/ Unix Socket（Termux）/ HTTP（调试） |
 | 独立浏览器 | `mengpaw-browser` v0.7.0，Intent 互通，45 条浏览器操控命令 |
 | 多模型 | 12 LLM Provider — OpenAI / DeepSeek / Kimi / GLM / Qwen / Grok / 火山引擎 / OpenModel / Self-Hosted / 自定义 |
-| 插件市场 | raw 直读 `plugins.json`（GitHub raw / Gitee raw 双源），ETag 缓存，SHA256 校验 |
+| 插件市场 | raw 直读 `plugins.json`（GitHub raw / Gitee raw 双源），ETag 缓存，SHA256 校验，磁盘快照离线降级（v0.34.0） |
 | 记忆孪生 | v0.15.0 — 跨设备 Agent 记忆同步 + 哈希链账本 + 短码配对 + 心跳保活 + QoS 自适应 + 手动 IP 发现 (plugin-memory-twin v0.2) |
 | Agent 自我升级 | `plugin.marketplace` → `plugin.search` → `plugin.install` → 命令即可用 |
 | 内置 Loop 模式 | Goal / Fleet / Fleet+ 三种模式直接内置在 AgentEngine，含 RubricGate 自动完成评估 |
@@ -685,6 +685,16 @@ MCP 协议极其简单——JSON-RPC + 三个原语（tool / resource / prompt�
 | 框架轨 | 连接器插件 (内核 FrameworkAdapter SPI) | 非 MengPaw 框架 (OpenClaw WS / QwenPaw REST) |
 
 协议分层: 内核 = 协议核心 (ACP + MCP + SPI, 无具体框架); plugin-framework = 内置协议插件 (发现/信任/网关/分派); connector-* = 外部分发连接器（独立仓库 [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)，MIT）。**接入指南见 [PROTOCOL.md](PROTOCOL.md)**。
+
+#### 端口与安全 (v0.34.0+ 文档化)
+
+| 端口 | 绑定 | 用途 | 认证 |
+|---|---|---|---|
+| `9876` (ACP) | **0.0.0.0 全部接口** (设备间通道, 故意) | 设备↔设备直连: 会话同步/工作区/委托/REVOKE/MCP-over-ACP | peerId↔来源 IP 绑定 (`AcpServer.bindPeerIp`); 敏感类型额外要求 IP 匹配; 设备级认证靠 `sharedSecret` (pairing 派生, 未设置启动即告警) |
+| `9880` (BROWSER_MCP) | `127.0.0.1` 回环 | Shell ↔ 浏览器进程 HTTP 桥 | Bearer token (`McpHttpServer` 无 token 一律 401, fail-closed) |
+| `9881` (MCP_LOCAL) | `127.0.0.1` 回环 | 本机 MCP 网关 (plugin-framework) | 无 (仅回环可连, 本机 MCP 客户端直连) |
+
+安全要点: 唯一暴露到局域网的是 ACP `9876` — 这是设备间通道的设计意图 (对端设备必须能直连)。防护层级: ① msg.from 不可信, 所有 peerId 绑定到实际来源 socket IP; ② 敏感消息类型 (会话/工作区/REVOKE/MCP) 额外要求来源 IP 与该 peerId 历史通信 IP 匹配, 防局域网冒充; ③ 生产配对必须传 `AcpServer(profile, port, derivedSecret)` 派生密钥, 不要使用 `AcpHolder` 默认占位值。其余两端口回环绑定, 仅本机进程可达。
 
 
 ### 4.8 记忆三轨制 (v0.15.0+, 单轨 v0.22.0)

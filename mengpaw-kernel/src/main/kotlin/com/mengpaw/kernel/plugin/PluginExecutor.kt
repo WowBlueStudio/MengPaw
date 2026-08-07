@@ -67,6 +67,10 @@ class PluginExecutor(
                     val desc = if (p.description.isNotBlank()) " — ${p.description}" else ""
                     lines.add("• ${p.id} v${p.version} $status — ${p.name}$desc")
                 }
+                if (marketplaceClient.lastSnapshotServedAt > 0L) {
+                    lines.add("")
+                    lines.add("⚠ 离线缓存模式 — 索引来自磁盘快照 (网络不可达), 可浏览/安装但无法更新")
+                }
                 ExecutionResult.ok(lines.joinToString("\n"))
             },
             onFailure = { e ->

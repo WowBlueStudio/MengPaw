@@ -10,6 +10,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -24,6 +25,7 @@ import com.mengpaw.kernel.error.ErrorCollector
  *   China (CN) → fetches index from Gitee, downloads from Gitee first
  *   Other       → fetches index from GitHub, downloads from GitHub first
  *   On failure  → retries with alternate source, then ghproxy.com proxy
+ *   Offline     → serves disk snapshot (last successful index), auto-retries next time
  *
  * Free public endpoints used:
  *   GitHub: raw.githubusercontent.com  (global CDN)
@@ -31,16 +33,20 @@ import com.mengpaw.kernel.error.ErrorCollector
  *   ghproxy: ghproxy.com                (GitHub proxy, last-resort fallback)
  */
 class PluginMarketplaceClient(
-    private val cacheDir: File = File(com.mengpaw.kernel.DataPaths.PLUGIN_CACHE)
+    private val cacheDir: File = File(com.mengpaw.kernel.DataPaths.PLUGIN_CACHE),
+    /** 网络超时参数 (ms) — 自定义 marketplace / 弱网环境可调。默认: Gitee 国内慢, 连接 20s / 读写放宽 */
+    connectTimeoutMs: Long = 20_000L,
+    readTimeoutMs: Long = 60_000L,
+    writeTimeoutMs: Long = 30_000L,
+    callTimeoutMs: Long = 120_000L,
 ) : AutoCloseable {
     private val client = HttpClient(OkHttp) {
         engine {
             config {
-                // Gitee in China can be slow — 20s connect, generous read/write
-                connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-                readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-                writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                callTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+                connectTimeout(connectTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+                readTimeout(readTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+                writeTimeout(writeTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+                callTimeout(callTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
                 // Connection pooling: reuse TLS sessions, reduce handshake overhead
                 connectionPool(
                     okhttp3.ConnectionPool(5, 5, java.util.concurrent.TimeUnit.MINUTES)
@@ -54,13 +60,28 @@ class PluginMarketplaceClient(
     private var lastEtag: String? = null
     @Volatile private var lastFetchTime = 0L
     private val cacheTtlMs = 300_000L // 5 minutes
+    /** 最近一次从磁盘快照降级服务的时间 (ms; 0 = 本进程未发生过离线降级)。 */
+    @Volatile var lastSnapshotServedAt: Long = 0L
 
     companion object {
         const val GITHUB_INDEX_URL =
             "https://raw.githubusercontent.com/WowBlueStudio/MengPaw/master/plugins.json"
         const val GITEE_INDEX_URL =
             "https://gitee.com/WowBlueStudio/MengPaw/raw/master/plugins.json"
+        /** 磁盘快照文件名 — 成功 fetch 后持久化, 全源失败/304 无内存缓存时离线降级用。 */
+        internal const val SNAPSHOT_FILE_NAME = "marketplace-index.snapshot.json"
     }
+
+    /** 磁盘快照结构: 原始索引 JSON + 元信息, 重启后离线可用。 */
+    @Serializable
+    internal data class MarketplaceSnapshot(
+        val savedAt: Long,
+        val source: String,
+        val rawJson: String
+    )
+
+    private val snapshotFile: File get() = File(cacheDir, SNAPSHOT_FILE_NAME)
+    private val snapshotJson = Json { ignoreUnknownKeys = true }
 
     /** Resolve the best index URL based on geo-location. */
     private fun resolveIndexUrl(): String {
@@ -102,11 +123,53 @@ class PluginMarketplaceClient(
         val ghproxy = ghproxyUrl(primary)
         if (ghproxy != null) return tryFetch(ghproxy)
 
+        // Fallback 3: 磁盘快照 (上次成功索引) — 离线降级, 保留浏览/安装能力。
+        // lastFetchTime 置 0 → 下次 fetchIndex 跳过 TTL 缓存, 网络恢复后自动重试。
+        loadSnapshot()?.let { snap ->
+            cachedIndex = parseIndex(snap.rawJson)
+            lastFetchTime = 0L
+            lastSnapshotServedAt = System.currentTimeMillis()
+            KernelLog.w("PluginMarket", "All sources failed — serving disk snapshot saved at ${snap.savedAt} (source: ${snap.source})")
+            return Result.success(cachedIndex ?: MarketplaceIndex())
+        }
+
         // All sources failed — add proxy guidance
         val originalError = fbResult.exceptionOrNull()
         return Result.failure(MarketplaceNetworkException(
             "${originalError?.message ?: "Unknown error"}; 检查网络连接或使用网络代理; 中国用户可尝试配置 net.proxy"
         ))
+    }
+
+    /** 内存缓存优先, 缺失时回退磁盘快照 (重启后首次 304 分支也会命中)。 */
+    private fun currentIndexOrSnapshot(): MarketplaceIndex {
+        cachedIndex?.let { return it }
+        return loadSnapshot()?.let { snap ->
+            cachedIndex = parseIndex(snap.rawJson)
+            lastFetchTime = 0L
+            cachedIndex ?: MarketplaceIndex()
+        } ?: MarketplaceIndex()
+    }
+
+    /** 持久化磁盘快照 (成功 fetch 后调用, 写失败仅记日志不影响主流程)。 */
+    internal fun persistSnapshot(source: String, rawJson: String) {
+        try {
+            cacheDir.mkdirs()
+            val snap = MarketplaceSnapshot(System.currentTimeMillis(), source, rawJson)
+            snapshotFile.writeText(snapshotJson.encodeToString(MarketplaceSnapshot.serializer(), snap))
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "PluginMarketClient.persistSnapshot")
+        }
+    }
+
+    /** 读取磁盘快照; 文件缺失/损坏返回 null (不抛异常)。 */
+    internal fun loadSnapshot(): MarketplaceSnapshot? {
+        return try {
+            if (!snapshotFile.isFile) null
+            else snapshotJson.decodeFromString(MarketplaceSnapshot.serializer(), snapshotFile.readText())
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "PluginMarketClient.loadSnapshot")
+            null
+        }
     }
 
     private suspend fun tryFetch(url: String): Result<MarketplaceIndex> {
@@ -117,7 +180,7 @@ class PluginMarketplaceClient(
             when {
                 response.status == HttpStatusCode.NotModified -> {
                     lastFetchTime = System.currentTimeMillis()
-                    Result.success(cachedIndex ?: MarketplaceIndex())
+                    Result.success(currentIndexOrSnapshot())
                 }
                 response.status.isSuccess() -> {
                     val body = response.bodyAsText()
@@ -125,6 +188,7 @@ class PluginMarketplaceClient(
                     cachedIndex = index
                     lastFetchTime = System.currentTimeMillis()
                     response.headers[HttpHeaders.ETag]?.let { lastEtag = it }
+                    persistSnapshot(url, body)
                     Result.success(index)
                 }
                 else -> Result.failure(
