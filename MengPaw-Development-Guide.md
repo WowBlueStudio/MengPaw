@@ -504,18 +504,18 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (15 模块 616 测试，v0.33.0 实测快照：kernel 337 + shell 50 + 插件 229，0 failures)
+### 3.7 测试 (15 模块 745 测试，v0.34.0 实测快照：kernel 409 + shell 60 + 插件 231，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 337 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm/mission |
+| mengpaw-kernel | 409 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm/mission、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级) |
 | mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
-| mengpaw-shell | 50 | ComplexityDetector 分档 (11 分 MISSION 回归)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵 |
+| mengpaw-shell | 60 | ComplexityDetector 分档 (11 分 MISSION 回归)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵、extractSkillSource frontmatter 解析 |
 | plugin-hermes (tribe) | 34 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 (P0 回归) |
 | plugin-memory-twin | 34 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
 | plugin-browser-search | 27 | SSRF 校验全矩阵 (私有 IP/回环/云元数据/scheme 白名单)、引擎检测 |
 | plugin-agent-tools | 22 | 工具集解析 |
-| plugin-skill | 21 | 路径消毒 (../ 越界/反斜杠穿越)、frontmatter 解析、命令层落实 |
+| plugin-skill | 23 | 路径消毒 (../ 越界/反斜杠穿越)、frontmatter 解析、命令层落实、source 来源标记 (预置/用户) |
 | plugin-net | 15 | SSRF 黑名单矩阵、validateUrl scheme 白名单、代理字符串逻辑 |
 | plugin-tavily | 15 | API Key 混淆往返/无明文窗口泄漏 |
 | plugin-framework | 14 | McpGateway 4MB 上限/非法 Content-Length 413、指纹 hex、peer JSON 往返 |
@@ -671,6 +671,19 @@ Agent 通过内核命令按需加载文档：
 - `agent.cli` — CLI 完整参考 (含 browser-tools 段)
 - `agent.docs` — 列出所有 Agent 文档
 - `skill.ls` + `skill.run <name>` — 先索引再加载具体 Skill
+
+#### 技能双层模型与来源标记 (v0.34.0+)
+
+技能 = Markdown 脚本（frontmatter 含 name/description/enabled/category/source），`skill.run <name>` 优先 Agent 本地 `{AGENTS}/{name}/skills/`，再回落全局池 `{BASE}/技能剧本/`。池文件由 SkillSeeds 从内核 assets 同步（仅当未进化时覆盖；进化过的文件保留）。
+
+**source 字段**（frontmatter，v0.34.0 起）区分三类技能：
+- `source: core` — 框架关键技能（17 个：browser×5、device-control、termux、execution-modes、self、sessions、protocols、plugin-system、plugin-index、source-index、guidance、make-plan、make_skills、find_skills），随框架演进，**不可删除**
+- `source: plugin` — 插件附带技能（6 个：filesystem/hermes/tavily/self-update/twin-guide/android），随插件安装，**不可删除**
+- 无 source — 用户技能（`skill.create` 模板不带 source），可在设置页删除
+
+预置技能不支持删除（设置页不渲染删除按钮）——SkillSeeds 会在启动时把被删的预置文件从 seed 复活，删除没有意义；预置清单由开发者谨慎增改。
+
+**@ 指定机制（PinnedSkills）**：设置页技能行 Pin 按钮写入 `{BASE}/技能剧本/.pinned`（行格式清单，每行一个技能名，原子写 tmp+rename，路径消毒）。指定后 PromptSystemBuilder 在文档块末尾追加「用户指定技能」指针段（只注入名称+描述一行，**不注入全文**——LLM 直接 `skill.run <name>` 按需读取，维持前缀缓存纪律）。缓存指纹含 `.pinned` mtime + 各指定技能文件 mtime（PromptEngineTest 覆盖：注入/移除/缺失技能优雅降级）。
 
 ### 4.7 MCP 协议：通用设备语言
 
