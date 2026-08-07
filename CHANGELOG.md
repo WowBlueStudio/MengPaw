@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.34.1 (2026-08-07) — NsdManager 共享 listener 竞态崩溃修复（荣耀 Android 14 平板启动即闪退）
+
+### 修复
+- **NsdManager resolveService 共享 listener 并发竞态** (4445bf8): `onServiceFound` 并发回调复用同一 `ResolveListener` → Android 14 NsdManager 严格校验抛 `IllegalArgumentException: listener already in use` → 未捕获进程崩溃。两处修复: FrameworkDiscovery / TwinDiscovery 每次发现 new listener（Android 官方推荐模式）+ try-catch 兜底
+- 该崩溃自 v0.32.0 即存在（dropbox 多版本有记录），v0.34.0 在荣耀 Android 14 平板上进入死亡循环（启动 0.3~1.3s 即崩 ×5 连）被暴露——与数据无关，清空数据仍崩
+
+### 发行
+- Shell APK v0.34.1 (versionCode 34001) — 全量发布双远端 + GitHub Release
+- Browser APK 无变更不构建
+- 测试: core 45 + kernel 409 + shell 63 + 插件 231 = 748 tests 全绿 (0 failures / 0 errors)
+- plugins.json 无变更
+
 ## v0.34.0 (2026-08-07) — P0 注入防护硬软结合重构（高危命令 reason 门禁 + 攻击拉黑闭环）+ 设置页四件套整理
 
 ### 安全修复
