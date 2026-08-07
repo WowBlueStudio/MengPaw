@@ -24,7 +24,17 @@ description: 发布 MengPaw 新版本 — 版本号/CHANGELOG/编译/签名验�
    发行节固定含：APK 版本号、plugins.json 变更、测试数
 3. `docs/lessons.md` 记录本次踩坑（项目惯例，随发布提交；历史教训浓缩库见 §15）
 
-## 2. 测试与编译
+## 2. 崩溃巡检（v0.34.1 事故教训：NSD 竞态从 v0.32.0 存在 4 版未被发现）
+
+```bash
+# 发布前对每台已连接设备跑 dropbox 巡检（crash buffer/crash.log 会丢，dropbox 保留全部历史）
+adb devices
+adb -s <设备> shell dumpsys dropbox --print | grep -A2 -E "^2026|Package:"
+# 规则: 本版本号的新 data_app_crash 必须闭环（能解释根因 + 已修复）才能发布；
+#       旧版本号的历史崩溃也要扫一眼, 若同一异常多版本连续出现 → 立项修复（本次 NSD 教训）
+```
+
+## 2.1 测试与编译
 
 ```bash
 # 测试（插件单测 + kernel）

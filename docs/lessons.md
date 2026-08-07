@@ -462,5 +462,13 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 | vivo OriginOS | `WAKE_LOCK` + `FOREGROUND_SERVICE_DATA_SYNC` 双保险 |
 | 荣耀 MagicOS | 华为建议全用 + specialUse 前台服务类型 |
 
+### 15.10 Android 系统 API 行为差异与崩溃排查（v0.34.1, NSD 事故）
 
-*最后更新: 2026-08-05 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*
+- **新 Android 版本的系统 API 行为变化是隐藏炸弹**：NsdManager 共享 listener 并发复用旧版静默容忍、Android 14 抛 `IllegalArgumentException: listener already in use` 直接崩进程——"Android 13→最新兼容性"检查必须覆盖 API 行为差异, 不能只看 API 级别是否存在
+- **系统回调线程未捕获异常 = 进程崩溃**：`onServiceFound` 等回调在系统 HandlerThread 执行, 裸调 `resolveService` 抛异常直接杀掉整个进程——所有系统回调必须 try-catch + 每次 new listener（Android 官方模式, 共享回调对象并发复用是竞态源）
+- **dropbox 是崩溃真相的唯一完整来源**：荣耀/vivo 的 crash buffer 会丢、自定义 crash.log 可能无记录, 只有 `dumpsys dropbox --print` 保留全部历史崩溃（含进程存活时长, 判断"启动即闪退"死亡循环）——发布前必巡检（已入 release skill §2）
+- **"启动即闪退 + 清数据仍崩" 排查路径**：先 dropbox（跨版本历史都在）→ 再看 logcat → 最后查代码；adb 列表 mDNS 与 IP 条目可能是同一台设备（用 `getprop ro.serialno` 确认），平板不在线时先别假设
+- **同 APK 设备矩阵差异是常态**：vivo 不崩、荣耀必崩——真机冒烟至少覆盖 Android 13/14/15 各一台
+
+
+*最后更新: 2026-08-07 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*
