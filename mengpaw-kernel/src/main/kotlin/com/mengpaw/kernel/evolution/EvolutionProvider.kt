@@ -103,7 +103,8 @@ object EvolutionEngine : EvolutionProvider {
 
     /**
      * 框架反馈 — Agent 省察发现框架缺陷时写给开发者。
-     * 落盘 `{AGENTS}/{agent}/evolution/feedback/YYYYMMDD_HHmmss.md` + 推送提醒用户。
+     * 落盘 `{AGENTS}/{agent}/evolution/feedback/YYYYMMDD_HHmmss.md` (有主 agent;
+     * 无主/"default" 归 `{BASE}/进化档案/feedback/`) + 推送提醒用户。
      * Usage: evolution.report <描述> [--context <复现路径>]
      */
     private suspend fun report(args: List<String>, ctx: ExecutionContext): ExecutionResult {

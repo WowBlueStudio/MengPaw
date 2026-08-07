@@ -71,10 +71,12 @@ internal class TribeTeamCommands(
                 added.joinToString("\n") { "• $it" })
         }
 
-        // 默认: 扫描本地 Agent 目录
+        // 默认: 扫描本地 Agent 目录 (仅真 Agent 工作区 — 统一判定, v0.34.x)
         val agentsDir = File(DataPaths.AGENTS)
-        val dirs = try { agentsDir.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name } ?: emptyList() } catch (_: Exception) { emptyList() }
-        val discovered = dirs.filter { it.name != "team" }.map { dir ->
+        val dirs = try {
+            agentsDir.listFiles()?.filter { it.isDirectory && DataPaths.isAgentWorkspaceDir(it.name) }?.sortedBy { it.name } ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+        val discovered = dirs.map { dir ->
             val profile = File(dir, "Profile.md").let {
                 if (it.exists()) try { it.readText() } catch (e: Exception) { ErrorCollector.report(e, "TribePlugin.discover"); "(读取失败)" } else "(无档案)"
             }

@@ -60,7 +60,8 @@ object TribeInboxWatcher {
         val newCounts = mutableMapOf<String, Int>()
         val agentsDir = File(DataPaths.AGENTS)
         val dirs = try {
-            agentsDir.listFiles()?.filter { it.isDirectory && it.name != "team" && it.name != "twin" && it.name != "acp" }
+            // 统一系统目录判定 (v0.34.x: 散落名单漏 default → 假 Agent inbox 被扫描)
+            agentsDir.listFiles()?.filter { it.isDirectory && DataPaths.isAgentWorkspaceDir(it.name) }
                 ?: emptyList()
         } catch (_: Exception) { emptyList() }
 

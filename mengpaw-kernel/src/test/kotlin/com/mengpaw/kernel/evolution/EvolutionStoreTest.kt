@@ -95,4 +95,67 @@ class EvolutionStoreTest {
         val empty = EvolutionGuide.buildSessionBrief("evo-test-none")
         assertNull("无复现模式时不注入", empty)
     }
+
+    // ── 无主档案路径 (v0.34.x: 归 进化档案/, 不入 Agent文档/ 防误判假 Agent) ──
+
+    @Test
+    fun `unowned failure lands in evolution dir not Agent文档`() {
+        EvolutionStore.recordFailure(null, "fs.cat", "ERR_NOT_FOUND", "unowned", "Pipeline")
+        val file = File(com.mengpaw.kernel.DataPaths.EVOLUTION, "failures.jsonl")
+        assertTrue("无主档案应落 {BASE}/进化档案/failures.jsonl", file.exists())
+        assertFalse("Agent文档/ 下不得创建 default 目录", File(com.mengpaw.kernel.DataPaths.AGENTS, "default").exists())
+    }
+
+    @Test
+    fun `default reserved agent name maps to evolution dir`() {
+        EvolutionStore.recordCorrection(EvolutionStore.DEFAULT_AGENT, "不对", "ctx", "task")
+        val f = File(com.mengpaw.kernel.DataPaths.EVOLUTION, "reactions.md")
+        assertTrue("default 保留字档案应归进化档案/reactions.md", f.exists())
+        assertFalse("default 不得写入 Agent文档/", File(com.mengpaw.kernel.DataPaths.AGENTS, "default").exists())
+    }
+
+    // ── 旧版 default 目录迁移 (v0.34.x) ──
+
+    @Test
+    fun `migrateLegacyDefaultDir moves archive and removes fake workspace`() {
+        val base = File(System.getProperty("java.io.tmpdir"), "mengpaw-evo-migrate-${System.currentTimeMillis()}")
+        base.mkdirs()
+        com.mengpaw.kernel.DataPaths.initialize(base.absolutePath)
+
+        // 构造旧版结构: Agent文档/default/evolution/failures.jsonl + 被误 bootstrap 的模板
+        val legacyDefault = File(base, "Agent文档/default")
+        val legacyEvo = File(legacyDefault, "evolution")
+        legacyEvo.mkdirs()
+        File(legacyEvo, "failures.jsonl").writeText("{legacy-archive}")
+        File(legacyDefault, "cli.md").writeText("# fake cli")
+        File(legacyDefault, "soul.md").writeText("fake soul")
+
+        EvolutionStore.migrateLegacyDefaultDir()
+
+        assertFalse("default 目录应被整体移除", legacyDefault.exists())
+        assertTrue("旧失败档案应迁移到 进化档案/",
+            File(com.mengpaw.kernel.DataPaths.EVOLUTION, "failures.jsonl").exists())
+        assertFalse("误生成的模板不得随档案迁移",
+            File(com.mengpaw.kernel.DataPaths.EVOLUTION, "cli.md").exists())
+    }
+
+    @Test
+    fun `migrate is idempotent and never overwrites newer data`() {
+        val base = File(System.getProperty("java.io.tmpdir"), "mengpaw-evo-migrate2-${System.currentTimeMillis()}")
+        base.mkdirs()
+        com.mengpaw.kernel.DataPaths.initialize(base.absolutePath)
+
+        File(com.mengpaw.kernel.DataPaths.EVOLUTION).mkdirs()
+        File(com.mengpaw.kernel.DataPaths.EVOLUTION, "failures.jsonl").writeText("newer-data")
+        val legacyEvo = File(base, "Agent文档/default/evolution")
+        legacyEvo.mkdirs()
+        File(legacyEvo, "failures.jsonl").writeText("legacy-data")
+
+        EvolutionStore.migrateLegacyDefaultDir()
+        EvolutionStore.migrateLegacyDefaultDir() // 幂等
+
+        assertEquals("新数据不得被旧档案覆盖", "newer-data",
+            File(com.mengpaw.kernel.DataPaths.EVOLUTION, "failures.jsonl").readText())
+        assertFalse("迁移后 default 目录不存在", File(base, "Agent文档/default").exists())
+    }
 }

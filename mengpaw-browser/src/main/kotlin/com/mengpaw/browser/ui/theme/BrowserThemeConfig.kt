@@ -10,7 +10,10 @@ object BrowserThemeConfig {
     fun load(ctx: android.content.Context? = null): Config {
         try {
             val agentsDir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS)
-            val dirs = agentsDir.listFiles()?.filter { it.isDirectory }?.sortedBy { it.name } ?: emptyList()
+            // 仅真 Agent 工作区参与主题发现 — 统一判定 (v0.34.x: default/系统目录不读)
+            val dirs = agentsDir.listFiles()
+                ?.filter { it.isDirectory && com.mengpaw.kernel.DataPaths.isAgentWorkspaceDir(it.name) }
+                ?.sortedBy { it.name } ?: emptyList()
             for (dir in dirs) {
                 val themeFile = java.io.File(dir, "theme.md")
                 if (themeFile.exists()) {

@@ -32,6 +32,9 @@ class MainActivity : ComponentActivity() {
 
         // ── 关键路径初始化 (崩溃日志 / DataPaths / 插件管理器 / SysExecutor / 模板 / 日志器) ──
         AppInitializer.initialize(this)
+        // ── 旧版无主进化档案迁移 (v0.34.x): Agent文档/default/ 被误建为 Agent 工作区 →
+        //    进化档案/ 顶层。必须在任何 Agent 发现/列表扫描之前执行 (幂等, 无旧数据零开销)。 ──
+        try { com.mengpaw.kernel.evolution.EvolutionStore.migrateLegacyDefaultDir() } catch (_: Exception) {}
         com.mengpaw.core.namespace.SysExecutor.setActivity(this)
         enableEdgeToEdge()
 
@@ -160,10 +163,10 @@ class MainActivity : ComponentActivity() {
                     frameworkName = "MengPaw"
                     frameworkVersion = com.mengpaw.kernel.AgentEngine.CORE_VERSION
                     val agentsDir = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS)
-                    // 与本地列表同源过滤系统目录 — 本地所见 = 对外宣称（inbox 不是智能体）
-                    val systemDirs = setOf("inbox", "team", "acp", "incubator", "agent-001")
+                    // 与本地列表同源过滤系统目录 — 本地所见 = 对外宣称（inbox/team/default 不是智能体）
+                    // 统一判定 DataPaths.isAgentWorkspaceDir (v0.34.x: default 曾漏排除被误判为 Agent)
                     agentNames = agentsDir.listFiles()
-                        ?.filter { it.isDirectory && it.name !in systemDirs && !it.name.startsWith(".") }
+                        ?.filter { it.isDirectory && com.mengpaw.kernel.DataPaths.isAgentWorkspaceDir(it.name) }
                         ?.map { it.name } ?: listOf("MengPaw")
                 }
             com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.register()

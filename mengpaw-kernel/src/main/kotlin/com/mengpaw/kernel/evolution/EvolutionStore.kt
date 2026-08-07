@@ -73,7 +73,9 @@ data class SeedPattern(
  *
  * ## Design(仿 ErrorCollector)
  * - 内存环形缓冲最近 50 条失败记录(全局, 按 agent 字段过滤)。
- * - JSON-lines 持久化到 `{AGENTS}/{agent}/evolution/failures.jsonl`(按 agent 分文件)。
+ * - JSON-lines 持久化 `{AGENTS}/{agent}/evolution/failures.jsonl`(按 agent 分文件);
+ *   无主记录 (agentName=null → 保留字 "default") 归 `{BASE}/进化档案/` —
+ *   绝不落 Agent文档/ 下, 防被 Agent 发现逻辑误判为假 Agent (v0.34.x 修复)。
  * - 用户反应以追加式 Markdown 落盘 `reactions.md`, 供 Agent 直接读取。
  * - 所有写入使用原子操作 (tmp + rename, 全项目写入铁律), 防崩溃损坏。
  * - 所有方法线程安全且永不抛异常。
@@ -344,8 +346,51 @@ object EvolutionStore {
         }
     }
 
+    // ── 旧版数据迁移 (v0.34.x) ─────────────────────────────────────
+
+    /**
+     * 一次性迁移: 旧版无主进化档案写在 `{AGENTS}/default/evolution/`, 被 Agent
+     * 发现逻辑 (目录扫描) 误判为假 Agent, 且一旦被识别, 会话 bootstrap 会把
+     * cli.md/soul.md 等模板写进 default/ — 越看越像真 Agent (自我强化)。
+     *
+     * 迁移动作:
+     * 1. `{AGENTS}/default/evolution/` 下全部内容 → `{BASE}/进化档案/` (不覆盖已有新数据)。
+     * 2. 删除 `{AGENTS}/default/` 下其余内容 (误生成的模板) 与目录本身。
+     *
+     * 幂等 (无旧数据时零开销); 永不抛异常。应用启动时调用。
+     */
+    fun migrateLegacyDefaultDir() {
+        try {
+            val legacy = File(DataPaths.AGENTS, DEFAULT_AGENT)
+            if (!legacy.isDirectory) return
+            val legacyEvolution = File(legacy, "evolution")
+            if (legacyEvolution.isDirectory) {
+                val target = File(DataPaths.EVOLUTION)
+                target.mkdirs()
+                legacyEvolution.listFiles()?.forEach { moveIfAbsent(it, File(target, it.name)) }
+            }
+            legacy.listFiles()?.forEach { it.deleteRecursively() }
+            legacy.delete()
+        } catch (_: Exception) { /* 迁移永不崩溃 */ }
+    }
+
+    /** 递归移动 (目标已存在 → 跳过保留新数据)。 */
+    private fun moveIfAbsent(src: File, dest: File) {
+        if (src.isDirectory) {
+            dest.mkdirs()
+            src.listFiles()?.forEach { moveIfAbsent(it, File(dest, it.name)) }
+            src.delete()
+        } else if (!dest.exists()) {
+            src.renameTo(dest)
+        } else {
+            src.delete()
+        }
+    }
+
     // ── 文件 ────────────────────────────────────────────────────────
 
+    /** 规范化 agent 名 — 无主 (null/空白) 归保留字 "default" (buffer 标识);
+     *  文件路径映射见 [DataPaths.evolutionDir]: "default" → {BASE}/进化档案/。 */
     private fun agentFileOf(agentName: String?): String =
         agentName?.replace(Regex("[/\\\\]"), "_")?.takeIf { it.isNotBlank() } ?: DEFAULT_AGENT
 

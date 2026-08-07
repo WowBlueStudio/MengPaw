@@ -986,6 +986,17 @@ Prompt 注入检测防火墙（ACP GUEST 命令级黑白名单 + 信任管理）
 
 **Phase 2（已取消 — v0.34.2 拉黑由 Agent 自主决定, 无用户确认环节）**: 原计划的用户确认通道（NotifyBus pending + Shell 对话框 + 批准注入）不再需要。保留方向: 用户主动干预通道（Shell 一键拉黑/撤销 UI, 可选）。
 
+#### 6.4.2 Agent文档/ 整洁性: 无主进化档案迁移 + 统一 Agent 工作区判定 (v0.34.3)
+
+**问题链路 (default 被识别为假 Agent)**: 进化系统无主失败记录（agentName=null, 如后台 Pipeline 错误）经 `EvolutionStore.agentFileOf` 回退到保留字 `"default"`, 在 `Agent文档/default/evolution/` 落盘失败档案 → 7 处 Agent 发现/列表扫描（MainActivity、SidebarContent、BrowserThemeConfig、DreamWorker、TribeInboxWatcher、TribeTeamCommands、FrameworkDiscovery）各持一份**散落排除名单**, 全部漏掉 `"default"` → 目录被识别为 Agent → 一旦被识别, 会话 bootstrap（AgentDocs.bootstrap + ensureCliDoc）把 cli.md/soul.md 等模板写进 default/ → 越看越像真 Agent（自我强化闭环）。
+
+**修复**:
+- **无主档案改道**: `DataPaths.EVOLUTION = "{BASE}/进化档案"` 顶层目录; `evolutionDir/evolutionFailuresFile/evolutionReactionsFile/evolutionFeedbackDir` 接受 `String?`, null/空白/**保留字 "default"** 一律归进化档案/ — `Agent文档/` 只允许真 Agent 工作区。有主 Agent 的进化档案仍留各自工作区
+- **统一判定**: `DataPaths.isAgentWorkspaceDir(name)` 成为 Agent 列表唯一事实源（系统目录集合: inbox/team/acp/incubator/agent-001/default/twin + 点前缀）; 7 处扫描点全部替换散落名单
+- **启动迁移**: `EvolutionStore.migrateLegacyDefaultDir()` 在 MainActivity.onCreate（AppInitializer 之后、setContent 之前）执行 — 旧 `Agent文档/default/evolution/` → 进化档案/（不覆盖新数据）, 删除 default/ 下误生成的模板与目录; 幂等, 永不抛异常
+
+**铁律**: 今后新增「Agent文档/ 下所有目录 = Agent」的扫描逻辑一律复用 `DataPaths.isAgentWorkspaceDir`, 禁止自写排除名单; 无主系统数据（非 Agent 专属）绝不写入 Agent文档/ 下。
+
 **ACP 信任模型 (P0 修复, v0.32.1+)**: 明文 HTTP 上 `msg.from` 完全可伪造 — 攻击者可冒充任意已配对 peer 的 agentId 通过 `isTrusted()`。两层加固：
 - **IP 绑定** (`AcpServer.bindPeerIp`/`isPeerFromBoundIp` + `AcpTransport`): 所有消息建立 peerId→来源 IP 绑定 (保留最近 4 个 IP, DHCP 容错); 敏感类型 (WS_MANIFEST/WS_PULL/REVOKE/SESSION_*/MCP_REQUEST) 额外要求消息来源 socket IP 在绑定集内, 冒充尝试 403 拒绝
 - **MCP_REQUEST 鉴权**: 该类型直达插件命令执行 (绕过 Pipeline 命令过滤), 与工作区同步同级要求已配对信任, 未配对 → `auth_required`

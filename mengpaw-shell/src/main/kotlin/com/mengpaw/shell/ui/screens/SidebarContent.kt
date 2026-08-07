@@ -85,11 +85,11 @@ fun SidebarContent(
         onCreateAgentWithDetails(name, wsFolder, intro); refreshTick++
     }
     val agentsDir = File(com.mengpaw.kernel.DataPaths.AGENTS)
-    // Exclude system dirs (inbox, team, acp, incubator) from agent list
-    val systemDirs = setOf("inbox", "team", "acp", "incubator", "agent-001")
+    // Exclude system dirs from agent list — 统一判定 DataPaths.isAgentWorkspaceDir
+    // (v0.34.x: 散落名单漏 default/twin, 无主进化档案目录被识别为假 Agent)
     val discoveredAgents = remember(refreshTick) {
         try { agentsDir.listFiles()
-            ?.filter { it.isDirectory && it.name !in systemDirs && !it.name.startsWith(".") }
+            ?.filter { it.isDirectory && com.mengpaw.kernel.DataPaths.isAgentWorkspaceDir(it.name) }
             ?.map { it.name }?.sorted()
             ?.ifEmpty { listOf("MengPaw") } ?: listOf("MengPaw") } catch (_: Exception) { listOf("MengPaw") }
     }

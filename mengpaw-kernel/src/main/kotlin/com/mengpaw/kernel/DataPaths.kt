@@ -16,10 +16,12 @@ package com.mengpaw.kernel
  *   ├── 会话检查点/            ← session checkpoints
  *   ├── 截图存档/              ← UI screenshots
  *   ├── 插件仓库/              ← plugin cache + downloaded JARs
- *   ├── Agent文档/             ← Agent document system
+ *   ├── Agent文档/             ← Agent document system (仅真 Agent 工作区)
  *   │   └── {agent-id}/
  *   │       ├── dialog/         ← 压缩归档 (YYYY-MM-DD.jsonl)
- *   │       └── tool_results/   ← 工具结果外存
+ *   │       ├── tool_results/   ← 工具结果外存
+ *   │       └── evolution/      ← 有主 Agent 的进化档案
+ *   ├── 进化档案/              ← 无主进化档案 (agentName=null, 不入 Agent文档 防误判)
  *   └── mengpaw.sock           ← Unix Socket (Termux IPC)
  */
 object DataPaths {
@@ -39,6 +41,9 @@ object DataPaths {
     val SCREENSHOTS get() = "$BASE/截图存档"
     val PLUGIN_CACHE get() = "$BASE/插件仓库"
     val AGENTS get() = "$BASE/Agent文档"
+    /** 无主进化档案目录 (agentName=null 时 EvolutionStore 写入处) —
+     *  与 Agent文档 分离, 防被 Agent 发现逻辑误判为 Agent (v0.34.x 修复)。 */
+    val EVOLUTION get() = "$BASE/进化档案"
     // ── 语音录制 (v0.33.0+) ──
     val RECORDINGS get() = "$BASE/录音"
     val AGENT_TEMPLATES get() = "$BASE/agent-templates"
@@ -111,14 +116,33 @@ object DataPaths {
     }
 
     // ── Evolution (Agent 进化系统) ─────────────────────────────────
-    /** Evolution data dir — failures / user reactions / framework feedback. */
-    fun evolutionDir(agentName: String) = "${safeAgentDir(agentName)}/evolution"
+    /**
+     * 有主 Agent 的进化数据目录 (失败模式库 / 用户反应 / 框架反馈)。
+     * 无主 (agentName=null/空白, 如后台 Pipeline 错误) → 归 `{BASE}/进化档案/`,
+     * 绝不落 Agent文档/ 下 — 否则被 Agent 发现逻辑识别为假 Agent (v0.34.x 教训)。
+     * "default" (EvolutionStore.DEFAULT_AGENT 保留字, 非真 Agent) 同样归进化档案/。
+     */
+    fun evolutionDir(agentName: String?) =
+        if (agentName.isNullOrBlank() || agentName == "default") EVOLUTION
+        else "${safeAgentDir(agentName)}/evolution"
     /** Failure pattern store (JSON-lines). */
-    fun evolutionFailuresFile(agentName: String) = "${evolutionDir(agentName)}/failures.jsonl"
+    fun evolutionFailuresFile(agentName: String?) = "${evolutionDir(agentName)}/failures.jsonl"
     /** User reaction archive (用户分身数据源) — appended markdown. */
-    fun evolutionReactionsFile(agentName: String) = "${evolutionDir(agentName)}/reactions.md"
+    fun evolutionReactionsFile(agentName: String?) = "${evolutionDir(agentName)}/reactions.md"
     /** Framework feedback reports written by Agent (evolution.report). */
-    fun evolutionFeedbackDir(agentName: String) = "${evolutionDir(agentName)}/feedback"
+    fun evolutionFeedbackDir(agentName: String?) = "${evolutionDir(agentName)}/feedback"
+
+    // ── Agent 工作区判定 (Agent 发现/列表的唯一事实源) ─────────────
+    /** Agent文档/ 下的系统目录 — 不是 Agent, 不得出现在任何 Agent 列表。
+     * (v0.34.x: 统一散落名单 — MainActivity/SidebarContent/DreamWorker/
+     *  BrowserTheme/TribeInbox/TribeTeam 此前各写各的, default/twin 漏排除
+     *  导致假 Agent 混入列表)。 */
+    val AGENT_SYSTEM_DIRS: Set<String> =
+        setOf("inbox", "team", "acp", "incubator", "agent-001", "default", "twin")
+
+    /** 该目录名是否构成一个 Agent 工作区 (真 Agent 或框架托管的 Agent)。 */
+    fun isAgentWorkspaceDir(name: String): Boolean =
+        name.isNotBlank() && name !in AGENT_SYSTEM_DIRS && !name.startsWith(".")
 
     // ── Plugin-specific storage ───────────────────────────────────
 

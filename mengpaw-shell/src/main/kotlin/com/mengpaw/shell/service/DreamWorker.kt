@@ -73,7 +73,8 @@ class DreamWorker(
         if (!agentsDir.exists()) return Result.success()
 
         val agentDirs = agentsDir.listFiles()?.filter {
-            it.isDirectory && File(it, "AGENTS.md").exists()
+            it.isDirectory && com.mengpaw.kernel.DataPaths.isAgentWorkspaceDir(it.name) &&
+                File(it, "AGENTS.md").exists()
         } ?: return Result.success()
 
         var ran = 0
