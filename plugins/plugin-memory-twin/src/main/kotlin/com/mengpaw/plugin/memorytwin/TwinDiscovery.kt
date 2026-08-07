@@ -54,42 +54,6 @@ class TwinDiscovery(
     val discoveredPeers: Flow<List<TwinPeerInfo>> = callbackFlow {
         val peers = mutableListOf<TwinPeerInfo>()
 
-        // Resolve listener: called when a service is fully resolved (IP/port available)
-        val resolveListener = object : NsdManager.ResolveListener {
-            override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                try {
-                    val peerId = serviceInfo.attributes["deviceId"]?.let { String(it) } ?: return
-                    val peerName = serviceInfo.attributes["agentName"]?.let { String(it) } ?: "Unknown"
-                    val peerPort = serviceInfo.port.takeIf { it > 0 } ?: Ports.ACP
-                    val host = serviceInfo.host?.hostAddress ?: return
-
-                    val existing = peers.find { it.peerId == peerId }
-                    if (existing != null) {
-                        existing.address = host
-                        existing.port = peerPort
-                        existing.lastSeen = System.currentTimeMillis()
-                    } else {
-                        peers.add(TwinPeerInfo(
-                            peerId = peerId,
-                            agentName = peerName,
-                            address = host,
-                            port = peerPort
-                        ))
-                    }
-                    trySend(peers.toList())
-                } catch (e: Exception) {
-                    ErrorCollector.report(e, "TwinDiscovery.resolve")
-                }
-            }
-
-            override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                ErrorCollector.report(
-                    Exception("NSD resolve failed: code=$errorCode for ${serviceInfo.serviceName}"),
-                    "TwinDiscovery"
-                )
-            }
-        }
-
         // Discovery listener: called when services appear/disappear
         discoveryListener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(serviceType: String) {
@@ -97,8 +61,45 @@ class TwinDiscovery(
             }
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                // Resolve the found service to get IP/port
-                nsdManager?.resolveService(serviceInfo, resolveListener)
+                // Resolve the found service to get IP/port.
+                // 每次 new listener — 共享 listener 并发 resolve 会触发 NsdManager
+                // "listener already in use" 崩溃 (Android 14 严格校验; 荣耀平板 v0.34.0 启动即闪退根因)
+                val resolveListener = object : NsdManager.ResolveListener {
+                    override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                        try {
+                            val peerId = serviceInfo.attributes["deviceId"]?.let { String(it) } ?: return
+                            val peerName = serviceInfo.attributes["agentName"]?.let { String(it) } ?: "Unknown"
+                            val peerPort = serviceInfo.port.takeIf { it > 0 } ?: Ports.ACP
+                            val host = serviceInfo.host?.hostAddress ?: return
+
+                            val existing = peers.find { it.peerId == peerId }
+                            if (existing != null) {
+                                existing.address = host
+                                existing.port = peerPort
+                                existing.lastSeen = System.currentTimeMillis()
+                            } else {
+                                peers.add(TwinPeerInfo(
+                                    peerId = peerId,
+                                    agentName = peerName,
+                                    address = host,
+                                    port = peerPort
+                                ))
+                            }
+                            trySend(peers.toList())
+                        } catch (e: Exception) {
+                            ErrorCollector.report(e, "TwinDiscovery.resolve")
+                        }
+                    }
+
+                    override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                        ErrorCollector.report(
+                            Exception("NSD resolve failed: code=$errorCode for ${serviceInfo.serviceName}"),
+                            "TwinDiscovery"
+                        )
+                    }
+                }
+                try { nsdManager?.resolveService(serviceInfo, resolveListener) }
+                catch (e: Exception) { ErrorCollector.report(e, "TwinDiscovery.resolveService") }
             }
 
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {

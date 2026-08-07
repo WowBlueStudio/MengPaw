@@ -128,8 +128,14 @@ class FrameworkDiscovery(private val context: Context) {
         override fun onServiceFound(info: NsdServiceInfo) {
             // 忽略本机服务（名称相同）
             if (info.serviceName == "MengPaw-$deviceName") return
-            // 解析详细信息
-            nsdManager?.resolveService(info, resolveListener)
+            // 解析详细信息 — 每次 new listener: 共享 listener 并发 resolve 会触发 NsdManager
+            // "listener already in use" 崩溃 (Android 14 严格校验; 荣耀平板 v0.34.0 启动即闪退根因)
+            val listener = object : NsdManager.ResolveListener {
+                override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {}
+                override fun onServiceResolved(info: NsdServiceInfo) = handleResolved(info)
+            }
+            try { nsdManager?.resolveService(info, listener) }
+            catch (e: Exception) { KernelLog.w("FrameworkDiscovery", "resolve failed: ${e.message}") }
         }
         override fun onServiceLost(info: NsdServiceInfo) {
             val fp = FrameworkPeerStore.computeFingerprint(
@@ -144,39 +150,37 @@ class FrameworkDiscovery(private val context: Context) {
         override fun onStopDiscoveryFailed(type: String, errorCode: Int) {}
     }
 
-    private val resolveListener = object : NsdManager.ResolveListener {
-        override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {}
-        override fun onServiceResolved(info: NsdServiceInfo) {
-            val name = info.serviceName.removePrefix("MengPaw-")
-            val addr = info.host?.hostAddress ?: return
-            // 自发现过滤（IP 比对兜底）: 实例名可能被系统改名，名字比对不可靠
-            if (isLocalAddress(addr)) return
-            // 属性读取 API 33+
-            val fwName = if (android.os.Build.VERSION.SDK_INT >= 33)
-                info.attributes["fwname"]?.let { String(it) } ?: "MengPaw"
-            else "MengPaw"
-            val version = if (android.os.Build.VERSION.SDK_INT >= 33)
-                info.attributes["version"]?.let { String(it) } ?: "?"
-            else "?"
-            val caps = if (android.os.Build.VERSION.SDK_INT >= 33)
-                info.attributes["capabilities"]?.let { String(it) }?.split(",") ?: emptyList()
-            else emptyList()
-            val agents = if (android.os.Build.VERSION.SDK_INT >= 33)
-                info.attributes["agents"]?.let { String(it) }?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
-            else emptyList()
-            val fp = FrameworkPeerStore.computeFingerprint(name, addr)
-            val now = System.currentTimeMillis()
-            val peer = FrameworkPeerStore.FrameworkPeer(
-                fingerprint = fp, name = name, version = version,
-                frameworkName = fwName,
-                address = addr, port = info.port,
-                capabilities = caps, agents = agents,
-                lastSeen = now,
-                trusted = FrameworkPeerStore.findByFingerprint(fp)?.trusted ?: false
-            )
-            FrameworkPeerStore.save(peer)
-            KernelLog.i("FrameworkDiscovery", "Found: $name ($fwName v$version) @ $addr:$info.port agents=${agents.size}")
-        }
+    /** 解析成功处理 — 提取自共享 resolveListener (v0.34.1: 每次发现 new listener 防并发竞态) */
+    private fun handleResolved(info: NsdServiceInfo) {
+        val name = info.serviceName.removePrefix("MengPaw-")
+        val addr = info.host?.hostAddress ?: return
+        // 自发现过滤（IP 比对兜底）: 实例名可能被系统改名，名字比对不可靠
+        if (isLocalAddress(addr)) return
+        // 属性读取 API 33+
+        val fwName = if (android.os.Build.VERSION.SDK_INT >= 33)
+            info.attributes["fwname"]?.let { String(it) } ?: "MengPaw"
+        else "MengPaw"
+        val version = if (android.os.Build.VERSION.SDK_INT >= 33)
+            info.attributes["version"]?.let { String(it) } ?: "?"
+        else "?"
+        val caps = if (android.os.Build.VERSION.SDK_INT >= 33)
+            info.attributes["capabilities"]?.let { String(it) }?.split(",") ?: emptyList()
+        else emptyList()
+        val agents = if (android.os.Build.VERSION.SDK_INT >= 33)
+            info.attributes["agents"]?.let { String(it) }?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+        else emptyList()
+        val fp = FrameworkPeerStore.computeFingerprint(name, addr)
+        val now = System.currentTimeMillis()
+        val peer = FrameworkPeerStore.FrameworkPeer(
+            fingerprint = fp, name = name, version = version,
+            frameworkName = fwName,
+            address = addr, port = info.port,
+            capabilities = caps, agents = agents,
+            lastSeen = now,
+            trusted = FrameworkPeerStore.findByFingerprint(fp)?.trusted ?: false
+        )
+        FrameworkPeerStore.save(peer)
+        KernelLog.i("FrameworkDiscovery", "Found: $name ($fwName v$version) @ $addr:$info.port agents=${agents.size}")
     }
 
     fun startDiscovery() {
