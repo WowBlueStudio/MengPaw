@@ -79,6 +79,31 @@ class AgentDocManagerTest {
         assertTrue("文件不存在退化为文件名", docs.all { !it.contains("—") })
     }
 
+    // ── 工作区进化档案目录可见性 (v0.34.3) ──
+
+    @Test
+    fun `listDocs includes evolution dir when archive exists`() {
+        val ws = workspace("EvoAgent")
+        val evo = File(ws, "evolution")
+        evo.mkdirs()
+        File(evo, "failures.jsonl").writeText("{}")
+        File(evo, "reactions.md").writeText("# 用户反应")
+
+        val docs = AgentDocManager(agentId = "EvoAgent").listDocs()
+        assertTrue("有档案时 agent.docs 应显示 evolution/ 目录",
+            docs.any { it.startsWith("evolution/ — 进化档案") && it.contains("failures.jsonl") })
+        assertEquals("6 文档 + 1 进化档案", 7, docs.size)
+    }
+
+    @Test
+    fun `listDocs omits evolution dir when archive empty`() {
+        workspace("NoEvoAgent")
+
+        val docs = AgentDocManager(agentId = "NoEvoAgent").listDocs()
+        assertTrue("无档案时不显示 evolution/", docs.none { it.startsWith("evolution/") })
+        assertEquals("保持 6 个文档", 6, docs.size)
+    }
+
     // ── CLI.md 陈旧检测: 命令集指纹 (v0.34.0) ──
 
     @Test

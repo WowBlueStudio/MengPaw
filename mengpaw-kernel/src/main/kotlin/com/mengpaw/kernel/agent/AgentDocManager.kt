@@ -119,14 +119,22 @@ class AgentDocManager(
     /**
      * 列出全部文档 (自检报告 P2-8): 每行带文件头 frontmatter 元数据 (summary / read_when),
      * 无 frontmatter 的文件退化为纯文件名。轻量: 只读文件头 2KB。
+     * v0.34.3: 追加工作区进化档案目录 (evolution/) — 失败模式库/用户反应/框架反馈
+     * 是工作区的一部分, agent.docs 应让 Agent 知道其存在; 无数据时不显示 (防空目录噪音)。
      */
-    fun listDocs(): List<String> = AgentDocType.entries.map { docType ->
-        val name = docType.name.lowercase() + ".md"
-        val (summary, readWhen) = frontmatterOf(file(docType))
-        when {
-            summary == null -> name
-            readWhen.isEmpty() -> "$name — $summary"
-            else -> "$name — $summary [${readWhen.joinToString(" / ")}]"
+    fun listDocs(): List<String> = buildList {
+        addAll(AgentDocType.entries.map { docType ->
+            val name = docType.name.lowercase() + ".md"
+            val (summary, readWhen) = frontmatterOf(file(docType))
+            when {
+                summary == null -> name
+                readWhen.isEmpty() -> "$name — $summary"
+                else -> "$name — $summary [${readWhen.joinToString(" / ")}]"
+            }
+        })
+        val evoDir = File(com.mengpaw.kernel.DataPaths.evolutionDir(agentId))
+        if (evoDir.isDirectory && evoDir.listFiles()?.isNotEmpty() == true) {
+            add("evolution/ — 进化档案: 失败模式库 (failures.jsonl, evolution.audit 查看) / 用户反应 (reactions.md) / 框架反馈 (feedback/)")
         }
     }
 
