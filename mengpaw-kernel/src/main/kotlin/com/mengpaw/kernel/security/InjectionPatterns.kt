@@ -16,7 +16,9 @@ object InjectionPatterns {
         // Ignore/override instructions — English
         Regex("(?i)ignore\\s+(all\\s+)?(previous|prior|earlier)\\s+(instructions|rules|prompts)"),
         // Ignore/override instructions — Chinese
+        // 两种词序都覆盖: 「忽略之前所有指令」(常见) 与「忽略所有之前指令」
         Regex("(?:忽略|忘掉|无视)\\s*(?:所有)?\\s*(?:之前|先前|上文)?\\s*(?:指令|指示|规则|提示|要求)"),
+        Regex("(?:忽略|忘掉|无视)\\s*(?:之前|先前|上文)?\\s*(?:所有)?\\s*(?:指令|指示|规则|提示|要求)"),
         // Unrestricted mode — English
         Regex("(?i)(unrestricted|debug|developer|admin|god|jailbreak)\\s+mode"),
         // Unrestricted mode — Chinese
@@ -35,6 +37,7 @@ object InjectionPatterns {
 
     /** Warning labels for matched injection patterns (same index as [INJECTION_PATTERNS]). */
     val INJECTION_LABELS: List<String> = listOf(
+        "指令覆盖攻击",
         "指令覆盖攻击",
         "指令覆盖攻击",
         "越狱模式请求",

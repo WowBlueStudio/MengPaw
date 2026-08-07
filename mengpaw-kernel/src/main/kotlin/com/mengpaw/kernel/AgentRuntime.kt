@@ -195,8 +195,8 @@ internal class AgentRuntime(private val engine: AgentEngine) {
         onDelta: ((String) -> Unit)? = null,
         attachments: List<AttachmentData> = emptyList()
     ): String {
-        val guardedTask = if (com.mengpaw.kernel.security.PromptFirewall.checkUserPrompt(task) != null)
-            com.mengpaw.kernel.security.PromptFirewall.wrapWithDefense(task) else task
+        // P0 注入防护: 任务入口静默剥离精确注入模式 (本地输入 + 远程委托 inbox 任务统一)
+        val guardedTask = com.mengpaw.kernel.security.UntrustedContent.sanitizeForAgent(task)
         return engine.runReActLoop(task = guardedTask, maxSteps = maxSteps, onStep = onStep, onDelta = onDelta,
             attachments = attachments)
     }

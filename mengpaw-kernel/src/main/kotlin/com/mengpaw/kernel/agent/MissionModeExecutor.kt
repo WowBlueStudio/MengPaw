@@ -9,7 +9,6 @@ import com.mengpaw.kernel.agent.SubtaskStatus
 import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
-import com.mengpaw.kernel.security.PromptFirewall
 import com.mengpaw.kernel.security.Sanitizer
 import com.mengpaw.kernel.session.Message
 import kotlinx.coroutines.CancellationException
@@ -49,8 +48,8 @@ class MissionModeExecutor(
         onDelta: ((String) -> Unit)? = null
     ): String {
         val llmProvider = agentEngine.getLlmProvider()
-        val guardedTask = if (PromptFirewall.checkUserPrompt(task) != null)
-            PromptFirewall.wrapWithDefense(task) else task
+        // P0 注入防护: 任务入口静默剥离精确注入模式
+        val guardedTask = com.mengpaw.kernel.security.UntrustedContent.sanitizeForAgent(task)
 
         // Step 1: Structured decomposition — LLM produces JSON subtask list
         val decomposeResult = try {

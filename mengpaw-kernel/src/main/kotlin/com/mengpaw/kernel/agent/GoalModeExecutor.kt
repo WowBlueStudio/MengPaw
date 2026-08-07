@@ -5,7 +5,6 @@ package com.mengpaw.kernel
 
 import com.mengpaw.kernel.agent.GoalSession
 import com.mengpaw.kernel.agent.RubricEvaluator
-import com.mengpaw.kernel.security.PromptFirewall
 
 /**
  * Goal-mode execution with RubricGate auto-completion detection.
@@ -33,8 +32,8 @@ class GoalModeExecutor(
         onDelta: ((String) -> Unit)? = null
     ): String {
         val llmProvider = agentEngine.getLlmProvider()
-        val guardedTask = if (PromptFirewall.checkUserPrompt(task) != null)
-            PromptFirewall.wrapWithDefense(task) else task
+        // P0 注入防护: 任务入口静默剥离精确注入模式
+        val guardedTask = com.mengpaw.kernel.security.UntrustedContent.sanitizeForAgent(task)
         val session = GoalSession(
             goal = guardedTask, maxIterations = maxTurns, maxTokens = maxTokensBudget
         )

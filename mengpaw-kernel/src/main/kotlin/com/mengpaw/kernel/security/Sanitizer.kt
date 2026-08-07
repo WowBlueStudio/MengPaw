@@ -16,9 +16,6 @@ object Sanitizer {
     private const val MAX_INPUT_LENGTH = 10_000
 
     // ── API Key & Token Patterns ──────────────────────────────────────────
-    // ── Prompt Injection Patterns (single source of truth in InjectionPatterns.kt) ──
-    private val promptInjectionPatterns = InjectionPatterns.INJECTION_PATTERNS
-    private val injectionLabels = InjectionPatterns.INJECTION_LABELS
 
     private val secretPatterns = listOf(
         Regex("sk-[a-zA-Z0-9_-]{20,60}"),                  // OpenAI (sk-proj-... or sk-...)
@@ -88,13 +85,9 @@ object Sanitizer {
             result = pattern.replace(result, "")
         }
 
-        // Step 4: Flag prompt injection attempts (Inspired by QwenPaw)
-        // Uses InjectionPatterns.kt shared patterns — single source of truth.
-        val injectionMatch = InjectionPatterns.findMatch(result)
-        if (injectionMatch != null && !result.startsWith("[PROMPT_INJECTION_WARN]")) {
-            result = "[PROMPT_INJECTION_WARN: $injectionMatch] " + result
-        }
-
+        // Step 4: 注入处理已收敛至 UntrustedContent (v0.34.0, P0 定案) —
+        // 原「[PROMPT_INJECTION_WARN] 前缀反射」移除: 命中反射暴露检测机制,
+        // 攻击者观察后即可反向利用 (伪装安全通知文案)。剥离/标记/静默见 UntrustedContent。
         // Step 5: Strip sensitive Unicode characters
         for (pattern in sensitiveUnicode) {
             result = pattern.replace(result, "[UNICODE_WARN]")

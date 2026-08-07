@@ -9,7 +9,6 @@ import com.mengpaw.kernel.agent.SwarmRoles
 import com.mengpaw.kernel.agent.SwarmSubtask
 import com.mengpaw.kernel.agent.SwarmSubtaskStatus
 import com.mengpaw.kernel.llm.LlmProvider
-import com.mengpaw.kernel.security.PromptFirewall
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -60,8 +59,8 @@ class SwarmModeExecutor(
         onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null
     ): String {
-        val guardedTask = if (PromptFirewall.checkUserPrompt(task) != null)
-            PromptFirewall.wrapWithDefense(task) else task
+        // P0 注入防护: 任务入口静默剥离精确注入模式
+        val guardedTask = com.mengpaw.kernel.security.UntrustedContent.sanitizeForAgent(task)
 
         // stop() 可达: 挂载当前协程 Job (worker 不经 runReActLoop, runningJob 不会自动挂上)
         agentEngine.attachRunningJob(currentCoroutineContext()[Job])

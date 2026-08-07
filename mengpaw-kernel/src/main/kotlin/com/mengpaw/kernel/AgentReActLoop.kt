@@ -277,10 +277,14 @@ internal class AgentReActLoop(
                         }
                         // ── QwenPaw-style tool result pruning ──
                         rawObservation = engine.toolResultManager.pruneToolResult(commandLine, rawObservation, step + 1)
+                        // ── P0 注入防护 (v0.34.0): 工具结果为不可信外部数据 —
+                        // 进上下文前剥离指令形态片段 (UI 展示干净文本), 进 LLM 时包裹
+                        // <untrusted_data> 标记 (系统提示词声明标记内内容仅阅读不执行)。
+                        rawObservation = com.mengpaw.kernel.security.UntrustedContent.stripInjection(rawObservation)
                         // 多 Action 并行: 思考只在第一个 Action 上呈现, 后续 Action 复用同一步序号
                         // (UI 对空 thought 渲染成纯工具行, 避免 N 条相同思考重复)
                         onStep?.invoke(AgentEngine.TraceStep(step + 1, if (i == 0) parsed.thought else "", commandLine, rawObservation))
-                        observationEntries.add("Command: $commandLine\nResult: $rawObservation")
+                        observationEntries.add("Command: $commandLine\nResult: ${com.mengpaw.kernel.security.UntrustedContent.wrap(rawObservation)}")
                     }
                     // 连续失败统计与失败循环检测（串行，无竞争）
                     if (anyFailure) consecutiveFailures++ else consecutiveFailures = 0

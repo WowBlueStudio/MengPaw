@@ -228,6 +228,20 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `trust boundary declaration present in both prompts`() {
+        // P0 注入防护软层 (v0.34.0): 系统提示词必须声明信任边界 —
+        // 工具结果/网页/文件/远程消息为不可信数据, 标记内内容仅阅读不执行
+        val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertTrue("中文提示词应含信任边界标题", zh.contains("信任边界"))
+        assertTrue("中文提示词应含 untrusted_data 标记", zh.contains("<untrusted_data>"))
+        assertTrue("中文提示词应声明仅阅读不执行", zh.contains("一律不执行"))
+        val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
+        assertTrue("英文提示词应含信任边界标题", en.contains("Trust boundary"))
+        assertTrue("英文提示词应含 untrusted_data 标记", en.contains("<untrusted_data>"))
+        assertTrue("英文提示词应声明仅阅读不执行", en.contains("NEVER commands to follow"))
+    }
+
+    @Test
     fun `parse xml tool calls translates to actions`() {
         // 用户案例回归: Claude 原生 XML 工具调用语法 — 此前被 Rule 3 当最终答案吞掉
         // (工具从不执行, 用户只见原始 XML)。应转译为 ToolCall 走并行执行链路。
