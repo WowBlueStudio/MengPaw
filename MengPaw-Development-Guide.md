@@ -694,6 +694,14 @@ Agent 通过内核命令按需加载文档：
 
 面板按命名空间分组折叠（组头=命名空间名+命令数+来源徽标，默认折叠；命令行内展开看完整描述）。历史坑位：旧版手工精选 40 条快照永远滞后于注册表；`McpServer.listTools()` 与插件命令同源（同为 ACTIVE 插件命令包装）造成同一批命令显示两遍——两者均已移除。
 
+#### 智能体工具面板：命令集分组折叠 + 整组删除 (v0.34.1+)
+
+设置页「智能体工具」展示该 Agent 的专属工具——**注册的 CLI 命令集**（如 飞书 CLI，AgentToolsStore 读取 `{agent}/tools/*.json`，非全局共享）。每组一个命令集：
+
+- **组头** = Terminal 图标 + 显示名 + 命令数/来源摘要 + 删除按钮 + chevron，点击折叠展开该组命令列表；命令行内再展开查看用法/描述（`AgentToolSet.commands[].usage + description`）
+- **整组删除**：仅组头有删除按钮 → 确认对话框 → `AgentToolsStore.remove(agentName, name)`（删 `{agent}/tools/{name}.json`）+ `AgentToolsSummary.invalidate(agentName)`（系统提示词摘要失效，对齐 `tools.remove` 命令层行为）+ 本地列表即时移除。`FrameworkItem.enName` 承载命令集权威名（文件定位），`name` 为显示名
+- 数据在 `rememberAppRootSettingsItems` 按 agentDataVersion 实时重扫（Agent 执行命令后列表自动更新）
+
 ### 4.7 MCP 协议：通用设备语言
 
 MCP 在 MengPaw 中的定位不是"让 AI 调用工具的协议"，而是**让任何碎片设备加入 Agent 网格的通用语言**。
