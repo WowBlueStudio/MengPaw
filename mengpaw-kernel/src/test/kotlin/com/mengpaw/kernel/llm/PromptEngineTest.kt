@@ -510,4 +510,74 @@ Action Input: {}
             engine.invalidateDocCache("MengPaw")
         }
     }
+
+    // ── 用户指定技能 (pinned) 指针段 — 免遍历直接 skill.run ───────────
+
+    private fun writePinnedSkill(name: String, desc: String) {
+        val dir = File(DataPaths.SKILLS)
+        dir.mkdirs()
+        File(dir, "$name.md").writeText(
+            """
+            |---
+            |name: $name
+            |description: $desc
+            |enabled: true
+            |category: general
+            |---
+            |# $name
+            |
+            |剧本正文 — 不得注入前缀。
+            """.trimMargin()
+        )
+    }
+
+    @Test
+    fun `pinned skills injected as pointer at tail - full text never injected`() {
+        writePinnedSkill("tavily", "AI 搜索")
+        try {
+            com.mengpaw.kernel.skill.PinnedSkills.toggle("tavily")
+            val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+            assertTrue("应注入用户指定技能段", prompt.contains("用户指定技能"))
+            assertTrue("指针应含技能名", prompt.contains("**tavily**"))
+            assertTrue("指针应含描述", prompt.contains("AI 搜索"))
+            assertFalse("剧本正文不得注入前缀", prompt.contains("剧本正文"))
+            // 段落应在 docsBlock 之后 (前缀缓存: 末尾追加)
+            val pinnedIdx = prompt.indexOf("用户指定技能")
+            val docsIdx = prompt.indexOf("## 📋 Skills 双层池")
+            assertTrue("pinned 段必须在 Skills 引导之后", pinnedIdx > docsIdx)
+        } finally {
+            com.mengpaw.kernel.skill.PinnedSkills.remove("tavily")
+            File(DataPaths.SKILLS, "tavily.md").delete()
+            engine.invalidateDocCache("MengPaw")
+        }
+    }
+
+    @Test
+    fun `unpinned skill pointer disappears and cache invalidates`() {
+        writePinnedSkill("hermes", "多智能体协作")
+        try {
+            com.mengpaw.kernel.skill.PinnedSkills.toggle("hermes")
+            val withPin = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+            assertTrue("指定后应注入", withPin.contains("hermes"))
+            com.mengpaw.kernel.skill.PinnedSkills.remove("hermes")
+            val afterUnpin = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+            assertFalse("取消指定后应消失 (指纹失效)", afterUnpin.contains("用户指定技能"))
+            assertFalse("技能名不得残留", afterUnpin.contains("**hermes**"))
+        } finally {
+            File(DataPaths.SKILLS, "hermes.md").delete()
+            engine.invalidateDocCache("MengPaw")
+        }
+    }
+
+    @Test
+    fun `pinned missing skill degrades gracefully`() {
+        // 技能文件被删但清单残留 (悬空指针) — 不注入也不崩溃
+        com.mengpaw.kernel.skill.PinnedSkills.toggle("ghost-skill")
+        try {
+            val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+            assertFalse("悬空指针不应注入", prompt.contains("ghost-skill"))
+        } finally {
+            com.mengpaw.kernel.skill.PinnedSkills.remove("ghost-skill")
+        }
+    }
 }

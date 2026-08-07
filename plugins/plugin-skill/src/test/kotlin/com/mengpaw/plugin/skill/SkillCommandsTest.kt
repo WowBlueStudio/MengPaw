@@ -121,4 +121,36 @@ class SkillCommandsTest {
         assertTrue(r.output.contains("演示"))
         assertTrue("占位符应列出", r.output.contains("{{param}}"))
     }
+
+    // ── 来源标签 (source) — 预置技能与用户技能的区分 ────────────────────
+
+    @Test
+    fun `parseSkill reads source from frontmatter`() = runBlocking {
+        // 预置技能 (plugin 来源) — 全局池文件带 source 标记
+        File(DataPaths.SKILLS).mkdirs()
+        val preset = File(DataPaths.SKILLS, "tavily.md")
+        preset.writeText("---\nname: tavily\ndescription: AI 搜索\nenabled: true\ncategory: general\nsource: plugin\n---\n正文")
+        val parsed = plugin.parseSkill(preset)
+        assertNotNull(parsed)
+        assertEquals("插件来源应解析", "plugin", parsed!!.source)
+        // 用户技能 (create 模板) — 无 source
+        run("create", "mine")
+        val mine = File(DataPaths.agentSkillsDir("tester"), "mine.md")
+        val parsedMine = plugin.parseSkill(mine)
+        assertEquals("用户创建技能 source 应为空", "", parsedMine!!.source)
+    }
+
+    @Test
+    fun `ls shows source column with labels`() = runBlocking {
+        File(DataPaths.SKILLS).mkdirs()
+        File(DataPaths.SKILLS, "core-skill.md").writeText(
+            "---\nname: core-skill\ndescription: 核心手册\nenabled: true\ncategory: system\nsource: core\n---\n正文")
+        File(DataPaths.SKILLS, "user-skill.md").writeText(
+            "---\nname: user-skill\ndescription: 用户技能\nenabled: true\ncategory: general\n---\n正文")
+        val r = run("ls")
+        assertTrue(r.success)
+        assertTrue("来源列头应存在", r.output.contains("来源"))
+        assertTrue("核心标签应显示", r.output.contains("核心"))
+        assertTrue("用户技能应标用户", r.output.contains("用户"))
+    }
 }

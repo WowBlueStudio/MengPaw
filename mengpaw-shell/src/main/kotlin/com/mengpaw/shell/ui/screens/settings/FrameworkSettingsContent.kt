@@ -230,7 +230,8 @@ fun FrameworkSettingsContent(
         expanded = skillsExpanded, onToggle = { skillsExpanded = !skillsExpanded })
     AnimatedVisibility(visible = skillsExpanded) {
         Column {
-            FrameworkItemSection("", Icons.Outlined.AutoAwesome, skillItems, state.strings)
+            // 专用面板: 来源标签(核心/插件) + @指定 + 删除(仅非预置) — 通用 FrameworkItemSection 无按钮
+            GlobalSkillPoolPanel(items = skillItems, strings = state.strings)
         }
     }
 }

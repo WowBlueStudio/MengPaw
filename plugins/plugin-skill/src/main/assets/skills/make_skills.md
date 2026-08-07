@@ -3,6 +3,7 @@ name: make_skills
 description: 按需设计三类技能，或把当前会话沉淀为技能 — 知识剧本类 / 剧本+脚本类 / 流程限定 Flow 类，创建后自动借用进化流程升级。触发词：「设计个技能」「做个技能」「把这事做成技能」「把这个变成 skill」「记住这个流程」「保存为技能」「沉淀这个会话」
 enabled: true
 category: meta
+source: core
 ---
 # Make Skills — 按需设计 / 会话沉淀技能
 
@@ -60,6 +61,7 @@ name: <skill-name>
 description: <一句话：什么时候触发>
 enabled: true
 category: general
+source: core
 ---
 # <标题>
 ## 适用场景
@@ -79,6 +81,7 @@ name: <skill-name>
 description: <触发描述>
 enabled: true
 category: dev
+source: core
 ---
 # <标题>
 ## 执行步骤
@@ -106,6 +109,7 @@ name: <skill-name>
 description: <触发描述>
 enabled: true
 category: system
+source: core
 ---
 # <标题>
 ## 前置条件
@@ -135,6 +139,7 @@ name: check-weather
 description: 通过 wttr.in 查询天气
 enabled: true
 category: general
+source: core
 ---
 # 查天气
 ## 步骤

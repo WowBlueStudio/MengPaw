@@ -375,6 +375,11 @@ val EnglishStrings = AppStrings().apply {
     workspaceEvolutionSummary = "Failures %d · Reactions %d · Feedback %d · %d files"
     workspaceEmptyDoc = "(empty)"
 
+    // Global skill pool panel — source badge / pin button
+    skillSourceCore = "Core"
+    skillSourcePlugin = "Plugin"
+    skillPin = "Pin"
+
     // Top bar — session model label
     agentNoModel = "Agent model not configured"
     agentUnconfigured = "Not configured"

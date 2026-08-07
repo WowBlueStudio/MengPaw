@@ -172,8 +172,10 @@ internal fun rememberAppRootSettingsItems(
                     ?.map { file ->
                         val content = try { file.readText() } catch (_: Exception) { "" }
                         // docMarkdown = 技能 md 全文 — 展开区以 Markdown 渲染剧本
+                        // source = frontmatter 来源标记 (core/plugin=预置不可删; 空=用户技能可删)
                         FrameworkItem(file.nameWithoutExtension, ItemCategory.BUILTIN,
-                            summary = extractSummary(content), docMarkdown = content)
+                            summary = extractSummary(content), docMarkdown = content,
+                            source = extractSkillSource(content))
                     }
                     ?: emptyList()
             } else emptyList()

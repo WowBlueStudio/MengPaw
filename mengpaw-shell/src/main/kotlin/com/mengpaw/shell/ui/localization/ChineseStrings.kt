@@ -375,6 +375,11 @@ val ChineseStrings = AppStrings().apply {
     workspaceEvolutionSummary = "失败模式 %d · 用户反应 %d · 框架反馈 %d · 共 %d 个文件"
     workspaceEmptyDoc = "（空文档）"
 
+    // 全局技能池面板 — 来源标签/指定按钮
+    skillSourceCore = "核心"
+    skillSourcePlugin = "插件"
+    skillPin = "指定"
+
     // 顶栏 — 会话模型标签
     agentNoModel = "智能体还未配置模型"
     agentUnconfigured = "未配置"

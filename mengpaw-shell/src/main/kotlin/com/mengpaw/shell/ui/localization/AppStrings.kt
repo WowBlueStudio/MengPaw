@@ -391,6 +391,11 @@ class AppStrings {
     var workspaceEvolutionSummary: String = ""
     var workspaceEmptyDoc: String = ""
 
+    // ── 全局技能池面板 (来源标签/指定按钮) ──
+    var skillSourceCore: String = ""
+    var skillSourcePlugin: String = ""
+    var skillPin: String = ""
+
     // ── 顶栏（会话模型标签）──
     var agentNoModel: String = ""
     var agentUnconfigured: String = ""

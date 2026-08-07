@@ -3,6 +3,7 @@ name: termux
 description: Termux 脚本执行桥接。通过 am startservice 在 Termux 环境中执行命令和脚本。。触发词：「跑脚本」「termux」「脚本执行」
 enabled: true
 category: system
+source: core
 ---
 
 # Termux 脚本执行桥接

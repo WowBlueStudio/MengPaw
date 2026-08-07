@@ -3,6 +3,7 @@ name: twin-guide
 description: 记忆孪生完整指南 — 配对/工作区同步/委派/设备丢失。触发词：「记忆孪生」「设备配对」「同步」「换设备」
 enabled: true
 category: system
+source: plugin
 ---
 
 # 记忆孪生

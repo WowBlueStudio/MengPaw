@@ -3,6 +3,7 @@ name: self
 description: Agent自我管理命令参考 — 查看状态、配置、工具列表，向用户推送消息。触发词：「查看状态」「自我管理」「推送消息」
 enabled: true
 category: system
+source: core
 ---
 # self — Agent自我管理 (16命令)
 

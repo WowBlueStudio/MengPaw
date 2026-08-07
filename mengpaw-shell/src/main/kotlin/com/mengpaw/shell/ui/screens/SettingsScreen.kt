@@ -42,7 +42,9 @@ data class FrameworkItem(
     /** 子条目 — 非空时本条目为目录节点(点击展开子列表),空时为文档行(点击展开 docMarkdown)。 */
     val children: List<FrameworkItem> = emptyList(),
     /** 显式目录标记 — children 为空的目录(如空 Notes)也按目录节点渲染。 */
-    val isFolder: Boolean = false
+    val isFolder: Boolean = false,
+    /** 技能来源标记 — "core"=框架核心 / "plugin"=插件附带 (预置,不可删); ""=用户技能(可删)。 */
+    val source: String = ""
 ) {
     /** UI 显示名 — 插件统一「中文名 (English)」中英对照格式。 */
     val displayName: String get() = enName?.let { "$name ($it)" } ?: name

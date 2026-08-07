@@ -31,6 +31,63 @@ internal class PromptSystemBuilder {
     /** 模板内容哈希快照 — 提示词常量改动自动失效（无需手动 bump）。 */
     private var cachedTemplateHash: Int? = null
 
+    // ── 用户指定技能 (pinned) 注入段 — 指纹校验 + 注入 ──
+    // 只在 .pinned 清单或其指向技能文件的 mtime 变化时重建 — 清单为行格式零 JSON 依赖。
+    private var pinnedFingerprint: String? = null
+
+    /** 当前 pinned 指纹 — .pinned mtime + 每个 pinned 技能文件 mtime 拼接。 */
+    private fun currentPinnedFingerprint(): String {
+        val pinned = com.mengpaw.kernel.skill.PinnedSkills.list()
+        if (pinned.isEmpty()) return ".pinned:0"
+        val sb = StringBuilder()
+        sb.append(".pinned:").append(java.io.File(com.mengpaw.kernel.DataPaths.SKILLS, ".pinned").lastModified())
+        for (name in pinned) {
+            val f = java.io.File(com.mengpaw.kernel.DataPaths.SKILLS, "$name.md")
+            sb.append('|').append(name).append(':').append(if (f.exists()) f.lastModified() else -1L)
+        }
+        return sb.toString()
+    }
+
+    /** 读取技能 frontmatter 的 name/description (轻量解析, 不引入插件依赖)。 */
+    private fun skillBrief(file: java.io.File): Pair<String, String>? {
+        val text = try { file.readText() } catch (_: Exception) { return null }
+        val fm = Regex("^---\\s*\n(.+?)\n---", RegexOption.DOT_MATCHES_ALL).find(text.trimStart())
+            ?: return null
+        var name = file.nameWithoutExtension
+        var desc = ""
+        fm.groupValues[1].lines().forEach { line ->
+            val idx = line.indexOf(':')
+            if (idx > 0) {
+                val k = line.take(idx).trim()
+                val v = line.drop(idx + 1).trim()
+                if (k == "name" && v.isNotBlank()) name = v
+                if (k == "description" && v.isNotBlank()) desc = v
+            }
+        }
+        return name to desc
+    }
+
+    /** 用户指定技能指针段 — 末尾追加 (前缀缓存铁律: 前插击穿缓存)。 */
+    private fun pinnedSkillsBlock(lang: PromptEngine.AgentLanguage): String {
+        val pinned = com.mengpaw.kernel.skill.PinnedSkills.list().filter { name ->
+            java.io.File(com.mengpaw.kernel.DataPaths.SKILLS, "$name.md").exists()
+        }
+        if (pinned.isEmpty()) return ""
+        return buildString {
+            append(
+                if (lang == PromptEngine.AgentLanguage.CHINESE)
+                    "\n\n## 📌 用户指定技能（直接使用，无需遍历查找）\n\n"
+                else
+                    "\n\n## 📌 User-Pinned Skills (use directly, no need to search)\n\n"
+            )
+            for (name in pinned) {
+                val brief = skillBrief(java.io.File(com.mengpaw.kernel.DataPaths.SKILLS, "$name.md"))
+                val display = brief?.let { (n, d) -> if (d.isNotBlank()) "$n — $d" else n } ?: name
+                append("- **$name** — $display （skill.run $name 读取全文）\n")
+            }
+        }
+    }
+
     /** 全部工作区文档的 mtime 快照（仅 stat, 不读内容）。 */
     private fun currentDocMtimes(agentName: String): Map<String, Long> =
         AGENT_DOC_FILES.associateWith { f ->
@@ -132,7 +189,8 @@ internal class PromptSystemBuilder {
             agentName == cachedPromptAgent && lang == cachedPromptLang &&
             framework == cachedPromptFramework && modelName == cachedPromptModel &&
             cachedTemplateHash == PromptEngine.TEMPLATE_HASH &&
-            docMtimes == currentDocMtimes(agentName) // 文件删除/修改即失配 → 重建
+            docMtimes == currentDocMtimes(agentName) && // 文件删除/修改即失配 → 重建
+            pinnedFingerprint == currentPinnedFingerprint() // 用户指定技能清单/内容变化 → 重建
         ) {
             return cachedPrompt
         }
@@ -261,6 +319,8 @@ Skills 分为两层：
                 append("\n\n## 你的长期记忆（长期积累的重要知识）\n\n")
                 append(compactDoc(memoryDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/memory/memory.md"))
             }
+            // ── 用户指定技能指针段 — 末尾追加 (前插击穿前缀缓存, 铁律见 docs/llm-multistage-dataflow.md) ──
+            append(pinnedSkillsBlock(lang))
         }
 
         val prompt = buildString(identity.length + basePrompt.length + docsBlock.length + 2) {
@@ -278,6 +338,7 @@ Skills 分为两层：
         cachedPromptModel = modelName
         cachedTemplateHash = PromptEngine.TEMPLATE_HASH
         docMtimes = currentDocMtimes(agentName)
+        pinnedFingerprint = currentPinnedFingerprint()
         return prompt
     }
 

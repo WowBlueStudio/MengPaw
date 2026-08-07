@@ -85,6 +85,7 @@ internal fun WorkspaceItemRow(
                 if (onOpenWorkspaceFile != null && !isDirectory) {
                     // 打开按钮 — 所有文档(含只读): 经系统选择器用其他软件打开 (含 MP 浏览器, 预览为主)
                     IconButton(onClick = { onOpenWorkspaceFile(deletePrefix + item.name) }, modifier = Modifier.size(28.dp)) {
+                        // OpenInNew deprecation 警告 (AutoMirrored 变体在 extended 库中不可用) — 保留原版
                         Icon(Icons.Outlined.OpenInNew, strings.openDoc, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
                     }
                 }

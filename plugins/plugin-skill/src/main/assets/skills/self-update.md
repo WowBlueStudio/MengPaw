@@ -3,6 +3,7 @@ name: self-update
 description: MengPaw自更新 — 检查/下载/安装新版本。触发词：「检查更新」「升级版本」「新版本」
 enabled: true
 category: system
+source: plugin
 ---
 # update — 自更新 (4命令)
 

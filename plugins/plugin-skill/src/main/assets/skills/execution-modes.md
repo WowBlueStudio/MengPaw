@@ -3,6 +3,7 @@ name: execution-modes
 description: 四种执行模式详解
 enabled: true
 category: system
+source: core
 ---
 # 执行模式
 

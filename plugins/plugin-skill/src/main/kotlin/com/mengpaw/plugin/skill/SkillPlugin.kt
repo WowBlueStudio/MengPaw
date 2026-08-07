@@ -69,6 +69,13 @@ class SkillPlugin : Plugin {
             "general" to "通用 — 未分类的通用技能"
         )
         fun categoryLabel(cat: String): String = CATEGORIES[cat] ?: cat
+
+        /** 内置来源标签 — 预置技能(核心/插件)框架维护不可删除; 空 = 用户技能。 */
+        fun sourceLabel(source: String): String = when (source) {
+            "core" -> "核心"
+            "plugin" -> "插件"
+            else -> "用户"
+        }
     }
 
     private var storageDir = com.mengpaw.kernel.DataPaths.SKILLS
@@ -144,10 +151,10 @@ class SkillPlugin : Plugin {
         return ExecutionResult.ok(buildString {
             appendLine("## ${poolLabel}可用技能 (${skills.size})")
             appendLine()
-            appendLine("| 状态 | 名称 | 分类 | 描述 |")
-            appendLine("|------|------|------|------|")
+            appendLine("| 状态 | 名称 | 来源 | 分类 | 描述 |")
+            appendLine("|------|------|------|------|------|")
             skills.forEach { s ->
-                appendLine("| ${if (s.enabled) "✅" else "⛔"} | ${s.name} | ${s.category} | ${s.description.take(50)} |")
+                appendLine("| ${if (s.enabled) "✅" else "⛔"} | ${s.name} | ${sourceLabel(s.source)} | ${s.category} | ${s.description.take(50)} |")
             }
             appendLine()
             appendLine("使用 skill.run <name> 执行，skill.info <name> 查看详情。")
@@ -206,6 +213,7 @@ class SkillPlugin : Plugin {
             appendLine("| 属性 | 值 |"); appendLine("|------|-----|")
             appendLine("| 名称 | ${skill.name} |")
             appendLine("| 描述 | ${skill.description} |")
+            appendLine("| 来源 | ${sourceLabel(skill.source)} |")
             appendLine("| 分类 | ${skill.category} (${categoryLabel(skill.category)}) |")
             appendLine("| 状态 | ${if (skill.enabled) "已启用" else "已停用"} |")
             appendLine("| 位置 | ${if (File(localDir(ctx.agentName ?: ""), "${skill.name}.md").exists()) "Agent本地" else "全局池"} |")
@@ -343,7 +351,7 @@ class SkillPlugin : Plugin {
         val contentStart = fm?.range?.last?.plus(1) ?: 0
         val content = text.substring(contentStart).trim()
         val props = frontmatter.lines().filter { it.isNotBlank() && it.contains(":") }.associate { val idx = it.indexOf(":"); it.take(idx).trim() to it.drop(idx + 1).trim() }
-        return SkillDef(name = props["name"] ?: file.nameWithoutExtension, description = props["description"] ?: "", enabled = props["enabled"]?.toBooleanStrictOrNull() ?: true, category = props["category"] ?: "general", content = content, rawText = text)
+        return SkillDef(name = props["name"] ?: file.nameWithoutExtension, description = props["description"] ?: "", enabled = props["enabled"]?.toBooleanStrictOrNull() ?: true, category = props["category"] ?: "general", source = props["source"] ?: "", content = content, rawText = text)
     }
 
     /** internal 为测试可见性 (模板生成单测)。 */
@@ -360,5 +368,9 @@ class SkillPlugin : Plugin {
     }
 }
 
-data class SkillDef(val name: String, val description: String, val enabled: Boolean, val category: String, val content: String, val rawText: String = "")
+/**
+ * @param source 内置来源标记 — "core"=框架核心(不可删) / "plugin"=插件附带(不可删) /
+ *                "" = 用户自建/Agent 进化/后续新注册(可删)。由资产 frontmatter `source:` 声明。
+ */
+data class SkillDef(val name: String, val description: String, val enabled: Boolean, val category: String, val content: String, val rawText: String = "", val source: String = "")
 

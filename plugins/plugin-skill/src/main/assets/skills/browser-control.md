@@ -3,6 +3,7 @@ name: browser-control
 description: 浏览器协作完整手册 — 唤醒打开 (sys.browser.open)、MCP 工具 (browser.mcp.*)、网页转档 (search.*)、插件开发 API。触发词：「浏览器怎么用」「浏览器手册」「唤醒浏览器」
 enabled: true
 category: browser
+source: core
 ---
 # 浏览器协作完整手册
 

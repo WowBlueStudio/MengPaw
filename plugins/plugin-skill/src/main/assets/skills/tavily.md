@@ -3,6 +3,7 @@ name: tavily
 description: Tavily AI搜索 — 结构化搜索+网页提取。触发词：「搜索」「查一下」「找资料」
 enabled: true
 category: general
+source: plugin
 ---
 # Tavily AI 搜索
 

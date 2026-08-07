@@ -3,6 +3,7 @@ name: guidance
 description: 用户询问安装、配置、或「怎么用」「报错了」时触发；帮助定位文档和排查问题。触发词：「怎么用」「怎么装」「报错了」「这个功能在哪」
 enabled: true
 category: system
+source: core
 ---
 # MengPaw 使用引导
 

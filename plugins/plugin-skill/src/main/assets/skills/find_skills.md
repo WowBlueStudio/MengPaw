@@ -3,6 +3,7 @@ name: find_skills
 description: 从外部技能市场（findskills.org + skills.sh）检索现成技能。触发词：「找找有没有技能」「搜索技能市场」「找现成的技能」
 enabled: true
 category: meta
+source: core
 ---
 # Find Skills — 外部技能检索
 

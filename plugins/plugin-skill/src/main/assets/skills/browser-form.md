@@ -3,6 +3,7 @@ name: browser-form
 description: 表单自动化指南 — 登录、注册、搜索、多步骤向导、CAPTCHA、文件上传、错误处理 (经 MCP 工具)。触发词：「填表单」「帮我登录」「注册账号」「提交表单」「选下拉选项」
 enabled: true
 category: browser
+source: core
 ---
 # 表单自动化 (经 MCP 工具)
 

@@ -35,6 +35,18 @@ internal fun extractSummary(markdown: String): String {
 }
 
 /**
+ * 从技能 md frontmatter 提取 `source:` 来源标记 — "core"/"plugin"=预置(不可删), 空=用户技能。
+ */
+internal fun extractSkillSource(markdown: String): String {
+    val fm = Regex("^---\\s*\n(.+?)\n---", RegexOption.DOT_MATCHES_ALL).find(markdown.trimStart()) ?: return ""
+    for (line in fm.groupValues[1].lines()) {
+        val idx = line.indexOf(':')
+        if (idx > 0 && line.take(idx).trim() == "source") return line.drop(idx + 1).trim()
+    }
+    return ""
+}
+
+/**
  * 用系统其他软件打开工作区 md 文档 — FileProvider 共享 + ACTION_VIEW。
  * 优先 text/markdown MIME; 无处理器时回退 text/plain; 两者皆无 → Toast 提示。
  * 选择器中出现 MP 浏览器时由浏览器自行渲染 (content:// md 支持见浏览器侧)。

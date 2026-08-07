@@ -3,6 +3,7 @@ name: plugin-index
 description: 插件命令总索引。先读这个找到需要的插件，再按需查阅具体说明书。触发词：「插件总览」「有哪些插件」「插件索引」
 enabled: true
 category: system
+source: core
 ---
 # 插件命令索引
 
