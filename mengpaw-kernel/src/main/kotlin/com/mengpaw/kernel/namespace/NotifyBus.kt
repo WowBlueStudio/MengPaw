@@ -5,6 +5,7 @@ package com.mengpaw.kernel.namespace
 
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 /**
@@ -32,6 +33,12 @@ object NotifyBus {
 
     private val _events = MutableSharedFlow<NotifyEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<NotifyEvent> = _events.asSharedFlow()
+
+    /**
+     * 当前订阅者数量 (replay=0 语义: 发射只投递已注册订阅者, 订阅注册异步完成)。
+     * 测试/Shell 可等待其 > 0 确认订阅已建立后再触发事件。
+     */
+    val subscriptionCount: StateFlow<Int> = _events.subscriptionCount
 
     /** Push a chat message visible to the user. */
     fun message(text: String) {

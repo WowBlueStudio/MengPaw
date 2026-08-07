@@ -90,6 +90,13 @@ internal object AgentCliDocTables {
         Triple("memory.project.edit", "agent.memory.project.edit <项目名> <时间戳> <内容>", "改项目条目")
     )
 
+    /** Built-in security.* commands (v0.34.1 — 攻击来源黑名单). */
+    val SECURITY_COMMANDS = listOf(
+        Triple("block", "security.block <来源>", "将攻击来源 (域名/路径) 加入黑名单, 后续同来源内容直接阻止"),
+        Triple("unblock", "security.unblock <来源>", "从黑名单移除来源"),
+        Triple("blocklist", "security.blocklist", "列出全部黑名单条目")
+    )
+
     /** 浏览器协作能力 — readable by Agent via CLI (v0.22.1 重写: 真实三通道, 移除未接线的 45 命令手册). */
     val BROWSER_TOOLS_MD = """
 # MP浏览器 协作能力 (v0.22.1)

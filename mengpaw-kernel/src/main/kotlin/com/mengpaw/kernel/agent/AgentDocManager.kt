@@ -67,12 +67,14 @@ class AgentDocManager(
     }
 
     /**
-     * 命令集指纹 — agent.* 命令键 + self.* 命令键 + 活跃插件数 的 MD5 前缀。
+     * 命令集指纹 — agent.* 命令键 + self.* 命令键 + security.* 命令键 + 活跃插件数 的 MD5 前缀。
      * 生成与比对共用此函数 (CliDocGenerator 写头, cliDocStale 验证), 永不漂移。
+     * security 键必入 seed — 新命名空间漏进 seed 会导致 CLI.md 永不重生成 (v0.34.1 教训)。
      */
     internal fun commandFingerprint(pluginManager: PluginManager): String {
         val seed = registeredAgentCommands.joinToString(",") + "|" +
             com.mengpaw.kernel.namespace.SelfExecutor.commands.keys.sorted().joinToString(",") + "|" +
+            com.mengpaw.kernel.namespace.SecurityExecutor.commands.keys.sorted().joinToString(",") + "|" +
             pluginManager.activeCount()
         val md = java.security.MessageDigest.getInstance("MD5")
         return md.digest(seed.toByteArray())
@@ -178,6 +180,9 @@ class AgentDocManager(
 
         /** Built-in agent.* commands. */
         internal val AGENT_COMMANDS = AgentCliDocTables.AGENT_COMMANDS
+
+        /** Built-in security.* commands (v0.34.1). */
+        internal val SECURITY_COMMANDS = AgentCliDocTables.SECURITY_COMMANDS
 
         /** 浏览器协作能力 — readable by Agent via CLI (v0.22.1 重写: 真实三通道, 移除未接线的 45 命令手册). */
         val BROWSER_TOOLS_MD = AgentCliDocTables.BROWSER_TOOLS_MD

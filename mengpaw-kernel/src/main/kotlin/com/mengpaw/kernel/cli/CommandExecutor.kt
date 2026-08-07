@@ -19,6 +19,10 @@ object ErrorCodes {
     const val DOWNLOAD_FAILED = "DOWNLOAD_FAILED"
     /** 网络不可达/离线（连接超时、断网、全部源失败）。 */
     const val NETWORK_OFFLINE = "NETWORK_OFFLINE"
+    /** 高危命令缺少意图声明 (reason) — HighRiskCommandGate 拒绝。 */
+    const val REASON_REQUIRED = "REASON_REQUIRED"
+    /** 命令来源（域名/路径）在攻击黑名单中 — SourceBlocklist 拒绝。 */
+    const val ERR_SOURCE_BLOCKED = "ERR_SOURCE_BLOCKED"
 }
 
 /**

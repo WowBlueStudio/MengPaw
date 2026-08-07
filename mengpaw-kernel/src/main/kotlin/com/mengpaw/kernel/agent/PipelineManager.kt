@@ -57,6 +57,11 @@ class PipelineManager(
             "auto" to com.mengpaw.kernel.cli.CommandSignature("plugin.auto <wake|sleep|status|sleep-idle>", 1)
         )
 
+        private val SECURITY_SIGNATURES = mapOf(
+            "block" to com.mengpaw.kernel.cli.CommandSignature("security.block <来源>", 1),
+            "unblock" to com.mengpaw.kernel.cli.CommandSignature("security.unblock <来源>", 1)
+        )
+
         private val AGENT_SIGNATURES = mapOf(
             "read" to com.mengpaw.kernel.cli.CommandSignature("agent.read <路径>", 1),
             "write" to com.mengpaw.kernel.cli.CommandSignature("agent.write <路径> <内容>", 2),
@@ -147,6 +152,9 @@ class PipelineManager(
         // Built-in: agent namespace (always available)
         registry.registerNamespace("agent", agentExecutor.commands, AGENT_SIGNATURES)
 
+        // Built-in: security namespace (攻击来源黑名单, always available)
+        registry.registerNamespace("security", com.mengpaw.kernel.namespace.SecurityExecutor.commands, SECURITY_SIGNATURES)
+
         // Additional namespaces (e.g. "sys" from Android adapter)
         additionalNamespaces.forEach { (ns, commands) ->
             registry.registerNamespace(ns, commands)
@@ -172,7 +180,7 @@ class PipelineManager(
 
     /** List all active CLI namespaces (built-in + plugins) for settings display. */
     fun getActiveNamespaces(): List<String> {
-        val namespaces = mutableSetOf("self", "evolution", "agent", "plugin")
+        val namespaces = mutableSetOf("self", "evolution", "agent", "plugin", "security")
         additionalNamespaces.keys.forEach { namespaces.add(it) }
         pluginManager.getActivePlugins().forEach { plugin ->
             namespaces.add(pluginNamespaceFor(plugin.metadata.id))

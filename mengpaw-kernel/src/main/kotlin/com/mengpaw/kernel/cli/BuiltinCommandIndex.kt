@@ -270,6 +270,17 @@ object BuiltinCommandIndex {
             listOf("验证", "校验", "检查", "完整性", "批量", "文件"),
             listOf("verify", "check", "validate", "integrity", "batch", "file"))
 
+        // ── security: 攻击来源黑名单 (v0.34.1) ──
+        idx("security.block", "将攻击来源 (域名/路径) 加入黑名单 — 拉黑后同来源内容直接阻止", "security.block <来源>",
+            listOf("拉黑", "黑名单", "阻止", "封禁", "攻击来源", "屏蔽", "加入黑名单"),
+            listOf("block", "blacklist", "ban", "blocklist", "source", "blocked"))
+        idx("security.unblock", "从黑名单移除来源 — 误拉黑可撤销", "security.unblock <来源>",
+            listOf("解除", "撤销", "移除", "取消拉黑", "恢复", "解封"),
+            listOf("unblock", "remove", "undo", "unban", "restore"))
+        idx("security.blocklist", "列出全部攻击来源黑名单条目", "security.blocklist",
+            listOf("黑名单", "列表", "查看", "全部", "已阻止来源"),
+            listOf("blocklist", "list", "view", "all", "blocked"))
+
         // ── framework: 框架协议 ──
         idx("framework.discover", "扫描局域网中发现 MengPaw 框架节点 (mDNS)", "framework.discover",
             listOf("发现", "扫描", "局域网", "框架", "节点", "搜索", "探测"),

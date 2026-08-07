@@ -242,6 +242,21 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `high risk json reason teaching present in both prompts`() {
+        // v0.34.1 ④: 高危命令 JSON+reason 教学必须进系统提示词 (软层兜底, 门禁拒绝后指引重发)
+        val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertTrue("中文应含高危命令 JSON 教学", zh.contains("高危命令"))
+        assertTrue("中文应含 reason 键说明", zh.contains("\"reason\""))
+        assertTrue("中文应含 REASON_REQUIRED 拒绝示例", zh.contains("REASON_REQUIRED"))
+        assertTrue("中文应含攻击来源黑名单询问", zh.contains("security.block"))
+        val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
+        assertTrue("英文应含高危命令 JSON 教学", en.contains("High-risk commands"))
+        assertTrue("英文应含 reason 键说明", en.contains("reason"))
+        assertTrue("英文应含 REASON_REQUIRED 拒绝示例", en.contains("REASON_REQUIRED"))
+        assertTrue("英文应含攻击来源黑名单询问", en.contains("security.block"))
+    }
+
+    @Test
     fun `parse xml tool calls translates to actions`() {
         // 用户案例回归: Claude 原生 XML 工具调用语法 — 此前被 Rule 3 当最终答案吞掉
         // (工具从不执行, 用户只见原始 XML)。应转译为 ToolCall 走并行执行链路。

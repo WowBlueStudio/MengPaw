@@ -16,9 +16,10 @@ object InjectionPatterns {
         // Ignore/override instructions — English
         Regex("(?i)ignore\\s+(all\\s+)?(previous|prior|earlier)\\s+(instructions|rules|prompts)"),
         // Ignore/override instructions — Chinese
-        // 两种词序都覆盖: 「忽略之前所有指令」(常见) 与「忽略所有之前指令」
-        Regex("(?:忽略|忘掉|无视)\\s*(?:所有)?\\s*(?:之前|先前|上文)?\\s*(?:指令|指示|规则|提示|要求)"),
-        Regex("(?:忽略|忘掉|无视)\\s*(?:之前|先前|上文)?\\s*(?:所有)?\\s*(?:指令|指示|规则|提示|要求)"),
+        // 两种词序都覆盖: 「忽略之前所有指令」(常见) 与「忽略所有之前指令」; 「的」语气助词可选
+        // (「忽略之前的指令」真实语料常见 — 漏掉「的」会整条失配)
+        Regex("(?:忽略|忘掉|无视)\\s*(?:所有)?\\s*(?:之前|先前|上文)?\\s*的?\\s*(?:指令|指示|规则|提示|要求)"),
+        Regex("(?:忽略|忘掉|无视)\\s*(?:之前|先前|上文)?\\s*(?:所有)?\\s*的?\\s*(?:指令|指示|规则|提示|要求)"),
         // Unrestricted mode — English
         Regex("(?i)(unrestricted|debug|developer|admin|god|jailbreak)\\s+mode"),
         // Unrestricted mode — Chinese

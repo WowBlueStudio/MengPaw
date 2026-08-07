@@ -102,13 +102,18 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                     val entries = coroutineScope {
                         actionList.map { call ->
                             async(KernelDispatchers.BACKGROUND) {
-                                val commandLine = "${call.name} ${call.parameters.values.joinToString(" ")}"
+                                // P0 对齐 (v0.34.1): 高危门禁 + 来源黑名单硬闸 (与主循环同一纯函数)
+                                val gate = com.mengpaw.kernel.security.HighRiskCommandGate.evaluate(call)
+                                val commandLine = gate.commandLine
                                 val result = try {
-                                    val formatError = call.paramFormatError()
-                                    if (formatError != null) {
-                                        ExecutionResult.fail(formatError, errorCode = ErrorCodes.PARAM_FORMAT_ERROR)
-                                    } else {
-                                        withTimeout(60_000L) { engine.getPipelineManager().buildPipeline().execute(commandLine, context) }
+                                    when {
+                                        gate.error != null ->
+                                            ExecutionResult.fail(gate.error, errorCode = gate.errorCode ?: ErrorCodes.PARAM_FORMAT_ERROR)
+                                        com.mengpaw.kernel.security.SourceBlocklist.extractSource(commandLine)
+                                            ?.let { com.mengpaw.kernel.security.SourceBlocklist.isBlocked(it) } == true ->
+                                            ExecutionResult.fail("来源已在黑名单，工具结果已阻止。", errorCode = ErrorCodes.ERR_SOURCE_BLOCKED)
+                                        else ->
+                                            withTimeout(60_000L) { engine.getPipelineManager().buildPipeline().execute(commandLine, context) }
                                     }
                                 } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                                     ExecutionResult.fail("命令超时 (60s): $commandLine", errorCode = ErrorCodes.ERR_INTERNAL)
@@ -117,8 +122,14 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                                 val observation = (if (result.success) result.output
                                     else (result.errorCode?.let { "Error [$it]: ${result.error}" } ?: "Error: ${result.error}"))
                                     .take(com.mengpaw.kernel.agent.MissionSwarmPrompts.WORKER_OBSERVATION_MAX)
-                                onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, commandLine, observation))
-                                "Command: $commandLine\nResult: $observation"
+                                // P0 一致性 (v0.34.1): 与主循环对齐 — 剥离指令形态片段 + <untrusted_data> 包裹;
+                                // worker 无用户交互: 命中仅日志, 不 banner 不提醒 (协调器主循环兜底)
+                                val cleaned = com.mengpaw.kernel.security.UntrustedContent.stripInjection(observation)
+                                com.mengpaw.kernel.security.InjectionPatterns.findMatch(observation)?.let {
+                                    KernelLog.w("SwarmWorker", "检测到疑似$it, 内容已净化 (worker 零用户交互)")
+                                }
+                                onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, commandLine, cleaned))
+                                "Command: $commandLine\nResult: ${com.mengpaw.kernel.security.UntrustedContent.wrap(cleaned)}"
                             }
                         }.awaitAll()
                     }
