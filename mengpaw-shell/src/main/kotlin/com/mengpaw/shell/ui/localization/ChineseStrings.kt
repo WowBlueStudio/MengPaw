@@ -264,6 +264,7 @@ val ChineseStrings = AppStrings().apply {
     noWorkspaceDocs = "工作区暂无文档"
     deleteDoc = "删除文档"
     deleteConfirm = "确定删除此文档？此操作不可恢复。"
+    agentToolDeleteConfirm = "确定删除命令集 %s ？此操作将移除该命令集及其全部命令，不可恢复。"
     resetDoc = "重置文档"
     resetConfirm = "确定将此文档重置为预置版？当前修改将丢失。"
     openDoc = "打开"

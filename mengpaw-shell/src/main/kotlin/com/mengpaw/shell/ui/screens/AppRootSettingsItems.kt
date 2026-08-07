@@ -168,6 +168,8 @@ internal fun rememberAppRootSettingsItems(
     }
 
     // Agent 专属工具: Agent文档/{agent}/tools/*.json — 命令集注册清单（非全局共享，LESSONS 99）
+    // 每组 = 一个命令集 (如 飞书 CLI): name=显示名, enName=权威名(文件定位/删除),
+    // children=命令列表 (展开查看), summary=命令数+来源。删除整组: AgentToolsStore.remove。
     var agentToolItems by remember { mutableStateOf(emptyList<FrameworkItem>()) }
     LaunchedEffect(showSettings, activeAgent, agentDataVersion) {
         if (!showSettings) return@LaunchedEffect
@@ -175,9 +177,15 @@ internal fun rememberAppRootSettingsItems(
             val items = com.mengpaw.plugin.agenttools.AgentToolsStore.readAll(activeAgent).map { set ->
                 FrameworkItem(
                     name = set.displayName.ifBlank { set.name },
+                    enName = set.name,
                     category = ItemCategory.CUSTOM,
                     summary = "${set.commands.size} 条命令 · 来源: ${set.source.ifBlank { "手动粘贴" }}",
-                    docMarkdown = com.mengpaw.plugin.agenttools.AgentToolsStore.toMarkdown(set))
+                    docMarkdown = com.mengpaw.plugin.agenttools.AgentToolsStore.toMarkdown(set),
+                    children = set.commands.map { cmd ->
+                        FrameworkItem(name = cmd.name, category = ItemCategory.CUSTOM,
+                            summary = cmd.description,
+                            docMarkdown = listOf(cmd.usage, cmd.description).filter { it.isNotBlank() }.joinToString("\n\n"))
+                    })
             }
             withContext(Dispatchers.Main) { agentToolItems = items }
         }

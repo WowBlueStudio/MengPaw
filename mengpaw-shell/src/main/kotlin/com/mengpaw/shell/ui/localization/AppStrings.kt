@@ -279,6 +279,7 @@ class AppStrings {
     var noWorkspaceDocs: String = ""
     var deleteDoc: String = ""
     var deleteConfirm: String = ""
+    var agentToolDeleteConfirm: String = ""
     var resetDoc: String = ""
     var resetConfirm: String = ""
     var openDoc: String = ""

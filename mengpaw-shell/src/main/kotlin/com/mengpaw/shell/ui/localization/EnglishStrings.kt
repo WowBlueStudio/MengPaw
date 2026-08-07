@@ -264,6 +264,7 @@ val EnglishStrings = AppStrings().apply {
     noWorkspaceDocs = "No workspace documents"
     deleteDoc = "Delete Document"
     deleteConfirm = "Delete this document? This cannot be undone."
+    agentToolDeleteConfirm = "Delete command set %s? This removes the set and all its commands. Cannot be undone."
     resetDoc = "Reset Document"
     resetConfirm = "Reset this document to the built-in version? Current changes will be lost."
     openDoc = "Open"
