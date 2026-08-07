@@ -30,8 +30,6 @@ MengPaw 采用双许可（社区版 AGPL-3.0 + 商业授权，见 [COMMERCIAL-LI
 
 ## 构建（从源码自行构建）
 
-## 构建（从源码自行构建）
-
 ### 环境搭建
 
 - JDK 17 (Amazon Corretto 17 推荐)
@@ -68,7 +66,7 @@ powershell -File scripts/validate-plugins.ps1
 | mengpaw-core | Android 适配层：Vault 加密存储 / IntegrityGuard / SysExecutor |
 | mengpaw-shell | Compose UI + 前台服务 |
 | mengpaw-design-system | Arco 设计令牌 + 基础组件 |
-| plugins/ | 21 个功能插件（均只依赖 kernel） |
+| plugins/ | 22 个功能插件（均只依赖 kernel） |
 
 ## 代码规范（提交 PR 前必读）
 

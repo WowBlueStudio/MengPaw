@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.30.0 | **更新**: 2026-08-05 | **架构**: 微内核(82文件) + AgentRuntime + 21插件模块(14内置随壳更新) + 双许可(社区AGPL + 商业授权) + 连接器拆分独立仓库(MIT) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 五模式自适应调度(REACT/GOAL/MISSION/SWARM/FLEET) + 8斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.0
+> **版本**: 0.34.1 | **更新**: 2026-08-07 | **架构**: 微内核(124文件) + AgentRuntime + 22插件模块(14捆绑随壳更新) + 双许可(社区AGPL + 商业授权) + 连接器拆分独立仓库(MIT) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 五模式自适应调度(REACT/GOAL/MISSION/SWARM/FLEET) + 8斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.3
 
 ---
 
@@ -18,12 +18,12 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 | 特征 | 说明 |
 |------|------|
-| 微内核 | `mengpaw-kernel` — 纯 Kotlin/JVM 模块，46 文件，零 Android 依赖，CLI/LLM/安全/会话/插件框架/Goal-Fleet 模式全部可脱离 Android 测试 |
-| 适配层 | `mengpaw-core` — 仅 5 个源文件，提供 Android 桥接（Vault 加密存储 / IntegrityGuard / SysExecutor）。移植到新平台只需重写这 5 个文件 |
+| 微内核 | `mengpaw-kernel` — 纯 Kotlin/JVM 模块，124 文件，零 Android 依赖，CLI/LLM/安全/会话/插件框架/Goal-Fleet 模式全部可脱离 Android 测试 |
+| 适配层 | `mengpaw-core` — 20 个源文件，提供 Android 桥接（Vault 加密存储 / IntegrityGuard / SysExecutor）。移植到新平台只需重写这层桥接 |
 | 插件同级 | 内置功能 (`sys`) 与外挂插件同等地位，均实现 `Plugin` 接口，均只依赖 kernel |
 | 零 Python | 纯 Kotlin，无 Python 运行时 |
 | 多通道 | AIDL（系统集成）/ Unix Socket（Termux）/ HTTP（调试） |
-| 独立浏览器 | `mengpaw-browser` v0.7.0，Intent 互通，45 条浏览器操控命令 |
+| 独立浏览器 | `mengpaw-browser` v0.7.3，Intent 互通，45 条浏览器操控命令 |
 | 多模型 | 12 LLM Provider — OpenAI / DeepSeek / Kimi / GLM / Qwen / Grok / 火山引擎 / OpenModel / Self-Hosted / 自定义 |
 | 插件市场 | raw 直读 `plugins.json`（GitHub raw / Gitee raw 双源），ETag 缓存，SHA256 校验，磁盘快照离线降级（v0.34.0） |
 | 记忆孪生 | v0.15.0 — 跨设备 Agent 记忆同步 + 哈希链账本 + 短码配对 + 心跳保活 + QoS 自适应 + 手动 IP 发现 (plugin-memory-twin v0.2) |
@@ -45,14 +45,14 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 │  ├─ AgentViewModel ← 轻量状态持有                 │
 │  └─ Compose UI    ← 纯展示                       │
 ├──────────────────────────────────────────────────┤
-│  mengpaw-core (6 文件, Android 适配)              │  ← 平台桥接
+│  mengpaw-core (20 文件, Android 适配)             │  ← 平台桥接
 ├──────────────────────────────────────────────────┤
-│  mengpaw-kernel (46 文件, 纯 Kotlin/JVM)          │  ← 微内核
+│  mengpaw-kernel (124 文件, 纯 Kotlin/JVM)         │  ← 微内核
 │  CLI · LLM · Session · Plugin · Security          │
 │  AgentEngine · Goal/Fleet/Swarm · MCP · ACP     │
 │  NotifyBus · Error · Trigger · Namespace          │
 ├──────────────────────────────────────────────────┤
-│  plugins/ (25 模块, 同级, 均只依赖 kernel)         │  ← 插件层
+│  plugins/ (22 模块, 同级, 均只依赖 kernel)         │  ← 插件层
 └──────────────────────────────────────────────────┘
 ```
 
@@ -67,11 +67,11 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 | 模块 | 类型 | 源文件 | 版本 | 说明 |
 |------|------|--------|------|------|
-| mengpaw-kernel | JVM Library | 82 | 0.30.0 | 微内核：纯 Kotlin，零 Android 依赖 |
-| mengpaw-core | Android Library | 21 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
-| mengpaw-design-system | Android Library | 6 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
-| mengpaw-shell | APK | 66 | 0.32.0 (vc=32000) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
-| mengpaw-browser | APK | 33 | 0.7.2 (vc=11) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 33文件架构 |
+| mengpaw-kernel | JVM Library | 124 | 0.34.1 | 微内核：纯 Kotlin，零 Android 依赖 |
+| mengpaw-core | Android Library | 20 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
+| mengpaw-design-system | Android Library | 8 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
+| mengpaw-shell | APK | 118 | 0.34.1 (vc=34001) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
+| mengpaw-browser | APK | 42 | 0.7.3 (vc=12) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 42文件架构 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
 
@@ -193,7 +193,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ## 3. 模块详解
 
-### 3.1 mengpaw-kernel（微内核，119 文件）
+### 3.1 mengpaw-kernel（微内核，124 文件）
 
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|
@@ -228,7 +228,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)` |
 | `AndroidLogger.kt` | 桥接：`KernelLog.setLogger(AndroidLogger())` |
 
-### 3.3 mengpaw-shell（主应用，116 文件）
+### 3.3 mengpaw-shell（主应用，118 文件）
 
 | 文件 | 职责 |
 |------|------|
@@ -1189,7 +1189,7 @@ interface Plugin {
 
 ### 9.2 插件构建工具链
 
-- `scripts/build-plugins.ps1` — 模块列表动态派生自 settings.gradle.kts（26 模块），逐模块 assembleRelease，产物复制到 `releases/plugins/plugin-<name>-<version>-release.aar`，自动回写 plugins.json 的 checksum/size/changelog（remote 条目）
+- `scripts/build-plugins.ps1` — 模块列表动态派生自 settings.gradle.kts（22 模块），逐模块 assembleRelease，产物复制到 `releases/plugins/plugin-<name>-<version>-release.aar`，自动回写 plugins.json 的 checksum/size/changelog（remote 条目）
 - `scripts/update-plugins-json.py` — JSON 写回（规避 PowerShell 5.1 的 ConvertTo-Json 中文转义缺陷）
 - `scripts/validate-plugins.ps1` — 只读校验：结构/id 唯一/字段完整/SemVer/URL 与 checksum 一致性/与代码交叉校验（namespaceFor 派生规则、shell 捆绑 vs plugins.json builtin 对应）
 - 插件 AAR 发布 tag：`plugins-vX.Y.Z`（独立于版本 tag `vX.Y.Z`）
@@ -1257,7 +1257,7 @@ MengPaw 以**双许可**发布（详细条款见 [COMMERCIAL-LICENSE.md](COMMERC
 
 ### 11.3 贡献政策
 
-- **主仓库**：仅接受 Bug 报告与功能请求（GitHub Issues 模板）；**暂不接受 PR**（保证版权单一归属），未来可能开放
+- **主仓库**：已开放 PR（2026-08-03 起，插件/文档类优先，内核严格评审）；提交 PR 即同意版权让渡（双许可合规）
 - **连接器仓库**（[mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)）：MIT 许可，**社区开放 PR**（inbound=outbound，无需 CLA）
 - **商用咨询**：1138018324@qq.com
 

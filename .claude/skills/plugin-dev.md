@@ -3,10 +3,12 @@ name: plugin-dev
 description: 插件开发与发布全流程 — 创建/审计/关键词/构建/校验/市场发布。用户说"插件开发/建插件/plugin.dev/发插件"时执行。管插件级发布（AAR+plugins.json）；版本级发布（APK）见 release skill。
 ---
 
+> **2026-08-07 已迁移**: 本技能已迁移至 Codex skill `mengpaw-plugin-dev`（用户级 `~/.codex/skills/mengpaw-plugin-dev/`），下文为兼容保留，新开发以 Codex skill 为准。
+
 # MengPaw 插件开发与发布流程
 
 > 权威文档：`PLUGIN_DEV_GUIDE.md`（开发）| `.claude/skills/release.md`（版本级发布）| 本 skill 管插件级发布
-> 插件数口径：26 模块（settings.gradle.kts）| 13 捆绑（mengpaw-shell）| plugins.json 28 条目
+> 插件数口径：22 模块（settings.gradle.kts）| 14 捆绑（mengpaw-shell build.gradle.kts）
 
 ## 0. 前置
 
@@ -51,7 +53,7 @@ dev.plugin.keywords --target <插件ID>  # 查看检索关键词
 ```bash
 # 纯 JVM（无需真机）: kernel 全量 + dev-plugin 链路（create→audit→keywords→端口冲突）
 ./gradlew :mengpaw-kernel:test :plugin-dev:testDebugUnitTest
-# 已知预存在失败: AcpProtocolTest round-trip（与本改动无关，不阻塞）
+# 出现任何失败 → 必须修复（AcpProtocolTest 已于 v0.22.1 修复，不再是"已知预存在失败"）
 # 真机: plugin.install <本地 AAR> 后 self.tools <ns> 验证命令注册
 ```
 
@@ -59,7 +61,7 @@ dev.plugin.keywords --target <插件ID>  # 查看检索关键词
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build-plugins.ps1
-# 动态派生 26 模块 → releases/plugins/plugin-<name>-<version>-release.aar
+# 动态派生 22 模块 → releases/plugins/plugin-<name>-<version>-release.aar
 # Python 回写 plugins.json: checksum/size/changelog/version/updated
 powershell -ExecutionPolicy Bypass -File scripts/validate-plugins.ps1
 # 全绿 = 字段/命名空间/URL/checksum 与实际 AAR 比对 + 与代码交叉校验（捆绑↔builtin）

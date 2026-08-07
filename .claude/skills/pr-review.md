@@ -3,6 +3,8 @@ name: pr-review
 description: 评审 GitHub Pull Request — 拉取 PR → 机器门禁（编译+测试）→ 九维评审 → 分级输出结论。用户说"评审这个 PR/review PR/看看这个 PR"时执行。
 ---
 
+> **2026-08-07 已迁移**: 本技能已迁移至 Codex skill `mengpaw-pr-review`（用户级 `~/.codex/skills/mengpaw-pr-review/`），下文为兼容保留，新开发以 Codex skill 为准。
+
 # MengPaw PR 评审流程
 
 > 方法论来源：v0.17.1 两轮全量审查沉淀（九维审查；原 `docs/code-review-9-dimensions.md` 已归档删除，git 历史可溯）。评审结论 = 机器门禁 + 九维审查 + 分级输出，**最终合并不由 Claude 决定，由用户拍板**。

@@ -3,6 +3,8 @@ name: release
 description: 发布 MengPaw 新版本 — 版本号/CHANGELOG/编译/签名验证/双远端推送/GitHub Release/插件市场/ADB 无线推送 全流程。用户说"发布/发新版/release"时执行。
 ---
 
+> **2026-08-07 已迁移**: 本技能已迁移至 Codex skill `mengpaw-release`(用户级 `~/.codex/skills/mengpaw-release/`),下文为兼容保留,新开发以 Codex skill 为准。
+
 # MengPaw 发布流程（v0.20.0 详细化版）
 
 > 每次发布踩坑都固化于此。严格执行每一步，跳过 = 返工。
@@ -39,8 +41,7 @@ adb -s <设备> shell dumpsys dropbox --print | grep -A2 -E "^2026|Package:"
 ```bash
 # 测试（插件单测 + kernel）
 ./gradlew :plugin-agent-tools:testDebugUnitTest :mengpaw-kernel:test
-# 已知预存在失败: AcpProtocolTest round-trip（干净 master 也失败，与本次无关，不阻塞发布）
-# 若出现 NEW 失败 → 必须修复才能发布
+# 出现任何失败 → 必须修复才能发布（AcpProtocolTest 已于 v0.22.1 修复，不再是"已知预存在失败"）
 
 # Release 构建（clean 防增量脏缓存；v0.30.0 起只构建本轮有变更的 APK）
 ./gradlew clean :mengpaw-shell:assembleRelease                     # 仅 shell 有变更
@@ -135,7 +136,7 @@ adb -s <设备> shell dumpsys package com.mengpaw.shell | grep versionName
 
 - 设备上 APK 与本地同密钥签名 → `-r` 覆盖安装成功；签名不匹配（异机构建/Play 安装）→ 报 INSTALL_FAILED_UPDATE_INCOMPATIBLE → 需 `adb uninstall` 后重装（丢数据）
 - 端口每次连接可能变化（无线调试需重新配对）——以用户提供为准
-- **静默安装铁律（v0.28.2 用户反馈固化）**：adb install 走系统安装器、设备端不弹审核框 —— 发布时一律由 Claude 直接 adb 推装两台设备，**不要让用户手动在设备上点文件管理器安装**（平板侧载审核框按错就得重来，用户明确吐槽）。荣耀平板每次 install 仍会弹一次"ICP 警告"（MagicOS 侧载限制，无法绕开，属正常，忽略即可，勿再提议改 manifest）
+- **安装弹窗（v0.34.0 修正）**：设备端安装会弹确认框（手机也弹，不再是纯静默），先提示用户点确认再重试，不要盲目重试；荣耀平板每次 install 仍会弹"ICP 警告"（MagicOS 侧载限制，用户已接受，勿再试 pm install/静默方案——荣耀上还有路径转换坑）
 
 ## 7. 验证清单（全部通过才算发布完成）
 

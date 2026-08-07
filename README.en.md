@@ -51,7 +51,7 @@ mengpaw/
 │   ├── AgentEngine.kt          # ReAct + Plan-Execute engine
 │   └── DataPaths.kt            # Platform-independent path constants
 │
-├── mengpaw-core/               # Android adapter layer (6 files)
+├── mengpaw-core/               # Android adapter layer (20 files)
 │   ├── security/               # Vault (Keystore) / IntegrityGuard (APK signature)
 │   └── namespace/              # SysExecutor (Android system info)
 │
@@ -65,7 +65,7 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS bidirectional bridge)
 │   └── plugin/                 # In-browser plugins (22 commands)
 │
-└── plugins/                    # 21 feature plugins (siblings, all depend only on kernel)
+└── plugins/                    # 22 feature plugins (siblings, all depend only on kernel)
     ├── plugin-fs/              # File system (5 commands)
     ├── plugin-net/             # HTTP network (3 commands)
     ├── plugin-skill/           # Two-tier skill system (4 commands) ⭐💎
@@ -95,12 +95,12 @@ mengpaw/
 ┌────────────────────────────────┐
 │  Shell APK     Browser APK     │  ← UI layer
 ├────────────────────────────────┤
-│  mengpaw-core (6 files)        │  ← Android adapter
+│  mengpaw-core (20 files)       │  ← Android adapter
 ├────────────────────────────────┤
-│  mengpaw-kernel (46 files)     │  ← Microkernel (pure Kotlin/JVM)
+│  mengpaw-kernel (124 files)    │  ← Microkernel (pure Kotlin/JVM)
 │  zero Android deps · JVM-tested │
 ├────────────────────────────────┤
-│  28 plugins (siblings · kernel only) │  ← Plugin layer
+│  22 plugins (siblings · kernel only) │  ← Plugin layer
 └────────────────────────────────┘
 ```
 
