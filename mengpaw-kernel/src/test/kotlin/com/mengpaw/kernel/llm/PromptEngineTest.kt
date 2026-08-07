@@ -214,6 +214,20 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `media delivery format guide present in both prompts`() {
+        // 聊天内媒体交付格式指引 (v0.34.0): 缺失时 LLM 用自然语言描述路径,
+        // 下行提取器猜不中格式 → 用户收不到文件 (与 XML 工具调用同类静默丢失)
+        val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertTrue("中文提示词应含 markdown 图片格式", zh.contains("![描述](绝对路径)"))
+        assertTrue("中文提示词应含已保存到独立行", zh.contains("已保存到 <绝对路径>"))
+        assertTrue("中文提示词应要求路径真实存在", zh.contains("agent.ls 验证"))
+        val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
+        assertTrue("英文提示词应含 markdown 图片格式", en.contains("![description](absolute path)"))
+        assertTrue("英文提示词应含 Saved to 独立行", en.contains("Saved to <absolute path>"))
+        assertTrue("英文提示词应要求路径真实存在", en.contains("must really exist"))
+    }
+
+    @Test
     fun `parse xml tool calls translates to actions`() {
         // 用户案例回归: Claude 原生 XML 工具调用语法 — 此前被 Rule 3 当最终答案吞掉
         // (工具从不执行, 用户只见原始 XML)。应转译为 ToolCall 走并行执行链路。

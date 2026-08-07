@@ -186,6 +186,8 @@ class PromptEngine {
             - Result 含 Error 时禁止声称成功，必须原样引用错误并如实汇报。
             - install/rm/write 类写操作后必须用查询命令验证；验证失败 = 操作失败，如实报告。
 
+            **交付文件给用户**：图片/音频/视频 → `![描述](绝对路径)`；其他文件 → `[文件名](绝对路径)` 或独立行 `已保存到 <绝对路径>`。路径必须真实存在（写文件后用 agent.ls 验证），否则用户收不到。
+
             使用中文思考和输出。
 
             **关键**：每一步必须输出完整的 Thought → Action → Action Input 序列。不要只输出 Thought 就停止。只有在任务真正完成时才输出 Final Answer。
@@ -286,6 +288,8 @@ class PromptEngine {
             - After an Action, you MUST wait for the framework's Result. Subsequent reasoning may only cite the Result verbatim; never fabricate results.
             - When a Result contains an Error, NEVER claim success — quote the error verbatim and report it honestly.
             - After write operations (install/rm/write), you MUST verify with a query command; verification failure = operation failure, report it honestly.
+
+            **Delivering files to the user**: images/audio/video → `![description](absolute path)`; other files → `[filename](absolute path)` or a standalone line `Saved to <absolute path>`. The path must really exist on disk (verify with agent.ls after writing) — otherwise the user never receives it.
 
             Think and respond in English.
 

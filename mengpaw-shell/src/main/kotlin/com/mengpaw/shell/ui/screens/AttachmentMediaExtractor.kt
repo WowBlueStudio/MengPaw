@@ -32,7 +32,7 @@ fun extractMedia(content: String): Pair<String, List<AttachmentData>> {
     //     否则 ![x](已删除文件.png) 会经链接分支漏出幻影卡片 (UI 渲染坏图)
     text = LINK_REGEX.replace(text) { m ->
         val name = m.groupValues[1].trim()
-        val path = m.groupValues[2].trim()
+        val path = m.groupValues[2].trim().removePrefix("file://")
         val ext = path.substringAfterLast('.', "").lowercase()
         val type = typeFromMime(null, path)
         val isRemote = path.startsWith("http://") || path.startsWith("https://")
@@ -48,14 +48,25 @@ fun extractMedia(content: String): Pair<String, List<AttachmentData>> {
             ); ""
         } else m.value
     }
-    // 3. Saved to / 已保存到 行 (插件输出)
+    // 3. 交付行: 交付动词 (Saved to/已保存到/文件在…) + 路径 (冒号/引号容错) 或
+    //    独立成行的纯路径 — LLM 自然语言交付形态。存在性/媒体扩展名交给
+    //    mediaFromMarkdownPath 保守过滤, 不命中则原文保留。
     text = text.lines().joinToString("\n") { line ->
-        val m = SAVED_TO_REGEX.find(line) ?: return@joinToString line
-        val path = m.groupValues[1].trim()
+        val path = deliveryPathOf(line) ?: return@joinToString line
         val card = mediaFromMarkdownPath(path) { typeFromMime(null, path) }
         if (card != null) { cards.add(card); "" } else line
     }
     return text to cards
+}
+
+/** 从一行提取候选交付路径 — 交付动词行优先, 否则独立成行的纯路径 (无空格且含 /)。 */
+private fun deliveryPathOf(line: String): String? {
+    val m = DELIVERY_REGEX.find(line)
+    if (m != null) {
+        return m.groupValues[1].ifBlank { m.groupValues[2].ifBlank { m.groupValues[3] } }.trim()
+    }
+    val t = line.trim().removeSuffix("。").removeSuffix(".").trim()
+    return if (t.isNotEmpty() && ' ' !in t && '/' in t) t else null
 }
 
 /** markdown 图片/路径 → 附件卡片; 本地路径须存在, URL 按扩展名。 */
@@ -77,7 +88,14 @@ internal fun mediaFromMarkdownPath(path: String, typeOf: (String) -> String): At
 }
 
 internal val LINK_REGEX = Regex("\\[([^\\]]{1,80})]\\(([^)]{1,500})\\)")
-internal val SAVED_TO_REGEX = Regex("(?:Saved to|已保存到)\\s+(\\S+)\\s*$")
+/** 交付动词 + 可选冒号(半角/全角) + 路径(引号可包裹, 含空格路径)。大小写不敏感。
+ *  路径捕获组以媒体/文档扩展名白名单收尾 — 防中文尾随文本 (无空格) 污染 \S+ 捕获。 */
+internal val DELIVERY_REGEX = Regex(
+    "(?i)(?:saved to|已保存到|文件在|文件位于|文件已保存到|文件已生成|输出到|保存在|生成于|文件为)[:：]?\\s*" +
+        "(?:\"([^\"]+\\.(?:png|jpe?g|gif|webp|mp3|m4a|wav|ogg|mp4|mov|webm|pdf|docx?|xlsx?|zip|txt|md))\"|" +
+        "'([^']+\\.(?:png|jpe?g|gif|webp|mp3|m4a|wav|ogg|mp4|mov|webm|pdf|docx?|xlsx?|zip|txt|md))'|" +
+        "(\\S+\\.(?:png|jpe?g|gif|webp|mp3|m4a|wav|ogg|mp4|mov|webm|pdf|docx?|xlsx?|zip|txt|md)))[。.!！？?]?\\s*$"
+)
 
 internal fun mimeForExt(ext: String): String = when (ext) {
     "png" -> "image/png"; "jpg", "jpeg" -> "image/jpeg"; "gif" -> "image/gif"; "webp" -> "image/webp"

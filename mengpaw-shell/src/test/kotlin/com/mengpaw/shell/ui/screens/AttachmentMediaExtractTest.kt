@@ -168,4 +168,114 @@ class AttachmentMediaExtractTest {
         assertEquals(0, cards2.size)
         assertTrue(clean2.contains("普通文字"))
     }
+
+    // ── extractMedia: 交付行容错 (v0.34.0+ 格式漂移加固) ──
+
+    @Test
+    fun 交付动词带冒号_半角全角均提取() {
+        val img = Files.createTempFile("media", ".png").toFile()
+        try {
+            val half = extractMedia("任务完成。\nSaved to: ${img.absolutePath}")
+            assertEquals("半角冒号应提取", 1, half.second.size)
+            val full = extractMedia("任务完成。\n已保存到：${img.absolutePath}")
+            assertEquals("全角冒号应提取", 1, full.second.size)
+        } finally {
+            img.delete()
+        }
+    }
+
+    @Test
+    fun saved_to小写提取() {
+        val img = Files.createTempFile("media", ".png").toFile()
+        try {
+            val (clean, cards) = extractMedia("saved to ${img.absolutePath}")
+            assertEquals(1, cards.size)
+            assertFalse(clean.contains("saved"))
+        } finally {
+            img.delete()
+        }
+    }
+
+    @Test
+    fun 引号包裹路径_含空格提取() {
+        val img = Files.createTempFile("media with space", ".png").toFile()
+        try {
+            val content = "已保存到 \"${img.absolutePath}\""
+            val (clean, cards) = extractMedia(content)
+            assertEquals(1, cards.size)
+            assertEquals(img.absolutePath, cards[0].path)
+            assertFalse(clean.contains("已保存到"))
+        } finally {
+            img.delete()
+        }
+    }
+
+    @Test
+    fun 独立行纯路径提取() {
+        val img = Files.createTempFile("media", ".png").toFile()
+        try {
+            // Android 路径为前斜杠形态 (Windows 测试环境用 replace 模拟)
+            val fwdPath = img.absolutePath.replace('\\', '/')
+            val (clean, cards) = extractMedia("生成完毕\n$fwdPath\n还有什么需要吗？")
+            assertEquals(1, cards.size)
+            assertEquals(fwdPath, cards[0].path)
+            assertFalse("独立路径行应从正文移除", clean.contains("media"))
+        } finally {
+            img.delete()
+        }
+    }
+
+    @Test
+    fun 交付动词_文件在_提取() {
+        val img = Files.createTempFile("media", ".png").toFile()
+        try {
+            val (clean, cards) = extractMedia("图片文件在 ${img.absolutePath}。")
+            assertEquals(1, cards.size)
+            assertEquals("image", cards[0].type)
+            assertFalse(clean.contains("文件在"))
+        } finally {
+            img.delete()
+        }
+    }
+
+    @Test
+    fun 路径后跟中文文本_不误提取_原文保留() {
+        // 中文尾随文本无空格 — 扩展名白名单限定捕获, 不命中即保留原文 (不静默丢失)
+        val img = Files.createTempFile("media", ".png").toFile()
+        try {
+            val content = "图片文件在 ${img.absolutePath}，请查收"
+            val (clean, cards) = extractMedia(content)
+            assertEquals(0, cards.size)
+            assertTrue("尾随中文文本时原文保留", clean.contains("文件在"))
+        } finally {
+            img.delete()
+        }
+    }
+
+    @Test
+    fun file链接前缀提取() {
+        val img = Files.createTempFile("media", ".png").toFile()
+        try {
+            val content = "[查看图片](file://${img.absolutePath})"
+            val (clean, cards) = extractMedia(content)
+            assertEquals(1, cards.size)
+            assertEquals("image", cards[0].type)
+            assertFalse(clean.contains("]("))
+        } finally {
+            img.delete()
+        }
+    }
+
+    @Test
+    fun 非媒体扩展名交付行不提取_原文保留() {
+        val dir = Files.createTempDirectory("media-xyz-").toFile()
+        try {
+            val ghost = "${dir.absolutePath}${java.io.File.separator}config.xyz"
+            val (clean, cards) = extractMedia("已保存到 $ghost")
+            assertEquals(0, cards.size)
+            assertTrue("非媒体交付行保留原文", clean.contains("config.xyz"))
+        } finally {
+            dir.delete()
+        }
+    }
 }
