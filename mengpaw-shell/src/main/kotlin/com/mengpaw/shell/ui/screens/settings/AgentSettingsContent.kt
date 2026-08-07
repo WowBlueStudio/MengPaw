@@ -64,7 +64,7 @@ fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    AgentSkillsPanel(state, agentSkillItems)
+    AgentSkillsPanel(state, agentSkillItems, activeAgentName)
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)

@@ -156,12 +156,32 @@ internal fun rememberAppRootSettingsItems(
             } catch (_: Exception) {}
             val dir = java.io.File(com.mengpaw.kernel.DataPaths.agentSkillsDir(activeAgent))
             val items = if (dir.exists()) {
-                dir.listFiles()?.filter { it.extension == "md" }?.sortedBy { it.name }
-                    ?.map { file ->
+                // 技能形态全覆盖 (v0.34.1+): ① md 剧本 + 同名资源文件夹 (脚本/流程) 合并一条目;
+                // ② 纯文件夹技能 (无同名 md); ③ 散资源文件 (.py/.sh/.json 等非 md 剧本)。
+                // 全部可见可删 — 删除统一: 删 {name}.md + {name} 递归 (对三种形态幂等)。
+                val mdNames = dir.listFiles { f -> f.isFile && f.extension == "md" }
+                    ?.map { it.nameWithoutExtension }?.toSet() ?: emptySet()
+                buildList {
+                    dir.listFiles { f -> f.isFile && f.extension == "md" }?.sortedBy { it.name }?.forEach { file ->
                         val content = try { file.readText() } catch (_: Exception) { "" }
-                        FrameworkItem(name = file.nameWithoutExtension, category = ItemCategory.BUILTIN,
-                            summary = extractSummary(content), docMarkdown = content)
-                    } ?: emptyList()
+                        val hasFolder = java.io.File(dir, file.nameWithoutExtension).isDirectory
+                        add(FrameworkItem(name = file.nameWithoutExtension, category = ItemCategory.BUILTIN,
+                            summary = (if (hasFolder) "[含资源文件夹] " else "") + extractSummary(content),
+                            docMarkdown = content))
+                    }
+                    dir.listFiles { f -> f.isDirectory && f.name !in mdNames }?.sortedBy { it.name }?.forEach { folder ->
+                        val files = folder.listFiles()?.map { it.name } ?: emptyList()
+                        add(FrameworkItem(name = folder.name, category = ItemCategory.BUILTIN,
+                            summary = "资源文件夹 (${files.size} 个文件)",
+                            docMarkdown = files.joinToString("\n", prefix = "资源文件夹 ${folder.name}/:\n")))
+                    }
+                    dir.listFiles { f -> f.isFile && f.extension != "md" }?.sortedBy { it.name }?.forEach { file ->
+                        val content = try { file.readText() } catch (_: Exception) { "(二进制或不可读文件)" }
+                        add(FrameworkItem(name = file.name, category = ItemCategory.BUILTIN,
+                            summary = "资源文件 (${file.length()} 字节)",
+                            docMarkdown = content))
+                    }
+                }
             } else emptyList()
             withContext(Dispatchers.Main) { agentSkillItems = items }
         }
