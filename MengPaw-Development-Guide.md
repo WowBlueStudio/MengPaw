@@ -702,6 +702,19 @@ Agent 通过内核命令按需加载文档：
 - **整组删除**：仅组头有删除按钮 → 确认对话框 → `AgentToolsStore.remove(agentName, name)`（删 `{agent}/tools/{name}.json`）+ `AgentToolsSummary.invalidate(agentName)`（系统提示词摘要失效，对齐 `tools.remove` 命令层行为）+ 本地列表即时移除。`FrameworkItem.enName` 承载命令集权威名（文件定位），`name` 为显示名
 - 数据在 `rememberAppRootSettingsItems` 按 agentDataVersion 实时重扫（Agent 执行命令后列表自动更新）
 
+#### 智能体技能面板：单条删除 + 技能形态全覆盖 (v0.34.1+)
+
+设置页「智能体技能」展示该 Agent 本地技能（`{agent}/skills/`），**技能形态全覆盖**——不再只收 `.md` 剧本：
+
+| 形态 | 条目 | 展开显示 |
+|---|---|---|
+| `name.md` 剧本 | 技能条目（summary=摘要） | 剧本全文（Markdown 渲染） |
+| `name.md` + 同名文件夹（脚本/流程资源） | 合并一条目，summary 前缀 `[含资源文件夹]` | 剧本全文 |
+| 纯文件夹（无同名 md） | 条目，summary=`资源文件夹 (N 个文件)` | 内部文件清单 |
+| 散资源文件（`.py/.sh/.json` 等非 md） | 条目，summary=`资源文件 (N 字节)` | 文件内容 |
+
+**单条删除**：每行删除按钮 → 确认对话框（`deleteConfirm` 文案）→ 删 `{name}.md` + `{name}` 递归删除——对三种形态幂等（md 条目连资源文件夹，文件夹条目删本体，散文件条目删文件）。无缓存需失效（`listSkills` 实时扫目录，对齐 `skill.rm` 命令层行为；确认对话框对齐 GlobalSkillPoolPanel 模式）。
+
 ### 4.7 MCP 协议：通用设备语言
 
 MCP 在 MengPaw 中的定位不是"让 AI 调用工具的协议"，而是**让任何碎片设备加入 Agent 网格的通用语言**。
