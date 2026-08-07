@@ -93,6 +93,8 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 **CLI.md 完整性机制 (v0.31.0 全量对照修复)**: agent.cli 自称"主要命令参考"但覆盖率仅 49% (self 8/16, agent 8/40, sys 11/51 — 连 self.tools/self.search 发现入口和 agent.read/write/ls 工作区核心都不在)。修复: ① self/agent 表改为**运行时键集生成** — self 表遍历 `SelfExecutor.commands.keys`, agent 表遍历 `AgentDocManager.registeredAgentCommands` (AgentExecutor 构造 init 注入), 新增命令自动入手册, 永无双份维护; ② 描述表 SELF_COMMANDS/AGENT_COMMANDS/PLUGIN_COMMANDS (internal) 提供 usage/说明, 查不到的行降级提示"见 self.search <命令>"; ③ sys 表硬编码补全 51 条 (kernel 不能引用 core, 修改 sys.* 时需同步此表); ④ IndexCoverageTest 锁死三件事: 索引覆盖注册表 (无触达断裂)、索引无幽灵、CLI.md 描述表键集与注册键集双向一致。
 
+**CLI.md 陈旧自愈 (v0.34.0, 巡检 P1/P4① 根因)**: 陈旧判定此前仅比对文件头「活跃插件: N」— 插件数不变时命令集变更 (内核升级新增 agent.audit 等) 永不反映到设备上已生成的 CLI.md, Agent 读旧表合理误判"命令未注册/文档不一致"。修复: 生成头部加 **「命令指纹」** 行 = MD5(agent 命令键 + self 命令键 + 活跃插件数), `cliDocStale` 双条件比对 — 指纹或计数任一变化即重生成; 旧文件无指纹 → 强制重生成一次 (自动迁移)。指纹生成与比对共用 `AgentDocManager.commandFingerprint` (CliDocGenerator 写头, cliDocStale 验证), 单点维护。
+
 ### 2.4 依赖关系
 
 ```

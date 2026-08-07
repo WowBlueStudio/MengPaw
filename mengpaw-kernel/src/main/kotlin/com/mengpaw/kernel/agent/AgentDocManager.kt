@@ -49,8 +49,11 @@ class AgentDocManager(
     fun bindAgent(agentName: String) { agentId = agentName }
 
     /**
-     * CLI.md 是否缺失/过期 — 读文件头 "活跃插件: N" 与当前激活数比对。
+     * CLI.md 是否缺失/过期 — 比对文件头 "活跃插件: N" 与"命令指纹"。
      * 插件 install/disable 改变 activeCount 后下次查询即自愈, 零写开销。
+     * 命令集指纹 (v0.34.0): 新增/删除命令也触发重生成 — 此前仅比活跃插件数,
+     * 插件数不变时命令集变更 (如新增 agent.audit) 永不反映到文档, Agent 读到
+     * 陈旧 CLI.md 会误判"命令未注册" (巡检 P1/P4① 根因)。旧文件无指纹 → 强制重生成一次。
      */
     fun cliDocStale(pluginManager: PluginManager?): Boolean {
         val f = file(AgentDocType.CLI)
@@ -58,7 +61,22 @@ class AgentDocManager(
         if (pluginManager == null) return false
         val header = try { f.readText().take(200) } catch (_: Exception) { return true }
         val stored = Regex("活跃插件:\\s*(\\d+)").find(header)?.groupValues?.get(1)?.toIntOrNull()
-        return stored == null || stored != pluginManager.activeCount()
+        if (stored == null || stored != pluginManager.activeCount()) return true
+        val storedFp = Regex("命令指纹:\\s*([0-9a-f]+)").find(header)?.groupValues?.get(1)
+        return storedFp == null || storedFp != commandFingerprint(pluginManager)
+    }
+
+    /**
+     * 命令集指纹 — agent.* 命令键 + self.* 命令键 + 活跃插件数 的 MD5 前缀。
+     * 生成与比对共用此函数 (CliDocGenerator 写头, cliDocStale 验证), 永不漂移。
+     */
+    internal fun commandFingerprint(pluginManager: PluginManager): String {
+        val seed = registeredAgentCommands.joinToString(",") + "|" +
+            com.mengpaw.kernel.namespace.SelfExecutor.commands.keys.sorted().joinToString(",") + "|" +
+            pluginManager.activeCount()
+        val md = java.security.MessageDigest.getInstance("MD5")
+        return md.digest(seed.toByteArray())
+            .joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }.take(16)
     }
 
     /** 预热 CLI.md — 幂等 (计数比对, 配置反复 apply 不重复写盘)。 */

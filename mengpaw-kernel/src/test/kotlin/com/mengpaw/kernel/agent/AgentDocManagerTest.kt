@@ -78,4 +78,34 @@ class AgentDocManagerTest {
         assertEquals(6, docs.size)
         assertTrue("文件不存在退化为文件名", docs.all { !it.contains("—") })
     }
+
+    // ── CLI.md 陈旧检测: 命令集指纹 (v0.34.0) ──
+
+    @Test
+    fun `命令集变化后 cliDocStale 判定为陈旧`() {
+        workspace("TestAgent")
+        val pm = com.mengpaw.kernel.plugin.PluginManager()
+        val mgr = AgentDocManager(agentId = "TestAgent")
+
+        mgr.regenerateCliDoc(pm)
+        assertFalse("生成后应立即新鲜", mgr.cliDocStale(pm))
+
+        // 模拟内核升级新增命令 (如 agent.audit) — 活跃插件数不变
+        mgr.registeredAgentCommands = listOf("audit")
+        assertTrue("命令集变化必须触发重生成", mgr.cliDocStale(pm))
+
+        // 重生成后恢复新鲜
+        mgr.regenerateCliDoc(pm)
+        assertFalse("重生成后恢复新鲜", mgr.cliDocStale(pm))
+    }
+
+    @Test
+    fun `无指纹的旧 CLI 文件强制重生成一次`() {
+        workspace("TestAgent")
+        val f = File(File(DataPaths.AGENTS, "TestAgent"), "cli.md")
+        // 旧版文件: 仅「活跃插件」行, 无命令指纹
+        f.writeText("# MengPaw CLI 命令参考\n> 生成时间: 2026-01-01T00:00:00Z\n> 活跃插件: 0\n\n## 内置命令")
+        val pm = com.mengpaw.kernel.plugin.PluginManager()
+        assertTrue("旧文件无指纹必须强制重生成", AgentDocManager(agentId = "TestAgent").cliDocStale(pm))
+    }
 }

@@ -26,6 +26,7 @@ internal class CliDocGenerator(private val manager: AgentDocManager) {
             appendLine("> 了解所需命令、权限和前置条件。所有提醒义务由 Agent 承担。")
             appendLine("> 生成时间: ${SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())}")
             appendLine("> 活跃插件: ${pluginManager.activeCount()}")
+            appendLine("> 命令指纹: ${manager.commandFingerprint(pluginManager)}")
             appendLine()
 
             // ── Built-in Commands ──
