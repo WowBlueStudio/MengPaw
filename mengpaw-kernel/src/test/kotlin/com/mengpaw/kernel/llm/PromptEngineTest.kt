@@ -214,6 +214,63 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `parse xml tool calls translates to actions`() {
+        // 用户案例回归: Claude 原生 XML 工具调用语法 — 此前被 Rule 3 当最终答案吞掉
+        // (工具从不执行, 用户只见原始 XML)。应转译为 ToolCall 走并行执行链路。
+        val input = """我来重新审视一下框架。先看看工作区的实际结构和文档，再做全面审查。
+<tool_calls><invoke name="agent.ls"><parameter name="path">.</parameter></invoke><invoke name="agent.docs"></invoke><invoke name="agent.memory"></invoke></tool_calls>"""
+        val result = engine.parse(input)
+        assertFalse("XML 工具调用不应被当最终答案", result.isFinal)
+        assertEquals(3, result.actions.size)
+        assertEquals("agent.ls", result.actions[0].name)
+        assertEquals(".", result.actions[0].parameters["path"])
+        assertEquals("agent.docs", result.actions[1].name)
+        assertTrue("无参 invoke 应为空参数", result.actions[1].parameters.isEmpty())
+        assertTrue("action 字段保留第一个", result.action?.name == "agent.ls")
+        assertTrue("thought 应取 XML 之前的文本", result.thought.startsWith("我来重新审视一下框架"))
+    }
+
+    @Test
+    fun `parse antml invoke variant`() {
+        val input = """Thought: 需要列目录。<antml:invoke name="agent.ls"><antml:parameter name="path">docs</antml:parameter></antml:invoke>"""
+        val result = engine.parse(input)
+        assertFalse(result.isFinal)
+        assertEquals(1, result.actions.size)
+        assertEquals("agent.ls", result.actions.first().name)
+        assertEquals("docs", result.actions.first().parameters["path"])
+    }
+
+    @Test
+    fun `xml multi param still guarded by param format gate`() {
+        // 转译不绕过安全门卫: 多字段 XML 参数仍触发 paramFormatError
+        val input = """<invoke name="plugin.install"><parameter name="id">tavily-plugin</parameter><parameter name="force">true</parameter></invoke>"""
+        val result = engine.parse(input)
+        assertFalse(result.isFinal)
+        assertNotNull("多字段 XML 参数应被门卫拦下", result.actions.first().paramFormatError())
+    }
+
+    @Test
+    fun `react markers take precedence over xml syntax`() {
+        // 有 Action 标记时按 ReAct 执行, XML 块忽略 (ReAct 为规范形态)
+        val input = """Thought: 用 ReAct。
+Action: self.status
+Action Input: {}
+<invoke name="agent.ls"><parameter name="path">.</parameter></invoke>"""
+        val result = engine.parse(input)
+        assertFalse(result.isFinal)
+        assertEquals(1, result.actions.size)
+        assertEquals("self.status", result.actions.first().name)
+    }
+
+    @Test
+    fun `parse plain natural language stays final`() {
+        // 纯自然语言 (无 ReAct 标记、无 XML 信封) 仍按 Rule 3 视为最终答案
+        val result = engine.parse("这是普通回答，没有任何工具调用。")
+        assertTrue(result.isFinal)
+        assertEquals("这是普通回答，没有任何工具调用。", result.thought)
+    }
+
+    @Test
     fun `thought without action triggers needsContinue not final`() {
         // v0.15.0: Thought-only no longer treated as final answer.
         // Instead triggers needsContinue → AgentEngine injects continue prompt.

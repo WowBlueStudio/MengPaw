@@ -82,6 +82,17 @@ internal class ReActParser {
             return ReActResponse(thought, actions.first(), isFinal = false, actions = actions)
         }
 
+        // ── Rule 2b: XML 工具调用转译 (Claude/GPT 原生 <invoke>/<antml:invoke>) ──
+        // 模型可能用原生 XML 信封 (Claude Code <tool_calls> / AntML <antml:invoke>) 而非
+        // ReAct Action: 语法 — 此前被 Rule 3 当最终答案吞掉: 工具从不执行, 用户只见原始 XML。
+        // 转译为 ToolCall 走并行执行链路 — 去重/循环检测/paramFormatError 门卫/超时全部复用。
+        val xmlCalls = parseXmlToolCalls(normalized)
+        if (xmlCalls.isNotEmpty()) {
+            val xmlStart = normalized.indexOf("<tool_calls").let { if (it >= 0) it else normalized.indexOf("<invoke") }
+            val thought = if (xmlStart >= 0) normalized.substring(0, xmlStart).trim() else extractThought(normalized)
+            return ReActResponse(thought, xmlCalls.first(), isFinal = false, actions = xmlCalls)
+        }
+
         // ── Rule 3: No "Action:" and no "Final Answer:" → natural language response ──
         // Key distinction:
         //   Explicit "Thought:" without "Action:" → model mid-reasoning → needsContinue
@@ -100,6 +111,25 @@ internal class ReActParser {
 
         // Fallback (should not reach here with current rules)
         return ReActResponse(normalized.take(200), null, isFinal = true)
+    }
+
+    /**
+     * 解析 Claude/GPT 原生 XML 工具调用信封:
+     * `<tool_calls><invoke name="X"><parameter name="k">v</parameter></invoke></tool_calls>`
+     * 兼容 `antml:invoke` / `antml:parameter` 前缀变体, 单双引号属性。
+     * 无参数 invoke → 空参数 (对齐省略 Action Input 语义)。
+     */
+    private fun parseXmlToolCalls(text: String): List<ToolCall> {
+        val invokeRe = Regex("(?is)<(?:\\w+:)?invoke\\s+name\\s*=\\s*([\"'])(.*?)\\1\\s*>(.*?)</(?:\\w+:)?invoke>")
+        val paramRe = Regex("(?is)<(?:\\w+:)?parameter\\s+name\\s*=\\s*([\"'])(.*?)\\1\\s*>(.*?)</(?:\\w+:)?parameter>")
+        return invokeRe.findAll(text).mapNotNull { m ->
+            val name = m.groupValues[2].trim()
+            if (name.isEmpty()) return@mapNotNull null
+            val params = paramRe.findAll(m.groupValues[3]).associate { p ->
+                p.groupValues[2].trim() to p.groupValues[3].trim()
+            }
+            ToolCall(name, params)
+        }.toList()
     }
 
     /** Extract Thought content from ReAct-format text, or return truncated beginning. */

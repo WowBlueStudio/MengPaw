@@ -542,6 +542,8 @@ twin.lost <peer> / twin.recover <peer>
 
 **结果纪律（v0.30.0+，系统提示词响应格式节）**: 提示词强制三条规则防 Observation 幻觉/谎报成功——① Action 发出后必须等框架返回 Result，后续思考只能引用 Result 原文，禁止自编结果；② Result 含 Error 时禁止声称成功，必须原样引用错误并如实汇报；③ install/rm/write 类写操作后必须用查询命令验证，验证失败 = 操作失败。Observation 由框架注入（`AgentEngine` 组装 `Command: …\nResult: …`），模型无自编通道；错误码随 Observation 以 `Error [CODE]: …` 形式可见（见 §5.2 错误码体系）。改提示词即改 `TEMPLATE_HASH` 自动失效缓存，无需手动 bump。
 
+**XML 工具调用转译（ReActParser Rule 2b）**: 模型偶发输出 Claude/GPT 原生 XML 信封（`<tool_calls><invoke name=…><parameter name="k">v</parameter>` / `antml:` 前缀变体）而非 ReAct `Action:` 语法——解析器将其转译为 ToolCall 走同一并行执行链路（去重/循环检测/参数门卫/超时全部复用），thought 取 XML 之前的文本；无 ReAct 标记且无 XML 信封才按 Rule 3 最终答案处理。多字段 XML 参数仍被 `paramFormatError` 门卫拦截（不绕过安全）。
+
 ### 4.1.1 流式输出 (SSE + UI 播放器, v0.28.5 定型)
 
 **链路**: `AdaptiveLlmProvider.consumeSseStream`(`bodyAsChannel()` + `readUTF8Line` 增量读, OpenAI/Anthropic 双格式解析)→ 引擎透传 onDelta → `AgentViewModel` UI 播放器 → 气泡渐进显示。

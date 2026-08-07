@@ -92,7 +92,8 @@ Final Answer: 你的电量是 85%……
 |------|------|------|
 | Rule 1 | 有 `Final Answer:` 且在其后无 Action（或 Action 数 < 2） | `ReActResponse(finalText, isFinal=true)` |
 | Rule 2 | 有 `Action:`（含多 Action） | 按 Action 位置切段解析，并行执行 |
-| Rule 3 | 无任何标记 | 视为最终答案（非 ReAct 模型自然回复） |
+| Rule 2b | 无 ReAct 标记但有 XML 工具调用信封（`<tool_calls><invoke>`/`<antml:invoke>` + `<parameter name="k">v</parameter>`） | 转译为 ToolCall 并行执行（thought 取 XML 之前的文本）。模型用原生 XML 语法时不再被 Rule 3 吞掉 |
+| Rule 3 | 无任何标记（含无 XML 信封） | 视为最终答案（非 ReAct 模型自然回复） |
 | needsContinue | 只有 Thought 无 Action | 注入 `继续。输出 Action: <命令>…` user 消息重试（连续 2 次强制收尾） |
 
 参数解析（`Action Input`）：
