@@ -521,5 +521,12 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **实测缺陷 3（不被采纳）**：两个根因——① failures buffer 启动时不加载文件，重启后 repeatedPatterns/stats/复现提醒/已修正状态全丢；② learn.command 只写 CommandSearch 内存索引，重启即丢。修复：failures.jsonl 按 agent 懒加载；learn.command 持久化到 `进化档案/commands.json`，EvolutionHook.install 时恢复进检索索引。长期记忆（memory.md）本就注入提示词，教训可自动采纳。
 - **教训**：进化系统"记录→沉淀→采纳"三段中，前两段只有文件持久化还不够——**读取侧必须懒加载文件**，否则重启后进化等于没发生过；登记类产物（learn.command）必须落盘，不能只驻内存索引。
 
+### 15.18 命令字段会被 LLM 参数污染，去重必须按命令名（2026-08-09，真实 failures.jsonl 46 行实证）
+
+- **现象**：用户实测文件 46 行中 termux.run 出现 9 次、agent.write 6 次、evolution.* 各 3 次——同命令反复失败各自成行，且 `command` 字段被 LLM 整段 Thought+Action+Observation 多行文本污染（如 `evolution.status Result: <untrusted_data>...`），命令名被淹没。
+- **根因**：LLM 传参错误把多行文本带进 commandLine → ErrorCollector metadata["command"] 存的是污染后的完整命令行；去重键若用完整命令行，同命令不同参数/不同 Thought 生成不同 key，去重失效。
+- **修复（v3）**：`recordFailure` 存储前 `cleanCommand`（剥离换行单行化，截断 120）；去重/复现键改 `commandNameOf`（清洗后第一 token）+ 错误码——同命令不同参数视为同一模式；`mergePatterns` 历史合并同规则。实测模拟：46 行 → 16 个模式（termux.run ×9 归一）。
+- **教训**：进化记录的"模式键"必须抗污染——用户输入不可信，**命令字段里唯一可靠的是第一个 token**；展示字段（command）与模式键（命令名）分离，两者都做清洗。
+
 
 *最后更新: 2026-08-07 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

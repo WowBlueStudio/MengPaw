@@ -192,11 +192,15 @@ object EvolutionStore {
             val agent = agentFileOf(agentName)
             // v2: 先懒加载该 agent 的历史档案, 否则 upsert 找不到旧模式会新增重复行
             ensureFailuresLoaded(agent)
-            val key = "$agent|$command|$errorCode"
+            // v3 (2026-08-09 真实数据): 命令字段会被 LLM 参数污染成多行文本 —
+            // 存储用清洗后的单行, 去重/复现键用命令名 (第一 token) + 错误码,
+            // 否则同命令不同参数/Thought 各自成行, 去重失效 (实测 46 行里 termux.run 出现 9 次)。
+            val cmd = cleanCommand(command)
+            val cmdName = commandNameOf(command)
+            val key = "$agent|$cmdName|$errorCode"
             val entry = synchronized(lock) {
                 val count = (repeatIndex[key] ?: 0) + 1
                 repeatIndex[key] = count
-                val cmd = command.take(120)
                 val errCode = errorCode.take(60)
                 val now = System.currentTimeMillis()
                 // 1) 种子命中提示 — 内置失败模式对照自查, 新手错误就地消化
@@ -212,7 +216,7 @@ object EvolutionStore {
                     }.take(600)
                 // v2 去重: 同模式 (agent+command+errorCode) 更新既有行, 不再追加重复行
                 val existingIdx = buffer.indexOfFirst {
-                    it.agentName == agent && it.command == cmd && it.errorCode == errCode
+                    it.agentName == agent && commandNameOf(it.command) == cmdName && it.errorCode == errCode
                 }
                 val e = if (existingIdx >= 0) {
                     val old = buffer.elementAt(existingIdx)
@@ -590,9 +594,11 @@ object EvolutionStore {
      * id 取最近一条 (用户 audit 看到的就是它, mark-corrected 引用稳定)。
      */
     private fun mergePatterns(entries: List<EvolutionFailure>): List<EvolutionFailure> {
-        return entries.groupBy { "${it.command}|${it.errorCode}" }.map { (_, list) ->
+        // v3: 按命令名+错误码合并 — 历史 command 字段可能被多行文本污染, 完整命令行分组会漏合并
+        return entries.groupBy { "${commandNameOf(it.command)}|${it.errorCode}" }.map { (_, list) ->
             val newest = list.maxByOrNull { it.timestamp } ?: return@map list.first()
             newest.copy(
+                command = cleanCommand(newest.command),
                 repeatCount = list.maxOf { it.repeatCount },
                 corrected = list.any { it.corrected },
                 task = newest.task.ifBlank { list.firstNotNullOfOrNull { it.task.ifBlank { null } } ?: "" },
@@ -753,6 +759,16 @@ object EvolutionStore {
 
     private fun failuresFile(agent: String): File = File(DataPaths.evolutionFailuresFile(agent))
     private fun reactionsFile(agent: String): File = File(DataPaths.evolutionReactionsFile(agent))
+
+    /** 命令字段清洗 (v3, 2026-08-09 真实数据): LLM 参数污染会把整段 Thought/Observation 塞进命令,
+     *  存储与展示前剥离换行单行化; 命令名与参数同屏可读。 */
+    private fun cleanCommand(raw: String): String =
+        raw.replace(Regex("\\r\\n|\\r|\\n"), " ").trim().take(120)
+
+    /** 命令名 (清洗后第一 token) — 失败模式去重/复现检测的模式键基础:
+     *  同命令不同参数视为同一模式 (termux.run a / termux.run b 都是"命令不可用"一类)。 */
+    private fun commandNameOf(raw: String): String =
+        cleanCommand(raw).substringBefore(' ').take(40)
 
     /** 时间戳 → "MM-dd HH:mm" 可读格式 (audit 展示用); 无效时间返回 "?"。 */
     private fun fmtTime(ts: Long): String =

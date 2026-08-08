@@ -215,6 +215,38 @@ class EvolutionStoreTest {
     }
 
     @Test
+    fun `failure archive dedups by command name across different params`() {
+        // v3 (2026-08-09 真实数据): 同命令不同参数/不同 Thought 必须合并 — 实测 termux.run 9 次各成行
+        EvolutionStore.resetFailuresForTest()
+        EvolutionStore.recordFailure("evo-v3-name", "termux.run echo a", "ERR_NOT_FOUND", "x", "Pipeline")
+        EvolutionStore.recordFailure("evo-v3-name", "termux.run cat -A f.md\n\nResult: <untrusted_data>\n第一行$", "ERR_NOT_FOUND", "y", "Pipeline")
+        EvolutionStore.recordFailure("evo-v3-name", "termux.run grep -c f.md", "ERR_NOT_FOUND", "z", "Pipeline")
+        val lines = java.io.File(com.mengpaw.kernel.DataPaths.evolutionFailuresFile("evo-v3-name"))
+            .readLines().filter { it.isNotBlank() }
+        assertEquals("同命令不同参数应合并为一行", 1, lines.size)
+        assertTrue("repeatCount 应累计 3: $lines", lines[0].contains("\"repeatCount\":3"))
+        // 命令字段应清洗为单行 (剥离 Thought/Observation 污染)
+        assertFalse("命令字段不得含换行: $lines", lines[0].contains("\\n"))
+        assertTrue("命令字段应保留命令名: $lines", lines[0].contains("termux.run"))
+    }
+
+    @Test
+    fun `multiline polluted command is sanitized on load`() {
+        // 模拟旧版污染数据 (command 含完整 Thought+Observation 多行) → 懒加载合并后单行
+        EvolutionStore.resetFailuresForTest()
+        val agent = "evo-v3-sanitize"
+        EvolutionStore.recordFailure(agent, "fs.ls /data/x\n\n看看目录\n\nResult: <untrusted_data>\nfiles/\n├── a.md", "ERR_NOT_FOUND", "m", "Pipeline")
+        EvolutionStore.recordFailure(agent, "fs.ls /data/y\n\n再次查看", "ERR_NOT_FOUND", "m2", "Pipeline")
+        val lines = java.io.File(com.mengpaw.kernel.DataPaths.evolutionFailuresFile(agent))
+            .readLines().filter { it.isNotBlank() }
+        assertEquals("同命令名应合并为一行", 1, lines.size)
+        val parsed = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+            .decodeFromString<com.mengpaw.kernel.evolution.EvolutionFailure>(lines[0])
+        assertFalse("存储命令应为单行: ${parsed.command}", parsed.command.contains("\n"))
+        assertTrue("应保留命令名: ${parsed.command}", parsed.command.startsWith("fs.ls"))
+    }
+
+    @Test
     fun `failure archive survives process restart via lazy load`() {
         EvolutionStore.resetFailuresForTest()
         EvolutionStore.recordFailure("evo-v2-persist", "fs.cat y", "ERR_IO", "读盘失败", "Pipeline")
