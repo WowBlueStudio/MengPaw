@@ -186,20 +186,26 @@ internal class AgentReActLoop(
                     // P0: 会话结局真实度 — 检测 Final Answer 是否如实提及本轮失败 (幻觉率)
                     com.mengpaw.kernel.evolution.EvolutionStore.recordSessionOutcome(
                         engine.agentName, sessionFailures, answer)
-                    // P0 实质化: Final Answer 门禁 — 本轮有失败但未如实提及 → 拒绝, 注入失败清单强制重写。
+                    // P0 实质化: Final Answer 门禁 — 本轮有失败但未如实提及 → 拒绝并静默纠正。
                     // 统计只度量幻觉; 门禁在幻觉发生的当下拦截, 把"声称成功"打回为"如实汇报"。
                     if (sessionFailures.isNotEmpty() && hallucinationRejections < MAX_HALLUCINATION_REJECTIONS) {
                         val unmentioned = com.mengpaw.kernel.evolution.EvolutionStore.unmentionedFailures(answer, sessionFailures)
                         if (unmentioned.isNotEmpty()) {
                             hallucinationRejections++
                             val failedList = unmentioned.joinToString("\n") { "  - ${it.first} → Error [${it.second}]" }
-                            val rejectMsg = "⚠️ 框架检测: 你的最终回答声称任务完成, 但以下命令实际失败且未如实提及:\n" +
-                                "$failedList\n\n" +
-                                "必须如实汇报这些失败 (引用 Error [CODE] 与原因), 再给出最终答案。" +
+                            // 静默门禁 (2026-08-08): 反馈只注入下一轮 LLM 请求 (buildConversation
+                            // 末尾追加 system), 不写入会话历史 — UI/持久化/后续上下文零污染。
+                            // 引导方向: 优先静默纠正 (重试/换命令), 成功则正常收尾不暴露内部过程;
+                            // 确认无法完成时才用自然语言如实说明, 不再强制堆内部错误码。
+                            conversation.pendingVeracityFeedback =
+                                "【内部反馈 · 仅本轮有效, 不向用户展示】你的上一轮 Final Answer 声称任务完成, " +
+                                "但以下操作实际失败且未如实反映:\n$failedList\n\n" +
+                                "要求: ① 若失败可修复, 立即静默纠正 (重试或换用其他命令), 成功后正常给出 " +
+                                "Final Answer, 无需复述历史失败; ② 若确认无法完成, 最终回答须如实说明未能完成 " +
+                                "的部分与原因 (自然语言即可, 不必引用内部错误码)。" +
                                 "禁止声称失败的操作已成功。请重新输出 Final Answer。"
-                            engine.getSessionManager().addMessage(session.id, Message("user", rejectMsg))
                             com.mengpaw.kernel.KernelLog.w("AgentEngine",
-                                "幻觉门禁拒绝 Final Answer (第 ${hallucinationRejections} 次): ${unmentioned.size} 条失败未提及")
+                                "幻觉门禁拒绝 Final Answer (第 ${hallucinationRejections} 次, 静默注入): ${unmentioned.size} 条失败未提及")
                             continue
                         }
                     }
@@ -316,7 +322,12 @@ internal class AgentReActLoop(
                     var batchNotified = false
                     results.forEachIndexed { i, result ->
                         val commandLine = commandLines[i]
-                        if (!result.success) {
+                        if (result.success) {
+                            // 失败已弥补豁免 (2026-08-08): 同命令重试成功 → 从"待如实提及"清单移除。
+                            // 门禁不再拦截"先失败后成功"场景, 用户只见最终成功结果, 不见内部重试噪音;
+                            // 幻觉率统计也同步只统计最终仍失败的条目。
+                            sessionFailures.removeAll { it.first == commandLine }
+                        } else {
                             anyFailure = true
                             sessionFailures.add(commandLine to (result.errorCode ?: "TOOL_CALL_FAILED"))
                             ErrorCollector.report(ErrorType.TOOL_CALL_FAILED, "AgentEngine",

@@ -502,6 +502,91 @@ class AgentEngineTest {
         assertTrue(result.contains("已达到最大步数") || result.contains("Max steps"))
     }
 
+    // ── P0 静默门禁 (2026-08-08): 幻觉拦截对用户不可见 ──
+
+    @Test
+    fun `final answer gate rejects silently and injects feedback only to LLM`() = runBlocking {
+        // 失败 → 声称成功 (幻觉) → 门禁静默拒绝 → 反馈仅注入下一轮 LLM 请求 (不落会话历史) → 如实回答
+        val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_gate_silent_" + System.nanoTime()
+        com.mengpaw.kernel.DataPaths.initialize(tmp)
+        val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
+        agentDir.mkdirs()
+        val receivedByLlm = mutableListOf<List<Map<String, String>>>()
+        var turn = 0
+        val llm = object : LlmProvider {
+            override suspend fun complete(prompt: String): String = respond()
+            override suspend fun completeWithMessages(messages: List<Map<String, String>>): String {
+                receivedByLlm.add(messages)
+                return respond()
+            }
+            override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
+                respond().also { onToken(it) }
+            override fun info() = ProviderInfo("mock", "silent-gate", ProviderType.LOCAL)
+            override fun close() {}
+            fun respond(): String = when (turn++) {
+                0 -> """
+                    Thought: 读取文件。
+                    Action: agent.read
+                    Action Input: {"path": "missing.md"}
+                """.trimIndent()
+                1 -> "Final Answer: 文件已成功读取, 内容完整。"
+                else -> "Final Answer: 无法读取 missing.md, 文件不存在。"
+            }
+        }
+        val sm2 = SessionManager()
+        val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
+        val result = engine2.run("静默门禁测试", maxSteps = 5)
+        assertTrue("应返回如实回答: $result", result.contains("无法读取"))
+        val history = sm2.getHistory(engine2.currentConversationId()!!).joinToString("\n") { it.content }
+        assertFalse("门禁反馈不得写入会话历史 (静默): $history",
+            history.contains("内部反馈") || history.contains("声称任务完成"))
+        val injected = receivedByLlm.any { msgs ->
+            msgs.any { it["role"] == "system" && it["content"].orEmpty().contains("内部反馈") }
+        }
+        assertTrue("反馈应注入下一轮 LLM 请求 (仅 LLM 可见)", injected)
+    }
+
+    @Test
+    fun `failure mitigated by successful retry is not gated`() = runBlocking {
+        // 第一轮缺 reason 被门禁拒绝, 第二轮同一命令行补 reason 成功 → 失败已弥补
+        // → 最终回答无需复述历史失败, 门禁放行 (同参数才豁免; 换参数 = 不同操作, 不豁免)
+        val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_gate_mitigated_" + System.nanoTime()
+        com.mengpaw.kernel.DataPaths.initialize(tmp)
+        val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
+        agentDir.mkdirs()
+        val receivedByLlm = mutableListOf<List<Map<String, String>>>()
+        var turn = 0
+        val llm = object : LlmProvider {
+            override suspend fun complete(prompt: String): String = respond()
+            override suspend fun completeWithMessages(messages: List<Map<String, String>>): String {
+                receivedByLlm.add(messages)
+                return respond()
+            }
+            override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
+                respond().also { onToken(it) }
+            override fun info() = ProviderInfo("mock", "mitigated-gate", ProviderType.LOCAL)
+            override fun close() {}
+            fun respond(): String = when (turn++) {
+                0 -> """
+                    Thought: 通知用户进度。
+                    Action: self.notify.message
+                    Action Input: {"text": "hello"}
+                """.trimIndent()
+                1 -> """
+                    Thought: 需要补 reason 重试。
+                    Action: self.notify.message
+                    Action Input: {"text": "hello", "reason": "告知用户进度"}
+                """.trimIndent()
+                else -> "Final Answer: 通知完成。"
+            }
+        }
+        val sm2 = SessionManager()
+        val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
+        val result = engine2.run("弥补豁免测试", maxSteps = 5)
+        assertEquals("失败已被成功弥补, 门禁应放行: $result", "通知完成。", result)
+        assertEquals("不应触发门禁拒绝 (LLM 仅 3 轮: 失败/重试/收尾)", 3, receivedByLlm.size)
+    }
+
     // ── Mock LLM Provider ────────────────────────────────────────────────
 
     private class MockLlmProvider : LlmProvider {

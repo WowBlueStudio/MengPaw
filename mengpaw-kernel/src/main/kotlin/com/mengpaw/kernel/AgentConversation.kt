@@ -17,6 +17,9 @@ internal class AgentConversation(private val engine: AgentEngine) {
     @Volatile internal var pendingGuideFragment: String? = null
     /** 本会话已注入引导次数 (限流, 防刷屏). */
     internal var guideInjections = 0
+    // ── P0 静默门禁 (2026-08-08): Final Answer 幻觉拦截反馈 ──
+    /** 待注入的静默门禁反馈 (拒绝幻觉 Final Answer 后生成, 只进下一轮 LLM 请求, 不落会话历史). */
+    @Volatile internal var pendingVeracityFeedback: String? = null
 
     // ── Integrity terminal latch (matching OpenClaw terminal latch pattern) ──
     // Once tripped, blocks further LLM calls until the session is repaired.
@@ -133,20 +136,32 @@ internal class AgentConversation(private val engine: AgentEngine) {
             )
         }
 
-        // ── Evolution 省察引导注入: 金字塔提问片段 (限流 MAX_INJECTIONS/会话) ──
+        // ── 注入片段 (只进当轮请求, 不落会话历史) ──
+        // ① 进化省察引导: 金字塔提问片段 (限流 MAX_INJECTIONS/会话)
+        // ② 静默门禁反馈: 幻觉 Final Answer 拒绝后的纠正指令
         // 追加到对话末尾而非 add(0) 前插 — 前插会使后续所有消息位移, 击穿整个
         // 前缀缓存 (prompt caching 按字节前缀命中); 末尾追加只增不改, 缓存前缀不受扰动,
         // 且"最新指令"语义更强（紧贴当前轮次）。
         // 只对主会话注入 — 并行 worker（mission/swarm 零待命会话）不消费主循环遗留的
-        // 省察引导（防注入错目标会话）。
-        val guide = if (engine.getSessionManager().getSession(sessionId)?.scope in AgentEngine.WORKER_SCOPES) null
-        else pendingGuideFragment
-        if (guide != null && guideInjections < com.mengpaw.kernel.evolution.EvolutionGuide.MAX_INJECTIONS) {
-            guideInjections++
-            pendingGuideFragment = null
+        // 注入片段（防注入错目标会话）。worker 各自有独立循环, 门禁反馈仅主循环产生。
+        val isWorkerScope = engine.getSessionManager().getSession(sessionId)?.scope in AgentEngine.WORKER_SCOPES
+        val injectables = mutableListOf<String>()
+        if (!isWorkerScope) {
+            val guide = pendingGuideFragment
+            if (guide != null && guideInjections < com.mengpaw.kernel.evolution.EvolutionGuide.MAX_INJECTIONS) {
+                guideInjections++
+                pendingGuideFragment = null
+                injectables.add(guide)
+            }
+            pendingVeracityFeedback?.let {
+                pendingVeracityFeedback = null
+                injectables.add(it)
+            }
+        }
+        if (injectables.isNotEmpty()) {
             val mutable = nonSystemHistory.toMutableList()
-            mutable.add(mapOf("role" to "system", "content" to guide))
-            KernelLog.d("MengPawLatency", "BC-EXIT $sessionId guide")
+            injectables.forEach { mutable.add(mapOf("role" to "system", "content" to it)) }
+            KernelLog.d("MengPawLatency", "BC-EXIT $sessionId inject")
             return engine.llmRequestBuilder.buildMessages(mutable, injectCacheAnnotations = true)
         }
 
