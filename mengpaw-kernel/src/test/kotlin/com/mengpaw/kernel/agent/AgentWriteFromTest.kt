@@ -48,6 +48,8 @@ class AgentWriteFromTest {
         // P0 强化 (2026-08-08): 校验锚点 — 声称成功须引用真实内容片段
         assertTrue("结果应含校验锚点", r.output!!.contains("[校验锚点]"))
         assertTrue("锚点应含内容开头", r.output!!.contains("第一行"))
+        // P0 实质化 (2026-08-08): 框架自动读回验证 — 成功断言由框架完成
+        assertTrue("结果应含读回验证", r.output!!.contains("读回验证: 内容一致 ✓"))
 
         val out = wsFile("TestAgent", "notes.md")
         assertTrue(out.exists())

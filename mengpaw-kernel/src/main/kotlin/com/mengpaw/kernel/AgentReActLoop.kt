@@ -28,6 +28,11 @@ internal class AgentReActLoop(
     private val conversation: AgentConversation
 ) {
 
+    /** Final Answer 门禁最大拒绝次数 — 超限放行 (防 LLM 反复幻觉导致死循环), 失败清单已注入历史可追溯。 */
+    private companion object {
+        const val MAX_HALLUCINATION_REJECTIONS = 2
+    }
+
     /**
      * Internal ReAct loop with optional context prefix.
      * Shared by run() and runWithGoal() to avoid session-creation overhead.
@@ -104,6 +109,8 @@ internal class AgentReActLoop(
             var extended = false
             // 会话级失败收集 (P0 幻觉率, 2026-08-08 自检): 本轮失败命令 (commandLine, errorCode)
             val sessionFailures = mutableListOf<Pair<String, String>>()
+            // P0 实质化 (2026-08-08): Final Answer 门禁拒绝次数 — 防止幻觉拒绝死循环
+            var hallucinationRejections = 0
 
             while (step < effectiveMax) {
                 engine.runningJob?.let { if (!it.isActive) throw kotlinx.coroutines.CancellationException("Agent stopped") }
@@ -179,6 +186,23 @@ internal class AgentReActLoop(
                     // P0: 会话结局真实度 — 检测 Final Answer 是否如实提及本轮失败 (幻觉率)
                     com.mengpaw.kernel.evolution.EvolutionStore.recordSessionOutcome(
                         engine.agentName, sessionFailures, answer)
+                    // P0 实质化: Final Answer 门禁 — 本轮有失败但未如实提及 → 拒绝, 注入失败清单强制重写。
+                    // 统计只度量幻觉; 门禁在幻觉发生的当下拦截, 把"声称成功"打回为"如实汇报"。
+                    if (sessionFailures.isNotEmpty() && hallucinationRejections < MAX_HALLUCINATION_REJECTIONS) {
+                        val unmentioned = com.mengpaw.kernel.evolution.EvolutionStore.unmentionedFailures(answer, sessionFailures)
+                        if (unmentioned.isNotEmpty()) {
+                            hallucinationRejections++
+                            val failedList = unmentioned.joinToString("\n") { "  - ${it.first} → Error [${it.second}]" }
+                            val rejectMsg = "⚠️ 框架检测: 你的最终回答声称任务完成, 但以下命令实际失败且未如实提及:\n" +
+                                "$failedList\n\n" +
+                                "必须如实汇报这些失败 (引用 Error [CODE] 与原因), 再给出最终答案。" +
+                                "禁止声称失败的操作已成功。请重新输出 Final Answer。"
+                            engine.getSessionManager().addMessage(session.id, Message("user", rejectMsg))
+                            com.mengpaw.kernel.KernelLog.w("AgentEngine",
+                                "幻觉门禁拒绝 Final Answer (第 ${hallucinationRejections} 次): ${unmentioned.size} 条失败未提及")
+                            continue
+                        }
+                    }
                     engine.getSessionManager().addMessage(session.id, Message("assistant", answer))
                     // No boundary message — the conversation continues naturally.
                     // The LLM sees full history: previous FinalAnswer + new user message = context.

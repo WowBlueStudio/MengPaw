@@ -214,6 +214,11 @@ internal class AgentFileCommands {
     /** --from 导入源文件体积上限 (防 OOM — 5MB 足覆盖日常草稿/报告)。 */
     private val MAX_FROM_BYTES = 5 * 1024 * 1024
 
+    private companion object {
+        /** 自动读回验证的全量比对字符阈值 — 超过则只验证存在+字节数 (读回成本控制)。 */
+        const val MAX_VERIFY_CHARS = 200_000
+    }
+
     /**
      * agent.write <path> <content> — write file. Blocked on system/app paths only.
      * P2-11(自检报告): 支持 `--from <源文件>` 从文件导入多行/大段内容 (UTF-8);
@@ -278,6 +283,14 @@ internal class AgentFileCommands {
             val msg = buildString {
                 append("已写入: $path (${content.length} 字符, ${content.lines().size} 行)")
                 if (sourcePath != null) append(" ← $sourcePath")
+                // P0 实质化 (2026-08-08): 框架自动读回验证 — 成功断言由框架完成, 不依赖 Agent 声称。
+                // ≤MAX_VERIFY_CHARS 全量比对; 大文件只验证存在+字节数一致 (读回成本控制)。
+                val verified = try {
+                    if (file.exists() && file.length() == content.encodeToByteArray().size.toLong()) {
+                        if (content.length <= MAX_VERIFY_CHARS) file.readText() == content else true
+                    } else false
+                } catch (_: Exception) { false }
+                append(if (verified) "\n读回验证: 内容一致 ✓" else "\n⚠️ 读回验证失败: 文件缺失或内容不一致!")
                 // P0 (2026-08-08 自检): 回传内容预览 — Agent 声称成功必须基于真实落盘内容
                 if (content.isNotBlank()) {
                     append("\n\n内容预览 (前 200 字符):\n")

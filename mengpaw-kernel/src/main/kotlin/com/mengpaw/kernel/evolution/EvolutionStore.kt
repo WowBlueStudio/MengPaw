@@ -235,11 +235,7 @@ object EvolutionStore {
             if (failedCommands.isEmpty()) return
             val agent = agentFileOf(agentName)
             val unmentioned = failedCommands.count { (cmd, code) ->
-                val name = cmd.substringBefore(' ').take(30)
-                val mentionedCode = code.isNotBlank() && finalAnswer.contains(code)
-                val mentionedNameAndFailure = finalAnswer.contains(name) &&
-                    FAILURE_WORDS.any { finalAnswer.contains(it) }
-                !mentionedCode && !mentionedNameAndFailure
+                !isFailureMentioned(finalAnswer, cmd, code)
             }
             ensureVeracityLoaded(agent)
             synchronized(veracityLock) {
@@ -258,6 +254,30 @@ object EvolutionStore {
             } catch (_: Exception) { /* 持久化失败不阻塞统计 */ }
         } catch (_: Exception) { /* 统计永不崩溃 */ }
     }
+
+    /**
+     * 幻觉检测 (P0 实质化, 2026-08-08): Final Answer 是否如实提及一次失败。
+     * 启发式: 含该失败错误码, 或含命令名+失败词 → 视为如实提及。
+     * 供 [recordSessionOutcome] 统计 与 Final Answer 门禁共用, 单点维护。
+     */
+    fun isFailureMentioned(finalAnswer: String, command: String, errorCode: String): Boolean {
+        val name = command.substringBefore(' ').take(30)
+        val mentionedCode = errorCode.isNotBlank() && finalAnswer.contains(errorCode)
+        val mentionedNameAndFailure = finalAnswer.contains(name) &&
+            FAILURE_WORDS.any { finalAnswer.contains(it) }
+        return mentionedCode || mentionedNameAndFailure
+    }
+
+    /**
+     * Final Answer 门禁核心 (P0 实质化, 2026-08-08): 返回未被如实提及的失败列表。
+     * 空列表 = 全部如实提及, 门禁放行; 非空 = 幻觉, 由 AgentReActLoop 拒绝 Final Answer
+     * 并注入失败清单强制重写。纯函数可单测。
+     */
+    fun unmentionedFailures(
+        finalAnswer: String,
+        failedCommands: List<Pair<String, String>>
+    ): List<Pair<String, String>> =
+        failedCommands.filter { (cmd, code) -> !isFailureMentioned(finalAnswer, cmd, code) }
 
     /** 会话真实度摘要 (P0): 如实提及率 + 疑似幻觉提示。供 evolution.audit 展示。 */
     fun veracityStats(agentName: String?): String {

@@ -146,6 +146,36 @@ class EvolutionStoreTest {
         assertTrue("升级版应禁止继续同类操作", reminder.contains("不得继续"))
     }
 
+    // ── P0 实质化 (2026-08-08): Final Answer 门禁纯函数 ──
+
+    @Test
+    fun `failure mentioned by error code is honest`() {
+        assertTrue(EvolutionStore.isFailureMentioned(
+            "写入失败: Error [ERR_NOT_FOUND], 路径不存在", "agent.write a.md", "ERR_NOT_FOUND"))
+        assertTrue(EvolutionStore.isFailureMentioned(
+            "agent.read 读取失败", "agent.read profile.md", "ERR_NOT_FOUND"))
+        assertFalse(EvolutionStore.isFailureMentioned(
+            "文件已成功写入, 内容完整", "agent.write a.md", "ERR_NOT_FOUND"))
+    }
+
+    @Test
+    fun `unmentioned failures gate the final answer`() {
+        val failures = listOf(
+            "agent.write a.md" to "ERR_NOT_FOUND",
+            "fs.cat x" to "ERR_PERMISSION_DENIED"
+        )
+        // 全部如实提及 → 放行
+        assertTrue(EvolutionStore.unmentionedFailures(
+            "写入失败 Error [ERR_NOT_FOUND], 读取 Error [ERR_PERMISSION_DENIED]", failures).isEmpty())
+        // 只提一个 → 另一个未提及 → 门禁拦截
+        val gated = EvolutionStore.unmentionedFailures(
+            "agent.write 失败 Error [ERR_NOT_FOUND]", failures)
+        assertEquals(1, gated.size)
+        assertEquals("fs.cat x", gated[0].first)
+        // 全未提及 → 全部拦截
+        assertEquals(2, EvolutionStore.unmentionedFailures("任务全部完成", failures).size)
+    }
+
     @Test
     fun `guide fragment grades deep on repeat failure`() {
         EvolutionStore.recordFailure("evo-test-6", "fs.write", "ERR_IO", "disk full", "Pipeline")
