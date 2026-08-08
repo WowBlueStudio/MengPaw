@@ -43,6 +43,9 @@ internal class AgentMemoryMutateCommands {
                 appendLine()
                 appendLine("本条内容预览 (前 200 字符):")
                 appendLine(content.take(200))
+                // 校验锚点 (P0 强化): 声称成功必须引用此片段中的真实文本
+                val anchor = content.replace("\n", " ").trim().take(12)
+                appendLine("[校验锚点] 内容开头: \"$anchor\"")
             }
         })
     }

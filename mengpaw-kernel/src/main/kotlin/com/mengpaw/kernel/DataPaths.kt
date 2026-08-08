@@ -127,6 +127,8 @@ object DataPaths {
         else "${safeAgentDir(agentName)}/evolution"
     /** Failure pattern store (JSON-lines). */
     fun evolutionFailuresFile(agentName: String?) = "${evolutionDir(agentName)}/failures.jsonl"
+    /** 会话幻觉率统计文件 (P0, 2026-08-08): 每行一条会话记录, 与 failures.jsonl 同模式。 */
+    fun evolutionVeracityFile(agentName: String?) = "${evolutionDir(agentName)}/veracity.jsonl"
     /** User reaction archive (用户分身数据源) — appended markdown. */
     fun evolutionReactionsFile(agentName: String?) = "${evolutionDir(agentName)}/reactions.md"
     /** Framework feedback reports written by Agent (evolution.report). */

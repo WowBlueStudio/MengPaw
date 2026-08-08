@@ -119,6 +119,34 @@ class EvolutionStoreTest {
     }
 
     @Test
+    fun `veracity persists to jsonl and reloads across process restart`() {
+        EvolutionStore.resetVeracityForTest()
+        // 第一次会话: 未提及失败
+        EvolutionStore.recordSessionOutcome("evo-p0-persist",
+            listOf("agent.write a.md" to "ERR_NOT_FOUND"),
+            "文件已成功写入")
+        // 落盘断言
+        val file = File(com.mengpaw.kernel.DataPaths.evolutionVeracityFile("evo-p0-persist"))
+        assertTrue("veracity.jsonl 应落盘", file.exists())
+        assertTrue("落盘内容应含记录", file.readText().contains("totalFailures"))
+        // 模拟进程重启: 清内存与加载标志 → 从文件重新累计
+        EvolutionStore.resetVeracityForTest()
+        val stats = EvolutionStore.veracityStats("evo-p0-persist")
+        assertTrue("重启后应能从文件恢复统计", stats.contains("0/1"))
+    }
+
+    @Test
+    fun `recurrence reminder escalates at three repeats`() {
+        EvolutionStore.recordFailure("evo-p1-escalate", "agent.ls", "ERR_NOT_FOUND", "x", "Pipeline")
+        EvolutionStore.recordFailure("evo-p1-escalate", "agent.ls", "ERR_NOT_FOUND", "x", "Pipeline")
+        EvolutionStore.recordFailure("evo-p1-escalate", "agent.ls", "ERR_NOT_FOUND", "x", "Pipeline")
+        val reminder = EvolutionStore.recurrenceReminder("evo-p1-escalate", "agent.ls", "ERR_NOT_FOUND")
+        assertNotNull(reminder)
+        assertTrue("复现 3 次应升级为强制措辞", reminder!!.contains("🚨"))
+        assertTrue("升级版应禁止继续同类操作", reminder.contains("不得继续"))
+    }
+
+    @Test
     fun `guide fragment grades deep on repeat failure`() {
         EvolutionStore.recordFailure("evo-test-6", "fs.write", "ERR_IO", "disk full", "Pipeline")
         EvolutionStore.recordFailure("evo-test-6", "fs.write", "ERR_IO", "disk full again", "Pipeline")

@@ -504,11 +504,11 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 773 测试，v0.34.1+Codex 维护实测快照：kernel 417 + core 45 + shell 63 + browser 17 + 插件 231，0 failures)
+### 3.7 测试 (16 模块 775 测试，v0.34.1+Codex 维护实测快照：kernel 419 + core 45 + shell 63 + browser 17 + 插件 231，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 412 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm/mission、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行参数引号保护 (P4, 2026-08-08)** |
+| mengpaw-kernel | 419 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm/mission、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行引号保护 + 进化闭环/幻觉率 (含持久化·校验锚点·升级提醒, P0/P1/P4, 2026-08-08)** |
 | mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
 | mengpaw-shell | 63 | ComplexityDetector 分档 (11 分 MISSION 回归)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵、extractSkillSource frontmatter 解析、toolSourceFor 来源分类 |
 | mengpaw-browser | 17 | **smartNavigate 智能导航 (v0.34.1+ 交接首测: URL/域名/纯数字不误判/关键词编码/fromKey 回退)**、AdBlocker 规则 (域名精确匹配/子域继承/路径规则/模式命中/非法 URL 降级) |
@@ -828,7 +828,9 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 > **闭环强制 (v0.34.1+ 自检 P1, 2026-08-08)**: 失败模式复现 ≥2 次且未沉淀修正时, `recurrenceReminder()` 生成强制处理提醒, 由 AgentReActLoop 注入失败 Observation (prune 之后追加, 防被裁剪): 当场二选一 `evolution.learn.command` 登记 or `agent.memory.keep` 沉淀; 已修正 (`markCorrected`) 不再强制。`stats()` 对"有失败但 0 沉淀"显示 ⚠️ 红灯, 不等 Agent 主动发现。
 
-> **会话幻觉率 (v0.34.1+ 自检 P0, 2026-08-08)**: `recordSessionOutcome()` 在 ReAct 循环收到 Final Answer 时对比本轮失败命令 (command+errorCode) 与最终回答 — 含错误码或"命令名+失败词"视为如实提及, 否则计入未如实提及; 进程内累计, `evolution.audit` 展示"会话失败如实提及: X/Y" + 疑似幻觉风险提示 (未提及 ≥1 且总失败 ≥3)。**写操作内容预览**: `agent.write`/`agent.memory.keep` 成功结果回传内容预览 (前 200 字符) + 行数 — Agent 声称成功必须基于真实落盘内容 (此前 agent.write 只回传字符数, keep 只回传计数, 无内容依据)。
+> **会话幻觉率 (v0.34.1+ 自检 P0, 2026-08-08)**: `recordSessionOutcome()` 在 ReAct 循环收到 Final Answer 时对比本轮失败命令 (command+errorCode) 与最终回答 — 含错误码或"命令名+失败词"视为如实提及, 否则计入未如实提及; **持久化到 `evolution/veracity.jsonl` (每会话一行, 进程重启跨会话累计)**, `evolution.audit` 展示"会话失败如实提及: X/Y" + 疑似幻觉风险提示 (未提及 ≥1 且总失败 ≥3)。**写操作内容预览 + 校验锚点**: `agent.write`/`agent.memory.keep` 成功结果回传内容预览 (前 200 字符) + 行数 + `[校验锚点] 内容开头: "…"` — 提示词要求声称写入成功必须引用锚点真实文本 (此前 agent.write 只回传字符数, keep 只回传计数, 无内容依据)。**UI 呈现**: 设置页工作区文件树 evolution 节点摘要附加幻觉率 + ⚠️ 未沉淀红灯。
+
+> **闭环强制升级 (v0.34.1+ 自检 P1, 2026-08-08)**: 复现 2 次注入二选一提醒; 复现 ≥3 次升级为 🚨 强制措辞 ("必须立即处理, 不得继续同类操作")。
 
 
 #### agent — 文档 + 内存 + 工作区 (27+)

@@ -45,6 +45,9 @@ class AgentWriteFromTest {
         // P0 (2026-08-08): 成功结果应回传内容预览 + 行数, Agent 声称成功须基于真实落盘内容
         assertTrue("结果应含行数", r.output!!.contains("行)"))
         assertTrue("结果应含内容预览", r.output!!.contains("内容预览") && r.output!!.contains("第一行"))
+        // P0 强化 (2026-08-08): 校验锚点 — 声称成功须引用真实内容片段
+        assertTrue("结果应含校验锚点", r.output!!.contains("[校验锚点]"))
+        assertTrue("锚点应含内容开头", r.output!!.contains("第一行"))
 
         val out = wsFile("TestAgent", "notes.md")
         assertTrue(out.exists())

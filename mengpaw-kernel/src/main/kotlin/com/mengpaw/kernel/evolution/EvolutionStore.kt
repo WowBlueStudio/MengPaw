@@ -50,6 +50,17 @@ data class UserReaction(
     val task: String
 )
 
+/** 一条会话幻觉率记录 — 持久化到 veracity.jsonl (每行一条, 按会话)。 */
+@Serializable
+data class VeracityRecord(
+    val agentName: String,
+    /** 本会话失败命令总数。 */
+    val totalFailures: Int,
+    /** 本会话未在 Final Answer 中如实提及的失败数。 */
+    val unmentionedFailures: Int,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 /**
  * 内置"新手常见错误"种子 — 预置失败模式, 非真实失败记录。
  * 新 Agent 首次 evolution.audit 即可看到常见错误及教训, 不必等失败模式库从零积累。
@@ -127,6 +138,7 @@ object EvolutionStore {
     // 检测启发式: Final Answer 含该失败错误码, 或含命令名+失败词 → 视为如实提及。
     private val veracityTotals = mutableMapOf<String, Pair<Int, Int>>()
     private val veracityLock = Any()
+    private var veracityLoaded = false
     private val FAILURE_WORDS = listOf("失败", "错误", "Error", "无法", "未能", "出错", "拒绝")
 
     // ── 失败记录 ────────────────────────────────────────────────────
@@ -200,10 +212,15 @@ object EvolutionStore {
             if (count < 2) return null
             val prefix = commandPrefixOf(command)
             if (prefix.isNotBlank() && hasCorrectedLesson(agent, prefix)) return null // 已修正不再强制
-            "⚠️ 此错误模式已复现 $count 次且未沉淀修正, 请当场处理 (二选一, 完成后继续任务):\n" +
-                "  ① evolution.learn.command $command <正确用法> [--keywords 同义词,逗号分隔] — 登记进指令集\n" +
-                "  ② agent.memory.keep <教训> — 沉淀进长期记忆\n" +
-                "两者都做更好; 用 evolution.audit 可随时查看沉淀状态。"
+            val escalate = count >= 3
+            buildString {
+                append(if (escalate) "🚨 此错误模式已复现 $count 次且仍未沉淀修正 — 必须立即处理, 不得继续同类操作:\n"
+                       else "⚠️ 此错误模式已复现 $count 次且未沉淀修正, 请当场处理 (二选一, 完成后继续任务):\n")
+                append("  ① evolution.learn.command $command <正确用法> [--keywords 同义词,逗号分隔] — 登记进指令集\n")
+                append("  ② agent.memory.keep <教训> — 沉淀进长期记忆\n")
+                append(if (escalate) "先完成 ①② 之一再继续; 用 evolution.audit 查看沉淀状态。"
+                       else "两者都做更好; 用 evolution.audit 可随时查看沉淀状态。")
+            }
         } catch (_: Exception) { null }
     }
 
@@ -224,10 +241,21 @@ object EvolutionStore {
                     FAILURE_WORDS.any { finalAnswer.contains(it) }
                 !mentionedCode && !mentionedNameAndFailure
             }
+            ensureVeracityLoaded(agent)
             synchronized(veracityLock) {
                 val (total, bad) = veracityTotals[agent] ?: (0 to 0)
                 veracityTotals[agent] = (total + failedCommands.size) to (bad + unmentioned)
             }
+            // 持久化: 追加一条会话记录 (失败不抛 — 统计不影响主链路)
+            try {
+                val file = File(DataPaths.evolutionVeracityFile(agent))
+                file.parentFile?.mkdirs()
+                file.appendText(json.encodeToString(VeracityRecord(
+                    agentName = agent,
+                    totalFailures = failedCommands.size,
+                    unmentionedFailures = unmentioned
+                )) + "\n")
+            } catch (_: Exception) { /* 持久化失败不阻塞统计 */ }
         } catch (_: Exception) { /* 统计永不崩溃 */ }
     }
 
@@ -235,6 +263,7 @@ object EvolutionStore {
     fun veracityStats(agentName: String?): String {
         return try {
             val agent = agentFileOf(agentName)
+            ensureVeracityLoaded(agent)
             val (total, bad) = synchronized(veracityLock) { veracityTotals[agent] ?: (0 to 0) }
             if (total == 0) return "(暂无会话失败数据)"
             val honest = total - bad
@@ -247,6 +276,38 @@ object EvolutionStore {
                 }
             }
         } catch (_: Exception) { "(统计失败)" }
+    }
+
+    /**
+     * 懒加载 veracity.jsonl 历史 (进程首次访问时), 使幻觉率统计跨会话/跨进程累计。
+     * 行解析失败跳过 (防损坏文件阻断统计); 读取失败降级为空统计。幂等。
+     */
+    private fun ensureVeracityLoaded(agent: String) {
+        synchronized(veracityLock) {
+            if (veracityLoaded) return
+            veracityLoaded = true
+            try {
+                val file = File(DataPaths.evolutionVeracityFile(agent))
+                if (!file.exists()) return
+                file.readLines().forEach { line ->
+                    try {
+                        val r = json.decodeFromString<VeracityRecord>(line)
+                        if (r.agentName == agent) {
+                            val (total, bad) = veracityTotals[agent] ?: (0 to 0)
+                            veracityTotals[agent] = (total + r.totalFailures) to (bad + r.unmentionedFailures)
+                        }
+                    } catch (_: Exception) { /* 跳过坏行 */ }
+                }
+            } catch (_: Exception) { /* 读取失败降级为空统计 */ }
+        }
+    }
+
+    /** 测试隔离: 清空幻觉率内存统计与加载标志 (持久化文件不动)。 */
+    internal fun resetVeracityForTest() {
+        synchronized(veracityLock) {
+            veracityTotals.clear()
+            veracityLoaded = false
+        }
     }
 
     /** 命令前缀命中种子 → 返回匹配的种子列表 (可能多条)。永不抛异常。 */

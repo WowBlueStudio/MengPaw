@@ -282,6 +282,9 @@ internal class AgentFileCommands {
                 if (content.isNotBlank()) {
                     append("\n\n内容预览 (前 200 字符):\n")
                     append(content.take(200))
+                    // 校验锚点 (P0 强化): 声称成功必须引用此片段中的真实文本
+                    val anchor = content.replace("\n", " ").trim().take(12)
+                    append("\n[校验锚点] 内容开头: \"$anchor\"")
                 }
                 if (isOutput) {
                     append("\n\n📱 用户可在文件管理器的 ${com.mengpaw.kernel.DataPaths.OUTPUT} 找到此文件")

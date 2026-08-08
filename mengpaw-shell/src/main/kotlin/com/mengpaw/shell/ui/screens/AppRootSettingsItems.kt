@@ -299,11 +299,23 @@ internal fun rememberAppRootSettingsItems(
                     val reactions = evolutionFiles.count { it.name == "reactions.md" }
                     val feedback = java.io.File(evolutionDir, "feedback").listFiles()?.count { it.isFile } ?: 0
                     if (evolutionFiles.isNotEmpty() || feedback > 0) {
+                        // P0 结果可信度 (2026-08-08): evolution 节点摘要附加幻觉率 + 未沉淀红灯
+                        val healthSuffix = try {
+                            buildString {
+                                val veracity = com.mengpaw.kernel.evolution.EvolutionStore.veracityStats(activeAgent)
+                                if (veracity.startsWith("会话失败如实提及")) {
+                                    append(" | ").append(veracity.lineSequence().first())
+                                }
+                                if (com.mengpaw.kernel.evolution.EvolutionStore.stats(activeAgent).contains("红灯")) {
+                                    append(" | ⚠️ 有失败未沉淀 (evolution.audit 查看)")
+                                }
+                            }
+                        } catch (_: Exception) { "" }
                         add(FrameworkItem(
                             name = strings.workspaceEvolutionFolder,
                             category = ItemCategory.BUILTIN,
                             isFolder = true,
-                            summary = String.format(strings.workspaceEvolutionSummary, failures, reactions, feedback, evolutionFiles.size + feedback),
+                            summary = String.format(strings.workspaceEvolutionSummary, failures, reactions, feedback, evolutionFiles.size + feedback) + healthSuffix,
                             children = evolutionFiles.map { f ->
                                 FrameworkItem(
                                     name = f.name,
