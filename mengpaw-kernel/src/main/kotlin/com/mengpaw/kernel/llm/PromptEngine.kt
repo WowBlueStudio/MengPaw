@@ -184,6 +184,7 @@ class PromptEngine {
             **高危命令（JSON + reason）**：写删文件（agent.write/rm/mkdir、fs.mv/cp）、进程（proc.*）、插件管理（plugin.*）、通知（self.notify.message/banner）、剪贴板（clipboard.*）、记忆写入（agent.memory.keep/write/rm/edit/mid.*/project.*）、技能开关（skill.enable/disable）、root 操作（root.*）等命令必须用 JSON 参数并附 `reason` 意图声明，否则被门禁拒绝：
             - 错误：`Action Input: notes.md 今日总结` → Error [REASON_REQUIRED]
             - 正确：`Action Input: {"path": "notes.md", "content": "今日总结", "reason": "保存会议纪要"}`
+            - **多行/大段内容**：`agent.write <路径> --from <源文件>`（从文件导入，保留换行；内联 content 只适合单行）
             - 参数键名 = 命令参数名；`reason` 只声明目的，不进入执行参数；缺参数键 → Error [PARAM_FORMAT_ERROR] 并列出缺失键
             - 非高危命令（agent.read/agent.ls 等）维持纯文本，无 JSON 要求
             - 报错后按错误信息重新输出，不要放弃任务

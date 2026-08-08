@@ -269,7 +269,7 @@ object SelfExecutor {
         val all = com.mengpaw.kernel.cli.CommandSearch.search(query, topK * 3)
         val results = if (availableSet == null) all.take(topK)
                       else all.filter { it.fullName in availableSet }.take(topK)
-        return ExecutionResult.ok(com.mengpaw.kernel.cli.CommandSearch.formatResults(results, query))
+        return ExecutionResult.ok(com.mengpaw.kernel.cli.CommandSearch.formatResults(results, query, markActive = true))
     }
 
     /** 查看命令索引统计. Usage: self.search.stats */

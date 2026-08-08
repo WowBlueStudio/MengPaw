@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.security
 
 import com.mengpaw.kernel.cli.ErrorCodes
+import com.mengpaw.kernel.cli.CliInterpreter
 import com.mengpaw.kernel.llm.ToolCall
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -76,6 +77,49 @@ class HighRiskCommandGateTest {
         )
         assertNull(result.error)
         assertEquals("agent.rm x --force", result.commandLine)
+    }
+
+    // ── P4 修复 (2026-08-08 自检): 多行 content 换行保留 ──
+
+    @Test
+    fun 多行content经引号保护保留换行() {
+        // JSON 通道: ReActParser 已把 \n 解析为真实换行 → 展开时须引号保护, 否则被 CLI 分词切散
+        val result = HighRiskCommandGate.evaluate(
+            ToolCall("agent.write", mapOf(
+                "path" to "a.md",
+                "content" to "第一行\n第二行\n```\ncode\n```",
+                "reason" to "写多行文档"
+            ))
+        )
+        assertNull(result.error)
+        assertTrue("content 应带引号保护", result.commandLine.contains("\"第一行\n第二行\n```\ncode\n```\""))
+
+        // 端到端: 展开后的命令行经 CliInterpreter 解析, 参数完整还原 (换行不丢)
+        val parsed = CliInterpreter().parse(result.commandLine)
+        assertEquals(listOf("a.md", "第一行\n第二行\n```\ncode\n```"), parsed.args)
+        assertTrue("reason 不得进入命令行", !result.commandLine.contains("写多行文档"))
+    }
+
+    @Test
+    fun 含空格引号反斜杠的content转义还原() {
+        val result = HighRiskCommandGate.evaluate(
+            ToolCall("agent.write", mapOf(
+                "path" to "a.md",
+                "content" to "say \"hi\" \\ done and more",
+                "reason" to "转义测试"
+            ))
+        )
+        assertNull(result.error)
+        val parsed = CliInterpreter().parse(result.commandLine)
+        assertEquals(listOf("a.md", "say \"hi\" \\ done and more"), parsed.args)
+    }
+
+    @Test
+    fun 普通参数不加引号保持既有行为() {
+        val result = HighRiskCommandGate.evaluate(
+            ToolCall("agent.write", mapOf("path" to "/a/x.txt", "content" to "hello", "reason" to "备份"))
+        )
+        assertEquals("agent.write /a/x.txt hello", result.commandLine)
     }
 
     @Test

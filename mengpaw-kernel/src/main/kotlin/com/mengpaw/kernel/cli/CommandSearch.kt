@@ -125,16 +125,18 @@ object CommandSearch {
      * 格式化搜索结果供 LLM 消费.
      * 输出紧凑的命令摘要, 含名称 + 描述 + 用法, 控制上下文占用.
      */
-    fun formatResults(results: List<CommandIndex>, query: String = ""): String {
+    fun formatResults(results: List<CommandIndex>, query: String = "", markActive: Boolean = false): String {
         if (results.isEmpty()) return "(未找到匹配 \"$query\" 的命令. 用 self.tools [ns] 查看完整列表.)"
 
         return buildString {
             if (query.isNotBlank()) append("搜索 \"$query\" 的结果 (${results.size} 条):\n\n")
+            if (markActive) appendLine("(以下命令均已按真实注册表校验, 可直接执行 — 无需再 self.tools 确认)\n")
             results.forEachIndexed { i, cmd ->
                 append("${i + 1}. ${cmd.fullName}")
                 if (cmd.usage.isNotBlank()) append(" — ${cmd.usage}")
                 append('\n')
                 if (cmd.description.isNotBlank()) append("   ${cmd.description}\n")
+                if (markActive) append("   ✓ 已注册可执行\n")
                 append('\n')
             }
         }

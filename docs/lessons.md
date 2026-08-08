@@ -470,5 +470,13 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **"启动即闪退 + 清数据仍崩" 排查路径**：先 dropbox（跨版本历史都在）→ 再看 logcat → 最后查代码；adb 列表 mDNS 与 IP 条目可能是同一台设备（用 `getprop ro.serialno` 确认），平板不在线时先别假设
 - **同 APK 设备矩阵差异是常态**：vivo 不崩、荣耀必崩——真机冒烟至少覆盖 Android 13/14/15 各一台
 
+### 15.11 CLI 参数层吞换行（v0.34.1+ 自检, P4）
+
+- **框架自检实测暴露**：Agent 用 agent.write 写 Markdown, 三种参数形态全部单行——JSON `\n` 转义、JSON 真实换行、纯文本 `\n` 转义。用户生成 md 全部变成标题（换行丢失, `# 标题` 连成一行）。
+- **根因链（三环）**：① ReActParser 用 kotlinx JSON 解析 Action Input, `\n` 已是真实换行；② HighRiskCommandGate 模板展开把 content **无引号**拼进命令行；③ CliInterpreter.tokenize 把空白（含换行）当参数分隔符、把 `\` 当转义符（`\n`→`n`）——writeFile 再 joinToString 还原, 换行只能变空格。
+- **修复模式**：HighRiskCommandGate 展开时对含空白/引号/反斜杠的值加双引号包裹并转义（`quoteIfNeeded`）, 引号内空白不切分、`\\`/`\"` 可还原；无特殊字符不加引号（既有行为零变化）。回归测试锁死展开→CliInterpreter 解析→参数完整还原。
+- **边界**：非高危命令（如 agent.memory.record）的纯文本参数若带真实换行仍会被分词切散——纯文本参数没有引号保护, 多行内容官方通道是 `agent.write --from <源文件>` / 引号包裹。
+- **可发现性教训（用户要求）**：Agent 误判"无法写多行"是因为不知道 --from 通道——修复不只是改 bug, 还要同步提示词（高危示例加 --from 指引）、搜索索引 usage、CLI.md。Agent 无法获知的信息缺口 = 框架缺陷。
+
 
 *最后更新: 2026-08-07 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

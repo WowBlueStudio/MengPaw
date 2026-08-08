@@ -504,11 +504,11 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 765 测试，v0.34.1+Codex 交接实测快照：kernel 409 + core 45 + shell 63 + browser 17 + 插件 231，0 failures)
+### 3.7 测试 (16 模块 768 测试，v0.34.1+Codex 维护实测快照：kernel 412 + core 45 + shell 63 + browser 17 + 插件 231，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 409 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm/mission、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级) |
+| mengpaw-kernel | 412 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm/mission、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行参数引号保护 (P4, 2026-08-08)** |
 | mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
 | mengpaw-shell | 63 | ComplexityDetector 分档 (11 分 MISSION 回归)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵、extractSkillSource frontmatter 解析、toolSourceFor 来源分类 |
 | mengpaw-browser | 17 | **smartNavigate 智能导航 (v0.34.1+ 交接首测: URL/域名/纯数字不误判/关键词编码/fromKey 回退)**、AdBlocker 规则 (域名精确匹配/子域继承/路径规则/模式命中/非法 URL 降级) |

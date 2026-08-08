@@ -339,7 +339,13 @@ object EvolutionStore {
                     appendLine("- 种子#${s.id} [${s.prefixes.joinToString("/")}]: ${s.description} → ${s.lesson}")
                 }
                 appendLine()
-                appendLine("未沉淀的失败模式: 用 agent.memory.keep / agent.memory.project.save 沉淀教训, 再 evolution.mark-corrected <id> 标记已修正")
+                if (repeated.isNotEmpty() || corrected < all.size) {
+                    appendLine("### 下一步可用动作 (闭环未完成: 复现 ${repeated.size} 种 / 未沉淀 ${all.size - corrected} 条)")
+                    appendLine("- 沉淀本次会话教训: agent.memory.keep <内容> 或 agent.memory.project.save <项目> <总结>")
+                    appendLine("- 登记命令正确用法: evolution.learn.command <命令> <描述> [--keywords 词1,词2]")
+                    appendLine("- 标记失败已修正: evolution.mark-corrected <失败id> (id 见上方复现模式)")
+                    appendLine("- 上报框架缺陷: evolution.report <描述>")
+                }
             }
         } catch (_: Exception) {
             "(统计失败)"

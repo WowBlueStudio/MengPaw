@@ -44,6 +44,9 @@ class SelfSearchFilterTest {
         assertTrue(r.success)
         assertTrue("搜索结果应含可用命令", r.output.contains("sys.calendar.add"))
         assertFalse("种子命中但不可执行的命令应被过滤", r.output.contains("skill.run"))
+        assertTrue("应标记 ACTIVE 可用 (P2, 2026-08-08): 让 Agent 无需再 self.tools 确认",
+            r.output.contains("已注册可执行"))
+        assertTrue("应含过滤后可直接执行的头部说明", r.output.contains("无需再 self.tools 确认"))
     }
 
     @Test

@@ -131,7 +131,7 @@ object HighRiskCommandGate {
                     errorCode = ErrorCodes.PARAM_FORMAT_ERROR
                 )
                 param.kind == Kind.FLAG -> if (value == "true") flags.add("--${param.key}")
-                else -> positional.add(value)
+                else -> positional.add(quoteIfNeeded(value))
             }
         }
         return GateResult(commandLine = buildString {
@@ -139,6 +139,21 @@ object HighRiskCommandGate {
             positional.forEach { append(' ').append(it) }
             flags.forEach { append(' ').append(it) }
         }, reason = reason)
+    }
+
+    /**
+     * 参数保护 (P4 修复, 2026-08-08 自检): 值含空白(含换行)/引号/反斜杠时用双引号包裹并转义。
+     *
+     * 否则多行 content 经 HighRiskCommandGate 展开后, CliInterpreter.tokenize 会把真实换行
+     * 当空白切分成多个参数 (writeFile 再 joinToString 还原为空格 → 换行丢失), 或把 `\n` 字面
+     * 当转义符吃掉反斜杠 (`\n` → `n`)。包裹后引号内空白不切分, `\\`/`\"` 可被 tokenize 还原。
+     * 无特殊字符的值不加引号 (既有展开行为零变化)。
+     */
+    private fun quoteIfNeeded(value: String): String {
+        val needsQuote = value.any { it.isWhitespace() || it == '"' || it == '\\' }
+        if (!needsQuote) return value
+        val escaped = value.replace("\\", "\\\\").replace("\"", "\\\"")
+        return "\"$escaped\""
     }
 
     /** 按模板动态生成完整 JSON 示例 (含 reason), 错误反馈内嵌重发指令格式 (自锁先例)。 */

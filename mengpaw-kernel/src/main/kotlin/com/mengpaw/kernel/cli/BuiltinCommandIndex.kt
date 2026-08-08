@@ -216,7 +216,7 @@ object BuiltinCommandIndex {
         idx("agent.read", "在工作区中读取文件内容 (只读)", "agent.read <路径>",
             listOf("读取", "读文件", "查看", "打开", "Read", "Cat"),
             listOf("read", "open", "view", "cat", "file", "content"))
-        idx("agent.write", "在工作区中写入文件 (原子操作 tmp→rename)", "agent.write <路径> <内容>",
+        idx("agent.write", "在工作区中写入文件 (原子操作 tmp→rename; 多行内容用 --from <源文件> 导入)", "agent.write <路径> <内容> | agent.write <路径> --from <源文件>",
             listOf("写入", "写文件", "创建", "保存", "Write", "生成文件"),
             listOf("write", "create", "save", "file", "generate", "output"))
         idx("agent.policy", "per-agent 命令前缀级授权 — 多 Agent 场景按 agent 放开受限命令 (blockList 恒优先)", "agent.policy [allow|deny <前缀> [--to <agent>]]",
