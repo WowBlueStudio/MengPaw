@@ -79,6 +79,8 @@ internal class AgentReActLoop(
             val errorMsg = localizedError("session_corrupted", session.id, engine.agentLanguage)
             engine.getSessionManager().addMessage(session.id, Message("system", errorMsg))
             engine._state.value = AgentState.Error(errorMsg)
+            // 进化介入 (2026-08-08): 完整性失败也是负面事件 — 记录截断上下文
+            recordTerminationEvolution(session.id, "session_corrupted", "", "SESSION_INTEGRITY")
             return errorMsg
         }
 
@@ -151,6 +153,8 @@ internal class AgentReActLoop(
                             payload = mapOf("error" to "empty_response", "consecutive" to "true")
                         ))
                         engine._state.value = AgentState.Error(errorMsg)
+                        // 进化介入 (2026-08-08): 模型层失败 (连续空响应) — 记录上下文
+                        recordTerminationEvolution(session.id, "empty_response", "", "LLM_EMPTY_RESPONSE")
                         return errorMsg
                     }
                     KernelLog.w("AgentEngine", "Empty LLM response at step $step — retrying once")
@@ -239,6 +243,8 @@ internal class AgentReActLoop(
                         val msg = localizedError("max_steps", maxSteps.toString(), engine.agentLanguage)
                         engine.getSessionManager().addMessage(session.id, Message("assistant", msg))
                         engine._state.value = AgentState.Finished(msg)
+                        // 进化介入 (2026-08-08): 只思考不行动 = 完成度低 — 记录截断上下文
+                        recordTerminationEvolution(session.id, "incomplete_action", "", "NO_ACTION")
                         return msg
                     }
                     val continuePrompt = "继续。输出 Action: <命令> 和 Action Input: <参数>。"

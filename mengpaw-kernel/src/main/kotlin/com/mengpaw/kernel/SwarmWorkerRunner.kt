@@ -75,6 +75,7 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                 if (job != null && !job.isActive) throw CancellationException("Swarm stopped")
                 // 闸1: 总预算 (实际步数, AtomicInteger CAS 无锁安全)
                 if (!budget.tryConsume()) {
+                    recordWorkerTermination(session.id, "worker_budget_exhausted", "", "SWARM_BUDGET_EXHAUSTED")
                     return WorkerOutcome("预算耗尽，停止执行", step, tokens, budgetExhausted = true)
                 }
 
@@ -82,6 +83,7 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                 val response = try {
                     provider.completeWithMessages(conversation)
                 } catch (e: Exception) {
+                    recordWorkerTermination(session.id, "worker_llm_error", "", "WORKER_LLM_ERROR")
                     return WorkerOutcome("", step, tokens, "LLM 错误: ${e.message}")
                 }
                 tokens += provider.lastUsage?.totalTokens?.toLong() ?: 0L
@@ -137,11 +139,45 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                 }
                 step++
             }
+            recordWorkerTermination(session.id, "worker_max_steps", "", "WORKER_MAX_STEPS")
             return WorkerOutcome("达到最大步数 ($maxSteps) 未完成", step, tokens, "max_steps")
         } finally {
             // 零待命: 销毁会话, 无跨任务记忆
             engine.getSessionManager().deleteSession(session.id)
         }
+    }
+
+    /**
+     * Worker 终止进化介入 (2026-08-08): 预算耗尽 / LLM 错误 / 步数上限都是"完成度低"信号,
+     * 记录到主 agent 的失败模式库 (reason 带 worker_ 前缀区分来源), 剪取子任务上下文片段。
+     * worker 零待命不写记忆, 但失败模式必须沉淀供进化学习。永不抛异常。
+     */
+    private fun recordWorkerTermination(
+        sessionId: String,
+        reason: String,
+        command: String,
+        errorCode: String
+    ) {
+        try {
+            com.mengpaw.kernel.evolution.EvolutionStore.recordTermination(
+                agentName = engine.agentName,
+                reason = reason,
+                command = command,
+                errorCode = errorCode,
+                contextSnippet = clipContext(sessionId)
+            )
+        } catch (_: Exception) { /* 进化记录永不阻塞 worker */ }
+    }
+
+    /** 剪取 worker 会话尾部最近上下文片段 (非 localOnly, 限长限条数)。 */
+    private fun clipContext(sessionId: String, maxEntries: Int = 6, maxChars: Int = 500): String {
+        return try {
+            val msgs = engine.getSessionManager().getSession(sessionId)?.messages ?: return ""
+            msgs.filter { !it.localOnly && it.content.isNotBlank() }
+                .takeLast(maxEntries)
+                .joinToString("\n") { "[${it.role}] ${it.content.take(160)}" }
+                .take(maxChars)
+        } catch (_: Exception) { "" }
     }
 }
 

@@ -708,6 +708,59 @@ class AgentEngineTest {
         assertTrue("应剪取上下文片段 (最近 Action): $text", text.contains("self.status"))
     }
 
+    @Test
+    fun `empty response termination records into evolution archive`() = runBlocking {
+        // 模型层失败 (连续空响应) → 进化介入: 记录 empty_response 截断
+        val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_empty_evo_" + System.nanoTime()
+        com.mengpaw.kernel.DataPaths.initialize(tmp)
+        val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
+        agentDir.mkdirs()
+        val llm = object : LlmProvider {
+            override suspend fun complete(prompt: String): String = ""
+            override suspend fun completeWithMessages(messages: List<Map<String, String>>): String = ""
+            override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String = ""
+            override fun info() = ProviderInfo("mock", "empty-evo", ProviderType.LOCAL)
+            override fun close() {}
+        }
+        val sm2 = SessionManager()
+        val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
+        val result = engine2.run("空响应进化测试", maxSteps = 3)
+        assertTrue("应返回空响应错误: $result", result.contains("空响应") || result.contains("empty response"))
+        val failures = java.io.File(com.mengpaw.kernel.DataPaths.evolutionFailuresFile("MengPaw"))
+        assertTrue("失败档案应落盘", failures.exists())
+        assertTrue("应记录空响应截断: ${failures.readText()}", failures.readText().contains("[截断: empty_response]"))
+    }
+
+    @Test
+    fun `incomplete action termination records into evolution archive`() = runBlocking {
+        // 只思考不行动 (连续 needsContinue) = 完成度低 → 进化介入: 记录 incomplete_action
+        val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_incomplete_evo_" + System.nanoTime()
+        com.mengpaw.kernel.DataPaths.initialize(tmp)
+        val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
+        agentDir.mkdirs()
+        val llm = object : LlmProvider {
+            override suspend fun complete(prompt: String): String = "Thought: 我在思考如何完成任务。"
+            override suspend fun completeWithMessages(messages: List<Map<String, String>>): String =
+                "Thought: 我在思考如何完成任务。"
+            override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String {
+                val r = "Thought: 我在思考如何完成任务。"
+                r.forEach { onToken(it.toString()) }
+                return r
+            }
+            override fun info() = ProviderInfo("mock", "incomplete-evo", ProviderType.LOCAL)
+            override fun close() {}
+        }
+        val sm2 = SessionManager()
+        val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
+        val result = engine2.run("不行动测试", maxSteps = 3)
+        assertTrue("应强制收尾: $result", result.contains("最大步数") || result.contains("Max steps"))
+        val failures = java.io.File(com.mengpaw.kernel.DataPaths.evolutionFailuresFile("MengPaw"))
+        assertTrue("失败档案应落盘", failures.exists())
+        val text = failures.readText()
+        assertTrue("应记录不行动截断: $text", text.contains("[截断: incomplete_action]"))
+        assertTrue("应剪取思考上下文: $text", text.contains("思考"))
+    }
+
     // ── Mock LLM Provider ────────────────────────────────────────────────
 
     private class MockLlmProvider : LlmProvider {
