@@ -104,6 +104,10 @@ internal class AgentReActLoop(
             var extended = false
             // 会话级失败收集 (P0 幻觉率, 2026-08-08 自检): 本轮失败命令 (commandLine, errorCode)
             val sessionFailures = mutableListOf<Pair<String, String>>()
+            // 回合内重试循环 (2026-08-08, 对齐 QwenPaw RETRY LOOP DETECTED):
+            // (commandLine, errorCode) → 本次任务内失败次数; 已注入停指令的 key 防重复刷屏。
+            val retryCounts = mutableMapOf<Pair<String, String>, Int>()
+            val retryNotified = mutableSetOf<Pair<String, String>>()
             // P0 实质化 (2026-08-08): Final Answer 门禁拒绝次数 — 防止幻觉拒绝死循环
             var hallucinationRejections = 0
 
@@ -326,12 +330,20 @@ internal class AgentReActLoop(
                             // 门禁不再拦截"先失败后成功"场景, 用户只见最终成功结果, 不见内部重试噪音;
                             // 幻觉率统计也同步只统计最终仍失败的条目。
                             sessionFailures.removeAll { it.first == commandLine }
+                            // 重试循环计数同步清零 — 中间成功过即非死循环, 重新计
+                            retryCounts.keys.removeAll { it.first == commandLine }
+                            retryNotified.removeAll { it.first == commandLine }
                         } else {
                             anyFailure = true
-                            sessionFailures.add(commandLine to (result.errorCode ?: "TOOL_CALL_FAILED"))
+                            val errorCode = result.errorCode ?: "TOOL_CALL_FAILED"
+                            sessionFailures.add(commandLine to errorCode)
+                            // 回合内重试循环计数: 同命令同错误码累计, 满阈值注入停指令 (只一次)
+                            val retryKey = commandLine to errorCode
+                            val retryCount = (retryCounts[retryKey] ?: 0) + 1
+                            retryCounts[retryKey] = retryCount
                             ErrorCollector.report(ErrorType.TOOL_CALL_FAILED, "AgentEngine",
                                 "$commandLine → ${result.error}", sessionId = session.id, agentName = engine.agentName,
-                                metadata = mapOf("errorCode" to (result.errorCode ?: ""), "command" to commandLine))
+                                metadata = mapOf("errorCode" to errorCode, "command" to commandLine))
                             // 进化省察: 生成金字塔引导片段, 下次 LLM 调用注入 (轻/深分级)
                             conversation.pendingGuideFragment = com.mengpaw.kernel.evolution.EvolutionGuide.buildFragment(
                                 agentName = engine.agentName, command = commandLine, message = result.error ?: "")
@@ -350,6 +362,16 @@ internal class AgentReActLoop(
                             val recurrence = com.mengpaw.kernel.evolution.EvolutionStore.recurrenceReminder(
                                 engine.agentName, commandLine, result.errorCode ?: "")
                             if (recurrence != null) rawObservation = "$rawObservation\n\n$recurrence"
+                            // ── 回合内重试循环停指令 (2026-08-08, 对齐 QwenPaw PR #3178) ──
+                            // 同命令同错误码满 3 次: 注入"停止重试, 换方法或向用户说明", 而非立即终止 —
+                            // 给 Agent 一次转向机会; 继续空转由 detectLoop/trackResult/max_steps 兜底。
+                            val retryKey = commandLine to (result.errorCode ?: "TOOL_CALL_FAILED")
+                            val stop = com.mengpaw.kernel.evolution.EvolutionStore.retryLoopDirective(
+                                commandLine, retryKey.second, retryCounts[retryKey] ?: 0, retryKey in retryNotified)
+                            if (stop != null) {
+                                retryNotified.add(retryKey)
+                                rawObservation = "$rawObservation\n\n$stop"
+                            }
                         }
                         // ── P0 注入防护 (v0.34.0+): 工具结果为不可信外部数据, 三分支处理 ──
                         // 目的明确攻击判定在剥离前 (剥离后原文消失无法匹配); 来源解析自命令行。

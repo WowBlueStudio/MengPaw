@@ -99,6 +99,8 @@ object EvolutionStore {
 
     private const val MAX_MEMORY = 50
     const val DEFAULT_AGENT = "default"
+    /** 回合内重试循环判定阈值 (2026-08-08): 同命令同错误码失败满 3 次即注入停指令。 */
+    const val RETRY_LOOP_THRESHOLD = 3
 
     private val json = Json { prettyPrint = false; encodeDefaults = true }
     private val buffer = ConcurrentLinkedQueue<EvolutionFailure>()
@@ -225,6 +227,31 @@ object EvolutionStore {
                 append("  ② agent.memory.keep <教训> — 沉淀进长期记忆\n")
                 append(if (escalate) "先完成 ①② 之一再继续; 用 evolution.audit 查看沉淀状态。"
                        else "两者都做更好; 用 evolution.audit 可随时查看沉淀状态。")
+            }
+        } catch (_: Exception) { null }
+    }
+
+    /**
+     * 回合内重试循环停指令 (2026-08-08, 对齐 QwenPaw RETRY LOOP DETECTED, qwen-code PR #3178):
+     * 同一命令同一错误码在**本次任务**内失败 ≥ [RETRY_LOOP_THRESHOLD] 次 → 返回停指令文本,
+     * 要求 Agent 立即停止重试、重查用法、换根本不同的方法, 或向用户如实说明。
+     * 与 [recurrenceReminder] 的区别: 后者是跨会话复现 (进化沉淀二选一); 本指令是回合内空转干预。
+     * 已注入过 (alreadyNotified) 返回 null — 防每轮刷屏。纯函数可单测, 永不抛异常。
+     */
+    fun retryLoopDirective(
+        commandLine: String,
+        errorCode: String,
+        retryCount: Int,
+        alreadyNotified: Boolean
+    ): String? {
+        return try {
+            if (commandLine.isBlank() || retryCount < RETRY_LOOP_THRESHOLD || alreadyNotified) return null
+            buildString {
+                append("🚨 检测到重试循环: 同一命令 \"${commandLine.take(100)}\" 因同一错误 [${errorCode}] ")
+                append("已失败 $retryCount 次。立即停止重试, 不要重复相同操作。请三选一:\n")
+                append("  ① 重新检查命令用法 (evolution.learn.command / self.tools / agent.cli)\n")
+                append("  ② 换一种根本不同的方法完成任务\n")
+                append("  ③ 向用户如实说明无法完成及原因\n")
             }
         } catch (_: Exception) { null }
     }

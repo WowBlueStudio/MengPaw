@@ -146,6 +146,32 @@ class EvolutionStoreTest {
         assertTrue("升级版应禁止继续同类操作", reminder.contains("不得继续"))
     }
 
+    // ── 回合内重试循环停指令 (2026-08-08, 对齐 QwenPaw RETRY LOOP DETECTED) ──
+
+    @Test
+    fun `retry loop directive triggers at threshold and only once`() {
+        val cmd = "agent.read missing.md"
+        val code = "ERR_NOT_FOUND"
+        // 阈值前不触发
+        assertNull("1 次失败不触发", EvolutionStore.retryLoopDirective(cmd, code, 1, false))
+        assertNull("2 次失败不触发", EvolutionStore.retryLoopDirective(cmd, code, 2, false))
+        // 满 3 次触发
+        val directive = EvolutionStore.retryLoopDirective(cmd, code, 3, false)
+        assertNotNull("满 3 次应触发", directive)
+        assertTrue("应含重试循环标识", directive!!.contains("重试循环"))
+        assertTrue("应要求停止重试", directive.contains("停止重试"))
+        assertTrue("应提供换方法选项", directive.contains("根本不同的方法"))
+        assertTrue("应提供向用户说明选项", directive.contains("向用户如实说明"))
+        // 已注入过不再重复 (防刷屏)
+        assertNull("已注入不重复", EvolutionStore.retryLoopDirective(cmd, code, 4, true))
+    }
+
+    @Test
+    fun `retry loop directive survives malformed input`() {
+        assertNull("空命令不触发", EvolutionStore.retryLoopDirective("", "", 5, false))
+        assertNull("负计数不触发", EvolutionStore.retryLoopDirective("fs.cat x", "ERR_IO", -1, false))
+    }
+
     // ── P0 实质化 (2026-08-08): Final Answer 门禁纯函数 ──
 
     @Test

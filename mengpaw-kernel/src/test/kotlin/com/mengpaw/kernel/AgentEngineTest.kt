@@ -626,6 +626,48 @@ class AgentEngineTest {
         assertEquals("拒绝应消耗步数预算 (LLM 共 3 轮)", 3, receivedByLlm.size)
     }
 
+    @Test
+    fun `retry loop injects stop directive on third same-error failure`() = runBlocking {
+        // 同命令同错误码失败 3 次 (回合内空转) → 第 3 次 Observation 注入停指令 (对齐 QwenPaw),
+        // Agent 收到后转向如实汇报 → 门禁放行; 指令只注入一次不刷屏
+        val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_gate_retryloop_" + System.nanoTime()
+        com.mengpaw.kernel.DataPaths.initialize(tmp)
+        val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
+        agentDir.mkdirs()
+        val receivedByLlm = mutableListOf<List<Map<String, String>>>()
+        var turn = 0
+        val llm = object : LlmProvider {
+            override suspend fun complete(prompt: String): String = respond()
+            override suspend fun completeWithMessages(messages: List<Map<String, String>>): String {
+                receivedByLlm.add(messages)
+                return respond()
+            }
+            override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
+                respond().also { onToken(it) }
+            override fun info() = ProviderInfo("mock", "retry-loop", ProviderType.LOCAL)
+            override fun close() {}
+            fun respond(): String = when (turn++) {
+                // 前 3 轮同一命令同一错误反复失败 (空转)
+                0, 1, 2 -> """
+                    Thought: 读取文件。
+                    Action: agent.read
+                    Action Input: {"path": "missing.md"}
+                """.trimIndent()
+                // 收到停指令后转向: 不再重试, 如实汇报
+                else -> "Final Answer: 无法读取 missing.md, 文件不存在, 任务无法完成。"
+            }
+        }
+        val sm2 = SessionManager()
+        val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
+        val result = engine2.run("重试循环测试", maxSteps = 6)
+        assertEquals("应转向如实汇报: $result", "无法读取 missing.md, 文件不存在, 任务无法完成。", result)
+        val history = sm2.getHistory(engine2.currentConversationId()!!).joinToString("\n") { it.content }
+        assertTrue("第 3 次失败应注入停指令: $history", history.contains("重试循环"))
+        assertTrue("停指令应要求停止重试: $history", history.contains("停止重试"))
+        assertTrue("停指令应只出现一次 (防刷屏)", Regex("检测到重试循环").findAll(history).count() == 1)
+        assertEquals("应共 4 轮 LLM 调用 (3 次失败 + 1 次收尾)", 4, receivedByLlm.size)
+    }
+
     // ── Mock LLM Provider ────────────────────────────────────────────────
 
     private class MockLlmProvider : LlmProvider {
