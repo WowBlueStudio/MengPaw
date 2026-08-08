@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.34.2 (2026-08-09) — 幻觉干预全链路 + 进化系统产物重构 + 三层十二问审查闭环
+
+### 新增
+- **幻觉问题从度量到干预** (4ebfa0a): Final Answer 门禁 — 本轮有失败但最终回答未如实提及即拒绝并静默纠正; agent.write 自动读回验证 (≤200KB 全量比对, 成功断言由框架完成)
+- **幻觉门禁静默化** (c624fdd): 门禁反馈只注入下一轮 LLM 请求, 不写会话历史 (UI/持久化零污染); 失败已弥补豁免 (同命令同参数重试成功不再拦截)
+- **去超限放行** (43b1695): 幻觉答案绝不放行, 每次拒绝消耗步数预算, 顽固幻觉由循环上限终止; 失败词表扩充 + 自然语言汇报识别放宽
+- **回合内重试循环停指令** (89af077, 对齐 QwenPaw RETRY LOOP DETECTED): 同命令同错误码失败满 3 次注入停指令 — 停止重试/换方法/向用户说明
+- **失败截断进化介入** (739afd7/5b8e64d): 循环/步数上限/空响应/只思考不行动/异常中断/worker 终止全部剪取上下文片段写入失败模式库
+- **进化产物 v2** (fc94392): failures.jsonl 去重 (每模式一行) + 懒加载 (重启恢复) + 可追溯字段 (task/sessionId/contextSnippet) + learn.command 持久化 (跨进程保留)
+- **进化失败记录抗污染** (15cb98a): 命令字段清洗 + 按命令名去重 — 真实 46 行 failures.jsonl 合并为 16 个模式
+- **三层十二问审查闭环** (49d0a19): 系统提示词按 hasEvolutionData 条件注入进化认知引导 + 进化数据指纹纳入缓存失效; learn.command 闭环指引; UI 摘要附复现模式数
+- **方法论找回**: 三层十二问 (bb7a586) + 九维代码审查法 (60b0a66) 抽象为通用方法论 + Codex skills (closure-audit-12q / code-review-9d)
+
+### 修复
+- P4 agent.write 多行换行丢失 (5be9c70): HighRiskCommandGate 展开层 quoteIfNeeded 引号保护
+- self.search 命令真实可用性 [ACTIVE] 标记 + audit 输出「下一步可用动作」 (5be9c70)
+- 会话幻觉率持久化 (veracity.jsonl 跨进程累计) + 校验锚点 + 复现 ≥3 升级 🚨 (2b30715/ecdc5ea)
+
+### 发行
+- Shell APK v0.34.2 (versionCode 34002) — 全量发布双远端 + GitHub Release
+- Browser APK 无功能变更不构建
+- 测试: kernel 442 + core 90 + shell 126 + browser 34 + 插件 462 = 1154 tests 全绿 (0 failures / 0 errors)
+- plugins.json 无变更; 手机/平板暂不推送 (用户指示)
+
 ## v0.34.1 (2026-08-07) — NsdManager 共享 listener 竞态崩溃修复（荣耀 Android 14 平板启动即闪退）
 
 ### 修复
