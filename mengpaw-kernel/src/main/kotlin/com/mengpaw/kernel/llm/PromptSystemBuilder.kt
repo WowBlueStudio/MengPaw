@@ -23,6 +23,9 @@ internal class PromptSystemBuilder {
     private var cachedPromptAgent: String? = null
     private var cachedPromptFramework: String? = null
     private var cachedPromptModel: String? = null
+    /** 进化数据指纹快照 (2026-08-09 三层十二问 1.1): 失败档案/指令集写入即失配 → 重建提示词,
+     *  否则进化引导注入形同虚设 (failures.jsonl 不在 docMtimes 检查范围)。 */
+    @Volatile private var cachedEvolutionFingerprint: String? = null
 
     /** 工作区文档 mtime 快照 — 任何文档删除/修改即失配, 强制重建提示词.
      *  (docCache.isNotEmpty() 只检查条目存在, 无法感知单个文件被删除 —
@@ -125,6 +128,7 @@ internal class PromptSystemBuilder {
             docCache.keys.removeAll { it.startsWith(prefix) }
         }
         cachedSystemPrompt = null
+        cachedEvolutionFingerprint = null
     }
 
     /**
@@ -190,7 +194,8 @@ internal class PromptSystemBuilder {
             framework == cachedPromptFramework && modelName == cachedPromptModel &&
             cachedTemplateHash == PromptEngine.TEMPLATE_HASH &&
             docMtimes == currentDocMtimes(agentName) && // 文件删除/修改即失配 → 重建
-            pinnedFingerprint == currentPinnedFingerprint() // 用户指定技能清单/内容变化 → 重建
+            pinnedFingerprint == currentPinnedFingerprint() && // 用户指定技能清单/内容变化 → 重建
+            cachedEvolutionFingerprint == currentEvolutionFingerprint(agentName) // 进化数据变化 → 重建
         ) {
             return cachedPrompt
         }
@@ -302,6 +307,24 @@ Skills 分为两层：
 
 """
             )
+            // ── 进化系统引导 (三层十二问 1.1, 2026-08-09): 有进化数据才注入 —
+            // 失败档案/已登记指令集存在时, Agent 需要知道如何查看绩效、登记教训、闭环沉淀。
+            // 零数据不注入 (零 token 开销); 失败时会另收省察引导 (事后认知)。
+            if (com.mengpaw.kernel.evolution.EvolutionStore.hasEvolutionData(agentName)) {
+                append(
+"""
+## 🧬 进化系统 — 你有失败记录/沉淀教训
+
+框架在后台记录你的失败模式并支持沉淀修正，闭环命令：
+- `evolution.audit` — 查看进化绩效：失败模式(含任务/上下文)、复现率、已登记指令集、红灯提醒
+- `evolution.learn.command <命令> <正确用法>` — 登记命令正确用法（self.search 可检索，跨重启保留）
+- `evolution.mark-corrected <失败id>` — 沉淀修正后标记闭环（id 见 evolution.audit）
+
+失败不可耻：如实汇报失败是进化的原料。沉淀教训用 `agent.memory.keep`（长期记忆自动注入后续会话）。
+
+"""
+                )
+            }
             // ── 身份档案（PROFILE.md）— 你是谁、你在帮谁，每轮可见 ──
             if (profileDoc.isNotBlank()) {
                 append("\n## 你的身份档案（profile.md）\n\n")
@@ -339,7 +362,18 @@ Skills 分为两层：
         cachedTemplateHash = PromptEngine.TEMPLATE_HASH
         docMtimes = currentDocMtimes(agentName)
         pinnedFingerprint = currentPinnedFingerprint()
+        cachedEvolutionFingerprint = currentEvolutionFingerprint(agentName)
         return prompt
+    }
+
+    /** 进化数据指纹: failures.jsonl + commands.json 的 (大小:修改时间) — 任一写入/清理即变化。 */
+    private fun currentEvolutionFingerprint(agentName: String): String {
+        return try {
+            fun fp(f: java.io.File): String = if (f.exists()) "${f.length()}:${f.lastModified()}" else "-"
+            val failures = java.io.File(com.mengpaw.kernel.DataPaths.evolutionFailuresFile(agentName))
+            val commands = java.io.File(com.mengpaw.kernel.DataPaths.evolutionCommandsFile())
+            "${fp(failures)}|${fp(commands)}"
+        } catch (_: Exception) { "-" }
     }
 
     companion object {

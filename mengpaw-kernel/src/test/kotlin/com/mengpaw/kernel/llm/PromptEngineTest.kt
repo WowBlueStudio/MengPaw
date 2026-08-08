@@ -28,6 +28,26 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `evolution guide injected only when evolution data exists`() {
+        // 三层十二问 1.1 (2026-08-09): 有进化数据 (失败档案/已登记指令) → 提示词注入进化系统引导;
+        // 零数据 → 不注入 (零 token 开销)
+        val agent = "evo-prompt-test"
+        com.mengpaw.kernel.evolution.EvolutionStore.resetFailuresForTest()
+        // 清理上次运行残留的进化数据文件 (测试目录固定复用)
+        File(DataPaths.AGENTS, agent).deleteRecursively()
+        File(DataPaths.EVOLUTION, "commands.json").delete()
+        val noData = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = agent)
+        assertFalse("无进化数据不应注入引导", noData.contains("进化系统 — 你有失败记录"))
+        // 写入失败档案 → 重建提示词应含引导
+        com.mengpaw.kernel.evolution.EvolutionStore.recordFailure(agent, "fs.cat x", "ERR_IO", "读盘失败", "Pipeline")
+        val withData = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = agent)
+        assertTrue("有失败档案应注入进化引导", withData.contains("进化系统 — 你有失败记录"))
+        assertTrue("引导应含 evolution.audit", withData.contains("evolution.audit"))
+        assertTrue("引导应含 learn.command", withData.contains("evolution.learn.command"))
+        assertTrue("引导应含 mark-corrected", withData.contains("evolution.mark-corrected"))
+    }
+
+    @Test
     fun `oversized agents doc is compacted with read link`() {
         // 写超长 agents.md → docsBlock 注入应被 compactDoc 截断 + 外链
         val dir = File(DataPaths.AGENTS, "MengPaw")

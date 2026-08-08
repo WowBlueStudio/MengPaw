@@ -178,7 +178,11 @@ object EvolutionEngine : EvolutionProvider {
             // v2 (2026-08-09): 登记条目持久化 — 重启后仍被 self.search/引导采纳
             EvolutionStore.saveLearnedCommand(index)
             val kwText = if (keywords.isEmpty()) "(自动)" else keywords.joinToString(", ")
-            ExecutionResult.ok("已丰富指令集: $name\n描述: $desc\n关键词: $kwText")
+            ExecutionResult.ok(buildString {
+                append("已丰富指令集: $name\n描述: $desc\n关键词: $kwText")
+                // 三层十二问 1.5 (2026-08-09): 登记后指引闭环 — 关联对应失败模式
+                append("\n若这是对某条失败模式的修正: evolution.audit 查看失败 id → evolution.mark-corrected <id> 标记闭环")
+            })
         } catch (e: Exception) {
             ExecutionResult.fail("索引更新失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
         }

@@ -821,6 +821,17 @@ object EvolutionStore {
         } catch (_: Exception) { emptyList() }
     }
 
+    /** 该 Agent 是否有进化数据 (失败档案或已登记指令集) — 供系统提示词条件注入引导 (三层十二问 1.1)。 */
+    fun hasEvolutionData(agentName: String?): Boolean {
+        return try {
+            val agent = agentFileOf(agentName)
+            val failures = failuresFile(agent)
+            if (failures.exists() && failures.length() > 0) return true
+            val commands = learnedCommandsFile
+            commands.exists() && commands.length() > 0
+        } catch (_: Exception) { false }
+    }
+
     /** 启动恢复: 已登记的 learn.command 条目重新注入 CommandSearch (幂等, 供 self.search/引导检索)。 */
     fun restoreLearnedCommands() {
         try {

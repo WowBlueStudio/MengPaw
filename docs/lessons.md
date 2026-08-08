@@ -528,5 +528,13 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **修复（v3）**：`recordFailure` 存储前 `cleanCommand`（剥离换行单行化，截断 120）；去重/复现键改 `commandNameOf`（清洗后第一 token）+ 错误码——同命令不同参数视为同一模式；`mergePatterns` 历史合并同规则。实测模拟：46 行 → 16 个模式（termux.run ×9 归一）。
 - **教训**：进化记录的"模式键"必须抗污染——用户输入不可信，**命令字段里唯一可靠的是第一个 token**；展示字段（command）与模式键（命令名）分离，两者都做清洗。
 
+### 15.19 三层十二问过进化全流程：认知入口与缓存失效（2026-08-09）
+
+- **审查结论**：18 问中 15 项闭环，3 项缺口——1.1 系统提示词无进化认知入口（Agent 首次接触靠失败引导事后补认知）；1.5 learn.command 成功后未指引 mark-corrected 闭环；2.3 UI 摘要缺复现模式数。
+- **修复 1.1（含隐藏坑）**：系统提示词按 `hasEvolutionData` 条件注入进化引导块（有失败/指令才注入，零数据零 token）。**隐藏坑**：failures.jsonl 不在提示词缓存 docMtimes 检查范围，写失败后缓存不失效 → 引导永远不出现。修复：`currentEvolutionFingerprint`（failures.jsonl + commands.json 的 size:mtime）纳入缓存命中条件，进化数据写入即重建提示词。
+- **修复 1.5**：learn.command 成功响应追加"evolution.audit 找 id → mark-corrected 标记闭环"指引，登记与闭环动作链补齐。
+- **修复 2.3**：设置页 evolution 节点摘要附加"复现模式: N 种"。
+- **待办 2.5**：失败库无清理命令（去重后每模式一行、数据量可控，删除有风险需用户决策）。
+
 
 *最后更新: 2026-08-07 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

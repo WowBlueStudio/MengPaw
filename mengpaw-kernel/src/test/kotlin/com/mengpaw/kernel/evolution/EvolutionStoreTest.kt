@@ -294,6 +294,18 @@ class EvolutionStoreTest {
             results.any { it.fullName == "agent.memory.keep" })
     }
 
+    @Test
+    fun `has evolution data reflects failures and learned commands`() {
+        EvolutionStore.resetFailuresForTest()
+        val agent = "evo-v2-hasdata"
+        assertFalse("无数据应返回 false", EvolutionStore.hasEvolutionData(agent))
+        EvolutionStore.recordFailure(agent, "fs.cat x", "ERR_IO", "m", "Pipeline")
+        assertTrue("有失败档案应返回 true", EvolutionStore.hasEvolutionData(agent))
+        // hasEvolutionData 查文件, 不依赖内存 buffer — 清内存后文件仍在, 仍为 true
+        EvolutionStore.resetFailuresForTest()
+        assertTrue("清空内存后文件仍在 → 仍为 true", EvolutionStore.hasEvolutionData(agent))
+    }
+
     // ── P0 实质化 (2026-08-08): Final Answer 门禁纯函数 ──
 
     @Test

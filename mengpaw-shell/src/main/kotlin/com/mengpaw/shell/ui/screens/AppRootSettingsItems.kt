@@ -306,7 +306,10 @@ internal fun rememberAppRootSettingsItems(
                                 if (veracity.startsWith("会话失败如实提及")) {
                                     append(" | ").append(veracity.lineSequence().first())
                                 }
-                                if (com.mengpaw.kernel.evolution.EvolutionStore.stats(activeAgent).contains("红灯")) {
+                                val stats = com.mengpaw.kernel.evolution.EvolutionStore.stats(activeAgent)
+                                stats.lineSequence().firstOrNull { it.startsWith("复现模式:") }
+                                    ?.let { append(" | ").append(it.substringBefore(" (")) }
+                                if (stats.contains("红灯")) {
                                     append(" | ⚠️ 有失败未沉淀 (evolution.audit 查看)")
                                 }
                             }
