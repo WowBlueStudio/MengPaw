@@ -35,7 +35,16 @@ interface EvolutionProvider {
     suspend fun executeCommand(command: String, args: List<String>, ctx: ExecutionContext): ExecutionResult?
 
     /** 失败事件 → 失败模式库 (钩子调用, 永不抛异常)。 */
-    fun recordFailure(agentName: String?, command: String, errorCode: String, message: String, source: String)
+    fun recordFailure(
+        agentName: String?,
+        command: String,
+        errorCode: String,
+        message: String,
+        source: String,
+        task: String = "",
+        sessionId: String = "",
+        contextSnippet: String = ""
+    )
 
     /** 用户纠正/撤回 → 用户反应档案 (shell 层纠正识别调用, 永不抛异常)。 */
     fun recordCorrection(agentName: String?, correction: String, contextSnippet: String, task: String)
@@ -157,14 +166,17 @@ object EvolutionEngine : EvolutionProvider {
         val keywords = if (kwIdx >= 0 && kwIdx + 1 < args.size)
             args[kwIdx + 1].split(",").map { it.trim() }.filter { it.isNotBlank() } else emptyList()
         return try {
-            CommandSearch.registerOrUpdate(CommandIndex(
+            val index = CommandIndex(
                 fullName = name,
                 namespace = name.substringBefore("."),
                 description = desc,
                 usage = name,
                 zhKeywords = keywords.ifEmpty { listOf(name, name.substringAfterLast(".")) },
                 enKeywords = keywords.ifEmpty { listOf(name) }
-            ))
+            )
+            CommandSearch.registerOrUpdate(index)
+            // v2 (2026-08-09): 登记条目持久化 — 重启后仍被 self.search/引导采纳
+            EvolutionStore.saveLearnedCommand(index)
             val kwText = if (keywords.isEmpty()) "(自动)" else keywords.joinToString(", ")
             ExecutionResult.ok("已丰富指令集: $name\n描述: $desc\n关键词: $kwText")
         } catch (e: Exception) {
@@ -195,9 +207,12 @@ object EvolutionEngine : EvolutionProvider {
         command: String,
         errorCode: String,
         message: String,
-        source: String
+        source: String,
+        task: String,
+        sessionId: String,
+        contextSnippet: String
     ) {
-        EvolutionStore.recordFailure(agentName, command, errorCode, message, source)
+        EvolutionStore.recordFailure(agentName, command, errorCode, message, source, task, sessionId, contextSnippet)
     }
 
     override fun recordCorrection(agentName: String?, correction: String, contextSnippet: String, task: String) {

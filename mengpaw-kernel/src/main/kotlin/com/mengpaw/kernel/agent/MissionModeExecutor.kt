@@ -241,7 +241,7 @@ class MissionModeExecutor(
                 val response = try {
                     agentEngine.getLlmProvider().completeWithMessages(conversation)
                 } catch (e: Exception) {
-                    recordMissionWorkerTermination(session.id, "worker_llm_error")
+                    recordMissionWorkerTermination(session.id, "worker_llm_error", subtask.description)
                     return "Error: ${e.message}"
                 }
                 val sanitized = com.mengpaw.kernel.security.Sanitizer.sanitize(response)
@@ -297,7 +297,7 @@ class MissionModeExecutor(
                 }
                 step++
             }
-            recordMissionWorkerTermination(session.id, "worker_max_steps")
+            recordMissionWorkerTermination(session.id, "worker_max_steps", subtask.description)
             return "已达到最大步数 ($maxSteps) 未完成"
         } finally {
             // 零待命: 销毁会话, 无跨任务记忆
@@ -310,14 +310,15 @@ class MissionModeExecutor(
      * 记录到主 agent 失败模式库 (reason 带 worker_ 前缀), 剪取子任务上下文片段。
      * worker 零待命不写记忆, 但失败模式必须沉淀供进化学习。永不抛异常。
      */
-    private fun recordMissionWorkerTermination(sessionId: String, reason: String) {
+    private fun recordMissionWorkerTermination(sessionId: String, reason: String, task: String) {
         try {
             com.mengpaw.kernel.evolution.EvolutionStore.recordTermination(
                 agentName = agentEngine.agentName,
                 reason = reason,
                 command = "",
                 errorCode = reason.uppercase(),
-                contextSnippet = clipMissionContext(sessionId)
+                contextSnippet = clipMissionContext(sessionId),
+                task = task
             )
         } catch (_: Exception) { /* 进化记录永不阻塞 worker */ }
     }

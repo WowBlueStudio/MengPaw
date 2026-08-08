@@ -23,8 +23,17 @@ class EvolutionProviderRegistryTest {
             if (command == "audit") ExecutionResult.ok("自定义绩效: 0 条")
             else EvolutionEngine.executeCommand(command, args, ctx)
 
-        override fun recordFailure(agentName: String?, command: String, errorCode: String, message: String, source: String) {
-            EvolutionEngine.recordFailure(agentName, command, errorCode, message, source)
+        override fun recordFailure(
+            agentName: String?,
+            command: String,
+            errorCode: String,
+            message: String,
+            source: String,
+            task: String,
+            sessionId: String,
+            contextSnippet: String
+        ) {
+            EvolutionEngine.recordFailure(agentName, command, errorCode, message, source, task, sessionId, contextSnippet)
         }
         override fun recordCorrection(agentName: String?, correction: String, contextSnippet: String, task: String) {
             EvolutionEngine.recordCorrection(agentName, correction, contextSnippet, task)

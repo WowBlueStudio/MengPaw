@@ -514,5 +514,12 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **落地**：AgentReActLoop 四类截断路径（loop_detected / consecutive_failures / max_steps / 异常中断）统一调 `recordTermination`：剪取会话尾部最近 6 条消息（Thought/Action/Observation 序列，≤500 字符）作为上下文片段，写入 failures.jsonl（message 带 `[截断: reason]`，source=Termination，空命令以 "(终止: reason)" 为模式键），复用复现计数/种子匹配/缺陷升级。
 - **教训**：截断本身就是重要的进化信号——"Agent 未能完成任务"和"某条命令失败"是不同粒度的学习素材；剪取上下文时只取非 localOnly 消息、限长限条数，防把恢复元数据/超长正文灌进档案。
 
+### 15.17 进化产物要可读、可追溯、可采纳（2026-08-09，实测三项缺陷）
+
+- **实测缺陷 1（重复）**：failures.jsonl 每失败追加一行，同模式反复失败产生 N 行几乎相同的内容。修复：按 (agent+command+errorCode) upsert，每模式一行，repeatCount 累计，firstSeen/lastSeen 记录时间线；历史重复行首次加载时自动去重整理。
+- **实测缺陷 2（无上下文）**：EvolutionFailure 只有命令+错误文本，不知道"当时在做什么任务"。修复：新增 task/sessionId/contextSnippet 字段（截断路径已剪取，命令失败经 ErrorCollector 钩子带 sessionId），audit 逐条展示 id/时间/任务/上下文。
+- **实测缺陷 3（不被采纳）**：两个根因——① failures buffer 启动时不加载文件，重启后 repeatedPatterns/stats/复现提醒/已修正状态全丢；② learn.command 只写 CommandSearch 内存索引，重启即丢。修复：failures.jsonl 按 agent 懒加载；learn.command 持久化到 `进化档案/commands.json`，EvolutionHook.install 时恢复进检索索引。长期记忆（memory.md）本就注入提示词，教训可自动采纳。
+- **教训**：进化系统"记录→沉淀→采纳"三段中，前两段只有文件持久化还不够——**读取侧必须懒加载文件**，否则重启后进化等于没发生过；登记类产物（learn.command）必须落盘，不能只驻内存索引。
+
 
 *最后更新: 2026-08-07 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

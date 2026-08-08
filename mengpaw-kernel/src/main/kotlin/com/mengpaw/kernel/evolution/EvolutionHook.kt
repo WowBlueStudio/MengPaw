@@ -28,6 +28,8 @@ object EvolutionHook {
         if (installed) return
         installed = true
         ErrorCollector.onReport = { entry -> onFailure(entry) }
+        // v2 (2026-08-09): 恢复用户 learn.command 登记的指令集 (跨进程保留)
+        EvolutionStore.restoreLearnedCommands()
     }
 
     private fun onFailure(entry: ErrorEntry) {
@@ -39,7 +41,8 @@ object EvolutionHook {
                 command = command,
                 errorCode = errorCode,
                 message = entry.message,
-                source = entry.source
+                source = entry.source,
+                sessionId = entry.sessionId ?: ""
             )
         } catch (_: Exception) { /* 钩子永不崩溃 */ }
     }

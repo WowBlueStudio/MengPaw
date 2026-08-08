@@ -80,7 +80,7 @@ internal class AgentReActLoop(
             engine.getSessionManager().addMessage(session.id, Message("system", errorMsg))
             engine._state.value = AgentState.Error(errorMsg)
             // 进化介入 (2026-08-08): 完整性失败也是负面事件 — 记录截断上下文
-            recordTerminationEvolution(session.id, "session_corrupted", "", "SESSION_INTEGRITY")
+            recordTerminationEvolution(session.id, "session_corrupted", "", "SESSION_INTEGRITY", task)
             return errorMsg
         }
 
@@ -154,7 +154,7 @@ internal class AgentReActLoop(
                         ))
                         engine._state.value = AgentState.Error(errorMsg)
                         // 进化介入 (2026-08-08): 模型层失败 (连续空响应) — 记录上下文
-                        recordTerminationEvolution(session.id, "empty_response", "", "LLM_EMPTY_RESPONSE")
+                        recordTerminationEvolution(session.id, "empty_response", "", "LLM_EMPTY_RESPONSE", task)
                         return errorMsg
                     }
                     KernelLog.w("AgentEngine", "Empty LLM response at step $step — retrying once")
@@ -244,7 +244,7 @@ internal class AgentReActLoop(
                         engine.getSessionManager().addMessage(session.id, Message("assistant", msg))
                         engine._state.value = AgentState.Finished(msg)
                         // 进化介入 (2026-08-08): 只思考不行动 = 完成度低 — 记录截断上下文
-                        recordTerminationEvolution(session.id, "incomplete_action", "", "NO_ACTION")
+                        recordTerminationEvolution(session.id, "incomplete_action", "", "NO_ACTION", task)
                         return msg
                     }
                     val continuePrompt = "继续。输出 Action: <命令> 和 Action Input: <参数>。"
@@ -296,7 +296,7 @@ internal class AgentReActLoop(
                         engine._state.value = AgentState.Error(errorMsg)
                         onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, cmd, errorMsg))
                         // 失败截断进化介入: 剪取上下文片段, 记录循环终止模式
-                        recordTerminationEvolution(session.id, "loop_detected", cmd, "LOOP_DETECTED")
+                        recordTerminationEvolution(session.id, "loop_detected", cmd, "LOOP_DETECTED", task)
                         return errorMsg
                     }
 
@@ -435,7 +435,8 @@ internal class AgentReActLoop(
                         recordTerminationEvolution(
                             session.id, "consecutive_failures",
                             lastFailure?.first ?: commandLines.first(),
-                            lastFailure?.second ?: "CONSECUTIVE_FAILURES")
+                            lastFailure?.second ?: "CONSECUTIVE_FAILURES",
+                            task)
                         return errorMsg
                     }
                     // 合并为一条 assistant 消息（多 Action 的多个 Observation）
@@ -471,7 +472,8 @@ internal class AgentReActLoop(
             recordTerminationEvolution(
                 session.id, "max_steps",
                 lastFailure?.first ?: "",
-                lastFailure?.second ?: "MAX_STEPS")
+                lastFailure?.second ?: "MAX_STEPS",
+                task)
             return msg
         } catch (e: kotlinx.coroutines.CancellationException) {
             // 取消传播契约: 必须先 rethrow (P1 已修, 禁止吞掉 CancellationException)。
@@ -515,7 +517,7 @@ internal class AgentReActLoop(
             engine.getSessionManager().addMessage(session.id, Message("assistant", errorMsg))
             engine._state.value = AgentState.Error(errorMsg)
             // 失败截断进化介入: 异常中断 — 剪取崩溃前上下文片段
-            recordTerminationEvolution(session.id, "interrupted", "", "AGENT_CRASH")
+            recordTerminationEvolution(session.id, "interrupted", "", "AGENT_CRASH", task)
             return errorMsg
         }
     }
@@ -543,7 +545,8 @@ internal class AgentReActLoop(
         sessionId: String,
         reason: String,
         command: String,
-        errorCode: String
+        errorCode: String,
+        task: String = ""
     ) {
         try {
             com.mengpaw.kernel.evolution.EvolutionStore.recordTermination(
@@ -551,7 +554,8 @@ internal class AgentReActLoop(
                 reason = reason,
                 command = command,
                 errorCode = errorCode,
-                contextSnippet = clipSessionContext(sessionId)
+                contextSnippet = clipSessionContext(sessionId),
+                task = task
             )
         } catch (_: Exception) { /* 进化记录永不阻塞主链路 */ }
     }

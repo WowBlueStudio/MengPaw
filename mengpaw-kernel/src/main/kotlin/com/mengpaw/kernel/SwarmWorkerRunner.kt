@@ -75,7 +75,7 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                 if (job != null && !job.isActive) throw CancellationException("Swarm stopped")
                 // 闸1: 总预算 (实际步数, AtomicInteger CAS 无锁安全)
                 if (!budget.tryConsume()) {
-                    recordWorkerTermination(session.id, "worker_budget_exhausted", "", "SWARM_BUDGET_EXHAUSTED")
+                    recordWorkerTermination(session.id, "worker_budget_exhausted", "", "SWARM_BUDGET_EXHAUSTED", subtask.description)
                     return WorkerOutcome("预算耗尽，停止执行", step, tokens, budgetExhausted = true)
                 }
 
@@ -83,7 +83,7 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                 val response = try {
                     provider.completeWithMessages(conversation)
                 } catch (e: Exception) {
-                    recordWorkerTermination(session.id, "worker_llm_error", "", "WORKER_LLM_ERROR")
+                    recordWorkerTermination(session.id, "worker_llm_error", "", "WORKER_LLM_ERROR", subtask.description)
                     return WorkerOutcome("", step, tokens, "LLM 错误: ${e.message}")
                 }
                 tokens += provider.lastUsage?.totalTokens?.toLong() ?: 0L
@@ -139,7 +139,7 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                 }
                 step++
             }
-            recordWorkerTermination(session.id, "worker_max_steps", "", "WORKER_MAX_STEPS")
+            recordWorkerTermination(session.id, "worker_max_steps", "", "WORKER_MAX_STEPS", subtask.description)
             return WorkerOutcome("达到最大步数 ($maxSteps) 未完成", step, tokens, "max_steps")
         } finally {
             // 零待命: 销毁会话, 无跨任务记忆
@@ -156,7 +156,8 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
         sessionId: String,
         reason: String,
         command: String,
-        errorCode: String
+        errorCode: String,
+        task: String
     ) {
         try {
             com.mengpaw.kernel.evolution.EvolutionStore.recordTermination(
@@ -164,7 +165,8 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                 reason = reason,
                 command = command,
                 errorCode = errorCode,
-                contextSnippet = clipContext(sessionId)
+                contextSnippet = clipContext(sessionId),
+                task = task
             )
         } catch (_: Exception) { /* 进化记录永不阻塞 worker */ }
     }

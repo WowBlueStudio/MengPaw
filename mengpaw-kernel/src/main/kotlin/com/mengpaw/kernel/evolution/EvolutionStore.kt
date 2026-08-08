@@ -4,6 +4,8 @@
 package com.mengpaw.kernel.evolution
 
 import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.cli.CommandIndex
+import com.mengpaw.kernel.cli.CommandSearch
 import com.mengpaw.kernel.namespace.NotifyBus
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -14,6 +16,9 @@ import java.util.concurrent.ConcurrentLinkedQueue
 /**
  * 一条进化失败记录 — 失败模式库的基础单元。
  * repeatCount 是绩效系统的核心指标:同一模式(命令+错误码)出现第 2 次起即"复现"。
+ * v2 (2026-08-09): failures.jsonl 按模式去重 (每模式一行, 重复失败更新同一行而非追加),
+ * 新增 task/sessionId/contextSnippet 提供可追溯上下文, firstSeen/lastSeen 记录时间线。
+ * 旧行无新字段 → 反序列化用默认值, 零迁移。
  */
 @Serializable
 data class EvolutionFailure(
@@ -30,7 +35,18 @@ data class EvolutionFailure(
     /** 该失败模式(命令+错误码)在记录中出现过的次数。 */
     val repeatCount: Int = 1,
     /** 是否已被 Agent 沉淀修正(经 evolution.mark-corrected)。 */
-    val corrected: Boolean = false
+    val corrected: Boolean = false,
+    // ── v2 可追溯字段 (2026-08-09) ──
+    /** 失败发生时的用户任务摘要 (供"当时在做什么"参考)。 */
+    val task: String = "",
+    /** 失败所在会话 id (供回查会话历史)。 */
+    val sessionId: String = "",
+    /** 失败时剪取的上下文片段 (Thought/Action/Observation 序列)。 */
+    val contextSnippet: String = "",
+    /** 模式首次出现时间 (0 = 与 timestamp 相同, 兼容旧行)。 */
+    val firstSeen: Long = 0,
+    /** 模式最近出现时间 (0 = 与 timestamp 相同, 兼容旧行)。 */
+    val lastSeen: Long = 0
 )
 
 /**
@@ -109,6 +125,8 @@ object EvolutionStore {
     /** 失败模式统计 key → 出现次数(内存, 持续累计)。 */
     private val repeatIndex = mutableMapOf<String, Int>()
     private val lock = Any()
+    /** 已完成文件懒加载的 agent 集合 (v2, 2026-08-09) — 防重复加载与 recordFailure 覆盖历史。 */
+    private val failuresLoadedAgents = mutableSetOf<String>()
 
     /**
      * 内置失败模式种子库 — 新手常见错误预防清单 (P1-4)。
@@ -165,40 +183,80 @@ object EvolutionStore {
         command: String,
         errorCode: String,
         message: String,
-        source: String
+        source: String,
+        task: String = "",
+        sessionId: String = "",
+        contextSnippet: String = ""
     ): EvolutionFailure {
         return try {
             val agent = agentFileOf(agentName)
+            // v2: 先懒加载该 agent 的历史档案, 否则 upsert 找不到旧模式会新增重复行
+            ensureFailuresLoaded(agent)
             val key = "$agent|$command|$errorCode"
             val entry = synchronized(lock) {
                 val count = (repeatIndex[key] ?: 0) + 1
                 repeatIndex[key] = count
                 val cmd = command.take(120)
+                val errCode = errorCode.take(60)
+                val now = System.currentTimeMillis()
                 // 1) 种子命中提示 — 内置失败模式对照自查, 新手错误就地消化
                 val seedHint = matchSeeds(cmd).joinToString("; ") {
                     "命中内置种子模式 #${it.id}: ${it.lesson}"
                 }
                 // 2) 复现缺陷检测 — 沉淀修正后同型错误仍复发 → 自动升级框架缺陷
                 val defectHint = detectRecurrenceDefect(agent, cmd, errorCode, count)
-                val e = EvolutionFailure(
-                    id = "evo_${nextId++}",
-                    timestamp = System.currentTimeMillis(),
-                    agentName = agent,
-                    command = cmd,
-                    errorCode = errorCode.take(60),
-                    message = buildString {
+                val newMessage = buildString {
                         append(message.take(300))
                         if (seedHint.isNotEmpty()) append("\n[种子] $seedHint")
                         if (defectHint != null) append("\n[缺陷] $defectHint")
-                    }.take(600),
-                    source = source.take(60),
-                    repeatCount = count
-                )
-                buffer.add(e)
+                    }.take(600)
+                // v2 去重: 同模式 (agent+command+errorCode) 更新既有行, 不再追加重复行
+                val existingIdx = buffer.indexOfFirst {
+                    it.agentName == agent && it.command == cmd && it.errorCode == errCode
+                }
+                val e = if (existingIdx >= 0) {
+                    val old = buffer.elementAt(existingIdx)
+                    old.copy(
+                        timestamp = now,
+                        repeatCount = count,
+                        message = newMessage,
+                        source = source.take(60),
+                        task = task.ifBlank { old.task },
+                        sessionId = sessionId.ifBlank { old.sessionId },
+                        contextSnippet = contextSnippet.ifBlank { old.contextSnippet },
+                        firstSeen = if (old.firstSeen == 0L) old.timestamp else old.firstSeen,
+                        lastSeen = now
+                    )
+                } else {
+                    EvolutionFailure(
+                        id = "evo_${nextId++}",
+                        timestamp = now,
+                        agentName = agent,
+                        command = cmd,
+                        errorCode = errCode,
+                        message = newMessage,
+                        source = source.take(60),
+                        repeatCount = count,
+                        task = task.take(200),
+                        sessionId = sessionId.take(80),
+                        contextSnippet = contextSnippet.take(400),
+                        firstSeen = now,
+                        lastSeen = now
+                    )
+                }
+                // 替换 buffer 中旧条目 (ConcurrentLinkedQueue 不支持 set — 重建)
+                val list = buffer.toList()
+                val updated = if (existingIdx >= 0) {
+                    list.mapIndexed { i, it -> if (i == existingIdx) e else it }
+                } else {
+                    list + e
+                }
+                buffer.clear(); buffer.addAll(updated)
                 while (buffer.size > MAX_MEMORY) { buffer.poll() ?: break }
                 e
             }
-            appendToFile(agent, entry)
+            // v2: 去重后文件小 (每模式一行), 直接全量重写而非追加
+            rewriteFile(agent)
             entry
         } catch (_: Exception) {
             EvolutionFailure("evo_err", System.currentTimeMillis(), agentFileOf(agentName), command, errorCode, message, source)
@@ -218,7 +276,8 @@ object EvolutionStore {
         reason: String,
         command: String,
         errorCode: String,
-        contextSnippet: String
+        contextSnippet: String,
+        task: String = ""
     ): EvolutionFailure? {
         return try {
             if (reason.isBlank() && contextSnippet.isBlank()) return null
@@ -228,7 +287,8 @@ object EvolutionStore {
                 command = command.ifBlank { "(终止: $reason)" },
                 errorCode = errorCode.ifBlank { reason },
                 message = "[截断: $reason] 会话上下文片段:\n$snippet",
-                source = "Termination"
+                source = "Termination",
+                task = task
             )
         } catch (_: Exception) { null }
     }
@@ -440,6 +500,7 @@ object EvolutionStore {
 
     /** 是否存在已沉淀修正 (corrected=true) 的同前缀记录 — 缓冲优先, 回退 failures.jsonl。 */
     private fun hasCorrectedLesson(agent: String, prefix: String): Boolean {
+        ensureFailuresLoaded(agent)
         if (buffer.toList().any { it.agentName == agent && it.corrected && it.command.startsWith(prefix) }) return true
         return try {
             val file = failuresFile(agent)
@@ -460,6 +521,7 @@ object EvolutionStore {
     fun markCorrected(agentName: String?, failureId: String): Boolean {
         return try {
             val agent = agentFileOf(agentName)
+            ensureFailuresLoaded(agent)
             val updated = buffer.find { it.id == failureId && it.agentName == agent }?.copy(corrected = true)
             if (updated != null) {
                 val list = buffer.toList().map { if (it.id == failureId) updated else it }
@@ -496,10 +558,57 @@ object EvolutionStore {
 
     // ── 查询 ────────────────────────────────────────────────────────
 
+    /**
+     * 懒加载 failures.jsonl → buffer (v2, 2026-08-09): 此前 buffer 只随进程累积,
+     * 重启后 repeatedPatterns/stats/复现提醒全部失效 — "教训不被采纳"的根因之一。
+     * 加载时对历史重复行做一次去重合并 (旧版每失败追加一行), 整理后落盘一次。
+     * 幂等 (每 agent 一次); 坏行跳过; 永不抛异常。
+     */
+    private fun ensureFailuresLoaded(agent: String) {
+        synchronized(lock) {
+            if (agent in failuresLoadedAgents) return
+            failuresLoadedAgents.add(agent)
+            try {
+                val file = failuresFile(agent)
+                if (!file.exists()) return
+                val raw = mutableListOf<EvolutionFailure>()
+                file.readLines().forEach { line ->
+                    try { raw.add(json.decodeFromString<EvolutionFailure>(line)) }
+                    catch (_: Exception) { /* 跳过坏行 */ }
+                }
+                val merged = mergePatterns(raw)
+                buffer.addAll(merged)
+                // 历史有重复行 → 整理落盘 (去重后每模式一行)
+                if (merged.size != raw.size) rewriteFile(agent)
+            } catch (_: Exception) { /* 读取失败降级为空档案 */ }
+        }
+    }
+
+    /**
+     * 同模式 (command+errorCode) 合并: repeatCount 取最大, corrected 任一 true 即 true,
+     * message/task/sessionId/contextSnippet 取最近一条, firstSeen 取最早, lastSeen/timestamp 取最近,
+     * id 取最近一条 (用户 audit 看到的就是它, mark-corrected 引用稳定)。
+     */
+    private fun mergePatterns(entries: List<EvolutionFailure>): List<EvolutionFailure> {
+        return entries.groupBy { "${it.command}|${it.errorCode}" }.map { (_, list) ->
+            val newest = list.maxByOrNull { it.timestamp } ?: return@map list.first()
+            newest.copy(
+                repeatCount = list.maxOf { it.repeatCount },
+                corrected = list.any { it.corrected },
+                task = newest.task.ifBlank { list.firstNotNullOfOrNull { it.task.ifBlank { null } } ?: "" },
+                sessionId = newest.sessionId.ifBlank { list.firstNotNullOfOrNull { it.sessionId.ifBlank { null } } ?: "" },
+                contextSnippet = newest.contextSnippet.ifBlank { list.firstNotNullOfOrNull { it.contextSnippet.ifBlank { null } } ?: "" },
+                firstSeen = (list.minOfOrNull { if (it.firstSeen == 0L) it.timestamp else it.firstSeen }) ?: newest.timestamp,
+                lastSeen = (list.maxOfOrNull { if (it.lastSeen == 0L) it.timestamp else it.lastSeen }) ?: newest.timestamp
+            )
+        }
+    }
+
     /** 最近 n 条失败记录(新→旧)。agentName 为空时返回全部。 */
     fun recentFailures(agentName: String?, n: Int = 20): List<EvolutionFailure> =
         try {
             val agent = agentFileOf(agentName)
+            ensureFailuresLoaded(agent)
             buffer.toList().filter { agentName == null || it.agentName == agent }.takeLast(n).reversed()
         } catch (_: Exception) { emptyList() }
 
@@ -507,10 +616,9 @@ object EvolutionStore {
     fun repeatedPatterns(agentName: String?, n: Int = 10): List<EvolutionFailure> =
         try {
             val agent = agentFileOf(agentName)
+            ensureFailuresLoaded(agent)
             buffer.toList()
                 .filter { it.agentName == agent }
-                .groupBy { "${it.command}|${it.errorCode}" }
-                .map { (_, list) -> list.maxBy { it.repeatCount } }
                 .filter { it.repeatCount >= 2 }
                 .sortedByDescending { it.repeatCount }
                 .take(n)
@@ -529,22 +637,37 @@ object EvolutionStore {
     /** 绩效摘要 — 供 evolution.audit 与引导注入。 */
     fun stats(agentName: String?): String {
         return try {
-            val all = buffer.toList().filter { it.agentName == agentFileOf(agentName) }
+            val agent = agentFileOf(agentName)
+            ensureFailuresLoaded(agent)
+            val all = buffer.toList().filter { it.agentName == agent }
             val repeated = all.filter { it.repeatCount >= 2 }
             val corrected = all.count { it.corrected }
+            val totalHits = all.sumOf { it.repeatCount }
             buildString {
-                appendLine("进化绩效 (${agentFileOf(agentName)})")
-                appendLine("记录失败: ${all.size}")
-                appendLine("复现模式: ${repeated.size} 种")
+                appendLine("进化绩效 (${agent})")
+                // v2 (2026-08-09): 去重后区分"模式数"与"累计失败次数"
+                appendLine("记录失败: ${all.size} 条模式 (累计 $totalHits 次失败)")
+                appendLine("复现模式: ${repeated.size} 种 (同模式失败 ≥2 次)")
                 appendLine("已沉淀修正: $corrected")
                 if (all.isNotEmpty() && corrected == 0) {
                     appendLine("⚠️ 红灯: 有 ${all.size} 条失败但 0 条已沉淀 — 闭环未完成, 请当场用 agent.memory.keep / evolution.learn.command 处理 (见下方「下一步可用动作」)")
                 }
-                if (repeated.isNotEmpty()) {
+                if (all.isNotEmpty()) {
                     appendLine()
-                    appendLine("### 复现模式")
-                    repeated.take(5).forEach { f ->
-                        appendLine("- ${f.command} [${f.errorCode}] ×${f.repeatCount}${if (f.corrected) " ✅已修正" else ""}")
+                    appendLine("### 失败模式 (可追溯)")
+                    // v2 (2026-08-09): 全部模式展示 task/上下文/时间线 — 单次失败也有上下文参考
+                    all.sortedByDescending { it.repeatCount }.take(8).forEach { f ->
+                        val flag = when {
+                            f.corrected -> " ✅已修正"
+                            f.repeatCount >= 2 -> " ⚠️未修正"
+                            else -> ""
+                        }
+                        appendLine("- ${f.command} [${f.errorCode}] ×${f.repeatCount}$flag")
+                        appendLine("    id=${f.id} · 首次 ${fmtTime(f.firstSeen)} · 最近 ${fmtTime(f.lastSeen)}")
+                        if (f.task.isNotBlank()) appendLine("    任务: ${f.task.take(120)}")
+                        if (f.contextSnippet.isNotBlank()) {
+                            appendLine("    上下文: ${f.contextSnippet.replace("\n", " ").take(120)}")
+                        }
                     }
                 }
                 appendLine()
@@ -560,6 +683,16 @@ object EvolutionStore {
                     appendLine("- 登记命令正确用法: evolution.learn.command <命令> <描述> [--keywords 词1,词2]")
                     appendLine("- 标记失败已修正: evolution.mark-corrected <失败id> (id 见上方复现模式)")
                     appendLine("- 上报框架缺陷: evolution.report <描述>")
+                }
+                // v2 (2026-08-09): 展示 learn.command 登记成果 — 可读 + 确认跨进程保留
+                val learned = loadLearnedCommands()
+                if (learned.isNotEmpty()) {
+                    appendLine()
+                    appendLine("### 已登记指令集 (evolution.learn.command, 跨进程保留)")
+                    learned.forEach { c ->
+                        appendLine("- ${c.fullName}: ${c.description.take(80)}")
+                        if (c.zhKeywords.isNotEmpty()) appendLine("    检索词: ${c.zhKeywords.joinToString(" / ")}")
+                    }
                 }
                 appendLine()
                 appendLine("### 会话幻觉率 (P0 结果可信度)")
@@ -621,6 +754,13 @@ object EvolutionStore {
     private fun failuresFile(agent: String): File = File(DataPaths.evolutionFailuresFile(agent))
     private fun reactionsFile(agent: String): File = File(DataPaths.evolutionReactionsFile(agent))
 
+    /** 时间戳 → "MM-dd HH:mm" 可读格式 (audit 展示用); 无效时间返回 "?"。 */
+    private fun fmtTime(ts: Long): String =
+        if (ts <= 0) "?"
+        else try {
+            java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(ts))
+        } catch (_: Exception) { "$ts" }
+
     private fun appendToFile(agent: String, entry: EvolutionFailure) {
         try {
             val file = failuresFile(agent)
@@ -637,6 +777,39 @@ object EvolutionStore {
             val lines = buffer.toList().filter { it.agentName == agent }
             atomicWrite(file, lines.joinToString("\n") { json.encodeToString(it) } + if (lines.isEmpty()) "" else "\n")
         } catch (_: Exception) { }
+    }
+
+    // ── 学习登记的指令集持久化 (v2, 2026-08-09) ─────────────────────
+    // 此前 learn.command 只写 CommandSearch 内存索引, 进程重启即丢 —
+    // "登记了但下次不被采纳"的根因之一。登记条目落盘 commands.json, 启动时恢复。
+
+    private val learnedCommandsFile: File
+        get() = File(DataPaths.evolutionCommandsFile())
+
+    /** 持久化一条 learn.command 登记 (同 fullName 覆盖, 保留用户最新修正)。 */
+    fun saveLearnedCommand(cmd: CommandIndex) {
+        try {
+            val list = loadLearnedCommands().filterNot { it.fullName == cmd.fullName } + cmd
+            val file = learnedCommandsFile
+            file.parentFile?.mkdirs()
+            atomicWrite(file, json.encodeToString(list))
+        } catch (_: Exception) { /* 持久化失败不阻塞登记 (内存索引仍生效) */ }
+    }
+
+    /** 读取已登记的指令集 (失败返回空列表)。 */
+    fun loadLearnedCommands(): List<CommandIndex> {
+        return try {
+            val file = learnedCommandsFile
+            if (!file.exists()) return emptyList()
+            json.decodeFromString<List<CommandIndex>>(file.readText())
+        } catch (_: Exception) { emptyList() }
+    }
+
+    /** 启动恢复: 已登记的 learn.command 条目重新注入 CommandSearch (幂等, 供 self.search/引导检索)。 */
+    fun restoreLearnedCommands() {
+        try {
+            loadLearnedCommands().forEach { CommandSearch.registerOrUpdate(it) }
+        } catch (_: Exception) { /* 恢复失败不阻塞启动 */ }
     }
 
     // ── 原子写入 (tmp + rename, 防崩溃损坏 — 全项目写入铁律) ───────
@@ -659,6 +832,16 @@ object EvolutionStore {
         } catch (e: Exception) {
             try { tmp.delete() } catch (_: Exception) {}
             throw e
+        }
+    }
+
+    /** 测试隔离: 清空失败模式内存态 (buffer/repeatIndex/懒加载标记/缺陷升级去重集)。 */
+    internal fun resetFailuresForTest() {
+        synchronized(lock) {
+            buffer.clear()
+            repeatIndex.clear()
+            failuresLoadedAgents.clear()
+            autoFeedbackKeys.clear()
         }
     }
 }

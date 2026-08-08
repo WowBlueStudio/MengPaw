@@ -197,6 +197,71 @@ class EvolutionStoreTest {
         assertNull("空 reason 且空上下文不记录", EvolutionStore.recordTermination("evo-term-3", "", "", "", ""))
     }
 
+    // ── v2 进化产物: 去重 / 懒加载 / 上下文 / 指令集持久化 (2026-08-09) ──
+
+    @Test
+    fun `failure archive dedups same pattern to single line`() {
+        EvolutionStore.resetFailuresForTest()
+        EvolutionStore.recordFailure("evo-v2-dedup", "agent.read x", "ERR_NOT_FOUND", "第一次失败", "Pipeline")
+        EvolutionStore.recordFailure("evo-v2-dedup", "agent.read x", "ERR_NOT_FOUND", "第二次失败", "Pipeline")
+        EvolutionStore.recordFailure("evo-v2-dedup", "agent.read x", "ERR_NOT_FOUND", "第三次失败", "Pipeline")
+        val lines = java.io.File(com.mengpaw.kernel.DataPaths.evolutionFailuresFile("evo-v2-dedup"))
+            .readLines().filter { it.isNotBlank() }
+        assertEquals("同模式应只保留一行", 1, lines.size)
+        assertTrue("repeatCount 应累计到 3: $lines", lines[0].contains("\"repeatCount\":3"))
+        val stats = EvolutionStore.stats("evo-v2-dedup")
+        assertTrue("统计应显示累计次数: $stats", stats.contains("累计 3 次失败"))
+        assertTrue("统计应显示 1 条模式: $stats", stats.contains("1 条模式"))
+    }
+
+    @Test
+    fun `failure archive survives process restart via lazy load`() {
+        EvolutionStore.resetFailuresForTest()
+        EvolutionStore.recordFailure("evo-v2-persist", "fs.cat y", "ERR_IO", "读盘失败", "Pipeline")
+        EvolutionStore.recordFailure("evo-v2-persist", "fs.cat y", "ERR_IO", "再次读盘失败", "Pipeline")
+        // 模拟进程重启: 清空内存态 (buffer + 懒加载标记) → 统计/复现必须从文件恢复
+        EvolutionStore.resetFailuresForTest()
+        val stats = EvolutionStore.stats("evo-v2-persist")
+        assertTrue("重启后统计应从文件恢复: $stats", stats.contains("累计 2 次失败"))
+        val repeated = EvolutionStore.repeatedPatterns("evo-v2-persist")
+        assertEquals("重启后复现模式应恢复", 1, repeated.size)
+    }
+
+    @Test
+    fun `failure record carries task session and context for traceability`() {
+        EvolutionStore.resetFailuresForTest()
+        EvolutionStore.recordFailure(
+            "evo-v2-ctx", "agent.write a.md", "ERR_PERMISSION_DENIED", "无权限",
+            "Pipeline", task = "帮我把报告写到文件", sessionId = "sess-42",
+            contextSnippet = "[user] 写报告\n[assistant] Thought: 写入文件")
+        val text = java.io.File(com.mengpaw.kernel.DataPaths.evolutionFailuresFile("evo-v2-ctx")).readText()
+        assertTrue("应含任务字段: $text", text.contains("帮我把报告写到文件"))
+        assertTrue("应含会话 id: $text", text.contains("sess-42"))
+        assertTrue("应含上下文片段: $text", text.contains("Thought: 写入文件"))
+        val stats = EvolutionStore.stats("evo-v2-ctx")
+        assertTrue("audit 应展示任务: $stats", stats.contains("帮我把报告写到文件"))
+    }
+
+    @Test
+    fun `learned commands persist and restore into search index`() {
+        EvolutionStore.resetFailuresForTest()
+        val cmd = com.mengpaw.kernel.cli.CommandIndex(
+            fullName = "agent.memory.keep",
+            namespace = "agent",
+            description = "写入长期记忆 (用户学习修正: 必须带内容)",
+            usage = "agent.memory.keep <内容>",
+            zhKeywords = listOf("记住", "沉淀", "教训"),
+            enKeywords = listOf("remember", "lesson")
+        )
+        EvolutionStore.saveLearnedCommand(cmd)
+        // 模拟重启: 从文件恢复
+        EvolutionStore.resetFailuresForTest()
+        EvolutionStore.restoreLearnedCommands()
+        val results = com.mengpaw.kernel.cli.CommandSearch.search("沉淀教训", 3)
+        assertTrue("重启后 learn.command 登记应可检索: $results",
+            results.any { it.fullName == "agent.memory.keep" })
+    }
+
     // ── P0 实质化 (2026-08-08): Final Answer 门禁纯函数 ──
 
     @Test

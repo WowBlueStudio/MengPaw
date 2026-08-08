@@ -3,12 +3,15 @@
 
 package com.mengpaw.kernel.cli
 
+import kotlinx.serialization.Serializable
+
 /**
  * 命令索引 — 每个注册命令的检索元数据.
  *
  * 设计思路: BM25 是杆子 (精确匹配), 同义词表是捆在杆子上的树枝.
  * Agent 用自然语言描述需求 → 查询词落在同义词树枝上 → 滑到正确的命令杆子上.
  */
+@Serializable
 data class CommandIndex(
     val fullName: String,           // "agent.memory.keep"
     val namespace: String,          // "agent"

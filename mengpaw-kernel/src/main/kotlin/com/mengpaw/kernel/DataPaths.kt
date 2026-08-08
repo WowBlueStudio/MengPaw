@@ -133,6 +133,8 @@ object DataPaths {
     fun evolutionReactionsFile(agentName: String?) = "${evolutionDir(agentName)}/reactions.md"
     /** Framework feedback reports written by Agent (evolution.report). */
     fun evolutionFeedbackDir(agentName: String?) = "${evolutionDir(agentName)}/feedback"
+    /** 用户学习登记的指令集 (evolution.learn.command 持久化, v2 2026-08-09) — 全局共享。 */
+    fun evolutionCommandsFile() = "${EVOLUTION}/commands.json"
 
     // ── Agent 工作区判定 (Agent 发现/列表的唯一事实源) ─────────────
     /** Agent文档/ 下的系统目录 — 不是 Agent, 不得出现在任何 Agent 列表。

@@ -671,6 +671,7 @@ class AgentEngineTest {
     @Test
     fun `max steps termination records clipped context into evolution archive`() = runBlocking {
         // 步数上限截断 (无 Final Answer) → 进化模块介入: 剪取会话上下文片段写入失败模式库
+        com.mengpaw.kernel.evolution.EvolutionStore.resetFailuresForTest()
         val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_term_e2e_" + System.nanoTime()
         com.mengpaw.kernel.DataPaths.initialize(tmp)
         val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
@@ -711,6 +712,7 @@ class AgentEngineTest {
     @Test
     fun `empty response termination records into evolution archive`() = runBlocking {
         // 模型层失败 (连续空响应) → 进化介入: 记录 empty_response 截断
+        com.mengpaw.kernel.evolution.EvolutionStore.resetFailuresForTest()
         val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_empty_evo_" + System.nanoTime()
         com.mengpaw.kernel.DataPaths.initialize(tmp)
         val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
@@ -734,6 +736,7 @@ class AgentEngineTest {
     @Test
     fun `incomplete action termination records into evolution archive`() = runBlocking {
         // 只思考不行动 (连续 needsContinue) = 完成度低 → 进化介入: 记录 incomplete_action
+        com.mengpaw.kernel.evolution.EvolutionStore.resetFailuresForTest()
         val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_incomplete_evo_" + System.nanoTime()
         com.mengpaw.kernel.DataPaths.initialize(tmp)
         val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
