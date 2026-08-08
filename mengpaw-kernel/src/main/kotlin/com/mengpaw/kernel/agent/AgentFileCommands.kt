@@ -276,8 +276,13 @@ internal class AgentFileCommands {
             }
             val isOutput = canonical.startsWith(com.mengpaw.kernel.DataPaths.OUTPUT)
             val msg = buildString {
-                append("已写入: $path (${content.length} 字符)")
+                append("已写入: $path (${content.length} 字符, ${content.lines().size} 行)")
                 if (sourcePath != null) append(" ← $sourcePath")
+                // P0 (2026-08-08 自检): 回传内容预览 — Agent 声称成功必须基于真实落盘内容
+                if (content.isNotBlank()) {
+                    append("\n\n内容预览 (前 200 字符):\n")
+                    append(content.take(200))
+                }
                 if (isOutput) {
                     append("\n\n📱 用户可在文件管理器的 ${com.mengpaw.kernel.DataPaths.OUTPUT} 找到此文件")
                 }

@@ -38,6 +38,12 @@ internal class AgentMemoryMutateCommands {
             appendLine("此内容将在下次对话中出现在系统提示词中")
             appendLine()
             appendLine("当前长期记忆总数: ${AgentDocs.countLongTermEntries(agentName(ctx))} 条")
+            // P0 (2026-08-08 自检): 回传内容预览 — 声称成功必须基于真实写入内容
+            if (content.isNotBlank()) {
+                appendLine()
+                appendLine("本条内容预览 (前 200 字符):")
+                appendLine(content.take(200))
+            }
         })
     }
 

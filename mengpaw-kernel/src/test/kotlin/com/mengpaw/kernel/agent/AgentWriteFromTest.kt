@@ -42,6 +42,9 @@ class AgentWriteFromTest {
         // 参数形态: agent.write <目标路径> --from <源文件> (flags 平铺后同现于 args)
         val r = ex.commands["write"]!!.invoke(listOf("notes.md", "--from", "draft.md"), ctx)
         assertTrue("--from 导入应成功: ${r.error}", r.success)
+        // P0 (2026-08-08): 成功结果应回传内容预览 + 行数, Agent 声称成功须基于真实落盘内容
+        assertTrue("结果应含行数", r.output!!.contains("行)"))
+        assertTrue("结果应含内容预览", r.output!!.contains("内容预览") && r.output!!.contains("第一行"))
 
         val out = wsFile("TestAgent", "notes.md")
         assertTrue(out.exists())

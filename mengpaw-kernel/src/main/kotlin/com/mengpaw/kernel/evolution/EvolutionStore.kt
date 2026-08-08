@@ -122,6 +122,13 @@ object EvolutionStore {
     /** 已自动升级为框架缺陷的 key (agent|prefix|errorCode) — 每进程只写一次, 防刷屏。 */
     private val autoFeedbackKeys = mutableSetOf<String>()
 
+    // ── 会话真实度统计 (P0, 2026-08-08 自检) ─────────────────────────
+    // 进程内累计: agent → (总失败命令数, 未在 Final Answer 中如实提及的失败数)。
+    // 检测启发式: Final Answer 含该失败错误码, 或含命令名+失败词 → 视为如实提及。
+    private val veracityTotals = mutableMapOf<String, Pair<Int, Int>>()
+    private val veracityLock = Any()
+    private val FAILURE_WORDS = listOf("失败", "错误", "Error", "无法", "未能", "出错", "拒绝")
+
     // ── 失败记录 ────────────────────────────────────────────────────
 
     /**
@@ -177,6 +184,69 @@ object EvolutionStore {
         } catch (_: Exception) {
             EvolutionFailure("evo_err", System.currentTimeMillis(), agentFileOf(agentName), command, errorCode, message, source)
         }
+    }
+
+    /**
+     * 复现模式强制处理提醒 (P1 闭环, 2026-08-08 自检): 同 agent 同命令+错误码复现 ≥2 次
+     * 且未沉淀修正时返回提醒文本, 由 AgentReActLoop 注入失败 Observation, 强制 Agent
+     * 当场二选一 (evolution.learn.command 登记 or agent.memory.keep 沉淀)。未触发返回 null。
+     * 永不抛异常。
+     */
+    fun recurrenceReminder(agentName: String?, command: String, errorCode: String): String? {
+        return try {
+            val agent = agentFileOf(agentName)
+            val key = "$agent|${command.take(120)}|$errorCode"
+            val count = synchronized(lock) { repeatIndex[key] ?: 0 }
+            if (count < 2) return null
+            val prefix = commandPrefixOf(command)
+            if (prefix.isNotBlank() && hasCorrectedLesson(agent, prefix)) return null // 已修正不再强制
+            "⚠️ 此错误模式已复现 $count 次且未沉淀修正, 请当场处理 (二选一, 完成后继续任务):\n" +
+                "  ① evolution.learn.command $command <正确用法> [--keywords 同义词,逗号分隔] — 登记进指令集\n" +
+                "  ② agent.memory.keep <教训> — 沉淀进长期记忆\n" +
+                "两者都做更好; 用 evolution.audit 可随时查看沉淀状态。"
+        } catch (_: Exception) { null }
+    }
+
+    /**
+     * 会话结局真实度记录 (P0 幻觉率, 2026-08-08 自检): ReAct 循环收到 Final Answer 时调用。
+     * @param failedCommands 本轮失败命令列表 (command, errorCode); 空则不计。
+     * @param finalAnswer 最终回答文本 — 启发式检测是否如实提及各失败。
+     * 永不抛异常。
+     */
+    fun recordSessionOutcome(agentName: String?, failedCommands: List<Pair<String, String>>, finalAnswer: String) {
+        try {
+            if (failedCommands.isEmpty()) return
+            val agent = agentFileOf(agentName)
+            val unmentioned = failedCommands.count { (cmd, code) ->
+                val name = cmd.substringBefore(' ').take(30)
+                val mentionedCode = code.isNotBlank() && finalAnswer.contains(code)
+                val mentionedNameAndFailure = finalAnswer.contains(name) &&
+                    FAILURE_WORDS.any { finalAnswer.contains(it) }
+                !mentionedCode && !mentionedNameAndFailure
+            }
+            synchronized(veracityLock) {
+                val (total, bad) = veracityTotals[agent] ?: (0 to 0)
+                veracityTotals[agent] = (total + failedCommands.size) to (bad + unmentioned)
+            }
+        } catch (_: Exception) { /* 统计永不崩溃 */ }
+    }
+
+    /** 会话真实度摘要 (P0): 如实提及率 + 疑似幻觉提示。供 evolution.audit 展示。 */
+    fun veracityStats(agentName: String?): String {
+        return try {
+            val agent = agentFileOf(agentName)
+            val (total, bad) = synchronized(veracityLock) { veracityTotals[agent] ?: (0 to 0) }
+            if (total == 0) return "(暂无会话失败数据)"
+            val honest = total - bad
+            buildString {
+                appendLine("会话失败如实提及: $honest/$total (未如实提及 $bad 条)")
+                if (bad > 0 && total >= 3) {
+                    appendLine("⚠️ 疑似幻觉风险: $bad 条失败未在最终回答中如实反映 — 结果纪律要求写操作后读回验证、失败必须原样引用错误。")
+                } else if (bad > 0) {
+                    appendLine("提示: $bad 条失败在最终回答中未体现 — 请确认是否已如实向用户汇报。")
+                }
+            }
+        } catch (_: Exception) { "(统计失败)" }
     }
 
     /** 命令前缀命中种子 → 返回匹配的种子列表 (可能多条)。永不抛异常。 */
@@ -325,6 +395,9 @@ object EvolutionStore {
                 appendLine("记录失败: ${all.size}")
                 appendLine("复现模式: ${repeated.size} 种")
                 appendLine("已沉淀修正: $corrected")
+                if (all.isNotEmpty() && corrected == 0) {
+                    appendLine("⚠️ 红灯: 有 ${all.size} 条失败但 0 条已沉淀 — 闭环未完成, 请当场用 agent.memory.keep / evolution.learn.command 处理 (见下方「下一步可用动作」)")
+                }
                 if (repeated.isNotEmpty()) {
                     appendLine()
                     appendLine("### 复现模式")
@@ -346,6 +419,9 @@ object EvolutionStore {
                     appendLine("- 标记失败已修正: evolution.mark-corrected <失败id> (id 见上方复现模式)")
                     appendLine("- 上报框架缺陷: evolution.report <描述>")
                 }
+                appendLine()
+                appendLine("### 会话幻觉率 (P0 结果可信度)")
+                appendLine(veracityStats(agentName))
             }
         } catch (_: Exception) {
             "(统计失败)"

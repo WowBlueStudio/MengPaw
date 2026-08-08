@@ -478,5 +478,12 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **边界**：非高危命令（如 agent.memory.record）的纯文本参数若带真实换行仍会被分词切散——纯文本参数没有引号保护, 多行内容官方通道是 `agent.write --from <源文件>` / 引号包裹。
 - **可发现性教训（用户要求）**：Agent 误判"无法写多行"是因为不知道 --from 通道——修复不只是改 bug, 还要同步提示词（高危示例加 --from 指引）、搜索索引 usage、CLI.md。Agent 无法获知的信息缺口 = 框架缺陷。
 
+### 15.12 结果可信度校验层（v0.34.1+ 自检, P0/P1）
+
+- **P0 根因**：结果纪律只写在提示词（PromptEngine 响应格式节"必须遵守"），LLM 幻觉时框架无任何机制发现"声称成功但命令实际失败"——框架返回 ERR_NOT_FOUND/REASON_REQUIRED，Agent 照样说"写入成功"，假结果闭环。
+- **落地三件套**：① 写操作成功回传内容预览（agent.write/agent.memory.keep 前 200 字符 + 行数）——声称成功必须引用真实落盘内容；② 会话幻觉率（recordSessionOutcome 对比 Final Answer 与失败命令，含错误码或"命令名+失败词"=如实提及，否则计入；audit 展示 X/Y + 疑似幻觉告警）；③ 失败如实提及检测是启发式（文本匹配），有误判边界——失败后 Agent 中途已如实汇报但 Final Answer 未复述时会计入未提及，属可接受噪声。
+- **P1 闭环强制**：复现 ≥2 次且未修正 → recurrenceReminder 注入失败 Observation（prune 后追加），强制 Agent 当场二选一（learn.command 登记 or memory.keep 沉淀）；已修正不再强制；stats() 对"有失败 0 沉淀"显示红灯。
+- **框架教训**：进化系统"记录→识别"都做了，缺"强制处置"一环——闭环的最后一步不能靠 Agent 自觉，要由框架把动作摆到 Result 里。下一环是"声称成功时的证据引用"（内容预览已铺路）。
+
 
 *最后更新: 2026-08-07 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

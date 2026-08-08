@@ -102,6 +102,8 @@ internal class AgentReActLoop(
             var effectiveMax = maxSteps
             var step = 0
             var extended = false
+            // 会话级失败收集 (P0 幻觉率, 2026-08-08 自检): 本轮失败命令 (commandLine, errorCode)
+            val sessionFailures = mutableListOf<Pair<String, String>>()
 
             while (step < effectiveMax) {
                 engine.runningJob?.let { if (!it.isActive) throw kotlinx.coroutines.CancellationException("Agent stopped") }
@@ -174,6 +176,9 @@ internal class AgentReActLoop(
 
                 if (parsed.isFinal) {
                     val answer = parsed.thought
+                    // P0: 会话结局真实度 — 检测 Final Answer 是否如实提及本轮失败 (幻觉率)
+                    com.mengpaw.kernel.evolution.EvolutionStore.recordSessionOutcome(
+                        engine.agentName, sessionFailures, answer)
                     engine.getSessionManager().addMessage(session.id, Message("assistant", answer))
                     // No boundary message — the conversation continues naturally.
                     // The LLM sees full history: previous FinalAnswer + new user message = context.
@@ -289,6 +294,7 @@ internal class AgentReActLoop(
                         val commandLine = commandLines[i]
                         if (!result.success) {
                             anyFailure = true
+                            sessionFailures.add(commandLine to (result.errorCode ?: "TOOL_CALL_FAILED"))
                             ErrorCollector.report(ErrorType.TOOL_CALL_FAILED, "AgentEngine",
                                 "$commandLine → ${result.error}", sessionId = session.id, agentName = engine.agentName,
                                 metadata = mapOf("errorCode" to (result.errorCode ?: ""), "command" to commandLine))
@@ -304,6 +310,13 @@ internal class AgentReActLoop(
                         }
                         // ── QwenPaw-style tool result pruning ──
                         rawObservation = engine.toolResultManager.pruneToolResult(commandLine, rawObservation, step + 1)
+                        // ── P1 闭环 (2026-08-08 自检): 复现模式命中且未沉淀 → 注入强制处理提醒 ──
+                        // prune 之后追加, 防被结果裁剪截掉; 提醒是框架级指令, 非不可信数据。
+                        if (!result.success) {
+                            val recurrence = com.mengpaw.kernel.evolution.EvolutionStore.recurrenceReminder(
+                                engine.agentName, commandLine, result.errorCode ?: "")
+                            if (recurrence != null) rawObservation = "$rawObservation\n\n$recurrence"
+                        }
                         // ── P0 注入防护 (v0.34.0+): 工具结果为不可信外部数据, 三分支处理 ──
                         // 目的明确攻击判定在剥离前 (剥离后原文消失无法匹配); 来源解析自命令行。
                         val label = com.mengpaw.kernel.security.InjectionPatterns.findMatch(rawObservation)

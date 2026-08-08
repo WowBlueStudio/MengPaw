@@ -504,7 +504,7 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 768 测试，v0.34.1+Codex 维护实测快照：kernel 412 + core 45 + shell 63 + browser 17 + 插件 231，0 failures)
+### 3.7 测试 (16 模块 773 测试，v0.34.1+Codex 维护实测快照：kernel 417 + core 45 + shell 63 + browser 17 + 插件 231，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
@@ -825,6 +825,10 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 > 失败钩子归系统 (ErrorCollector.onReport): 命令失败/循环/崩溃自动写入失败模式库 (`{AGENTS}/{agent}/evolution/failures.jsonl`), 下次 LLM 调用注入金字塔省察引导 (L1 事实→L2 归因→L3 用户视角→L4 进化)。用户纠正 (shell 层识别) 写入用户反应档案 `reactions.md`。处置: 指令错→`learn.command`/`self.search`, 常识错→`agent.memory.keep`, 行为错→`agent.write soul.md`, 框架错→`report`。实现经 EvolutionProvider SPI 可替换 (同捆插件 plugin-evolution 注册内核默认, 第三方覆盖后卸载回退)。
 
 > **内置预防种子 (v0.32.1+, 自检报告 P1-4)**: `EvolutionStore.SEED_PATTERNS` 7 条新手错误种子 (自然语言当路径 agent.read/agent.ls、写后不验证 agent.write、缺 Action Input agent.memory.keep、JSON 当 Action Input、shell 原生命令 ls/dir/cat、agent.rm 删除前不确认) — `recordFailure` 命中时失败记录 message 附 `[种子] 命中内置种子模式 #N` 标注, `evolution.audit` 输出"常见错误预防清单"。**复现检测**: `detectRecurrenceDefect()` — 同 agent 同命令前缀 + 同错误码 ≥2 次, 且存在同前缀 `markCorrected=true` 教训 → 自动升级框架缺陷: 写 `{AGENTS}/{agent}/evolution/feedback/YYYYMMDD_HHmmss.md` (与 evolution.report 同通道) + NotifyBus 推送, message 附 `[缺陷] 沉淀修正后同型错误仍复发 N 次`, `autoFeedbackKeys` 每进程每 key 只写一次防刷屏。
+
+> **闭环强制 (v0.34.1+ 自检 P1, 2026-08-08)**: 失败模式复现 ≥2 次且未沉淀修正时, `recurrenceReminder()` 生成强制处理提醒, 由 AgentReActLoop 注入失败 Observation (prune 之后追加, 防被裁剪): 当场二选一 `evolution.learn.command` 登记 or `agent.memory.keep` 沉淀; 已修正 (`markCorrected`) 不再强制。`stats()` 对"有失败但 0 沉淀"显示 ⚠️ 红灯, 不等 Agent 主动发现。
+
+> **会话幻觉率 (v0.34.1+ 自检 P0, 2026-08-08)**: `recordSessionOutcome()` 在 ReAct 循环收到 Final Answer 时对比本轮失败命令 (command+errorCode) 与最终回答 — 含错误码或"命令名+失败词"视为如实提及, 否则计入未如实提及; 进程内累计, `evolution.audit` 展示"会话失败如实提及: X/Y" + 疑似幻觉风险提示 (未提及 ≥1 且总失败 ≥3)。**写操作内容预览**: `agent.write`/`agent.memory.keep` 成功结果回传内容预览 (前 200 字符) + 行数 — Agent 声称成功必须基于真实落盘内容 (此前 agent.write 只回传字符数, keep 只回传计数, 无内容依据)。
 
 
 #### agent — 文档 + 内存 + 工作区 (27+)

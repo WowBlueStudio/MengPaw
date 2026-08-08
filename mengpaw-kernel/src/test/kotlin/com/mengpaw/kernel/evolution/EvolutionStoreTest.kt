@@ -67,6 +67,57 @@ class EvolutionStoreTest {
         assertTrue(stats.contains("记录失败"))
     }
 
+    // ── P0/P1 (2026-08-08 自检): 幻觉率 + 复现强制处理提醒 + 红灯 ──
+
+    @Test
+    fun `recurrence reminder triggers on unrepaired repeat`() {
+        EvolutionStore.recordFailure("evo-p1-a", "agent.read", "ERR_NOT_FOUND", "路径不存在", "Pipeline")
+        assertNull("单次失败不提醒", EvolutionStore.recurrenceReminder("evo-p1-a", "agent.read", "ERR_NOT_FOUND"))
+        EvolutionStore.recordFailure("evo-p1-a", "agent.read", "ERR_NOT_FOUND", "路径不存在", "Pipeline")
+        val reminder = EvolutionStore.recurrenceReminder("evo-p1-a", "agent.read", "ERR_NOT_FOUND")
+        assertNotNull("复现 2 次未修正应强制提醒", reminder)
+        assertTrue("提醒应含复现次数", reminder!!.contains("复现 2 次"))
+        assertTrue("提醒应含二选一动作", reminder.contains("evolution.learn.command") && reminder.contains("agent.memory.keep"))
+    }
+
+    @Test
+    fun `recurrence reminder suppressed after correction`() {
+        val f = EvolutionStore.recordFailure("evo-p1-b", "fs.cat", "ERR_NOT_FOUND", "x", "Pipeline")
+        EvolutionStore.recordFailure("evo-p1-b", "fs.cat", "ERR_NOT_FOUND", "x", "Pipeline")
+        EvolutionStore.markCorrected("evo-p1-b", f.id)
+        assertNull("已沉淀修正后不再强制", EvolutionStore.recurrenceReminder("evo-p1-b", "fs.cat", "ERR_NOT_FOUND"))
+    }
+
+    @Test
+    fun `session outcome counts unmentioned failures as hallucination risk`() {
+        // 失败但 Final Answer 未提及错误 → 计入未如实提及
+        EvolutionStore.recordSessionOutcome("evo-p0-a",
+            listOf("agent.write a.md" to "ERR_NOT_FOUND"),
+            "文件已成功写入, 内容完整")
+        val stats = EvolutionStore.veracityStats("evo-p0-a")
+        assertTrue("应显示未如实提及 1 条", stats.contains("未如实提及 1 条"))
+        assertTrue("应显示如实提及 0/1", stats.contains("0/1"))
+    }
+
+    @Test
+    fun `session outcome counts mentioned failures as honest`() {
+        // Final Answer 含错误码 → 如实提及
+        EvolutionStore.recordSessionOutcome("evo-p0-b",
+            listOf("agent.write a.md" to "ERR_NOT_FOUND"),
+            "写入失败: Error [ERR_NOT_FOUND], 路径不存在")
+        val stats = EvolutionStore.veracityStats("evo-p0-b")
+        assertTrue("含错误码应视为如实提及", stats.contains("1/1"))
+        assertTrue("不应有未提及", !stats.contains("未如实提及 1"))
+    }
+
+    @Test
+    fun `stats shows red light when failures exist but none corrected`() {
+        EvolutionStore.recordFailure("evo-p1-red", "agent.read", "ERR_NOT_FOUND", "m", "Pipeline")
+        val stats = EvolutionStore.stats("evo-p1-red")
+        assertTrue("0 沉淀应显示红灯", stats.contains("红灯"))
+        assertTrue("红灯应指向处理动作", stats.contains("agent.memory.keep"))
+    }
+
     @Test
     fun `guide fragment grades deep on repeat failure`() {
         EvolutionStore.recordFailure("evo-test-6", "fs.write", "ERR_IO", "disk full", "Pipeline")
