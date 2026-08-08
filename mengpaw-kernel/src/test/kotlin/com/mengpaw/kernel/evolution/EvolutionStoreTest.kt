@@ -159,21 +159,36 @@ class EvolutionStoreTest {
     }
 
     @Test
+    fun `natural language failure phrases are recognized`() {
+        // 静默门禁引导自然语言汇报后, 高频口语化失败表述必须命中 (2026-08-08 扩充词表)
+        assertTrue("没成功", EvolutionStore.isFailureMentioned(
+            "文件写入没成功", "agent.write a.md", "ERR_NOT_FOUND"))
+        assertTrue("未成功", EvolutionStore.isFailureMentioned(
+            "文件写入未成功", "agent.write a.md", "ERR_NOT_FOUND"))
+        assertTrue("报错", EvolutionStore.isFailureMentioned(
+            "读取时报错了", "agent.read a.md", "ERR_NOT_FOUND"))
+        assertTrue("没能", EvolutionStore.isFailureMentioned(
+            "没能写入文件", "agent.write a.md", "ERR_NOT_FOUND"))
+        assertTrue("未完成", EvolutionStore.isFailureMentioned(
+            "文件读取未完成", "agent.read a.md", "ERR_NOT_FOUND"))
+        assertTrue("小写 error", EvolutionStore.isFailureMentioned(
+            "an error occurred while writing", "agent.write a.md", "ERR_NOT_FOUND"))
+    }
+
+    @Test
     fun `unmentioned failures gate the final answer`() {
         val failures = listOf(
             "agent.write a.md" to "ERR_NOT_FOUND",
             "fs.cat x" to "ERR_PERMISSION_DENIED"
         )
-        // 全部如实提及 → 放行
+        // 错误码精确绑定 → 放行
         assertTrue(EvolutionStore.unmentionedFailures(
             "写入失败 Error [ERR_NOT_FOUND], 读取 Error [ERR_PERMISSION_DENIED]", failures).isEmpty())
-        // 只提一个 → 另一个未提及 → 门禁拦截
-        val gated = EvolutionStore.unmentionedFailures(
-            "agent.write 失败 Error [ERR_NOT_FOUND]", failures)
-        assertEquals(1, gated.size)
-        assertEquals("fs.cat x", gated[0].first)
-        // 全未提及 → 全部拦截
-        assertEquals(2, EvolutionStore.unmentionedFailures("任务全部完成", failures).size)
+        // 自然语言承认失败 (2026-08-08 放宽: 任一失败词即视为已承认, 不再要求命令名)
+        assertTrue("自然语言承认失败应放行", EvolutionStore.unmentionedFailures(
+            "部分操作未能完成, 请检查。", failures).isEmpty())
+        // 声称成功且无任何失败词 → 全部拦截 (防虚假成功)
+        assertEquals(2, EvolutionStore.unmentionedFailures("任务全部完成, 文件已生成。", failures).size)
     }
 
     @Test

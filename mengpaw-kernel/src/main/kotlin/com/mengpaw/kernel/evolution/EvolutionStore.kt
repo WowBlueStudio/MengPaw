@@ -139,7 +139,12 @@ object EvolutionStore {
     private val veracityTotals = mutableMapOf<String, Pair<Int, Int>>()
     private val veracityLock = Any()
     private var veracityLoaded = false
-    private val FAILURE_WORDS = listOf("失败", "错误", "Error", "无法", "未能", "出错", "拒绝")
+    // 高频自然语言失败表述 (2026-08-08 扩充): 静默门禁引导 Agent 自然语言汇报后,
+    // 检测必须覆盖"没成功/报错/没能"等口语化措辞, 否则如实汇报也会被误判为未提及。
+    private val FAILURE_WORDS = listOf(
+        "失败", "错误", "Error", "error", "failed", "无法", "未能", "没能",
+        "没成功", "未成功", "不成功", "报错", "出错", "拒绝", "未完成"
+    )
 
     // ── 失败记录 ────────────────────────────────────────────────────
 
@@ -257,15 +262,16 @@ object EvolutionStore {
 
     /**
      * 幻觉检测 (P0 实质化, 2026-08-08): Final Answer 是否如实提及一次失败。
-     * 启发式: 含该失败错误码, 或含命令名+失败词 → 视为如实提及。
+     * 启发式: 含该失败错误码, 或含任一失败词 → 视为如实提及。
+     * 2026-08-08 放宽: 不再要求命令名 — 静默门禁引导 Agent 自然语言汇报后,
+     * 给用户的回答里几乎不会出现内部命令名 (agent.write 等), 含失败词即视为已承认失败;
+     * "没有失败"式反例措辞属可接受噪声, 写操作仍有读回验证兜底, 不会让假数据闭环。
      * 供 [recordSessionOutcome] 统计 与 Final Answer 门禁共用, 单点维护。
      */
     fun isFailureMentioned(finalAnswer: String, command: String, errorCode: String): Boolean {
-        val name = command.substringBefore(' ').take(30)
         val mentionedCode = errorCode.isNotBlank() && finalAnswer.contains(errorCode)
-        val mentionedNameAndFailure = finalAnswer.contains(name) &&
-            FAILURE_WORDS.any { finalAnswer.contains(it) }
-        return mentionedCode || mentionedNameAndFailure
+        val mentionedFailureWord = FAILURE_WORDS.any { finalAnswer.contains(it) }
+        return mentionedCode || mentionedFailureWord
     }
 
     /**

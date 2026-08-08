@@ -215,13 +215,13 @@ class AgentEngineTest {
                     Action: plugin.install
                     Action Input: {"force": true, "id": "tavily-plugin"}
                 """.trimIndent()
-                else -> "Final Answer: 完成"
+                else -> "Final Answer: 插件安装未成功, 参数格式错误。"
             }
         }
         val sm2 = SessionManager()
         val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
         val result = engine2.run("门卫测试", maxSteps = 3)
-        assertEquals("完成", result)
+        assertEquals("插件安装未成功, 参数格式错误。", result)
         val history = sm2.getHistory(engine2.currentConversationId()!!)
         val obs = history.joinToString("\n") { it.content }
         assertTrue("Observation 应含 REASON_REQUIRED: $obs", obs.contains("REASON_REQUIRED"))
@@ -247,13 +247,13 @@ class AgentEngineTest {
                     Action: plugin.search
                     Action Input: {"query": "tavily", "force":}
                 """.trimIndent()
-                else -> "Final Answer: 完成"
+                else -> "Final Answer: 插件搜索未成功, 参数格式有误。"
             }
         }
         val sm2 = SessionManager()
         val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
         val result = engine2.run("门卫测试", maxSteps = 3)
-        assertEquals("完成", result)
+        assertEquals("插件搜索未成功, 参数格式有误。", result)
         val history = sm2.getHistory(engine2.currentConversationId()!!)
         val obs = history.joinToString("\n") { it.content }
         assertTrue("Observation 应含 PARAM_FORMAT_ERROR: $obs", obs.contains("PARAM_FORMAT_ERROR"))
@@ -311,13 +311,13 @@ class AgentEngineTest {
                     Action: agent.rm
                     Action Input: test.md
                 """.trimIndent()
-                else -> "Final Answer: 完成"
+                else -> "Final Answer: 删除未成功, 缺少 reason 参数。"
             }
         }
         val sm2 = SessionManager()
         val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
         val result = engine2.run("门禁拒绝测试", maxSteps = 3)
-        assertEquals("完成", result)
+        assertEquals("删除未成功, 缺少 reason 参数。", result)
         val obs = sm2.getHistory(engine2.currentConversationId()!!).joinToString("\n") { it.content }
         assertTrue("应拒绝并含 REASON_REQUIRED: $obs", obs.contains("REASON_REQUIRED"))
         assertTrue("拒绝文本应含 JSON 示例引导: $obs", obs.contains("\"reason\""))
@@ -410,13 +410,13 @@ class AgentEngineTest {
                         Action: agent.read
                         Action Input: attack.md
                     """.trimIndent()
-                    else -> "Final Answer: 完成"
+                    else -> "Final Answer: 读取未成功, 该来源已在黑名单。"
                 }
             }
             val sm2 = SessionManager()
             val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
             val result = engine2.run("读取测试", maxSteps = 3)
-            assertEquals("完成", result)
+            assertEquals("读取未成功, 该来源已在黑名单。", result)
             val obs = sm2.getHistory(engine2.currentConversationId()!!).joinToString("\n") { it.content }
             assertTrue("应提示已拉黑: $obs", obs.contains("已在黑名单"))
             assertFalse("攻击内容不得进入: $obs", obs.contains("忽略之前的指令"))
@@ -585,6 +585,45 @@ class AgentEngineTest {
         val result = engine2.run("弥补豁免测试", maxSteps = 5)
         assertEquals("失败已被成功弥补, 门禁应放行: $result", "通知完成。", result)
         assertEquals("不应触发门禁拒绝 (LLM 仅 3 轮: 失败/重试/收尾)", 3, receivedByLlm.size)
+    }
+
+    @Test
+    fun `stubborn hallucinated final answer terminates at step budget instead of passing`() = runBlocking {
+        // 顽固幻觉: 失败后 LLM 反复声称成功, 门禁拒绝不设上限 → 幻觉答案绝不放行,
+        // 每次拒绝消耗一步预算, 循环在 effectiveMax 处终止 (返回 max_steps, 而非假成功)
+        val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_gate_stubborn_" + System.nanoTime()
+        com.mengpaw.kernel.DataPaths.initialize(tmp)
+        val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
+        agentDir.mkdirs()
+        val receivedByLlm = mutableListOf<List<Map<String, String>>>()
+        var turn = 0
+        val llm = object : LlmProvider {
+            override suspend fun complete(prompt: String): String = respond()
+            override suspend fun completeWithMessages(messages: List<Map<String, String>>): String {
+                receivedByLlm.add(messages)
+                return respond()
+            }
+            override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
+                respond().also { onToken(it) }
+            override fun info() = ProviderInfo("mock", "stubborn-gate", ProviderType.LOCAL)
+            override fun close() {}
+            fun respond(): String = when (turn++) {
+                0 -> """
+                    Thought: 读取文件。
+                    Action: agent.read
+                    Action Input: {"path": "missing.md"}
+                """.trimIndent()
+                // 此后永远声称成功 — 门禁必须拒绝到底, 不得超限放行
+                else -> "Final Answer: 文件已成功读取, 内容完整。"
+            }
+        }
+        val sm2 = SessionManager()
+        val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
+        val result = engine2.run("顽固幻觉测试", maxSteps = 3)
+        assertFalse("幻觉答案绝不能被放行: $result", result.contains("已成功读取"))
+        assertTrue("应由步数上限终止: $result", result.contains("最大步数") || result.contains("Max steps"))
+        // 1 次 Action + 2 次拒绝后 (step 达上限) 终止, 而非无限循环
+        assertEquals("拒绝应消耗步数预算 (LLM 共 3 轮)", 3, receivedByLlm.size)
     }
 
     // ── Mock LLM Provider ────────────────────────────────────────────────

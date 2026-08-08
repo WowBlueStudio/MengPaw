@@ -28,11 +28,6 @@ internal class AgentReActLoop(
     private val conversation: AgentConversation
 ) {
 
-    /** Final Answer 门禁最大拒绝次数 — 超限放行 (防 LLM 反复幻觉导致死循环), 失败清单已注入历史可追溯。 */
-    private companion object {
-        const val MAX_HALLUCINATION_REJECTIONS = 2
-    }
-
     /**
      * Internal ReAct loop with optional context prefix.
      * Shared by run() and runWithGoal() to avoid session-creation overhead.
@@ -188,10 +183,14 @@ internal class AgentReActLoop(
                         engine.agentName, sessionFailures, answer)
                     // P0 实质化: Final Answer 门禁 — 本轮有失败但未如实提及 → 拒绝并静默纠正。
                     // 统计只度量幻觉; 门禁在幻觉发生的当下拦截, 把"声称成功"打回为"如实汇报"。
-                    if (sessionFailures.isNotEmpty() && hallucinationRejections < MAX_HALLUCINATION_REJECTIONS) {
+                    // 拒绝不设次数上限 (2026-08-08): 幻觉答案绝不放行; 防死循环由 step 预算兜底 —
+                    // 每次拒绝也消耗一步 (step++), LLM 若顽固反复输出幻觉 Final Answer,
+                    // 循环会在 effectiveMax 处终止并返回 max_steps 错误, 而不是放行假成功。
+                    if (sessionFailures.isNotEmpty()) {
                         val unmentioned = com.mengpaw.kernel.evolution.EvolutionStore.unmentionedFailures(answer, sessionFailures)
                         if (unmentioned.isNotEmpty()) {
                             hallucinationRejections++
+                            step++
                             val failedList = unmentioned.joinToString("\n") { "  - ${it.first} → Error [${it.second}]" }
                             // 静默门禁 (2026-08-08): 反馈只注入下一轮 LLM 请求 (buildConversation
                             // 末尾追加 system), 不写入会话历史 — UI/持久化/后续上下文零污染。
