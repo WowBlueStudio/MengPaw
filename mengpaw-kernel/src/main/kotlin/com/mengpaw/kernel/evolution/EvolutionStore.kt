@@ -206,6 +206,34 @@ object EvolutionStore {
     }
 
     /**
+     * 失败截断进化记录 (2026-08-08): 任务被截断终止 (max_steps / consecutive_failures /
+     * loop_detected / 异常中断) 时, 把截断原因 + **会话上下文片段**写入失败模式库 —
+     * 进化素材不只是一行错误文本, 还保留失败发生时的上下文 (最近 Thought/Action/Observation),
+     * 供 evolution.audit / 教训检索时理解"当时在做什么、为什么失败"。
+     * 复用 [recordFailure] 的复现计数/种子匹配/缺陷升级逻辑; command 为空时以 "(终止: reason)" 作模式键。
+     * 永不抛异常, 失败静默。
+     */
+    fun recordTermination(
+        agentName: String?,
+        reason: String,
+        command: String,
+        errorCode: String,
+        contextSnippet: String
+    ): EvolutionFailure? {
+        return try {
+            if (reason.isBlank() && contextSnippet.isBlank()) return null
+            val snippet = contextSnippet.take(400).ifBlank { "(无上下文)" }
+            recordFailure(
+                agentName = agentName,
+                command = command.ifBlank { "(终止: $reason)" },
+                errorCode = errorCode.ifBlank { reason },
+                message = "[截断: $reason] 会话上下文片段:\n$snippet",
+                source = "Termination"
+            )
+        } catch (_: Exception) { null }
+    }
+
+    /**
      * 复现模式强制处理提醒 (P1 闭环, 2026-08-08 自检): 同 agent 同命令+错误码复现 ≥2 次
      * 且未沉淀修正时返回提醒文本, 由 AgentReActLoop 注入失败 Observation, 强制 Agent
      * 当场二选一 (evolution.learn.command 登记 or agent.memory.keep 沉淀)。未触发返回 null。

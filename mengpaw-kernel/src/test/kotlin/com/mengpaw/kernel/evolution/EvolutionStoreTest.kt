@@ -172,6 +172,31 @@ class EvolutionStoreTest {
         assertNull("负计数不触发", EvolutionStore.retryLoopDirective("fs.cat x", "ERR_IO", -1, false))
     }
 
+    // ── 失败截断进化记录 (2026-08-08): 上下文片段剪取 ──
+
+    @Test
+    fun `termination records context snippet into failure archive`() {
+        EvolutionStore.recordTermination(
+            "evo-term-1", "max_steps", "agent.read missing.md", "ERR_NOT_FOUND",
+            "[user] 读取文件\n[assistant] Thought: 读取文件\n[assistant] Command: agent.read missing.md\nResult: Error [ERR_NOT_FOUND]")
+        val text = java.io.File(com.mengpaw.kernel.DataPaths.evolutionFailuresFile("evo-term-1")).readText()
+        assertTrue("应含截断原因: $text", text.contains("max_steps"))
+        assertTrue("应含上下文片段标记: $text", text.contains("会话上下文片段"))
+        assertTrue("应剪取到失败命令上下文: $text", text.contains("agent.read missing.md"))
+    }
+
+    @Test
+    fun `termination with empty command uses reason as pattern key`() {
+        EvolutionStore.recordTermination("evo-term-2", "max_steps", "", "", "[user] 任务")
+        val text = java.io.File(com.mengpaw.kernel.DataPaths.evolutionFailuresFile("evo-term-2")).readText()
+        assertTrue("空命令应以终止原因为模式键: $text", text.contains("(终止: max_steps)"))
+    }
+
+    @Test
+    fun `termination with blank reason and context is skipped`() {
+        assertNull("空 reason 且空上下文不记录", EvolutionStore.recordTermination("evo-term-3", "", "", "", ""))
+    }
+
     // ── P0 实质化 (2026-08-08): Final Answer 门禁纯函数 ──
 
     @Test

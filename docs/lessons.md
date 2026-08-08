@@ -508,5 +508,11 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **落地**：回合内 `(commandLine, errorCode) → 次数`，同命令同错误码满 3 次注入停指令（每 key 一次防刷屏）；同命令成功一次计数清零（中间成功即非死循环）；与跨会话 `recurrenceReminder`（沉淀二选一）正交，与 detectLoop/trackResult（终止）形成"先引导后终止"梯度。
 - **教训**：干预粒度应有梯度——提示（3 次）先于终止（5 次）；注入必须是框架级指令（区别于不可信工具数据），且要防重复注入。
 
+### 15.16 失败截断要进进化，且要带上下文片段（2026-08-08）
+
+- **观察**：循环/步数/中断终止时，进化系统只记录"命令+错误文本"（经 ErrorCollector 钩子），且 max_steps / consecutive_failures 终止路径**根本没有失败记录**——进化素材缺了"当时在做什么"。
+- **落地**：AgentReActLoop 四类截断路径（loop_detected / consecutive_failures / max_steps / 异常中断）统一调 `recordTermination`：剪取会话尾部最近 6 条消息（Thought/Action/Observation 序列，≤500 字符）作为上下文片段，写入 failures.jsonl（message 带 `[截断: reason]`，source=Termination，空命令以 "(终止: reason)" 为模式键），复用复现计数/种子匹配/缺陷升级。
+- **教训**：截断本身就是重要的进化信号——"Agent 未能完成任务"和"某条命令失败"是不同粒度的学习素材；剪取上下文时只取非 localOnly 消息、限长限条数，防把恢复元数据/超长正文灌进档案。
+
 
 *最后更新: 2026-08-07 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

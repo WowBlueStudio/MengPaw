@@ -504,11 +504,11 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 784 测试，v0.34.1+Codex 维护实测快照：kernel 428 + core 45 + shell 63 + browser 17 + 插件 231，0 failures)
+### 3.7 测试 (16 模块 788 测试，v0.34.1+Codex 维护实测快照：kernel 432 + core 45 + shell 63 + browser 17 + 插件 231，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 428 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm/mission、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行引号保护 + 进化闭环/幻觉门禁(静默·无上限拒绝)/回合内重试循环停指令/读回验证 (P0/P1/P4, 2026-08-08)** |
+| mengpaw-kernel | 432 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm/mission、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行引号保护 + 进化闭环/幻觉门禁(静默·无上限拒绝)/回合内重试循环停指令/失败截断上下文剪取/读回验证 (P0/P1/P4, 2026-08-08)** |
 | mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
 | mengpaw-shell | 63 | ComplexityDetector 分档 (11 分 MISSION 回归)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵、extractSkillSource frontmatter 解析、toolSourceFor 来源分类 |
 | mengpaw-browser | 17 | **smartNavigate 智能导航 (v0.34.1+ 交接首测: URL/域名/纯数字不误判/关键词编码/fromKey 回退)**、AdBlocker 规则 (域名精确匹配/子域继承/路径规则/模式命中/非法 URL 降级) |
@@ -833,6 +833,8 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 > **闭环强制升级 (v0.34.1+ 自检 P1, 2026-08-08)**: 复现 2 次注入二选一提醒; 复现 ≥3 次升级为 🚨 强制措辞 ("必须立即处理, 不得继续同类操作")。
 
 > **回合内重试循环停指令 (2026-08-08, 对齐 QwenPaw RETRY LOOP DETECTED, qwen-code PR #3178)**: AgentReActLoop 回合内维护 `(commandLine, errorCode) → 次数`; 同命令同错误码失败满 3 次 (`RETRY_LOOP_THRESHOLD`) 时在失败 Observation 追加 🚨 停指令: 立即停止重试, 三选一 (① 重查命令用法 evolution.learn.command/self.tools/agent.cli, ② 换根本不同的方法, ③ 向用户如实说明无法完成)。每 key 只注入一次防刷屏; 同命令成功一次计数清零 (中间成功即非死循环)。**与既有检测的分工 (先引导后终止)**: 本指令最早干预 (3 次, 给转向机会) → detectLoop 同命令 5 次终止 → trackResult 连续 5 败终止 → 跨会话 recurrenceReminder ≥2 次沉淀二选一 (进化维度, 正交)。
+
+> **失败截断进化介入 (2026-08-08)**: 任务被截断终止 (loop_detected / consecutive_failures / max_steps / 异常中断) 时, AgentReActLoop 剪取会话尾部最近 6 条消息 (Thought/Action/Observation 序列, ≤500 字符) 作为**上下文片段**, 经 `EvolutionStore.recordTermination` 写入失败模式库 (message 带 `[截断: reason]` 标记, 复用复现计数/种子匹配/缺陷升级; 空命令以 "(终止: reason)" 为模式键, source=Termination)。修复前 max_steps / consecutive_failures 终止根本不进进化 — 进化素材从"一行错误文本"升级为"失败发生时的上下文", evolution.audit 可直接看到当时在做什么、为什么失败。
 
 
 #### agent — 文档 + 内存 + 工作区 (27+)

@@ -289,6 +289,8 @@ internal class AgentReActLoop(
                         engine.getSessionManager().addMessage(session.id, Message("assistant", errorMsg))
                         engine._state.value = AgentState.Error(errorMsg)
                         onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, cmd, errorMsg))
+                        // 失败截断进化介入: 剪取上下文片段, 记录循环终止模式
+                        recordTerminationEvolution(session.id, "loop_detected", cmd, "LOOP_DETECTED")
                         return errorMsg
                     }
 
@@ -422,6 +424,12 @@ internal class AgentReActLoop(
                         engine.getSessionManager().addMessage(session.id, Message("assistant", errorMsg))
                         engine._state.value = AgentState.Error(errorMsg)
                         onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, commandLines.first(), errorMsg))
+                        // 失败截断进化介入: 连续失败终止 — 关联最近一次失败命令与错误码
+                        val lastFailure = sessionFailures.lastOrNull()
+                        recordTerminationEvolution(
+                            session.id, "consecutive_failures",
+                            lastFailure?.first ?: commandLines.first(),
+                            lastFailure?.second ?: "CONSECUTIVE_FAILURES")
                         return errorMsg
                     }
                     // 合并为一条 assistant 消息（多 Action 的多个 Observation）
@@ -452,6 +460,12 @@ internal class AgentReActLoop(
                 payload = mapOf("steps" to step.toString(), "max" to effectiveMax.toString())
             ))
             engine._state.value = AgentState.Finished(msg)
+            // 失败截断进化介入: 步数上限终止 — 若本轮有失败, 关联最近失败; 否则记纯 max_steps 模式
+            val lastFailure = sessionFailures.lastOrNull()
+            recordTerminationEvolution(
+                session.id, "max_steps",
+                lastFailure?.first ?: "",
+                lastFailure?.second ?: "MAX_STEPS")
             return msg
         } catch (e: kotlinx.coroutines.CancellationException) {
             // 取消传播契约: 必须先 rethrow (P1 已修, 禁止吞掉 CancellationException)。
@@ -494,7 +508,45 @@ internal class AgentReActLoop(
             val errorMsg = localizedError("agent_error", e.message ?: e::class.simpleName ?: "unknown", engine.agentLanguage)
             engine.getSessionManager().addMessage(session.id, Message("assistant", errorMsg))
             engine._state.value = AgentState.Error(errorMsg)
+            // 失败截断进化介入: 异常中断 — 剪取崩溃前上下文片段
+            recordTerminationEvolution(session.id, "interrupted", "", "AGENT_CRASH")
             return errorMsg
         }
+    }
+
+    /**
+     * 失败截断上下文剪取 (2026-08-08): 取会话尾部最近 N 条非 localOnly 消息
+     * (Thought/Action/Observation 序列), 截断到 maxChars, 作为进化记录的上下文片段。
+     * 剪取失败返回空串 — 进化记录不能阻塞主链路。
+     */
+    private fun clipSessionContext(sessionId: String, maxEntries: Int = 6, maxChars: Int = 500): String {
+        return try {
+            val msgs = engine.getSessionManager().getSession(sessionId)?.messages ?: return ""
+            msgs.filter { !it.localOnly && it.content.isNotBlank() }
+                .takeLast(maxEntries)
+                .joinToString("\n") { "[${it.role}] ${it.content.take(160)}" }
+                .take(maxChars)
+        } catch (_: Exception) { "" }
+    }
+
+    /**
+     * 失败截断进化介入 (2026-08-08): 终止/中断路径统一入口 — 剪取上下文片段并记录。
+     * 永不抛异常, 不影响主链路返回。
+     */
+    private fun recordTerminationEvolution(
+        sessionId: String,
+        reason: String,
+        command: String,
+        errorCode: String
+    ) {
+        try {
+            com.mengpaw.kernel.evolution.EvolutionStore.recordTermination(
+                agentName = engine.agentName,
+                reason = reason,
+                command = command,
+                errorCode = errorCode,
+                contextSnippet = clipSessionContext(sessionId)
+            )
+        } catch (_: Exception) { /* 进化记录永不阻塞主链路 */ }
     }
 }

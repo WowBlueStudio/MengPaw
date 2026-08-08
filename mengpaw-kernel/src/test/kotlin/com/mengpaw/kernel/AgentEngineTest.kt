@@ -668,6 +668,46 @@ class AgentEngineTest {
         assertEquals("应共 4 轮 LLM 调用 (3 次失败 + 1 次收尾)", 4, receivedByLlm.size)
     }
 
+    @Test
+    fun `max steps termination records clipped context into evolution archive`() = runBlocking {
+        // 步数上限截断 (无 Final Answer) → 进化模块介入: 剪取会话上下文片段写入失败模式库
+        val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_term_e2e_" + System.nanoTime()
+        com.mengpaw.kernel.DataPaths.initialize(tmp)
+        val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
+        agentDir.mkdirs()
+        var turn = 0
+        val llm = object : LlmProvider {
+            override suspend fun complete(prompt: String): String = respond()
+            override suspend fun completeWithMessages(messages: List<Map<String, String>>): String = respond()
+            override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
+                respond().also { onToken(it) }
+            override fun info() = ProviderInfo("mock", "term-e2e", ProviderType.LOCAL)
+            override fun close() {}
+            fun respond(): String = when (turn++) {
+                0 -> """
+                    Thought: 查系统状态。
+                    Action: self.status
+                    Action Input: {}
+                """.trimIndent()
+                // 一直行动不给 Final Answer → 步数上限截断
+                else -> """
+                    Thought: 再查一次状态。
+                    Action: self.status
+                    Action Input: {}
+                """.trimIndent()
+            }
+        }
+        val sm2 = SessionManager()
+        val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
+        val result = engine2.run("步数上限测试", maxSteps = 2)
+        assertTrue("应由步数上限终止: $result", result.contains("最大步数") || result.contains("Max steps"))
+        val failures = java.io.File(com.mengpaw.kernel.DataPaths.evolutionFailuresFile("MengPaw"))
+        assertTrue("失败档案应落盘", failures.exists())
+        val text = failures.readText()
+        assertTrue("应记录截断原因: $text", text.contains("[截断: max_steps]"))
+        assertTrue("应剪取上下文片段 (最近 Action): $text", text.contains("self.status"))
+    }
+
     // ── Mock LLM Provider ────────────────────────────────────────────────
 
     private class MockLlmProvider : LlmProvider {
