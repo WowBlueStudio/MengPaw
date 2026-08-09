@@ -132,9 +132,9 @@ fun SystemSettingsContent(
         }
     }
 
-    // ── 输出目录 (v0.34.3): 公共 /storage/emulated/0/MengPaw/ 用户可见;
-    //    未授权时引导跳转"所有文件访问"设置页 (MANAGE_EXTERNAL_STORAGE) ──
-    // v0.35.1: 轮询刷新 — 授权返回 (MainActivity.onResume refreshOutput) 后实时更新显示
+    // ── 输出目录 (v0.35.1 独立区块): 点击整块 → 系统文件管理器打开目录;
+    //    未授权 (不可写) → 点击跳『所有文件访问』授权页 ──
+    SectionHeader(if (state.useChinese) "输出目录" else "Output Directory")
     var outPath by remember { mutableStateOf(com.mengpaw.kernel.DataPaths.OUTPUT) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -144,32 +144,37 @@ fun SystemSettingsContent(
     }
     val outDir = java.io.File(outPath)
     val outWritable = outDir.canWrite()
-    Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (outWritable) Icons.Outlined.FolderOpen else Icons.Outlined.Warning,
-            null, Modifier.size(20.dp), tint = if (outWritable) ArcoColors.Green6 else ArcoColors.Orange6)
-        Spacer(Modifier.width(ArcoSpacing.md))
-        Column(Modifier.weight(1f)) {
-            Text("输出目录", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text(outPath,
-                style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary,
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (!outWritable) {
-                Text("⚠️ 不可写 — 授予『所有文件访问』权限后，Agent 交付的文件才会出现在这里",
-                    style = MaterialTheme.typography.labelSmall, color = ArcoColors.Orange6)
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable {
+            if (outWritable) openOutputDir(ctx, outDir)
+            else startAllFilesAccess(ctx)
+        },
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCardHigh
+    ) {
+        Row(Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (outWritable) Icons.Outlined.FolderOpen else Icons.Outlined.Warning,
+                null, Modifier.size(24.dp), tint = if (outWritable) ArcoColors.Green6 else ArcoColors.Orange6)
+            Spacer(Modifier.width(ArcoSpacing.md))
+            Column(Modifier.weight(1f)) {
+                Text(if (state.useChinese) "输出目录" else "Output Directory",
+                    fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                Text(outPath,
+                    style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (!outWritable) {
+                    Text("⚠️ 不可写 — 点击授权『所有文件访问』，Agent 交付的文件才会出现在这里",
+                        style = MaterialTheme.typography.labelSmall, color = ArcoColors.Orange6)
+                }
             }
-        }
-        if (!outWritable) {
-            TextButton(onClick = {
-                try {
-                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                        data = android.net.Uri.parse("package:com.mengpaw.shell")
-                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    if (intent.resolveActivity(ctx.packageManager) != null) ctx.startActivity(intent)
-                    else ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                } catch (_: Exception) { KernelLog.w("SystemSettings", "start all-files-access settings failed") }
-            }) { Text("去授权", style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand) }
+            if (outWritable) {
+                Icon(Icons.Outlined.ChevronRight, null,
+                    tint = ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
+            } else {
+                TextButton(onClick = { startAllFilesAccess(ctx) }) {
+                    Text("去授权", style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
+                }
+            }
         }
     }
 
@@ -285,4 +290,66 @@ fun SystemSettingsContent(
     }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
+}
+
+/**
+ * 打开系统文件管理器定位到输出目录 (v0.35.1) —
+ * Android 8+ DocumentsUI 支持 EXTRA_INITIAL_URI 初始定位; 公共存储用
+ * primary:<相对路径> 文档 URI, 私有路径 (旧 Android/data 回退) 用 file:// 初值。
+ * 不可用 (部分设备 DocumentsUI 无定位) 时兜底打开外部存储根。
+ */
+private fun openOutputDir(context: android.content.Context, dir: java.io.File) {
+    try {
+        val uri = try {
+            val p = dir.absolutePath
+            if (p.startsWith("/storage/emulated/0/")) {
+                android.provider.DocumentsContract.buildDocumentUri(
+                    "com.android.externalstorage.documents",
+                    "primary:${p.removePrefix("/storage/emulated/0/")}"
+                )
+            } else android.net.Uri.fromFile(dir)
+        } catch (_: Exception) { null }
+        val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            if (android.os.Build.VERSION.SDK_INT >= 26 && uri != null) {
+                putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, uri)
+            }
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (intent.resolveActivity(context.packageManager) != null) {
+            context.startActivity(intent)
+            return
+        }
+    } catch (_: Exception) {}
+    try {
+        // 兜底: 打开外部存储根目录
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+            data = android.provider.DocumentsContract.buildRootUri(
+                "com.android.externalstorage.documents", "primary"
+            )
+            type = "vnd.android.document/root"
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)
+    } catch (_: Exception) {}
+}
+
+/** 跳转『所有文件访问』授权页 (MANAGE_EXTERNAL_STORAGE)。 */
+private fun startAllFilesAccess(context: android.content.Context) {
+    try {
+        val intent = android.content.Intent(
+            android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
+        ).apply {
+            data = android.net.Uri.parse("package:${context.packageName}")
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (intent.resolveActivity(context.packageManager) != null) context.startActivity(intent)
+        else {
+            context.startActivity(
+                android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+    } catch (_: Exception) {
+        KernelLog.w("SystemSettings", "start all-files-access settings failed")
+    }
 }
