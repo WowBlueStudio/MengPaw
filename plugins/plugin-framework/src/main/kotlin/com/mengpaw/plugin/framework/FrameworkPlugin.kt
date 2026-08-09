@@ -198,7 +198,7 @@ class FrameworkPlugin : Plugin {
         val port = explicitPort ?: defaultPort
         if (port !in 1..65535) return ExecutionResult.fail(
             "非法端口: $port (1-65535)", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_INVALID_INPUT)
-        val fingerprint = FrameworkPeerStore.computeFingerprint(name, "$address:$port")
+        val fingerprint = FrameworkPeerStore.computeFingerprint(frameworkType, "$address:$port")
         val existing = FrameworkPeerStore.findByFingerprint(fingerprint)
         if (existing != null) {
             return ExecutionResult.fail("节点已存在: ${existing.name} (${existing.address}:${existing.port})\n" +

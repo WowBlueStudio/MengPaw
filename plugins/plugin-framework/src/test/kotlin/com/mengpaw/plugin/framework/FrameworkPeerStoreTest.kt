@@ -9,33 +9,33 @@ import org.junit.Assert.*
 import org.junit.Test
 
 /**
- * FrameworkPeerStore 纯逻辑单测: 指纹计算 (Locale.ROOT hex, P2 修复)、
+ * FrameworkPeerStore 纯逻辑单测: 绑定标识 (框架类型|设备标识, v0.34.3)、
  * peer JSON 序列化往返、框架类型表一致性。不触磁盘 (loadAll/save 依赖
  * DataPaths.CONFIG, 留待集成层)。
  */
 class FrameworkPeerStoreTest {
 
-    // ── 指纹计算 (P2: Locale.ROOT %02x) ────────────────────────────────
+    // ── 绑定标识 (v0.34.3: 框架类型|设备标识, 不再哈希) ─────────────────
 
     @Test
-    fun `computeFingerprint is deterministic lowercase hex`() {
-        val a = FrameworkPeerStore.computeFingerprint("MengPaw-1", "device-abc")
-        val b = FrameworkPeerStore.computeFingerprint("MengPaw-1", "device-abc")
-        assertEquals("同输入必须同指纹", a, b)
-        assertEquals("8 字节 SHA-256 前缀 = 16 hex 字符", 16, a.length)
-        assertTrue("必须全小写 hex", a.matches(Regex("[0-9a-f]{16}")))
+    fun `computeFingerprint is frameworkType deviceId concatenation`() {
+        assertEquals("mengpaw|aa:bb:cc:dd:ee:ff",
+            FrameworkPeerStore.computeFingerprint("mengpaw", "aa:bb:cc:dd:ee:ff"))
+        assertEquals("claude-code|192.168.1.5:9881",
+            FrameworkPeerStore.computeFingerprint("claude-code", "192.168.1.5:9881"))
+        // 同机多框架: 类型不同标识不同 (用户设计: 笔记本多框架不冲突)
+        assertNotEquals(
+            FrameworkPeerStore.computeFingerprint("claude-code", "aa:bb:cc:dd:ee:ff"),
+            FrameworkPeerStore.computeFingerprint("codex", "aa:bb:cc:dd:ee:ff")
+        )
     }
 
     @Test
-    fun `computeFingerprint differs for different inputs`() {
-        assertNotEquals(
-            FrameworkPeerStore.computeFingerprint("A", "x"),
-            FrameworkPeerStore.computeFingerprint("A", "y")
-        )
-        assertNotEquals(
-            FrameworkPeerStore.computeFingerprint("A", "x"),
-            FrameworkPeerStore.computeFingerprint("B", "x")
-        )
+    fun `shortCode derives from deviceId tail`() {
+        assertEquals("dde-eff",
+            FrameworkPeerStore.shortCodeOf("mengpaw|aa:bb:cc:dd:ee:ff"))
+        assertEquals("681-123",
+            FrameworkPeerStore.shortCodeOf("claude-code|192.168.1.123"))
     }
 
     // ── peer JSON 往返 ──────────────────────────────────────────────────

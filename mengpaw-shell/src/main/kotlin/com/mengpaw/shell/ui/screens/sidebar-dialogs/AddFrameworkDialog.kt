@@ -164,7 +164,8 @@ fun AddFrameworkDialog(strings: AppStrings, onDismiss: () -> Unit) {
                         // 手动添加的节点不出现在 framework.peers / 侧边栏 (添加后无效)
                         val host = address.substringBeforeLast(':').ifBlank { address }
                         val port = address.substringAfterLast(':', "").toIntOrNull() ?: com.mengpaw.kernel.ports.Ports.ACP
-                        val fp = com.mengpaw.plugin.framework.FrameworkPeerStore.computeFingerprint(name, "$host:$port")
+                        val fp = com.mengpaw.plugin.framework.FrameworkPeerStore
+                            .computeFingerprint(frameworkType, "$host:$port")
                         com.mengpaw.plugin.framework.FrameworkPeerStore.save(
                             com.mengpaw.plugin.framework.FrameworkPeerStore.FrameworkPeer(
                                 fingerprint = fp, name = name, version = "手动添加",

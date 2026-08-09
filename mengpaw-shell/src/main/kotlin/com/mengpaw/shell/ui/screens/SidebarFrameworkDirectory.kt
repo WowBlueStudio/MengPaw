@@ -143,7 +143,7 @@ internal fun FrameworkDirectorySection(
                                         com.mengpaw.plugin.framework.FrameworkPeerStore.FrameworkPeer(
                                             fingerprint = framework.fingerprint.ifBlank {
                                                 com.mengpaw.plugin.framework.FrameworkPeerStore
-                                                    .computeFingerprint(framework.name, "$host:$port")
+                                                    .computeFingerprint(framework.frameworkType, "$host:$port")
                                             },
                                             name = framework.name, version = framework.version,
                                             frameworkName = framework.frameworkName,

@@ -11,7 +11,7 @@ import java.io.File
  * 本机框架名片 (v0.34.3 框架发现调整) — 持久化 {BASE}/配置/framework_identity.json。
  *
  * - displayName: 自定义框架名 (空 = 缺省, 其他设备显示指纹码)
- * - fingerprint: 本机指纹 = SHA256(mac) — 绑 MAC, 换 IP 不变; 显示为 6 位短码 (xxx-xxx)
+ * - fingerprint: 本机绑定标识 = "mengpaw|MAC" — 换 IP 不变; 显示短码 = MAC 后 6 位 (xxx-xxx)
  */
 object FrameworkIdentity {
 
@@ -26,10 +26,7 @@ object FrameworkIdentity {
 
     /** 显示用短码 — 前 6 位 hex, 格式 xxx-xxx。 */
     val shortCode: String
-        get() {
-            val fp = fingerprint
-            return if (fp.length >= 6) "${fp.take(3)}-${fp.drop(3).take(3)}" else fp
-        }
+        get() = FrameworkPeerStore.shortCodeOf(fingerprint)
 
     /** 加载身份 (启动时调用) — 懒加载。 */
     fun load() {
@@ -50,10 +47,10 @@ object FrameworkIdentity {
         persist()
     }
 
-    /** 本机指纹 = SHA256("self|MAC") — 绑 MAC, 换 IP 不变; 无 MAC (低版本/模拟器) 回退 Build 指纹。 */
+    /** 本机绑定标识 = "mengpaw|MAC" — 换 IP 不变; 无 MAC (低版本/模拟器) 回退 no-mac。 */
     private fun computeLocalFingerprint(): String {
         val mac = localMacAddress() ?: "no-mac"
-        return FrameworkPeerStore.computeFingerprint("self", mac)
+        return FrameworkPeerStore.computeFingerprint("mengpaw", mac)
     }
 
     /** 本机 WiFi MAC — NetworkInterface 遍历取非回环硬件地址 (无需权限)。

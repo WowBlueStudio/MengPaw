@@ -8,7 +8,6 @@ import com.mengpaw.kernel.ports.Ports
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.security.MessageDigest
 
 /** 框架指纹持久化 — JSON 原子读写。 */
 object FrameworkPeerStore {
@@ -136,13 +135,21 @@ object FrameworkPeerStore {
         } catch (_: Exception) {}
     }
 
-    /** 生成框架指纹 = SHA256(名称 + 设备标识)。
-     *  v0.34.3: 对端指纹绑 MAC (deviceId = mDNS mac 属性); 手动添加无 MAC 时传 "address:port"。 */
-    fun computeFingerprint(name: String, deviceId: String): String {
-        val input = "$name|$deviceId"
-        val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(input.toByteArray()).take(8)
-            // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
-            .joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
+    /**
+     * 生成框架绑定标识 = "框架类型|设备标识" (v0.34.3 设计定案, 不再哈希)。
+     * - mDNS 发现节点: deviceId = MAC (mDNS mac 属性) → "mengpaw|aa:bb:cc:dd:ee:ff"
+     * - 手动添加/MCP 节点 (无 MAC): deviceId = "address:port" → "claude-code|192.168.1.5:9881"
+     * 组合唯一: 同一台电脑多个框架类型不同不冲突; 换 IP 不变 (MAC 场景)。
+     * 显示短码由 deviceId (MAC 后 6 位) 派生, 配对核对用。
+     */
+    fun computeFingerprint(frameworkType: String, deviceId: String): String =
+        "$frameworkType|$deviceId"
+
+    /** 从绑定标识取 MAC 短码 (xxx-xxx) — 配对核对/缺省显示名用。 */
+    fun shortCodeOf(peerId: String): String {
+        val deviceId = peerId.substringAfter('|', peerId)
+        val hex = deviceId.replace(":", "").replace(".", "").replace("-", "")
+        return if (hex.length >= 6) "${hex.takeLast(6).take(3)}-${hex.takeLast(6).drop(3)}"
+        else deviceId.take(8)
     }
 }

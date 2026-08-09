@@ -151,7 +151,7 @@ class FrameworkDiscovery(private val context: Context) {
         }
         override fun onServiceLost(info: NsdServiceInfo) {
             val fp = FrameworkPeerStore.computeFingerprint(
-                info.serviceName.removePrefix("MengPaw-"),
+                "mengpaw",
                 info.host?.hostAddress ?: ""
             )
             KernelLog.i("FrameworkDiscovery", "Lost: ${info.serviceName}")
@@ -186,12 +186,18 @@ class FrameworkDiscovery(private val context: Context) {
             info.attributes["mac"]?.let { String(it) }?.takeIf { it.isNotBlank() } else null
         val display = if (android.os.Build.VERSION.SDK_INT >= 33)
             info.attributes["display"]?.let { String(it) }?.takeIf { it.isNotBlank() } else null
-        val fp = FrameworkPeerStore.computeFingerprint(name, mac ?: addr)
+        val fp = FrameworkPeerStore.computeFingerprint("mengpaw", mac ?: addr)
         val now = System.currentTimeMillis()
+        // v0.34.3 迁移: 旧哈希指纹条目 (16 hex 无 |) 按 address 清理, 换新绑定标识
+        try {
+            FrameworkPeerStore.loadAll()
+                .filter { it.address == addr && !it.fingerprint.contains("|") }
+                .forEach { FrameworkPeerStore.remove(it.fingerprint) }
+        } catch (_: Exception) {}
         val peer = FrameworkPeerStore.FrameworkPeer(
             fingerprint = fp,
             // 名片规则: 对端设置了自定义框架名 → 显示它; 缺省 → 显示指纹短码 (v0.34.3)
-            name = display ?: fp.take(3) + "-" + fp.drop(3).take(3),
+            name = display ?: FrameworkPeerStore.shortCodeOf(fp),
             version = version,
             frameworkName = fwName,
             address = addr, port = info.port,

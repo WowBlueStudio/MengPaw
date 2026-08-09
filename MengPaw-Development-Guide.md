@@ -1048,6 +1048,12 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - **扫描时机**: 后台不持续扫; 打开侧边栏 → startContinuousDiscovery (10s 周期 + 10s 刷新通讯录), 关闭 → stopContinuousDiscovery
 - **联络失败提醒**: framework.connect 失败 → NotifyBus 横幅 (WARN)
 
+**框架绑定标识定案 (v0.34.3 设计讨论)**: 绑定标识 = **框架类型|设备标识**, 不再哈希。
+- mDNS 发现节点: `mengpaw|MAC` (mac 属性); 手动添加/MCP 节点 (Claude Code/Codex 等): `frameworkType|address:port`
+- 组合唯一性: 同一台电脑多个框架类型不同不冲突; MAC 场景换 IP 不变
+- 显示短码 = 设备标识尾 6 位 hex (xxx-xxx), 配对核对用; 对端缺省名称时显示短码
+- 旧哈希指纹条目 (16 hex) 发现时按 address 迁移清理
+
 **per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
 
 
