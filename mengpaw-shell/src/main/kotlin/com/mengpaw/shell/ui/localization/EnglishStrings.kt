@@ -307,8 +307,9 @@ val EnglishStrings = AppStrings().apply {
     frameworkCardUntrusted = "Untrusted"
     frameworkCardHostedAgents = "Hosted Agents (%d)"
     frameworkCardDelete = "Delete Framework"
-    frameworkCardTrust = "Trust this Framework"
+    frameworkCardTrust = "Trust framework"
     frameworkCardUntwin = "Untwin"
+    frameworkCardUntrust = "Untrust"
 
     // Agent card dialog
     agentCardTitle = "Agent Card"

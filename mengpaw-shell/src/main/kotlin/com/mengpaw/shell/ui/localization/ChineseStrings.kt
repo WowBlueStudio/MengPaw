@@ -307,8 +307,9 @@ val ChineseStrings = AppStrings().apply {
     frameworkCardUntrusted = "未信任"
     frameworkCardHostedAgents = "托管智能体 (%d)"
     frameworkCardDelete = "删除框架"
-    frameworkCardTrust = "信任此框架"
+    frameworkCardTrust = "信任框架"
     frameworkCardUntwin = "解除孪生"
+    frameworkCardUntrust = "解除信任"
 
     // 智能体名片对话框
     agentCardTitle = "智能体名片"

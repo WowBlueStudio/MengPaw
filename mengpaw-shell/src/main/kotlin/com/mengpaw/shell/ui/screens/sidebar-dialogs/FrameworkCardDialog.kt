@@ -48,14 +48,14 @@ fun FrameworkCardDialog(
     frameworkName: String,
     onDismiss: () -> Unit
 ) {
-    val peer = remember(frameworkName) { com.mengpaw.plugin.framework.FrameworkPeerStore.findByName(frameworkName) }
+    // v0.35.1: 可变 peer — 保存备注/切换信任后 UI 实时刷新
+    var peer by remember(frameworkName) {
+        mutableStateOf(com.mengpaw.plugin.framework.FrameworkPeerStore.findByName(frameworkName))
+    }
     val acpFile = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "$frameworkName.json")
     val acpJson = remember(frameworkName) { if (acpFile.exists()) try { appJson.decodeFromString<AcpContactFile>(acpFile.readText()) } catch (_: Exception) { null } else null }
 
     val fwType = remember(frameworkName, peer) { peer?.frameworkType?.ifBlank { acpJson?.frameworkType ?: "mengpaw" } ?: "mengpaw" }
-    val proto = com.mengpaw.plugin.framework.FrameworkPeerStore.PROTOCOL_LABELS[fwType]
-    val protoLabel = proto?.first ?: "?"
-    val protoMode = proto?.second ?: ""
 
     val savedRemark = remember(frameworkName, peer) { peer?.remark?.ifBlank { acpJson?.remark?.ifBlank { acpJson?.notes?.ifBlank { "" } } } ?: "" }
     var editRemark by remember { mutableStateOf(savedRemark) }
@@ -67,9 +67,14 @@ fun FrameworkCardDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(strings.frameworkCardTitle, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = {
+                // v0.35.1: 图形按钮 (编辑 ↔ 保存)
+                IconButton(onClick = {
                     if (isEditing) {
-                        if (peer != null) com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(remark = editRemark.trim()))
+                        peer?.let { p ->
+                            val updated = p.copy(remark = editRemark.trim())
+                            com.mengpaw.plugin.framework.FrameworkPeerStore.save(updated)
+                            peer = updated
+                        }
                         if (acpFile.exists()) {
                             try {
                                 val current = appJson.decodeFromString<AcpContactFile>(acpFile.readText())
@@ -79,23 +84,29 @@ fun FrameworkCardDialog(
                         }
                     }
                     isEditing = !isEditing
-                }) { Text(if (isEditing) strings.cardSave else strings.cardEdit, color = ThemeColors.brand, fontSize = 13.sp) }
+                }) {
+                    Icon(if (isEditing) Icons.Outlined.Check else Icons.Outlined.Edit,
+                        contentDescription = if (isEditing) strings.cardSave else strings.cardEdit,
+                        tint = ThemeColors.brand)
+                }
             }
         },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 400.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                // 类型图标
                 Surface(shape = RoundedCornerShape(ArcoRadius.lg), color = ThemeColors.brandContainer, modifier = Modifier.size(72.dp)) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(frameworkTypeIcon(fwType), fwType, Modifier.size(36.dp), tint = ThemeColors.brand)
                     }
                 }
-                Spacer(Modifier.height(4.dp))
-                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh) {
-                    Text("$protoLabel · $protoMode", Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 10.sp)
-                }
                 Spacer(Modifier.height(ArcoSpacing.sm))
 
+                // 1. 框架名称 (软件名)
+                Text(peer?.frameworkName?.ifBlank { "MengPaw" } ?: "MengPaw",
+                    fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = ThemeColors.textPrimary)
+                Spacer(Modifier.height(ArcoSpacing.sm))
+
+                // 2. 框架备注名 (可编辑)
                 if (isEditing) {
                     Text(strings.frameworkCardRemarkLabel, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
@@ -104,52 +115,40 @@ fun FrameworkCardDialog(
                         shape = RoundedCornerShape(ArcoRadius.md))
                 } else {
                     val displayRemark = savedRemark.ifBlank { frameworkName }
-                    Text(displayRemark, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = ThemeColors.textPrimary)
-                    if (savedRemark.isNotBlank()) Text(frameworkName, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
+                    Text(displayRemark, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
                 }
                 Spacer(Modifier.height(ArcoSpacing.sm))
 
-                if (peer != null) {
+                // 3. 框架所在系统环境
+                peer?.let { p ->
+                    val platform = p.platform.ifBlank { "" }
+                    Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Devices, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (platform.isNullOrBlank()) "未知" else platform,
+                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    // 4. 框架名称-版本号
                     Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Info, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
-                        Spacer(Modifier.width(6.dp)); Text(String.format(strings.frameworkCardVersion, peer.version), style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
+                        Spacer(Modifier.width(6.dp))
+                        Text("${p.frameworkName.ifBlank { "MengPaw" }} v${p.version}",
+                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
                     }
                     Spacer(Modifier.height(4.dp))
-                }
 
-                val addr = peer?.address ?: acpJson?.address ?: ""
-                if (addr.isNotBlank()) {
-                    Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Language, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
-                        Spacer(Modifier.width(6.dp)); Text("${addr}:${peer?.port ?: com.mengpaw.kernel.ports.Ports.ACP}", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
-                    }
-                    Spacer(Modifier.height(4.dp))
-                }
-
-                if (peer != null) {
-                    val online = peer.lastSeen > System.currentTimeMillis() - 120_000
-                    Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).background(if (online) ArcoColors.Green6 else ArcoColors.Gray5, CircleShape))
-                        Spacer(Modifier.width(6.dp)); Text(if (online) strings.frameworkStatusOnline else strings.frameworkStatusOffline, style = MaterialTheme.typography.labelSmall, color = if (online) ArcoColors.Green6 else ThemeColors.textSecondary, fontSize = 11.sp)
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Security, null, Modifier.size(14.dp), tint = if (peer.trusted) ArcoColors.Green6 else ArcoColors.Orange6)
-                        Spacer(Modifier.width(6.dp)); Text(if (peer.trusted) strings.securityTrusted else strings.frameworkCardUntrusted, style = MaterialTheme.typography.labelSmall, color = if (peer.trusted) ArcoColors.Green6 else ArcoColors.Orange6, fontSize = 11.sp)
-                    }
-                    Spacer(Modifier.height(4.dp))
-                }
-
-                val agentList = peer?.agents ?: emptyList()
-                if (agentList.isNotEmpty()) {
-                    Text(String.format(strings.frameworkCardHostedAgents, agentList.size), style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(4.dp))
-                    agentList.forEach { agent ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(shape = CircleShape, modifier = Modifier.size(20.dp), color = ThemeColors.bgCardHigh) {
-                                Box(contentAlignment = Alignment.Center) { Text(agent.take(1), fontSize = 9.sp, color = ThemeColors.textSecondary) }
+                    // 5. 智能体列表
+                    if (p.agents.isNotEmpty()) {
+                        Text(String.format(strings.frameworkCardHostedAgents, p.agents.size), style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(4.dp))
+                        p.agents.forEach { agent ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Surface(shape = CircleShape, modifier = Modifier.size(20.dp), color = ThemeColors.bgCardHigh) {
+                                    Box(contentAlignment = Alignment.Center) { Text(agent.take(1), fontSize = 9.sp, color = ThemeColors.textSecondary) }
+                                }
+                                Spacer(Modifier.width(6.dp)); Text(agent, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textPrimary, fontSize = 12.sp)
                             }
-                            Spacer(Modifier.width(6.dp)); Text(agent, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textPrimary, fontSize = 12.sp)
                         }
                     }
                 }
@@ -168,28 +167,33 @@ fun FrameworkCardDialog(
                     onDismiss()
                 }) { Text(strings.frameworkCardDelete, color = ArcoColors.Red6, fontSize = 13.sp) }
 
-                if (peer != null && !peer.trusted) {
-                    TextButton(onClick = { com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = true)); onDismiss() }) { Text(strings.frameworkCardTrust, color = ThemeColors.brand, fontSize = 13.sp) }
-                }
-
-                val twinActive = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.isActivated
-                if (peer != null && peer.trusted && twinActive) {
-                    TextButton(onClick = {
-                        val peerId = peer.fingerprint.ifBlank { frameworkName }
-                        com.mengpaw.kernel.security.PromptFirewall.untrust(peerId)
-                        val twinTrusted = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.trusted")
-                        if (twinTrusted.exists()) try { twinTrusted.delete() } catch (_: Exception) { KernelLog.w("FrameworkDialog", "delete twinTrusted failed") }
-                        val twinKey = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.key")
-                        if (twinKey.exists()) try { twinKey.delete() } catch (_: Exception) { KernelLog.w("FrameworkDialog", "delete twinKey failed") }
-                        val twinKeyFp = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${peerId}.key")
-                        if (twinKeyFp.exists()) try { twinKeyFp.delete() } catch (_: Exception) { KernelLog.w("FrameworkDialog", "delete twinKeyFp failed") }
-                        com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = false))
-                        android.util.Log.i("MengPawTwin", "解除孪生: $frameworkName")
-                        onDismiss()
-                    }) { Text(strings.frameworkCardUntwin, color = ArcoColors.Orange6, fontSize = 13.sp) }
+                // v0.35.1: 信任框架 / 解除信任 按钮 (按当前状态切换)
+                peer?.let { p ->
+                    if (p.trusted) {
+                        TextButton(onClick = {
+                            val cur = peer ?: return@TextButton
+                            val peerId = cur.fingerprint.ifBlank { frameworkName }
+                            try { com.mengpaw.kernel.security.PromptFirewall.untrust(peerId) } catch (_: Exception) {}
+                            val twinTrusted = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.trusted")
+                            if (twinTrusted.exists()) try { twinTrusted.delete() } catch (_: Exception) {}
+                            val twinKey = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.key")
+                            if (twinKey.exists()) try { twinKey.delete() } catch (_: Exception) {}
+                            val twinKeyFp = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${peerId}.key")
+                            if (twinKeyFp.exists()) try { twinKeyFp.delete() } catch (_: Exception) {}
+                            val updated = cur.copy(trusted = false)
+                            com.mengpaw.plugin.framework.FrameworkPeerStore.save(updated)
+                            peer = updated
+                        }) { Text(strings.frameworkCardUntrust, color = ArcoColors.Orange6, fontSize = 13.sp) }
+                    } else {
+                        TextButton(onClick = {
+                            val cur = peer ?: return@TextButton
+                            val updated = cur.copy(trusted = true)
+                            com.mengpaw.plugin.framework.FrameworkPeerStore.save(updated)
+                            peer = updated
+                        }) { Text(strings.frameworkCardTrust, color = ThemeColors.brand, fontSize = 13.sp) }
+                    }
                 }
             }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.close) } }
+        }
     )
 }

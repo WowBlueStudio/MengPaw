@@ -88,6 +88,7 @@ class FrameworkDiscovery(private val context: Context) {
             // v0.35.1 绑定标识: did = 设备标识 (Android 10+ 拿不到真实 MAC → ANDROID_ID 兜底)
             info.setAttribute("display", FrameworkIdentity.displayName)
             info.setAttribute("did", FrameworkIdentity.deviceId())
+            info.setAttribute("platform", "Android")
         }
         try { nsd.registerService(info, NsdManager.PROTOCOL_DNS_SD, registrationListener) }
         catch (e: Exception) { KernelLog.w("FrameworkDiscovery", "register failed: ${e.message}") }
@@ -198,6 +199,8 @@ class FrameworkDiscovery(private val context: Context) {
         else null
         val display = if (android.os.Build.VERSION.SDK_INT >= 33)
             info.attributes["display"]?.let { String(it) }?.takeIf { it.isNotBlank() } else null
+        val platform = if (android.os.Build.VERSION.SDK_INT >= 33)
+            info.attributes["platform"]?.let { String(it) }?.takeIf { it.isNotBlank() } else null
         val fp = FrameworkPeerStore.computeFingerprint("mengpaw", deviceId ?: addr)
         val now = System.currentTimeMillis()
         // v0.34.3 迁移: 旧哈希指纹条目 (16 hex 无 |) 按 address 清理, 换新绑定标识
@@ -215,7 +218,8 @@ class FrameworkDiscovery(private val context: Context) {
             address = addr, port = info.port,
             capabilities = caps, agents = agents,
             lastSeen = now,
-            trusted = FrameworkPeerStore.findByFingerprint(fp)?.trusted ?: false
+            trusted = FrameworkPeerStore.findByFingerprint(fp)?.trusted ?: false,
+            platform = platform ?: ""
         )
         // v0.34.3: 发现即入册取消 — 结果进内存列表 (侧边栏展示, 用户确认后入册)
         discoveredPeers.removeAll { it.fingerprint == fp }

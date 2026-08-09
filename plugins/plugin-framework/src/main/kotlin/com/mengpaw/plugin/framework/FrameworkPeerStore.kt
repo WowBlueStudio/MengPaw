@@ -59,7 +59,9 @@ object FrameworkPeerStore {
         val lastSeen: Long = System.currentTimeMillis(),
         val trusted: Boolean = false,
         val remark: String = "",
-        val frameworkType: String = "mengpaw"
+        val frameworkType: String = "mengpaw",
+        /** 对端运行环境 (v0.35.1): mDNS platform 属性, 如 "Android"; 手动添加缺省空。 */
+        val platform: String = ""
     ) {
         fun toJson(): JSONObject = JSONObject().apply {
             put("fingerprint", fingerprint)
@@ -74,6 +76,7 @@ object FrameworkPeerStore {
             put("trusted", trusted)
             put("remark", remark)
             put("frameworkType", frameworkType)
+            put("platform", platform)
         }
 
         companion object {
@@ -93,7 +96,8 @@ object FrameworkPeerStore {
                 lastSeen = obj.optLong("lastSeen", 0L),
                 trusted = obj.optBoolean("trusted", false),
                 remark = obj.optString("remark", ""),
-                frameworkType = obj.optString("frameworkType", "mengpaw")
+                frameworkType = obj.optString("frameworkType", "mengpaw"),
+                platform = obj.optString("platform", "")
             )
         }
     }

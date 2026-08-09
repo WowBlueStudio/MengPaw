@@ -324,6 +324,7 @@ class AppStrings {
     var frameworkCardDelete: String = ""
     var frameworkCardTrust: String = ""
     var frameworkCardUntwin: String = ""
+    var frameworkCardUntrust: String = ""
 
     // ── 智能体名片对话框 ──
     var agentCardTitle: String = ""
