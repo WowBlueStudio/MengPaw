@@ -1054,7 +1054,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - **同意双向入册**: 接受方本地入册发起方 + 回发 `FRAMEWORK_PAIR_ACCEPT` (携带本机名片); 发起方收到后入册接受方 — 双方通讯录互通
 - **非 MengPaw 框架**: 无 ACP 配对能力, 手动添加仍直接本地入册 (保持兼容); 手动添加 MengPaw 节点也走请求流程
 
-**框架名片重构 (v0.35.1, 用户定案)**: `FrameworkCardDialog` 与智能体名片同风格 — 编辑改图形按钮 (Edit/Check), 去掉"关闭" (点外部/返回键关闭); 内容五项: 框架名称 / 框架备注名 (可编辑) / 框架所在系统环境 (mDNS 新增 `platform` 属性广播, peer 持久化 `platform` 字段, 未知回退) / 框架名称-版本号 / 智能体列表 (地址/在线/信任行移出); 底部按钮: 删除 + **信任框架/解除信任** (按状态切换, 解除同时清理 ACP 信任与孪生配对文件, 保存/信任后 UI 实时刷新)。
+**框架名片重构 (v0.35.1, 用户定案)**: `FrameworkCardDialog` 去标题文字 + 整体 UI 重构 — 类型图标 (64dp) / 框架名称 (19sp) / 备注名 (编辑态输入框) / 信息卡片 (系统环境 + 名称-版本号两行合一) / 智能体列表 (胶囊 chips); 编辑改图形按钮 (Edit/Check), 去掉"关闭" (点外部/返回键关闭); 框架所在系统环境 = mDNS 新增 `platform` 属性广播 + peer 持久化 `platform` 字段 (未知回退); 底部按钮: 删除 + **信任框架/解除信任** (按状态切换, 解除同时清理 ACP 信任与孪生配对文件, 保存/信任后 UI 实时刷新)。
 
 **框架绑定标识定案 (v0.34.3 设计讨论)**: 绑定标识 = **框架类型|设备标识**, 不再哈希。
 - mDNS 发现节点: `mengpaw|MAC` (mac 属性); 手动添加/MCP 节点 (Claude Code/Codex 等): `frameworkType|address:port`
@@ -1214,7 +1214,7 @@ Shell ↔ 浏览器进程的 127.0.0.1:9880 HTTP 桥 (`McpHttpServer`/`BrowserMc
 
 **死代码清理**: 删 PromptBuilder.kt 整文件; LlmRequestBuilder.buildRequest 死双轨 (+toolToJson/anyToJson); AcpServer 4 死函数 (onDiscoverResponse/peerCount/writeBridgeTaskToInbox/cleanup); lastPromptTokens 死属性; StorageMonitor.kt 整文件; ProviderCard.kt; BrowserIcons.kt (37 图标); BrowserPluginRegistry+BrowserPlugin 死注册机制 (browser-tools.md 技能删除)。AgentMiddleware.chain 保留 — AgentSessionFactory 有生产调用, 审查误判已修正。
 
-**UI 细节 (shell)**: ComplexityDetector 评分正则预编译 (v0.34.4 8+ 分全归 SWARM — Mission 档并入); "dashiscope" 拼写修正; targetAgent 硬编码 8 处 → `DEFAULT_AGENT_NAME` 唯一事实源; checkMissingPlugin 硬编码 7 插件 → 注册表动态读取; 发送逻辑三份合一 `performSend`; rememberSaveable 补 10 处 (输入草稿/侧栏/选中 tab/折叠状态); AppRoot 记忆孪生激活 runBlocking → lifecycleScope IO 协程; AgentViewModel 流式扫描 O(n²) → 增量水位 (scannedUpTo); 触发器 id random() → 时间戳+AtomicLong; 软键盘 Enter 改 ImeAction.Send (注释与实现一致)。**智能体名片 (v0.35.1 用户定案)**: `AgentCardDialog` 编辑按钮改图形按钮 (Edit/Check 图标); 工作目录核对 = `AGENTS/<name>/` (profile.md/soul.md 同目录); 移除工作区文件列表; 底部去掉"切换到此智能体"与"关闭" (点外部/返回键关闭), 仅保留删除 (主 Agent 不可删)。
+**UI 细节 (shell)**: ComplexityDetector 评分正则预编译 (v0.34.4 8+ 分全归 SWARM — Mission 档并入); "dashiscope" 拼写修正; targetAgent 硬编码 8 处 → `DEFAULT_AGENT_NAME` 唯一事实源; checkMissingPlugin 硬编码 7 插件 → 注册表动态读取; 发送逻辑三份合一 `performSend`; rememberSaveable 补 10 处 (输入草稿/侧栏/选中 tab/折叠状态); AppRoot 记忆孪生激活 runBlocking → lifecycleScope IO 协程; AgentViewModel 流式扫描 O(n²) → 增量水位 (scannedUpTo); 触发器 id random() → 时间戳+AtomicLong; 软键盘 Enter 改 ImeAction.Send (注释与实现一致)。**智能体名片 (v0.35.1 用户定案)**: `AgentCardDialog` 去标题文字 + 整体 UI 重构 — 大头像 (84dp) / 名称 (20sp) / 简介 (居中, 编辑态输入框) / 分隔线 / 工作目录卡片; 编辑按钮改图形按钮 (Edit/Check 图标); 工作目录核对 = `AGENTS/<name>/` (profile.md/soul.md 同目录); 移除工作区文件列表; 底部去掉"切换到此智能体"与"关闭" (点外部/返回键关闭), 仅保留删除 (主 Agent 不可删)。
 
 **主线程 IO**: SidebarContent 裸 listFiles 每重组 → remember(refreshTick) 事件驱动重扫; 头像/预览 decodeFile 无采样 → decodeSampled 有界 (256/4096); TwinPairingDialogs 轮询 listFiles → Dispatchers.IO。
 

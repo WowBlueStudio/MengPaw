@@ -43,6 +43,7 @@ data class AcpContactFile(
 )
 
 @Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 fun FrameworkCardDialog(
     strings: AppStrings,
     frameworkName: String,
@@ -63,11 +64,9 @@ fun FrameworkCardDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        // v0.35.1: 去掉"框架名片"标题文字 — 右上角仅编辑/保存图形按钮
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(strings.frameworkCardTitle, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.weight(1f))
-                // v0.35.1: 图形按钮 (编辑 ↔ 保存)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 IconButton(onClick = {
                     if (isEditing) {
                         peer?.let { p ->
@@ -92,21 +91,22 @@ fun FrameworkCardDialog(
             }
         },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 400.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                // 类型图标
-                Surface(shape = RoundedCornerShape(ArcoRadius.lg), color = ThemeColors.brandContainer, modifier = Modifier.size(72.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(max = 440.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                // ── 类型图标 ──
+                Surface(shape = RoundedCornerShape(ArcoRadius.lg), color = ThemeColors.brandContainer, modifier = Modifier.size(64.dp)) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(frameworkTypeIcon(fwType), fwType, Modifier.size(36.dp), tint = ThemeColors.brand)
+                        Icon(frameworkTypeIcon(fwType), fwType, Modifier.size(30.dp), tint = ThemeColors.brand)
                     }
                 }
-                Spacer(Modifier.height(ArcoSpacing.sm))
+                Spacer(Modifier.height(ArcoSpacing.lg))
 
-                // 1. 框架名称 (软件名)
+                // ── 1. 框架名称 (软件名) ──
                 Text(peer?.frameworkName?.ifBlank { "MengPaw" } ?: "MengPaw",
-                    fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = ThemeColors.textPrimary)
-                Spacer(Modifier.height(ArcoSpacing.sm))
+                    fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = ThemeColors.textPrimary)
+                Spacer(Modifier.height(4.dp))
 
-                // 2. 框架备注名 (可编辑)
+                // ── 2. 框架备注名 (可编辑) ──
                 if (isEditing) {
                     Text(strings.frameworkCardRemarkLabel, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(4.dp))
@@ -115,39 +115,54 @@ fun FrameworkCardDialog(
                         shape = RoundedCornerShape(ArcoRadius.md))
                 } else {
                     val displayRemark = savedRemark.ifBlank { frameworkName }
-                    Text(displayRemark, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = ThemeColors.textPrimary)
+                    Text(displayRemark, fontSize = 13.sp, color = ThemeColors.textSecondary)
                 }
-                Spacer(Modifier.height(ArcoSpacing.sm))
+                Spacer(Modifier.height(ArcoSpacing.lg))
 
-                // 3. 框架所在系统环境
+                // ── 3+4. 系统环境 + 名称-版本号 (合一信息卡片) ──
                 peer?.let { p ->
                     val platform = p.platform.ifBlank { "" }
-                    Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Devices, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (platform.isNullOrBlank()) "未知" else platform,
-                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
+                    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh) {
+                        Column(Modifier.padding(ArcoSpacing.sm)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.Devices, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (platform.isNullOrBlank()) "未知" else platform,
+                                    style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.Info, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
+                                Spacer(Modifier.width(6.dp))
+                                Text("${p.frameworkName.ifBlank { "MengPaw" }} v${p.version}",
+                                    style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
+                            }
+                        }
                     }
-                    Spacer(Modifier.height(4.dp))
-                    // 4. 框架名称-版本号
-                    Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)).padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Info, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
-                        Spacer(Modifier.width(6.dp))
-                        Text("${p.frameworkName.ifBlank { "MengPaw" }} v${p.version}",
-                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
-                    }
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(ArcoSpacing.sm))
 
-                    // 5. 智能体列表
+                    // ── 5. 智能体列表 (胶囊 chips) ──
                     if (p.agents.isNotEmpty()) {
                         Text(String.format(strings.frameworkCardHostedAgents, p.agents.size), style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
                         Spacer(Modifier.height(4.dp))
-                        p.agents.forEach { agent ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Surface(shape = CircleShape, modifier = Modifier.size(20.dp), color = ThemeColors.bgCardHigh) {
-                                    Box(contentAlignment = Alignment.Center) { Text(agent.take(1), fontSize = 9.sp, color = ThemeColors.textSecondary) }
+                        androidx.compose.foundation.layout.FlowRow(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            p.agents.forEach { agent ->
+                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.bgCardHigh) {
+                                    Row(Modifier.padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(shape = CircleShape, modifier = Modifier.size(16.dp), color = ThemeColors.brandContainer) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(agent.take(1), fontSize = 8.sp, color = ThemeColors.brand)
+                                            }
+                                        }
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(agent, style = MaterialTheme.typography.labelSmall,
+                                            color = ThemeColors.textPrimary, fontSize = 11.sp)
+                                    }
                                 }
-                                Spacer(Modifier.width(6.dp)); Text(agent, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textPrimary, fontSize = 12.sp)
                             }
                         }
                     }

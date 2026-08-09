@@ -49,11 +49,9 @@ fun AgentCardDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        // v0.35.1: 去掉"智能体名片"标题文字 — 右上角仅编辑/保存图形按钮
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(strings.agentCardTitle, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.weight(1f))
-                // v0.35.1: 图形按钮 (编辑 ↔ 保存)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 IconButton(onClick = {
                     if (isEditing) {
                         val newProfile = profile.copy(name = editName, bio = editIntro)
@@ -69,54 +67,63 @@ fun AgentCardDialog(
         },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 400.dp),
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(max = 440.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // ── 头像 ──
                 if (avatarBitmap != null) {
                     androidx.compose.foundation.Image(
                         bitmap = avatarBitmap.asImageBitmap(),
                         contentDescription = null,
-                        modifier = Modifier.size(72.dp).clip(CircleShape)
+                        modifier = Modifier.size(84.dp).clip(CircleShape)
                     )
                 } else {
-                    Surface(shape = CircleShape, color = ThemeColors.brandContainer, modifier = Modifier.size(72.dp)) {
+                    Surface(shape = CircleShape, color = ThemeColors.brandContainer, modifier = Modifier.size(84.dp)) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(editName.ifBlank { agentName }.take(1), color = ThemeColors.brand,
-                                fontWeight = FontWeight.Bold, fontSize = 28.sp)
+                                fontWeight = FontWeight.Bold, fontSize = 32.sp)
                         }
                     }
                 }
-                Spacer(Modifier.height(ArcoSpacing.md))
+                Spacer(Modifier.height(ArcoSpacing.lg))
 
+                // ── 名称 ──
                 if (isEditing) {
                     OutlinedTextField(value = editName, onValueChange = { editName = it },
-                        label = { Text(strings.agentCardNameLabel) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        label = { Text(strings.agentCardNameLabel) }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.titleMedium,
                         shape = RoundedCornerShape(ArcoRadius.md))
                 } else {
-                    Text(editName.ifBlank { agentName }, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+                    Text(editName.ifBlank { agentName }, fontWeight = FontWeight.SemiBold, fontSize = 20.sp,
                         color = ThemeColors.textPrimary)
                 }
+                Spacer(Modifier.height(ArcoSpacing.md))
+
+                // ── 简介 ──
+                if (isEditing) {
+                    OutlinedTextField(value = editIntro, onValueChange = { editIntro = it },
+                        label = { Text(strings.agentCardIntroField) }, minLines = 2, maxLines = 4,
+                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md))
+                } else {
+                    Text(editIntro.ifBlank { strings.agentCardNoIntro },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (editIntro.isBlank()) ThemeColors.textSecondary.copy(alpha = 0.6f)
+                            else ThemeColors.textPrimary,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
+                Spacer(Modifier.height(ArcoSpacing.lg))
+
+                HorizontalDivider(color = ThemeColors.border)
                 Spacer(Modifier.height(ArcoSpacing.sm))
 
+                // ── 工作目录 ──
                 Row(Modifier.fillMaxWidth().background(ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm))
                     .padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Folder, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
                     Spacer(Modifier.width(6.dp))
                     Text(workspacePath, style = MaterialTheme.typography.labelSmall,
                         color = ThemeColors.textSecondary, fontSize = 11.sp)
-                }
-                Spacer(Modifier.height(ArcoSpacing.sm))
-
-                Text(strings.agentCardIntroLabel, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary,
-                    modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(4.dp))
-                if (isEditing) {
-                    OutlinedTextField(value = editIntro, onValueChange = { editIntro = it },
-                        label = { Text(strings.agentCardIntroField) }, minLines = 2, maxLines = 4,
-                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md))
-                } else {
-                    Text(editIntro.ifBlank { strings.agentCardNoIntro }, style = MaterialTheme.typography.bodySmall,
-                        color = if (editIntro.isBlank()) ThemeColors.textSecondary.copy(alpha = 0.6f) else ThemeColors.textPrimary)
                 }
             }
         },
