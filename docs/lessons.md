@@ -560,5 +560,19 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **CLI.md 整体移除 (v0.34.3 用户拍板)**：22KB 命令参考不再生成/常驻 — `agent.cli` 改为轻量指引，命令发现完全走 `self.tools`（运行时枚举，天然新鲜）+ `self.search`（CommandSearch，IndexCoverageTest 锁覆盖）。生成链路（CliDocGenerator/ensureCliDoc/命令指纹/CliDocSyncTest）全部删除；设备旧残留 cli.md 无害。
 - **教训**：① 手写元数据（描述/关键词）必须对照实现，且要语义测试锁；② **双源并存 = 定时炸弹**——合并时选错源会把潜伏错误带入生产路径；③ 大型参考文档（22KB）对 Agent 是每轮负担，"自动生成"不等于"值得常驻"，运行时枚举+检索索引是更轻的发现路径。
 
+### 15.23 添加框架按钮无效 4 版：UI 状态置位但从未渲染（2026-08-09，v0.35.1 框架发现流程调整）
+
+- **现象**：通讯录标题右侧"添加框架"按钮点击无任何反应；审查发现 `showAddFramework` 置 true 后**全仓库无消费方**（AddFrameworkDialog 是死代码，从未被调用渲染）。
+- **根因链**：① 添加逻辑演进中 Dialog 被拆出独立文件（AddFrameworkDialog.kt），SidebarContent 只保留 `showAddFramework = true` 状态置位，渲染调用在拆分时丢失；② 无 UI 测试/可点击性检查，按钮无效潜伏 4 个版本（用户 v0.34.2 实测反馈）。
+- **处置**：改为全屏独立页面 `AddFrameworkScreen`（待处理配对请求 + 扫描 + 手动添加），SidebarContent 渲染接入；顺带落地用户定案的**请求-同意双向配对流程**。
+- **教训**：① 状态置位必须有消费方——`rg "showXxx"` 应同时看到 setter 与 renderer；② 拆文件时对话框渲染点丢失是高频事故，拆后必须搜调用点验证；③ 用户报告"按钮无效"优先查"状态是否被渲染"，而不是先怀疑数据源。
+
+### 15.24 Gradle 增量编译缓存与组合任务：单独跑绿、组合红（2026-08-09，v0.35.1）
+
+- **现象**：`FrameworkPairHandler.kt` 报 `Unresolved reference 'jsonPrimitive'`（同一文件部分行报错、部分不报）；单独 `:plugin-framework:compileDebugKotlin` 全绿，`:mengpaw-shell:assembleDebug`（触发 plugin 重编译）稳定报错；`--rerun-tasks`/`--no-configuration-cache` 单独跑也绿。
+- **根因**：跨模块依赖下 Kotlin 增量编译的 classpath 快照与配置缓存复用不一致——plugin 编译读到的 kernel jar 状态与源码改动不同步（本项目 kernel jar 需先于依赖模块重建）。
+- **处置**：① 依赖 kernel 新 API 的模块先单独 `:mengpaw-kernel:test`（产出最新 jar）再编插件/shell；② 组合命令失败时逐模块拆开定位，避免被 Gradle 报告误导（错误指向的模块未必是真正根因）；③ 兜底 `:模块:clean` 后重编译。
+- **教训**：① 改内核 API 后，验证顺序必须是 kernel → 依赖模块 → shell，全量 `test` 放最后；② Gradle 组合任务的错误报告在增量缓存异常时不可信，拆开跑是正解；③ 本项目勿并行多个 Gradle 任务（与 clean 互踩同源）。
+
 
 *最后更新: 2026-08-09 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

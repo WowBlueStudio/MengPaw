@@ -103,6 +103,11 @@ class AcpServer(
         handlers.add(handler)
     }
 
+    /** 插件卸载时反注册 (v0.35.1 框架配对 handler 生命周期用)。 */
+    fun unregisterHandler(handler: AcpHandler) {
+        handlers.remove(handler)
+    }
+
     fun registerTransport(transport: AcpTransport) {
         transports.add(transport)
     }
@@ -148,6 +153,29 @@ class AcpServer(
      */
     suspend fun sendViaTransport(msg: AcpMessage): Boolean =
         transports.any { it.send(msg) }
+
+    /**
+     * 直连指定地址发送 ACP 消息 (v0.35.1 框架通讯录配对请求用) — 对端尚未入册/未握手,
+     * 不在 peers 列表中, 无法经 [sendViaTransport] 广播送达, 这里按 IP:port 直接 HTTP POST。
+     * 明文传输, 与配对类消息"建立信任"的无防火墙语义一致 (配对请求不含敏感数据)。
+     */
+    suspend fun sendDirect(msg: AcpMessage, address: String, port: Int, timeoutMs: Int = 4000): Boolean {
+        return try {
+            val url = java.net.URL("http://$address:$port/acp")
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.connectTimeout = 3000
+            conn.readTimeout = timeoutMs
+            java.io.OutputStreamWriter(conn.outputStream).use {
+                it.write(json.encodeToString(AcpMessage.serializer(), msg))
+            }
+            conn.responseCode in 200..299
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     suspend fun handleMessage(raw: String): AcpResult {
         return try {
@@ -264,9 +292,11 @@ class AcpServer(
                 }
                 customResult ?: AcpResult(true, "ack", msg.type)
             }
-            // Memory Twin pairing types — NO firewall (their purpose IS establishing trust)
+            // Pairing types — NO firewall (their purpose IS establishing trust)
             AcpMessageType.CAPABILITY_ANNOUNCE, AcpMessageType.TWIN_DELEGATE,
-            AcpMessageType.PAIR_CHALLENGE, AcpMessageType.PAIR_CONFIRM -> {
+            AcpMessageType.PAIR_CHALLENGE, AcpMessageType.PAIR_CONFIRM,
+            AcpMessageType.FRAMEWORK_PAIR_REQUEST, AcpMessageType.FRAMEWORK_PAIR_ACCEPT,
+            AcpMessageType.FRAMEWORK_PAIR_DECLINE -> {
                 var customResult: AcpResult? = null
                 for (handler in handlers) {
                     if (type in handler.supportedTypes) {

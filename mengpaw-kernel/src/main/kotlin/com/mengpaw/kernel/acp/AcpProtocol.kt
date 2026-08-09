@@ -38,6 +38,9 @@ enum class AcpMessageType {
     TWIN_DELEGATE,          // 孪生任务委派（带能力需求）
     PAIR_CHALLENGE,         // 配对挑战（接收方响应, 携带 nonce+指纹）
     PAIR_CONFIRM,           // 配对确认（发起方验证短码后, 携带签名）
+    FRAMEWORK_PAIR_REQUEST, // 框架通讯录配对请求（发现节点 → 请求入册, 对方确认后双向入册）
+    FRAMEWORK_PAIR_ACCEPT,  // 框架配对请求同意（双方入册）
+    FRAMEWORK_PAIR_DECLINE, // 框架配对请求拒绝
     MCP_REQUEST,            // MCP JSON-RPC 请求 (tools/list, tools/call, etc.)
     MCP_RESPONSE,           // MCP JSON-RPC 响应 (通过 ACP 返回)
     // ── Session Sync (会话同步 / Upstream Links) ──
@@ -179,6 +182,40 @@ data class AcpMessage(
                     put("verificationCode", JsonPrimitive(verificationCode))
                     put("signature", JsonPrimitive(signature))
                 }.toString())
+
+        // ── Framework directory pairing (框架通讯录配对请求) ──────────
+
+        /** FRAMEWORK_PAIR_REQUEST: 请求对方将本机加入其框架通讯录 (UI 添加按钮 → 请求-同意流程)。 */
+        fun frameworkPairRequest(
+            from: String, to: String, requestId: String,
+            fingerprint: String, displayName: String, address: String, port: Int
+        ) = AcpMessage(from, to, AcpMessageType.FRAMEWORK_PAIR_REQUEST.name,
+            kotlinx.serialization.json.buildJsonObject {
+                put("requestId", JsonPrimitive(requestId))
+                put("fingerprint", JsonPrimitive(fingerprint))
+                put("displayName", JsonPrimitive(displayName))
+                put("address", JsonPrimitive(address))
+                put("port", JsonPrimitive(port))
+            }.toString(), requestId = requestId)
+
+        /** FRAMEWORK_PAIR_ACCEPT/DECLINE: 回应配对请求 — accepted=true 携带接受方名片 (发起方据此入册)。 */
+        fun frameworkPairResponse(
+            from: String, to: String, requestId: String, accepted: Boolean,
+            fingerprint: String = "", displayName: String = "",
+            address: String = "", port: Int = com.mengpaw.kernel.ports.Ports.ACP,
+            reason: String = ""
+        ) =
+            AcpMessage(from, to,
+                if (accepted) AcpMessageType.FRAMEWORK_PAIR_ACCEPT.name else AcpMessageType.FRAMEWORK_PAIR_DECLINE.name,
+                kotlinx.serialization.json.buildJsonObject {
+                    put("requestId", JsonPrimitive(requestId))
+                    put("accepted", JsonPrimitive(accepted))
+                    put("fingerprint", JsonPrimitive(fingerprint))
+                    put("displayName", JsonPrimitive(displayName))
+                    put("address", JsonPrimitive(address))
+                    put("port", JsonPrimitive(port))
+                    put("reason", JsonPrimitive(reason))
+                }.toString(), requestId = requestId)
 
         /** REVOKE: broadcast twin unpair / device loss. */
         fun revoke(from: String, to: String, revokedPeerId: String) =

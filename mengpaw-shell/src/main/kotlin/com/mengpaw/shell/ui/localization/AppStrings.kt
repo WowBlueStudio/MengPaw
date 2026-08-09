@@ -359,6 +359,20 @@ class AppStrings {
     var addFrameworkAddrGenericPlaceholder: String = ""
     var addFrameworkScanLan: String = ""
     var addFrameworkDiscovered: String = ""
+    // v0.35.1 框架发现流程调整: 配对请求-同意流程
+    var pairPendingRequests: String = ""
+    var pairNoPending: String = ""
+    var pairAccept: String = ""
+    var pairDecline: String = ""
+    var pairAccepted: String = ""
+    var pairDeclined: String = ""
+    var pairRespondFailed: String = ""
+    var pairScanEmpty: String = ""
+    var pairScanHint: String = ""
+    var pairRequestSent: String = ""
+    var pairRequestFailed: String = ""
+    var pairManualAdd: String = ""
+    var pairAddedLocal: String = ""
 
     // ── 记忆孪生配对（侧边栏弹窗）──
     var twinRequestTitle: String = ""

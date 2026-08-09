@@ -49,6 +49,30 @@ class AcpProtocolTest {
         val pcPayload = json.parseToJsonElement(pc.payload).jsonObject
         assertEquals("dev1", pcPayload["deviceId"]?.jsonPrimitive?.content)
         assertEquals("fingerprintY", pcPayload["fingerprint"]?.jsonPrimitive?.content)
+
+        // Framework pair request (v0.35.1 框架通讯录配对)
+        val fpr = AcpMessage.frameworkPairRequest(
+            "mengpaw-abc-def", "*", "req123",
+            "mengpaw|aa:bb:cc:dd:ee:ff", "书房平板", "192.168.2.34", 9876
+        )
+        assertEquals(AcpMessageType.FRAMEWORK_PAIR_REQUEST.name, fpr.type)
+        assertEquals("req123", fpr.requestId)
+        val fprPayload = json.parseToJsonElement(fpr.payload).jsonObject
+        assertEquals("req123", fprPayload["requestId"]?.jsonPrimitive?.content)
+        assertEquals("mengpaw|aa:bb:cc:dd:ee:ff", fprPayload["fingerprint"]?.jsonPrimitive?.content)
+        assertEquals("192.168.2.34", fprPayload["address"]?.jsonPrimitive?.content)
+
+        // Framework pair response (accept 携带名片)
+        val fpa = AcpMessage.frameworkPairResponse(
+            "mengpaw-123-456", "*", "req123", accepted = true,
+            fingerprint = "mengpaw|11:22:33:44:55:66", displayName = "客厅手机",
+            address = "192.168.2.9", port = 9876
+        )
+        assertEquals(AcpMessageType.FRAMEWORK_PAIR_ACCEPT.name, fpa.type)
+        val fpaPayload = json.parseToJsonElement(fpa.payload).jsonObject
+        assertEquals(true, fpaPayload["accepted"]?.jsonPrimitive?.boolean)
+        assertEquals("mengpaw|11:22:33:44:55:66", fpaPayload["fingerprint"]?.jsonPrimitive?.content)
+        assertEquals("客厅手机", fpaPayload["displayName"]?.jsonPrimitive?.content)
     }
 
     // ── AcpServer routing ───────────────────────────────────────────

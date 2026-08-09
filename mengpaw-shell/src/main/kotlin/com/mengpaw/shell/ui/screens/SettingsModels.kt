@@ -11,7 +11,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 // ── 设置数据模型 — 拆自 SettingsViewModel.kt (2026-08-06, >400 行文件拆分批次4) ──
-// 命名避开同名冲突 — 各对话框文件已有自己的 private appJson (AddFrameworkDialog/FrameworkCardDialog)。
+// 命名避开同名冲突 — 各对话框文件已有自己的 private appJson (FrameworkCardDialog 等)。
 
 internal val settingsAppJson = Json { ignoreUnknownKeys = true; prettyPrint = true }
 

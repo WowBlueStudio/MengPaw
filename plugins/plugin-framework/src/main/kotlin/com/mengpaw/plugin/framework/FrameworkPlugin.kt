@@ -21,6 +21,11 @@ import com.mengpaw.kernel.plugin.*
  */
 class FrameworkPlugin : Plugin {
 
+    companion object {
+        /** 配对请求 handler 实例 — 反注册需同一实例 (v0.35.1)。 */
+        @Volatile private var pairHandler: FrameworkPairHandler? = null
+    }
+
     override val metadata = PluginMetadata(
         id = "framework-plugin",
         name = "框架发现",
@@ -57,8 +62,23 @@ class FrameworkPlugin : Plugin {
     override suspend fun onInstall(ctx: PluginContext) {
         // 本机标准 MCP 网关 (9881) — 任何 MCP client 直连 MengPaw 工具
         McpGateway.start()
+        // v0.35.1 框架发现流程调整: 注册配对请求 handler (请求-同意双向入册)
+        try {
+            pairHandler = FrameworkPairHandler()
+            pairHandler?.let {
+                com.mengpaw.kernel.namespace.AcpHolder.server.registerHandler(it)
+            }
+        } catch (e: Exception) {
+            com.mengpaw.kernel.KernelLog.w("FrameworkPlugin", "register pair handler failed: ${e.message}")
+        }
     }
     override suspend fun onUninstall() {
+        try {
+            pairHandler?.let {
+                com.mengpaw.kernel.namespace.AcpHolder.server.unregisterHandler(it)
+            }
+            pairHandler = null
+        } catch (_: Exception) {}
         McpGateway.stop()
         discovery?.stopDiscovery()
         discovery?.unregister()

@@ -1047,6 +1047,13 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - **扫描时机**: 后台不持续扫; 打开侧边栏 → startContinuousDiscovery (10s 周期 + 10s 刷新通讯录), 关闭 → stopContinuousDiscovery
 - **联络失败提醒**: framework.connect 失败 → NotifyBus 横幅 (WARN)
 
+**框架通讯录配对请求流程 (v0.35.1, 用户定案)**: 添加框架从"本地单向入册"改为**请求-同意双向流程** —
+- **独立页面**: 点通讯录标题右侧"添加框架" → 全屏独立页面 (`AddFrameworkScreen`, 替代原 Dialog; 修复 showAddFramework 置 true 后从未渲染的无效按钮根因)
+- **发起方**: 页面内"扫描局域网"刷新 `FrameworkDiscovery.discoveredPeers` → 点节点"添加" → 直连 HTTP POST `FRAMEWORK_PAIR_REQUEST` (内核 `AcpServer.sendDirect`, 对端未握手不在 peers 列表, 无法走 transport 广播) → UI 提示"已发送, 等待对方同意"
+- **接收方**: `FrameworkPairHandler` 收到请求 → 落盘 `FrameworkPairStore` (framework_pair_requests.json, pendingCount 驱动) → **通讯录"添加框架"按钮红点角标** + NotifyBus 横幅提醒 → 点按钮进入页面查看请求 → **同意/拒绝**
+- **同意双向入册**: 接受方本地入册发起方 + 回发 `FRAMEWORK_PAIR_ACCEPT` (携带本机名片); 发起方收到后入册接受方 — 双方通讯录互通
+- **非 MengPaw 框架**: 无 ACP 配对能力, 手动添加仍直接本地入册 (保持兼容); 手动添加 MengPaw 节点也走请求流程
+
 **框架绑定标识定案 (v0.34.3 设计讨论)**: 绑定标识 = **框架类型|设备标识**, 不再哈希。
 - mDNS 发现节点: `mengpaw|MAC` (mac 属性); 手动添加/MCP 节点 (Claude Code/Codex 等): `frameworkType|address:port`
 - 组合唯一性: 同一台电脑多个框架类型不同不冲突; MAC 场景换 IP 不变

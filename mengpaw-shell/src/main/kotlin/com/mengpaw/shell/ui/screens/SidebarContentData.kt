@@ -15,7 +15,7 @@ import kotlinx.serialization.json.Json
 /**
  * 侧栏数据模型 + 图标助手 — 从 SidebarContent.kt 拆出 (2026-08-04, >40KB UI 文件拆分)。
  * sidebarAppJson 为 internal 共享实例 (SidebarContent + TwinPairingDialogs 解码用);
- * 命名避开同名冲突 — 各对话框文件已有自己的 private appJson (AddFrameworkDialog/FrameworkCardDialog)。
+ * 命名避开同名冲突 — 各对话框文件已有自己的 private appJson (FrameworkCardDialog 等)。
  */
 internal val sidebarAppJson = Json { ignoreUnknownKeys = true; prettyPrint = true }
 

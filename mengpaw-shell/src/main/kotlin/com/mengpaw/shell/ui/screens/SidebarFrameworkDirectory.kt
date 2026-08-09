@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,6 +32,7 @@ import com.mengpaw.shell.ui.components.KanbanStatusBar
 import com.mengpaw.shell.ui.components.TribeBarState
 import com.mengpaw.shell.ui.components.aggregateTribeBarState
 import com.mengpaw.shell.ui.localization.AppStrings
+import com.mengpaw.plugin.framework.FrameworkPairStore
 import kotlinx.coroutines.delay
 
 // ── 框架通讯录区段 — 拆自 SidebarContent.kt (2026-08-06, >400 行文件拆分批次4) ──
@@ -51,11 +53,31 @@ internal fun FrameworkDirectorySection(
     onFrameworkLongClick: (String) -> Unit,
     onTwinActivate: (FrameworkContact) -> Unit
 ) {
+    // v0.35.1 框架发现流程调整: 待处理配对请求 → 添加按钮红点角标 (响应 Store 变化)
+    var pairPending by remember { mutableStateOf(FrameworkPairStore.pendingCount) }
+    DisposableEffect(Unit) {
+        val listener: () -> Unit = {
+            pairPending = FrameworkPairStore.pendingCount
+        }
+        FrameworkPairStore.addListener(listener)
+        onDispose { FrameworkPairStore.removeListener(listener) }
+    }
+
     // ── Framework Directory ──
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(strings.sidebarFrameworkDirectory, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-        IconButton(onClick = onAddFramework, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Outlined.PersonAdd, strings.sidebarFrameworkDirectory, tint = ThemeColors.brand, modifier = Modifier.size(20.dp))
+        Box {
+            IconButton(onClick = onAddFramework, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Outlined.PersonAdd, strings.sidebarFrameworkDirectory, tint = ThemeColors.brand, modifier = Modifier.size(20.dp))
+            }
+            if (pairPending > 0) {
+                Badge(
+                    containerColor = ArcoColors.Red6,
+                    modifier = Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp)
+                ) {
+                    Text(if (pairPending > 99) "99+" else pairPending.toString(), fontSize = 9.sp)
+                }
+            }
         }
     }
     Spacer(Modifier.height(ArcoSpacing.sm))
