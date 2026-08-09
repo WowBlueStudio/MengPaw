@@ -31,6 +31,136 @@ import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 
+// ═══════════════════════════════════════════════════════════════════════
+// v0.34.3 气泡 UI 重构: 思考过程容器 + 最终答案
+// 时间轴主导: 思考/调用/观察循环收进单一可折叠容器, 最终答案独立气泡。
+// 工具行只显示命令名 (失败红字), 观察全文点击展开; 思考全文保留可回看;
+// 折叠态显示 "N 轮思考 · M 次调用" 摘要。
+// ═══════════════════════════════════════════════════════════════════════
+
+@Composable
+fun ThinkingProcessBubble(message: ChatMessageUi.ThinkingProcess, agentName: String = "MengPaw") {
+    // 自动折叠: 最终答案开始 (collapsed=true) 默认收起; 运行中强制展开 (思考可见)
+    var expanded by rememberSaveable(message.stableId) { mutableStateOf(!message.collapsed) }
+    LaunchedEffect(message.collapsed, message.isRunning) {
+        if (message.isRunning) expanded = true
+        else if (message.collapsed) expanded = false
+    }
+
+    Column(Modifier.fillMaxWidth()) {
+        // ── 头部: "N 轮思考 · M 次调用" 摘要 + 折叠开关 + 运行中反馈 ──
+        Row(
+            Modifier.fillMaxWidth(0.95f).padding(horizontal = ArcoSpacing.sm, vertical = 6.dp)
+                .clickable { expanded = !expanded },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                null, Modifier.size(16.dp), tint = ThemeColors.brand)
+            Spacer(Modifier.width(6.dp))
+            Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
+            Spacer(Modifier.width(6.dp))
+            Text(
+                if (message.isRunning) "思考中…" else "思考过程",
+                style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("${message.steps.size} 轮思考 · ${message.toolCount} 次调用",
+                style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+            if (message.isRunning) {
+                Spacer(Modifier.width(8.dp))
+                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp,
+                    color = ThemeColors.brand)
+            }
+        }
+
+        // ── 展开内容: 每轮思考全文 + 折叠工具行 ──
+        AnimatedVisibility(visible = expanded) {
+            Column(Modifier.fillMaxWidth(0.95f).padding(start = ArcoSpacing.md, end = ArcoSpacing.sm, bottom = ArcoSpacing.sm)) {
+                message.steps.forEachIndexed { i, step ->
+                    if (step.thought.isNotBlank()) {
+                        Text(if (message.steps.size > 1) "第 ${i + 1} 轮思考" else "思考",
+                            style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                        Spacer(Modifier.height(2.dp))
+                        Text(step.thought, style = MaterialTheme.typography.bodySmall,
+                            color = ThemeColors.textSecondary)
+                        Spacer(Modifier.height(6.dp))
+                    }
+                    step.tools.forEach { tool -> ProcessToolRow(tool) }
+                }
+            }
+        }
+    }
+}
+
+/** 工具调用折叠行 — 只显示命令名; 失败红字; 点击展开参数与观察全文。 */
+@Composable
+private fun ProcessToolRow(tool: ChatMessageUi.ProcessTool) {
+    var showDetail by remember(tool.command) { mutableStateOf(false) }
+    val fg = if (tool.isError) ArcoColors.Red6 else ThemeColors.textPrimary
+    Row(
+        Modifier.fillMaxWidth().clickable { showDetail = !showDetail }.padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(if (tool.isError) Icons.Outlined.Error else Icons.Outlined.Terminal,
+            null, Modifier.size(14.dp), tint = if (tool.isError) ArcoColors.Red6 else ThemeColors.textSecondary)
+        Spacer(Modifier.width(6.dp))
+        Text(tool.command, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = fg)
+        if (tool.observation.isNotEmpty()) {
+            Spacer(Modifier.width(6.dp))
+            Text(if (tool.isError) "✗ 失败" else "✓",
+                fontSize = 11.sp, color = if (tool.isError) ArcoColors.Red6 else ArcoColors.Green6)
+        } else {
+            Spacer(Modifier.width(6.dp))
+            Text("…", fontSize = 11.sp, color = ThemeColors.textSecondary)
+        }
+    }
+    // ── 展开态: 完整参数 + 观察全文 (可选中复制) ──
+    AnimatedVisibility(visible = showDetail && tool.observation.isNotEmpty()) {
+        Column(Modifier.fillMaxWidth().padding(start = ArcoSpacing.md, bottom = 4.dp)) {
+            if (tool.actionInput.isNotBlank()) {
+                Text("参数: ${tool.actionInput}", fontSize = 11.sp,
+                    color = ThemeColors.textSecondary, fontFamily = FontFamily.Monospace)
+                Spacer(Modifier.height(2.dp))
+            }
+            SelectionContainer {
+                Text(tool.observation, fontSize = 11.sp, color = ThemeColors.textSecondary)
+            }
+        }
+    }
+}
+
+/** 最终答案气泡 — 与思考过程容器分离, 流式输出, 完成后提取附件卡片。 */
+@Composable
+fun FinalAnswerBubble(message: ChatMessageUi.FinalAnswer, agentName: String = "MengPaw") {
+    val (cleanFinal, mediaCards) = remember(message.content) { extractMedia(message.content) }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        Surface(
+            shape = RoundedCornerShape(ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.lg, ArcoRadius.sm),
+            color = ThemeColors.bgCardHigh, modifier = Modifier.fillMaxWidth(0.9f)
+        ) {
+            Column(Modifier.padding(ArcoSpacing.lg)) {
+                AgentBubbleHeader(agentName = agentName, executionMode = message.executionMode,
+                    agentRef = message.agentRef)
+                Spacer(Modifier.height(ArcoSpacing.xs))
+                if (message.isRunning &&
+                    (cleanFinal.isBlank() || cleanFinal == "思考中...")) {
+                    WaitingIndicator("思考中...")
+                } else if (cleanFinal.isNotBlank()) {
+                    SelectionContainer {
+                        MarkdownText(content = cleanFinal,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = ThemeColors.textPrimary),
+                            nestedScroll = true)
+                    }
+                }
+                if (mediaCards.isNotEmpty() && !message.isRunning) {
+                    Spacer(Modifier.height(ArcoSpacing.sm))
+                    AttachmentCardList(mediaCards, isUserSide = false)
+                }
+            }
+        }
+    }
+}
+
 // ── Agent Step Bubble (v0.3x): 每个 ReAct 步骤一个独立气泡 ──
 // 形态: [Step N 思考(折叠, 展开=完整思考全文+工具调用)] + 正文(中间输出/最终答案)
 // 默认展开 — 用户要求展开必须看到全程 (完整思考不截断)

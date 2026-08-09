@@ -71,6 +71,7 @@ fun BubbleWrapper(
         is ChatMessageUi.User -> message.content
         is ChatMessageUi.Agent -> message.content
         is ChatMessageUi.AgentWithTrace -> message.finalContent
+        is ChatMessageUi.FinalAnswer -> message.content
         is ChatMessageUi.CommandResult -> message.content
         else -> ""
     }

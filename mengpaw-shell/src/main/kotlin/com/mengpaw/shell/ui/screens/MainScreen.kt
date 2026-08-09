@@ -31,6 +31,94 @@ import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoSpacing
 
+/**
+ * 历史消息统一重排 (v0.34.3 气泡 UI 重构) — 旧 agent_step 序列 / agent_trace
+ * 合并为「思考过程容器 + 最终答案」结构, 新旧会话视觉一致。
+ * 规则: 连续非 final 的 AgentStep → ThinkingProcess (每步 = 思考 + 工具行);
+ * isFinal 的 AgentStep / Agent / AgentWithTrace.finalContent → FinalAnswer。
+ */
+internal fun reflowLegacyMessages(messages: List<ChatMessageUi>): List<ChatMessageUi> {
+    val out = mutableListOf<ChatMessageUi>()
+    val pending = mutableListOf<ChatMessageUi.AgentStep>()
+
+    fun flushPending() {
+        if (pending.isEmpty()) return
+        val first = pending.first()
+        val anyRunning = pending.any { it.isRunning }
+        val steps = pending.map { s ->
+            ChatMessageUi.ProcessStep(
+                thought = s.thought,
+                tools = s.action?.takeIf { it.isNotBlank() }?.let { action ->
+                    val name = action.substringBefore(' ')
+                    listOf(ChatMessageUi.ProcessTool(
+                        command = name,
+                        actionInput = action.removePrefix(name).trim(),
+                        observation = s.content,
+                        isError = s.content.startsWith("Error [")
+                    ))
+                } ?: emptyList()
+            )
+        }
+        out.add(ChatMessageUi.ThinkingProcess(
+            steps = steps, isRunning = anyRunning, collapsed = !anyRunning,
+            executionMode = first.executionMode, agentRef = first.agentRef
+        ))
+        pending.clear()
+    }
+
+    messages.forEach { m ->
+        when (m) {
+            is ChatMessageUi.AgentStep -> {
+                if (m.isFinal) {
+                    flushPending()
+                    out.add(ChatMessageUi.FinalAnswer(
+                        content = m.content, isRunning = m.isRunning,
+                        executionMode = m.executionMode, agentRef = m.agentRef))
+                } else {
+                    pending.add(m)
+                }
+            }
+            is ChatMessageUi.AgentWithTrace -> {
+                flushPending()
+                val steps = m.traces.map { t ->
+                    ChatMessageUi.ProcessStep(
+                        thought = t.thought,
+                        tools = t.action?.takeIf { it.isNotBlank() }?.let { action ->
+                            val name = action.substringBefore(' ')
+                            listOf(ChatMessageUi.ProcessTool(
+                                command = name,
+                                actionInput = action.removePrefix(name).trim(),
+                                observation = t.observation ?: "",
+                                isError = t.observation?.startsWith("Error [") == true
+                            ))
+                        } ?: emptyList()
+                    )
+                }
+                out.add(ChatMessageUi.ThinkingProcess(
+                    steps = steps, isRunning = m.isRunning, collapsed = !m.isRunning,
+                    executionMode = m.executionMode, agentRef = m.agentRef))
+                if (m.finalContent.isNotBlank()) {
+                    out.add(ChatMessageUi.FinalAnswer(
+                        content = m.finalContent, isRunning = m.isRunning,
+                        executionMode = m.executionMode, agentRef = m.agentRef))
+                }
+            }
+            is ChatMessageUi.Agent -> {
+                flushPending()
+                out.add(ChatMessageUi.FinalAnswer(
+                    content = m.content, isRunning = false,
+                    executionMode = m.executionMode, agentRef = m.agentRef))
+            }
+            else -> {
+                flushPending()
+                out.add(m)
+            }
+        }
+    }
+    flushPending()
+    return out
+}
+
 // 底部输入栏/@mention·!bang 下拉 → MainScreenInputBar.kt; 文件选择器 → MainScreenPickers.kt;
 // 自动滚动 → MainScreenScrollBehavior.kt; 头栏/侧栏/底表 → 既有拆分 (2026-08-06, 批次4)
 
@@ -208,6 +296,8 @@ fun MainScreen(
                                             is ChatMessageUi.User -> UserBubble(message)
                                             is ChatMessageUi.Agent -> AgentBubble(message.content, displayAgentName,
                                                 executionMode = message.executionMode, agentRef = message.agentRef)
+                                            is ChatMessageUi.ThinkingProcess -> ThinkingProcessBubble(message, displayAgentName)
+                                            is ChatMessageUi.FinalAnswer -> FinalAnswerBubble(message, displayAgentName)
                                             is ChatMessageUi.AgentWithTrace -> AgentBubbleWithTrace(message, displayAgentName)
                                             is ChatMessageUi.AgentStep -> AgentStepBubble(message, displayAgentName)
                                             is ChatMessageUi.CommandResult -> CommandResultBubble(message, strings)

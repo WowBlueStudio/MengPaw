@@ -29,7 +29,7 @@ import java.io.File
  * SessionChatController (聊天状态流/绑定), TaskExecutionPipeline (submitTask 主链路),
  * TaskExecutionHelpers (纠正/建议/摘要/错误兜底), SessionMessageCenter (消息注入/撤回),
  * AgentTaskInbox (触发器/浏览器/部落轮询), StreamPlaybackBuffer (流式打字机),
- * StepBubbleWriter (步骤气泡), StreamStepTracker (前缀/正则/索引守卫)。
+ * ThinkingProcessWriter (思考过程容器+最终答案, v0.34.3), StreamStepTracker (前缀/正则/索引守卫)。
  * 公开 API (属性/方法签名) 零变化, 消费方 (MainScreen/AppRoot/AgentRuntime 等) 无需改动。
  */
 class AgentViewModel : ViewModel() {

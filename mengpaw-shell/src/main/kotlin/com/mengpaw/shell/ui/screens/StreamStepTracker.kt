@@ -21,5 +21,6 @@ internal val ACTION_LINE_REGEX = Regex("""(?m)^Action:\s*([\w.+\-]+)\s*$""")
  */
 internal class RunningStepTracker {
     @Volatile var index: Int = -1
-    @Volatile var ref: ChatMessageUi.AgentStep? = null
+    // v0.34.3 气泡 UI 重构: ref 泛化为任意运行中消息 (ThinkingProcess / FinalAnswer)
+    @Volatile var ref: ChatMessageUi? = null
 }

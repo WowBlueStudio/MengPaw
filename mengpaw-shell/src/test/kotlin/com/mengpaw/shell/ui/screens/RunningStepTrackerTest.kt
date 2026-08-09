@@ -44,7 +44,8 @@ class RunningStepTrackerTest {
         trackerClass().getDeclaredMethod("getIndex").apply { isAccessible = true }
     }
     private val setRefMethod by lazy {
-        trackerClass().getDeclaredMethod("setRef", ChatMessageUi.AgentStep::class.java)
+        // v0.34.3: ref 泛化为 ChatMessageUi (ThinkingProcess / FinalAnswer / AgentStep)
+        trackerClass().getDeclaredMethod("setRef", ChatMessageUi::class.java)
             .apply { isAccessible = true }
     }
     private val getRefMethod by lazy {
@@ -55,9 +56,9 @@ class RunningStepTrackerTest {
 
     private fun getIndex(tracker: Any): Int = getIndexMethod.invoke(tracker) as Int
 
-    private fun setRef(tracker: Any, ref: ChatMessageUi.AgentStep?) = setRefMethod.invoke(tracker, ref)
+    private fun setRef(tracker: Any, ref: ChatMessageUi?) = setRefMethod.invoke(tracker, ref)
 
-    private fun getRef(tracker: Any): ChatMessageUi.AgentStep? = getRefMethod.invoke(tracker) as ChatMessageUi.AgentStep?
+    private fun getRef(tracker: Any): ChatMessageUi? = getRefMethod.invoke(tracker) as ChatMessageUi?
 
     @Test
     fun 构造默认值() {
@@ -78,11 +79,9 @@ class RunningStepTrackerTest {
     @Test
     fun ref存取与置空() {
         val tracker = newTracker()
-        val step = ChatMessageUi.AgentStep(
-            step = 2, thought = "思考", action = "fs.write", content = "结果", isRunning = true
-        )
-        setRef(tracker, step)
-        assertSame("ref 应原样读回同一实例", step, getRef(tracker))
+        val msg = ChatMessageUi.FinalAnswer(content = "结果", isRunning = true)
+        setRef(tracker, msg)
+        assertSame("ref 应原样读回同一实例", msg, getRef(tracker))
         setRef(tracker, null)
         assertNull("ref 置空后可读回 null", getRef(tracker))
     }

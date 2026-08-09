@@ -43,6 +43,7 @@ internal fun detectCorrection(task: String, agentRef: String?, session: AgentSes
                     is ChatMessageUi.Agent -> msg.content
                     is ChatMessageUi.AgentWithTrace -> msg.finalContent
                     is ChatMessageUi.AgentStep -> msg.content
+                    is ChatMessageUi.FinalAnswer -> msg.content
                     else -> null
                 }
             }?.take(200) ?: ""
@@ -143,7 +144,7 @@ internal fun runBangCommand(scope: CoroutineScope, session: AgentSession, origin
  */
 internal fun applyFinalResult(
     session: AgentSession,
-    bubbles: StepBubbleWriter,
+    writer: ThinkingProcessWriter,
     streamBuffer: StreamPlaybackBuffer,
     displayResult: String,
     result: String,
@@ -153,18 +154,14 @@ internal fun applyFinalResult(
 ) {
     session.messages.update { current ->
         val mutable = current.toMutableList()
-        val idx = resolveRunningIndex(mutable, bubbles.tracker.index, bubbles.tracker.ref)
-        if (idx >= 0) {
-            val prev = mutable[idx] as ChatMessageUi.AgentStep
-            // final 轮无 onStep — 思考从流式缓冲提取 (Thought 段全文, 完整可见)
-            val finalThought = streamBuffer.extractFinalThought()
-            val newMsg = prev.copy(
-                content = displayResult, thought = finalThought,
-                isRunning = false, isFinal = true
-            )
-            bubbles.tracker.ref = newMsg
-            bubbles.tracker.index = idx
-            mutable[idx] = newMsg
+        // v0.34.3: 最终答案气泡已由 beginFinalAnswer 创建 — 定型 content
+        val idx = resolveRunningIndex(mutable, writer.tracker.index, writer.tracker.ref)
+        if (idx >= 0 && mutable[idx] is ChatMessageUi.FinalAnswer) {
+            val updated = (mutable[idx] as ChatMessageUi.FinalAnswer)
+                .copy(content = displayResult, isRunning = false)
+            writer.tracker.ref = updated
+            writer.tracker.index = idx
+            mutable[idx] = updated
         } else {
             mutable.add(ChatMessageUi.Agent(displayResult,
                 executionMode = modePrefix, agentRef = agentRef))
@@ -187,7 +184,7 @@ internal fun applyFinalResult(
 internal suspend fun applyError(
     e: Throwable,
     session: AgentSession,
-    bubbles: StepBubbleWriter,
+    writer: ThinkingProcessWriter,
     savedLoopMode: LoopMode,
     playbackJob: Job?,
     modePrefix: String?,
@@ -208,21 +205,8 @@ internal suspend fun applyError(
     } else {
         "执行出错：${e.message?.take(120) ?: "未知错误"} — 已完成的工作已自动记录，继续对话可恢复进度。"
     }
-    session.messages.update { current ->
-        val mutable = current.toMutableList()
-        val idx = resolveRunningIndex(mutable, bubbles.tracker.index, bubbles.tracker.ref)
-        if (idx >= 0) {
-            val newMsg = (mutable[idx] as ChatMessageUi.AgentStep).copy(
-                content = errorMsg, isRunning = false)
-            bubbles.tracker.ref = newMsg
-            bubbles.tracker.index = idx
-            mutable[idx] = newMsg
-        } else {
-            mutable.add(ChatMessageUi.Agent(errorMsg,
-                executionMode = modePrefix, agentRef = agentRef))
-        }
-        mutable
-    }
+    // v0.34.3: 最终答案气泡 (若存在) 替换为错误; 否则过程容器收尾 + 追加错误
+    writer.fail(errorMsg)
     // 恢复原始 loopMode
     inputTagManager.loopMode = savedLoopMode
     // Fully sync all running/input state

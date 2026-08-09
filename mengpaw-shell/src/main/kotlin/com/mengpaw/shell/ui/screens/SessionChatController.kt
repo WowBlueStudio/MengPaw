@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 internal fun resolveRunningIndex(
     list: List<ChatMessageUi>,
     cachedIndex: Int,
-    cachedRef: ChatMessageUi.AgentStep?
+    cachedRef: ChatMessageUi?
 ): Int {
     // Fast path: identity match at cached index (O(1) — normal case)
     if (cachedIndex in list.indices && list[cachedIndex] === cachedRef) return cachedIndex
@@ -32,7 +32,7 @@ internal fun resolveRunningIndex(
         if (found >= 0) return found
     }
     // Last resort: scan by type (shouldn't happen unless ref was GC'd)
-    return list.indexOfLast { it is ChatMessageUi.AgentStep && it.isRunning }
+    return list.indexOfLast { (it is ChatMessageUi.ThinkingProcess && it.isRunning) || (it is ChatMessageUi.FinalAnswer && it.isRunning) }
 }
 
 /**
@@ -105,7 +105,8 @@ internal class SessionChatController(
                         val last = session.messages.value.lastOrNull()
                         val alreadyShown = (last is ChatMessageUi.Agent && last.content == state.message) ||
                             (last is ChatMessageUi.AgentWithTrace && last.finalContent == state.message) ||
-                            (last is ChatMessageUi.AgentStep && last.content == state.message)
+                            (last is ChatMessageUi.AgentStep && last.content == state.message) ||
+                            (last is ChatMessageUi.FinalAnswer && last.content == state.message)
                         if (!alreadyShown) {
                             session.messages.value = session.messages.value + ChatMessageUi.Agent(state.message)
                         }

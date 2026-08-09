@@ -87,11 +87,11 @@ internal class TaskExecutionPipeline(
             // ── 执行模式分发变量（在 try 外，catch 中也需要）────
             val savedLoopMode = inputTagManager.loopMode
             val modePrefix = executionMode?.prefix
-            // v0.3x 步骤气泡: 当前运行 step 气泡 (每 ReAct 步骤独立气泡, 非单运行气泡+traces)
+            // v0.34.3 气泡 UI 重构: 思考过程容器 + 最终答案 (ThinkingProcessWriter)
             // P2 修复: 局部 var 被三线程共享 → @Volatile 追踪器 (见 RunningStepTracker)
-            val bubbles = StepBubbleWriter(session, modePrefix, agentRef)
-            var lastCompletedStep = 0     // 最近固化的 step 号 (多 Action 批内合并判定)
+            val writer = ThinkingProcessWriter(session, modePrefix, agentRef)
             var playbackJob: Job? = null // 流式播放协程句柄 (try 外声明, catch 路径可取消)
+            val finalAnswerStarted = java.util.concurrent.atomic.AtomicBoolean(false)
             try {
                 // /Mission /Goal /Fleet: 临时覆盖 loopMode
                 if (executionMode == ExecutionMode.MISSION) {
@@ -127,9 +127,8 @@ internal class TaskExecutionPipeline(
                     return@launch
                 }
 
-                // ── "思考中..."步骤气泡前置 (v0.28.6): 在翻译/召回/引擎准备之前插入,
-                // 用户发送后立即看到反馈, 4-13s 等待期有活动气泡 (v0.3x: 首步占位) ──
-                bubbles.preinsert(1, "思考中...")
+                // ── 过程容器前置 (v0.34.3): 用户发送后立即看到思考容器, 4-13s 等待期有活动反馈 ──
+                writer.start()
                 KernelLog.d("MengPawLatency", "T1 bubble")
 
                 // Auto-translate for English-optimized models (saves ~40% tokens)
@@ -193,12 +192,12 @@ internal class TaskExecutionPipeline(
                             cacheHitTokens = usage.cacheHitTokens
                         )
                     }
-                    if (trace.step == lastCompletedStep) {
-                        bubbles.merge(trace)
-                    } else {
-                        lastCompletedStep = trace.step
-                        bubbles.complete(trace)
-                    }
+                    // v0.34.3: 工具完成 → 挂观察全文 + 成败 (失败红字渲染)
+                    writer.completeTool(
+                        commandLine = trace.action ?: "",
+                        observation = trace.observation ?: "",
+                        isError = trace.observation?.startsWith("Error [") == true
+                    )
                     // 工具轮结束 → 清空流式缓冲与播放进度, 下一轮从头累积
                     // (旧实现 buffer 跨轮永不清空, "Action:" 一旦出现即永久过滤后续纯文本增量)
                     streamBuffer.resetRound()
@@ -206,23 +205,22 @@ internal class TaskExecutionPipeline(
 
                 // onDelta (engine 线程回调): 只累积, 不推送 — 节奏由播放协程控制
                 var firstDelta = true
+                var accumulatedRaw = ""  // 原始增量累积 — Final Answer 检测用 (displayText 会剥离标记)
                 val onDelta: (String) -> Unit = { delta ->
                     if (firstDelta) { firstDelta = false; KernelLog.d("MengPawLatency", "T3 first-delta") }
+                    accumulatedRaw += delta
                     // 工具提前通知 (P2 修复: 原每 delta 对整段缓冲 findAll 重扫 → O(n²);
                     // 现只扫描"上次水位后可能完整的新行" — 从上一条换行处起扫, 跨界行完整可见;
                     // 新匹配必然在本次增量内结束(range.last ≥ 水位), 已宣布的旧行被过滤)。
                     // 完整行才宣布 — 避免 "Action: l" 半截工具名误报; "Action Input:" 不匹配
                     // 因为要求冒号紧跟 Action。流式到达时行尾 \n 落地即命中。
                     val newTool = streamBuffer.append(delta)
-                    // 锁外推送 (锁纪律同 onStep/播放协程: push 不在监视器内调用)
-                    newTool?.let { tool ->
-                        // v0.3x: 工具轮思考过程已流式可见 — 仅当缓冲里尚无 Thought 内容时
-                        // (极端短思考) 才兜底宣布, 避免宣布行替换掉正在播放的 Thought 轨迹
-                        val base = streamBuffer.displayText()
-                        if (base.isBlank()) {
-                            val cur = bubbles.tracker.ref
-                            if (cur != null) bubbles.push(cur.step, cur.thought, cur.action, "$EXECUTING_TOOL_PREFIX$tool…")
-                        }
+                    // v0.34.3: 完整 "Action: <tool>" 行 → 折叠工具行即时插入
+                    newTool?.let { writer.addTool(it) }
+                    // 检测 Final Answer 开始 → 过程容器自动折叠 + 答案气泡流式
+                    if (!finalAnswerStarted.get() && accumulatedRaw.contains("Final Answer:", ignoreCase = true)) {
+                        finalAnswerStarted.set(true)
+                        writer.beginFinalAnswer()
                     }
                 }
 
@@ -231,8 +229,7 @@ internal class TaskExecutionPipeline(
                 // readUTF8Line 从不挂起, 主线程被读取循环占死, Main 调度的播放协程会被饿死
                 // (实测 846 chunks/166ms 突发 → UI-PUSH 零输出)
                 playbackJob = streamBuffer.launchPlayback(scope) { text ->
-                    val cur = bubbles.tracker.ref
-                    if (cur != null) bubbles.push(cur.step, cur.thought, cur.action, text)
+                    if (finalAnswerStarted.get()) writer.pushFinal(text) else writer.pushThought(text)
                 }
 
                 // Reset stale state from previous runs before starting
@@ -290,15 +287,14 @@ internal class TaskExecutionPipeline(
                     // 兜底 flush: 播放器异常退出时推完剩余; 正常播完时此处无操作
                     val flushText = streamBuffer.flushText()
                     if (flushText != null) {
-                        val cur = bubbles.tracker.ref
-                        if (cur != null) bubbles.push(cur.step, cur.thought, cur.action, flushText)
+                        if (finalAnswerStarted.get()) writer.pushFinal(flushText) else writer.pushThought(flushText)
                     }
                 }
 
                 // Translate result back to Chinese for US models
                 val displayResult = if (doTranslate) translator.toChinese(result) else result
 
-                applyFinalResult(session, bubbles, streamBuffer, displayResult, result, modePrefix, agentRef, pluginViewModel)
+                applyFinalResult(session, writer, streamBuffer, displayResult, result, modePrefix, agentRef, pluginViewModel)
                 inputTagManager.loopMode = savedLoopMode
                 processNextPending()
 
@@ -317,7 +313,7 @@ internal class TaskExecutionPipeline(
             } catch (e: Throwable) {
                 // Safety net: catch OOM, unexpected runtime errors, etc.
                 // Prevents process crash — degrades gracefully to error message
-                applyError(e, session, bubbles, savedLoopMode, playbackJob, modePrefix, agentRef,
+                applyError(e, session, writer, savedLoopMode, playbackJob, modePrefix, agentRef,
                     chat, inputTagManager, sessionPersistence) { processNextPending() }
             }
         }

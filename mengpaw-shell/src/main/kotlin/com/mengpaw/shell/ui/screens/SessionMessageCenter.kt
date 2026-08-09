@@ -71,6 +71,7 @@ internal class SessionMessageCenter(
             is ChatMessageUi.Agent -> "> Agent 回复: ${msg.content.take(200)}"
             is ChatMessageUi.AgentWithTrace -> "> Agent 回复: ${msg.finalContent.take(200)}"
             is ChatMessageUi.AgentStep -> "> Agent 步骤: ${msg.content.take(200)}"
+            is ChatMessageUi.FinalAnswer -> "> Agent 回复: ${msg.content.take(200)}"
             is ChatMessageUi.CommandResult -> "> 命令输出: ${msg.content.take(200)}"
             else -> ""
         }

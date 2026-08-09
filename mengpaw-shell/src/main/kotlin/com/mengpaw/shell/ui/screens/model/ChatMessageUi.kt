@@ -61,6 +61,46 @@ sealed class ChatMessageUi {
         override val stableId get() = "st_${step}_$createdAt"
     }
 
+    // ── 思考过程容器 + 最终答案 (v0.34.3 气泡 UI 重构) ──
+    // 一次任务 = 单一过程容器 (思考/调用/观察循环, 折叠) + 最终答案气泡。
+    // 工具行只显示命令名, 失败红字; 观察全文点击展开; 思考全文保留可回看。
+
+    /** 一次工具调用 — 折叠行显示命令名, 展开显示完整参数与观察全文。 */
+    data class ProcessTool(
+        val command: String,      // 命令名 (如 agent.write)
+        val actionInput: String,  // 完整 Action Input (折叠, 展开显示)
+        val observation: String,  // 工具结果全文 (折叠, 点击展开)
+        val isError: Boolean = false
+    )
+
+    /** 一轮 ReAct 交互 — 思考 + 该轮工具调用列表 (多 Action 并行)。 */
+    data class ProcessStep(
+        val thought: String = "",
+        val tools: List<ProcessTool> = emptyList()
+    )
+
+    /** 思考过程容器 — 跨所有轮次, 最终答案开始时自动折叠 (collapsed=true)。 */
+    data class ThinkingProcess(
+        val steps: List<ProcessStep>,
+        val isRunning: Boolean = false,
+        val collapsed: Boolean = false,
+        val executionMode: String? = null,
+        val agentRef: String? = null
+    ) : ChatMessageUi() {
+        override val stableId get() = "tp_$createdAt"
+        val toolCount: Int get() = steps.sumOf { it.tools.size }
+    }
+
+    /** 最终答案气泡 — 与过程容器分离, 流式输出。 */
+    data class FinalAnswer(
+        val content: String,
+        val isRunning: Boolean = false,
+        val executionMode: String? = null,
+        val agentRef: String? = null
+    ) : ChatMessageUi() {
+        override val stableId get() = "fa_$createdAt"
+    }
+
     data class System(val content: String) : ChatMessageUi() {
         override val stableId get() = "s_$createdAt"
     }

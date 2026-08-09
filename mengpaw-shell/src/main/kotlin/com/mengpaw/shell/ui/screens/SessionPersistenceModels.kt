@@ -33,7 +33,27 @@ data class MessageData(
     val step: Int = 0,
     val thought: String = "",
     val action: String = "",
-    val isFinal: Boolean = false
+    val isFinal: Boolean = false,
+    /** v0.34.3 思考过程容器 (type="thinking_process") / 最终答案 (type="final_answer")。 */
+    val isRunning: Boolean = false,
+    val collapsed: Boolean = false,
+    val steps: List<ProcessStepData> = emptyList()
+)
+
+/** 一轮 ReAct 交互持久化 (v0.34.3 气泡 UI 重构)。 */
+@Serializable
+data class ProcessStepData(
+    val thought: String = "",
+    val tools: List<ProcessToolData> = emptyList()
+)
+
+/** 一次工具调用持久化 — 折叠行只显命令名, 展开看参数与观察全文。 */
+@Serializable
+data class ProcessToolData(
+    val command: String = "",
+    val actionInput: String = "",
+    val observation: String = "",
+    val isError: Boolean = false
 )
 
 @Serializable

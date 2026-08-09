@@ -554,6 +554,8 @@ twin.lost <peer> / twin.recover <peer>
 
 **链路**: `AdaptiveLlmProvider.consumeSseStream`(`bodyAsChannel()` + `readUTF8Line` 增量读, OpenAI/Anthropic 双格式解析)→ 引擎透传 onDelta → `AgentViewModel` UI 播放器 → 气泡渐进显示。
 
+**气泡 UI 重构 (v0.34.3)**: 时间轴主导 — 一次任务 = **思考过程容器** (`ChatMessageUi.ThinkingProcess`, 单一可折叠, 跨所有轮次) + **最终答案气泡** (`ChatMessageUi.FinalAnswer`, 独立)。执行中: 思考流式写入容器 → 完整 `Action:` 行出现即插入折叠工具行 (只显示命令名, 失败红字, 点击展开参数+观察全文) → 工具完成挂观察 → 检测到 `Final Answer:` (onDelta 原始增量累积检测) 时**过程容器自动折叠** (折叠态显示 "N 轮思考 · M 次调用" 摘要, 展开可回看全部思考) + 答案气泡流式。写入器 `ThinkingProcessWriter` 替代旧 `StepBubbleWriter` (每轮一卡的模型废除); 历史会话经 `reflowLegacyMessages` 渲染层统一重排 (旧 agent_step/agent_trace 序列合并为过程容器+答案, 持久化格式兼容, 新增 thinking_process/final_answer 类型)。
+
 **网关行为(实测铁证)**: LLM 网关(如 DeepSeek)**不是逐 token 流** — 按 ~1s 批次批量 flush(~120 chunks/批); 相同 prompt 二次请求命中服务端 prompt cache 后整段回放(TTFB 8s+ 然后 ~200ms 全到)。突发到达是常态, 客户端改不了, 打字机观感必须由 UI 播放器兜底。
 
 **UI 播放器**(`AgentViewModel.submitTask`, 核心设计):

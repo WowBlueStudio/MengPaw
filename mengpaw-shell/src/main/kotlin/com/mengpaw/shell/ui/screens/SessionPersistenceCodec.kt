@@ -37,6 +37,24 @@ internal fun messagesToJson(msgs: List<ChatMessageUi>): List<MessageData> {
                 isFinal = msg.isFinal,
                 executionMode = msg.executionMode, agentRef = msg.agentRef
             )
+            is ChatMessageUi.ThinkingProcess -> MessageData(
+                type = "thinking_process", text = "",
+                isRunning = msg.isRunning, collapsed = msg.collapsed,
+                steps = msg.steps.map { s ->
+                    ProcessStepData(
+                        thought = s.thought,
+                        tools = s.tools.map { t ->
+                            ProcessToolData(t.command, t.actionInput, t.observation, t.isError)
+                        }
+                    )
+                },
+                executionMode = msg.executionMode, agentRef = msg.agentRef
+            )
+            is ChatMessageUi.FinalAnswer -> MessageData(
+                type = "final_answer", text = msg.content,
+                isRunning = msg.isRunning,
+                executionMode = msg.executionMode, agentRef = msg.agentRef
+            )
             is ChatMessageUi.CommandResult -> MessageData(
                 type = "command", text = msg.content, isError = msg.isError
             )
@@ -49,7 +67,7 @@ internal fun jsonToMessages(jsonStr: String): List<ChatMessageUi> {
     return try {
         val dataList: List<MessageData> = json.decodeFromString(jsonStr)
         dataList.mapNotNull { data ->
-            if (data.text.isBlank()) return@mapNotNull null
+            if (data.type != "thinking_process" && data.text.isBlank()) return@mapNotNull null
             when (data.type) {
                 "user" -> ChatMessageUi.User(data.text, attachments = data.attachments)
                 "agent" -> ChatMessageUi.Agent(data.text,
@@ -69,6 +87,24 @@ internal fun jsonToMessages(jsonStr: String): List<ChatMessageUi> {
                     step = data.step, thought = data.thought,
                     action = data.action.ifEmpty { null },
                     content = data.text, isRunning = false, isFinal = data.isFinal,
+                    executionMode = data.executionMode?.ifEmpty { null },
+                    agentRef = data.agentRef?.ifEmpty { null }
+                )
+                "thinking_process" -> ChatMessageUi.ThinkingProcess(
+                    steps = data.steps.map { s ->
+                        ChatMessageUi.ProcessStep(
+                            thought = s.thought,
+                            tools = s.tools.map { t ->
+                                ChatMessageUi.ProcessTool(t.command, t.actionInput, t.observation, t.isError)
+                            }
+                        )
+                    },
+                    isRunning = data.isRunning, collapsed = data.collapsed,
+                    executionMode = data.executionMode?.ifEmpty { null },
+                    agentRef = data.agentRef?.ifEmpty { null }
+                )
+                "final_answer" -> ChatMessageUi.FinalAnswer(
+                    content = data.text, isRunning = data.isRunning,
                     executionMode = data.executionMode?.ifEmpty { null },
                     agentRef = data.agentRef?.ifEmpty { null }
                 )
