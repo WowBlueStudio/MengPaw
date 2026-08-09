@@ -49,6 +49,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.runtime:runtime")
+    implementation("androidx.core:core-ktx:1.13.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

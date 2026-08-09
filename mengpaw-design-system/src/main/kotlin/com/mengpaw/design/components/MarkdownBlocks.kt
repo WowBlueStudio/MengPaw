@@ -3,6 +3,9 @@
 
 package com.mengpaw.design.components
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -17,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontFamily
@@ -27,9 +31,44 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import java.io.File
+
+/** 链接点击 — http(s) 与本地文件统一抛给 Android 系统 (用户自选打开方式)。
+ *  本地路径经 FileProvider 转 content:// 再 ACTION_VIEW — 直接对 file:// 起
+ *  ACTION_VIEW 会触发 FileUriExposedException 闪退 (v0.34.2 平板实锤崩溃堆栈)。
+ *  目标不存在 / 打开失败 → Toast 提示, 不再静默无反应。 */
+private fun openLinkSafely(context: Context, url: String) {
+    val trimmed = url.trim()
+    try {
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(trimmed)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            return
+        }
+        val path = trimmed.removePrefix("file://")
+        val file = File(path)
+        if (!file.exists() || !file.isFile) {
+            android.widget.Toast.makeText(context, "文件未找到: $path", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val type = context.contentResolver.getType(uri) ?: "application/octet-stream"
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, type)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(
+            context, "无法打开: ${e.message?.take(80) ?: url}", android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+}
 
 // ── Block composables — 拆自 MarkdownText.kt (2026-08-06, >400 行文件拆分批次4) ──
 
@@ -62,7 +101,8 @@ import com.mengpaw.design.tokens.ArcoSpacing
 }
 
 @Composable internal fun ParagraphBlock(paragraph: MdBlock.Paragraph, baseStyle: TextStyle, codeColor: Color, linkColor: Color) {
-    val annotated = remember(paragraph) {
+    val context = LocalContext.current
+    val annotated = remember(paragraph, context) {
         buildAnnotatedString {
             paragraph.segments.forEach { seg ->
                 val style = when {
@@ -77,7 +117,13 @@ import com.mengpaw.design.tokens.ArcoSpacing
                     else -> SpanStyle()
                 }
                 val start = length; append(seg.text); addStyle(style, start, length)
-                if (seg.link != null) addLink(LinkAnnotation.Url(seg.link), start, length)
+                if (seg.link != null) {
+                    // v0.34.3: Url 注解的默认行为是 LocalUriHandler 直接 ACTION_VIEW —
+                    // 对 file:// 链接抛 FileUriExposedException 闪退。改用 Clickable
+                    // 自定义处理: http/file 统一经 FileProvider 转 content:// 抛系统选择器。
+                    val url = seg.link
+                    addLink(LinkAnnotation.Clickable(url) { openLinkSafely(context, url) }, start, length)
+                }
             }
         }
     }

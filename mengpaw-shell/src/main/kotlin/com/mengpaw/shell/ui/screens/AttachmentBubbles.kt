@@ -211,11 +211,27 @@ fun FileAttachmentCard(att: AttachmentData, isUserSide: Boolean) {
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
                         context.startActivity(intent)
-                    } catch (_: Exception) { }
+                    } catch (e: Exception) {
+                        // v0.34.3: 不再静默吞异常 — FileProvider 未映射/无处理应用时用户能看到原因
+                        android.widget.Toast.makeText(
+                            context, "无法打开文件: ${e.message?.take(60) ?: att.name}",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 } else if (att.path.startsWith("http")) {
                     try {
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(att.path)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    } catch (_: Exception) { }
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(
+                            context, "无法打开链接: ${e.message?.take(60) ?: att.path}",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } else {
+                    // v0.34.3: 文件不存在 — 明确提示 (此前静默, 用户以为点击坏了)
+                    android.widget.Toast.makeText(
+                        context, "文件不存在: ${att.path.take(80)}", android.widget.Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
             .padding(horizontal = 10.dp, vertical = 10.dp),

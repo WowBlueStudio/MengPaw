@@ -4,4 +4,8 @@
     <files-path name="screenshots" path="截图存档/" />
     <!-- Agent 工作区 — 文件上传目标 -->
     <files-path name="agents" path="Agent文档/" />
+    <!-- 输出目录 (旧: 外部私有 output/) — Agent 交付文档 (v0.34.3 修复 FileProvider 未映射) -->
+    <external-files-path name="output" path="output/" />
+    <!-- 公共输出目录 /storage/emulated/0/MengPaw/ — 用户可见交付区 (v0.34.3) -->
+    <external-path name="mengpaw" path="MengPaw/" />
 </paths>
