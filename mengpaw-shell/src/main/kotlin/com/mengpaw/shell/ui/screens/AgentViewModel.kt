@@ -16,6 +16,8 @@ import com.mengpaw.shell.ui.screens.model.ChatMessageUi
 import com.mengpaw.shell.ui.screens.model.ExecutionMode
 import com.mengpaw.shell.ui.screens.model.InputTag
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -32,8 +34,20 @@ import java.io.File
  */
 class AgentViewModel : ViewModel() {
 
+    // ── 高危操作确认队列 (v0.34.3 分级系统) — kernel UserConfirmBus 请求 → UI 弹窗 ──
+    private val confirmListener = com.mengpaw.kernel.security.UserConfirmBus.Listener { request ->
+        confirmQueue.update { it.apply { addLast(request) } }
+        true
+    }
+    val confirmQueue = MutableStateFlow<ArrayDeque<com.mengpaw.kernel.security.UserConfirmBus.ConfirmRequest>>(ArrayDeque())
+
+    init {
+        com.mengpaw.kernel.security.UserConfirmBus.registerListener(confirmListener)
+    }
+
     override fun onCleared() {
         super.onCleared()
+        com.mengpaw.kernel.security.UserConfirmBus.unregisterListener(confirmListener)
         sessionPersistence.saveCurrentSession()
         sessionPersistence.flushSaveQueue()   // v0.28.6: 等异步落盘队列完成 (1s 兜底)
         // Unwire static trigger callback to prevent ViewModel memory leak
@@ -41,6 +55,13 @@ class AgentViewModel : ViewModel() {
         sessions.values.forEach { session ->
             try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) {}
         }
+    }
+
+    /** 高危确认弹窗结果回传 (MainScreen 调用) — 允许/拒绝当前队首请求。 */
+    fun respondConfirm(allowed: Boolean) {
+        val req = confirmQueue.value.firstOrNull() ?: return
+        com.mengpaw.kernel.security.UserConfirmBus.respond(req.id, allowed)
+        confirmQueue.update { it.apply { removeFirst() } }
     }
 
     // ── Multi-session store ──

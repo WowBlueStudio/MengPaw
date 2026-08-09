@@ -52,6 +52,12 @@ fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
+    AgentPermissionPanel(activeAgentName)
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
     AgentTriggersPanel(state, viewModel)
 
     Spacer(Modifier.height(ArcoSpacing.lg))

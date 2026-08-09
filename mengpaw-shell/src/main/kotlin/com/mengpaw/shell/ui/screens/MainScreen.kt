@@ -19,12 +19,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mengpaw.shell.ui.components.MissionMonitorOverlay
 import com.mengpaw.shell.ui.components.NotifyBannerHost
 import com.mengpaw.shell.ui.MAX_CONTENT_WIDTH
 import com.mengpaw.shell.ui.isWide
+import com.mengpaw.design.theme.ThemeColors
+import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoSpacing
 
 // 底部输入栏/@mention·!bang 下拉 → MainScreenInputBar.kt; 文件选择器 → MainScreenPickers.kt;
@@ -46,6 +50,35 @@ fun MainScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
+    // ── 高危操作确认弹窗 (v0.34.3 分级系统) ──
+    val confirmQueue by viewModel.confirmQueue.collectAsState()
+    confirmQueue.firstOrNull()?.let { req ->
+        AlertDialog(
+            onDismissRequest = { viewModel.respondConfirm(false) },
+            title = { Text("⚠️ 高危操作确认") },
+            text = {
+                Column {
+                    Text("Agent 请求执行高危操作:", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(6.dp))
+                    Text(req.command, fontFamily = FontFamily.Monospace, fontSize = 13.sp,
+                        color = ThemeColors.textPrimary)
+                    if (!req.reason.isNullOrBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("原因: ${req.reason}", fontSize = 13.sp, color = ThemeColors.textSecondary)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("高危操作涉及清空/卸载/修改系统级数据，允许后将立即执行。",
+                        fontSize = 12.sp, color = ArcoColors.Orange6)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.respondConfirm(true) }) { Text("允许") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.respondConfirm(false) }) { Text("拒绝") }
+            }
+        )
+    }
     // P2 修复: rememberSaveable — 输入框草稿/展开状态跨配置变更与进程重建保留
     var inputText by rememberSaveable { mutableStateOf("") }
     val inputFocus = remember { androidx.compose.ui.focus.FocusRequester() }

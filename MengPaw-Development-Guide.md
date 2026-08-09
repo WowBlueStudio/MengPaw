@@ -612,10 +612,11 @@ twin.lost <peer> / twin.recover <peer>
 
 | 类别 | 文件 | 方式 | 理由 |
 |------|------|------|------|
-| **常驻约束** | profile.md / agents.md / soul.md / memory/memory.md | **明文全文注入** (compactDoc: ≤12K 字符全量, 超长前 6K + `agent.read` 外链) | 行为约束必须每轮可见 — 提示词权重优先: 明文 = 每轮硬约束, 链接式 = 软约束靠 LLM 自觉读取, 约束性文件 LLM 倾向每轮都读 → 反而比明文更贵 (多完整调用轮次) 且遵循度漂移 |
+| **常驻约束** | memory/memory.md | **明文全文注入** (compactDoc: ≤12K 字符全量, 超长前 6K + `agent.read` 外链) | 长期记忆是动态价值内容, 每轮可见 (v0.34.3 后唯一全文注入的工作区文档) |
+| **brief 注入** | profile.md / agents.md / soul.md | **frontmatter summary + `agent.read` 外链** (v0.34.3 P1-4 方案A, 用户拍板; 无 summary 的旧文档取首行 300 字符) | 模板占位符全文不产生约束价值, 每轮白烧 token; 核心行为准则由系统提示词安全节兜底, 文档全文按需读取 |
 | **场景触发** | boost.md / heartbeat.md / trumanshow.md | **链接式** — 仅注入"工作区有该文件, 触发时去读"的引导语, 不注入全文 | 只在触发器到来时需要, 不常驻不占权重; 触发时读一次 (首次引导/CRON/伪人模式) |
 
-**反模式警告**: 不要把常驻文件改链接式以省流量 — system 尺寸的节省换不来权重崩塌 (soul/agents 是行为准则不是知识查询); 链接式文件的读取是 LLM 自由裁量, 无法保证每轮遵循。前缀缓存 (DeepSeek 50×) 对两类都正常命中 — system 稳定即可, 与注入方式无关。附件路径行同理 (user 消息正文, 见 §4.1.3)。
+**反模式警告 (v0.34.3 修订)**: 原定案"常驻约束必须全文注入"经自检报告 P1-4 与用户拍板修订 — 模板占位符全文 (名字空/用户资料空) 有效信息≈0 却每轮白烧 token; 但**已填充的身份/灵魂/操作手册仍是行为约束**, 系统提示词安全节承担核心底线 (API Key 禁区/先问再破坏/trash>rm/信任边界), 文档经 `agent.read` 按需取。链接式文件的读取是 LLM 自由裁量 — brief 注入把"有什么、去哪读"固定进每轮, 降低漏读概率。前缀缓存 (DeepSeek 50×) 对两类都正常命中。附件路径行同理 (user 消息正文, 见 §4.1.3)。
 
 **静态参考数据分层（v0.32.1+, 自检报告 P0-1）**: 与反模式警告的边界 — 行为约束（soul/agents/profile/记忆）**必须**常驻明文, 纯参考数据（端口表）**不**常驻。v0.32.1 起整张网络端口表移出提示词, 改为一行指针: `端口/网络接口一览: self.ports`（`__PORTS_TABLE__` 占位符与注入逻辑删除, `self.ports` 成为端口单一事实源, CLI.md 端口章节保留供查阅）。同批压缩: Tribe 节（默认未安装, 4 行→1 行指针 `self.tools tribe`）、浏览器协作节（5 行→3 行, browser-mcp 默认未安装不展开 9880 细节）。TEMPLATE_HASH 自动失效缓存, 生产前缀缓存一次性失效。判断标准: 该内容 Agent 是否在每轮都需要它才能正确行动 — 参考数据按需取, 约束每轮给。
 
@@ -995,7 +996,9 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 ### 6.1 三层拦截（始终强制执行，不可关闭）
 
-命令 → ① SecurityPolicy.isAllowed()（白名单 + 黑名单 + 15 条危险模式）→ ② IntegrityGuard.validateCommand()（路径保护，接入 Pipeline 指令链）→ ③ 执行
+命令 → ① SecurityPolicy.isAllowed()（白名单 + 黑名单 + 15 条危险模式）→ ② IntegrityGuard.validateCommand()（路径保护，接入 Pipeline 指令链）→ ③ **安全分级 (v0.34.3)** → ④ 执行
+
+**安全分级 (v0.34.3, P0-3 用户拍板)**: `CommandRiskLevels` 三级 — **普通** (新建/写入文件、通知等) 默认放行; **中危** (删除/修改、剪贴板、截图录屏、插件/技能启停) 默认拒绝, Agent 权限等级提升为「信任」(`AgentPermissionStore` per-agent, 智能体设置) 后放行; **高危** (清空/卸载/系统级/root/拍照) 每次执行经 `UserConfirmBus` 弹窗询问用户 (30s 超时默认拒绝, worker/后台环境不弹窗直接拒绝)。中危/高危命令仍须 JSON + `reason` 意图声明 (`HighRiskCommandGate`, 普通命令移出 reason 表)。分级与 reason 门禁在 `RiskGate.evaluate` 统一求值, 主循环 (可弹窗) 与 Swarm/Mission worker (不弹窗) 复用同一纯函数。
 
 **per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
 
