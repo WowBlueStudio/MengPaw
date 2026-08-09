@@ -51,7 +51,7 @@ fun ThinkingProcessBubble(message: ChatMessageUi.ThinkingProcess, agentName: Str
         // ── 头部: "N 轮思考 · M 次调用" 摘要 + 折叠开关 + 运行中反馈 ──
         Row(
             Modifier.fillMaxWidth(0.95f).padding(horizontal = ArcoSpacing.sm, vertical = 6.dp)
-                .clickable { expanded = !expanded },
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { expanded = !expanded },
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
@@ -98,7 +98,9 @@ private fun ProcessToolRow(tool: ChatMessageUi.ProcessTool) {
     var showDetail by remember(tool.command) { mutableStateOf(false) }
     val fg = if (tool.isError) ArcoColors.Red6 else ThemeColors.textPrimary
     Row(
-        Modifier.fillMaxWidth().clickable { showDetail = !showDetail }.padding(vertical = 3.dp),
+        Modifier.fillMaxWidth()
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { showDetail = !showDetail }
+            .padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(if (tool.isError) Icons.Outlined.Error else Icons.Outlined.Terminal,
@@ -173,7 +175,7 @@ fun AgentStepBubble(message: ChatMessageUi.AgentStep, agentName: String = "MengP
         // ── 思考折叠头: 完整思考 + 工具调用, 点击折叠/展开 ──
         if (message.thought.isNotBlank() || message.action != null) {
             Column(Modifier.fillMaxWidth(0.95f).padding(bottom = 2.dp)
-                .clickable { thinkingExpanded = !thinkingExpanded }) {
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { thinkingExpanded = !thinkingExpanded }) {
                 Row(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
@@ -244,7 +246,7 @@ fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: Strin
         // ── Thinking process (outside main bubble, visible while running) ──
         if (traces.isNotEmpty()) {
             Column(Modifier.fillMaxWidth(0.95f).padding(bottom = 2.dp)
-                .clickable { thinkingExpanded = !thinkingExpanded }) {
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { thinkingExpanded = !thinkingExpanded }) {
                 Row(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)

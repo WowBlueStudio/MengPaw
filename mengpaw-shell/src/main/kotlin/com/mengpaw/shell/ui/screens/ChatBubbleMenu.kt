@@ -4,9 +4,15 @@
 package com.mengpaw.shell.ui.screens
 
 import com.mengpaw.shell.ui.screens.model.ChatMessageUi
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -20,9 +26,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mengpaw.shell.ui.components.BigBangPopup
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -53,7 +61,6 @@ fun pluginIconForName(name: String): ImageVector = when (name.lowercase()) {
     else -> Icons.Outlined.Extension
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BubbleWrapper(
     message: ChatMessageUi,
@@ -64,7 +71,6 @@ fun BubbleWrapper(
     onNavigateToPlugins: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    var showMenu by remember { mutableStateOf(false) }
     var showBigBang by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val bubbleText = when (message) {
@@ -76,65 +82,144 @@ fun BubbleWrapper(
         else -> ""
     }
 
-    Box {
-        Box(
-            Modifier.combinedClickable(
-                onClick = { showMenu = false },
-                onLongClick = { showMenu = true }
-            )
-        ) { content() }
+    // v0.35.1: 去掉长按气泡动作 + 点击动画 — 原长按菜单功能改为气泡下方线性图标
+    Column(Modifier.fillMaxWidth()) {
+        // 气泡本体 — 无点击/长按 (indication = null 去点击动画)
+        Box(Modifier.clickable(
+            indication = null,
+            interactionSource = remember { MutableInteractionSource() },
+            onClick = {}
+        )) { content() }
 
-        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-            DropdownMenuItem(text = { Text("复制") }, leadingIcon = { Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp)) }, onClick = {
-                (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
-                    ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", bubbleText))
-                showMenu = false
-            })
-            DropdownMenuItem(text = { Text("大爆炸") }, leadingIcon = { Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp)) }, onClick = { showBigBang = true; showMenu = false })
-            DropdownMenuItem(text = { Text("引用") }, leadingIcon = { Icon(Icons.Outlined.FormatQuote, null, Modifier.size(18.dp)) }, onClick = {
-                onQuote(viewModel.formatQuote(message)); showMenu = false
-            })
-            if (message is ChatMessageUi.User && viewModel.isLastUserMessage(message)) {
-                DropdownMenuItem(text = { Text("撤回") }, leadingIcon = { Icon(Icons.Outlined.Undo, null, Modifier.size(18.dp)) }, onClick = {
-                    viewModel.retractLastUserMessage()?.let { onRetract(it) }; showMenu = false
-                })
-            }
-            // Image save for Agent messages
+        // 输出气泡 (Agent) 下方操作图标行
+        if (message is ChatMessageUi.Agent || message is ChatMessageUi.AgentWithTrace ||
+            message is ChatMessageUi.FinalAnswer || message is ChatMessageUi.CommandResult) {
             val imgs = MARKDOWN_IMAGE_REGEX.findAll(bubbleText).toList()
-            if (imgs.isNotEmpty()) {
-                DropdownMenuItem(text = { Text("保存图片 (${imgs.size})") }, leadingIcon = { Icon(Icons.Outlined.SaveAlt, null, Modifier.size(18.dp)) }, onClick = {
+            BubbleActionBar(
+                hasImages = imgs.isNotEmpty(),
+                onCopy = {
+                    (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
+                        ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", bubbleText))
+                },
+                onBigBang = { showBigBang = true },
+                onQuote = { onQuote(viewModel.formatQuote(message)) },
+                onSaveImages = {
                     imgs.forEach { m ->
                         val p = m.groupValues[1]
                         if (!p.startsWith("http")) try {
-                            java.io.File(p).copyTo(java.io.File(com.mengpaw.kernel.DataPaths.SCREENSHOTS, "saved_${System.currentTimeMillis()}.png"), overwrite = true)
-                        } catch (_: Exception) { }
+                            java.io.File(p).copyTo(
+                                java.io.File(com.mengpaw.kernel.DataPaths.SCREENSHOTS, "saved_${System.currentTimeMillis()}.png"),
+                                overwrite = true
+                            )
+                        } catch (_: Exception) {}
                     }
-                    showMenu = false
-                })
-                DropdownMenuItem(text = { Text("标注图片发回") }, leadingIcon = { Icon(Icons.Outlined.Edit, null, Modifier.size(18.dp)) }, onClick = {
-                    imgs.firstOrNull()?.groupValues?.get(1)?.let { if (!it.startsWith("http")) onQuote("标注图片: $it") }
-                    showMenu = false
-                })
-            }
-            DropdownMenuItem(text = { Text("一键分享") }, leadingIcon = { Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)) }, onClick = {
-                val si = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                    type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, bubbleText.take(500))
+                },
+                onMarkImage = {
+                    imgs.firstOrNull()?.groupValues?.get(1)
+                        ?.let { if (!it.startsWith("http")) onQuote("标注图片: $it") }
+                },
+                onShare = {
+                    val si = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, bubbleText.take(500))
+                    }
+                    context.startActivity(android.content.Intent.createChooser(si, "分享到"))
                 }
-                context.startActivity(android.content.Intent.createChooser(si, "分享到"))
-                showMenu = false
-            })
-        }
-
-        if (showBigBang) {
-            BigBangPopup(
-                text = bubbleText,
-                onDismiss = { showBigBang = false },
-                onCopy = { sel ->
+            )
+        } else if (message is ChatMessageUi.User) {
+            // 用户气泡: 复制 / 大爆炸 / 撤回 (最后一条) / 分享
+            val canRetract = viewModel.isLastUserMessage(message)
+            UserActionBar(
+                canRetract = canRetract,
+                onCopy = {
                     (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
-                        ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", sel))
-                    showBigBang = false
+                        ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", bubbleText))
+                },
+                onBigBang = { showBigBang = true },
+                onRetract = { viewModel.retractLastUserMessage()?.let { onRetract(it) } },
+                onShare = {
+                    val si = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, bubbleText.take(500))
+                    }
+                    context.startActivity(android.content.Intent.createChooser(si, "分享到"))
                 }
             )
         }
     }
+
+    if (showBigBang) {
+        BigBangPopup(
+            text = bubbleText,
+            onDismiss = { showBigBang = false },
+            onCopy = { sel ->
+                (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
+                    ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", sel))
+                showBigBang = false
+            }
+        )
+    }
+}
+
+/** 输出气泡下方操作图标行 (v0.35.1) — 复制/大爆炸/引用/保存图片/标注图片/分享。 */
+@Composable
+private fun BubbleActionBar(
+    hasImages: Boolean,
+    onCopy: () -> Unit,
+    onBigBang: () -> Unit,
+    onQuote: () -> Unit,
+    onSaveImages: () -> Unit,
+    onMarkImage: () -> Unit,
+    onShare: () -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 4.dp, top = 2.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ActionIcon(Icons.Outlined.ContentCopy, "复制", onCopy)
+        ActionIcon(Icons.Outlined.AutoAwesome, "大爆炸", onBigBang)
+        ActionIcon(Icons.Outlined.FormatQuote, "引用", onQuote)
+        if (hasImages) {
+            ActionIcon(Icons.Outlined.SaveAlt, "保存图片", onSaveImages)
+            ActionIcon(Icons.Outlined.Edit, "标注图片", onMarkImage)
+        }
+        ActionIcon(Icons.Outlined.Share, "分享", onShare)
+    }
+}
+
+/** 用户气泡下方操作图标行 (v0.35.1) — 复制/大爆炸/撤回/分享。 */
+@Composable
+private fun UserActionBar(
+    canRetract: Boolean,
+    onCopy: () -> Unit,
+    onBigBang: () -> Unit,
+    onRetract: () -> Unit,
+    onShare: () -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 4.dp, top = 2.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ActionIcon(Icons.Outlined.ContentCopy, "复制", onCopy)
+        ActionIcon(Icons.Outlined.AutoAwesome, "大爆炸", onBigBang)
+        if (canRetract) {
+            ActionIcon(Icons.Outlined.Undo, "撤回", onRetract)
+        }
+        ActionIcon(Icons.Outlined.Share, "分享", onShare)
+    }
+}
+
+/** 单个线性操作图标 (无点击动画)。 */
+@Composable
+private fun ActionIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Icon(
+        icon, label, tint = com.mengpaw.design.theme.ThemeColors.textSecondary,
+        modifier = Modifier
+            .size(18.dp)
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onClick
+            )
+    )
 }
