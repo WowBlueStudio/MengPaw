@@ -34,12 +34,20 @@ import androidx.compose.ui.unit.sp
 import com.mengpaw.shell.ui.components.BigBangPopup
 
 /**
+ * 换行规范化 (v0.35.1) — 统一 \r\n/\r → \n, 保证复制/分享/大爆炸都保留分行。
+ */
+fun normalizeNewlines(raw: String): String =
+    raw.replace("\r\n", "\n").replace("\r", "\n")
+
+/**
  * 剥离 Markdown 标记 → 纯文本 (v0.35.1) — 大爆炸/分享用; 复制保留原文格式。
  * 处理: 代码块围栏 / 行内代码 / 图片 / 链接 / 加粗斜体删除线 / 标题引用列表。
+ * 保留换行 (分行): 段落/列表的 \n 原样保留, 软换行 (行尾两空格) 转硬换行。
  */
 fun stripMarkdown(raw: String): String {
     if (raw.isBlank()) return raw
-    var t = raw
+    var t = normalizeNewlines(raw)
+    t = t.replace(Regex(" {2,}\n"), "\n")             // 软换行 → 硬换行
     t = t.replace(Regex("(?m)^```.*$"), "")           // 代码块围栏行
     t = t.replace(Regex("`([^`]+)`"), "$1")           // 行内代码
     t = t.replace(Regex("!\\[[^\\]]*]\\([^)]*\\)"), "") // 图片
@@ -120,7 +128,7 @@ fun BubbleWrapper(
                 hasImages = imgs.isNotEmpty(),
                 onCopy = {
                     (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
-                        ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", bubbleText))
+                        ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", normalizeNewlines(bubbleText)))
                 },
                 onBigBang = { showBigBang = true },
                 onQuote = { onQuote(viewModel.formatQuote(message)) },
@@ -153,7 +161,7 @@ fun BubbleWrapper(
                 canRetract = canRetract,
                 onCopy = {
                     (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
-                        ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", bubbleText))
+                        ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", normalizeNewlines(bubbleText)))
                 },
                 onBigBang = { showBigBang = true },
                 onRetract = { viewModel.retractLastUserMessage()?.let { onRetract(it) } },
