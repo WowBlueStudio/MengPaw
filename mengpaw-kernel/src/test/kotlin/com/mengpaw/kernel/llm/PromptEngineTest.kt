@@ -128,6 +128,17 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `system prompt carries integrity probe`() {
+        // P0-2 ③: 系统提示词应含探针指令, Final Answer 标记 <!--mok-->
+        val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertTrue("中文提示词应含探针指令", zh.contains("系统完整性探针"))
+        assertTrue("中文提示词应含探针标记", zh.contains("<!--mok-->"))
+        val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
+        assertTrue("英文提示词应含探针指令", en.contains("integrity probe"))
+        assertTrue("英文提示词应含探针标记", en.contains("<!--mok-->"))
+    }
+
+    @Test
     fun `same params hit system prompt cache`() {
         val p1 = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
         val p2 = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")

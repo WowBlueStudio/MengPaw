@@ -1023,6 +1023,12 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **P2-9 进化反馈闭环 (v0.34.3)**: `evolution.report` 落盘带 `status: new` frontmatter; 新增 `evolution.feedback [ls|mark <文件> <new|ack|scheduled|fixed>]` — Agent 上报后能查看/标记状态, 不再石沉大海 (开发者处置: ack 已读 → scheduled 排期 → fixed 修复)。
 
+**铲子检测 (v0.34.3, P0-2 用户采纳 ①②③④ 中的 ①③④)** — 第三方 LLM 供应商/中转代理在服务端植入恶意行为 (模型无用户意图时主动写/外联) 的三道检测:
+- ① 会话行为基线 `ProactiveBehaviorDetector`: 检测"无读取操作间隔的连续写/外联命令序列" (正常 Agent 读→判断→写; 铲子直接连写连外联) — 连续 ≥4 条触发告警注入 Observation, 每会话只告警一次; 只提示不阻断 (硬拦截由分级承担)。
+- ③ 提示词遵从探针: 系统提示词内置 `<!--mok-->` 探针指令, Final Answer 末尾标记在返回前剥离; 连续 5 次失配 → KernelLog 告警 (疑似服务端篡改/剥离系统提示词)。单轮失配不告警 (模型遵从性差异)。
+- ④ 写路径边界: `agent.write`/`agent.mkdir` 写入工作区 (Agent文档)/输出目录/录音/截图存档之外 (如 /sdcard 任意路径) → 降级中危, 标准权限拒绝, TRUSTED 放行; 相对路径按工作区基准视为安全。
+- 未采纳: 外联域名监控、供应商信誉清单 (用户判定无必要)。
+
 **per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
 
 

@@ -28,6 +28,11 @@ internal class AgentReActLoop(
     private val conversation: AgentConversation
 ) {
 
+    /** 探针连续失配告警阈值 — 单轮失配可能是模型遵从性差异, 连续 N 次才疑似铲子。 */
+    private companion object {
+        const val PROBE_MISS_ALERT_THRESHOLD = 5
+    }
+
     /**
      * Internal ReAct loop with optional context prefix.
      * Shared by run() and runWithGoal() to avoid session-creation overhead.
@@ -112,6 +117,8 @@ internal class AgentReActLoop(
             val retryNotified = mutableSetOf<Pair<String, String>>()
             // P0 实质化 (2026-08-08): Final Answer 门禁拒绝次数 — 防止幻觉拒绝死循环
             var hallucinationRejections = 0
+            // 提示词遵从探针连续失配计数 (v0.34.3 P0-2 ③)
+            var probeMisses = 0
 
             while (step < effectiveMax) {
                 engine.runningJob?.let { if (!it.isActive) throw kotlinx.coroutines.CancellationException("Agent stopped") }
@@ -185,7 +192,21 @@ internal class AgentReActLoop(
                 val parsed = engine.getPromptEngine().parse(sanitized)
 
                 if (parsed.isFinal) {
-                    val answer = parsed.thought
+                    var answer = parsed.thought
+                    // ── 提示词遵从探针 (v0.34.3 P0-2 ③): Final Answer 应带 <!--mok--> 标记 ──
+                    // 服务端篡改/剥离系统提示词 (铲子) 会让模型系统性丢失探针; 剥离标记避免污染 UI。
+                    val probeOk = answer.contains("<!--mok-->")
+                    answer = answer.replace("<!--mok-->", "").trim()
+                    if (probeOk) {
+                        probeMisses = 0
+                    } else {
+                        probeMisses++
+                        if (probeMisses == PROBE_MISS_ALERT_THRESHOLD) {
+                            com.mengpaw.kernel.KernelLog.w("ProbeCheck",
+                                "系统提示词遵从探针连续 ${PROBE_MISS_ALERT_THRESHOLD} 次失配 — " +
+                                "疑似第三方服务端篡改/剥离系统提示词 (铲子式注入), 请核查 LLM 供应商/中转端点")
+                        }
+                    }
                     // P0: 会话结局真实度 — 检测 Final Answer 是否如实提及本轮失败 (幻觉率)
                     com.mengpaw.kernel.evolution.EvolutionStore.recordSessionOutcome(
                         engine.agentName, sessionFailures, answer)
@@ -267,6 +288,10 @@ internal class AgentReActLoop(
                         .map { call -> com.mengpaw.kernel.security.HighRiskCommandGate.evaluate(call) }
                         .distinctBy { it.commandLine }
                     val commandLines = formattedCalls.map { it.commandLine }
+                    // ── 主动行为基线 (v0.34.3 P0-2 ①): 连续写/外联无读间隔 → 告警注入 ──
+                    val proactiveAlerts = commandLines.mapNotNull { cmd ->
+                        com.mengpaw.kernel.security.ProactiveBehaviorDetector.recordCommand(session.id, cmd)
+                    }
                     // ── reason 审计 (v0.34.1, TOOL_EXECUTED 首次使用): 高危命令执行意图入会话事件日志 ──
                     formattedCalls.forEach { gate ->
                         if (gate.reason != null) {
@@ -323,6 +348,8 @@ internal class AgentReActLoop(
 
                     // ── 合并后串行更新共享可变状态 + 组装 Observation ──
                     val observationEntries = mutableListOf<String>()
+                    // 主动行为告警 — 框架级条目 (区别于 untrusted 数据), 随 Observation 合并入上下文
+                    proactiveAlerts.forEach { observationEntries.add(it) }
                     var anyFailure = false
                     // 同批多条命中攻击时 banner 只发一次 (防刷屏)
                     var batchNotified = false

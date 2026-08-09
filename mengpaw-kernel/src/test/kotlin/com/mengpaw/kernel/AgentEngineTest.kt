@@ -332,6 +332,24 @@ class AgentEngineTest {
         assertFalse("不得执行删除: $obs", obs.contains("已删除"))
     }
 
+    @Test
+    fun `final answer probe marker is stripped before return`() = runBlocking {
+        // P0-2 ③: Final Answer 末尾的 <!--mok--> 探针标记应在返回前剥离, 不污染 UI
+        val llm = object : LlmProvider {
+            override suspend fun complete(prompt: String): String = respond()
+            override suspend fun completeWithMessages(messages: List<Map<String, String>>): String = respond()
+            override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
+                respond().also { onToken(it) }
+            override fun info() = ProviderInfo("mock", "probe-strip", ProviderType.LOCAL)
+            override fun close() {}
+            fun respond(): String = "Final Answer: 完成\n<!--mok-->"
+        }
+        val sm2 = SessionManager()
+        val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
+        val result = engine2.run("探针剥离测试", maxSteps = 3)
+        assertEquals("探针标记应剥离", "完成", result)
+    }
+
     // ── 攻击提醒与拉黑闭环 (v0.34.1, ⑦) ──
 
     @Test

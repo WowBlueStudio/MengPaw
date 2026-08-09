@@ -137,6 +137,30 @@ class RiskGateTest {
     }
 
     @Test
+    fun `写路径超出允许区降级中危`() {
+        runBlocking {
+            // P0-2 ④: agent.write 写工作区/输出目录外 (如 /sdcard) → 默认拒绝, TRUSTED 放行
+            val gate = HighRiskCommandGate.evaluate(
+                ToolCall("agent.write", mapOf("path" to "/sdcard/evil.sh", "content" to "x"))
+            )
+            assertNotNull("标准权限应拒绝工作区外写入", RiskGate.evaluate(gate, "agent-x", allowUserConfirm = true))
+            AgentPermissionStore.setLevel("agent-x", AgentPermissionLevel.TRUSTED)
+            assertNull("信任权限应放行工作区外写入", RiskGate.evaluate(gate, "agent-x", allowUserConfirm = true))
+            AgentPermissionStore.setLevel("agent-x", AgentPermissionLevel.STANDARD)
+        }
+    }
+
+    @Test
+    fun `写工作区绝对路径与相对路径放行`() = runBlocking {
+        val rel = HighRiskCommandGate.evaluate(ToolCall("agent.write", mapOf("path" to "a.md", "content" to "x")))
+        assertNull(RiskGate.evaluate(rel, "agent-x", allowUserConfirm = true))
+        val abs = HighRiskCommandGate.evaluate(
+            ToolCall("agent.write", mapOf("path" to "${com.mengpaw.kernel.DataPaths.AGENTS}/MengPaw/a.md", "content" to "x"))
+        )
+        assertNull("工作区绝对路径应放行", RiskGate.evaluate(abs, "agent-x", allowUserConfirm = true))
+    }
+
+    @Test
     fun `MID 命令标准权限拒绝信任权限放行`() = runBlocking {
         val gate = HighRiskCommandGate.evaluate(
             ToolCall("agent.rm", mapOf("path" to "a.md", "force" to "true", "reason" to "清理"))
