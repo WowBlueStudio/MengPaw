@@ -6,7 +6,9 @@ package com.mengpaw.shell.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -18,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -229,7 +232,9 @@ private fun AppRootContent(
             },
             rightSidebarContent = { close ->
                 // v0.34.3 /plan UI: 右侧边栏 = 历史会话 (上) + 计划模式列表 (底部)
-                Column(Modifier.fillMaxSize()) {
+                // v0.35.1 修复: 外层固定 300dp 宽 — fillMaxSize 在持久侧栏 wrap 容器
+                // 内撑开异常宽度, 导致 300dp 历史会话内容被推到左侧
+                Column(Modifier.width(300.dp).fillMaxHeight()) {
                     Box(Modifier.weight(1f)) {
                         HistorySidebar(
                             localGroups = localGroups,
