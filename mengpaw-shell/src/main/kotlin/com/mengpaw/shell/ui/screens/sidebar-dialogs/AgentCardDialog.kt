@@ -36,6 +36,8 @@ fun AgentCardDialog(
 ) {
     val agentDir = File(com.mengpaw.kernel.DataPaths.AGENTS, agentName)
     val workspacePath = agentDir.absolutePath
+    // v0.35.1: 显示短路径 — 去掉 BASE 前缀 (如 "Agent文档/MengPaw"), 非 BASE 下保留原样
+    val shortWorkspace = workspacePath.removePrefix(com.mengpaw.kernel.DataPaths.BASE + "/")
 
     val profile = remember(agentName) { AgentProfile.load(agentName) }
     var editName by remember { mutableStateOf(profile.name.ifBlank { agentName }) }
@@ -122,7 +124,7 @@ fun AgentCardDialog(
                     .padding(ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Folder, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
                     Spacer(Modifier.width(6.dp))
-                    Text(workspacePath, style = MaterialTheme.typography.labelSmall,
+                    Text(shortWorkspace, style = MaterialTheme.typography.labelSmall,
                         color = ThemeColors.textSecondary, fontSize = 11.sp)
                 }
             }
