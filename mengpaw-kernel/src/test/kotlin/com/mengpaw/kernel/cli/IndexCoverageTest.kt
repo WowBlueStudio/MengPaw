@@ -65,26 +65,6 @@ class IndexCoverageTest {
     }
 
     @Test
-    fun `cli doc description tables cover every registered command`() {
-        // CLI.md 描述表 (AGENT_COMMANDS/SELF_COMMANDS/PLUGIN_COMMANDS) 与注册键集
-        // 双向一致 — 描述缺失时动态表降级提示 self.search, 但键集漂移必须 0
-        val agentKeys = AgentExecutor(AgentDocManager()).commands.keys.toSet()
-        val agentDesc = AgentDocManager.AGENT_COMMANDS.map { it.first }.toSet()
-        assertTrue("CLI.md agent 描述表缺: ${agentKeys - agentDesc}", (agentKeys - agentDesc).isEmpty())
-        assertTrue("CLI.md agent 描述表多: ${agentDesc - agentKeys}", (agentDesc - agentKeys).isEmpty())
-
-        val selfKeys = SelfExecutor.commands.keys.toSet()
-        val selfDesc = AgentDocManager.SELF_COMMANDS.map { it.first }.toSet()
-        assertTrue("CLI.md self 描述表缺: ${selfKeys - selfDesc}", (selfKeys - selfDesc).isEmpty())
-        assertTrue("CLI.md self 描述表多: ${selfDesc - selfKeys}", (selfDesc - selfKeys).isEmpty())
-
-        val pluginKeys = PluginExecutor(PluginManager()).commands.keys.toSet()
-        val pluginDesc = AgentDocManager.PLUGIN_COMMANDS.map { it.first }.toSet()
-        assertTrue("CLI.md plugin 描述表缺: ${pluginKeys - pluginDesc}", (pluginKeys - pluginDesc).isEmpty())
-        assertTrue("CLI.md plugin 描述表多: ${pluginDesc - pluginKeys}", (pluginDesc - pluginKeys).isEmpty())
-    }
-
-    @Test
     fun `cli doc dynamic agent table covers all commands`() {
         // 动态表数据源注入: AgentExecutor 构造时把注册键集注入 docManager
         val docManager = AgentDocManager()

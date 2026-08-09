@@ -180,17 +180,8 @@ class AgentDocManager(
     // ── Default document templates ────────────────────────────────────
 
     companion object {
-        /** Built-in self.* commands for CLI.md generation. */
-        internal val SELF_COMMANDS = AgentCliDocTables.SELF_COMMANDS
-
-        /** Built-in plugin.* commands. */
-        internal val PLUGIN_COMMANDS = AgentCliDocTables.PLUGIN_COMMANDS
-
-        /** Built-in agent.* commands. */
-        internal val AGENT_COMMANDS = AgentCliDocTables.AGENT_COMMANDS
-
-        /** Built-in security.* commands (v0.34.1). */
-        internal val SECURITY_COMMANDS = AgentCliDocTables.SECURITY_COMMANDS
+        // v0.34.3 P2-8: SELF/PLUGIN/AGENT/SECURITY 命令表删除 —
+        // CLI.md 从 CommandSearch (BuiltinCommandIndex 单一数据源) 动态生成。
 
         /** 浏览器协作能力 — readable by Agent via CLI (v0.22.1 重写: 真实三通道, 移除未接线的 45 命令手册). */
         val BROWSER_TOOLS_MD = AgentCliDocTables.BROWSER_TOOLS_MD

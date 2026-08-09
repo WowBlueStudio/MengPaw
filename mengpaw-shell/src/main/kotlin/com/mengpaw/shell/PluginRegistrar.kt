@@ -105,6 +105,19 @@ object PluginRegistrar {
         "tavily-plugin" to ("AI 搜索" to "Tavily AI 优化搜索引擎 — 结构化搜索结果 + 网页正文提取，Agent 原生搜索能力 (Tavily AI-optimized search — structured results + web content extraction, Agent's native search)")
     )
 
+    /** 远程/按需安装插件候选描述 (v0.34.3 P0-1) — CLI.md 远程插件表数据源,
+     *  与 PluginClassRegistry.BUILTIN_CLASSES 中非内置条目对齐 (新增远程插件在此登记)。 */
+    val REMOTE_PLUGIN_BRIEFS = mapOf(
+        "update-plugin" to "自动更新",
+        "translate-plugin" to "翻译",
+        "error-report-plugin" to "错误上报",
+        "render-plugin" to "API 生图 (需 API Key)",
+        "comfy-plugin" to "ComfyUI 工作流 (默认端口 8188)",
+        "browser-push-plugin" to "浏览器推送",
+        "browser-search-plugin" to "网页转档/提炼",
+        "browser-mcp-plugin" to "浏览器 MCP 工具 (9880 桥)"
+    )
+
     /** PluginViewModel 类注册 — 使内置插件类可被反射实例化 (install 时用类名加载). */
     fun registerPluginClasses() {
         PluginViewModel.registerPluginClass("fs-plugin", "com.mengpaw.plugin.fs.FsPlugin")

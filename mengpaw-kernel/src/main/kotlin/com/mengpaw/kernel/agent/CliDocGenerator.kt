@@ -17,6 +17,20 @@ import java.util.Locale
  */
 internal class CliDocGenerator(private val manager: AgentDocManager) {
 
+    /** 从 BM25 索引取命令用法/说明 (P2-8 单一数据源: BuiltinCommandIndex → CommandSearch)。
+     *  索引缺失时返回 null, 调用方降级为"见 self.search"。 */
+    private fun cmdDoc(full: String): Pair<String, String>? {
+        val idx = com.mengpaw.kernel.cli.CommandSearch.all().firstOrNull { it.fullName == full } ?: return null
+        return (idx.usage.ifBlank { full }) to idx.description
+    }
+
+    /** 命令表行 — 有索引描述用索引, 无则降级提示 self.search。 */
+    private fun cmdRow(full: String, permission: String): String {
+        val d = cmdDoc(full)
+        return if (d != null) "| $full | ${d.first} | ${d.second} | $permission |"
+        else "| $full | $full | 见 self.search 获取用法 | $permission |"
+    }
+
     /** Regenerate CLI.md — Agent's primary command reference with permission guides & tutorials. */
     internal fun regenerateCliDoc(pluginManager: PluginManager) {
         try { manager.file(AgentDocType.CLI).atomicWriteText(buildString {
@@ -37,19 +51,15 @@ internal class CliDocGenerator(private val manager: AgentDocManager) {
             appendLine("|------|------|------|------|")
             SelfExecutor.commands.keys.sorted().forEach { name ->
                 val full = "self.$name"
-                val d = AgentDocManager.SELF_COMMANDS.firstOrNull { it.first == name }
-                if (d != null) appendLine("| $full | ${d.second} | ${d.third} | 无 |")
-                else appendLine("| $full | $full | 见 self.search 获取用法 | 无 |")
+                appendLine(cmdRow(full, "无"))
             }
             appendLine()
             appendLine("### evolution — Agent 进化 (从失败中学习)")
             appendLine("| 命令 | 用法 | 说明 | 权限 |")
             appendLine("|------|------|------|------|")
-            appendLine("| evolution.audit | evolution.audit | 进化绩效: 失败分布/复现率/教训 | 无 |")
-            appendLine("| evolution.report | evolution.report <描述> | 框架缺陷反馈给开发者 (落盘+推送) | 无 |")
-            appendLine("| evolution.learn.command | evolution.learn.command <命令> <描述> [--keywords 词,词] | 丰富指令集 (登记正确用法/同义词) | 无 |")
-            appendLine("| evolution.reactions | evolution.reactions | 查看用户反应档案 (用户分身数据源) | 无 |")
-            appendLine("| evolution.mark-corrected | evolution.mark-corrected <id> | 标记失败模式已沉淀修正 | 无 |")
+            com.mengpaw.kernel.evolution.EvolutionExecutor.commands.keys.sorted().forEach { name ->
+                appendLine(cmdRow("evolution.$name", "无"))
+            }
             appendLine()
             appendLine("> 失败后系统自动注入金字塔省察引导 (L1 事实 → L2 归因 → L3 用户视角 → L4 进化), 处置动作: 常识错用 agent.memory.keep, 行为错改 soul.md (agent.write), 指令错用 evolution.learn.command 或 self.search。")
             appendLine()
@@ -61,18 +71,10 @@ internal class CliDocGenerator(private val manager: AgentDocManager) {
             appendLine("### plugin — 插件/工具/技能管理")
             appendLine("| 命令 | 用法 | 说明 | 权限 |")
             appendLine("|------|------|------|------|")
-            appendLine("| plugin.marketplace | plugin.marketplace [--refresh] | 浏览插件市场 | 无 |")
-            appendLine("| plugin.search | plugin.search <关键词> | 搜索插件 | 无 |")
-            appendLine("| plugin.install | plugin.install <插件ID> | 下载+验证+安装+激活 | 无 |")
-            appendLine("| plugin.uninstall | plugin.uninstall <插件ID> | 卸载插件 | 无 |")
-            appendLine("| plugin.list | plugin.list | 已安装列表 | 无 |")
-            appendLine("| plugin.info | plugin.info <插件ID> | 插件详情 | 无 |")
-            appendLine("| plugin.enable | plugin.enable <插件ID> | 启用 | 无 |")
-            appendLine("| plugin.disable | plugin.disable <插件ID> | 停用 | 无 |")
-            appendLine("| plugin.update | plugin.update <插件ID> | 检查更新 | 无 |")
-            appendLine("| plugin.upgrade | plugin.upgrade --all | 升级全部 | 无 |")
-            appendLine("| plugin.verify | plugin.verify <插件ID> \\| plugin.verify --all | 校验插件文件完整性 | 无 |")
-            appendLine("| plugin.auto | plugin.auto <wake\\|sleep\\|status\\|sleep-idle> | 插件省电管理 | 无 |")
+            val pluginNames = SelfExecutor.commandRegistry?.list("plugin")?.sorted()
+                ?: com.mengpaw.kernel.cli.CommandSearch.all().filter { it.namespace == "plugin" }
+                    .map { it.fullName }.sorted()
+            pluginNames.forEach { appendLine(cmdRow(it, "无")) }
             appendLine()
 
             appendLine("### agent — Agent 文档")
@@ -80,8 +82,8 @@ internal class CliDocGenerator(private val manager: AgentDocManager) {
             appendLine("|------|------|------|")
             manager.registeredAgentCommands.forEach { name ->
                 val full = "agent.$name"
-                val d = AgentDocManager.AGENT_COMMANDS.firstOrNull { it.first == name }
-                if (d != null) appendLine("| $full | ${d.second} | ${d.third} |")
+                val d = cmdDoc(full)
+                if (d != null) appendLine("| $full | ${d.first} | ${d.second} |")
                 else appendLine("| $full | $full | 见 self.search $full 获取用法 |")
             }
             appendLine()
@@ -91,9 +93,7 @@ internal class CliDocGenerator(private val manager: AgentDocManager) {
             appendLine("|------|------|------|------|")
             com.mengpaw.kernel.namespace.SecurityExecutor.commands.keys.sorted().forEach { name ->
                 val full = "security.$name"
-                val d = AgentDocManager.SECURITY_COMMANDS.firstOrNull { it.first == name }
-                if (d != null) appendLine("| $full | ${d.second} | ${d.third} | 无 |")
-                else appendLine("| $full | $full | 见 self.search 获取用法 | 无 |")
+                appendLine(cmdRow(full, "无"))
             }
             appendLine()
             appendLine("> 检测到目的明确的提示词攻击 (工具结果含指令覆盖/越狱/隐藏等形态) 时, 框架会特殊提醒。")
@@ -291,44 +291,31 @@ internal class CliDocGenerator(private val manager: AgentDocManager) {
             appendLine("Agent 可按需安装以下插件。使用 `plugin.install <ID>` 安装。")
             appendLine("完整命令与权限见 `plugin.info <ID>` 或 `self.tools <命名空间>`。")
             appendLine()
-            appendLine("### 内置 (随 APK 预装, 仅可禁用)")
-            appendLine()
-            appendLine("| 插件ID | 命令命名空间 | 用途 |")
-            appendLine("|--------|------------|------|")
-            appendLine("| framework-plugin | framework.* | 外部框架接入/发现 |")
-            appendLine("| fs-plugin | fs.* | 文件系统 |")
-            appendLine("| net-plugin | net.* | 网络请求 |")
-            appendLine("| memory-twin-plugin | twin.* | 记忆孪生/跨设备同步 |")
-            appendLine("| skill-plugin | skill.* | 技能系统 |")
-            appendLine("| clipboard-plugin | clipboard.* | 剪贴板 |")
-            appendLine("| notification-plugin | notification.* | 通知 |")
-            appendLine("| dev-plugin | dev.plugin.* | 插件开发工具 (create/audit/share) |")
-            appendLine("| root-plugin | root.* | Root 权限 (最高权限) |")
-            appendLine("| tools-plugin | tools.* | Agent 命令集 (import/ls/remove/search) |")
-            appendLine("| dream-plugin | agent.dream | 梦境模式 — 记忆整理管道 (中期→长期) |")
-            appendLine("| evolution-plugin | evolution.* | 智能体进化 — 失败模式库/省察引导/框架反馈 |")
-            appendLine("| tavily-plugin | tavily.* | AI 搜索 (内置, 需 TAVILY_API_KEY 或 tavily.setup 配置) |")
-            appendLine()
-            appendLine("### 远程/按需安装")
-            appendLine()
-            appendLine("| 插件ID | 用途 |")
-            appendLine("|--------|------|")
-            appendLine("| tribe-plugin (hermes 兼容) | 部落协作/多Agent团队 |")
-            appendLine("| update-plugin | 自动更新 |")
-            appendLine("| translate-plugin | 翻译 |")
-            appendLine("| error-report-plugin | 错误上报 |")
-            appendLine("| render-plugin | API 生图 (需 API Key) |")
-            appendLine("| comfy-plugin | ComfyUI 工作流 (默认端口 8188) |")
-            appendLine("| workflow-plugin | 工作流编排 |")
-            appendLine("| incubator-plugin | Agent 孵化器 |")
-            appendLine("| browser-push/search/mcp/cdp/inspector-plugin | 浏览器扩展能力 |")
-            appendLine()
-            appendLine("### 嵌入 (UI 绑定, 不可安装/卸载)")
-            appendLine()
-            appendLine("| 插件ID | 用途 |")
-            appendLine("|--------|------|")
-            appendLine("| agent-mission-plugin | Mission 模式 |")
-            appendLine("| agent-loop-plugin | Agent Loop 模式 |")
+            // ── 插件表动态生成 (v0.34.3 P0-1) — 单一事实源 BuiltinPluginRegistry,
+            //    由 shell PluginRegistrar/PluginClassRegistry 注入, 不再硬编码:
+            //    幻影条目 (notification-plugin / workflow / incubator / cdp / inspector
+            //    / agent-mission-plugin / agent-loop-plugin) 随硬编码删除而消失 ──
+            val builtins = com.mengpaw.kernel.plugin.BuiltinPluginRegistry.builtinBriefs.toSortedMap()
+            if (builtins.isNotEmpty()) {
+                appendLine("### 内置 (随 APK 预装, 仅可禁用)")
+                appendLine()
+                appendLine("| 插件ID | 命令命名空间 | 用途 |")
+                appendLine("|--------|------------|------|")
+                builtins.forEach { (id, brief) ->
+                    appendLine("| $id | ${com.mengpaw.kernel.plugin.pluginNamespaceFor(id)}.* | $brief |")
+                }
+                appendLine()
+            }
+            val remotes = com.mengpaw.kernel.plugin.BuiltinPluginRegistry.remoteBriefs.toSortedMap()
+            if (remotes.isNotEmpty()) {
+                appendLine("### 远程/按需安装")
+                appendLine()
+                appendLine("| 插件ID | 用途 |")
+                appendLine("|--------|------|")
+                remotes.forEach { (id, brief) -> appendLine("| $id | $brief |") }
+                appendLine()
+            }
+            appendLine("> Mission / Agent Loop 是斜杠执行模式 (/Mission 等), 非插件, 无需安装。")
             appendLine()
             appendLine("端口与网络接口一览: `self.ports`。")
             appendLine()

@@ -50,6 +50,10 @@ internal object PluginClassRegistry {
         "concise-plugin" to "com.mengpaw.plugin.concise.ConcisePlugin"
     )
 
+    /** 已知插件类注册全量 (v0.34.3 P0-1) — 内置 + 远程类映射公开,
+     *  AppInitializer 注入 BuiltinPluginRegistry 时用来求远程候选集合。 */
+    val ALL_KNOWN_CLASSES: Map<String, String> get() = BUILTIN_CLASSES
+
     /** Look up the class name for a builtin plugin by its ID. */
     fun builtinPluginClass(pluginId: String): String? = BUILTIN_CLASSES[pluginId]
 }

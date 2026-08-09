@@ -49,6 +49,13 @@ object AppInitializer {
         DataPathsInitializer.initialize(context)
         com.mengpaw.kernel.plugin.PluginManager.initializeGlobalInstance(
             com.mengpaw.kernel.AgentEngine.CORE_VERSION)
+        // ── 插件注册源注入 (v0.34.3 P0-1): CLI.md 插件表单一事实源 —
+        //    内置 = PluginRegistrar.BUILTIN_PLUGIN_INFO; 远程 = 类注册表非内置条目 ──
+        com.mengpaw.kernel.plugin.BuiltinPluginRegistry.builtinBriefs =
+            com.mengpaw.shell.PluginRegistrar.BUILTIN_PLUGIN_INFO.mapValues { it.value.second }
+        com.mengpaw.shell.PluginRegistrar.REMOTE_PLUGIN_BRIEFS.filterKeys {
+            it in com.mengpaw.shell.ui.screens.PluginClassRegistry.ALL_KNOWN_CLASSES
+        }.let { com.mengpaw.kernel.plugin.BuiltinPluginRegistry.remoteBriefs = it }
         com.mengpaw.core.namespace.SysExecutor.init(context)
         com.mengpaw.core.security.IntegrityGuard.globalInstance.init(context)
         com.mengpaw.core.AgentTemplates.init(context)
