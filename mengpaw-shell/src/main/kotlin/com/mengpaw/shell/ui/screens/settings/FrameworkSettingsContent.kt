@@ -97,10 +97,20 @@ fun FrameworkSettingsContent(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     buildString {
-                        append(if (state.useChinese) "本机指纹码 " else "Local fingerprint ")
-                        append(com.mengpaw.plugin.framework.FrameworkIdentity.shortCode)
-                        append(" · MengPaw Android ")
-                        append(com.mengpaw.plugin.framework.FrameworkIdentity.deviceRawId())
+                        // v0.35.1: 指纹/设备标识无效时省略对应段 (不再显示 "本机指纹码 no-mac · ")
+                        val fp = com.mengpaw.plugin.framework.FrameworkIdentity.fingerprint
+                        val fpValid = fp.isNotBlank() &&
+                            !fp.endsWith("no-mac") && !fp.endsWith("no-device-id")
+                        val rawId = com.mengpaw.plugin.framework.FrameworkIdentity.deviceRawId()
+                        if (fpValid) {
+                            append(if (state.useChinese) "本机指纹码 " else "Local fingerprint ")
+                            append(com.mengpaw.plugin.framework.FrameworkIdentity.shortCode)
+                        }
+                        if (rawId.isNotBlank()) {
+                            if (fpValid) append(" · ")
+                            append("MengPaw Android ")
+                            append(rawId)
+                        }
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = ThemeColors.textSecondary,

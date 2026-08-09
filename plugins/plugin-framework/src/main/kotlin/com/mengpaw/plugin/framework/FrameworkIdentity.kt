@@ -40,10 +40,15 @@ object FrameworkIdentity {
     fun load(context: Context) {
         appContext = context.applicationContext
         try {
-            if (!file.exists()) { fingerprint = computeLocalFingerprint(); return }
-            val obj = JSONObject(file.readText())
-            displayName = obj.optString("displayName", "")
-            fingerprint = obj.optString("fingerprint", "").ifEmpty { computeLocalFingerprint() }
+            val obj = if (file.exists()) JSONObject(file.readText()) else null
+            displayName = obj?.optString("displayName", "") ?: ""
+            val stored = obj?.optString("fingerprint", "") ?: ""
+            fingerprint = computeLocalFingerprint()
+            // v0.35.1: 迁移旧无效指纹 — Android 10+ MAC 不可得时代的 "mengpaw|no-mac"
+            // (所有设备指纹相同) / no-device-id; 检测到则用当前设备标识重算并落盘
+            val invalid = stored.isBlank() || stored.endsWith("no-mac") || stored.endsWith("no-device-id")
+            if (!invalid) fingerprint = stored
+            else persist()
         } catch (_: Exception) {
             fingerprint = computeLocalFingerprint()
         }
