@@ -108,10 +108,11 @@ class NetPlugin : Plugin {
     private suspend fun curl(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: net curl <url>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val url = args[0]
+        val extraHint = com.mengpaw.kernel.cli.ParamGuard.extraArgsHint(args, 1, "net.curl")
 
         // SSRF validation
         val validationError = validateUrl(url)
-        if (validationError != null) return ExecutionResult.fail(validationError, errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        if (validationError != null) return ExecutionResult.fail(validationError + (extraHint ?: ""), errorCode = ErrorCodes.ERR_INVALID_INPUT)
 
         return try {
             val response = client.get(url)
@@ -121,7 +122,7 @@ class NetPlugin : Plugin {
                     errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
             } else {
                 val body = response.bodyAsText().take(10000)
-                ExecutionResult.ok(body)
+                ExecutionResult.ok(body + (extraHint ?: ""))
             }
         } catch (e: Exception) {
             val hint = if (url.contains("github", ignoreCase = true) || url.contains("raw.githubusercontent", ignoreCase = true))

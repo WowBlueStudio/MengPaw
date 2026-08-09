@@ -46,6 +46,10 @@ internal class CliDocGenerator(private val manager: AgentDocManager) {
             // ── Built-in Commands ──
             appendLine("## 内置命令 (始终可用)")
             appendLine()
+            appendLine("> **参数纯净规则 (v0.34.3)**: 路径/名称/URL/时间戳等标识符参数必须是单个参数 — " +
+                "禁止把「等待结果/看看/输出」等描述文本拼在参数后 (会被并入参数导致解析失败); " +
+                "路径含空格时用引号包裹整个路径; 参数被污染失败时, 重试前先去掉多余文本, 不要原样复制。")
+            appendLine()
             appendLine("### self — Agent 自我管理")
             appendLine("| 命令 | 用法 | 说明 | 权限 |")
             appendLine("|------|------|------|------|")

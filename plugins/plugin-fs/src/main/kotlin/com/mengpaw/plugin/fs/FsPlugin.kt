@@ -62,7 +62,7 @@ class FsPlugin : Plugin {
         dstResolved.file.parentFile?.mkdirs()
         return try {
             srcResolved.file.copyTo(dstResolved.file, overwrite = true)
-            ExecutionResult.ok("Copied")
+            ExecutionResult.ok("Copied" + (com.mengpaw.kernel.cli.ParamGuard.extraArgsHint(args, 2, "fs.cp") ?: ""))
         } catch (e: Exception) {
             ErrorCollector.report(e, "FsPlugin.cp")
             ExecutionResult.fail("Copy error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
@@ -79,7 +79,7 @@ class FsPlugin : Plugin {
         dstResolved.file.parentFile?.mkdirs()
         return try {
             srcResolved.file.renameTo(dstResolved.file)
-            ExecutionResult.ok("Moved")
+            ExecutionResult.ok("Moved" + (com.mengpaw.kernel.cli.ParamGuard.extraArgsHint(args, 2, "fs.mv") ?: ""))
         } catch (e: Exception) {
             ErrorCollector.report(e, "FsPlugin.mv")
             ExecutionResult.fail("Move error: ${e.message}", errorCode = ErrorCodes.ERR_IO)
@@ -99,7 +99,7 @@ class FsPlugin : Plugin {
             Readable: ${file.canRead()}
             Writable: ${file.canWrite()}
             Last Modified: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(java.util.Date(file.lastModified()))}
-        """.trimIndent())
+        """.trimIndent() + (com.mengpaw.kernel.cli.ParamGuard.extraArgsHint(args, 1, "fs.stat") ?: ""))
     }
 
     // ── Search (ported from QwenPaw grep_search / glob_search) ─────────

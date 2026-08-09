@@ -122,6 +122,10 @@ internal class AgentMemoryMutateCommands {
         val date = args[0]
         val entryId = args.drop(1).joinToString(" ")
         if (entryId.length < 6) return ExecutionResult.fail("时间戳太短。中期记忆条目以 HH:mm:ss 开头，如 \"14:30:15\"。")
+        // v0.34.3 污染防护: 时间戳拼接型参数 — 描述文本会被并入 entryId 导致匹配失败
+        com.mengpaw.kernel.cli.ParamGuard.pollutedHint(args.drop(1), "agent.memory.mid.rm")?.let {
+            return ExecutionResult.fail(it, errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        }
         val agent = agentName(ctx)
         val path = DataPaths.midTermMemoryFile(agent, date)
         val deleted = AgentDocs.deleteEntry(agent, path, entryId)
@@ -159,6 +163,9 @@ internal class AgentMemoryMutateCommands {
         val projectName = args[0]
         val entryId = args.drop(1).joinToString(" ")
         if (entryId.length < 10) return ExecutionResult.fail("时间戳太短，需要至少 10 字符。")
+        com.mengpaw.kernel.cli.ParamGuard.pollutedHint(args.drop(1), "agent.memory.project.rm")?.let {
+            return ExecutionResult.fail(it, errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        }
         val agent = agentName(ctx)
         val path = DataPaths.projectMemoryFile(agent, projectName)
         val deleted = AgentDocs.deleteEntry(agent, path, entryId)

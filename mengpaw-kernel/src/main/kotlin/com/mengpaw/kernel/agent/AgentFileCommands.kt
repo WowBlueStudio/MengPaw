@@ -51,26 +51,9 @@ internal class AgentFileCommands {
         "mnt", "proc", "sys", "dev", "cache", "apex"
     )
 
-    /** 描述性文本词表 — Agent 常把这些词拼进路径参数尾部 (如 "agent.ls / 等待结果")。
-     *  命中 = 高置信参数污染 (v0.34.3 命令污染修复)。 */
-    private val POLLUTION_WORDS = setOf(
-        "等待结果", "结果", "看看", "查看", "输出", "等待", "然后", "谢谢", "好的",
-        "完毕", "完成", "尝试", "试一下", "请", "ok", "OK", "thanks", "please", "wait", "done"
-    )
-
-    /** 参数污染提示 (v0.34.3): 路径类命令解析失败且末片段命中描述词表时,
-     *  错误反馈附加修正指引 — Agent 不再原样复制污染参数重试 (循环复现根因)。
-     *  @param command 命令名 (提示重发格式用); @return 附加文本或 null。 */
-    private fun pollutedHint(args: List<String>, command: String): String? {
-        if (args.size < 2) return null
-        val last = args.last()
-        val isDescription = last in POLLUTION_WORDS ||
-            POLLUTION_WORDS.any { last.startsWith(it) && last.length <= it.length + 2 }
-        if (!isDescription) return null
-        val clean = args.dropLast(1).joinToString(" ")
-        return "\n⚠️ 参数污染提示: 「$last」疑似多余的描述文本被并入了路径参数 (收到 ${args.size} 个片段: ${args.joinToString(" + ")})。" +
-            "路径参数只能是一个完整路径。请重发纯净参数: $command $clean"
-    }
+    /** 参数污染提示 — 委托 ParamGuard (v0.34.3 全量审计后通用化)。 */
+    private fun pollutedHint(args: List<String>, command: String): String? =
+        com.mengpaw.kernel.cli.ParamGuard.pollutedHint(args, command)
 
     /**
      * Resolve path with traversal protection (canonical path resolves ../ and symlinks).

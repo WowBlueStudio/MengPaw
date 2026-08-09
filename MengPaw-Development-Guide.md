@@ -1033,6 +1033,12 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **命令参数污染防护 (v0.34.3)** — Agent 把描述文本 ("等待结果"/"看看") 拼进路径参数尾部 (如 `agent.ls / 等待结果`), `joinToString(" ")` 还原后路径含空格 → 解析失败且 Agent 原样复制重试循环复现。修复: ① 路径拼接类命令 (read/ls/rm/mkdir) 解析失败时附**污染提示** (指出疑似多余文本 + 纯净重发指引); ② 写类命令 (rm/mkdir) **前置拒绝**污染路径, 防错误落盘/误删; ③ 系统提示词响应格式节加**路径参数纯净规则** (路径参数只能含路径本身, 禁止附加描述文本, 失败重试不得原样复制)。agent.write 的路径是首 token 不参与拼接, 污染文本会进 content — 由读回验证兜底, 不做前置拒绝 (防误伤正常内容)。
 
+**命令参数歧义全量审计 (v0.34.3)** — `ParamGuard` 通用化污染/多余参数检测 (词表: 等待结果/看看/输出等):
+- **全拼型 (joinToString)** — 污染进关键参数 → 解析失败循环: agent.read/ls/rm/mkdir (已修) + agent.memory.mid.rm/project.rm 时间戳拼接 (新增前置拒绝)
+- **单 token 位置参数型 (fs/root/skill/net)** — 多余 token 静默忽略 → 不失败但 Agent 不知情: fs.cp/mv/stat + net.curl 成功/失败结果附**多余参数提示** ("多余的「等待结果」已被忽略")
+- **自由文本型 (content/命令/搜索词)** — 污染即文本本身, 无害不防护
+- CLI.md 表头加**参数纯净规则**通用说明; 系统提示词已同步 (v0.34.3 路径参数纯净规则)
+
 **per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
 
 
