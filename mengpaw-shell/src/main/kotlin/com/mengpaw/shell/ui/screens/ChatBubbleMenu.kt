@@ -33,6 +33,27 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.shell.ui.components.BigBangPopup
 
+/**
+ * 剥离 Markdown 标记 → 纯文本 (v0.35.1) — 大爆炸/分享用; 复制保留原文格式。
+ * 处理: 代码块围栏 / 行内代码 / 图片 / 链接 / 加粗斜体删除线 / 标题引用列表。
+ */
+fun stripMarkdown(raw: String): String {
+    if (raw.isBlank()) return raw
+    var t = raw
+    t = t.replace(Regex("(?m)^```.*$"), "")           // 代码块围栏行
+    t = t.replace(Regex("`([^`]+)`"), "$1")           // 行内代码
+    t = t.replace(Regex("!\\[[^\\]]*]\\([^)]*\\)"), "") // 图片
+    t = t.replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "$1") // 链接 → 文本
+    t = t.replace(Regex("\\*\\*([^*]+)\\*\\*"), "$1") // 加粗
+    t = t.replace(Regex("\\*([^*]+)\\*"), "$1")       // 斜体
+    t = t.replace(Regex("~~([^~]+)~~"), "$1")         // 删除线
+    t = t.replace(Regex("(?m)^#{1,6}\\s+"), "")       // 标题
+    t = t.replace(Regex("(?m)^>\\s?"), "")            // 引用
+    t = t.replace(Regex("(?m)^[-*]\\s+"), "• ")       // 无序列表
+    t = t.replace(Regex("(?m)^\\d+\\.\\s+"), "")      // 有序列表
+    return t.trim()
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Bubble long-press context menu — 拆自 ChatBubbles.kt (2026-08-06, 批次4)
 // ═══════════════════════════════════════════════════════════════════════
@@ -120,7 +141,7 @@ fun BubbleWrapper(
                 },
                 onShare = {
                     val si = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, bubbleText.take(500))
+                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, stripMarkdown(bubbleText).take(500))
                     }
                     context.startActivity(android.content.Intent.createChooser(si, "分享到"))
                 }
@@ -138,7 +159,7 @@ fun BubbleWrapper(
                 onRetract = { viewModel.retractLastUserMessage()?.let { onRetract(it) } },
                 onShare = {
                     val si = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, bubbleText.take(500))
+                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, stripMarkdown(bubbleText).take(500))
                     }
                     context.startActivity(android.content.Intent.createChooser(si, "分享到"))
                 }
@@ -148,7 +169,7 @@ fun BubbleWrapper(
 
     if (showBigBang) {
         BigBangPopup(
-            text = bubbleText,
+            text = stripMarkdown(bubbleText),
             onDismiss = { showBigBang = false },
             onCopy = { sel ->
                 (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
