@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.35.0 (2026-08-09) — /plan 模式 UI + Mission 并入 Swarm + 框架发现与命令反歧义
+
+### 新增
+- **/plan 模式 UI** (5d66913): 内核 `PlanMonitor` 实时发布计划与步骤状态 — Chat 消息区右侧竖列状态标识（灰空心圈/粉呼吸/蓝点/红叉），右侧边栏底部计划列表（当前步骤高亮），点击竖列展开侧栏；计划完成/失败/取消自动消失
+- **Swarm 吸收 Mission** (62984ad): Swarm 是进化版的 Mission — 继承拆解→并行 Worker→验证→合成编排与 👍 DONE 降级语义（verifier 不可用标 DONE 非 VERIFIED），进化出角色混合模型/Andon 失败协议/JIT 看板三闸门；`/Mission` 斜杠命令、LoopMode.MISSION、MissionModeExecutor/MissionMonitor 全链路移除，原 Mission 任务全部由 Swarm 负责，自动升级收敛为四档（REACT/GOAL/SWARM/FLEET）
+- **UI 侧同步** (f906008/4c3acc3): agent.modes 描述 7 种 + 中英文提示词同步 + 已部署 modes.md 旧模板自动迁移（含 /Mission 章节即覆盖，自定义文档不误伤）；智能体设置 Swarm 描述完整体现进化版 Mission
+- **CLI.md 整体移除** (f7840ab): 工作区 22KB 命令文档删除，命令发现收敛为 self.tools（运行时枚举）+ self.search（CommandSearch 单一事实源）；描述语义回归锁
+- **执行模式自动升级** (e1e26a5/899e3e0): 复杂度五档→四档自动升级；Loop 模式设置显示名带斜杠命令前缀（Swarm 火种模式/Fleet 步坦协同模式）
+- **框架发现调整** (fa6f1a2/796db10): 本机名片可编辑/指纹码显示、指纹绑 MAC（框架类型|设备标识）、发现即入册改确认制、侧边栏扫描 10s 刷新、失效联络提醒；安全规则-框架信任列表起效（530cdac）
+- **命令参数反歧义** (ce12006/bf7e487/08ccb3e): ParamGuard 通用化（路径/URL/时间戳污染提示 + 写类命令前置拒绝）+ fs/net 多余参数提示 + 提示词路径纯净规则 + 新增命令自动反歧义审查回归锁
+
+### 修复
+- **参数污染循环复现** (ce12006): 路径参数末尾携带多余文本时附污染提示，阻断同错重试
+- **设置页清理** (ea63c94/4f41be3): 智能体设置移除引导进度面板；删除系统设置-时区（跟随系统）；Token 用量图表 Y 轴动态范围（消除底部大区域孔位）
+- **数据流文档同步** (d336c30): 气泡 UI 重构 §8.5 + 金字塔彻查法升级 0.2.0（证据等级 + 链接闪退/测试 flaky 实战案例）
+
+### 发行
+- APK: `mengpaw-shell-v0.35.0-release.apk`（签名 CN=MengPaw, OU=Studio, O=WowBlue）
+- plugins.json 无变更（本轮无插件发布）
+- 测试数: kernel 484 + core 90 + shell 114 + browser 34 + 插件 462 = 1184，0 failures
+
 ## v0.34.3 (2026-08-09) — 气泡 UI 重构 + 安全分级系统 + 全量审查收尾
 
 ### 新增
