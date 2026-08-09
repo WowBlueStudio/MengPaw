@@ -66,18 +66,7 @@ fun SystemSettingsContent(
         }
     }
 
-    Spacer(Modifier.height(ArcoSpacing.lg))
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Icon(Icons.Outlined.Language, null, tint = ArcoColors.Gray6, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(ArcoSpacing.md))
-        Column(Modifier.weight(1f)) {
-            Text(state.strings.systemTimezone, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text(state.timezone, style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
-        }
-        TextButton(onClick = { viewModel.updateTimezone(if (state.timezone == "Asia/Shanghai") java.util.TimeZone.getDefault().id else "Asia/Shanghai") }) {
-            Text(if (state.timezone == "Asia/Shanghai") state.strings.systemTimezoneAuto else state.strings.systemTimezoneShanghai)
-        }
-    }
+    // v0.34.3: 时区选项删除 — 跟随系统即可, 无手动切换意义
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)

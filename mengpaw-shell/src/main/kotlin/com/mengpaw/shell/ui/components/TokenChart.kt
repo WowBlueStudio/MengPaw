@@ -91,10 +91,16 @@ fun TokenLineChart(
             val chartW = w - padLeft - padRight
             val chartH = h - padTop - padBottom
 
-            // Find max value for Y scale
+            // v0.34.3: Y 轴动态范围 [yMin, yMax] — 原实现固定 0..maxVal,
+            // 数据值小时折线全挤在上部、底部大片空白 (孔位)。现从数据最小值
+            // 附近起算, 上下各留 15%/10% 余量, 折线铺满绘制区。
             val allValues = series.flatMap { it.second.map { p -> p.second } } + cacheSeries.map { it.second }
-            val maxVal = (allValues.maxOrNull() ?: 1L).coerceAtLeast(1L)
-            val yScale = chartH / maxVal.toFloat()
+            val rawMin = allValues.minOrNull() ?: 0L
+            val rawMax = allValues.maxOrNull() ?: 1L
+            val span = (rawMax - rawMin).coerceAtLeast(1L)
+            val yMin = if (rawMin == 0L) 0L else (rawMin - span * 15 / 100).coerceAtLeast(0L)
+            val yMax = rawMax + span * 10 / 100
+            val yScale = chartH / (yMax - yMin).toFloat()
 
             // Y-axis labels (3 ticks)
             val textPaint = android.graphics.Paint().apply {
@@ -103,8 +109,8 @@ fun TokenLineChart(
                 isAntiAlias = true
             }
             for (i in 0..3) {
-                val yVal = maxVal * i / 3
-                val y = padTop + chartH - yVal * yScale
+                val yVal = yMin + (yMax - yMin) * i / 3
+                val y = padTop + chartH - (yVal - yMin) * yScale
                 drawContext.canvas.nativeCanvas.drawText(
                     formatTokenCount(yVal),
                     4f, y + 8f, textPaint
@@ -126,14 +132,14 @@ fun TokenLineChart(
                 val path = Path()
                 data.forEachIndexed { i, (_, value) ->
                     val x = padLeft + chartW * i / (data.size - 1).coerceAtLeast(1)
-                    val y = padTop + chartH - value * yScale
+                    val y = padTop + chartH - (value - yMin) * yScale
                     if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
                 }
                 drawPath(path, color, style = Stroke(strokeWidth))
                 // Dots
                 data.forEachIndexed { i, (_, value) ->
                     val x = padLeft + chartW * i / (data.size - 1).coerceAtLeast(1)
-                    val y = padTop + chartH - value * yScale
+                    val y = padTop + chartH - (value - yMin) * yScale
                     drawCircle(color, 4f, Offset(x, y))
                 }
             }
