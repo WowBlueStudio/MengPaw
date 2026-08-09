@@ -504,7 +504,7 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 1154 测试，v0.34.1+Codex 维护实测快照：kernel 442 + core 90 + shell 126 + browser 34 + 插件 462，0 failures)
+### 3.7 测试 (16 模块 1184 测试，v0.34.3 实测快照：kernel 472 + core 90 + shell 126 + browser 34 + 插件 462，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|

@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.34.3 (2026-08-09) — 气泡 UI 重构 + 安全分级系统 + 全量审查收尾
+
+### 新增
+- **气泡 UI 重构** (ef299ef): 时间轴主导 — 思考过程容器 (单一可折叠, 思考/调用/观察循环, "N 轮思考 · M 次调用" 摘要) + 最终答案独立气泡; 工具行只显命令名 (失败红字, 点击展开参数+观察全文); Final Answer 开始即自动折叠; 历史会话统一重排
+- **命令安全分级系统** (f0b3afe/2229d95): 普通放行 / 中危权限 (Agent 权限等级: 标准/信任, 智能体设置) / 高危弹窗确认 (UserConfirmBus, 30s 超时默认拒绝); reason 门禁收窄到中危/高危
+- **铲子检测** (6776fb5): 会话行为基线 (连续 ≥4 写/外联无读间隔告警) + 提示词遵从探针 (<!--mok--> 连续 5 次失配告警) + agent.write/mkdir 写路径边界 (工作区/输出目录外降级中危)
+- **9881 MCP 网关 Bearer token 认证** (d965961): 无/错 token 一律 401 fail-closed (对齐 9880 桥), self.mcp token 获取
+- **进化反馈状态机** (d59e089): evolution.feedback ls/mark (new/ack/scheduled/fixed) — report 落盘带 status frontmatter
+- **输出目录公共 /MengPaw/** (244e8c0): 用户可见交付区 (Android 11+ 隐藏 Android/data 根治), 旧文件自动迁移, 设置页授权入口
+- **P1-4 约束文档 summary 注入** (be82b66): profile/agents/soul 只注入 frontmatter summary + agent.read 外链 (memory 保持全文)
+- **P1-5 触发器注入条件** (bb42e36): heartbeat/trumanshow 引导块按已启用触发器注入, 触发器指纹进提示词缓存
+- **P0-1+P2-8 单一事实源** (f7bff3d): CLI.md 插件表/命令表去硬编码, 幻影条目永久删除 (notification/workflow/incubator 等)
+- **P2-7 记忆行为侧** (c3fd5ca): 中期只写不编辑 (梦境自动整理), keep/record/project.save 按触发时机
+
+### 修复
+- **本地链接点击闪退** (a568841): FileUriExposedException — Markdown 链接改 Clickable + FileProvider content:// 抛系统选择器
+- **输出目录不可见/未落盘** (244e8c0): 迁移公共 /MengPaw/ + 写路径前导 / 回退工作区 + 交付纪律 (先落盘→agent.ls 验证→再输出链接)
+- **agent.memory.mid.rm 删不掉** (f0b3afe): deleteEntry/editEntry 长度下限 10→6 (HH:mm:ss 条目误伤)
+
+### 发行
+- Shell APK v0.34.3 (versionCode 34003) — 全量发布双远端 + GitHub Release
+- Browser APK 无功能变更不构建
+- 测试: kernel 472 + core 90 + shell 126 + browser 34 + 插件 462 = 1184 tests 全绿 (0 failures / 0 errors)
+- plugins.json 无变更; 交付平板 (GDI-W09) + 手机 (V2361A)
+
 ## v0.34.2 (2026-08-09) — 幻觉干预全链路 + 进化系统产物重构 + 三层十二问审查闭环
 
 ### 新增

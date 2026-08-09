@@ -100,7 +100,9 @@ class SessionShellPoolTest {
 
     @Test
     fun `timed out command destroys session`() = runBlocking {
-        SessionShellPool.commandTimeoutMs = 500  // 测试缩短超时
+        // 1500ms: 足够覆盖新 sh 进程启动 (全量并行负载下 500ms 太激进,
+        // 恢复命令借新会话时启动即超时 — v0.34.3 发布全量实测 flaky 根因)
+        SessionShellPool.commandTimeoutMs = 1500
         val r = SessionShellPool.execute("sleep 3", ctx)
         assertFalse("sleep 3 应超时", r.success)
         assertEquals(ErrorCodes.ERR_TIMEOUT, r.errorCode)
