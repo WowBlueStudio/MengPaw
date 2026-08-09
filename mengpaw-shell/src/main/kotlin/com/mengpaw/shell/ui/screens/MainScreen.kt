@@ -23,7 +23,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.mengpaw.shell.ui.components.MissionMonitorOverlay
 import com.mengpaw.shell.ui.components.NotifyBannerHost
 import com.mengpaw.shell.ui.components.PlanStatusRail
 import com.mengpaw.shell.ui.MAX_CONTENT_WIDTH
@@ -174,15 +173,6 @@ fun MainScreen(
     val listState = rememberLazyListState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showExpandSheet by rememberSaveable { mutableStateOf(false) }
-    var showMissionOverlay by remember { mutableStateOf(false) }
-    // Reactive Mission state synced from kernel via listener
-    var missionActiveState by remember { mutableStateOf(false) }
-    DisposableEffect(Unit) {
-        val listener: com.mengpaw.kernel.mission.MissionListener = { missionActiveState = it.active }
-        com.mengpaw.kernel.mission.MissionMonitor.addListener(listener)
-        missionActiveState = com.mengpaw.kernel.mission.MissionMonitor.missionActive
-        onDispose { com.mengpaw.kernel.mission.MissionMonitor.removeListener(listener) }
-    }
 
     // FIX U17+U6: Derive filtered list once to avoid allocation per recomposition
     val displayedMessages by remember(messages) {
@@ -236,12 +226,10 @@ fun MainScreen(
                 displayAgentName = displayAgentName,
                 agentFramework = agentFramework,
                 sessionLabel = agentViewModel?.activeSessionLabel(strings) ?: "MengPaw / ${strings.agentUnconfigured}",
-                missionActiveState = missionActiveState,
                 pluginViewModel = pluginViewModel,
                 onPluginCommand = { inputText = it },
                 onToggleLeftSidebar = { showLeftSidebar = !showLeftSidebar },
                 onToggleRightSidebar = { showRightSidebar = !showRightSidebar },
-                onToggleMissionOverlay = { showMissionOverlay = !showMissionOverlay },
                 onNewSession = { viewModel.newSession() }
             )
 
@@ -388,16 +376,6 @@ fun MainScreen(
             )
         } // close Column
     } // close outermost Box
-
-    // ── Mission Monitor overlay ──
-    // Auto-dismiss when mission ends (reactive via missionActiveState)
-    LaunchedEffect(missionActiveState) {
-        if (!missionActiveState) showMissionOverlay = false
-    }
-    MissionMonitorOverlay(
-        visible = showMissionOverlay,
-        onDismiss = { showMissionOverlay = false }
-    )
 
     // ── Expand bottom sheet (3-section layout) — 拆至 MainScreenExpandSheet.kt ──
     MainScreenExpandSheet(

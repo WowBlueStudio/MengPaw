@@ -93,10 +93,8 @@ internal class TaskExecutionPipeline(
             var playbackJob: Job? = null // 流式播放协程句柄 (try 外声明, catch 路径可取消)
             val finalAnswerStarted = java.util.concurrent.atomic.AtomicBoolean(false)
             try {
-                // /Mission /Goal /Fleet: 临时覆盖 loopMode
-                if (executionMode == ExecutionMode.MISSION) {
-                    inputTagManager.loopMode = LoopMode.MISSION
-                } else if (executionMode == ExecutionMode.GOAL) {
+                // /Goal /Fleet: 临时覆盖 loopMode
+                if (executionMode == ExecutionMode.GOAL) {
                     inputTagManager.loopMode = LoopMode.GOAL
                 } else if (executionMode == ExecutionMode.FLEET) {
                     inputTagManager.loopMode = LoopMode.FLEET
@@ -248,15 +246,13 @@ internal class TaskExecutionPipeline(
                         // 自动升级: 添加 UI 标签 (复用 AssistChip 体系)
                         val autoTag = when (detected) {
                             LoopMode.GOAL -> InputTag.Mode(ExecutionMode.GOAL)
-                            LoopMode.MISSION -> InputTag.Mode(ExecutionMode.MISSION)
                             LoopMode.SWARM -> InputTag.Mode(ExecutionMode.SWARM)
                             LoopMode.FLEET -> InputTag.Mode(ExecutionMode.FLEET)
                             else -> null
                         }
                         autoTag?.let { inputTagManager.addTag(it) }
                         // 临时覆盖 loopMode 用于本轮分发
-                        if (detected == LoopMode.GOAL || detected == LoopMode.MISSION ||
-                            detected == LoopMode.SWARM || detected == LoopMode.FLEET) {
+                        if (detected == LoopMode.GOAL || detected == LoopMode.SWARM || detected == LoopMode.FLEET) {
                             inputTagManager.loopMode = detected
                         }
                     }
@@ -265,17 +261,16 @@ internal class TaskExecutionPipeline(
                 // Mode dispatch: map slash command + loopMode to the correct engine method
                 val result = when {
                     executionMode == ExecutionMode.PLAN -> session.engine.runWithPlan(task = finalTask, onStep = onStep, onDelta = onDelta)
-                    executionMode == ExecutionMode.MISSION -> session.engine.runWithMission(task = finalTask, onStep = onStep, onDelta = onDelta)
                     executionMode == ExecutionMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep, onDelta = onDelta)
                     // ── 显式斜杠命令结束, 以下为 loopMode 分发 ──
                     // v0.33.0+: REACT 主链路透传附件 (历史经 getStructuredHistory 挂二进制键);
-                    // 目标模式 (GOAL/MISSION/FLEET/SWARM) 执行器签名不含附件 — 附件不传 (注释: P2)
+                    // 目标模式 (GOAL/FLEET/SWARM) 执行器签名不含附件 — 附件不传 (注释: P2)
                     inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta, attachments = attachments)
                     inputTagManager.loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep, onDelta = onDelta)
-                    inputTagManager.loopMode == LoopMode.MISSION || inputTagManager.loopMode == LoopMode.FLEET ->
-                        session.engine.runWithFleet(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep, onDelta = onDelta)
                     inputTagManager.loopMode == LoopMode.SWARM ->
                         session.engine.runWithSwarm(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep, onDelta = onDelta)
+                    inputTagManager.loopMode == LoopMode.FLEET ->
+                        session.engine.runWithFleet(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep, onDelta = onDelta)
                     else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta, attachments = attachments)
                 }
 

@@ -4,7 +4,7 @@
 package com.mengpaw.kernel.security
 
 /**
- * 分级拦截求值 (v0.34.3) — 主循环 / Swarm worker / Mission worker 共用同一纯函数。
+ * 分级拦截求值 (v0.34.3) — 主循环 / Swarm worker 共用同一纯函数。
  *
  * LOW → 放行; MID → STANDARD 权限拒绝 (TRUSTED 放行); HIGH → 弹窗确认
  * (allowUserConfirm=false 的 worker 环境一律拒绝)。

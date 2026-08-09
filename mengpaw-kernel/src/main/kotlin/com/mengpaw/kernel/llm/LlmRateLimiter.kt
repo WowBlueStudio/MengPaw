@@ -16,7 +16,7 @@ import kotlin.random.Random
  *
  * Design rationale (Android single-user):
  *   - Semaphore is preferred over sliding-window QPM: Android runs one user at a time,
- *     peak concurrency is 3-5 calls (Mission workers + Heartbeat + manual chat). Sliding
+ *     peak concurrency is 3-5 calls (Swarm workers + Heartbeat + manual chat). Sliding
  *     window adds timestamp-tracking complexity for no benefit.
  *   - Coordinated pause is simplified: single-process, so a shared atomic is sufficient;
  *     no need for IPC-based pause signaling.

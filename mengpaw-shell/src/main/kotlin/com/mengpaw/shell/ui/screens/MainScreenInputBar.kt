@@ -235,7 +235,6 @@ internal fun MainScreenInputBar(
                         placeholder = {
                             val modeTag = activeTags.filterIsInstance<InputTag.Mode>().firstOrNull()
                             val hint = when (modeTag?.mode) {
-                                ExecutionMode.MISSION -> strings.placeholderMission
                                 ExecutionMode.SWARM -> strings.placeholderSwarm
                                 ExecutionMode.FLEET -> "描述任务，Agent 编队跨设备/多框架协作执行..."
                                 ExecutionMode.GOAL -> "描述目标，Agent 自动评估完成度..."

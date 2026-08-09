@@ -15,7 +15,7 @@ private val FLEET_REGEX = Regex("其他框架|远程设备|另一台|跨设备|�
 
 /**
  * 自动检测任务并返回建议执行模式 (v0.34.3 五档自动升级):
- * 默认 REACT → 目标明确复杂 → GOAL → 规模较大 → MISSION → 规模更大并发 → SWARM;
+ * v0.34.4 Mission 并入 Swarm — 默认 REACT → 目标明确复杂 → GOAL → 规模较大/并发 → SWARM;
  * 需其他框架/设备协助 → FLEET (指征优先, 意图明确不靠评分).
  */
 internal fun detectComplexity(task: String): LoopMode {
@@ -24,8 +24,7 @@ internal fun detectComplexity(task: String): LoopMode {
     return when {
         score <= 4 -> LoopMode.REACT
         score <= 7 -> LoopMode.GOAL
-        score <= 10 -> LoopMode.MISSION
-        // 11+: 规模更大并发 → SWARM (批量/并发信号强)
+        // 8+: 规模较大/并发 → SWARM (v0.34.4 起 Mission 全部由 Swarm 负责)
         else -> LoopMode.SWARM
     }
 }

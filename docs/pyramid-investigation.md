@@ -110,9 +110,9 @@ AdaptiveLlmProvider.consumeSseStream → AgentEngine.runReActLoop
 - 50ms 节流只在 delta 到达时检查;流尾段 token 落在窗口内则永不增量推送,只会在引擎返回后的最终 replace 中一次性出现
 
 **③ 模式分发绕过流式——AgentViewModel.kt:489-519 + ComplexityDetector.kt:12-42**
-- `detectComplexity` 自动把评分 >4 的普通任务(如"帮我写脚本批量下载文件")静默升级 GOAL/MISSION
+- `detectComplexity` 自动把评分 >4 的普通任务(如"帮我写脚本批量下载文件")静默升级 GOAL/SWARM (v0.34.4 Mission 并入 Swarm)
 - GOAL 经 runWithGoal → GoalModeExecutor.kt:56-60 调 runReActLoop **不传 onDelta** → 引擎静默降级非流式(AgentEngine.kt:577-579)
-- MISSION/SWARM/PLAN 路径完全无 onDelta 参数;fallback provider(RemoteApi)同样丢流式
+- SWARM/PLAN 路径完全无 onDelta 参数;fallback provider(RemoteApi)同样丢流式
 
 ### 观察结论
 

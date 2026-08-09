@@ -14,9 +14,12 @@ object PanelOrderStore {
 
     private val file: File get() = File(DataPaths.CONFIG, FILE_NAME)
 
+    // v0.34.4: Mission 并入 Swarm — 默认面板不再含 mission
+    private val DEFAULT_MODES = listOf("goal", "swarm", "fleet", "plan", "research", "translate", "silent")
+
     data class PanelOrder(
-        // v0.34.3: 补 fleet — 此前缺 Fleet 导致 + 面板没有该模式
-        val modes: List<String> = listOf("goal", "mission", "swarm", "fleet", "plan", "research", "translate", "silent"),
+        // v0.34.3: 补 fleet; v0.34.4: 去 mission (并入 Swarm)
+        val modes: List<String> = DEFAULT_MODES,
         val plugins: List<String> = emptyList()
     )
 
@@ -28,10 +31,11 @@ object PanelOrderStore {
             val obj = JSONObject(text)
             val storedModes = obj.optJSONArray("modes")?.let { arr ->
                     (0 until arr.length()).map { i -> arr.getString(i) }
-                } ?: listOf("goal", "mission", "swarm", "fleet", "plan", "research", "translate", "silent")
-            // 迁移: 旧持久化列表缺 fleet → 插入 (防老用户永远看不到 Fleet)
-            val modes = if ("fleet" in storedModes) storedModes
-                else listOf("goal", "mission", "swarm", "fleet") + storedModes.filter { it != "swarm" }
+                } ?: DEFAULT_MODES
+            // 迁移: 旧列表可能含 mission → 过滤 (并入 Swarm); 缺 fleet → 插入 (防老用户看不到 Fleet)
+            val cleaned = storedModes.filter { it != "mission" }
+            val modes = if ("fleet" in cleaned) cleaned
+                else listOf("goal", "swarm", "fleet") + cleaned.filter { it != "swarm" }
             PanelOrder(
                 modes = modes,
                 plugins = obj.optJSONArray("plugins")?.let { arr ->

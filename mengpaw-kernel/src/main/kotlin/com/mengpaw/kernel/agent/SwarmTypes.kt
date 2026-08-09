@@ -9,10 +9,12 @@ import java.util.concurrent.atomic.AtomicInteger
  * 火种模式（Swarm Mode）类型定义。
  *
  * 释义: 星星之火，可以燎原——一个任务点燃众多 Worker 的燎原之势。
+ * Swarm 是进化版的 Mission：吸收 Mission 的并行拆解/验证/降级语义（DONE 👍），
+ * 并在此基础上增加角色混合模型、Andon 失败协议与 JIT 看板三闸门。
  * 编排: 规划器拆解 → 并行 Worker（可混合不同模型）→ Verifier 验证 → 合成器输出。
  * 机制: JIT 看板三闸门（总预算/WIP 并行/单任务）+ Andon 失败协议 + 零待命 Worker。
  */
-enum class SwarmSubtaskStatus { PENDING, RUNNING, VERIFIED, FAILED, SKIPPED }
+enum class SwarmSubtaskStatus { PENDING, RUNNING, VERIFIED, DONE, FAILED, SKIPPED }
 
 /** 拆解出的子任务。role 指定执行角色（roles map 的键，缺省 "worker"）。 */
 data class SwarmSubtask(
@@ -41,6 +43,7 @@ data class SwarmResultCard(
 ) {
     val icon: String get() = when (status) {
         SwarmSubtaskStatus.VERIFIED -> "✅"
+        SwarmSubtaskStatus.DONE -> "👍"
         SwarmSubtaskStatus.FAILED -> "❌"
         SwarmSubtaskStatus.SKIPPED -> "⏭️"
         else -> "⬜"

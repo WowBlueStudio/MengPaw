@@ -8,12 +8,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 复杂度自动检测测试 (v0.34.3 五档升级: REACT/GOAL/MISSION/SWARM + FLEET 指征)。
+ * 复杂度自动检测测试 (v0.34.3 五档升级; v0.34.4 Mission 并入 Swarm: REACT/GOAL/SWARM + FLEET 指征)。
  *
  * detectComplexity/scoreComplexity 为纯 Kotlin (预编译正则 + 阈值判断), 可直接测试。
  * 评分规则: 风险词 +3 / 修改词 +2 / 域命中 ≤3 / 长度 >200 +2, >80 +1 / 序列词 +2 / 批量词 +2。
  *
- * 边界: ≤4 → REACT, 5-7 → GOAL, 8-10 → MISSION, ≥11 → SWARM; FLEET 指征优先。
+ * 边界: ≤4 → REACT, 5-7 → GOAL, ≥8 → SWARM; FLEET 指征优先。
  */
 class ComplexityDetectorTest {
 
@@ -47,25 +47,25 @@ class ComplexityDetectorTest {
     }
 
     @Test
-    fun `8分边界_MISSION`() {
-        // 风险+3 + 域(文件)+1 + 序列(然后)+2 + 批量(所有)+2 = 8 → MISSION (8-10)
+    fun `8分边界_SWARM`() {
+        // 风险+3 + 域(文件)+1 + 序列(然后)+2 + 批量(所有)+2 = 8 → SWARM (v0.34.4 Mission 并入 Swarm)
         assertEquals(8, scoreComplexity("删除文件然后所有"))
-        assertEquals(LoopMode.MISSION, detectComplexity("删除文件然后所有"))
+        assertEquals(LoopMode.SWARM, detectComplexity("删除文件然后所有"))
     }
 
     @Test
-    fun `10分边界_MISSION`() {
-        // 风险+3 + 域(文件,浏览器,系统)+3 + 序列+2 + 批量+2 = 10 → MISSION
+    fun `10分边界_SWARM`() {
+        // 风险+3 + 域(文件,浏览器,系统)+3 + 序列+2 + 批量+2 = 10 → SWARM
         assertEquals(10, scoreComplexity("删除文件然后所有浏览器系统"))
-        assertEquals(LoopMode.MISSION, detectComplexity("删除文件然后所有浏览器系统"))
+        assertEquals(LoopMode.SWARM, detectComplexity("删除文件然后所有浏览器系统"))
     }
 
-    // ── v0.34.3 五档升级: 11+ 最高复杂度 → SWARM (规模更大并发) ──
+    // ── v0.34.4: 8+ 全归 SWARM (原 MISSION 档并入) ──
 
     @Test
     fun `11分最高复杂度_SWARM`() {
         // 风险+3 + 域 9 类命中封顶+3 + 序列(然后)+2 + 批量(所有)+2 = 10;
-        // 补足长度 85 (>80) +1 → 11 — v0.34.3 起 11+ 落 SWARM
+        // 补足长度 85 (>80) +1 → 11 — 8+ 落 SWARM
         val task = "删除文件网络插件记忆系统浏览器搜索翻译应用然后所有" + "认真".repeat(30)
         assertTrue("长度 85 应落在 >80 档", task.length in 81..200)
         assertEquals(11, scoreComplexity(task))

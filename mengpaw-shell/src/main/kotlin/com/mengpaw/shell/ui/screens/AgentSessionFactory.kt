@@ -52,7 +52,7 @@ class AgentSessionFactory(
             rolesProviderCache = null  // 配置变化 → 缓存失效（P2 修复）
         }
 
-    /** 角色 provider 缓存 — 避免每次 Mission/Swarm 运行新建 AdaptiveLlmProvider（HttpClient 开销）。 */
+    /** 角色 provider 缓存 — 避免每次 Swarm/Fleet 运行新建 AdaptiveLlmProvider（HttpClient 开销）。 */
     @Volatile
     private var rolesProviderCache: Map<String, LlmProvider>? = null
 

@@ -98,11 +98,10 @@ enum class LoopMode(val label: String, val desc: String, val enLabel: String, va
         "React Mode", "Standard Q&A, flexible and efficient"),
     GOAL("Goal 模式", "单目标驱动，完成即停",
         "Goal Mode", "Single goal, stops when done"),
-    MISSION("Mission 模式", "建立临时子 Agent 分解任务链，逐步执行",
-        "Mission Mode", "Decompose into subtask chain with temporary sub-agents"),
     // v0.34.3: 中文名带斜杠命令前缀 — 让 Loop 模式设置与 /Swarm /Fleet 直观关联
-    SWARM("Swarm 火种模式", "星星之火，可以燎原：并行 Worker 协作，可按角色混合模型 (/Swarm)",
-        "Swarm Mode", "Parallel workers with role-based model routing (/Swarm)"),
+    // v0.34.4: Swarm 是进化版的 Mission — Mission 并入 Swarm，原 Mission 任务全部由 Swarm 负责
+    SWARM("Swarm 火种模式", "星星之火，可以燎原：Swarm 是进化版的 Mission，并行 Worker 协作，可按角色混合模型 (/Swarm)",
+        "Swarm Mode", "The evolved Mission: parallel workers with role-based model routing (/Swarm)"),
     FLEET("Fleet 步坦协同模式", "装甲集群推进+步兵协同清剿：多 Agent 编队协同，跨设备分布式执行复杂任务 (/Fleet)",
         "Fleet Mode", "Multi-agent combined-arms coordination for distributed complex tasks (/Fleet)")
 }

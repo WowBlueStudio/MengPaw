@@ -9,8 +9,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * Mission / Swarm 共用的 LLM 提示词与解析逻辑（两执行器的拆解/验证/合成/重试
- * 提示词原为逐字复制的双份，提取后单一事实源）。
+ * Swarm 火种模式的 LLM 提示词与解析逻辑（拆解/验证/合成/重试单一事实源）。
+ * 对象名保留历史 "MissionSwarm"（v0.34.4 Mission 并入 Swarm 后仅 Swarm 使用）。
  */
 
 /** 拆解后的子任务规格（JSON 或行解析两种来源的公共中间结构）。 */
@@ -18,16 +18,16 @@ data class SubtaskSpec(
     val id: String,
     val desc: String,
     val criteria: String,
-    /** Swarm 专属: worker 角色 (混合模型用); Mission 恒为 null。 */
+    /** worker 角色 (混合模型用); 缺省 null 回退默认 worker。 */
     val role: String? = null
 )
 
 object MissionSwarmPrompts {
-    /** worker 观察截断上限（防单条结果撑爆 worker 上下文）— Mission/Swarm 共享。 */
+    /** worker 观察截断上限（防单条结果撑爆 worker 上下文）。 */
     const val WORKER_OBSERVATION_MAX = 4000
 
 
-    /** 拆解提示词 — withRole=true 供 Swarm（角色混合模型），Mission 用 false。 */
+    /** 拆解提示词 — withRole=true 输出角色字段（混合模型路由）。 */
     fun buildDecomposePrompt(task: String, maxSubtasks: Int, withRole: Boolean = false): String = buildString {
         append("You are decomposing a complex task into independent subtasks for parallel execution.\n\n")
         append("Task: $task\n\n")
@@ -81,7 +81,7 @@ object MissionSwarmPrompts {
             }
     }
 
-    /** Verifier 提示词 — FIX 行取详细版（Mission 原文）。 */
+    /** Verifier 提示词 — FIX 行取详细版。 */
     fun buildVerifierPrompt(criteria: String, output: String): String = """
 You are a strict quality verifier. Review the worker agent's output against the success criteria.
 
@@ -118,7 +118,7 @@ FIX: <if FAIL, give the worker concrete, actionable instructions for the retry. 
         return Triple(verdict == "PASS", note, fix)
     }
 
-    /** 合成提示词 — mode 为 "Mission" / "火种模式" 等显示名。 */
+    /** 合成提示词 — mode 为显示名（"火种模式" 等）。 */
     fun buildSynthesisPrompt(task: String, mode: String, verified: Int, failed: Int, total: Int, parts: String): String = """
 Synthesize the following $mode results into a clear, structured final report.
 

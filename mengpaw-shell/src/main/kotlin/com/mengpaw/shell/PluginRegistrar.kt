@@ -52,7 +52,7 @@ object PluginRegistrar {
     /**
      * 插件英文名映射 — UI 统一显示「中文名 (English)」（中英对照卖点）。
      * 只对中文名插件设置; 中文名已含英文（部落协作 (Tribe) 改回部落协作 + 本映射）或
-     * 纯英文名（Mission / Agent Loop）不设。
+     * 纯英文名（Agent Loop）不设。
      */
     val PLUGIN_EN_NAMES = mapOf(
         // 内置

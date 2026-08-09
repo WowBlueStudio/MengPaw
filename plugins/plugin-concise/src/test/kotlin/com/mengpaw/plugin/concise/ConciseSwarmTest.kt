@@ -19,12 +19,12 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * 言简意赅 上下文测试 — mission 子 Agent 链路（拆解→worker→verifier→合成）
+ * 言简意赅 上下文测试 — swarm 子 Agent 链路（拆解→worker→verifier→合成）
  * 在 middleware 变换后的提示词下运行，确保不干扰生成、不破坏解析。
  *
  * 断言均通过 calls 记录（每次发给 LLM 的完整 prompt）+ 按序回放响应。
  */
-class ConciseMissionTest {
+class ConciseSwarmTest {
 
     /** 按序返回响应（超出循环用最后一个），记录每次 prompt。 */
     private class ScriptedLlmProvider(
@@ -76,8 +76,8 @@ class ConciseMissionTest {
         it.setAgentIdentity("MengPaw", null, "mock")
     }
 
-    private fun runMission(engine: AgentEngine, task: String) = runBlocking {
-        engine.runWithMission(task = task, onStep = {})
+    private fun runSwarm(engine: AgentEngine, task: String) = runBlocking {
+        engine.runWithSwarm(task = task, onStep = {})
     }
 
     private val SINGLE_DECOMPOSE = "[{\"id\":\"t1\",\"desc\":\"子任务A\",\"criteria\":\"完成A\"}]"
@@ -92,7 +92,7 @@ class ConciseMissionTest {
             "VERDICT: PASS\nANALYSIS: 达标",        // verifier
             "综合报告：设备正常，共 3 个文件"           // 合成
         ))
-        val report = runMission(engineWith(provider), "检查设备状态")
+        val report = runSwarm(engineWith(provider), "检查设备状态")
         assertTrue("报告应含合成文本: $report", report.contains("综合报告：设备正常，共 3 个文件"))
         // worker 只被调 1 次 — 纯文本被当最终答案，未误判为 needsContinue 循环
         // （合成调用也含子任务描述，需排除 "Synthesize"）
@@ -110,7 +110,7 @@ class ConciseMissionTest {
             "VERDICT: PASS\nANALYSIS: 达标",
             "综合报告：完成"
         ))
-        val report = runMission(engineWith(provider), "批量处理")
+        val report = runSwarm(engineWith(provider), "批量处理")
         assertTrue("报告应含合成文本: $report", report.contains("综合报告：完成"))
         // worker 原文（含 Markdown）完整进入合成输入 — 前缀引导不剥内容
         assertTrue("Markdown 内容应原样进入合成: ${provider.calls.last()}",
@@ -125,7 +125,7 @@ class ConciseMissionTest {
             "VERDICT: PASS\nANALYSIS: 达标",
             "综合报告：完成"
         ))
-        runMission(engineWith(provider), "检查状态")
+        runSwarm(engineWith(provider), "检查状态")
         assertEquals("verifier 只应被调 1 次（PASS 不重试）", 1, provider.calls.count { it.contains("VERDICT:") })
     }
 
@@ -138,7 +138,7 @@ class ConciseMissionTest {
             "B完成", "VERDICT: PASS\nANALYSIS: ok",
             "综合报告：完成"
         ))
-        val report = runMission(engineWith(provider), "两个子任务")
+        val report = runSwarm(engineWith(provider), "两个子任务")
         assertTrue("报告应含合成文本: $report", report.contains("综合报告：完成"))
         assertTrue("两个子任务都应执行", provider.calls.any { it.contains("子任务A") } && provider.calls.any { it.contains("子任务B") })
     }
@@ -151,7 +151,7 @@ class ConciseMissionTest {
             "VERDICT: PASS\nANALYSIS: ok",
             "综合报告：完成"
         ))
-        val report = runMission(engineWith(provider), "带代码块拆解")
+        val report = runSwarm(engineWith(provider), "带代码块拆解")
         assertTrue("报告应含合成文本: $report", report.contains("综合报告：完成"))
     }
 }

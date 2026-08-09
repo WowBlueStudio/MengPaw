@@ -19,20 +19,6 @@ data class GoalSession(
 )
 
 /**
- * Decomposed subtask for Mission mode.
- */
-data class MissionSubtask(
-    val id: String,
-    val description: String,
-    val expectedOutcome: String = "",
-    var status: SubtaskStatus = SubtaskStatus.PENDING,
-    var output: String = "",
-    var verifierNote: String = ""
-)
-
-enum class SubtaskStatus { PENDING, RUNNING, DONE, FAILED, VERIFIED }
-
-/**
  * LLM-based goal completion evaluator — the core RubricGate innovation.
  *
  * After each goal turn, calls the LLM to evaluate whether the goal is complete.

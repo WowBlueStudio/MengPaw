@@ -17,7 +17,8 @@ data class PlanSnapshot(
 typealias PlanListener = (PlanSnapshot) -> Unit
 
 /**
- * 计划模式监控 (v0.34.3 /plan UI) — 仿 MissionMonitor 的监听范式。
+ * 计划模式监控 (v0.34.3 /plan UI) — 监听器范式（同 MissionMonitor，v0.34.4 起
+ * Mission 并入 Swarm，Swarm 进度监控可复用本范式）。
  *
  * PlanModeExecutor 在计划生成后 [start], 每步状态变更 [updateStep],
  * 计划结束/取消/异常 [stop]。UI (shell) 经 [addListener] 保持响应式 —

@@ -35,12 +35,10 @@ fun MainScreenHeader(
     displayAgentName: String,
     agentFramework: String?,
     sessionLabel: String,
-    missionActiveState: Boolean,
     pluginViewModel: PluginViewModel,
     onPluginCommand: (String) -> Unit,
     onToggleLeftSidebar: () -> Unit,
     onToggleRightSidebar: () -> Unit,
-    onToggleMissionOverlay: () -> Unit,
     onNewSession: () -> Unit
 ) {
     Surface(
@@ -86,13 +84,6 @@ fun MainScreenHeader(
             Box(modifier = Modifier.size(44.dp).pointerInput(Unit) { detectTapGestures { onNewSession() } },
                 contentAlignment = Alignment.Center) {
                 Icon(Icons.Outlined.Add, strings.newSession, tint = ThemeColors.textSecondary)
-            }
-            // Mission monitor toggle (visible when mission is active)
-            if (missionActiveState) {
-                Box(modifier = Modifier.size(44.dp).pointerInput(Unit) { detectTapGestures { onToggleMissionOverlay() } },
-                    contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.Monitor, "Mission", tint = ThemeColors.brand)
-                }
             }
             // FIX: Dynamic plugin buttons from HEADER_BAR placement
             val headerButtons = remember(pluginViewModel.activeButtons) { pluginViewModel.activeButtons[com.mengpaw.kernel.plugin.ButtonPlacement.HEADER_BAR] ?: emptyList() }

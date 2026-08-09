@@ -50,7 +50,6 @@ class AgentEngine(
     private val pipelineManager = PipelineManager(pluginManager, pluginExecutor, agentExecutor, additionalNamespaces)
     internal var toolResultManager = ToolResultManager("agent")
     private val goalModeExecutor = GoalModeExecutor(this)
-    private val missionModeExecutor = MissionModeExecutor(this)
     private val planModeExecutor = PlanModeExecutor(this, pipelineManager, sessionManager, promptEngine)
     private val swarmModeExecutor = SwarmModeExecutor(this)
     var integrityProvider: IntegrityProvider = NoOpIntegrityProvider
@@ -148,7 +147,7 @@ class AgentEngine(
     /** Expose the current LLM provider for delegation to sub-executors. */
     internal fun getLlmProvider(): LlmProvider = llmProvider
 
-    /** Expose sub-managers for delegation to sub-executors (swarm/mission/plan). */
+    /** Expose sub-managers for delegation to sub-executors (swarm/plan). */
     internal fun getSessionManager(): SessionManager = sessionManager
 
     internal fun getPipelineManager(): PipelineManager = pipelineManager
@@ -206,6 +205,8 @@ class AgentEngine(
         val CORE_VERSION: String get() = MengPawVersion.FRAMEWORK
 
         /** 零待命并行 worker 会话 scope — 不注入主循环省察引导。 */
+        // v0.34.4 Mission 并入 Swarm — 保留 "mission" 仅为历史会话数据兼容
+        // （旧版本 mission scope 的 worker 会话仍按零待命处理）
         internal val WORKER_SCOPES = setOf("mission", "swarm")
     }
 
@@ -308,25 +309,11 @@ class AgentEngine(
         attachments: List<AttachmentData> = emptyList()
     ): String = runtime.runReActLoop(task, maxSteps, contextPrefix, onStep, onDelta, attachments)
 
-    // ── Mission Mode (delegated to MissionModeExecutor) ──────────────
-
-    /**
-     * Mission-mode: decompose -> worker execution -> verification.
-     * Uses the LLM to decompose the task, then runs each subtask sequentially.
-     * Delegates to [MissionModeExecutor].
-     */
-    suspend fun runWithMission(
-        task: String, maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
-        maxRetriesPerSubtask: Int = 2, maxParallel: Int = 4,
-        onStep: ((TraceStep) -> Unit)? = null,
-        onDelta: ((String) -> Unit)? = null
-    ): String = missionModeExecutor.runWithMission(
-        task, maxSubtasks, maxStepsPerSubtask, maxRetriesPerSubtask, maxParallel, onStep, onDelta)
-
     // ── 火种模式 (Swarm Mode) — 规划器拆解 → 并行 Worker → Verifier → 合成器 ──
 
     /**
      * 火种模式 (Swarm Mode): "星星之火，可以燎原" — 一个任务点燃众多 Worker 的燎原之势。
+     * Swarm 是进化版的 Mission（v0.34.4 起 Mission 并入 Swarm）。
      *
      * 混合模型: [roles] 按角色注入 LlmProvider (planner/worker/verifier/synthesizer 可异模型),
      * 缺省回退引擎主 provider。JIT 看板三闸门: [maxTotalSteps] 总预算 + [maxParallel] WIP 并行

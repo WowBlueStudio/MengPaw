@@ -148,8 +148,7 @@ Final Answer: 你的电量是 85%……
 |------|:---:|------|
 | REACT（主链路） | ✅ | v0.34.3: 思考过程容器（思考流式 + 折叠工具行 + 观察）+ 最终答案气泡 |
 | GOAL | ✅ | 同主链路（`runWithGoal` 同签名透传） |
-| MISSION/FLEET | 合成阶段 ✅ / worker 阶段 ❌ | 并行 worker 非流式（设计选择），onStep/traces 呈现进度 |
-| SWARM | worker 阶段 ❌ | 同上，Andon 协议呈现 |
+| FLEET/SWARM | 合成阶段 ✅ / worker 阶段 ❌ | 并行 worker 非流式（设计选择），onStep/traces 呈现进度（v0.34.4 Mission 并入 Swarm） |
 | PLAN | ✅ | 同主链路 |
 
 ## 8.5 气泡呈现模型 (v0.34.3 重构)

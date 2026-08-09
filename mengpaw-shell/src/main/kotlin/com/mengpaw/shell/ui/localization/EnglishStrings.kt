@@ -65,14 +65,13 @@ val EnglishStrings = AppStrings().apply {
     filePickCamera = "Camera"
     dragHint = "Long-press to reorder"
 
-    tagModeMission = "/Mission"
     tagModeResearch = "/Research"
     tagModeTranslate = "/Translate"
     tagModeSilent = "/Silent"
     tagDismiss = "Remove"
     mentionHint = "@mention an agent..."
 
-    placeholderMission = "Describe a complex task for sub-agents to decompose..."
+    // v0.34.4: Swarm is the evolved Mission — subtask decomposition is now handled by Swarm
     placeholderSwarm = "Describe a task for parallel swarm workers with mixed models..."
     placeholderResearch = "Enter a topic for deep research with source verification..."
     placeholderTranslate = "Enter text to translate..."

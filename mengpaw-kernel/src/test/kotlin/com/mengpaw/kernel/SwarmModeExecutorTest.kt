@@ -7,6 +7,8 @@ import com.mengpaw.kernel.agent.AgentMemoryExecutor
 import com.mengpaw.kernel.agent.SwarmBudget
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.llm.LlmProvider
+import com.mengpaw.kernel.llm.ProviderInfo
+import com.mengpaw.kernel.llm.ProviderType
 import com.mengpaw.kernel.session.SessionManager
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -25,6 +27,18 @@ class SwarmModeExecutorTest {
 
     private fun engineWith(provider: LlmProvider) =
         AgentEngine(llmProvider = provider, sessionManager = SessionManager())
+
+    /** 验证器不可用模拟 — complete 一律抛异常触发 UNAVAILABLE 降级。 */
+    private class ThrowingLlmProvider : LlmProvider {
+        override suspend fun complete(prompt: String): String =
+            throw RuntimeException("verifier unavailable")
+        override suspend fun completeWithMessages(messages: List<Map<String, String>>): String =
+            throw RuntimeException("verifier unavailable")
+        override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
+            throw RuntimeException("verifier unavailable")
+        override fun info() = ProviderInfo("mock", "throwing", ProviderType.LOCAL)
+        override fun close() {}
+    }
 
     // ── 用例 1: 混合模型角色分发 ────────────────────────────────────
 
@@ -166,6 +180,29 @@ class SwarmModeExecutorTest {
         assertTrue("报告应含 2 个跳过", report.contains("⏭️ 2"))
         // worker 仅被调 2 次 (2 步)
         assertEquals("worker 调用数 = 预算", 2, worker.calls.size)
+    }
+
+    // ── 用例 4b: 验证器不可用 → 👍 DONE 降级 (v0.34.4 吸收 Mission 语义) ──
+
+    @Test
+    fun `verifier unavailable degrades to DONE`() = runBlocking {
+        val planner = ScriptedLlmProvider(listOf(DECOMPOSE_JSON), "planner")
+        val worker = ScriptedLlmProvider(listOf("Final Answer: 完成"), "worker")
+        val synthesizer = ScriptedLlmProvider(listOf("综合报告"), "synthesizer")
+        val engine = engineWith(planner)
+
+        val report = engine.runWithSwarm(
+            task = "降级测试",
+            roles = mapOf(
+                "planner" to planner, "worker" to worker,
+                "verifier" to ThrowingLlmProvider(), "synthesizer" to synthesizer
+            ),
+            maxSubtasks = 1
+        )
+
+        assertTrue("报告应含 👍 DONE 计数: $report", report.contains("👍 1"))
+        assertFalse("不应误标严格验证通过", report.contains("✅ 1"))
+        assertTrue("合成正常", report.contains("综合报告"))
     }
 
     // ── 用例 5: Andon 重派 (换模型) ────────────────────────────────

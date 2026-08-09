@@ -65,14 +65,13 @@ val ChineseStrings = AppStrings().apply {
     filePickCamera = "拍照"
     dragHint = "长按拖拽排序"
 
-    tagModeMission = "/Mission"
     tagModeResearch = "/Research"
     tagModeTranslate = "/Translate"
     tagModeSilent = "/Silent"
     tagDismiss = "移除"
     mentionHint = "@智能体名称..."
 
-    placeholderMission = "输入一个需要子智能体进行拆解执行的复杂任务"
+    // v0.34.4: Swarm 是进化版的 Mission — 原 Mission 的拆解执行由 Swarm 承接
     placeholderSwarm = "输入需要火种模式并行拆解执行的任务（可混合不同模型）"
     placeholderResearch = "输入需要深度调研的课题，将进行多轮搜索与交叉验证"
     placeholderTranslate = "输入需要翻译的内容"

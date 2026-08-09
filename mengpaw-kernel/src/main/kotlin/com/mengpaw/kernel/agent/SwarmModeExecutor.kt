@@ -21,6 +21,11 @@ import kotlinx.coroutines.sync.withPermit
 /**
  * 火种模式 (Swarm Mode) 执行器 — "星星之火，可以燎原"。
  *
+ * Swarm 是进化版的 Mission：继承 Mission 的"拆解→并行 Worker→Verifier 验证→合成"
+ * 编排与验证器不可用时的 👍 DONE 降级语义，并进化出角色混合模型、Andon 失败协议
+ * （不静默重试，协调器决策重派/终止）与 JIT 看板三闸门（总预算/WIP 并行/单任务上限）。
+ * Mission 模式自 v0.34.4 起并入 Swarm，原 Mission 任务全部由 Swarm 负责。
+ *
  * 一个任务点燃众多 Worker 的燎原之势: 规划器拆解 → 并行 Worker (可混合不同模型) →
  * Verifier 验证 → 合成器输出。参考 Kimi Agent Swarm 四层架构与丰田 JIT 生产体系:
  *
@@ -38,6 +43,8 @@ class SwarmModeExecutor(
     private val promptEngine get() = agentEngine.getPromptEngine()
 
     private enum class AndonAction { REDEPLOY, TERMINATE }
+    /** Verifier 裁决 — UNAVAILABLE 为验证器不可用时的降级通过（Mission 的 👍 DONE 语义）。 */
+    private enum class VerificationVerdict { PASS, FAIL, UNAVAILABLE }
 
     /** 零待命 Worker 执行器 (runWorker 拆自本类, 400 行文件拆分)。 */
     private val workerRunner = SwarmWorkerRunner(agentEngine)
@@ -93,12 +100,13 @@ class SwarmModeExecutor(
             // ── Phase 3: 合成器汇总 (流式: 最终报告逐字输出) ──
             val synthesis = synthesize(guardedTask, cards, providerFor(SwarmRoles.SYNTHESIZER, roles), onDelta)
             val verified = cards.count { it.status == SwarmSubtaskStatus.VERIFIED }
+            val done = cards.count { it.status == SwarmSubtaskStatus.DONE }
             val failed = cards.count { it.status == SwarmSubtaskStatus.FAILED }
             val skipped = cards.count { it.status == SwarmSubtaskStatus.SKIPPED }
 
             val report = buildString {
                 appendLine("## 火种模式: $guardedTask")
-                appendLine("子任务: ${cards.size} | ✅ $verified | ❌ $failed | ⏭️ $skipped | 总步数: ${budget.consumedSteps}")
+                appendLine("子任务: ${cards.size} | ✅ $verified | 👍 $done | ❌ $failed | ⏭️ $skipped | 总步数: ${budget.consumedSteps}")
                 appendLine()
                 cards.forEach { appendLine("${it.icon} ${it.subtaskId}: ${it.summary.take(300)}") }
                 appendLine()
@@ -155,10 +163,16 @@ class SwarmModeExecutor(
             }
 
             // Phase 2: Verifier 验证 (Worker-Verifier 模式)
-            val (passed, note) = verify(subtask, outcome, providerFor(SwarmRoles.VERIFIER, roles))
-            if (passed) {
-                return SwarmResultCard(subtask.id, SwarmSubtaskStatus.VERIFIED,
-                    outcome.answer, outcome.tokensUsed, outcome.stepsUsed, note)
+            val (verdict, note) = verify(subtask, outcome, providerFor(SwarmRoles.VERIFIER, roles))
+            when (verdict) {
+                // 降级通过 (验证器不可用) — 吸收 Mission 的 👍 DONE 语义
+                VerificationVerdict.UNAVAILABLE ->
+                    return SwarmResultCard(subtask.id, SwarmSubtaskStatus.DONE,
+                        outcome.answer, outcome.tokensUsed, outcome.stepsUsed, note)
+                VerificationVerdict.PASS ->
+                    return SwarmResultCard(subtask.id, SwarmSubtaskStatus.VERIFIED,
+                        outcome.answer, outcome.tokensUsed, outcome.stepsUsed, note)
+                VerificationVerdict.FAIL -> Unit // 落到下方重试判定
             }
             if (subtask.retryCount >= maxRetries || budget.exhausted) {
                 return SwarmResultCard(subtask.id, SwarmSubtaskStatus.FAILED,
@@ -194,7 +208,7 @@ class SwarmModeExecutor(
         subtask: SwarmSubtask,
         outcome: WorkerOutcome,
         verifierProvider: LlmProvider
-    ): Pair<Boolean, String> {
+    ): Pair<VerificationVerdict, String> {
         val verifierPrompt = com.mengpaw.kernel.agent.MissionSwarmPrompts.buildVerifierPrompt(
             criteria = subtask.expectedOutcome.ifBlank { "Complete the task: ${subtask.description}" },
             output = outcome.answer
@@ -208,10 +222,10 @@ class SwarmModeExecutor(
                 if (fix.isNotBlank()) append("修复建议: $fix")
                 if (isBlank()) append(verifyResult.take(200))
             }.ifBlank { "PASS" }
-            passed to note
+            (if (passed) VerificationVerdict.PASS else VerificationVerdict.FAIL) to note
         } catch (e: Exception) {
-            // 验证不可用 — 接受结果 (Mission 同款降级)
-            true to "PASS (verifier unavailable)"
+            // 验证不可用 — 接受结果并标记 👍 DONE（Mission 降级语义，与严格验证区分）
+            VerificationVerdict.UNAVAILABLE to "PASS (verifier unavailable)"
         }
     }
 
@@ -249,7 +263,8 @@ class SwarmModeExecutor(
         synthesizerProvider: LlmProvider,
         onDelta: ((String) -> Unit)? = null
     ): String {
-        val verified = cards.count { it.status == SwarmSubtaskStatus.VERIFIED }
+        // ✅ 严格验证 + 👍 降级通过 均计入"通过"统计（报告行单独区分）
+        val verified = cards.count { it.status == SwarmSubtaskStatus.VERIFIED || it.status == SwarmSubtaskStatus.DONE }
         val failed = cards.count { it.status == SwarmSubtaskStatus.FAILED }
         val parts = cards.joinToString("\n") { card ->
             "${card.icon} ${card.subtaskId}: ${card.summary.take(300)}"

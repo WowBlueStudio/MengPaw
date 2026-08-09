@@ -62,7 +62,7 @@ class SessionPersistenceDataTest {
                 MessageData(
                     type = "agent_step",
                     text = "步骤文本",
-                    executionMode = "MISSION",
+                    executionMode = "SWARM",
                     agentRef = "MengPaw",
                     isError = false,
                     attachments = listOf(

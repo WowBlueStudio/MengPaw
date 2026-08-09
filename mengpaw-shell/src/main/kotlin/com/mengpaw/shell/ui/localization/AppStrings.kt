@@ -74,7 +74,6 @@ class AppStrings {
     var dragHint: String = ""
 
     // Execution mode tags
-    var tagModeMission: String = ""
     var tagModeResearch: String = ""
     var tagModeTranslate: String = ""
     var tagModeSilent: String = ""
@@ -82,7 +81,6 @@ class AppStrings {
     var mentionHint: String = ""
 
     // Mode-specific placeholders
-    var placeholderMission: String = ""
     var placeholderSwarm: String = ""
     var placeholderResearch: String = ""
     var placeholderTranslate: String = ""

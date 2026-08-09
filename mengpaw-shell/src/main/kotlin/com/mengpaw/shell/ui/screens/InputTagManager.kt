@@ -28,7 +28,6 @@ class InputTagManager {
             is InputTag.Mode -> {
                 current.removeAll { it is InputTag.Mode }
                 when (tag.mode) {
-                    ExecutionMode.MISSION -> loopMode = LoopMode.MISSION
                     ExecutionMode.GOAL -> loopMode = LoopMode.GOAL
                     ExecutionMode.PLAN -> {} // Plan uses explicit dispatch, doesn't change loopMode
                     else -> {} // RESEARCH/TRANSLATE/SILENT 不改变 loopMode

@@ -151,7 +151,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         else ExecutionResult.ok("boost.md 不存在——你早已完成初始化。")
     }
 
-    /** Slash command mode menu — 8 execution modes (modes.md, template-provided). */
+    /** Slash command mode menu — 7 execution modes (modes.md, template-provided). */
     private suspend fun modes(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val modesDoc = docManager.getDoc(AgentDocType.MODES)
         if (modesDoc.isBlank()) return ExecutionResult.ok("(modes.md 不存在)")

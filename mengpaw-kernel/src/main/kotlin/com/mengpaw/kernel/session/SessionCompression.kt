@@ -163,7 +163,7 @@ internal class SessionCompressor(
      * - 复用 AgentDocs.appendMidTermMemory 写入队列 — 与 agent.memory.record 同一
      *   落盘路径/格式, LLM 响应返回后由 AgentEngine.flushMidTermMemoryQueue 刷盘;
      * - 幂等: AutoSummaryMemory.WrittenGuard 以 会话 id + 折叠次数 去重;
-     * - 零待命并行 worker (swarm/mission) 不写 — 与 AgentMemoryExecutor 写屏蔽一致,
+     * - 零待命并行 worker (swarm + 历史 mission 会话兼容) 不写 — 与 AgentMemoryExecutor 写屏蔽一致,
      *   防止 worker 对话向 Agent 中期记忆注入噪音;
      * - 写入失败静默 (best-effort), 不放异常, 不阻塞压缩主路径。
      */

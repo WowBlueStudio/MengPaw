@@ -98,7 +98,7 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                     engine.getSessionManager().addMessage(session.id, Message("user", "继续。输出 Action: <命令> 和 Action Input: <参数>。"))
                     continue
                 }
-                // P2 修复: 多 Action 并行（与主循环/Mission worker 对齐 — 一次 LLM 输出多工具）
+                // P2 修复: 多 Action 并行（与主循环对齐 — 一次 LLM 输出多工具）
                 val actionList = parsed.actions.ifEmpty { listOfNotNull(parsed.action) }
                 if (actionList.isNotEmpty()) {
                     val entries = coroutineScope {
