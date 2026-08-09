@@ -63,6 +63,40 @@ class FrameworkPairTest {
         assertEquals(1, FrameworkPairStore.pendingCount)
     }
 
+    // ── v0.35.2 审查闭环: 过期清理 / 清除已处理 ─────────────────────
+
+    @Test
+    fun `cleanupExpired removes old processed but keeps pending`() {
+        val old = System.currentTimeMillis() - 8 * 24L * 3600 * 1000L
+        FrameworkPairStore.add(request().copy(requestId = "old-accepted", requestedAt = old,
+            status = FrameworkPairStore.PairStatus.ACCEPTED))
+        FrameworkPairStore.add(request().copy(requestId = "old-declined", requestedAt = old,
+            status = FrameworkPairStore.PairStatus.DECLINED))
+        FrameworkPairStore.add(request().copy(requestId = "pending-old"))
+        FrameworkPairStore.add(request().copy(requestId = "recent-accepted",
+            status = FrameworkPairStore.PairStatus.ACCEPTED))
+
+        val removed = FrameworkPairStore.cleanupExpired(days = 7)
+        assertEquals("仅过期已处理被清", 2, removed)
+        assertEquals("待处理保留", 1, FrameworkPairStore.pending().size)
+        assertNotNull("7 天内已处理保留", FrameworkPairStore.findByRequestId("recent-accepted"))
+        assertNull("过期已处理清除", FrameworkPairStore.findByRequestId("old-accepted"))
+    }
+
+    @Test
+    fun `clearProcessed keeps only pending`() {
+        FrameworkPairStore.add(request().copy(requestId = "p1"))
+        FrameworkPairStore.add(request().copy(requestId = "a1",
+            status = FrameworkPairStore.PairStatus.ACCEPTED))
+        FrameworkPairStore.add(request().copy(requestId = "d1",
+            status = FrameworkPairStore.PairStatus.DECLINED))
+
+        FrameworkPairStore.clearProcessed()
+        assertEquals(1, FrameworkPairStore.loadAll().size)
+        assertEquals(FrameworkPairStore.PairStatus.PENDING,
+            FrameworkPairStore.loadAll()[0].status)
+    }
+
     // ── Handler: REQUEST 落盘 + ACCEPT 双向入册 ──────────────────────
 
     @Test

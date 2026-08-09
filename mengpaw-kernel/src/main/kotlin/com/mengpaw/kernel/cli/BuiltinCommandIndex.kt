@@ -316,6 +316,16 @@ object BuiltinCommandIndex {
         idx("framework.disconnect", "断开与外部框架节点的连接", "framework.disconnect <peer-name>",
             listOf("断开", "连接", "外部", "取消"),
             listOf("disconnect", "close", "stop", "detach"))
+        // v0.35.2 审查闭环: 配对请求 Agent 侧操作入口 (framework.pair.*)
+        idx("framework.pair.ls", "列出框架通讯录配对请求 (待处理/已同意/已拒绝; 顺带清理 7 天前过期记录)", "framework.pair.ls",
+            listOf("配对", "请求", "待处理", "红点", "通讯录", "同意", "拒绝"),
+            listOf("pair", "request", "pending", "accept", "decline", "directory"))
+        idx("framework.pair.accept", "同意框架配对请求 (双方加入通讯录)", "framework.pair.accept <requestId>",
+            listOf("同意", "配对", "请求", "接受", "确认"),
+            listOf("pair", "accept", "request", "confirm", "approve"))
+        idx("framework.pair.decline", "拒绝框架配对请求", "framework.pair.decline <requestId>",
+            listOf("拒绝", "配对", "请求", "驳回"),
+            listOf("pair", "decline", "request", "reject"))
         idx("framework.adapters", "列出已注册的连接器及其在线状态", "framework.adapters",
             listOf("连接器", "适配器", "列表", "在线", "MCP网关"),
             listOf("adapters", "connectors", "list", "gateway", "status"))

@@ -39,7 +39,9 @@ class FrameworkPlugin : Plugin {
             "framework.trust", "framework.untrust",
             "framework.info", "framework.ping",
             "framework.connect", "framework.call",
-            "framework.disconnect", "framework.adapters"
+            "framework.disconnect", "framework.adapters",
+            // v0.35.2 审查闭环: Agent 侧配对请求操作入口
+            "framework.pair.ls", "framework.pair.accept", "framework.pair.decline"
         )
     )
 
@@ -54,10 +56,72 @@ class FrameworkPlugin : Plugin {
         "connect" to { args, ctx -> handleConnect(args, ctx) },
         "call" to { args, ctx -> handleCall(args, ctx) },
         "disconnect" to { args, ctx -> handleDisconnect(args, ctx) },
-        "adapters" to { args, ctx -> handleAdapters(args, ctx) }
+        "adapters" to { args, ctx -> handleAdapters(args, ctx) },
+        "pair.ls" to { args, ctx -> handlePairLs(args, ctx) },
+        "pair.accept" to { args, ctx -> handlePairAccept(args, ctx) },
+        "pair.decline" to { args, ctx -> handlePairDecline(args, ctx) }
     )
 
     private val discovery get() = FrameworkDiscovery.instance
+
+    // ── 配对请求 (v0.35.2 审查闭环: Agent 认知层缺口) ──────────────────
+
+    private suspend fun handlePairLs(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        // 顺带清理过期已处理请求 (7 天)
+        try { FrameworkPairStore.cleanupExpired() } catch (_: Exception) {}
+        val all = FrameworkPairStore.loadAll()
+        if (all.isEmpty()) {
+            return ExecutionResult.ok(
+                "暂无配对请求。添加框架流程: 通讯录 → 添加框架 → 扫描/手动 → 发送请求, 对方红点查看并同意。")
+        }
+        val pending = all.filter { it.status == FrameworkPairStore.PairStatus.PENDING }
+        val sb = StringBuilder("配对请求 (待处理 ${pending.size} / 共 ${all.size}):\n\n")
+        all.forEach { r ->
+            val statusLabel = when (r.status) {
+                FrameworkPairStore.PairStatus.PENDING -> "待处理"
+                FrameworkPairStore.PairStatus.ACCEPTED -> "已同意"
+                FrameworkPairStore.PairStatus.DECLINED -> "已拒绝"
+            }
+            sb.appendLine("${r.requestId} · ${r.fromName} (${r.fromAddress}:${r.fromPort}) · $statusLabel")
+        }
+        if (pending.isNotEmpty()) {
+            sb.appendLine("\n同意: framework.pair.accept <requestId>; 拒绝: framework.pair.decline <requestId>")
+        }
+        return ExecutionResult.ok(sb.toString().trimEnd())
+    }
+
+    private suspend fun handlePairAccept(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val id = args.firstOrNull()
+            ?: return ExecutionResult.fail("用法: framework.pair.accept <requestId> (framework.pair.ls 查看)", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_INVALID_INPUT)
+        val req = FrameworkPairStore.findByRequestId(id)
+            ?: return ExecutionResult.fail("未找到请求 $id — framework.pair.ls 查看当前请求", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_NOT_FOUND)
+        if (req.status != FrameworkPairStore.PairStatus.PENDING) {
+            return ExecutionResult.ok("该请求已处理: ${req.status}")
+        }
+        val sent = FrameworkPairEngine.accept(req)
+        return if (sent) {
+            ExecutionResult.ok("已同意 ${req.fromName} 的配对请求 — 双方已加入框架通讯录")
+        } else {
+            ExecutionResult.fail(
+                "已本地入册 ${req.fromName}, 但回执发送失败 — 请确认对方在线且同一 WiFi (防火墙可能拦截); framework.pair.ls 复查")
+        }
+    }
+
+    private suspend fun handlePairDecline(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val id = args.firstOrNull()
+            ?: return ExecutionResult.fail("用法: framework.pair.decline <requestId> (framework.pair.ls 查看)", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_INVALID_INPUT)
+        val req = FrameworkPairStore.findByRequestId(id)
+            ?: return ExecutionResult.fail("未找到请求 $id — framework.pair.ls 查看当前请求", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_NOT_FOUND)
+        if (req.status != FrameworkPairStore.PairStatus.PENDING) {
+            return ExecutionResult.ok("该请求已处理: ${req.status}")
+        }
+        val sent = FrameworkPairEngine.decline(req)
+        return if (sent) {
+            ExecutionResult.ok("已拒绝 ${req.fromName} 的配对请求")
+        } else {
+            ExecutionResult.fail("已本地标记拒绝, 但回执发送失败 — 请确认对方在线")
+        }
+    }
 
     override suspend fun onInstall(ctx: PluginContext) {
         // 本机标准 MCP 网关 (9881) — 任何 MCP client 直连 MengPaw 工具
@@ -185,7 +249,7 @@ class FrameworkPlugin : Plugin {
         kotlinx.coroutines.delay(3000)
         val peers = discovery?.discoveredPeers?.toList().orEmpty()
         if (peers.isEmpty()) return ExecutionResult.ok(
-            "未发现局域网框架。请确保其他设备已启动 MengPaw 并在同一 WiFi; 或手动添加: framework.add <名称> <IP> <端口>。\n" +
+            "未发现局域网框架。请确保其他设备已启动 MengPaw 并在同一 WiFi (防火墙可能拦截 mDNS); 或手动添加: framework.add <名称> <IP> <端口>。\n" +
             "已入册节点: framework.peers")
         val sb = StringBuilder("发现 ${peers.size} 个框架 (未入册):\n\n")
         peers.forEach { p ->
@@ -194,6 +258,7 @@ class FrameworkPlugin : Plugin {
             sb.appendLine("   入册: framework.add ${p.name} ${p.address} ${p.port} (或侧边栏添加)")
             sb.appendLine()
         }
+        sb.appendLine("> 跨版本说明: 旧版对端不广播设备标识 (did) 时, 指纹暂按 IP 回退 (换 IP 会变); 双方升级到最新版后指纹固定。")
         return ExecutionResult.ok(sb.toString().trimEnd())
     }
 

@@ -372,6 +372,7 @@ class AppStrings {
     var pairScanHint: String = ""
     var pairRequestSent: String = ""
     var pairRequestFailed: String = ""
+    var pairClearProcessed: String = ""
     var pairManualAdd: String = ""
     var pairAddedLocal: String = ""
     // v0.35.2 审查: 气泡图标操作行 / 输出目录区块 / 安全分级面板 / 权限引导 / 名片标签

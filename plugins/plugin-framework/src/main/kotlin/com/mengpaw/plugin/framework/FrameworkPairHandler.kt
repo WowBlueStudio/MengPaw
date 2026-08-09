@@ -59,6 +59,15 @@ class FrameworkPairHandler : AcpHandler {
             fromType = "mengpaw"
         )
         FrameworkPairStore.add(req)
+        // v0.35.2 审查闭环: Agent 侧反馈通道 — inbox 提醒文件 (Agent 轮询可感知, 与 DelegateHandler 同模式)
+        try {
+            val inbox = java.io.File(com.mengpaw.kernel.DataPaths.AGENT_INBOX).also { it.mkdirs() }
+            java.io.File(inbox, "pair_request_${System.currentTimeMillis()}.md").writeText(
+                "收到框架配对请求: ${req.fromName} (${req.fromAddress}:${req.fromPort})\n" +
+                    "待处理请求: framework.pair.ls; 同意/拒绝: framework.pair.accept/decline <requestId>\n" +
+                    "或侧边栏通讯录点「添加框架」查看。"
+            )
+        } catch (_: Exception) {}
         try {
             NotifyBus.banner(
                 "🔔 框架配对请求: ${req.fromName} 请求加入通讯录 — 点「添加框架」查看并同意",

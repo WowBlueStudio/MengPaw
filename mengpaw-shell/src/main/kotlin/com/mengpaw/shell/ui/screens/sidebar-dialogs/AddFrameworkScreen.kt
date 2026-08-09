@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 fun AddFrameworkScreen(strings: AppStrings, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var requests by remember { mutableStateOf(FrameworkPairStore.pending()) }
+    var processedCount by remember { mutableStateOf(0) }
     var discovered by remember { mutableStateOf<List<FrameworkPeerStore.FrameworkPeer>>(emptyList()) }
     var isDiscovering by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf("") }
@@ -49,6 +50,7 @@ fun AddFrameworkScreen(strings: AppStrings, onDismiss: () -> Unit) {
     DisposableEffect(Unit) {
         val listener: () -> Unit = {
             requests = FrameworkPairStore.pending()
+            processedCount = FrameworkPairStore.loadAll().count { it.status != FrameworkPairStore.PairStatus.PENDING }
         }
         FrameworkPairStore.addListener(listener)
         onDispose { FrameworkPairStore.removeListener(listener) }
@@ -84,8 +86,17 @@ fun AddFrameworkScreen(strings: AppStrings, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(ArcoSpacing.sm))
 
                 // ── ① 待处理配对请求 ──
-                Text(strings.pairPendingRequests, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
-                    color = ThemeColors.textPrimary, modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(strings.pairPendingRequests, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                        color = ThemeColors.textPrimary, modifier = Modifier.weight(1f))
+                    if (processedCount > 0) {
+                        TextButton(onClick = {
+                            FrameworkPairStore.clearProcessed()
+                            requests = FrameworkPairStore.pending()
+                            processedCount = 0
+                        }) { Text(strings.pairClearProcessed, fontSize = 11.sp, color = ThemeColors.textSecondary) }
+                    }
+                }
                 Spacer(Modifier.height(4.dp))
                 if (requests.isEmpty()) {
                     Text(strings.pairNoPending, fontSize = 12.sp, color = ThemeColors.textSecondary,

@@ -100,6 +100,26 @@ object FrameworkPairStore {
 
     fun findByRequestId(id: String): PairRequest? = loadAll().find { it.requestId == id }
 
+    /**
+     * 清理过期请求 (v0.35.2 审查闭环): 超过 [days] 天的已处理 (ACCEPTED/DECLINED) 请求删除。
+     * 待处理请求保留 (红点不能静默消失)。返回清理条数。
+     */
+    fun cleanupExpired(days: Int = 7): Int {
+        val cutoff = System.currentTimeMillis() - days * 24L * 3600 * 1000L
+        val all = loadAll()
+        val keep = all.filter { it.status == PairStatus.PENDING || it.requestedAt >= cutoff }
+        if (keep.size != all.size) {
+            writeAll(keep)
+            return all.size - keep.size
+        }
+        return 0
+    }
+
+    /** 清除全部已处理 (ACCEPTED/DECLINED) 请求 — 仅保留待处理 (UI 手动清除入口)。 */
+    fun clearProcessed() {
+        writeAll(loadAll().filter { it.status == PairStatus.PENDING })
+    }
+
     private fun writeAll(requests: List<PairRequest>) {
         try {
             file.parentFile?.mkdirs()

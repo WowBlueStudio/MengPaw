@@ -80,7 +80,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | `self` | SelfExecutor.kt | 16 | Agent 自我管理 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/ports/search/search.stats/time/notify.message/notify.banner) |
 | `agent` | AgentExecutor.kt | 39 | 文档(6) + 记忆三轨(18) + 其他(5) + 会话(4) + 工作区文件(6) |
 | `plugin` | PluginExecutor + DevPlugin | 12 + 6 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade/auto/verify + create/audit/share/examples/keywords/guide) |
-| `framework` | FrameworkPlugin | 11 | 框架通信 (discover/add/peers/trust/untrust/info/ping/connect/call/disconnect/adapters) [↔ 同捆插件 plugin-framework] |
+| `framework` | FrameworkPlugin | 14 | 框架通信 (discover/add/peers/trust/untrust/info/ping/connect/call/disconnect/adapters + v0.35.2 pair.ls/accept/decline — 配对请求 Agent 侧操作入口) [↔ 同捆插件 plugin-framework] |
 | `evolution` | EvolutionExecutor.kt | 5 | 智能体进化 (audit/report/learn.command/reactions/mark-corrected) [↔ 同捆插件 plugin-evolution 提供默认实现] |
 
 > `sys` 命名空间 (40 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。`evolution` 命名空间在内核注册 (PipelineManager)，默认实现由同捆插件 plugin-evolution 注册为 EvolutionProvider SPI。
@@ -293,7 +293,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | plugin-net | net | curl, get, post (3) | ⭐ |
 | plugin-skill | skill | ls, run, enable, disable (4) | ⭐ |
 | plugin-clipboard | clipboard | copy, paste, clear (3) | ⭐ |
-| plugin-framework | framework | discover, peers, trust, untrust, info, ping, connect, call, disconnect, adapters (10) | ⭐ |
+| plugin-framework | framework | discover, peers, trust, untrust, info, ping, connect, call, disconnect, adapters, pair.ls, pair.accept, pair.decline (13) | ⭐ |
 | plugin-agent-tools | tools | import, ls, remove, search (4) | ⭐ |
 
 #### AI / 搜索 (4)
@@ -1051,6 +1051,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - **悬浮窗口**: 点通讯录标题右侧"添加框架" → `AddFrameworkScreen` 悬浮窗口 (v0.35.1 由全屏页面改回, 布局参考框架名片: 居中类型图标 + 标题, 右上关闭, 分区卡片 — 待处理请求/扫描发现/手动添加; 修复 showAddFramework 置 true 后从未渲染的无效按钮根因)
 - **发起方**: 页面内"扫描局域网"刷新 `FrameworkDiscovery.discoveredPeers` → 点节点"添加" → 直连 HTTP POST `FRAMEWORK_PAIR_REQUEST` (内核 `AcpServer.sendDirect`, 对端未握手不在 peers 列表, 无法走 transport 广播) → UI 提示"已发送, 等待对方同意"
 - **接收方**: `FrameworkPairHandler` 收到请求 → 落盘 `FrameworkPairStore` (framework_pair_requests.json, pendingCount 驱动) → **通讯录"添加框架"按钮红点角标** + NotifyBus 横幅提醒 → 点按钮进入页面查看请求 → **同意/拒绝**
+- **Agent 侧闭环 (v0.35.2 审查)**: `framework.pair.ls/accept/decline` 命令 (四源同步) — Agent 可查待处理请求、经用户授权后代为同意/拒绝、汇报状态; 收到请求时额外写 inbox 提醒文件 (Agent 轮询可感知); `pair.ls` 顺带清理 7 天前已处理记录; UI 悬浮窗提供"清除已处理"入口
 - **同意双向入册**: 接受方本地入册发起方 + 回发 `FRAMEWORK_PAIR_ACCEPT` (携带本机名片); 发起方收到后入册接受方 — 双方通讯录互通
 - **非 MengPaw 框架**: 无 ACP 配对能力, 手动添加仍直接本地入册 (保持兼容); 手动添加 MengPaw 节点也走请求流程
 
