@@ -11,7 +11,7 @@ Slash commands are a MengPaw-specific feature: the user taps **+** in the input 
 
 ## /Swarm (火种 Swarm Mode)
 
-Swarm is the evolved Mission: it inherits Mission's decompose→parallel workers→verifier→synthesis pipeline with the 👍 downgrade-pass semantics, and evolves per-role mixed models, the Andon failure protocol (redeploy/terminate instead of silent retry), and a shared step budget to prevent runaway. "A single spark starts a prairie fire": LLM decompose→parallel workers (per-role mixable models)→Verifier→synthesis. For large-scale retrieval/batch/multi-perspective composite tasks. Workers write no memory, keep no cross-task context.
+Swarm is the evolved Mission: it inherits Mission's decompose→parallel workers→verifier→synthesis pipeline with the downgrade-pass semantics, and evolves per-role mixed models, the Andon failure protocol (redeploy/terminate instead of silent retry), and a shared step budget to prevent runaway. "A single spark starts a prairie fire": LLM decompose→parallel workers (per-role mixable models)→Verifier→synthesis. For large-scale retrieval/batch/multi-perspective composite tasks. Workers write no memory, keep no cross-task context.
 
 ## /Fleet (步坦协同 Combined Arms Mode)
 

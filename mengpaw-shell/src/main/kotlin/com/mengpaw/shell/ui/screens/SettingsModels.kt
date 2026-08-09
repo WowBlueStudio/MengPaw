@@ -101,9 +101,9 @@ enum class LoopMode(val label: String, val desc: String, val enLabel: String, va
     // v0.34.3: 中文名带斜杠命令前缀 — 让 Loop 模式设置与 /Swarm /Fleet 直观关联
     // v0.34.4: Swarm 是进化版的 Mission — Mission 并入 Swarm，原 Mission 任务全部由 Swarm 负责
     SWARM("Swarm 火种模式",
-        "星星之火，可以燎原：Swarm 是进化版的 Mission — 继承拆解→并行 Worker→验证→合成与 👍 降级通过，进化出角色混合模型、Andon 失败协议（重派/终止）与共享步数预算；原 Mission 任务由 Swarm 承接 (/Swarm)",
+        "星星之火，可以燎原：Swarm 是进化版的 Mission — 继承拆解→并行 Worker→验证→合成与降级通过，进化出角色混合模型、Andon 失败协议（重派/终止）与共享步数预算；原 Mission 任务由 Swarm 承接 (/Swarm)",
         "Swarm Mode",
-        "The evolved Mission: inherits decompose→parallel workers→verify→synthesize with 👍 downgrade-pass; evolved role-based models, Andon failure protocol (redeploy/terminate) and shared step budget. Former Mission tasks are handled by Swarm (/Swarm)"),
+        "The evolved Mission: inherits decompose→parallel workers→verify→synthesize with downgrade-pass; evolved role-based models, Andon failure protocol (redeploy/terminate) and shared step budget. Former Mission tasks are handled by Swarm (/Swarm)"),
     FLEET("Fleet 步坦协同模式", "装甲集群推进+步兵协同清剿：多 Agent 编队协同，跨设备分布式执行复杂任务 (/Fleet)",
         "Fleet Mode", "Multi-agent combined-arms coordination for distributed complex tasks (/Fleet)")
 }
@@ -135,7 +135,8 @@ data class SettingsState(
     val timezone: String = java.util.TimeZone.getDefault().id,
     val contextStrategy: String = "default",
     val memoryBackend: String = "builtin",
-    val themeMode: ThemeMode = ThemeMode.LIGHT,
+    // v0.35.1: 主题默认跟随系统 (此前默认亮色)
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val showApiKey: Boolean = false,
     val backgroundMode: BackgroundMode = BackgroundMode.NOTIFICATION,
     /** 自动翻译(美系模型) — opt-in, 默认关闭, 用户主动开启才加载 Google 翻译. */
