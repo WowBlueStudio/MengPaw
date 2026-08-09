@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.35.3 (2026-08-09) — 暗色模式深蓝字体换白 + 九维/闭环审计修复
+
+### 新增
+- **暗色模式深蓝字体换白**: `ThemeColors.accentText` + `isDark` (背景亮度判断) — 暗色下原硬编码 Blue5/Blue6 的标题/标签/Step 等文字改白色, 亮色不变
+- **框架配对 Agent 侧闭环** (闭环审计): `framework.pair.ls/accept/decline` 命令 (四源同步) — Agent 可查待处理请求、经授权后代为同意/拒绝; 收到请求写 inbox 提醒; pair.ls 顺带清理 7 天前已处理记录; 添加框架悬浮窗"清除已处理"入口; 发送失败补网络排查提示 (同一 WiFi/防火墙); discover 输出补跨版本指纹回退说明
+- **stripMarkdown 回归锁**: 7 用例 (换行规范化/行内标记/链接图片/标题引用围栏/列表分行/软换行/段落保留)
+
+### 修复
+- **TokenBarChart 滚动协程死循环** (maxValue==0 无限 delay) → 固定延迟 + if 判断
+- **新增 UI 文案本地化**: 气泡图标行/输出目录区块/安全分级面板/输出权限引导/名片指纹标签 → Strings.kt 中英双语
+- **BubbleWrapper 空 clickable 占位移除**; **ActionIcon 点击热区 18→30dp**
+- **AcpServer.sendDirect 地址消毒** (仅 IP/主机名, 防 URL 注入) + 失败日志
+- **AcpServer mcpBridge!! 历史红线清理**
+
+### 发行
+- APK: `mengpaw-shell-v0.35.3-release.apk`（签名 CN=MengPaw, OU=Studio, O=WowBlue）
+- plugins.json 无变更（本轮无插件发布）
+- 测试数: kernel 484 + shell 65 (unit) + plugin-framework 42 (含新增 StripMarkdownTest 7 用例 + FrameworkPair 过期清理 2 用例)，全量 0 failures
+
 ## v0.35.2 (2026-08-09) — 框架配对流程 + 名片/气泡 UI 重构 + 输出目录修复
 
 ### 新增
