@@ -26,6 +26,9 @@ internal class PromptSystemBuilder {
     /** 进化数据指纹快照 (2026-08-09 三层十二问 1.1): 失败档案/指令集写入即失配 → 重建提示词,
      *  否则进化引导注入形同虚设 (failures.jsonl 不在 docMtimes 检查范围)。 */
     @Volatile private var cachedEvolutionFingerprint: String? = null
+    /** 触发器指纹快照 (v0.34.3 P1-5): heartbeat/trumanshow 引导按触发器注入 —
+     *  触发器增删即失配 → 重建提示词, 否则引导块不随触发器变化。 */
+    @Volatile private var cachedTriggerFingerprint: String? = null
 
     /** 工作区文档 mtime 快照 — 任何文档删除/修改即失配, 强制重建提示词.
      *  (docCache.isNotEmpty() 只检查条目存在, 无法感知单个文件被删除 —
@@ -205,7 +208,8 @@ internal class PromptSystemBuilder {
             cachedTemplateHash == PromptEngine.TEMPLATE_HASH &&
             docMtimes == currentDocMtimes(agentName) && // 文件删除/修改即失配 → 重建
             pinnedFingerprint == currentPinnedFingerprint() && // 用户指定技能清单/内容变化 → 重建
-            cachedEvolutionFingerprint == currentEvolutionFingerprint(agentName) // 进化数据变化 → 重建
+            cachedEvolutionFingerprint == currentEvolutionFingerprint(agentName) && // 进化数据变化 → 重建
+            cachedTriggerFingerprint == currentTriggerFingerprint() // 触发器增删 → 重建 (P1-5)
         ) {
             return cachedPrompt
         }
@@ -268,8 +272,12 @@ This reminder disappears automatically once the name is set.
 """
                 )
             }
-            // ── HEARTBEAT: non-empty heartbeat.md → inject CRON task guidance ──
-            if (heartbeatDoc.isNotBlank()) {
+            // ── HEARTBEAT: 有 CRON 触发器 且 文件非空 → 注入 CRON 任务引导 ──
+            // (v0.34.3 P1-5: 零触发器不注入死配置引导 — 模板文件存在但未注册触发器时
+            //  不再每轮白占 token)
+            val hasCron = com.mengpaw.kernel.trigger.TriggerEngine.list()
+                .any { it.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.CRON && it.enabled }
+            if (heartbeatDoc.isNotBlank() && hasCron) {
                 append(
 """
 ## ⏰ CRON 定时任务 — heartbeat.md 存在
@@ -284,8 +292,10 @@ This reminder disappears automatically once the name is set.
 """
                 )
             }
-            // ── TRUEMAN: non-empty trumanshow.md → inject random-chat guidance ──
-            if (trumanShowDoc.isNotBlank()) {
+            // ── TRUMAN: 有 SCHEDULE 触发器 且 文件非空 → 注入伪人模式引导 ──
+            val hasSchedule = com.mengpaw.kernel.trigger.TriggerEngine.list()
+                .any { it.type == com.mengpaw.kernel.trigger.TriggerEngine.TriggerType.SCHEDULE && it.enabled }
+            if (trumanShowDoc.isNotBlank() && hasSchedule) {
                 append(
 """
 ## 🎭 伪人模式 — trumanshow.md 存在
@@ -373,8 +383,14 @@ Skills 分为两层：
         docMtimes = currentDocMtimes(agentName)
         pinnedFingerprint = currentPinnedFingerprint()
         cachedEvolutionFingerprint = currentEvolutionFingerprint(agentName)
+        cachedTriggerFingerprint = currentTriggerFingerprint()
         return prompt
     }
+
+    /** 触发器指纹 — 全部触发器的 (id:type:enabled) 拼接, 增删/启停即变化。 */
+    private fun currentTriggerFingerprint(): String =
+        com.mengpaw.kernel.trigger.TriggerEngine.list()
+            .joinToString("|") { "${it.id}:${it.type}:${it.enabled}" }
 
     /** 进化数据指纹: failures.jsonl + commands.json 的 (大小:修改时间) — 任一写入/清理即变化。 */
     private fun currentEvolutionFingerprint(agentName: String): String {

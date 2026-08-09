@@ -98,6 +98,36 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `heartbeat truman guidance injected only when trigger registered`() {
+        // P1-5 (v0.34.3): 零触发器不注入死配置引导 — 模板文件存在但无 CRON/SCHEDULE
+        // 触发器注册时, heartbeat/trumanshow 引导块不进上下文
+        val agent = "trigger-gate-test"
+        val dir = File(DataPaths.AGENTS, agent)
+        dir.deleteRecursively()
+        dir.mkdirs()
+        File(dir, "heartbeat.md").writeText("# heartbeat\n任务说明")
+        File(dir, "trumanshow.md").writeText("# trumanshow\n话题")
+        val id = "test-trigger-${System.nanoTime()}"
+        try {
+            val noTrigger = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = agent)
+            assertFalse("无触发器不得注入 CRON 引导", noTrigger.contains("## ⏰ CRON 定时任务 — heartbeat.md 存在"))
+            assertFalse("无触发器不得注入伪人引导", noTrigger.contains("## 🎭 伪人模式 — trumanshow.md 存在"))
+
+            com.mengpaw.kernel.trigger.TriggerEngine.addCron(id, "0 9 * * *", "测试")
+            val withCron = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = agent)
+            assertTrue("有 CRON 触发器应注入引导", withCron.contains("## ⏰ CRON 定时任务 — heartbeat.md 存在"))
+            assertFalse("CRON 触发器不应注入伪人引导", withCron.contains("## 🎭 伪人模式 — trumanshow.md 存在"))
+
+            com.mengpaw.kernel.trigger.TriggerEngine.addSchedule(id + "-s", "08:00-22:00,count=3,interval=60", "测试")
+            val withBoth = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = agent)
+            assertTrue("有 SCHEDULE 触发器应注入伪人引导", withBoth.contains("## 🎭 伪人模式 — trumanshow.md 存在"))
+        } finally {
+            com.mengpaw.kernel.trigger.TriggerEngine.remove(id)
+            com.mengpaw.kernel.trigger.TriggerEngine.remove(id + "-s")
+        }
+    }
+
+    @Test
     fun `same params hit system prompt cache`() {
         val p1 = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
         val p2 = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
