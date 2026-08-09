@@ -47,7 +47,7 @@ fun AgentSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
-    AgentPermissionPanel(activeAgentName)
+    AgentPermissionPanel(activeAgentName, state.strings)
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)

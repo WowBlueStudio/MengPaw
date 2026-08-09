@@ -50,12 +50,13 @@ private val cacheColor = ArcoColors.Gray6
 fun TokenBarChart(
     series: List<Pair<String, List<Pair<String, Long>>>>,  // (model/line name, [(label, value)]) 
     cacheSeries: List<Pair<String, Long>> = emptyList(),    // cache hit data
+    emptyLabel: String = "暂无数据",
     modifier: Modifier = Modifier
 ) {
     val dataSize = series.firstOrNull()?.second?.size ?: 0
     if (dataSize == 0) {
         Box(modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-            Text("暂无数据", color = ThemeColors.textSecondary, fontSize = 14.sp)
+            Text(emptyLabel, color = ThemeColors.textSecondary, fontSize = 14.sp)
         }
         return
     }
@@ -79,9 +80,9 @@ fun TokenBarChart(
         // 固定柱宽 22dp + 间隙 8dp — 数据量超过容器宽度时横向滚动
         val scrollState = rememberScrollState()
         LaunchedEffect(dataSize) {
-            // 等布局完成 (maxValue > 0) → 自动拉到最右侧 (最新日期)
-            while (scrollState.maxValue <= 0) kotlinx.coroutines.delay(20)
-            scrollState.scrollTo(scrollState.maxValue)
+            // 等布局完成 → 自动拉到最右侧 (最新日期); 内容不超出容器 (maxValue==0) 时直接返回
+            kotlinx.coroutines.delay(80)
+            if (scrollState.maxValue > 0) scrollState.scrollTo(scrollState.maxValue)
         }
         val barWidth = 22.dp
         val barGap = 8.dp

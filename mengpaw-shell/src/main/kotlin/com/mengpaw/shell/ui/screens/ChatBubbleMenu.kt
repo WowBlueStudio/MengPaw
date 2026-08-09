@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.shell.ui.components.BigBangPopup
+import com.mengpaw.shell.ui.localization.AppStrings
 
 /**
  * 换行规范化 (v0.35.1) — 统一 \r\n/\r → \n, 保证复制/分享/大爆炸都保留分行。
@@ -92,6 +93,7 @@ fun pluginIconForName(name: String): ImageVector = when (name.lowercase()) {
 
 @Composable
 fun BubbleWrapper(
+    strings: AppStrings,
     message: ChatMessageUi,
     viewModel: AgentViewModel,
     onRetract: (String) -> Unit,
@@ -113,18 +115,15 @@ fun BubbleWrapper(
 
     // v0.35.1: 去掉长按气泡动作 + 点击动画 — 原长按菜单功能改为气泡下方线性图标
     Column(Modifier.fillMaxWidth()) {
-        // 气泡本体 — 无点击/长按 (indication = null 去点击动画)
-        Box(Modifier.clickable(
-            indication = null,
-            interactionSource = remember { MutableInteractionSource() },
-            onClick = {}
-        )) { content() }
+        // 气泡本体 — 无点击/长按
+        Box { content() }
 
         // 输出气泡 (Agent) 下方操作图标行
         if (message is ChatMessageUi.Agent || message is ChatMessageUi.AgentWithTrace ||
             message is ChatMessageUi.FinalAnswer || message is ChatMessageUi.CommandResult) {
             val imgs = MARKDOWN_IMAGE_REGEX.findAll(bubbleText).toList()
             BubbleActionBar(
+                strings = strings,
                 hasImages = imgs.isNotEmpty(),
                 onCopy = {
                     (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
@@ -151,13 +150,14 @@ fun BubbleWrapper(
                     val si = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                         type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, stripMarkdown(bubbleText).take(500))
                     }
-                    context.startActivity(android.content.Intent.createChooser(si, "分享到"))
+                    context.startActivity(android.content.Intent.createChooser(si, strings.bubbleShareTo))
                 }
             )
         } else if (message is ChatMessageUi.User) {
             // 用户气泡: 复制 / 大爆炸 / 撤回 (最后一条) / 分享
             val canRetract = viewModel.isLastUserMessage(message)
             UserActionBar(
+                strings = strings,
                 canRetract = canRetract,
                 onCopy = {
                     (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
@@ -169,7 +169,7 @@ fun BubbleWrapper(
                     val si = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                         type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, stripMarkdown(bubbleText).take(500))
                     }
-                    context.startActivity(android.content.Intent.createChooser(si, "分享到"))
+                    context.startActivity(android.content.Intent.createChooser(si, strings.bubbleShareTo))
                 }
             )
         }
@@ -191,6 +191,7 @@ fun BubbleWrapper(
 /** 输出气泡下方操作图标行 (v0.35.1) — 复制/大爆炸/引用/保存图片/标注图片/分享。 */
 @Composable
 private fun BubbleActionBar(
+    strings: AppStrings,
     hasImages: Boolean,
     onCopy: () -> Unit,
     onBigBang: () -> Unit,
@@ -204,20 +205,21 @@ private fun BubbleActionBar(
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ActionIcon(Icons.Outlined.ContentCopy, "复制", onCopy)
-        ActionIcon(Icons.Outlined.AutoAwesome, "大爆炸", onBigBang)
-        ActionIcon(Icons.Outlined.FormatQuote, "引用", onQuote)
+        ActionIcon(Icons.Outlined.ContentCopy, strings.bubbleCopy, onCopy)
+        ActionIcon(Icons.Outlined.AutoAwesome, strings.bubbleBigBang, onBigBang)
+        ActionIcon(Icons.Outlined.FormatQuote, strings.bubbleQuote, onQuote)
         if (hasImages) {
-            ActionIcon(Icons.Outlined.SaveAlt, "保存图片", onSaveImages)
-            ActionIcon(Icons.Outlined.Edit, "标注图片", onMarkImage)
+            ActionIcon(Icons.Outlined.SaveAlt, strings.bubbleSaveImages, onSaveImages)
+            ActionIcon(Icons.Outlined.Edit, strings.bubbleMarkImage, onMarkImage)
         }
-        ActionIcon(Icons.Outlined.Share, "分享", onShare)
+        ActionIcon(Icons.Outlined.Share, strings.bubbleShare, onShare)
     }
 }
 
 /** 用户气泡下方操作图标行 (v0.35.1) — 复制/大爆炸/撤回/分享。 */
 @Composable
 private fun UserActionBar(
+    strings: AppStrings,
     canRetract: Boolean,
     onCopy: () -> Unit,
     onBigBang: () -> Unit,
@@ -229,26 +231,29 @@ private fun UserActionBar(
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ActionIcon(Icons.Outlined.ContentCopy, "复制", onCopy)
-        ActionIcon(Icons.Outlined.AutoAwesome, "大爆炸", onBigBang)
+        ActionIcon(Icons.Outlined.ContentCopy, strings.bubbleCopy, onCopy)
+        ActionIcon(Icons.Outlined.AutoAwesome, strings.bubbleBigBang, onBigBang)
         if (canRetract) {
-            ActionIcon(Icons.Outlined.Undo, "撤回", onRetract)
+            ActionIcon(Icons.Outlined.Undo, strings.bubbleRetract, onRetract)
         }
-        ActionIcon(Icons.Outlined.Share, "分享", onShare)
+        ActionIcon(Icons.Outlined.Share, strings.bubbleShare, onShare)
     }
 }
 
 /** 单个线性操作图标 (无点击动画)。 */
 @Composable
 private fun ActionIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Icon(
-        icon, label, tint = com.mengpaw.design.theme.ThemeColors.textSecondary,
+    Box(
         modifier = Modifier
-            .size(18.dp)
+            .size(30.dp)
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
                 onClick = onClick
-            )
-    )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, label, tint = com.mengpaw.design.theme.ThemeColors.textSecondary,
+            modifier = Modifier.size(18.dp))
+    }
 }

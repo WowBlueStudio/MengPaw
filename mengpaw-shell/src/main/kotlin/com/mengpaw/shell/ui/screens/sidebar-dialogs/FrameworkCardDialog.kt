@@ -127,7 +127,7 @@ fun FrameworkCardDialog(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Outlined.Devices, null, Modifier.size(14.dp), tint = ThemeColors.textSecondary)
                                 Spacer(Modifier.width(6.dp))
-                                Text(if (platform.isNullOrBlank()) "未知" else platform,
+                                Text(if (platform.isNullOrBlank()) strings.frameworkUnknown else platform,
                                     style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
                             }
                             Spacer(Modifier.height(6.dp))

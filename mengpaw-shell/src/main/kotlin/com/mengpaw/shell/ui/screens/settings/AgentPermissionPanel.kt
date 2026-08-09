@@ -31,14 +31,14 @@ import com.mengpaw.kernel.security.AgentPermissionStore
  * 无开关, 点击整个块切换等级。
  */
 @Composable
-fun AgentPermissionPanel(activeAgentName: String) {
+fun AgentPermissionPanel(activeAgentName: String, strings: com.mengpaw.shell.ui.localization.AppStrings) {
     var level by remember(activeAgentName) {
         mutableStateOf(AgentPermissionStore.levelOf(activeAgentName))
     }
     val trusted = level == AgentPermissionLevel.TRUSTED
     val shieldColor = if (trusted) ArcoColors.Pink6 else ArcoColors.Blue6
 
-    SectionHeader("安全分级权限")
+    SectionHeader(strings.permissionLevelTitle)
     Surface(
         modifier = Modifier.fillMaxWidth().clickable {
             val target = if (trusted) AgentPermissionLevel.STANDARD else AgentPermissionLevel.TRUSTED
@@ -52,19 +52,19 @@ fun AgentPermissionPanel(activeAgentName: String) {
                 Icon(Icons.Outlined.Shield, null, Modifier.size(24.dp), tint = shieldColor)
                 Spacer(Modifier.width(ArcoSpacing.sm))
                 Column(Modifier.weight(1f)) {
-                    Text(if (trusted) "信任" else "标准",
+                    Text(if (trusted) strings.permissionTrusted else strings.permissionStandard,
                         fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium,
                         color = shieldColor)
-                    Text(if (trusted) "信任 — 中危操作也放行（点击切换为标准）" else "标准 — 中危操作需提升权限（点击切换为信任）",
+                    Text(if (trusted) strings.permissionTrustedDesc else strings.permissionStandardDesc,
                         fontSize = 12.sp, color = ThemeColors.textSecondary)
                 }
             }
             Spacer(Modifier.height(ArcoSpacing.sm))
-            Text("• 普通（新建/写入文件、通知等）— 始终放行",
+            Text(strings.permissionLow,
                 fontSize = 12.sp, color = ArcoColors.Green6)
-            Text("• 中危（删除/修改文件、剪贴板、截图录屏）— ${if (trusted) "信任放行" else "标准拒绝"}",
+            Text(if (trusted) strings.permissionMidTrusted else strings.permissionMidStandard,
                 fontSize = 12.sp, color = shieldColor)
-            Text("• 高危（清空/卸载/系统级/拍照）— 每次弹窗询问，拒绝即阻挡",
+            Text(strings.permissionHigh,
                 fontSize = 12.sp, color = ArcoColors.Red6)
         }
     }

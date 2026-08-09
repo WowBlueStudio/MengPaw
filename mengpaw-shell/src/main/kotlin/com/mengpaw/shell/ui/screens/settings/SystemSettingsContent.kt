@@ -134,7 +134,7 @@ fun SystemSettingsContent(
 
     // ── 输出目录 (v0.35.1 独立区块): 点击整块 → 系统文件管理器打开目录;
     //    未授权 (不可写) → 点击跳『所有文件访问』授权页 ──
-    SectionHeader(if (state.useChinese) "输出目录" else "Output Directory")
+    SectionHeader(state.strings.outputDirTitle)
     var outPath by remember { mutableStateOf(com.mengpaw.kernel.DataPaths.OUTPUT) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -157,13 +157,13 @@ fun SystemSettingsContent(
                 null, Modifier.size(24.dp), tint = if (outWritable) ArcoColors.Green6 else ArcoColors.Orange6)
             Spacer(Modifier.width(ArcoSpacing.md))
             Column(Modifier.weight(1f)) {
-                Text(if (state.useChinese) "输出目录" else "Output Directory",
+                Text(state.strings.outputDirTitle,
                     fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
                 Text(outPath,
                     style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (!outWritable) {
-                    Text("⚠️ 不可写 — 点击授权『所有文件访问』，Agent 交付的文件才会出现在这里",
+                    Text(state.strings.outputDirUnwritable,
                         style = MaterialTheme.typography.labelSmall, color = ArcoColors.Orange6)
                 }
             }
@@ -172,7 +172,7 @@ fun SystemSettingsContent(
                     tint = ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
             } else {
                 TextButton(onClick = { startAllFilesAccess(ctx) }) {
-                    Text("去授权", style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
+                    Text(state.strings.outputDirGrant, style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
                 }
             }
         }
@@ -225,7 +225,8 @@ fun SystemSettingsContent(
             }
             label to cache
         }
-        TokenBarChart(series = modelSeries, cacheSeries = cacheSeries)
+        TokenBarChart(series = modelSeries, cacheSeries = cacheSeries,
+            emptyLabel = state.strings.systemNoTokenData)
     } else {
         Text(state.strings.systemNoTokenData,
             style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(vertical = ArcoSpacing.lg))

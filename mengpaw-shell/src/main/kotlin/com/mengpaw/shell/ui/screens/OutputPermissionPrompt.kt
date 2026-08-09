@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
-import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.kernel.DataPaths
+import com.mengpaw.shell.ui.localization.AppStrings
 
 /**
  * 输出目录授权引导 (v0.35.1) — 启动时公共目录 /MengPaw/ 不可写 (Android 11+
@@ -33,16 +33,15 @@ import com.mengpaw.kernel.DataPaths
  * 授权返回后 MainActivity.onResume refreshOutput, 输出目录切公共, 引导自动消失。
  */
 @Composable
-fun OutputPermissionPrompt(onDismiss: () -> Unit) {
+fun OutputPermissionPrompt(strings: AppStrings, onDismiss: () -> Unit) {
     val context = LocalContext.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("需要『所有文件访问』权限", fontWeight = FontWeight.Bold) },
+        title = { Text(strings.outputPermissionTitle, fontWeight = FontWeight.Bold) },
         text = {
             Column {
                 Text(
-                    "MengPaw 会把交付的文件写入公共输出目录 /storage/emulated/0/MengPaw/，" +
-                        "手机文件管理器可直接查看。\n\n当前输出目录: ${DataPaths.OUTPUT}",
+                    "${strings.outputPermissionBody}\n\n${strings.outputDirCurrent}: ${DataPaths.OUTPUT}",
                     fontSize = 13.sp
                 )
             }
@@ -67,10 +66,10 @@ fun OutputPermissionPrompt(onDismiss: () -> Unit) {
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
                 shape = RoundedCornerShape(ArcoRadius.md)
-            ) { Text("去授权", color = Color.White) }
+            ) { Text(strings.outputPermissionGrant, color = Color.White) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("暂不") }
+            TextButton(onClick = onDismiss) { Text(strings.outputPermissionLater) }
         }
     )
 }

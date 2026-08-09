@@ -263,7 +263,7 @@ private fun AppRootContent(
 
         // ── 输出目录授权引导 (全屏最上层) ──
         if (showOutputPrompt) {
-            OutputPermissionPrompt(onDismiss = { showOutputPrompt = false })
+            OutputPermissionPrompt(strings = strings, onDismiss = { showOutputPrompt = false })
         }
     }
 

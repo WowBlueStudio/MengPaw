@@ -274,6 +274,7 @@ fun MainScreen(
                                 ) {
                                 items(displayedMessages, key = { it.stableId }) { message ->
                                     BubbleWrapper(
+                                        strings = strings,
                                         message = message,
                                         viewModel = viewModel,
                                         onRetract = { inputText = it },

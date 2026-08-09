@@ -41,7 +41,7 @@ fun FrameworkSettingsContent(
     skillItems: List<FrameworkItem> = emptyList()
 ) {
     // ── 框架名片 (v0.34.3 + v0.35.1 两行重构): 行1 名称+编辑 / 行2 指纹码+设备标识 ──
-    SectionHeader(if (state.useChinese) "框架名片" else "Framework Identity")
+    SectionHeader(state.strings.frameworkCardTitle)
     var identityName by remember {
         mutableStateOf(com.mengpaw.plugin.framework.FrameworkIdentity.displayName)
     }
@@ -60,7 +60,7 @@ fun FrameworkSettingsContent(
                         onValueChange = { identityName = it },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        placeholder = { Text(if (state.useChinese) "缺省 = 显示指纹码" else "Default = show fingerprint") }
+                        placeholder = { Text(state.strings.frameworkIdentityDefaultPlaceholder) }
                     )
                     Spacer(Modifier.width(ArcoSpacing.sm))
                     Button(
@@ -73,7 +73,7 @@ fun FrameworkSettingsContent(
                         },
                         shape = RoundedCornerShape(ArcoRadius.md),
                         colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand)
-                    ) { Text(if (state.useChinese) "保存" else "Save", color = Color.White) }
+                    ) { Text(state.strings.cardSave, color = Color.White) }
                 } else {
                     Text(
                         com.mengpaw.plugin.framework.FrameworkIdentity.displayName
@@ -88,7 +88,7 @@ fun FrameworkSettingsContent(
                     }) {
                         Icon(Icons.Outlined.Edit, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(2.dp))
-                        Text(if (state.useChinese) "编辑" else "Edit", fontSize = 13.sp)
+                        Text(state.strings.cardEdit, fontSize = 13.sp)
                     }
                 }
             }
@@ -103,7 +103,8 @@ fun FrameworkSettingsContent(
                             !fp.endsWith("no-mac") && !fp.endsWith("no-device-id")
                         val rawId = com.mengpaw.plugin.framework.FrameworkIdentity.deviceRawId()
                         if (fpValid) {
-                            append(if (state.useChinese) "本机指纹码 " else "Local fingerprint ")
+                            append(state.strings.frameworkIdentityLabel)
+                            append(" ")
                             append(com.mengpaw.plugin.framework.FrameworkIdentity.shortCode)
                         }
                         if (rawId.isNotBlank()) {

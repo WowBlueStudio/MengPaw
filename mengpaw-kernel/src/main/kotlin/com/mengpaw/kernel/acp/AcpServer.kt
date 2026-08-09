@@ -85,8 +85,9 @@ class AcpServer(
 
     /** Enable MCP-over-ACP bridge. Must be called after McpServer is initialized. */
     fun enableMcpBridge(mcpServer: com.mengpaw.kernel.mcp.McpServer) {
-        mcpBridge = McpOverAcpBridge(mcpServer)
-        handlers.add(mcpBridge!!)
+        val bridge = McpOverAcpBridge(mcpServer)
+        mcpBridge = bridge
+        handlers.add(bridge)
     }
 
     init {
@@ -160,8 +161,14 @@ class AcpServer(
      * 明文传输, 与配对类消息"建立信任"的无防火墙语义一致 (配对请求不含敏感数据)。
      */
     suspend fun sendDirect(msg: AcpMessage, address: String, port: Int, timeoutMs: Int = 4000): Boolean {
+        // 地址消毒 (v0.35.2 审查): 仅允许 IP/主机名, 拒绝协议/路径/空格 — 防 URL 注入
+        val cleanAddress = address.trim().removePrefix("http://").removePrefix("https://")
+        if (cleanAddress.isBlank() || !Regex("^[0-9A-Za-z.\\-:]+$").matches(cleanAddress)) {
+            com.mengpaw.kernel.KernelLog.w("AcpServer", "sendDirect: 非法地址拒绝: $address")
+            return false
+        }
         return try {
-            val url = java.net.URL("http://$address:$port/acp")
+            val url = java.net.URL("http://$cleanAddress:$port/acp")
             val conn = url.openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json")
@@ -173,6 +180,7 @@ class AcpServer(
             }
             conn.responseCode in 200..299
         } catch (e: Exception) {
+            com.mengpaw.kernel.KernelLog.w("AcpServer", "sendDirect 失败: $cleanAddress:$port — ${e.message}")
             false
         }
     }
