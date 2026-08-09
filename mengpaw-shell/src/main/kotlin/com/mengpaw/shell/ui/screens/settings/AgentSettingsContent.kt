@@ -34,12 +34,7 @@ fun AgentSettingsContent(
     onOpenWorkspaceFile: ((String) -> Unit)? = null,       // 用其他软件打开工作区文档 (预览)
     activeAgentName: String = "MengPaw"                    // 当前主 Agent — 引导进度按它读取
 ) {
-    // ── Agent 引导进度 (P2-13): 身份/头像/主题/灵魂 四项打勾, 进入设置页读一次 ──
-    AgentBoostPanel(agentName = activeAgentName, strings = state.strings)
-    Spacer(Modifier.height(ArcoSpacing.lg))
-    HorizontalDivider(color = ThemeColors.border)
-    Spacer(Modifier.height(ArcoSpacing.lg))
-
+    // v0.34.3: 引导进度面板已移除 (用户拍板) — 设置页直接从 Provider/模型面板开始
     AgentProviderModelPanel(state, viewModel, activeEndpoint, activeModel, onSelectProvider)
 
     Spacer(Modifier.height(ArcoSpacing.lg))
