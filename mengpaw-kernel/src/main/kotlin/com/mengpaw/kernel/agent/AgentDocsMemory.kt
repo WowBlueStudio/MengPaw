@@ -282,11 +282,14 @@ internal class AgentDocsMemory {
 
     /**
      * Delete a SINGLE entry from any memory file by exact ## header match.
-     * Safety: refuses blank IDs, IDs < 10 chars, and ambiguous (multi-match) IDs.
+     * Safety: refuses blank IDs, IDs < 6 chars, and ambiguous (multi-match) IDs.
+     * v0.34.3: 长度下限 10 → 6 — 中期记忆条目标题是 HH:mm:ss (8 字符),
+     * 原 10 字符限制 (按长期记忆 yyyy-MM-dd HH:mm 设计) 导致 agent.memory.mid.rm
+     * 对自己的标准条目永远匹配失败 (deleteEntry 直接 return 0)。
      * @return Number of entries deleted (0 or 1).
      */
     internal fun deleteEntry(agentName: String, filePath: String, entryId: String): Int {
-        if (entryId.isBlank() || entryId.length < 10) return 0
+        if (entryId.isBlank() || entryId.length < 6) return 0
         val file = File(filePath)
         if (!file.exists()) return 0
         return try {
@@ -303,10 +306,11 @@ internal class AgentDocsMemory {
     /**
      * Replace a SINGLE entry's content in any memory file.
      * Finds the entry by exact ## header, replaces only its content (preserves header).
+     * v0.34.3: 长度下限 10 → 6 (对齐 mid HH:mm:ss 条目, 同 deleteEntry)。
      * @return Number of entries edited (0 or 1).
      */
     internal fun editEntry(agentName: String, filePath: String, entryId: String, newContent: String): Int {
-        if (entryId.isBlank() || entryId.length < 10) return 0
+        if (entryId.isBlank() || entryId.length < 6) return 0
         val file = File(filePath)
         if (!file.exists()) return 0
         return try {

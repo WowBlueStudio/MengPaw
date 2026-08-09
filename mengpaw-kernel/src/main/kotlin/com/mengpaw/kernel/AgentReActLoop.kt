@@ -309,13 +309,8 @@ internal class AgentReActLoop(
                                         // 门禁拒绝 (REASON_REQUIRED / PARAM_FORMAT_ERROR): 不执行, 直接反馈引导
                                         gate.error != null ->
                                             ExecutionResult.fail(gate.error, errorCode = gate.errorCode ?: ErrorCodes.PARAM_FORMAT_ERROR)
-                                        // 来源黑名单硬闸 (v0.34.1): 拉黑来源的内容直接阻止, 防换注入变体再试
-                                        com.mengpaw.kernel.security.SourceBlocklist.extractSource(gate.commandLine)
-                                            ?.let { com.mengpaw.kernel.security.SourceBlocklist.isBlocked(it) } == true ->
-                                            ExecutionResult.fail("来源已在黑名单，工具结果已阻止。security.blocklist 查看黑名单。",
-                                                errorCode = ErrorCodes.ERR_SOURCE_BLOCKED)
                                         else ->
-                                            withTimeout(60_000L) { engine.getPipelineManager().buildPipeline().execute(gate.commandLine, context) }
+                                            runRiskGuarded(gate, engine.agentName, context)
                                     }
                                 } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                                     ExecutionResult.fail("命令超时 (60s): ${gate.commandLine}。请检查网络连接或尝试其他方式。", errorCode = ErrorCodes.ERR_INTERNAL)
@@ -558,5 +553,26 @@ internal class AgentReActLoop(
                 task = task
             )
         } catch (_: Exception) { /* 进化记录永不阻塞主链路 */ }
+    }
+
+    /** 分级拦截 + 来源黑名单 + 执行 (v0.34.3 抽自并行执行分支 — 主循环可弹窗确认)。
+     *  MID 权限不足 → ERR_PERMISSION_DENIED; HIGH → UserConfirmBus 弹窗, 拒绝即阻挡;
+     *  黑名单来源 → ERR_SOURCE_BLOCKED; 全过 → 60s 超时执行。 */
+    private suspend fun runRiskGuarded(
+        gate: com.mengpaw.kernel.security.HighRiskCommandGate.GateResult,
+        agent: String,
+        context: ExecutionContext
+    ): ExecutionResult {
+        val riskError = com.mengpaw.kernel.security.RiskGate.evaluate(gate, agent, allowUserConfirm = true)
+        if (riskError != null) {
+            return ExecutionResult.fail(riskError, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        }
+        val source = com.mengpaw.kernel.security.SourceBlocklist.extractSource(gate.commandLine)
+        if (source != null && com.mengpaw.kernel.security.SourceBlocklist.isBlocked(source)) {
+            return ExecutionResult.fail(
+                "来源已在黑名单，工具结果已阻止。security.blocklist 查看黑名单。",
+                errorCode = ErrorCodes.ERR_SOURCE_BLOCKED)
+        }
+        return withTimeout(60_000L) { engine.getPipelineManager().buildPipeline().execute(gate.commandLine, context) }
     }
 }

@@ -111,11 +111,21 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                                     when {
                                         gate.error != null ->
                                             ExecutionResult.fail(gate.error, errorCode = gate.errorCode ?: ErrorCodes.PARAM_FORMAT_ERROR)
-                                        com.mengpaw.kernel.security.SourceBlocklist.extractSource(commandLine)
-                                            ?.let { com.mengpaw.kernel.security.SourceBlocklist.isBlocked(it) } == true ->
-                                            ExecutionResult.fail("来源已在黑名单，工具结果已阻止。", errorCode = ErrorCodes.ERR_SOURCE_BLOCKED)
-                                        else ->
-                                            withTimeout(60_000L) { engine.getPipelineManager().buildPipeline().execute(commandLine, context) }
+                                        else -> {
+                                            // ── 分级拦截 (v0.34.3): worker 无用户交互, 高危直接拒绝 ──
+                                            val riskError = com.mengpaw.kernel.security.RiskGate
+                                                .evaluate(gate, context.agentName ?: engine.agentName, allowUserConfirm = false)
+                                            if (riskError != null) {
+                                                ExecutionResult.fail(riskError, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+                                            } else {
+                                                val source = com.mengpaw.kernel.security.SourceBlocklist.extractSource(commandLine)
+                                                if (source != null && com.mengpaw.kernel.security.SourceBlocklist.isBlocked(source)) {
+                                                    ExecutionResult.fail("来源已在黑名单，工具结果已阻止。", errorCode = ErrorCodes.ERR_SOURCE_BLOCKED)
+                                                } else {
+                                                    withTimeout(60_000L) { engine.getPipelineManager().buildPipeline().execute(commandLine, context) }
+                                                }
+                                            }
+                                        }
                                     }
                                 } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                                     ExecutionResult.fail("命令超时 (60s): $commandLine", errorCode = ErrorCodes.ERR_INTERNAL)

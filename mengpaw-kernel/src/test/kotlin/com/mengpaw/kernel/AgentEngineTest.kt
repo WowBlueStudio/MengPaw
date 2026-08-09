@@ -265,6 +265,14 @@ class AgentEngineTest {
     @Test
     fun `high-risk command with reason passes gate and executes`() = runBlocking {
         // JSON 豁免通道: 高危命令带 reason → 模板展开执行, reason 不进入命令文本
+        // v0.34.3: agent.rm 为 MID — 测试前置 TRUSTED 权限避免分级拦截干扰 reason 门禁断言
+        val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_gate_pass_" + System.nanoTime()
+        com.mengpaw.kernel.DataPaths.initialize(tmp)
+        val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
+        agentDir.mkdirs()
+        java.io.File(agentDir, "test.md").writeText("x")  // agent.rm 需要真实文件才能执行成功
+        com.mengpaw.kernel.security.AgentPermissionStore.resetForTest(java.io.File(tmp, "perm.json"))
+        com.mengpaw.kernel.security.AgentPermissionStore.setLevel("MengPaw", com.mengpaw.kernel.security.AgentPermissionLevel.TRUSTED)
         var turn = 0
         val llm = object : LlmProvider {
             override suspend fun complete(prompt: String): String = respond()
@@ -275,9 +283,9 @@ class AgentEngineTest {
             override fun close() {}
             fun respond(): String = when (turn++) {
                 0 -> """
-                    Thought: 通知用户进度。
-                    Action: self.notify.message
-                    Action Input: {"text": "hello", "reason": "告知用户进度"}
+                    Thought: 清理临时文件。
+                    Action: agent.rm
+                    Action Input: {"path": "test.md", "force": "true", "reason": "清理临时文件"}
                 """.trimIndent()
                 else -> "Final Answer: 完成"
             }
@@ -288,9 +296,9 @@ class AgentEngineTest {
         assertEquals("完成", result)
         val obs = sm2.getHistory(engine2.currentConversationId()!!).joinToString("\n") { it.content }
         // reason 只应出现在模型原始输出 (Action Input, 传参必经之路), 绝不进入执行命令文本
-        val commandLines = Regex("Command: self\\.notify\\.message[^\n]*").findAll(obs).map { it.value }.toList()
-        assertTrue("命令应模板展开执行: $commandLines", commandLines.any { it == "Command: self.notify.message hello" })
-        assertFalse("reason 不得进入命令文本: $commandLines", commandLines.any { it.contains("告知") })
+        val commandLines = Regex("Command: agent\\.rm[^\n]*").findAll(obs).map { it.value }.toList()
+        assertTrue("命令应模板展开执行: $commandLines", commandLines.any { it == "Command: agent.rm test.md --force" })
+        assertFalse("reason 不得进入命令文本: $commandLines", commandLines.any { it.contains("清理临时文件") })
         assertFalse("带 reason 不得拒绝: $obs", obs.contains("REASON_REQUIRED"))
     }
 
@@ -550,10 +558,18 @@ class AgentEngineTest {
     fun `failure mitigated by successful retry is not gated`() = runBlocking {
         // 第一轮缺 reason 被门禁拒绝, 第二轮同一命令行补 reason 成功 → 失败已弥补
         // → 最终回答无需复述历史失败, 门禁放行 (同参数才豁免; 换参数 = 不同操作, 不豁免)
+        // v0.34.3: agent.memory.mid.rm 为 MID — TRUSTED 权限避免分级拦截干扰;
+        // 参数无空格无 flag, 无 reason 与带 reason 两种展开形态的 commandLine 一致,
+        // 保证"同命令重试成功"豁免键匹配 (agent.rm 的 force flag 形态不一致会破坏豁免)
         val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_gate_mitigated_" + System.nanoTime()
         com.mengpaw.kernel.DataPaths.initialize(tmp)
         val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
         agentDir.mkdirs()
+        val midFile = java.io.File(agentDir, "memory/memory_2026-08-09.md")
+        midFile.parentFile.mkdirs()
+        midFile.writeText("\n## 14:30:15\n\n测试条目\n")  // mid 条目格式: ## HH:mm:ss
+        com.mengpaw.kernel.security.AgentPermissionStore.resetForTest(java.io.File(tmp, "perm.json"))
+        com.mengpaw.kernel.security.AgentPermissionStore.setLevel("MengPaw", com.mengpaw.kernel.security.AgentPermissionLevel.TRUSTED)
         val receivedByLlm = mutableListOf<List<Map<String, String>>>()
         var turn = 0
         val llm = object : LlmProvider {
@@ -568,22 +584,22 @@ class AgentEngineTest {
             override fun close() {}
             fun respond(): String = when (turn++) {
                 0 -> """
-                    Thought: 通知用户进度。
-                    Action: self.notify.message
-                    Action Input: {"text": "hello"}
+                    Thought: 清理中期记忆条目。
+                    Action: agent.memory.mid.rm
+                    Action Input: {"date": "2026-08-09", "timestamp": "14:30:15"}
                 """.trimIndent()
                 1 -> """
                     Thought: 需要补 reason 重试。
-                    Action: self.notify.message
-                    Action Input: {"text": "hello", "reason": "告知用户进度"}
+                    Action: agent.memory.mid.rm
+                    Action Input: {"date": "2026-08-09", "timestamp": "14:30:15", "reason": "清理临时条目"}
                 """.trimIndent()
-                else -> "Final Answer: 通知完成。"
+                else -> "Final Answer: 清理完成。"
             }
         }
         val sm2 = SessionManager()
         val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
         val result = engine2.run("弥补豁免测试", maxSteps = 5)
-        assertEquals("失败已被成功弥补, 门禁应放行: $result", "通知完成。", result)
+        assertEquals("失败已被成功弥补, 门禁应放行: $result", "清理完成。", result)
         assertEquals("不应触发门禁拒绝 (LLM 仅 3 轮: 失败/重试/收尾)", 3, receivedByLlm.size)
     }
 

@@ -36,7 +36,7 @@ class HighRiskCommandGateTest {
     @Test
     fun 高危reason空白被拒() {
         val result = HighRiskCommandGate.evaluate(
-            ToolCall("agent.write", mapOf("path" to "a.md", "content" to "x", "reason" to "  "))
+            ToolCall("agent.memory.edit", mapOf("timestamp" to "2026-08-09 10:00", "content" to "x", "reason" to "  "))
         )
         assertEquals(ErrorCodes.REASON_REQUIRED, result.errorCode)
     }
@@ -53,17 +53,17 @@ class HighRiskCommandGateTest {
     @Test
     fun 双参数展开不含reason() {
         val result = HighRiskCommandGate.evaluate(
-            ToolCall("agent.write", mapOf("path" to "/a/x.txt", "content" to "hello", "reason" to "用户要求备份"))
+            ToolCall("agent.memory.edit", mapOf("timestamp" to "2026-08-09 10:00", "content" to "hello", "reason" to "用户要求备份"))
         )
         assertNull(result.error)
-        assertEquals("agent.write /a/x.txt hello", result.commandLine)
+        assertEquals("agent.memory.edit \"2026-08-09 10:00\" hello", result.commandLine)
         assertTrue("reason 不得进入命令文本", !result.commandLine.contains("用户要求备份"))
     }
 
     @Test
     fun 缺键报PARAM_FORMAT_ERROR并列出期望键() {
         val result = HighRiskCommandGate.evaluate(
-            ToolCall("agent.write", mapOf("path" to "/a/x.txt", "reason" to "备份"))
+            ToolCall("agent.memory.edit", mapOf("timestamp" to "2026-08-09 10:00", "reason" to "备份"))
         )
         assertEquals(ErrorCodes.PARAM_FORMAT_ERROR, result.errorCode)
         assertTrue("错误文本应列出缺失键", result.error!!.contains("content"))
@@ -85,8 +85,8 @@ class HighRiskCommandGateTest {
     fun 多行content经引号保护保留换行() {
         // JSON 通道: ReActParser 已把 \n 解析为真实换行 → 展开时须引号保护, 否则被 CLI 分词切散
         val result = HighRiskCommandGate.evaluate(
-            ToolCall("agent.write", mapOf(
-                "path" to "a.md",
+            ToolCall("agent.memory.edit", mapOf(
+                "timestamp" to "2026-08-09 10:00",
                 "content" to "第一行\n第二行\n```\ncode\n```",
                 "reason" to "写多行文档"
             ))
@@ -96,30 +96,30 @@ class HighRiskCommandGateTest {
 
         // 端到端: 展开后的命令行经 CliInterpreter 解析, 参数完整还原 (换行不丢)
         val parsed = CliInterpreter().parse(result.commandLine)
-        assertEquals(listOf("a.md", "第一行\n第二行\n```\ncode\n```"), parsed.args)
+        assertEquals(listOf("2026-08-09 10:00", "第一行\n第二行\n```\ncode\n```"), parsed.args)
         assertTrue("reason 不得进入命令行", !result.commandLine.contains("写多行文档"))
     }
 
     @Test
     fun 含空格引号反斜杠的content转义还原() {
         val result = HighRiskCommandGate.evaluate(
-            ToolCall("agent.write", mapOf(
-                "path" to "a.md",
+            ToolCall("agent.memory.edit", mapOf(
+                "timestamp" to "2026-08-09 10:00",
                 "content" to "say \"hi\" \\ done and more",
                 "reason" to "转义测试"
             ))
         )
         assertNull(result.error)
         val parsed = CliInterpreter().parse(result.commandLine)
-        assertEquals(listOf("a.md", "say \"hi\" \\ done and more"), parsed.args)
+        assertEquals(listOf("2026-08-09 10:00", "say \"hi\" \\ done and more"), parsed.args)
     }
 
     @Test
     fun 普通参数不加引号保持既有行为() {
         val result = HighRiskCommandGate.evaluate(
-            ToolCall("agent.write", mapOf("path" to "/a/x.txt", "content" to "hello", "reason" to "备份"))
+            ToolCall("agent.memory.edit", mapOf("timestamp" to "2026-08-09 10:00", "content" to "hello", "reason" to "备份"))
         )
-        assertEquals("agent.write /a/x.txt hello", result.commandLine)
+        assertEquals("agent.memory.edit \"2026-08-09 10:00\" hello", result.commandLine)
     }
 
     @Test
@@ -141,10 +141,10 @@ class HighRiskCommandGateTest {
     fun XML具名参数同构豁免() {
         // XML 工具调用转译后 parameters 是与 JSON 同构的具名 Map — 同一通道
         val result = HighRiskCommandGate.evaluate(
-            ToolCall("agent.write", mapOf("path" to "report.md", "content" to "正文", "reason" to "用户要求"))
+            ToolCall("agent.memory.edit", mapOf("timestamp" to "2026-08-09 10:00", "content" to "正文", "reason" to "用户要求"))
         )
         assertNull(result.error)
-        assertEquals("agent.write report.md 正文", result.commandLine)
+        assertEquals("agent.memory.edit \"2026-08-09 10:00\" 正文", result.commandLine)
     }
 
     // ── 非高危: 原门卫行为零变化 ──
@@ -175,17 +175,16 @@ class HighRiskCommandGateTest {
 
     @Test
     fun 高危表覆盖关键命令() {
-        // 回归保护: 高危集合必须覆盖用户明确列举的命令类别
+        // v0.34.3 分级化: HIGH_RISK 表 = 中危/高危命令 (reason 门禁);
+        // 普通 (LOW) 命令移出, 由 CommandRiskLevels 分级承载
         listOf(
-            "agent.write", "agent.rm", "agent.mkdir", "fs.mv", "fs.cp",
+            "agent.rm", "fs.mv",
             "proc.exec", "proc.system", "plugin.install", "plugin.uninstall",
             "plugin.enable", "plugin.disable",
-            "self.notify.message", "self.notify.banner",
             "clipboard.copy", "clipboard.paste", "clipboard.clear",
             "skill.enable", "skill.disable",
-            "agent.memory.keep", "agent.memory.write", "agent.memory.rm",
-            "agent.memory.edit", "agent.memory.mid.delete", "agent.memory.mid.rm",
-            "agent.memory.mid.edit", "agent.memory.project.save",
+            "agent.memory.rm", "agent.memory.edit", "agent.memory.mid.delete", "agent.memory.mid.rm",
+            "agent.memory.mid.edit",
             "agent.memory.project.delete", "agent.memory.project.rm", "agent.memory.project.edit",
             "root.exec", "root.shell", "root.fs.write", "root.system.setprop",
             "root.system.hosts", "root.backup.restore",
@@ -193,9 +192,17 @@ class HighRiskCommandGateTest {
         ).forEach { name ->
             assertTrue("高危表应包含 $name", HighRiskCommandGate.HIGH_RISK.containsKey(name))
         }
-        // 只读命令不应在高危表
+        // LOW 命令 (v0.34.3 分级: 新建/写入/普通表达) 移出 reason 表
+        listOf(
+            "agent.write", "agent.mkdir", "fs.cp",
+            "self.notify.message", "self.notify.banner",
+            "agent.memory.keep", "agent.memory.write", "agent.memory.record", "agent.memory.project.save"
+        ).forEach { name ->
+            assertTrue("LOW 命令不应在 reason 表: $name", !HighRiskCommandGate.HIGH_RISK.containsKey(name))
+            assertTrue("LOW 命令分级应为普通: $name", CommandRiskLevels.levelOf(name) == RiskLevel.LOW)
+        }
+        // 只读命令不在高危表
         assertTrue("agent.read 不应在高危表", !HighRiskCommandGate.HIGH_RISK.containsKey("agent.read"))
         assertTrue("agent.output (只读列表) 不应在高危表", !HighRiskCommandGate.HIGH_RISK.containsKey("agent.output"))
-        assertTrue("agent.memory.record (append-only) 不应在高危表", !HighRiskCommandGate.HIGH_RISK.containsKey("agent.memory.record"))
     }
 }

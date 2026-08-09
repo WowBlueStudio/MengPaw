@@ -7,12 +7,13 @@ import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.llm.ToolCall
 
 /**
- * 高危命令 reason 门禁 (P0 注入防护 v0.34.1)。
+ * 中危/高危命令 reason 门禁 (P0 注入防护 v0.34.1, 分级化 v0.34.3)。
  *
- * Agent 自主调用高危命令（文件写/删、proc、插件管理、通知、剪贴板、记忆写、技能开关、
- * root.*）必须附意图声明 (reason)。形态 = **JSON 豁免通道**:
+ * Agent 自主调用中危/高危命令（删除/修改、proc、插件管理、剪贴板、记忆删改、
+ * root.*、sys 破坏性）必须附意图声明 (reason)。形态 = **JSON 豁免通道**:
  * 高危命令豁免 [ToolCall.paramFormatError] 全局门卫, 允许结构化 `{"reason": ...}` 参数;
- * 非高危命令维持原门卫 (行为零变化)。
+ * 非高危命令维持原门卫 (行为零变化)。普通 (LOW) 命令已移出本表 — 不再强制 reason,
+ * 由 CommandRiskLevels 分级决定是否拦截 (LOW 放行 / MID 权限 / HIGH 弹窗)。
  *
  * 模板驱动展开: 参数按模板键序拼接 (reason 及模板外键一律排除), 消除 JSON 键序
  * 不稳定导致的参数错位。豁免条件 = 名在高危表 **且** reason 非空 — 模板漏配 =
@@ -28,43 +29,35 @@ object HighRiskCommandGate {
     /** 参数模板条目: POSITIONAL 按序拼接为位置参数; FLAG 值为 "true" 时拼 "--key"。 */
     data class Param(val key: String, val kind: Kind = Kind.POSITIONAL)
 
-    /** 高危命令 → 参数模板。集合按真实注册表校准 (fs.write 已并入 agent.*, 不在此列)。 */
+    /** 中危/高危命令 → 参数模板 (v0.34.3: LOW 命令移出 — 普通写操作不再强制 reason)。
+     *  集合按真实注册表校准 (fs.write 已并入 agent.*, 不在此列)。 */
     val HIGH_RISK: Map<String, List<Param>> = mapOf(
-        // ── 文件 ──
-        "agent.write" to listOf(Param("path"), Param("content")),
-        "agent.rm" to listOf(Param("path"), Param("force", Kind.FLAG)),   // 文件需 --force (自锁先例)
-        "agent.mkdir" to listOf(Param("path")),
+        // ── 文件 (中危) ──
+        "agent.rm" to listOf(Param("path"), Param("force", Kind.FLAG)),
         "fs.mv" to listOf(Param("source"), Param("dest")),
-        "fs.cp" to listOf(Param("source"), Param("dest")),
         // ── 进程 ──
         "proc.exec" to listOf(Param("command")),
         "proc.system" to listOf(Param("command")),
         "proc.kill" to listOf(Param("pid")),
-        // ── 插件管理 ──
+        // ── 插件管理 (install/enable/disable/update 中危, uninstall 高危) ──
         "plugin.install" to listOf(Param("id")),
         "plugin.uninstall" to listOf(Param("id")),
         "plugin.enable" to listOf(Param("id")),
         "plugin.disable" to listOf(Param("id")),
         "plugin.update" to listOf(Param("id")),
-        // ── 通知 ──
-        "self.notify.message" to listOf(Param("text")),
-        "self.notify.banner" to listOf(Param("text")),
-        // ── 剪贴板 ──
+        // ── 剪贴板 (copy/paste 中危, clear 高危) ──
         "clipboard.copy" to listOf(Param("text")),
         "clipboard.paste" to emptyList(),
         "clipboard.clear" to emptyList(),
-        // ── 技能开关 ──
+        // ── 技能开关 (中危) ──
         "skill.enable" to listOf(Param("id")),
         "skill.disable" to listOf(Param("id")),
-        // ── 记忆写/改/删 (record 不入: append-only 日记, 危害低) ──
-        "agent.memory.keep" to listOf(Param("content")),
-        "agent.memory.write" to listOf(Param("id"), Param("content")),
+        // ── 记忆改/删 (keep/write/record/project.save 为 LOW, 不入表) ──
         "agent.memory.rm" to listOf(Param("timestamp")),
         "agent.memory.edit" to listOf(Param("timestamp"), Param("content")),
         "agent.memory.mid.delete" to listOf(Param("date")),
         "agent.memory.mid.rm" to listOf(Param("date"), Param("timestamp")),
         "agent.memory.mid.edit" to listOf(Param("date"), Param("timestamp"), Param("content")),
-        "agent.memory.project.save" to listOf(Param("project"), Param("content")),
         "agent.memory.project.delete" to listOf(Param("project")),
         "agent.memory.project.rm" to listOf(Param("project"), Param("timestamp")),
         "agent.memory.project.edit" to listOf(Param("project"), Param("timestamp"), Param("content")),
