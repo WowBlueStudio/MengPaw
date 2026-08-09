@@ -192,9 +192,9 @@ object BuiltinCommandIndex {
         idx("agent.session.current", "查看当前活跃会话 ID 和状态", "agent.session.current",
             listOf("当前", "会话", "ID", "状态", "活跃"),
             listOf("current", "session", "id", "status", "active"))
-        idx("agent.audit", "对工作区执行 7 类安全检查 (危险命令/强制解包/IO 无 try/catch/明文 HTTP)", "agent.audit",
-            listOf("审计", "安全", "检查", "审查", "扫描", "漏洞", "Audit"),
-            listOf("audit", "security", "check", "review", "scan", "vulnerability"))
+        idx("agent.audit", "查看命令执行审计日志 (最近 N 条: 成败/会话/命令/输出摘要)", "agent.audit [条数]",
+            listOf("审计", "日志", "历史", "记录", "命令", "Audit"),
+            listOf("audit", "log", "history", "record", "command"))
         idx("agent.browser-tools", "查看浏览器协作能力参考 (唤醒 sys.browser.open / MCP 工具 browser.mcp.* / 网页转档 search.*)", "agent.browser-tools",
             listOf("浏览器", "WebView", "操控", "MCP", "转档", "Browser"),
             listOf("browser", "WebView", "tools", "mcp", "commands", "control"))
@@ -211,7 +211,7 @@ object BuiltinCommandIndex {
         idx("agent.sessions", "搜索跨会话的历史记录 (支持关键词过滤)", "agent.sessions [keyword] [limit]",
             listOf("会话", "历史", "搜索", "过往", "记录", "查找"),
             listOf("sessions", "history", "search", "past", "conversation", "find"))
-        idx("agent.output", "查看或管理用户输出目录 (HTML/MD/PDF 导出)", "agent.output",
+        idx("agent.output", "查看用户输出目录 (HTML/MD/PDF 导出位置, 只读)", "agent.output",
             listOf("输出", "导出", "文件", "目录", "生成", "保存"),
             listOf("output", "export", "file", "directory", "generate", "save"))
 
@@ -266,9 +266,9 @@ object BuiltinCommandIndex {
         idx("plugin.upgrade", "批量升级所有可更新的插件", "plugin.upgrade --all",
             listOf("升级", "全部", "批量", "所有", "更新", "Upgrade"),
             listOf("upgrade", "update all", "batch", "everything"))
-        idx("plugin.auto", "管理插件自动更新策略 (开启/关闭/状态/空闲时自动)", "plugin.auto <wake|sleep|status|sleep-idle>",
-            listOf("自动", "更新", "策略", "休眠", "唤醒"),
-            listOf("auto", "update", "policy", "sleep", "wake"))
+        idx("plugin.auto", "插件省电管理 (唤醒/休眠/状态/空闲自动休眠)", "plugin.auto <wake|sleep|status|sleep-idle>",
+            listOf("省电", "休眠", "唤醒", "空闲", "功耗"),
+            listOf("power", "sleep", "wake", "idle", "battery"))
         idx("plugin.verify", "校验已安装插件文件完整性 (单个或 --all 批量)", "plugin.verify <id> | plugin.verify --all",
             listOf("验证", "校验", "检查", "完整性", "批量", "文件"),
             listOf("verify", "check", "validate", "integrity", "batch", "file"))
@@ -285,7 +285,7 @@ object BuiltinCommandIndex {
             listOf("blocklist", "list", "view", "all", "blocked"))
 
         // ── framework: 框架协议 ──
-        idx("framework.discover", "扫描局域网中发现 MengPaw 框架节点 (mDNS)", "framework.discover",
+        idx("framework.discover", "扫描局域网中发现 MengPaw 框架节点 (mDNS; --wait 同步等待 3 秒看结果)", "framework.discover [--wait]",
             listOf("发现", "扫描", "局域网", "框架", "节点", "搜索", "探测"),
             listOf("discover", "scan", "LAN", "network", "find", "peer", "mDNS"))
         idx("framework.peers", "列出所有已知框架节点 (含信任状态和在线状态)", "framework.peers",
@@ -298,13 +298,13 @@ object BuiltinCommandIndex {
         idx("framework.trust", "信任指定框架节点 (允许任务委派与数据共享, 需 --yes 确认)", "framework.trust <fingerprint> [--yes]",
             listOf("信任", "授权", "允许", "框架", "节点", "配对", "确认"),
             listOf("trust", "authorize", "allow", "peer", "pair", "accept", "confirm"))
-        idx("framework.untrust", "取消信任指定框架节点", "framework.untrust <peer>",
+        idx("framework.untrust", "取消信任指定框架节点", "framework.untrust <fingerprint>",
             listOf("取消", "信任", "撤销", "移除", "断开"),
             listOf("untrust", "revoke", "remove", "disconnect", "block"))
-        idx("framework.info", "查看指定框架节点的详细信息 (名称/版本/Agent 列表)", "framework.info <peer>",
+        idx("framework.info", "查看指定框架节点的详细信息 (名称/版本/Agent 列表)", "framework.info <fingerprint>",
             listOf("详情", "信息", "框架", "版本", "Agent"),
             listOf("info", "details", "framework", "version", "agent"))
-        idx("framework.ping", "测试与指定框架节点的网络连通性", "framework.ping <peer>",
+        idx("framework.ping", "测试与指定框架节点的网络连通性", "framework.ping <fingerprint>",
             listOf("Ping", "连通", "测试", "网络", "延迟"),
             listOf("ping", "test", "network", "latency", "check"))
         idx("framework.connect", "通过连接器插件连接外部框架节点 (OpenClaw/QwenPaw 等)", "framework.connect <peer-name>",

@@ -230,7 +230,7 @@ internal class CliDocGenerator(private val manager: AgentDocManager) {
             appendLine("2. 安装 Magisk Manager")
             appendLine("3. 通过 Magisk 修补 boot.img 并刷入")
             appendLine("4. 重启后在 Magisk 中授权 MengPaw")
-            appendLine("5. root 后可使用 `proc.exec` 命令（需先解除沙箱禁用）")
+            appendLine("5. root 后可使用 `proc.exec` 命令（高危, 每次执行需用户确认）")
             appendLine()
 
             appendLine("### 授予无障碍权限")
