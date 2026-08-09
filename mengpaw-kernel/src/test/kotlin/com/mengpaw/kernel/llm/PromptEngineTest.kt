@@ -139,6 +139,18 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `path parameter cleanliness rule present in both prompts`() {
+        // 命令污染修复 (v0.34.3): 路径类 Action Input 禁止附加描述文本
+        val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertTrue("中文应含路径参数纯净规则", zh.contains("路径参数纯净"))
+        assertTrue("中文应禁止描述文本拼路径", zh.contains("等待结果"))
+        assertTrue("中文应禁止原样复制失败参数", zh.contains("不要原样复制"))
+        val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
+        assertTrue("英文应含路径参数纯净规则", en.contains("Path parameters must be clean"))
+        assertTrue("英文应禁止原样复制", en.contains("NEVER copy"))
+    }
+
+    @Test
     fun `same params hit system prompt cache`() {
         val p1 = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
         val p2 = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")

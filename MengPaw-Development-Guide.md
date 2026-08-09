@@ -1031,6 +1031,8 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - ④ 写路径边界: `agent.write`/`agent.mkdir` 写入工作区 (Agent文档)/输出目录/录音/截图存档之外 (如 /sdcard 任意路径) → 降级中危, 标准权限拒绝, TRUSTED 放行; 相对路径按工作区基准视为安全。
 - 未采纳: 外联域名监控、供应商信誉清单 (用户判定无必要)。
 
+**命令参数污染防护 (v0.34.3)** — Agent 把描述文本 ("等待结果"/"看看") 拼进路径参数尾部 (如 `agent.ls / 等待结果`), `joinToString(" ")` 还原后路径含空格 → 解析失败且 Agent 原样复制重试循环复现。修复: ① 路径拼接类命令 (read/ls/rm/mkdir) 解析失败时附**污染提示** (指出疑似多余文本 + 纯净重发指引); ② 写类命令 (rm/mkdir) **前置拒绝**污染路径, 防错误落盘/误删; ③ 系统提示词响应格式节加**路径参数纯净规则** (路径参数只能含路径本身, 禁止附加描述文本, 失败重试不得原样复制)。agent.write 的路径是首 token 不参与拼接, 污染文本会进 content — 由读回验证兜底, 不做前置拒绝 (防误伤正常内容)。
+
 **per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
 
 

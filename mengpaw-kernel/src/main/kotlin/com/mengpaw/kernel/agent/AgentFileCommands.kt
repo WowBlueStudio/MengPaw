@@ -51,6 +51,27 @@ internal class AgentFileCommands {
         "mnt", "proc", "sys", "dev", "cache", "apex"
     )
 
+    /** 描述性文本词表 — Agent 常把这些词拼进路径参数尾部 (如 "agent.ls / 等待结果")。
+     *  命中 = 高置信参数污染 (v0.34.3 命令污染修复)。 */
+    private val POLLUTION_WORDS = setOf(
+        "等待结果", "结果", "看看", "查看", "输出", "等待", "然后", "谢谢", "好的",
+        "完毕", "完成", "尝试", "试一下", "请", "ok", "OK", "thanks", "please", "wait", "done"
+    )
+
+    /** 参数污染提示 (v0.34.3): 路径类命令解析失败且末片段命中描述词表时,
+     *  错误反馈附加修正指引 — Agent 不再原样复制污染参数重试 (循环复现根因)。
+     *  @param command 命令名 (提示重发格式用); @return 附加文本或 null。 */
+    private fun pollutedHint(args: List<String>, command: String): String? {
+        if (args.size < 2) return null
+        val last = args.last()
+        val isDescription = last in POLLUTION_WORDS ||
+            POLLUTION_WORDS.any { last.startsWith(it) && last.length <= it.length + 2 }
+        if (!isDescription) return null
+        val clean = args.dropLast(1).joinToString(" ")
+        return "\n⚠️ 参数污染提示: 「$last」疑似多余的描述文本被并入了路径参数 (收到 ${args.size} 个片段: ${args.joinToString(" + ")})。" +
+            "路径参数只能是一个完整路径。请重发纯净参数: $command $clean"
+    }
+
     /**
      * Resolve path with traversal protection (canonical path resolves ../ and symlinks).
      * 相对路径以 Agent 工作区 {AGENTS}/{agent}/ 为基准 — 提示词教的工作区相对语义
@@ -86,7 +107,8 @@ internal class AgentFileCommands {
         if (!file.exists()) return ExecutionResult.fail(
             // FIX(自检报告 P0-2): 输出解析后的真实路径 — Agent 盲试时能据此修正基准
             "文件不存在: $path (解析为 ${file.absolutePath})\n" +
-            "工作区根: ${com.mengpaw.kernel.DataPaths.AGENTS}/${agentName(ctx)} — 相对路径以它为基准",
+            "工作区根: ${com.mengpaw.kernel.DataPaths.AGENTS}/${agentName(ctx)} — 相对路径以它为基准" +
+            (pollutedHint(args, "agent.read") ?: ""),
             errorCode = ErrorCodes.ERR_NOT_FOUND)
         if (file.isDirectory) {
             val listing = file.listFiles()?.take(50)?.joinToString("\n") { f ->
@@ -110,7 +132,8 @@ internal class AgentFileCommands {
         val dir = resolvePath(path, agent) ?: return ExecutionResult.fail("路径无效: $path")
         if (!dir.exists()) return ExecutionResult.fail(
             "路径不存在: $path (解析为 ${dir.absolutePath})\n" +
-            "工作区根: ${com.mengpaw.kernel.DataPaths.AGENTS}/$agent — 相对路径以它为基准")
+            "工作区根: ${com.mengpaw.kernel.DataPaths.AGENTS}/$agent — 相对路径以它为基准" +
+            (pollutedHint(args, "agent.ls") ?: ""))
         if (!dir.isDirectory) {
             // Single file — show its info
             return ExecutionResult.ok("📄 ${dir.name} — ${dir.length()}B — ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(dir.lastModified()))}")
@@ -141,9 +164,14 @@ internal class AgentFileCommands {
             "先预览: agent.ls <path> 查看要删的文件。"
         )
         val path = pathArgs.joinToString(" ")
+        // 污染前置拒绝: rm 的路径含描述文本 → 立即拒绝, 防误删错误路径
+        pollutedHint(pathArgs, "agent.rm")?.let {
+            return ExecutionResult.fail(it, errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        }
         val file = resolvePath(path, agentName(ctx)) ?: return ExecutionResult.fail("路径无效: $path")
         val canonical = file.absolutePath
-        if (!file.exists()) return ExecutionResult.fail("文件不存在: $path")
+        if (!file.exists()) return ExecutionResult.fail(
+            "文件不存在: $path" + (pollutedHint(pathArgs, "agent.rm") ?: ""))
         if (file.isDirectory && (file.listFiles()?.isNotEmpty() == true)) {
             return ExecutionResult.fail("目录非空: $path (${file.listFiles()?.size ?: 0} 个项目)。\n请先删除目录中的文件，或用 agent.memory.mid.delete 删除中期记忆分片。")
         }
@@ -176,6 +204,10 @@ internal class AgentFileCommands {
     /** agent.mkdir <path> — create a directory. */
     internal suspend fun makeDir(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("用法: agent.mkdir <path>")
+        // 污染前置拒绝: mkdir 的路径含描述文本 → 拒绝, 防在工作区错误创建目录
+        pollutedHint(args, "agent.mkdir")?.let {
+            return ExecutionResult.fail(it, errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        }
         val path = args.joinToString(" ")
         val dir = resolvePath(path, agentName(ctx)) ?: return ExecutionResult.fail("路径无效: $path")
         if (dir.exists()) return ExecutionResult.fail("已存在: $path")

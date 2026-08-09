@@ -181,6 +181,7 @@ class PromptEngine {
             Final Answer: （最终答案）
 
             需要多个独立工具时，可一次输出多个 Action（每个都带 Action Input），框架会并行执行。
+            - **路径参数纯净（必须遵守）**：路径类命令（agent.read/ls/write/rm/mkdir、fs.*）的 Action Input 只能包含路径本身，**禁止把"等待结果/看看/输出/谢谢"等描述文本拼在路径参数后**（会被并入路径导致解析失败）；路径含空格时用引号包裹整个路径。若上一次调用因参数带多余文本而失败，重试时必须去掉多余文本，**不要原样复制失败参数**。
 
             **安全分级（v0.34.3）**：命令按风险分三级 — **普通**（新建/写入文件 agent.write/mkdir、通知等）直接执行，纯文本参数；**中危**（删除/修改 agent.rm/fs.mv/记忆 rm+edit、剪贴板、截图录屏、插件/技能启停）默认被拒，需用户将 Agent 权限等级提升为「信任」（智能体设置）后才可执行；**高危**（清空剪贴板、卸载应用/插件、整片记忆删除、proc.*/root.*、拍照）每次执行都会弹窗询问用户，拒绝即阻挡，必须如实告知用户。中危/高危命令必须用 JSON 参数并附 `reason` 意图声明，否则被门禁拒绝：
             - 错误：`Action Input: notes.md 今日总结` → Error [REASON_REQUIRED]
@@ -299,6 +300,7 @@ class PromptEngine {
             Final Answer: (your final response)
 
             When multiple independent tools are needed, you may output multiple Action blocks at once (each with its own Action Input); the framework will execute them in parallel.
+            - **Path parameters must be clean (mandatory)**: for path commands (agent.read/ls/write/rm/mkdir, fs.*), Action Input must contain ONLY the path itself — never append descriptive text like "waiting"/"please"/"thanks" after the path (it gets merged into the path and fails parsing); wrap the whole path in quotes if it contains spaces. When a previous call failed because extra text polluted the parameter, strip the extra text on retry — NEVER copy the polluted parameter verbatim.
 
             **Safety levels (v0.34.3)**: commands are graded in three tiers — **LOW** (create/write files agent.write/mkdir, notifications) run directly with plain-text args; **MID** (delete/modify agent.rm/fs.mv/memory rm+edit, clipboard, screenshots/screen recording, plugin/skill toggles) are denied by default until the user raises this agent's permission level to "Trusted" (agent settings); **HIGH** (clear clipboard, uninstall apps/plugins, delete memory shards, proc.*/root.*, taking photos) always asks the user in a confirmation dialog before running — denial blocks execution, and you must report it honestly. MID/HIGH commands MUST use JSON parameters with a `reason` intent declaration, or the gate rejects them:
             - Wrong: `Action Input: notes.md today's notes` → Error [REASON_REQUIRED]
