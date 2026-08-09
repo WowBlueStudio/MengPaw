@@ -66,6 +66,22 @@ object AgentDocs {
         bootstrapImpl.bootstrap(agentName, language)
     }
 
+    /** 从 markdown 头部 frontmatter 提取 summary (P1-4 方案A: 系统提示词只注入 summary)。
+     *  无 frontmatter / 无 summary 字段返回 null。 */
+    fun frontmatterSummary(markdown: String): String? {
+        val head = markdown.take(2048)
+        if (!head.startsWith("---")) return null
+        val closeIdx = head.indexOf("\n---", 3)
+        if (closeIdx < 0) return null
+        head.substring(3, closeIdx).lineSequence().forEach { line ->
+            val t = line.trim()
+            if (t.startsWith("summary:")) {
+                return t.removePrefix("summary:").trim().trim('"').trim('\'')
+            }
+        }
+        return null
+    }
+
     /**
      * 重置工作区文档为 APK 预置版（模板覆盖写，区别于 bootstrap 的"只补缺失"）。
      * 模板路径 {BASE}/agent-templates/{language}/{relativePath}，language 模板缺失回退 zh。

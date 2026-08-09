@@ -141,6 +141,16 @@ internal class PromptSystemBuilder {
             "\n\n…[文档过长 (${doc.length} 字符)，完整内容: agent.read $path]"
     }
 
+    /** 文档 brief (P1-4 方案A) — 优先 frontmatter summary; 无则取首个非空非标题行前 300 字符;
+     *  全文经 agent.read 按需取, 不再全文常驻。长期记忆 (memory.md) 除外 — 保持全文注入。 */
+    private fun docBrief(doc: String, path: String): String = buildString {
+        val summary = com.mengpaw.kernel.agent.AgentDocs.frontmatterSummary(doc)
+            ?: doc.trim().lineSequence().firstOrNull { it.isNotBlank() && !it.trimStart().startsWith("#") }
+                ?.trim()?.take(DOC_BRIEF_FALLBACK_CHARS)
+        append(summary ?: "(空文档)")
+        append("\n\n完整内容: agent.read $path")
+    }
+
     /**
      * Build the system prompt with agent identity, framework context, and model info.
      * @param lang Output language
@@ -328,15 +338,15 @@ Skills 分为两层：
             // ── 身份档案（PROFILE.md）— 你是谁、你在帮谁，每轮可见 ──
             if (profileDoc.isNotBlank()) {
                 append("\n## 你的身份档案（profile.md）\n\n")
-                append(compactDoc(profileDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/profile.md"))
+                append(docBrief(profileDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/profile.md"))
             }
             if (agentsDoc.isNotBlank()) {
                 append("\n## 你的操作手册（agents.md）\n\n")
-                append(compactDoc(agentsDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/agents.md"))
+                append(docBrief(agentsDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/agents.md"))
             }
             if (soulDoc.isNotBlank()) {
                 append("\n\n## 你的灵魂准则（soul.md）\n\n")
-                append(compactDoc(soulDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/soul.md"))
+                append(docBrief(soulDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/soul.md"))
             }
             if (memoryDoc.isNotBlank()) {
                 append("\n\n## 你的长期记忆（长期积累的重要知识）\n\n")
@@ -380,7 +390,9 @@ Skills 分为两层：
         /** 文档全量注入上限 — 超过则走 [compactDoc] 前段 + 外链。 */
         private const val DOC_FULL_INJECT_CHARS = 12_000
         /** 超长文档注入的前段字符数。 */
-        private const val DOC_SNIPPET_CHARS = 6_000
+    private const val DOC_SNIPPET_CHARS = 6_000
+    /** 无 frontmatter summary 的旧文档 brief 取前段字符数 (P1-4 方案A)。 */
+    private const val DOC_BRIEF_FALLBACK_CHARS = 300
         /** 注入提示词的工作区文档清单 — mtime 快照比对用（与 buildSystemPrompt 读取顺序一致）。 */
         private val AGENT_DOC_FILES = listOf(
             "profile.md", "agents.md", "soul.md", "memory/memory.md",

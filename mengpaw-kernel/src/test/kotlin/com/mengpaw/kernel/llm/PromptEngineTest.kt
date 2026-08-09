@@ -49,18 +49,36 @@ class PromptEngineTest {
 
     @Test
     fun `oversized agents doc is compacted with read link`() {
-        // 写超长 agents.md → docsBlock 注入应被 compactDoc 截断 + 外链
+        // 写超长 agents.md → docsBlock 注入应只取 brief + agent.read 外链 (P1-4 方案A)
         val dir = File(DataPaths.AGENTS, "MengPaw")
         dir.mkdirs()
         val doc = File(dir, "agents.md")
         doc.writeText("长文档内容".repeat(4000))  // ~20K 字符 > 12K 阈值
         try {
             val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
-            assertTrue("超长文档应含截断外链标记", prompt.contains("文档过长"))
-            assertTrue("外链应指向 agents.md", prompt.contains("agent.read"))
+            assertTrue("超长文档应走 brief 外链", prompt.contains("完整内容: agent.read"))
+            assertFalse("超长文档全文不得注入", prompt.contains("长文档内容".repeat(100)))
         } finally {
             doc.delete()
         }
+    }
+
+    @Test
+    fun `profile soul agents inject summary brief instead of full template`() {
+        // P1-4 方案A (v0.34.3): 约束文档只注入 frontmatter summary + agent.read 外链,
+        // 模板占位符全文不再常驻提示词 (token 瘦身)
+        val agent = "summary-brief-test"
+        val dir = File(DataPaths.AGENTS, agent)
+        dir.deleteRecursively()
+        dir.mkdirs()
+        File(dir, "profile.md").writeText(
+            "---\nsummary: \"Agent 身份与用户资料 — 会被记忆孪生同步\"\nread_when:\n  - 手动引导工作区\n---\n\n## 身份\n\n- **名字：**\n  *（挑个你喜欢的）*"
+        )
+        val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = agent)
+        assertTrue("应注入 frontmatter summary", prompt.contains("Agent 身份与用户资料"))
+        assertFalse("模板占位符全文不得注入", prompt.contains("挑个你喜欢的"))
+        assertTrue("应附 agent.read 外链", prompt.contains("agent.read"))
+        assertTrue("外链应指向 profile.md", prompt.contains("profile.md"))
     }
 
     @Test
@@ -263,14 +281,17 @@ class PromptEngineTest {
 
     @Test
     fun `high risk json reason teaching present in both prompts`() {
-        // v0.34.1 ④: 高危命令 JSON+reason 教学必须进系统提示词 (软层兜底, 门禁拒绝后指引重发)
+        // v0.34.1 ④ + v0.34.3: 安全分级 + 中危/高危命令 JSON+reason 教学必须进系统提示词
         val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
-        assertTrue("中文应含高危命令 JSON 教学", zh.contains("高危命令"))
+        assertTrue("中文应含安全分级教学", zh.contains("安全分级"))
+        assertTrue("中文应含中危权限说明", zh.contains("中危"))
+        assertTrue("中文应含高危弹窗说明", zh.contains("弹窗"))
         assertTrue("中文应含 reason 键说明", zh.contains("\"reason\""))
         assertTrue("中文应含 REASON_REQUIRED 拒绝示例", zh.contains("REASON_REQUIRED"))
         assertTrue("中文应含攻击来源黑名单询问", zh.contains("security.block"))
         val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
-        assertTrue("英文应含高危命令 JSON 教学", en.contains("High-risk commands"))
+        assertTrue("英文应含安全分级教学", en.contains("Safety levels"))
+        assertTrue("英文应含中危权限说明", en.contains("Trusted"))
         assertTrue("英文应含 reason 键说明", en.contains("reason"))
         assertTrue("英文应含 REASON_REQUIRED 拒绝示例", en.contains("REASON_REQUIRED"))
         assertTrue("英文应含攻击来源黑名单询问", en.contains("security.block"))
