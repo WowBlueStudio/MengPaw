@@ -5,10 +5,10 @@ package com.mengpaw.shell.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material3.*
@@ -46,25 +46,37 @@ fun NewAgentDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = RoundedCornerShape(ArcoRadius.lg), color = ThemeColors.brandContainer,
-                    modifier = Modifier.size(40.dp)) {
+        // v0.35.1: 与智能体名片一致 — 无标题文字, 内容居中布局
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(max = 440.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // ── 图标头像 (新建无头像, 用 PersonAdd 占位) ──
+                Surface(shape = CircleShape, color = ThemeColors.brandContainer, modifier = Modifier.size(84.dp)) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.PersonAdd, null, Modifier.size(22.dp), tint = ThemeColors.brand)
+                        Icon(Icons.Outlined.PersonAdd, null, Modifier.size(36.dp), tint = ThemeColors.brand)
                     }
                 }
-                Spacer(Modifier.width(ArcoSpacing.md))
-                Text(strings.newAgentTitle, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            }
-        },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(ArcoSpacing.md)) {
+                Spacer(Modifier.height(ArcoSpacing.lg))
+
+                // ── 名称 ──
                 OutlinedTextField(value = name, onValueChange = { name = it; if (workspaceFolder.isBlank()) workspaceFolder = it },
                     label = { Text(strings.newAgentNameLabel) }, placeholder = { Text(strings.newAgentNamePlaceholder) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md),
-                    leadingIcon = { Icon(Icons.Outlined.PersonAdd, null, tint = ThemeColors.textSecondary) })
+                    textStyle = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(ArcoSpacing.md))
+
+                // ── 简介 ──
+                OutlinedTextField(value = intro, onValueChange = { intro = it },
+                    label = { Text(strings.newAgentIntroLabel) }, placeholder = { Text(strings.newAgentIntroPlaceholder) },
+                    minLines = 3, maxLines = 5, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md))
+                Spacer(Modifier.height(ArcoSpacing.lg))
+
+                HorizontalDivider(color = ThemeColors.border)
+                Spacer(Modifier.height(ArcoSpacing.sm))
+
+                // ── 工作区文件夹卡片 ──
                 OutlinedTextField(value = workspaceFolder, onValueChange = { workspaceFolder = it },
                     label = { Text(strings.newAgentFolderLabel) }, placeholder = { Text(strings.newAgentFolderPlaceholder) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md),
@@ -74,10 +86,6 @@ fun NewAgentDialog(
                         Text(String.format(strings.newAgentFolderHint, full.replaceFirst(Regex("^/data/data/"), "./")),
                             fontSize = 10.sp, color = ThemeColors.textSecondary)
                     })
-                OutlinedTextField(value = intro, onValueChange = { intro = it },
-                    label = { Text(strings.newAgentIntroLabel) }, placeholder = { Text(strings.newAgentIntroPlaceholder) },
-                    minLines = 3, maxLines = 5, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md),
-                    leadingIcon = { Icon(Icons.Outlined.Description, null, tint = ThemeColors.textSecondary) })
             }
         },
         confirmButton = {
