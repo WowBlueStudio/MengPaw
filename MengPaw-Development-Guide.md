@@ -1048,7 +1048,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - **联络失败提醒**: framework.connect 失败 → NotifyBus 横幅 (WARN)
 
 **框架通讯录配对请求流程 (v0.35.1, 用户定案)**: 添加框架从"本地单向入册"改为**请求-同意双向流程** —
-- **独立页面**: 点通讯录标题右侧"添加框架" → 全屏独立页面 (`AddFrameworkScreen`, 替代原 Dialog; 修复 showAddFramework 置 true 后从未渲染的无效按钮根因)
+- **悬浮窗口**: 点通讯录标题右侧"添加框架" → `AddFrameworkScreen` 悬浮窗口 (v0.35.1 由全屏页面改回, 布局参考框架名片: 居中类型图标 + 标题, 右上关闭, 分区卡片 — 待处理请求/扫描发现/手动添加; 修复 showAddFramework 置 true 后从未渲染的无效按钮根因)
 - **发起方**: 页面内"扫描局域网"刷新 `FrameworkDiscovery.discoveredPeers` → 点节点"添加" → 直连 HTTP POST `FRAMEWORK_PAIR_REQUEST` (内核 `AcpServer.sendDirect`, 对端未握手不在 peers 列表, 无法走 transport 广播) → UI 提示"已发送, 等待对方同意"
 - **接收方**: `FrameworkPairHandler` 收到请求 → 落盘 `FrameworkPairStore` (framework_pair_requests.json, pendingCount 驱动) → **通讯录"添加框架"按钮红点角标** + NotifyBus 横幅提醒 → 点按钮进入页面查看请求 → **同意/拒绝**
 - **同意双向入册**: 接受方本地入册发起方 + 回发 `FRAMEWORK_PAIR_ACCEPT` (携带本机名片); 发起方收到后入册接受方 — 双方通讯录互通

@@ -3,12 +3,12 @@
 
 package com.mengpaw.shell.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,8 +18,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
@@ -33,12 +31,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * 添加框架独立页面 (v0.35.1 框架发现流程调整) — 替代原 Dialog:
- * ① 待处理配对请求 (红点内容, 同意/拒绝) ② 刷新局域网发现列表 → 发送配对请求
+ * 添加框架悬浮窗口 (v0.35.1 重构) — 布局参考框架名片:
+ * 居中类型图标 + 标题, 无标题栏文字 (右上关闭), 分区卡片:
+ * ① 待处理配对请求 (同意/拒绝) ② 刷新局域网发现列表 → 发送配对请求
  * ③ 手动添加 (MengPaw 发请求 / 其他框架本地入册)。
- * 全屏 Dialog 呈现 (usePlatformDefaultWidth=false), 与通讯录侧栏叠加。
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun AddFrameworkScreen(strings: AppStrings, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var requests by remember { mutableStateOf(FrameworkPairStore.pending()) }
@@ -55,185 +54,203 @@ fun AddFrameworkScreen(strings: AppStrings, onDismiss: () -> Unit) {
         onDispose { FrameworkPairStore.removeListener(listener) }
     }
 
-    Dialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(Modifier.fillMaxSize(), color = ThemeColors.bgPrimary) {
-            Column(Modifier.fillMaxSize()) {
-                // ── 页面头: 返回 + 标题 + 待处理数 ──
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.sm, vertical = ArcoSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, strings.cancel, tint = ThemeColors.textPrimary)
+        // 无标题文字 — 右上角关闭按钮 (与名片同风格)
+        title = {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Outlined.Close, strings.cancel, tint = ThemeColors.textSecondary)
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(max = 480.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // ── 居中类型图标 + 标题 (名片风格) ──
+                Surface(shape = RoundedCornerShape(ArcoRadius.lg), color = ThemeColors.brandContainer,
+                    modifier = Modifier.size(64.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.DeviceHub, null, Modifier.size(30.dp), tint = ThemeColors.brand)
                     }
-                    Text(strings.addFrameworkTitle, fontWeight = FontWeight.Bold, fontSize = 18.sp,
-                        modifier = Modifier.weight(1f))
-                    if (requests.isNotEmpty()) {
-                        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Pink6.copy(alpha = 0.12f)) {
-                            Text("${requests.size} ${strings.pairPendingRequests}",
-                                Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                fontSize = 11.sp, color = ArcoColors.Pink6)
+                }
+                Spacer(Modifier.height(ArcoSpacing.sm))
+                Text(strings.addFrameworkTitle, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+                    color = ThemeColors.textPrimary)
+                Spacer(Modifier.height(ArcoSpacing.lg))
+                HorizontalDivider(color = ThemeColors.border)
+                Spacer(Modifier.height(ArcoSpacing.sm))
+
+                // ── ① 待处理配对请求 ──
+                Text(strings.pairPendingRequests, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                    color = ThemeColors.textPrimary, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(4.dp))
+                if (requests.isEmpty()) {
+                    Text(strings.pairNoPending, fontSize = 12.sp, color = ThemeColors.textSecondary,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.xs))
+                } else {
+                    requests.forEach { req ->
+                        PairRequestCard(strings = strings, req = req, scope = scope) { message ->
+                            feedback = message
                         }
                     }
                 }
+                Spacer(Modifier.height(ArcoSpacing.md))
 
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm)) {
-                    // ── ① 待处理配对请求 ──
-                    item {
-                        Text(strings.pairPendingRequests, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
-                            color = ThemeColors.textPrimary)
-                        Spacer(Modifier.height(ArcoSpacing.sm))
-                    }
-                    if (requests.isEmpty()) {
-                        item {
-                            Text(strings.pairNoPending, fontSize = 12.sp, color = ThemeColors.textSecondary,
-                                modifier = Modifier.padding(bottom = ArcoSpacing.md))
+                // ── ② 刷新局域网发现列表 ──
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(strings.addFrameworkDiscovered, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                        color = ThemeColors.textPrimary, modifier = Modifier.weight(1f))
+                    TextButton(onClick = {
+                        isDiscovering = true
+                        scope.launch {
+                            FrameworkDiscovery.instance?.startDiscovery()
+                            delay(2500)
+                            discovered = FrameworkDiscovery.instance?.discoveredPeers?.toList().orEmpty()
+                            isDiscovering = false
+                            if (discovered.isEmpty()) feedback = strings.pairScanEmpty
                         }
-                    } else {
-                        items(requests, key = { it.requestId }) { req ->
-                            Surface(
-                                Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                                shape = RoundedCornerShape(ArcoRadius.md),
-                                color = ThemeColors.bgCard
-                            ) {
-                                Column(Modifier.padding(ArcoSpacing.md)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Outlined.DeviceHub, null, tint = ThemeColors.brand, modifier = Modifier.size(18.dp))
-                                        Spacer(Modifier.width(ArcoSpacing.sm))
-                                        Column(Modifier.weight(1f)) {
-                                            Text(req.fromName, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                                            Text("${req.fromAddress}:${req.fromPort} · ${FrameworkPeerStore.shortCodeOf(req.fromFingerprint)}",
-                                                fontSize = 11.sp, color = ThemeColors.textSecondary)
-                                        }
-                                    }
-                                    Spacer(Modifier.height(ArcoSpacing.sm))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
-                                        Button(
-                                            onClick = {
-                                                scope.launch {
-                                                    val ok = FrameworkPairEngine.accept(req)
-                                                    feedback = if (ok) strings.pairAccepted
-                                                        else strings.pairRespondFailed
-                                                }
-                                            },
-                                            shape = RoundedCornerShape(ArcoRadius.md),
-                                            colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand)
-                                        ) { Text(strings.pairAccept, color = Color.White, fontSize = 13.sp) }
-                                        OutlinedButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    val ok = FrameworkPairEngine.decline(req)
-                                                    feedback = if (ok) strings.pairDeclined
-                                                        else strings.pairRespondFailed
-                                                }
-                                            },
-                                            shape = RoundedCornerShape(ArcoRadius.md)
-                                        ) { Text(strings.pairDecline, fontSize = 13.sp) }
-                                    }
+                    }) {
+                        if (isDiscovering) {
+                            CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(strings.addFrameworkScanLan)
+                    }
+                }
+                if (discovered.isEmpty()) {
+                    Text(strings.pairScanHint, fontSize = 11.sp, color = ThemeColors.textSecondary,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.xs))
+                } else {
+                    discovered.forEach { peer ->
+                        Row(
+                            Modifier.fillMaxWidth().background(
+                                ThemeColors.bgCardHigh, RoundedCornerShape(ArcoRadius.sm)
+                            ).padding(ArcoSpacing.sm).padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brandContainer,
+                                modifier = Modifier.size(28.dp)) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Outlined.Devices, null, Modifier.size(16.dp), tint = ThemeColors.brand)
                                 }
                             }
-                        }
-                    }
-
-                    // ── ② 刷新局域网发现列表 ──
-                    item {
-                        Spacer(Modifier.height(ArcoSpacing.md))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(strings.addFrameworkDiscovered, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
-                                modifier = Modifier.weight(1f))
+                            Spacer(Modifier.width(ArcoSpacing.sm))
+                            Column(Modifier.weight(1f)) {
+                                Text(peer.name, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                Text("${peer.address}:${peer.port} · ${peer.frameworkName} v${peer.version}",
+                                    fontSize = 10.sp, color = ThemeColors.textSecondary)
+                            }
                             TextButton(onClick = {
-                                isDiscovering = true
                                 scope.launch {
-                                    FrameworkDiscovery.instance?.startDiscovery()
-                                    delay(2500)
-                                    discovered = FrameworkDiscovery.instance?.discoveredPeers?.toList().orEmpty()
-                                    isDiscovering = false
-                                    if (discovered.isEmpty()) feedback = strings.pairScanEmpty
-                                }
-                            }) {
-                                if (isDiscovering) {
-                                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                                    Spacer(Modifier.width(4.dp))
-                                }
-                                Text(strings.addFrameworkScanLan)
-                            }
-                        }
-                    }
-                    if (discovered.isEmpty()) {
-                        item {
-                            Text(strings.pairScanHint, fontSize = 12.sp, color = ThemeColors.textSecondary,
-                                modifier = Modifier.padding(vertical = ArcoSpacing.xs))
-                        }
-                    } else {
-                        items(discovered, key = { it.fingerprint }) { peer ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(peer.name, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                    Text("${peer.address}:${peer.port} · ${peer.frameworkName} v${peer.version}",
-                                        fontSize = 11.sp, color = ThemeColors.textSecondary)
-                                }
-                                TextButton(onClick = {
-                                    scope.launch {
-                                        val ok = FrameworkPairEngine.sendRequest(
-                                            address = peer.address,
-                                            port = peer.port,
-                                            displayName = FrameworkIdentityDisplay(),
-                                            fingerprint = FrameworkIdentityFingerprint()
-                                        )
-                                        feedback = if (ok) strings.pairRequestSent else strings.pairRequestFailed
-                                    }
-                                }) { Text(strings.add, color = ThemeColors.brand, fontSize = 13.sp) }
-                            }
-                        }
-                    }
-
-                    // ── ③ 手动添加 ──
-                    item {
-                        Spacer(Modifier.height(ArcoSpacing.md))
-                        Text(strings.pairManualAdd, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Spacer(Modifier.height(ArcoSpacing.sm))
-                    }
-                    item {
-                        ManualAddRow(strings = strings) { name, host, port, type ->
-                            scope.launch {
-                                // MengPaw 节点发配对请求; 其他框架无 ACP 配对, 直接本地入册
-                                if (type == "mengpaw") {
                                     val ok = FrameworkPairEngine.sendRequest(
-                                        address = host, port = port,
+                                        address = peer.address,
+                                        port = peer.port,
                                         displayName = FrameworkIdentityDisplay(),
                                         fingerprint = FrameworkIdentityFingerprint()
                                     )
                                     feedback = if (ok) strings.pairRequestSent else strings.pairRequestFailed
-                                } else {
-                                    FrameworkPeerStore.save(
-                                        FrameworkPeerStore.FrameworkPeer(
-                                            fingerprint = FrameworkPeerStore.computeFingerprint(type, "$host:$port"),
-                                            name = name, version = "手动添加",
-                                            frameworkName = "MengPaw",
-                                            address = host, port = port,
-                                            frameworkType = type,
-                                            lastSeen = System.currentTimeMillis()
-                                        )
-                                    )
-                                    feedback = strings.pairAddedLocal
                                 }
-                            }
+                            }) { Text(strings.add, color = ThemeColors.brand, fontSize = 12.sp) }
                         }
+                        Spacer(Modifier.height(4.dp))
                     }
+                }
+                Spacer(Modifier.height(ArcoSpacing.md))
 
-                    if (feedback.isNotBlank()) {
-                        item {
-                            Spacer(Modifier.height(ArcoSpacing.sm))
-                            Text(feedback, fontSize = 12.sp, color = ThemeColors.brand)
+                // ── ③ 手动添加 ──
+                Text(strings.pairManualAdd, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                    color = ThemeColors.textPrimary, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(4.dp))
+                ManualAddRow(strings = strings) { name, host, port, type ->
+                    scope.launch {
+                        // MengPaw 节点发配对请求; 其他框架无 ACP 配对, 直接本地入册
+                        if (type == "mengpaw") {
+                            val ok = FrameworkPairEngine.sendRequest(
+                                address = host, port = port,
+                                displayName = FrameworkIdentityDisplay(),
+                                fingerprint = FrameworkIdentityFingerprint()
+                            )
+                            feedback = if (ok) strings.pairRequestSent else strings.pairRequestFailed
+                        } else {
+                            FrameworkPeerStore.save(
+                                FrameworkPeerStore.FrameworkPeer(
+                                    fingerprint = FrameworkPeerStore.computeFingerprint(type, "$host:$port"),
+                                    name = name, version = "手动添加",
+                                    frameworkName = "MengPaw",
+                                    address = host, port = port,
+                                    frameworkType = type,
+                                    lastSeen = System.currentTimeMillis()
+                                )
+                            )
+                            feedback = strings.pairAddedLocal
                         }
                     }
                 }
+
+                if (feedback.isNotBlank()) {
+                    Spacer(Modifier.height(ArcoSpacing.sm))
+                    Text(feedback, fontSize = 12.sp, color = ThemeColors.brand)
+                }
+            }
+        },
+        confirmButton = {}
+    )
+}
+
+/** 待处理配对请求卡片 — 名称/地址/指纹 + 同意/拒绝 (名片风格)。 */
+@Composable
+private fun PairRequestCard(
+    strings: AppStrings,
+    req: FrameworkPairStore.PairRequest,
+    scope: kotlinx.coroutines.CoroutineScope,
+    onFeedback: (String) -> Unit
+) {
+    Surface(
+        Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCardHigh
+    ) {
+        Column(Modifier.padding(ArcoSpacing.sm)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ThemeColors.brandContainer,
+                    modifier = Modifier.size(28.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.DeviceHub, null, Modifier.size(16.dp), tint = ThemeColors.brand)
+                    }
+                }
+                Spacer(Modifier.width(ArcoSpacing.sm))
+                Column(Modifier.weight(1f)) {
+                    Text(req.fromName, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                    Text("${req.fromAddress}:${req.fromPort} · ${FrameworkPeerStore.shortCodeOf(req.fromFingerprint)}",
+                        fontSize = 10.sp, color = ThemeColors.textSecondary)
+                }
+            }
+            Spacer(Modifier.height(ArcoSpacing.xs))
+            Row(horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            val ok = FrameworkPairEngine.accept(req)
+                            onFeedback(if (ok) strings.pairAccepted else strings.pairRespondFailed)
+                        }
+                    },
+                    shape = RoundedCornerShape(ArcoRadius.md),
+                    colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
+                    contentPadding = PaddingValues(horizontal = ArcoSpacing.md, vertical = 4.dp)
+                ) { Text(strings.pairAccept, color = Color.White, fontSize = 12.sp) }
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            val ok = FrameworkPairEngine.decline(req)
+                            onFeedback(if (ok) strings.pairDeclined else strings.pairRespondFailed)
+                        }
+                    },
+                    shape = RoundedCornerShape(ArcoRadius.md),
+                    contentPadding = PaddingValues(horizontal = ArcoSpacing.md, vertical = 4.dp)
+                ) { Text(strings.pairDecline, fontSize = 12.sp) }
             }
         }
     }
@@ -312,7 +329,8 @@ private fun ManualAddRow(
             },
             enabled = name.isNotBlank() && address.isNotBlank(),
             colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
-            shape = RoundedCornerShape(ArcoRadius.md)
+            shape = RoundedCornerShape(ArcoRadius.md),
+            modifier = Modifier.fillMaxWidth()
         ) { Text(strings.add, color = Color.White) }
     }
 }
