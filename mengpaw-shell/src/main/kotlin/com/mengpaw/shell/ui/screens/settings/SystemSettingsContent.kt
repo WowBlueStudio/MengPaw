@@ -22,7 +22,7 @@ import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
-import com.mengpaw.shell.ui.components.TokenLineChart
+import com.mengpaw.shell.ui.components.TokenBarChart
 import com.mengpaw.shell.ui.components.TokenStatsCollector
 import com.mengpaw.shell.ui.components.formatTokenCount
 import com.mengpaw.design.components.SectionHeader
@@ -225,7 +225,7 @@ fun SystemSettingsContent(
             }
             label to cache
         }
-        TokenLineChart(series = modelSeries, cacheSeries = cacheSeries)
+        TokenBarChart(series = modelSeries, cacheSeries = cacheSeries)
     } else {
         Text(state.strings.systemNoTokenData,
             style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(vertical = ArcoSpacing.lg))

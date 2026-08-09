@@ -6,7 +6,9 @@ package com.mengpaw.shell.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -15,9 +17,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,28 +42,28 @@ private val chartColors = listOf(
 private val cacheColor = ArcoColors.Gray6
 
 /**
- * Simple line chart for token usage over time.
- *
- * Each series is a list of (label, value) pairs.
- * Supports multiple model lines + a cache-hit line.
+ * Token 用量柱状图 (v0.35.1 用户定案) — 每日期一根堆叠柱 (模型分段着色),
+ * 固定柱宽 22dp + 间隙 8dp, 日期从左往右排列; 超出容器宽度时横向滚动,
+ * 数据更新自动拉到最右侧 (最新日期)。
  */
 @Composable
-fun TokenLineChart(
-    series: List<Pair<String, List<Pair<String, Long>>>>,  // (model/line name, [(label, value)])
+fun TokenBarChart(
+    series: List<Pair<String, List<Pair<String, Long>>>>,  // (model/line name, [(label, value)]) 
     cacheSeries: List<Pair<String, Long>> = emptyList(),    // cache hit data
     modifier: Modifier = Modifier
 ) {
-    if (series.all { it.second.isEmpty() } && cacheSeries.isEmpty()) {
+    val dataSize = series.firstOrNull()?.second?.size ?: 0
+    if (dataSize == 0) {
         Box(modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
             Text("暂无数据", color = ThemeColors.textSecondary, fontSize = 14.sp)
         }
         return
     }
 
-    var showCacheLine by remember { mutableStateOf(true) }
+    val labels = series.first().second.map { it.first }
 
     Column(modifier) {
-        // Legend
+        // Legend — 模型色点 + 缓存节省 (静态)
         Row(
             Modifier.fillMaxWidth().padding(bottom = ArcoSpacing.sm),
             horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.md)
@@ -70,100 +72,84 @@ fun TokenLineChart(
                 LegendDot(chartColors[i % chartColors.size], name)
             }
             if (cacheSeries.isNotEmpty()) {
-                LegendDot(cacheColor, "缓存节省", showCacheLine) { showCacheLine = !showCacheLine }
+                LegendDot(cacheColor, "缓存节省")
             }
         }
 
-        // Chart canvas
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-                .background(ThemeColors.bgCard, RoundedCornerShape(ArcoRadius.md))
-                .padding(horizontal = 8.dp, vertical = 12.dp)
-        ) {
-            val w = size.width
-            val h = size.height
-            val padLeft = 48f
-            val padRight = 16f
-            val padTop = 16f
-            val padBottom = 32f
-            val chartW = w - padLeft - padRight
-            val chartH = h - padTop - padBottom
+        // 固定柱宽 22dp + 间隙 8dp — 数据量超过容器宽度时横向滚动
+        val scrollState = rememberScrollState()
+        LaunchedEffect(dataSize) {
+            // 等布局完成 (maxValue > 0) → 自动拉到最右侧 (最新日期)
+            while (scrollState.maxValue <= 0) kotlinx.coroutines.delay(20)
+            scrollState.scrollTo(scrollState.maxValue)
+        }
+        val barWidth = 22.dp
+        val barGap = 8.dp
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            // 内容总宽 = 数据量 × (柱宽+间隙), 至少铺满容器
+            val contentWidth = ((barWidth + barGap) * dataSize - barGap).coerceAtLeast(maxWidth)
+            Row(Modifier.horizontalScroll(scrollState)) {
+                Canvas(
+                    Modifier.width(contentWidth).height(220.dp)
+                        .background(ThemeColors.bgCard, RoundedCornerShape(ArcoRadius.md))
+                        .padding(horizontal = 8.dp, vertical = 12.dp)
+                ) {
+                    val w = size.width
+                    val h = size.height
+                    val padLeft = 44f
+                    val padRight = 8f
+                    val padTop = 12f
+                    val padBottom = 30f
+                    val chartW = w - padLeft - padRight
+                    val chartH = h - padTop - padBottom
 
-            // v0.34.3: Y 轴动态范围 [yMin, yMax] — 原实现固定 0..maxVal,
-            // 数据值小时折线全挤在上部、底部大片空白 (孔位)。现从数据最小值
-            // 附近起算, 上下各留 15%/10% 余量, 折线铺满绘制区。
-            val allValues = series.flatMap { it.second.map { p -> p.second } } + cacheSeries.map { it.second }
-            val rawMin = allValues.minOrNull() ?: 0L
-            val rawMax = allValues.maxOrNull() ?: 1L
-            val span = (rawMax - rawMin).coerceAtLeast(1L)
-            val yMin = if (rawMin == 0L) 0L else (rawMin - span * 15 / 100).coerceAtLeast(0L)
-            val yMax = rawMax + span * 10 / 100
-            val yScale = chartH / (yMax - yMin).toFloat()
+                    // Y 轴 0 起动态上限: 每日堆叠总量最大值 × 1.15
+                    val totals = (0 until dataSize).map { i ->
+                        series.sumOf { it.second.getOrNull(i)?.second ?: 0L }
+                    }
+                    val rawMax = (totals.maxOrNull() ?: 1L).coerceAtLeast(1L)
+                    val yMax = rawMax * 115 / 100
+                    val yScale = chartH / yMax.toFloat()
 
-            // Y-axis labels (3 ticks)
-            val textPaint = android.graphics.Paint().apply {
-                color = 0xFF86909C.toInt() // ArcoColors.Gray6
-                textSize = 24f
-                isAntiAlias = true
-            }
-            for (i in 0..3) {
-                val yVal = yMin + (yMax - yMin) * i / 3
-                val y = padTop + chartH - (yVal - yMin) * yScale
-                drawContext.canvas.nativeCanvas.drawText(
-                    formatTokenCount(yVal),
-                    4f, y + 8f, textPaint
-                )
-                // Grid line
-                drawLine(
-                    ArcoColors.Gray3, Offset(padLeft, y), Offset(w - padRight, y),
-                    strokeWidth = 1f
-                )
-            }
+                    val textPaint = android.graphics.Paint().apply {
+                        color = 0xFF86909C.toInt() // ArcoColors.Gray6
+                        textSize = 22f
+                        isAntiAlias = true
+                    }
+                    // Y 刻度 (0..yMax 4 格) + 网格
+                    for (i in 0..4) {
+                        val yVal = yMax * i / 4
+                        val y = padTop + chartH - yVal * yScale
+                        drawContext.canvas.nativeCanvas.drawText(formatTokenCount(yVal), 2f, y + 6f, textPaint)
+                        drawLine(ArcoColors.Gray3, Offset(padLeft, y), Offset(w - padRight, y), strokeWidth = 1f)
+                    }
 
-            // X-axis labels
-            fun drawSeriesLine(
-                data: List<Pair<String, Long>>,
-                color: Color,
-                strokeWidth: Float = 2.5f
-            ) {
-                if (data.size < 2) return
-                val path = Path()
-                data.forEachIndexed { i, (_, value) ->
-                    val x = padLeft + chartW * i / (data.size - 1).coerceAtLeast(1)
-                    val y = padTop + chartH - (value - yMin) * yScale
-                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                }
-                drawPath(path, color, style = Stroke(strokeWidth))
-                // Dots
-                data.forEachIndexed { i, (_, value) ->
-                    val x = padLeft + chartW * i / (data.size - 1).coerceAtLeast(1)
-                    val y = padTop + chartH - (value - yMin) * yScale
-                    drawCircle(color, 4f, Offset(x, y))
-                }
-            }
-
-            // Draw each model series
-            series.forEachIndexed { i, (_, data) ->
-                drawSeriesLine(data, chartColors[i % chartColors.size])
-            }
-
-            // Draw cache-hit line (dashed style via lower alpha)
-            if (showCacheLine && cacheSeries.isNotEmpty()) {
-                drawSeriesLine(cacheSeries, cacheColor, 2f)
-            }
-
-            // X-axis labels
-            val allLabels = series.firstOrNull()?.second?.map { it.first } ?: emptyList()
-            if (allLabels.isNotEmpty()) {
-                allLabels.forEachIndexed { i, label ->
-                    if (i % maxOf(1, allLabels.size / 5) == 0 || i == allLabels.size - 1) {
-                        val x = padLeft + chartW * i / (allLabels.size - 1).coerceAtLeast(1)
-                        drawContext.canvas.nativeCanvas.drawText(
-                            label.takeLast(5),  // e.g. "07-15" or "W29"
-                            x - 16f, h - 4f, textPaint
-                        )
+                    // 堆叠柱 — 每日一根, 模型分段着色 (自底向上)
+                    val barWidthPx = barWidth.toPx()
+                    val barGapPx = barGap.toPx()
+                    (0 until dataSize).forEach { i ->
+                        val x = padLeft + i * (barWidthPx + barGapPx)
+                        var acc = 0f
+                        series.forEachIndexed { sIdx, (_, sData) ->
+                            val v = sData.getOrNull(i)?.second ?: 0L
+                            val barH = v * yScale
+                            if (barH > 0.5f) {
+                                drawRoundRect(
+                                    chartColors[sIdx % chartColors.size],
+                                    topLeft = Offset(x, padTop + chartH - acc - barH),
+                                    size = Size(barWidthPx, barH),
+                                    cornerRadius = CornerRadius(3f, 3f)
+                                )
+                                acc += barH
+                            }
+                        }
+                        // 日期标签 (间隔显示, 最后一天必显示)
+                        if (i % maxOf(1, dataSize / 6) == 0 || i == dataSize - 1) {
+                            drawContext.canvas.nativeCanvas.drawText(
+                                labels[i].takeLast(5),
+                                x - 14f, h - 2f, textPaint
+                            )
+                        }
                     }
                 }
             }
