@@ -9,6 +9,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import com.mengpaw.design.tokens.ArcoColors
 
 /**
@@ -249,4 +250,15 @@ object ThemeColors {
     // Brand (always from primary — theme-aware)
     val brand: Color @Composable get() = primary
     val brandContainer: Color @Composable get() = primaryContainer
+
+    /** 当前是否暗色主题 (v0.35.2) — 按背景亮度判断, 与主题模式解耦。 */
+    val isDark: Boolean @Composable
+        get() = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    /**
+     * 强调文字色 (v0.35.2, 用户定案) — 暗色模式深蓝字体 → 白色;
+     * 亮色保持品牌深蓝。用于标题/标签等原本硬编码 Blue5/Blue6 的文字。
+     */
+    val accentText: Color @Composable
+        get() = if (isDark) Color.White else ArcoColors.Blue6
 }

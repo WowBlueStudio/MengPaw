@@ -40,7 +40,7 @@ fun SectionHeader(
         Text(
             text = title,
             fontWeight = FontWeight.Bold,
-            color = ArcoColors.Blue6,
+            color = ThemeColors.accentText,
             modifier = modifier
         )
         return
@@ -52,7 +52,7 @@ fun SectionHeader(
         Text(
             text = title,
             fontWeight = FontWeight.Bold,
-            color = ArcoColors.Blue6,
+            color = ThemeColors.accentText,
             modifier = Modifier.weight(1f)
         )
         if (count != null) {

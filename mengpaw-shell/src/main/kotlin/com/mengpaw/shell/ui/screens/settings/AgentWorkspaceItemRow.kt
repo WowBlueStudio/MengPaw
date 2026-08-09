@@ -148,7 +148,7 @@ internal fun WorkspaceItemRow(
                 TextButton(onClick = {
                     onResetWorkspaceFile?.invoke(deletePrefix + item.name)
                     showResetConfirm = false
-                }) { Text(strings.resetDoc, color = ArcoColors.Blue6) }
+                }) { Text(strings.resetDoc, color = ThemeColors.accentText) }
             },
             dismissButton = { TextButton(onClick = { showResetConfirm = false }) { Text(strings.cancel) } }
         )

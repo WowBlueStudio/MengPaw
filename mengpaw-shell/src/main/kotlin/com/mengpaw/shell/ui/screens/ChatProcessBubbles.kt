@@ -328,7 +328,8 @@ fun TraceStepItem(trace: AgentTrace) {
         val isParallelTool = trace.thought.isBlank()
         if (!isParallelTool) {
             Row(verticalAlignment = Alignment.Top) {
-                Text("Step${trace.step}", fontSize = 10.sp, color = ArcoColors.Blue5,
+                Text("Step${trace.step}", fontSize = 10.sp,
+                    color = if (ThemeColors.isDark) Color.White else ArcoColors.Blue5,
                     fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 2.dp))
                 Spacer(Modifier.width(4.dp))
                 Icon(Icons.Outlined.Psychology, null, Modifier.size(14.dp).padding(top = 2.dp), tint = ArcoColors.Blue4)

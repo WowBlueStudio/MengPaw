@@ -60,7 +60,7 @@ internal fun AgentGroupItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("已选 ${selectedIds.size} 项", fontWeight = FontWeight.Medium,
-                    fontSize = 13.sp, color = ArcoColors.Blue6)
+                    fontSize = 13.sp, color = ThemeColors.accentText)
                 Row(horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
                     TextButton(onClick = {
                         selectedIds.forEach { onDeleteSession(it) }

@@ -174,12 +174,12 @@ private fun PluginCard(
                     if (isBuiltin) {
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Blue1) {
                             Text(strings.builtinBadge, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                style = MaterialTheme.typography.labelSmall, color = ArcoColors.Blue6)
+                                style = MaterialTheme.typography.labelSmall, color = com.mengpaw.design.theme.ThemeColors.accentText)
                         }
                     } else if (item.availability == PluginAvailability.EMBEDDED) {
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Blue1) {
                             Text(strings.embeddedBadge, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                style = MaterialTheme.typography.labelSmall, color = ArcoColors.Blue6)
+                                style = MaterialTheme.typography.labelSmall, color = com.mengpaw.design.theme.ThemeColors.accentText)
                         }
                     } else if (item.isInstalled) {
                         val label = if (item.isActive) strings.activeBadge else strings.disabledBadge
