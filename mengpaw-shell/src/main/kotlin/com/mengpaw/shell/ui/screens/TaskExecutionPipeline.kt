@@ -249,11 +249,14 @@ internal class TaskExecutionPipeline(
                         val autoTag = when (detected) {
                             LoopMode.GOAL -> InputTag.Mode(ExecutionMode.GOAL)
                             LoopMode.MISSION -> InputTag.Mode(ExecutionMode.MISSION)
+                            LoopMode.SWARM -> InputTag.Mode(ExecutionMode.SWARM)
+                            LoopMode.FLEET -> InputTag.Mode(ExecutionMode.FLEET)
                             else -> null
                         }
                         autoTag?.let { inputTagManager.addTag(it) }
                         // 临时覆盖 loopMode 用于本轮分发
-                        if (detected == LoopMode.GOAL || detected == LoopMode.MISSION) {
+                        if (detected == LoopMode.GOAL || detected == LoopMode.MISSION ||
+                            detected == LoopMode.SWARM || detected == LoopMode.FLEET) {
                             inputTagManager.loopMode = detected
                         }
                     }

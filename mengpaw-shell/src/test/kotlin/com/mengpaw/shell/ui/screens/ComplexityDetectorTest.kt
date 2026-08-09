@@ -8,12 +8,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 复杂度自动检测测试 (P2 修复: 11-15 分最高复杂度原落 GOAL — 改为 MISSION)。
+ * 复杂度自动检测测试 (v0.34.3 五档升级: REACT/GOAL/MISSION/SWARM + FLEET 指征)。
  *
  * detectComplexity/scoreComplexity 为纯 Kotlin (预编译正则 + 阈值判断), 可直接测试。
  * 评分规则: 风险词 +3 / 修改词 +2 / 域命中 ≤3 / 长度 >200 +2, >80 +1 / 序列词 +2 / 批量词 +2。
  *
- * 边界: ≤4 → REACT, 5-7 → GOAL, 8-10 → MISSION, ≥11 → MISSION (修复点)。
+ * 边界: ≤4 → REACT, 5-7 → GOAL, 8-10 → MISSION, ≥11 → SWARM; FLEET 指征优先。
  */
 class ComplexityDetectorTest {
 
@@ -60,29 +60,36 @@ class ComplexityDetectorTest {
         assertEquals(LoopMode.MISSION, detectComplexity("删除文件然后所有浏览器系统"))
     }
 
-    // ── P2 修复: 11-12 分最高复杂度 → MISSION (修复前落入 GOAL) ──
+    // ── v0.34.3 五档升级: 11+ 最高复杂度 → SWARM (规模更大并发) ──
 
     @Test
-    fun `11分最高复杂度_MISSION_修复回归`() {
+    fun `11分最高复杂度_SWARM`() {
         // 风险+3 + 域 9 类命中封顶+3 + 序列(然后)+2 + 批量(所有)+2 = 10;
-        // 补足长度 85 (>80) +1 → 11 — 修复前 11-15 分落 GOAL, 现必须 MISSION
+        // 补足长度 85 (>80) +1 → 11 — v0.34.3 起 11+ 落 SWARM
         val task = "删除文件网络插件记忆系统浏览器搜索翻译应用然后所有" + "认真".repeat(30)
         assertTrue("长度 85 应落在 >80 档", task.length in 81..200)
         assertEquals(11, scoreComplexity(task))
-        assertEquals(
-            "11 分属最高复杂度档, 必须为 MISSION (P2 修复回归)",
-            LoopMode.MISSION, detectComplexity(task)
-        )
+        assertEquals("11 分属最高复杂度档 → SWARM", LoopMode.SWARM, detectComplexity(task))
     }
 
     @Test
-    fun `12分上限_MISSION`() {
+    fun `12分上限_SWARM`() {
         // 风险+3 + 域 9 类命中封顶+3 + 序列+2 + 批量+2 = 10; 长度 >200 +2 → 12 (理论上限)
         val longTask = "删除 文件 网络 插件 记忆 系统 浏览器 搜索 翻译 应用 然后 所有 " +
             "任务需要认真执行耐心完成每一步骤".repeat(12)
         assertTrue(longTask.length > 200)
         assertEquals(12, scoreComplexity(longTask))
-        assertEquals(LoopMode.MISSION, detectComplexity(longTask))
+        assertEquals(LoopMode.SWARM, detectComplexity(longTask))
+    }
+
+    @Test
+    fun `FLEET 指征优先于评分`() {
+        // 需其他框架/跨设备协助 → FLEET, 即使任务本身低分
+        assertEquals(LoopMode.FLEET, detectComplexity("帮我研究一下，需要其他框架协助"))
+        assertEquals(LoopMode.FLEET, detectComplexity("跨设备分布式执行批量任务"))
+        assertEquals(LoopMode.FLEET, detectComplexity("多Agent编队协同完成任务"))
+        // 无 FLEET 指征时不误升
+        assertEquals(LoopMode.REACT, detectComplexity("你好"))
     }
 
     // ── 评分维度 ──

@@ -10,19 +10,23 @@ private val RISK_REGEX = Regex("删除|卸载|rm |发布|部署|格式化|清空
 private val MODIFY_REGEX = Regex("创建|写入|修改|安装|配置|设置|编译|构建|生成")
 private val SEQUENCE_REGEX = Regex("然后|之后|接着|再|并且|同时|;|；|第一步|第二步")
 private val BATCH_REGEX = Regex("每个|所有|全部|批量|遍历|循环")
+// v0.34.3 五档自动升级: FLEET 指征 = 需其他框架/设备协助 (跨设备/分布式/多框架/多 Agent 编队)
+private val FLEET_REGEX = Regex("其他框架|远程设备|另一台|跨设备|分布式|集群|编队|多Agent|多智能体|协同作战")
 
 /**
- * 自动检测任务复杂度, 返回建议的 LoopMode.
- * 简单问答 → REACT | 明确任务 → GOAL | 复杂工程 → MISSION.
+ * 自动检测任务并返回建议执行模式 (v0.34.3 五档自动升级):
+ * 默认 REACT → 目标明确复杂 → GOAL → 规模较大 → MISSION → 规模更大并发 → SWARM;
+ * 需其他框架/设备协助 → FLEET (指征优先, 意图明确不靠评分).
  */
 internal fun detectComplexity(task: String): LoopMode {
+    if (FLEET_REGEX.containsMatchIn(task)) return LoopMode.FLEET
     val score = scoreComplexity(task)
     return when {
         score <= 4 -> LoopMode.REACT
         score <= 7 -> LoopMode.GOAL
         score <= 10 -> LoopMode.MISSION
-        // P2 修复: 11-15 分(最高复杂度)原落入 GOAL 与注释"复杂工程 → MISSION"矛盾 — 改为 MISSION
-        else -> LoopMode.MISSION
+        // 11+: 规模更大并发 → SWARM (批量/并发信号强)
+        else -> LoopMode.SWARM
     }
 }
 

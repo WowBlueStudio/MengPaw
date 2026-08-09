@@ -95,6 +95,8 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 **CLI.md 移除 (v0.34.3, 用户拍板)**: CLI.md 工作区文档整体删除 — 生成链路 (CliDocGenerator/AgentDocManager.ensureCliDoc/cliDocStale/命令指纹/AgentDocType.CLI) 全部移除, `agent.cli` 改为轻量指引 (self.tools/self.search/self.ports 入口 + 参数纯净规则 + 安全分级), 22KB 全表不再每轮负担。历史遗留: ① 完整性/陈旧自愈机制 (v0.31.0/v0.34.0) 随生成器删除 — 命令发现由 `self.tools` (运行时枚举, 天然新鲜) + `self.search` (CommandSearch, IndexCoverageTest 锁覆盖) 承担; ② 描述与实现错配的教训 (agent.audit/plugin.auto 手写种子错误潜伏 9 版, 经 P2-8 合并暴露) → AntiAmbiguityTest 语义锁防再犯; ③ 设备上旧工作区残留 cli.md 文件无害 (agent.cli 不再读, agent.docs 不再列出), 孪生同步仍排除。
 
+**执行模式五档自动升级 (v0.34.3, 用户定案)**: `detectComplexity` 从三档扩展为五档 — 默认 REACT → 目标明确复杂 (评分 5-7) → GOAL → 规模较大 (8-10) → MISSION → 规模更大并发 (≥11) → SWARM; **需其他框架/跨设备协助 (FLEET 指征: 其他框架/远程设备/跨设备/分布式/编队/多Agent)** → FLEET (指征优先, 意图明确不靠评分)。自动升级逻辑同步支持 SWARM/FLEET 标签 + loopMode 覆盖。**UI 修复**: `PanelOrderStore` 默认模式列表补 fleet (原 7 个缺 Fleet 导致 + 面板没有该模式), 旧持久化文件迁移插入; 输入栏 placeholder 补 Fleet。
+
 ### 2.4 依赖关系
 
 ```

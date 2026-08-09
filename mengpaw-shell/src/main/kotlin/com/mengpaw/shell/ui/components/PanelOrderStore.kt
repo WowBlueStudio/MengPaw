@@ -15,7 +15,8 @@ object PanelOrderStore {
     private val file: File get() = File(DataPaths.CONFIG, FILE_NAME)
 
     data class PanelOrder(
-        val modes: List<String> = listOf("goal", "mission", "swarm", "plan", "research", "translate", "silent"),
+        // v0.34.3: 补 fleet — 此前缺 Fleet 导致 + 面板没有该模式
+        val modes: List<String> = listOf("goal", "mission", "swarm", "fleet", "plan", "research", "translate", "silent"),
         val plugins: List<String> = emptyList()
     )
 
@@ -25,10 +26,14 @@ object PanelOrderStore {
             val text = file.readText()
             if (text.isBlank()) return PanelOrder()
             val obj = JSONObject(text)
-            PanelOrder(
-                modes = obj.optJSONArray("modes")?.let { arr ->
+            val storedModes = obj.optJSONArray("modes")?.let { arr ->
                     (0 until arr.length()).map { i -> arr.getString(i) }
-                } ?: listOf("goal", "mission", "plan", "research", "translate", "silent"),
+                } ?: listOf("goal", "mission", "swarm", "fleet", "plan", "research", "translate", "silent")
+            // 迁移: 旧持久化列表缺 fleet → 插入 (防老用户永远看不到 Fleet)
+            val modes = if ("fleet" in storedModes) storedModes
+                else listOf("goal", "mission", "swarm", "fleet") + storedModes.filter { it != "swarm" }
+            PanelOrder(
+                modes = modes,
                 plugins = obj.optJSONArray("plugins")?.let { arr ->
                     (0 until arr.length()).map { i -> arr.getString(i) }
                 } ?: emptyList()
