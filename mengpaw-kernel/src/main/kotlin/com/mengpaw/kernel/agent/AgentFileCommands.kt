@@ -45,23 +45,34 @@ internal class AgentFileCommands {
         // soul.md, profile.md, agents.md are deletable via agent.rm (Agent owns them)
     )
 
+    /** 绝对路径首段白名单 — 真系统挂载点。前导 "/" 宽容解析只对非挂载点路径生效。 */
+    private val SYSTEM_ROOT_SEGMENTS = setOf(
+        "data", "storage", "sdcard", "system", "vendor", "product", "odm",
+        "mnt", "proc", "sys", "dev", "cache", "apex"
+    )
+
     /**
      * Resolve path with traversal protection (canonical path resolves ../ and symlinks).
      * 相对路径以 Agent 工作区 {AGENTS}/{agent}/ 为基准 — 提示词教的工作区相对语义
      * (agent.read profile.md) 由此成为现实。
      * 前导 "/" 宽容 (FIX 自检报告 P0-2): Agent 常按 Unix 习惯写 "/Agent文档/MengPaw",
      * Android 上被 File.isAbsolute 当根目录绝对路径 → 必然不存在。字面解析失败时,
-     * 去掉前导 / 按工作区重试; 真实系统绝对路径 (/data/...) 存在时不受影响。
+     * 去掉前导 / 按工作区重试; 真实系统绝对路径 (/data/.../storage/...) 不受影响。
+     * v0.34.3: 原实现仅当"重试路径已存在"才回退 — 写新文件 (/Agent文档/x.md) 时
+     * 目标不存在导致回退失效, 直接落到根目录写入失败。现改为: 非系统挂载点前缀的
+     * 前导 / 路径一律按工作区解析 (读写一致)。
      */
     private fun resolvePath(raw: String, agent: String): java.io.File? {
         val trimmed = raw.trim()
         val file = if (java.io.File(trimmed).isAbsolute) java.io.File(trimmed)
                    else java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$agent/$trimmed")
         val canonical = try { file.canonicalFile } catch (_: Exception) { null }
-        if ((canonical == null || !canonical.exists()) && trimmed.startsWith("/") && trimmed.length > 1) {
-            val retry = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$agent/${trimmed.trimStart('/')}")
-            val retryCanonical = try { retry.canonicalFile } catch (_: Exception) { null }
-            if (retryCanonical != null && retryCanonical.exists()) return retryCanonical
+        if (trimmed.startsWith("/") && trimmed.length > 1) {
+            val first = trimmed.trimStart('/').substringBefore('/').lowercase()
+            if (first !in SYSTEM_ROOT_SEGMENTS) {
+                // Unix 风格 /Agent文档/... → 按工作区解析 (不依赖目标是否存在)
+                return java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$agent/${trimmed.trimStart('/')}").canonicalFile
+            }
         }
         return canonical
     }
@@ -183,7 +194,14 @@ internal class AgentFileCommands {
         val files = dir.listFiles()?.sortedBy { if (it.isDirectory) 0 else 1 } ?: emptyList()
         return ExecutionResult.ok(buildString {
             appendLine("📂 输出目录: ${com.mengpaw.kernel.DataPaths.OUTPUT}")
-            appendLine("   状态: ${if (dir.canWrite()) "可写" else "⚠️ 不可写"}")
+            if (dir.canWrite()) {
+                appendLine("   状态: 可写")
+            } else {
+                appendLine("   状态: ⚠️ 不可写")
+                if (com.mengpaw.kernel.DataPaths.OUTPUT.startsWith("/storage/emulated/0/MengPaw")) {
+                    appendLine("   └ 公共目录需『所有文件访问』权限: 设置 → 应用 → MengPaw → 权限 → 所有文件访问 → 允许")
+                }
+            }
             val totalSize = files.sumOf { it.length() }
             if (totalSize > 0) appendLine("   总大小: ${formatSize(totalSize)}")
             appendLine()

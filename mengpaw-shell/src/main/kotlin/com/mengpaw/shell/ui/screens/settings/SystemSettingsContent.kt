@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.kernel.KernelLog
@@ -138,6 +139,39 @@ fun SystemSettingsContent(
                     else ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                 } catch (_: Exception) { KernelLog.w("SystemSettings", "start battery settings intent failed") }
             }) { Text(state.strings.systemGoToBatterySettings, style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand) }
+        }
+    }
+
+    // ── 输出目录 (v0.34.3): 公共 /storage/emulated/0/MengPaw/ 用户可见;
+    //    未授权时引导跳转"所有文件访问"设置页 (MANAGE_EXTERNAL_STORAGE) ──
+    val outDir = java.io.File(com.mengpaw.kernel.DataPaths.OUTPUT)
+    val outWritable = outDir.canWrite()
+    Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        Icon(if (outWritable) Icons.Outlined.FolderOpen else Icons.Outlined.Warning,
+            null, Modifier.size(20.dp), tint = if (outWritable) ArcoColors.Green6 else ArcoColors.Orange6)
+        Spacer(Modifier.width(ArcoSpacing.md))
+        Column(Modifier.weight(1f)) {
+            Text("输出目录", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+            Text(com.mengpaw.kernel.DataPaths.OUTPUT,
+                style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (!outWritable) {
+                Text("⚠️ 不可写 — 授予『所有文件访问』权限后，Agent 交付的文件才会出现在这里",
+                    style = MaterialTheme.typography.labelSmall, color = ArcoColors.Orange6)
+            }
+        }
+        if (!outWritable) {
+            TextButton(onClick = {
+                try {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                        data = android.net.Uri.parse("package:com.mengpaw.shell")
+                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    if (intent.resolveActivity(ctx.packageManager) != null) ctx.startActivity(intent)
+                    else ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (_: Exception) { KernelLog.w("SystemSettings", "start all-files-access settings failed") }
+            }) { Text("去授权", style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand) }
         }
     }
 
