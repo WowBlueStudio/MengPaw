@@ -225,7 +225,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | `security/Vault.kt` | API Key 加密存储 (EncryptedSharedPreferences + Android Keystore) |
 | `security/IntegrityGuard.kt` | APK 签名校验，实现 `IntegrityProvider` 接口 |
 | `namespace/SysExecutor.kt` | 系统信息命令 (39 个，反射 Android API) |
-| `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)` |
+| `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)`；输出目录优先公共 `/storage/emulated/0/MengPaw/` (v0.34.3, 用户可见；需 MANAGE_EXTERNAL_STORAGE，未授权回退旧私有目录并迁移旧文件) |
 | `AndroidLogger.kt` | 桥接：`KernelLog.setLogger(AndroidLogger())` |
 
 ### 3.3 mengpaw-shell（主应用，118 文件）
@@ -599,6 +599,10 @@ twin.lost <peer> / twin.recover <peer>
 **已知成本与 P2** (v0.32.1+ 已修复首项): ~~每轮请求重发全部历史图片/音频 base64~~ → **仅最后一条带附件的 user 消息挂二进制键** (`History.getStructuredHistory` latest-only — 历史附件每轮全量 base64 会击穿上下文窗口: 2MB 图 ≈ 50 万 token/step; 更早消息视觉认知依赖 LLM 文本转述); 同一附件多 step 经指纹缓存 (path|size|mtime, 128 条/64MB 上限, `AttachmentPayload`); 恢复轮注入保留二进制键 (AgentEngine recovery 不再重建 map 丢 `_image`); 上行图片不缩图 (kernel 零 Android 依赖无 BitmapFactory, 靠 8MB 上限) — 后续 P2: shell 选图时预生成 thumb; 进程被杀恢复会话附件降级路径文本; 旧会话 `📎 path` 文本不迁移为卡片。
 
 **下行媒体**: 气泡层 `AttachmentBubbles.extractMedia` 提取规则 — ① `![alt](path)` 图片 (data:/javascript: 前缀排除) ② `[name](path)` 且扩展名命中 image/audio/video/document (file:// 前缀容错) ③ 交付行 — 交付动词组 (`Saved to`/`已保存到`/`文件在`/`文件位于`/`输出到`/`生成于`/`文件为` 等, 大小写不敏感, 冒号半角/全角可选, 路径可引号包裹含空格) + 媒体/文档扩展名白名单收尾, 或独立成行的纯路径 (无空格且含 /) (本地路径须 exists)。提取后文本交 MarkdownText, 卡片垂直堆叠 maxWidth 260dp。**提示词联动 (v0.34.0)**: 响应格式节含「交付文件给用户」指引 (图片/音频/视频 → `![描述](绝对路径)`, 其他文件 → `[文件名](绝对路径)` 或独立行 `已保存到 <绝对路径>`, 路径须 agent.ls 验证存在) — 聊天内交付格式与提取器白名单对齐, 防自然语言漂移静默丢失 (与 XML 工具调用同类)。渲染: 图片 `inJustDecodeBounds` 采样 ≤2048px + 全屏 Dialog; 音频 `AudioPlayerHolder` 单实例 MediaPlayer (同刻只播一条, 静态装饰波形, 进度轮询); 视频 MediaMetadataRetriever 封面帧 + VideoView Dialog; 文件扩展名图标 + MIME 配色, ACTION_VIEW FileProvider (对齐 ClipboardIntentExecutor); http(s) URL HttpURLConnection 下载 cacheDir/media_cache sha1 缓存。
+
+**链接点击安全 (v0.34.3, 平板 0.34.2 实锤 FileUriExposedException 闪退)**: MarkdownText 内 `[name](path)` 链接不再用 `LinkAnnotation.Url` (Compose 默认经 LocalUriHandler 直接对 file:// 起 ACTION_VIEW → 崩溃), 改用 `LinkAnnotation.Clickable` 自定义处理 — http(s) 直接 ACTION_VIEW; 本地路径去 file:// 前缀, 经 FileProvider 转 content:// 再抛系统选择器 (用户自选打开方式); 目标不存在/打开失败 Toast。`file_paths.xml` 映射 `output/` (外部私有) 与 `MengPaw/` (公共) 两处输出目录。
+
+**输出目录 (v0.34.3)**: 由 `/Android/data/com.mengpaw.shell/files/output/` 迁移到公共 `/storage/emulated/0/MengPaw/` — Android 11+ 文件管理器隐藏 Android/data 是「路径下没有文件」的根源之一 (平板会话: Agent 输出的 file:// 路径指向空目录, 点击即崩溃, 用户按路径找不到文件)。Agent 交付纪律同步强化: 先 `agent.output` 查路径 → `agent.write` 真实落盘 → `agent.ls` 验证 → 才输出链接, 禁止输出未落盘路径。`agent.write` 路径解析: 非系统挂载点前缀 (data/storage/system 等) 的前导 `/` 一律按工作区回退 — 原实现仅「已存在」才回退, Unix 风格 `/Agent文档/x.md` 写新文件会落根目录失败。
 
 **语音输入**: `VoiceInputButton` 按住录音松手直发 (input_audio 通道), 上滑/左滑取消, <300ms 丢弃, RECORD_AUDIO 运行时权限 (Manifest 已声明)。显隐判定 `VoiceCapability` (shell, 纯 UI 策略): 内置前缀 gpt-5/gpt-4o/qwen3-omni/qwen2.5-omni/qwen-omni/glm-4.5v/glm-5v/doubao-1.5-audio/doubao-audio + 关键词 omni/audio/voice/whisper/speech 兜底, 刻意排除 gemini (代理翻译 input_audio 不可靠会 400), `type=="全模态"` 兜底。不支持语音的模型不显示按钮 — 用户用 Android 输入法自带语音转译, 不做 ASR。
 

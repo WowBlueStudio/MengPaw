@@ -536,5 +536,14 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **修复 2.3**：设置页 evolution 节点摘要附加"复现模式: N 种"。
 - **待办 2.5**：失败库无清理命令（去重后每模式一行、数据量可控，删除有风险需用户决策）。
 
+### 15.20 链接点击闪退与「路径下没有文件」是同一根因链（2026-08-09，平板 0.34.2 实锤）
 
-*最后更新: 2026-08-07 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*
+- **现象**：Agent 交付 md 文档 → 用户看到本地文件链接而非文件气泡；点击链接 App 直接闪退；按 Agent 给出的路径找不到文件；全程无流式动画（后者单独排查，未定案）。
+- **实锤崩溃堆栈**：`FileUriExposedException: file:///storage/emulated/0/Android/data/com.mengpaw.shell/files/output/xxx.md exposed beyond app through Intent.getData()`，触发链为 Compose `TextLinkScope` → `AndroidUriHandler.openUri` → `ACTION_VIEW(file://)`。**新版本 Compose 对 `LinkAnnotation.Url` 有默认点击处理（LocalUriHandler 直接 ACTION_VIEW），不是"无处理"**——静态看代码以为链接不可点，实际默认处理对 file:// 是崩溃路径。
+- **根因 1（闪退）**：MarkdownText 用 `LinkAnnotation.Url`，点击 file:// 链接触发 FileUriExposedException。修复：改用 `LinkAnnotation.Clickable` 自定义处理——http(s) 直接 ACTION_VIEW；本地路径去 file:// 前缀经 FileProvider 转 content:// 再抛系统选择器；目标不存在/打开失败 Toast。
+- **根因 2（文件不可见/未落盘）**：输出目录在 `/Android/data/<pkg>/files/output/`——Android 11+ 文件管理器默认隐藏 Android/data，用户按路径找不到文件；且该次会话 Agent 输出的路径下实际没有文件（幻觉/未落盘）。修复：输出目录迁移公共 `/storage/emulated/0/MengPaw/`（MANAGE_EXTERNAL_STORAGE 授权，未授权回退私有）；交付纪律强化（先 agent.output 查路径 → agent.write 落盘 → agent.ls 验证 → 才输出链接）。
+- **根因 3（写路径失败面）**：`resolvePath` 前导 `/` 宽容仅对"已存在"路径回退工作区，写新文件 `/Agent文档/x.md` 时回退失效、落根目录失败。修复：非系统挂载点前缀的前导 `/` 一律按工作区解析。
+- **教训**：① Android 上 `file://` 链接点击 = 定时炸弹，任何经 Intent 出进程的文件必须 FileProvider；② "给用户的文件"绝不能放 Android/data 或应用私有目录——文件管理器看不到就等于没交付；③ Compose LinkAnnotation 的行为随版本变化，**默认行为不可假设，点击处理必须显式覆盖**；④ UI 提示"链接/文件不存在"比静默无反应强——静默吞异常让用户以为功能坏了。
+
+
+*最后更新: 2026-08-09 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*
