@@ -40,53 +40,74 @@ fun FrameworkSettingsContent(
     toolItems: List<FrameworkItem> = emptyList(),
     skillItems: List<FrameworkItem> = emptyList()
 ) {
-    // ── 框架名片 (v0.34.3): 本机名称编辑 + 指纹码显示 — 配对识别用 ──
+    // ── 框架名片 (v0.34.3 + v0.35.1 两行重构): 行1 名称+编辑 / 行2 指纹码+设备标识 ──
     SectionHeader(if (state.useChinese) "框架名片" else "Framework Identity")
     var identityName by remember {
         mutableStateOf(com.mengpaw.plugin.framework.FrameworkIdentity.displayName)
     }
+    var editingName by remember { mutableStateOf(false) }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(ArcoRadius.md),
         color = ThemeColors.bgCardHigh
     ) {
         Column(Modifier.padding(ArcoSpacing.lg)) {
-            Text(if (state.useChinese) "框架名称 (其他设备显示; 留空则显示指纹码)" else "Framework name (shown to peers; empty = fingerprint)",
-                style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-            Spacer(Modifier.height(4.dp))
+            // 行1: {框架名称} — 右侧仅一个"编辑"按钮 (编辑态 = 输入框 + 保存)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = identityName,
-                    onValueChange = { identityName = it },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    placeholder = { Text(if (state.useChinese) "留空 = 缺省 (显示指纹码)" else "Empty = default (show fingerprint)") }
-                )
-                Spacer(Modifier.width(ArcoSpacing.sm))
-                Button(
-                    onClick = {
-                        com.mengpaw.plugin.framework.FrameworkIdentity.setDisplayName(identityName)
-                        // 名称变更 → 重新注册 mDNS (serviceName 不变, display 属性随下次注册生效)
-                        com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.unregister()
-                        com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.register()
-                    },
-                    shape = RoundedCornerShape(ArcoRadius.md),
-                    colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand)
-                ) { Text(if (state.useChinese) "保存" else "Save", color = Color.White) }
+                if (editingName) {
+                    OutlinedTextField(
+                        value = identityName,
+                        onValueChange = { identityName = it },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        placeholder = { Text(if (state.useChinese) "缺省 = 显示指纹码" else "Default = show fingerprint") }
+                    )
+                    Spacer(Modifier.width(ArcoSpacing.sm))
+                    Button(
+                        onClick = {
+                            com.mengpaw.plugin.framework.FrameworkIdentity.setDisplayName(identityName)
+                            // 名称变更 → 重新注册 mDNS (display 属性随下次注册生效)
+                            com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.unregister()
+                            com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.register()
+                            editingName = false
+                        },
+                        shape = RoundedCornerShape(ArcoRadius.md),
+                        colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand)
+                    ) { Text(if (state.useChinese) "保存" else "Save", color = Color.White) }
+                } else {
+                    Text(
+                        com.mengpaw.plugin.framework.FrameworkIdentity.displayName
+                            .ifBlank { com.mengpaw.plugin.framework.FrameworkIdentity.shortCode },
+                        fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1
+                    )
+                    TextButton(onClick = {
+                        identityName = com.mengpaw.plugin.framework.FrameworkIdentity.displayName
+                        editingName = true
+                    }) {
+                        Icon(Icons.Outlined.Edit, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(2.dp))
+                        Text(if (state.useChinese) "编辑" else "Edit", fontSize = 13.sp)
+                    }
+                }
             }
             Spacer(Modifier.height(ArcoSpacing.sm))
+            // 行2: 本机指纹码 MengPaw Android {android id}
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (state.useChinese) "本机指纹码" else "Local fingerprint",
-                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Spacer(Modifier.width(ArcoSpacing.md))
-                Text(com.mengpaw.plugin.framework.FrameworkIdentity.shortCode,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = ThemeColors.brand, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                Text(
+                    buildString {
+                        append(if (state.useChinese) "本机指纹码 " else "Local fingerprint ")
+                        append(com.mengpaw.plugin.framework.FrameworkIdentity.shortCode)
+                        append(" · MengPaw Android ")
+                        append(com.mengpaw.plugin.framework.FrameworkIdentity.deviceRawId())
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ThemeColors.textSecondary,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    maxLines = 1
+                )
             }
-            Text(if (state.useChinese)
-                "指纹绑 MAC, 换 IP 不变; 配对时告知对方此码, 对方以此识别你的设备。"
-                else "Fingerprint is bound to MAC (stable across IP changes); tell this code to peers for identification.",
-                style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
         }
     }
     Spacer(Modifier.height(ArcoSpacing.lg))

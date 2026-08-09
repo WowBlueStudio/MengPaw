@@ -74,6 +74,16 @@ object FrameworkIdentity {
         } catch (_: Exception) { "no-device-id" }
     }
 
+    /** 设备标识原文 (Android ID / 低版本 MAC) — 名片第二行展示用, 无前缀。 */
+    fun deviceRawId(): String {
+        localMacAddress()?.let { return it }
+        val ctx = appContext ?: return ""
+        return try {
+            val aid = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ANDROID_ID)
+            if (aid.isNullOrBlank() || aid == "9774d56d682e549c") "" else aid
+        } catch (_: Exception) { "" }
+    }
+
     /** 本机真实 MAC — NetworkInterface 遍历取非回环硬件地址; Android 10+ 恒 null (系统限制)。 */
     internal fun localMacAddress(): String? {
         return try {
