@@ -20,7 +20,7 @@
 
 | 文件 | 大小 | 内容 |
 |------|:----:|------|
-| `pyramid-investigation.md` | 6 KB | 金字塔彻查法：从现象逐层拆链路、证据排除、反模式与实战案例 | 功能"永远修不好"或做链路级排障时 |
+| `pyramid-investigation.md` | 10 KB | 金字塔彻查法：从现象逐层拆链路、证据排除、反模式与实战案例（含证据等级 0.2.0） | 功能"永远修不好"或做链路级排障时 |
 | `roadmap.md` | 2 KB | 开发路线图 Phase 1-10（Phase 1-6 完成，7-10 未来规划） |
 
 > 已归档（git 历史可溯）：九维审查总结→Codex skill `mengpaw-pr-review`；审计方法论→记忆 `bug-audit-methodology`；编译问题速查→`lessons.md` §15；流式调查记录→主文档 §4.1.1 定论；审校记录→`CHANGELOG.md`；make-skill 对比→`CHANGELOG.md` v0.26.2；根发布流程 RELEASE.md→Codex skill `mengpaw-release`（2026-08-07 由 `.claude/skills/release.md` 迁移）。

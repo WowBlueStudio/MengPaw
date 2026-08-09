@@ -1,6 +1,6 @@
 # 金字塔彻查法 — 从现象到根因的链路级排障方法论
 
-> 从 2026-08-04 流式传输彻查中提炼。
+> 从 2026-08-04 流式传输彻查中提炼；0.2.0 补充证据等级与 2026-08-09 两个实战案例。
 > 适用于任何"修了很多次但从未修好"的功能问题:流式输出、会话持久化、删除清理……
 > 与审计方法论 `bug-audit-methodology`（记忆，问"功能是否闭环"）互补——本方法问"现象为什么发生"。
 
@@ -40,6 +40,22 @@
 - 要求**代码证据**:`file:line` + 代码摘录,不许"感觉"、"可能"
 - **健康层也要明示"已排除"**——否则下次排障又从头查一遍,历史结论随之蒸发
 - 死代码是铁证:只赋值从不读取的变量 = 设计意图从未落地(例:本项目 `sawActionMarker`)
+
+### 3.5 证据等级 — 运行时证据优先于静态推断
+
+同一层可以被不同证据强度的判断同时支撑和推翻,排序如下:
+
+1. **运行时证据** (崩溃堆栈 / logcat / dropbox / 实际输出) — 最高,直接记录"发生了什么"
+2. **动态行为验证** (加日志打点 / 最小复现 / 条件开关) — 主动制造可观察行为
+3. **静态代码推断** ("这段代码看起来会/不会 X") — 依赖框架默认行为与版本,可能系统性错
+4. **记忆与假设** ("以前遇到过 / 大概率是") — 只作线索,不作结论
+
+> 反例(2026-08-09 实证): 排查链接点击闪退时,静态读 `MarkdownText` 代码推断
+> "没有 LinkInteractionListener → 链接点击无反应 → 闪退在别处",把嫌疑指向
+> FileProvider 映射。运行时 dropbox 堆栈直接推翻: `TextLinkScope →
+> AndroidUriHandler.openUri → ACTION_VIEW(file://)` — **新版本 Compose 对
+> LinkAnnotation.Url 有默认点击处理**,静态"看起来没处理"与实际行为相反。
+> 结论: 框架默认行为随版本变化,**静态推断必须用运行时证据校准**。
 
 ### 4. 交叉验证 — 多视角结论一致才锁定
 
@@ -104,6 +120,68 @@ AdaptiveLlmProvider.consumeSseStream → AgentEngine.runReActLoop
 
 ---
 
+## 实战案例 — 2026-08-09 链接点击闪退 (FileUriExposedException)
+
+### 链路(金字塔分层)
+
+```
+Markdown 渲染(design-system MarkdownText)
+→ 链接注解(LinkAnnotation) → 点击处理(Compose TextLinkScope/默认 UriHandler)
+→ Intent 启动(ACTION_VIEW file://) → Android StrictMode → 进程崩溃
+```
+
+### 证据过程
+
+| 层 | 判定 | 证据 |
+|----|------|------|
+| Markdown 渲染 | 健康(已排除) | commonmark 解析 + 安全偏移,无异常面 |
+| 链接注解 | **初始误判** | 静态读代码以为 `LinkAnnotation.Url` 无点击处理(旧版本行为);运行时堆栈显示新版本有默认 `TextLinkScope` 处理 |
+| 点击处理 | **根因** | 崩溃堆栈 `AndroidUriHandler.openUri` 对 `file://` 起 `ACTION_VIEW` → `FileUriExposedException` |
+| Intent 启动 | 根因延续 | file:// 未走 FileProvider,Android 7+ 安全异常 |
+
+### 锁定根因与修复
+
+Compose 默认 UriHandler 直接对 file:// 起 ACTION_VIEW。修复: 链接改用
+`LinkAnnotation.Clickable` 自定义处理 — http(s) 直接 ACTION_VIEW; 本地路径去
+`file://` 前缀经 FileProvider 转 `content://` 再抛系统选择器; 目标不存在/打开
+失败给 Toast。`file_paths.xml` 补输出目录映射。
+
+### 教训
+
+- **运行时堆栈 > 静态推断**: "代码里没有 handler" 的静态结论被运行时行为推翻。
+- 同一现象(点击崩溃)的根因链上,静态排查先锁定 FileProvider(健康层),
+  运行时证据才锁定 Compose 默认处理(真凶层)。
+
+---
+
+## 实战案例 — 2026-08-09 SessionShellPoolTest 全量 flaky
+
+### 现象
+
+`timed out command destroys session` 单独跑全绿,`./gradlew test` 全量下稳定失败
+(恢复命令也报 "Command timed out (0s)")。
+
+### 链路
+
+```
+测试用例(sleep 3 + 500ms 超时) → 超时销毁会话
+→ 恢复命令(echo)借新会话 → 新 sh 进程启动 + 管道初始化 → 执行
+```
+
+### 根因
+
+500ms 超时窗口只覆盖"被测试命令"耗时,没覆盖"超时销毁后重建会话"的进程启动
+成本;全量并行(`org.gradle.parallel=true` + 多模块同时跑)放大启动抖动,恢复命令
+借新会话时启动即超时。修复: 超时窗口 500 → 1500ms(仍 < `sleep 3`,语义不变)。
+
+### 教训
+
+- **单独跑绿 ≠ 全量绿**: 涉及真实子进程(进程/ADB/外部工具)的测试,超时窗口
+  必须 ≥ 进程启动成本 3 倍,且要在全量并行负载下验证。
+- "环境抖动"不是免修理由: 全量下稳定复现 = 测试自身时序缺陷,必须修测试。
+
+---
+
 ## 使用时机
 
 | 场景 | 做法 |
@@ -112,7 +190,9 @@ AdaptiveLlmProvider.consumeSseStream → AgentEngine.runReActLoop
 | 新功能首验不通过 | 沿链路逐层打点(日志),从源头往下找断点 |
 | 回归问题(以前好过现在坏了) | 金字塔 + git log 对比行为变更,变更层优先 |
 | 任何"我明明改过了怎么还在" | 先查证据(死代码、未被调用的分支),再动手 |
+| 崩溃类问题(闪退/ANR) | 先拿运行时堆栈(dropbox/logcat),再静态读码 — 堆栈会直接告诉你真凶层 |
+| 测试单独跑绿但全量挂 | 测试时序/共享状态缺陷 — 全量并行负载下验证,超时窗口留足启动成本 |
 
 ---
 
-*方法论版本: 0.1.0 | 提炼自 2026-08-04 流式传输彻查(v0.28.2)*
+*方法论版本: 0.2.0 | 提炼自 2026-08-04 流式传输彻查(v0.28.2) + 2026-08-09 链接闪退/测试 flaky 彻查(v0.34.3)*

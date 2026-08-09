@@ -17,7 +17,7 @@
   ▼
 ② LLM 输出   = 一段完整文本（ReAct 格式，可含多个 Action 批）
   │
-  ├─ onDelta  = 原始增量 token（逐批透传 UI 播放器，打字机观感）
+  ├─ onDelta  = 原始增量 token（逐批透传 UI 播放器 → 思考过程容器 / 最终答案气泡，打字机观感，v0.34.3）
   ├─ 返回值   = 完整文本（同一内容，供解析）
   ▼
 ③ 框架收到   = sanitize 后的完整文本（sanitized）
@@ -146,11 +146,19 @@ Final Answer: 你的电量是 85%……
 
 | 模式 | 工具轮流式（onDelta） | 呈现 |
 |------|:---:|------|
-| REACT（主链路） | ✅ | 完整流式 + 工具提前通知 + trace 行 |
+| REACT（主链路） | ✅ | v0.34.3: 思考过程容器（思考流式 + 折叠工具行 + 观察）+ 最终答案气泡 |
 | GOAL | ✅ | 同主链路（`runWithGoal` 同签名透传） |
 | MISSION/FLEET | 合成阶段 ✅ / worker 阶段 ❌ | 并行 worker 非流式（设计选择），onStep/traces 呈现进度 |
 | SWARM | worker 阶段 ❌ | 同上，Andon 协议呈现 |
 | PLAN | ✅ | 同主链路 |
+
+## 8.5 气泡呈现模型 (v0.34.3 重构)
+
+UI 侧从"每 ReAct 步骤一个气泡"改为**时间轴主导**（`ThinkingProcessWriter` 写入，`MainScreen.reflowLegacyMessages` 渲染）：
+
+- **思考过程容器** (`ChatMessageUi.ThinkingProcess`)：单一可折叠，跨所有轮次。思考流式写入（`pushThought`）；完整 `Action:` 行出现即插入折叠工具行（`addTool`，只显示命令名）；工具完成挂观察全文 + 成败（`completeTool`，失败红字，点击展开参数+观察）。折叠态显示 "N 轮思考 · M 次调用" 摘要，展开可回看全部思考。
+- **最终答案气泡** (`ChatMessageUi.FinalAnswer`)：独立气泡。`onDelta` 用**原始增量累积**检测 `Final Answer:`（显示文本会剥离标记，不能用于检测）→ `beginFinalAnswer` 同步折叠过程容器 → 答案流式（`pushFinal`）→ `applyFinalResult.finalize` 定型。
+- **历史统一重排**：`reflowLegacyMessages` 渲染层把旧 `agent_step`/`agent_trace` 序列合并为过程容器 + 最终答案，新旧会话视觉一致；持久化新增 `thinking_process`/`final_answer` 类型（默认值兼容旧文件）。
 
 ## 9. 完整示例（三层收到的内容对照）
 
