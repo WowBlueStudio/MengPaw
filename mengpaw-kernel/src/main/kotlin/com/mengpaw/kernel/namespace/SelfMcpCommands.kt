@@ -15,10 +15,11 @@ internal class SelfMcpCommands {
 
     /** MCP connection management. Usage: self.mcp [connect|disconnect|status|call] */
     internal suspend fun mcp(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.ok(com.mengpaw.kernel.mcp.McpClient.statusReport())
+        if (args.isEmpty()) return ExecutionResult.ok(com.mengpaw.kernel.mcp.McpClient.statusReport() +
+            "\n\n本机 MCP 网关 (9881): 需 Bearer token — `self.mcp token` 查看")
         val sub = args[0]
         return MCP_SUBCOMMANDS[sub]?.invoke(args, ctx)
-            ?: ExecutionResult.fail("Usage: self.mcp connect|disconnect|status|call", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+            ?: ExecutionResult.fail("Usage: self.mcp connect|disconnect|status|call|token", errorCode = ErrorCodes.ERR_INVALID_INPUT)
     }
 
     private val MCP_SUBCOMMANDS: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
@@ -35,6 +36,15 @@ internal class SelfMcpCommands {
             else { com.mengpaw.kernel.mcp.McpClient.disconnect(a[1]); ExecutionResult.ok("Disconnected: ${a[1]}") }
         },
         "status" to { _, _ -> ExecutionResult.ok(com.mengpaw.kernel.mcp.McpClient.statusReport()) },
+        "token" to { _, _ ->
+            val token = com.mengpaw.kernel.mcp.McpGatewayAuth.ensureToken()
+            if (token.isBlank()) ExecutionResult.fail("MCP 网关未安装 (framework-plugin)", errorCode = ErrorCodes.ERR_NOT_FOUND)
+            else ExecutionResult.ok(
+                "本机 MCP 网关 (9881) Bearer token:\n$token\n\n" +
+                "MCP 客户端请求头: Authorization: Bearer <token>\n" +
+                "持久化: ${com.mengpaw.kernel.DataPaths.CONFIG}/mcp_gateway_token"
+            )
+        },
         "call" to { a, _ ->
             if (a.size < 4) ExecutionResult.fail("Usage: self.mcp call <connection-id> <tool-name> <args-json>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
             else {

@@ -23,6 +23,10 @@ import java.net.Socket
  */
 object McpGateway {
 
+    // ── Bearer token 认证 (v0.34.3 P1-6) — 9881 此前零认证, 任何本机进程可调插件命令;
+    //    对齐 9880 浏览器桥 fail-closed: 无 token/错 token 一律 401。
+    //    实现下沉 kernel McpGatewayAuth (self.mcp token 命令直接引用, 免反射) ──
+
     /** MCP 请求体大小上限 (P2 修复: 原实现按 Content-Length 无上限 new CharArray,
      *  恶意客户端可声称超大长度撑爆内存)。超限/非法长度直接 413 拒绝。 */
     internal const val MAX_MCP_BODY_BYTES = 4 * 1024 * 1024
@@ -65,6 +69,7 @@ object McpGateway {
 
     fun start() {
         if (running) return
+        com.mengpaw.kernel.mcp.McpGatewayAuth.ensureToken() // 启动即生成/加载 token (P1-6)
         running = true
         serverThread = Thread({ runServer() }, "mcp-gateway").apply {
             isDaemon = true
@@ -107,10 +112,14 @@ object McpGateway {
             val path = parts.getOrNull(1) ?: return
 
             var contentLength: Int? = null
+            var authorization: String? = null
             while (true) {
                 val line = reader.readLine() ?: break
                 if (line.isEmpty()) break
                 parseContentLength(line)?.let { contentLength = it }
+                if (line.startsWith("Authorization:", ignoreCase = true)) {
+                    authorization = line.substringAfter(":").trim()
+                }
             }
 
             val rejection = routeRejection(method, path, contentLength)
@@ -120,15 +129,23 @@ object McpGateway {
                 response = rejection.second
                 status = rejection.first
             } else {
-                // 受理: 读取请求体 (长度已由 routeRejection 限定 0..MAX) 并转交内核 MCP Server
-                val len = contentLength ?: 0
-                val body = CharArray(len)
-                if (len > 0) reader.read(body, 0, len)
-                val mcpServer = com.mengpaw.kernel.mcp.McpServer(
-                    com.mengpaw.kernel.plugin.PluginManager.globalInstance
-                )
-                response = mcpServer.handleRequest(String(body))
-                status = "200 OK"
+                // ── 认证 (P1-6): POST /mcp 必须携带有效 Bearer token, fail-closed ──
+                val auth = com.mengpaw.kernel.mcp.McpGatewayAuth
+                    .authRejection(method, path, authorization, com.mengpaw.kernel.mcp.McpGatewayAuth.authToken)
+                if (auth != null) {
+                    response = auth.second
+                    status = auth.first
+                } else {
+                    // 受理: 读取请求体 (长度已由 routeRejection 限定 0..MAX) 并转交内核 MCP Server
+                    val len = contentLength ?: 0
+                    val body = CharArray(len)
+                    if (len > 0) reader.read(body, 0, len)
+                    val mcpServer = com.mengpaw.kernel.mcp.McpServer(
+                        com.mengpaw.kernel.plugin.PluginManager.globalInstance
+                    )
+                    response = mcpServer.handleRequest(String(body))
+                    status = "200 OK"
+                }
             }
 
             writer.write("HTTP/1.1 $status\r\n")
