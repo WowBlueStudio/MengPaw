@@ -70,7 +70,8 @@ fun SidebarContent(
 
     // ── Card dialog states ──
     var cardAgentName by remember { mutableStateOf<String?>(null) }
-    var cardFrameworkName by remember { mutableStateOf<String?>(null) }
+    // v0.35.4: 名片直接持联系人 — 手机端 ACP 配对未入册的框架也能正确显示信任按钮
+    var cardFramework by remember { mutableStateOf<FrameworkContact?>(null) }
 
     // ── New Agent dialog state ──
     var showNewAgentDialog by remember { mutableStateOf(false) }
@@ -164,7 +165,7 @@ fun SidebarContent(
             activeAgent = activeAgent,
             onSwitchAgent = onSwitchAgent,
             onAddFramework = { showAddFramework = true },
-            onFrameworkLongClick = { cardFrameworkName = it },
+            onFrameworkLongClick = { cardFramework = it },
             onTwinActivate = { framework ->
                 twinPairTarget = framework
                 showTwinConfirmDialog = true
@@ -194,11 +195,11 @@ fun SidebarContent(
         )
     }
 
-    cardFrameworkName?.let { name ->
+    cardFramework?.let { contact ->
         FrameworkCardDialog(
             strings = strings,
-            frameworkName = name,
-            onDismiss = { cardFrameworkName = null }
+            framework = contact,
+            onDismiss = { cardFramework = null }
         )
     }
 

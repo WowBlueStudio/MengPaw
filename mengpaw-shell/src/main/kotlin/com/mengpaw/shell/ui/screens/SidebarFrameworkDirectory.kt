@@ -50,7 +50,8 @@ internal fun FrameworkDirectorySection(
     activeAgent: String,
     onSwitchAgent: (String, String?) -> Unit,
     onAddFramework: () -> Unit,
-    onFrameworkLongClick: (String) -> Unit,
+    // v0.35.4: 长按传完整联系人 — 名片对话框据此解析 peer (ACP 配对未入册也能显示信任按钮)
+    onFrameworkLongClick: (FrameworkContact) -> Unit,
     onTwinActivate: (FrameworkContact) -> Unit
 ) {
     // v0.35.1 框架发现流程调整: 待处理配对请求 → 添加按钮红点角标 (响应 Store 变化)
@@ -107,7 +108,7 @@ internal fun FrameworkDirectorySection(
                 Modifier.fillMaxWidth()
                     .combinedClickable(
                         onClick = { expanded = !expanded },
-                        onLongClick = { onFrameworkLongClick(framework.name) }
+                        onLongClick = { onFrameworkLongClick(framework) }
                     )
                     .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically

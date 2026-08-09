@@ -1055,7 +1055,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - **同意双向入册**: 接受方本地入册发起方 + 回发 `FRAMEWORK_PAIR_ACCEPT` (携带本机名片); 发起方收到后入册接受方 — 双方通讯录互通
 - **非 MengPaw 框架**: 无 ACP 配对能力, 手动添加仍直接本地入册 (保持兼容); 手动添加 MengPaw 节点也走请求流程
 
-**框架名片重构 (v0.35.1, 用户定案)**: `FrameworkCardDialog` 去标题文字 + 整体 UI 重构 — 类型图标 (64dp) / 框架名称 (19sp) / 备注名 (编辑态输入框) / 信息卡片 (系统环境 + 名称-版本号两行合一) / 智能体列表 (胶囊 chips); 编辑改图形按钮 (Edit/Check), 去掉"关闭" (点外部/返回键关闭); 框架所在系统环境 = mDNS 新增 `platform` 属性广播 + peer 持久化 `platform` 字段 (未知回退); 底部按钮: 删除 + **信任框架/解除信任** (按状态切换, 解除同时清理 ACP 信任与孪生配对文件, 保存/信任后 UI 实时刷新)。
+**框架名片重构 (v0.35.1, 用户定案)**: `FrameworkCardDialog` 去标题文字 + 整体 UI 重构 — 类型图标 (64dp) / 框架名称 (19sp) / 备注名 (编辑态输入框) / 信息卡片 (系统环境 + 名称-版本号两行合一) / 智能体列表 (胶囊 chips); 编辑改图形按钮 (Edit/Check), 去掉"关闭" (点外部/返回键关闭); 框架所在系统环境 = mDNS 新增 `platform` 属性广播 + peer 持久化 `platform` 字段 (未知回退); 底部按钮: 删除 + **信任框架/解除信任** (按状态切换, 解除同时清理 ACP 信任与孪生配对文件, 保存/信任后 UI 实时刷新)。**v0.35.4 修复 (用户反馈)**: 信任按钮此前只在 `FrameworkPeerStore.findByName` 命中时渲染 — 手机上"ACP 配对但未入册"的框架 (peer==null) 名片丢失信任按钮。修复: 名片改接收完整 `FrameworkContact` (长按传联系人, 不再只传名字), peer 解析按名称→指纹兜底; 有效信任 = 通讯录信任或 ACP 配对信任 (`PromptFirewall`, 指纹/联系人名双键); 未入册的 ACP 联系人点"信任框架"自动入册 (address 拆 host/port + computeFingerprint), 已配对则显示"解除信任" (清理 ACP 信任与孪生文件); 仅 mDNS 发现节点仍走行内"添加"入册流程。
 
 **框架绑定标识定案 (v0.34.3 设计讨论)**: 绑定标识 = **框架类型|设备标识**, 不再哈希。
 - mDNS 发现节点: `mengpaw|MAC` (mac 属性); 手动添加/MCP 节点 (Claude Code/Codex 等): `frameworkType|address:port`
@@ -1063,7 +1063,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - 显示短码 = 设备标识尾 6 位 hex (xxx-xxx), 配对核对用; 对端缺省名称时显示短码
 - 旧哈希指纹条目 (16 hex) 发现时按 address 迁移清理
 
-**安全规则-框架信任列表修复 (v0.34.3)**: 原列表只读 `PromptFirewall.listTrusted()` (ACP 配对信任), 与框架通讯录信任 (`FrameworkPeerStore.trusted`, 侧边栏/`framework.trust` 操作的真实信任源) 脱节 — 侧边栏信任的框架不显示、无操作按钮、进入页面不刷新。修复: 列表以框架通讯录信任为准 (名称/地址/短码), 支持**撤销信任**; ACP 已配对设备作为次级展示, 支持**解除配对**; 展开时实时刷新。
+**安全规则-框架信任列表修复 (v0.34.3)**: 原列表只读 `PromptFirewall.listTrusted()` (ACP 配对信任), 与框架通讯录信任 (`FrameworkPeerStore.trusted`, 侧边栏/`framework.trust` 操作的真实信任源) 脱节 — 侧边栏信任的框架不显示、无操作按钮、进入页面不刷新。修复: 列表以框架通讯录信任为准 (名称/地址/短码), 支持**撤销信任**; ACP 已配对设备作为次级展示, 支持**解除配对**; 展开时实时刷新。**v0.35.4 修复 (用户反馈)**: 折叠时 `frameworkTrusted` 返回空列表导致计数恒 0 — 改为始终读真实信任列表, 折叠/展开计数一致 (展开仅控制列表显示)。
 
 **per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
 

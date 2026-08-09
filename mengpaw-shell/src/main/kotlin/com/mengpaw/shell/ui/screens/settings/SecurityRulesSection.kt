@@ -35,9 +35,9 @@ fun SecurityRulesSection(
     // v0.34.3 修复"未起效": 框架信任列表以 FrameworkPeerStore.trusted 为准
     // (侧边栏/框架命令操作的真实信任源) — 此前只读 ACP 配对信任, 侧边栏信任的
     // 框架不显示且无操作按钮。ACP 配对 (PromptFirewall) 作为次级展示。
-    val frameworkTrusted = remember(showTrusted, trustVersion) {
-        if (!showTrusted) emptyList()
-        else com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll().filter { it.trusted }
+    // 修复: 折叠时不再返回 emptyList — 计数"已信任 N 个框架设备"折叠/展开保持一致
+    val frameworkTrusted = remember(trustVersion) {
+        com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll().filter { it.trusted }
     }
     val acpTrusted = remember(showTrusted, trustVersion) {
         if (!showTrusted) emptyList()

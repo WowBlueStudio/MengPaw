@@ -46,12 +46,19 @@ data class AcpContactFile(
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 fun FrameworkCardDialog(
     strings: AppStrings,
-    frameworkName: String,
+    framework: FrameworkContact,
     onDismiss: () -> Unit
 ) {
+    val frameworkName = framework.name
     // v0.35.1: 可变 peer — 保存备注/切换信任后 UI 实时刷新
+    // 修复: 手机上 ACP 配对但未入册 (peer==null) 的框架也能显示信任按钮 —
+    // 先按名称解析, 名称不一致时按指纹兜底
     var peer by remember(frameworkName) {
-        mutableStateOf(com.mengpaw.plugin.framework.FrameworkPeerStore.findByName(frameworkName))
+        mutableStateOf(
+            com.mengpaw.plugin.framework.FrameworkPeerStore.findByName(frameworkName)
+                ?: framework.fingerprint.takeIf { it.isNotBlank() }
+                    ?.let { com.mengpaw.plugin.framework.FrameworkPeerStore.findByFingerprint(it) }
+        )
     }
     val acpFile = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "$frameworkName.json")
     val acpJson = remember(frameworkName) { if (acpFile.exists()) try { appJson.decodeFromString<AcpContactFile>(acpFile.readText()) } catch (_: Exception) { null } else null }
@@ -61,6 +68,17 @@ fun FrameworkCardDialog(
     val savedRemark = remember(frameworkName, peer) { peer?.remark?.ifBlank { acpJson?.remark?.ifBlank { acpJson?.notes?.ifBlank { "" } } } ?: "" }
     var editRemark by remember { mutableStateOf(savedRemark) }
     var isEditing by remember { mutableStateOf(false) }
+    // 信任/解除后强制重算 — 纯 ACP 联系人 (peer==null) 解除后按钮需翻回"信任框架"
+    var trustVersion by remember { mutableIntStateOf(0) }
+
+    // 有效信任 = 框架通讯录信任 (FrameworkPeerStore.trusted) 或 ACP 配对信任
+    // (PromptFirewall, 键 = 指纹或联系人名 — 与下方解除动作清理的文件一一对应)
+    val firewallTrusted = remember(frameworkName, peer, trustVersion) {
+        val fp = peer?.fingerprint
+        (fp?.isNotBlank() == true && com.mengpaw.kernel.security.PromptFirewall.isTrusted(fp)) ||
+            com.mengpaw.kernel.security.PromptFirewall.isTrusted(frameworkName)
+    }
+    val effectivelyTrusted = (peer?.trusted == true) || firewallTrusted
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -183,11 +201,13 @@ fun FrameworkCardDialog(
                 }) { Text(strings.frameworkCardDelete, color = ArcoColors.Red6, fontSize = 13.sp) }
 
                 // v0.35.1: 信任框架 / 解除信任 按钮 (按当前状态切换)
-                peer?.let { p ->
-                    if (p.trusted) {
+                // 修复: 通讯录条目 (peer) 或 ACP 联系人 (未入册, discovered=false) 都显示;
+                // 仅 mDNS 发现节点保留行内"添加"入册流程
+                if (peer != null || !framework.discovered) {
+                    if (effectivelyTrusted) {
                         TextButton(onClick = {
-                            val cur = peer ?: return@TextButton
-                            val peerId = cur.fingerprint.ifBlank { frameworkName }
+                            val cur = peer
+                            val peerId = cur?.fingerprint?.ifBlank { frameworkName } ?: frameworkName
                             try { com.mengpaw.kernel.security.PromptFirewall.untrust(peerId) } catch (_: Exception) {}
                             val twinTrusted = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${frameworkName}.trusted")
                             if (twinTrusted.exists()) try { twinTrusted.delete() } catch (_: Exception) {}
@@ -195,20 +215,48 @@ fun FrameworkCardDialog(
                             if (twinKey.exists()) try { twinKey.delete() } catch (_: Exception) {}
                             val twinKeyFp = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "${peerId}.key")
                             if (twinKeyFp.exists()) try { twinKeyFp.delete() } catch (_: Exception) {}
-                            val updated = cur.copy(trusted = false)
-                            com.mengpaw.plugin.framework.FrameworkPeerStore.save(updated)
-                            peer = updated
+                            if (cur != null) {
+                                val updated = cur.copy(trusted = false)
+                                com.mengpaw.plugin.framework.FrameworkPeerStore.save(updated)
+                                peer = updated
+                            }
+                            trustVersion++
                         }) { Text(strings.frameworkCardUntrust, color = ArcoColors.Orange6, fontSize = 13.sp) }
                     } else {
                         TextButton(onClick = {
-                            val cur = peer ?: return@TextButton
+                            // 未入册的 ACP 联系人: 信任 = 入册 + 置 trusted
+                            val cur = peer ?: peerFromContact(framework) ?: return@TextButton
                             val updated = cur.copy(trusted = true)
                             com.mengpaw.plugin.framework.FrameworkPeerStore.save(updated)
                             peer = updated
+                            trustVersion++
                         }) { Text(strings.frameworkCardTrust, color = ThemeColors.brand, fontSize = 13.sp) }
                     }
                 }
             }
         }
+    )
+}
+
+/** 由侧边栏联系人合成通讯录 peer — 未入册的 ACP 联系人点击"信任框架"时入册。internal 供回归测试。 */
+internal fun peerFromContact(framework: FrameworkContact): com.mengpaw.plugin.framework.FrameworkPeerStore.FrameworkPeer {
+    val host = framework.address.substringBeforeLast(':').ifBlank { framework.address }
+    val port = framework.address.substringAfterLast(':', "").toIntOrNull()
+        ?: com.mengpaw.kernel.ports.Ports.ACP
+    val fwType = framework.frameworkType.ifBlank { "mengpaw" }
+    return com.mengpaw.plugin.framework.FrameworkPeerStore.FrameworkPeer(
+        fingerprint = framework.fingerprint.ifBlank {
+            com.mengpaw.plugin.framework.FrameworkPeerStore.computeFingerprint(fwType, "$host:$port")
+        },
+        name = framework.name,
+        version = framework.version.ifBlank { "ACP 配对" },
+        frameworkName = framework.frameworkName.ifBlank { "MengPaw" },
+        address = host,
+        port = port,
+        agents = framework.agents,
+        frameworkType = fwType,
+        lastSeen = System.currentTimeMillis(),
+        trusted = true,
+        remark = framework.remark
     )
 }
