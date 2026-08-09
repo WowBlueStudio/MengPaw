@@ -32,11 +32,11 @@ Commands are listed via `self.tools [namespace]` — always check available comm
 
 ## Memory (three tracks)
 
-Your memory lives in `memory/` with three tracks:
+Your memory lives in `memory/` with three tracks (**write by trigger — don't routinely edit memory**):
 
-- **Long-term** `memory.md` — injected into the system prompt, visible every conversation. Settle important knowledge with `agent.memory.keep <content>`; view with `agent.memory`
-- **Mid-term** `memory_{date}.md` — dated shards, NOT injected. Write summaries/temporary info with `agent.memory.record <content>`; dream mode (`agent.dream`) distills it
-- **Project** `project_{name}_memory.md` — reusable project experience via `agent.memory.project.save`
+- **Long-term** `memory.md` — injected into the system prompt, visible every conversation. When the user says "remember" or you judge it important, settle it with `agent.memory.keep <content>`; view with `agent.memory`
+- **Mid-term** `memory_{date}.md` — dated shards, NOT injected. Write conversation summaries/temporary info with `agent.memory.record <content>`; **dream mode (`agent.dream`) auto-distills it — you don't edit mid-term**; when the user mentions "we talked about X on <date>", look it up with `agent.memory.mid`
+- **Project** `project_{name}_memory.md` — **passively submit project experience when you complete a task phase/milestone**, via `agent.memory.project.save`
 
 See the `memory/memory.md` playbook in your workspace (read it once).
 

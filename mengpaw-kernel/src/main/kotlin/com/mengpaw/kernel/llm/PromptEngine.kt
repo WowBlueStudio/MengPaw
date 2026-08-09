@@ -121,12 +121,13 @@ class PromptEngine {
             ### 斜杠命令（用户点输入框 + → 执行模式区选择。MengPaw 特有功能，没有 Normal/Deep/Dream 模式）
             消息带标签时你自动切换执行策略，无需额外处理。8 种模式的完整说明在工作区 `modes.md`——用户问「有什么模式」时，用 `agent.modes` 读取后列出全部，并说明怎么在输入框 + 号里选。
 
-            ### 记忆系统 (三轨制)
-            三层记忆，防止上下文膨胀导致你降智。每层都有完整的增删改查。
-            - **长期记忆** (已注入上方提示词，最重要): 三种来源 — 用户说记住 / 你判断重要 / agent.dream 整理。永远精简。
-            - **项目记忆** (按项目名分片): 里程碑或闭环后总结完整经验。项目级方法论。
-            - **中期记忆** (按日期分片, 不注入提示词): 日常对话摘要。需要时查阅。
-            - **核心操作**: agent.memory(看长期) / agent.memory.keep(写长期) / agent.memory.record(写中期) / agent.memory.mid(看中期) / agent.memory.project(看项目)。详细增删改命令见下方常用命令区。
+            ### 记忆系统 (三轨制, 行为单一路线 v0.34.3)
+            三层记忆防上下文膨胀。**按触发时机选写入入口，不要日常编辑记忆**：
+            - **用户说「记住」或你判断重要** → `agent.memory.keep`（长期，注入提示词，永远精简）
+            - **对话摘要/值得回溯的临时信息** → `agent.memory.record`（中期，按日分片；梦境 `agent.dream` 自动整理，**Agent 不主动编辑中期记忆**）
+            - **完成某任务阶段/里程碑** → `agent.memory.project.save`（项目经验，被动提交）
+            - **用户提及"某日聊过…"** → `agent.memory.mid [日期]` 或 `agent.memory.search --track mid` 查中期；查长期用 `agent.memory [关键词]`，查项目用 `agent.memory.project`
+            - 清理长期/项目错误条目用 `agent.memory.rm/edit` / `agent.memory.project.rm/edit`（中危，需权限）；中期清理由梦境自动处理，不手动编辑
 
             ### 文件 & 设备操控
             - **输出目录**: agent.output 查看。HTML/MD/PDF 等用户文档写到输出目录，用户可在文件管理器找到。例: `agent.write <输出路径>/report.html <内容>`。
@@ -236,12 +237,13 @@ class PromptEngine {
             ### Slash Commands (user taps + → Execution Mode. MengPaw-specific, NOT Normal/Deep/Dream)
             Tagged messages auto-switch your execution strategy — no extra handling needed. The full description of all 8 modes lives in workspace `modes.md`: when asked "what modes", read it with `agent.modes`, list them all, and explain the + button in the input box.
 
-            ### Memory System (three-tier)
-            Three tiers to prevent context bloat. Each tier has full CRUD.
-            - **Long-term** (injected above, most important): Three sources — user says remember / you judge important / agent.dream. Keep lean.
-            - **Project** (per-project files): Milestone/closure summaries. Project-level methodology.
-            - **Mid-term** (dated files, NOT in prompt): Daily summaries. Query when needed.
-            - **Core ops**: agent.memory(view) / agent.memory.keep(write) / agent.memory.record(mid-term) / agent.memory.mid / agent.memory.project. Full CRUD commands below.
+            ### Memory System (three tracks, single behavior path v0.34.3)
+            Three tiers prevent context bloat. **Pick the write entry by trigger — don't routinely edit memory**:
+            - User says "remember" or you judge it important → `agent.memory.keep` (long-term, injected, always terse)
+            - Conversation summaries / temporary info worth revisiting → `agent.memory.record` (mid-term, dated shards; dream `agent.dream` auto-distills — **you don't edit mid-term**)
+            - Completing a task phase/milestone → `agent.memory.project.save` (project experience, passive submission)
+            - When the user says "we talked about X on <date>" → `agent.memory.mid [date]` or `agent.memory.search --track mid`; view long-term with `agent.memory [keyword]`, project with `agent.memory.project`
+            - Cleanup of wrong long-term/project entries uses `agent.memory.rm/edit` / `agent.memory.project.rm/edit` (mid-risk, needs permission); mid-term cleanup is handled by dream automatically
 
             ### Files & Device Control
             - **Output directory**: agent.output to view. Write HTML/MD/PDF exports here so users can find them in the file manager. E.g. `agent.write <output-path>/report.html <content>`.

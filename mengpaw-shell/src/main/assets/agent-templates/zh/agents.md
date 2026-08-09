@@ -32,11 +32,11 @@ read_when:
 
 ## 记忆（三轨制）
 
-你的记忆在 `memory/` 目录，三轨分工：
+你的记忆在 `memory/` 目录，三轨分工（**按触发时机写入，不日常编辑记忆**）：
 
-- **长期记忆** `memory.md` — 注入系统提示词，每次对话可见。沉淀重要知识用 `agent.memory.keep <内容>`；查看用 `agent.memory`
-- **中期记忆** `memory_{日期}.md` — 按日分片，不注入提示词。对话摘要/临时信息用 `agent.memory.record <内容>` 写入，梦境模式（`agent.dream`）会自动提炼
-- **项目记忆** `project_{名称}_memory.md` — 项目经验沉淀，用 `agent.memory.project.save`
+- **长期记忆** `memory.md` — 注入系统提示词，每次对话可见。**用户说"记住"或你判断重要**时用 `agent.memory.keep <内容>` 沉淀；查看用 `agent.memory`
+- **中期记忆** `memory_{日期}.md` — 按日分片，不注入提示词。对话摘要/值得回溯的临时信息用 `agent.memory.record <内容>` 写入；**梦境模式（`agent.dream`）自动整理，Agent 不主动编辑中期记忆**；用户提及"某日聊过…"时才用 `agent.memory.mid` 按日期查阅
+- **项目记忆** `project_{名称}_memory.md` — **完成某任务阶段/里程碑时被动提交**项目经验，用 `agent.memory.project.save`
 
 用法详见工作区 `memory/memory.md` 剧本（第一次读它）。
 

@@ -755,6 +755,23 @@ MCP 协议极其简单——JSON-RPC + 三个原语（tool / resource / prompt�
 
 MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目录持有全部记忆——旁轨 `memory.md` 轨道已删除，任务记忆 (自动任务记录) 并入三轨中期。会话不是记忆形式——会话中的细节保留在按日分片的中期记忆中，由梦境模式按日压缩提炼。
 
+**行为侧梳理 (v0.34.3, P2-7 用户定案)** — 记忆命令从"每轨完整增删改查"收敛为**行为单一路线**:
+
+```
+写 (按触发时机, 3 个主入口):
+  用户说「记住」/ Agent 判断重要   → agent.memory.keep      (长期)
+  对话摘要/值得回溯的临时信息       → agent.memory.record     (中期, 单一路线)
+  完成某任务阶段/里程碑             → agent.memory.project.save (项目, 被动提交)
+读 (用户问历史/复盘时):
+  用户提及「某日聊过…」 → agent.memory.mid [日期] / agent.memory.search --track mid
+  查长期 → agent.memory [关键词]; 查项目 → agent.memory.project
+清理/修正 (谨慎, 中危/高危分级拦截):
+  长期/项目 rm/edit — 仅清理错误条目
+  中期 rm/edit/delete — 梦境自动整理, Agent 不使用 (命令保留供用户手动清理)
+```
+
+核心变化: **中期记忆是「摘要记录 → 梦境整理」的单一路线** — Agent 只写不编辑 (梦境 `agent.dream` 自动提炼入长期); 读中期仅在用户主动提及历史时。系统提示词记忆节/agents.md 模板/CLI.md/BM25 索引描述同步按此语义标注, 移除"每层完整 CRUD"的对称引导。
+
 ```
 长期记忆 (memory/memory.md)
   ← 注入系统提示词, Agent 每次对话可见

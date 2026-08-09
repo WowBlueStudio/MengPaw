@@ -114,11 +114,11 @@ object BuiltinCommandIndex {
             listOf("记忆", "长期", "查看", "已记住", "读记忆", "Memory"),
             listOf("memory", "long-term", "view", "remember", "read", "recall"),
             group = "memory.core")
-        idx("agent.memory.keep", "将重要信息写入长期记忆 (注入系统提示词)", "agent.memory.keep <内容>",
+        idx("agent.memory.keep", "写长期记忆 — 用户说记住/你判断重要时 (注入系统提示词)", "agent.memory.keep <内容>",
             listOf("持久化", "保存", "记住", "存储", "记录", "写记忆", "Keep", "重要"),
             listOf("persist", "save", "remember", "store", "write memory", "keep", "important"),
             group = "memory.long")
-        idx("agent.memory.record", "记录对话摘要到中期记忆 (按日分片, 不注入提示词)", "agent.memory.record <内容>",
+        idx("agent.memory.record", "写中期记忆 — 对话摘要/值得回溯的临时信息 (梦境自动整理, 不编辑)", "agent.memory.record <内容>",
             listOf("记录", "中期", "摘要", "对话", "日志", "临时", "日记"),
             listOf("record", "mid-term", "summary", "log", "note", "daily", "journal"),
             group = "memory.mid")
@@ -136,19 +136,19 @@ object BuiltinCommandIndex {
             listOf("写入", "指定", "更新", "标题", "Write", "存储"),
             listOf("write", "update", "store", "title", "create"),
             group = "memory.long")
-        idx("agent.memory.mid", "查看/搜索中期记忆 (按日期分片, 需要时查阅)", "agent.memory.mid [日期|关键词]",
+        idx("agent.memory.mid", "查看中期记忆 — 用户提及「某日聊过…」时按日期查 (不注入提示词)", "agent.memory.mid [日期|关键词]",
             listOf("中期", "记忆", "日", "历史", "查阅", "过往", "回顾"),
             listOf("mid", "history", "daily", "review", "past", "query"),
             group = "memory.mid")
-        idx("agent.memory.mid.delete", "删除指定日期的中期记忆分片", "agent.memory.mid.delete <日期>",
+        idx("agent.memory.mid.delete", "删除中期分片 — 梦境自动整理, Agent 一般不使用", "agent.memory.mid.delete <日期>",
             listOf("删除", "中期记忆", "清理", "日"),
             listOf("delete", "mid", "remove", "clean", "daily"),
             group = "memory.mid")
-        idx("agent.memory.mid.rm", "删除中期记忆中的一条指定条目 (按日期+时间戳)", "agent.memory.mid.rm <日期> <时间戳>",
+        idx("agent.memory.mid.rm", "删中期条目 — Agent 一般不使用 (梦境自动整理)", "agent.memory.mid.rm <日期> <时间戳>",
             listOf("删除", "中期记忆", "移除", "清理"),
             listOf("remove", "mid", "delete", "entry", "clean"),
             group = "memory.mid")
-        idx("agent.memory.mid.edit", "编辑中期记忆中的一条指定条目 (按日期+时间戳)", "agent.memory.mid.edit <日期> <时间戳> <新内容>",
+        idx("agent.memory.mid.edit", "改中期条目 — Agent 一般不使用 (梦境自动整理)", "agent.memory.mid.edit <日期> <时间戳> <新内容>",
             listOf("编辑", "修改", "中期记忆", "更新"),
             listOf("edit", "modify", "mid", "update", "entry"),
             group = "memory.mid")
@@ -156,7 +156,7 @@ object BuiltinCommandIndex {
             listOf("项目", "记忆", "经验", "方法", "总结", "闭环", "里程碑", "Project"),
             listOf("project", "experience", "method", "summary", "milestone"),
             group = "memory.project")
-        idx("agent.memory.project.save", "将里程碑总结写入项目记忆", "agent.memory.project.save <项目名> <内容>",
+        idx("agent.memory.project.save", "项目经验 — 完成某任务阶段/里程碑时被动提交", "agent.memory.project.save <项目名> <内容>",
             listOf("保存", "项目经验", "总结", "方法", "Save", "写入"),
             listOf("save", "project", "summary", "method", "write", "experience"),
             group = "memory.project")

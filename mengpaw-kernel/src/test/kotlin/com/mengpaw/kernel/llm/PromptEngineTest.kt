@@ -82,6 +82,22 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `memory section teaches single behavior path not CRUD symmetry`() {
+        // P2-7 行为侧梳理 (v0.34.3): 记忆节按触发时机给写入入口, 中期只读不编辑
+        val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertTrue("中文应含行为单一路线标题", zh.contains("行为单一路线"))
+        assertTrue("中文应含 keep 触发时机", zh.contains("用户说「记住」或你判断重要"))
+        assertTrue("中文应含 record 触发时机", zh.contains("对话摘要"))
+        assertTrue("中文应含 project.save 触发时机", zh.contains("里程碑"))
+        assertTrue("中文应声明不主动编辑中期", zh.contains("不主动编辑中期记忆"))
+        assertTrue("中文应含用户提及历史时查中期", zh.contains("某日聊过"))
+        assertFalse("不再宣称每层完整增删改查", zh.contains("每层都有完整的增删改查"))
+        val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
+        assertTrue("英文应含行为单一路线", en.contains("single behavior path"))
+        assertTrue("英文应声明不编辑中期", en.contains("you don't edit mid-term"))
+    }
+
+    @Test
     fun `same params hit system prompt cache`() {
         val p1 = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
         val p2 = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
