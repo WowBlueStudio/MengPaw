@@ -136,7 +136,8 @@ object FrameworkPeerStore {
         } catch (_: Exception) {}
     }
 
-    /** 生成框架指纹 = SHA256(名称 + 设备ID前缀) */
+    /** 生成框架指纹 = SHA256(名称 + 设备标识)。
+     *  v0.34.3: 对端指纹绑 MAC (deviceId = mDNS mac 属性); 手动添加无 MAC 时传 "address:port"。 */
     fun computeFingerprint(name: String, deviceId: String): String {
         val input = "$name|$deviceId"
         val digest = MessageDigest.getInstance("SHA-256")

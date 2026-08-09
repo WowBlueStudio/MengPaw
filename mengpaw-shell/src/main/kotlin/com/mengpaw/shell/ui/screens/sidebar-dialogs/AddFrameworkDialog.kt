@@ -134,7 +134,16 @@ fun AddFrameworkDialog(strings: AppStrings, onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Spacer(Modifier.height(ArcoSpacing.sm))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = { isDiscovering = true; discovered = com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll().map { it.name to "${it.address}:${it.port}" }; isDiscovering = false }) {
+                    TextButton(onClick = {
+                        isDiscovering = true
+                        // v0.34.3: 触发真实 mDNS 扫描 + 读发现结果 (内存列表, 非已入册通讯录)
+                        com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.startDiscovery()
+                        discovered = com.mengpaw.plugin.framework.FrameworkDiscovery.instance
+                            ?.discoveredPeers?.toList()
+                            ?.map { it.name to "${it.address}:${it.port}" }
+                            .orEmpty()
+                        isDiscovering = false
+                    }) {
                         if (isDiscovering) { CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp); Spacer(Modifier.width(4.dp)) }
                         Text(strings.addFrameworkScanLan)
                     }
@@ -150,12 +159,21 @@ fun AddFrameworkDialog(strings: AppStrings, onDismiss: () -> Unit) {
             Button(
                 onClick = {
                     if (name.isNotBlank()) {
-                        val trustedDir = File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED)
-                        trustedDir.mkdirs()
-                        val fwFile = File(trustedDir, "$name.json")
-                        val tmp = File(trustedDir, "$name.tmp.json")
-                        val fwData = FrameworkFileData(name = name, address = address, frameworkType = frameworkType, addedAt = System.currentTimeMillis())
-                        try { tmp.writeText(appJson.encodeToString(FrameworkFileData.serializer(), fwData)); if (fwFile.exists()) fwFile.delete(); tmp.renameTo(fwFile); if (tmp.exists()) try { tmp.delete() } catch (_: Exception) { KernelLog.w("AddFramework", "delete tmp failed") }; onDismiss() } catch (e: Exception) { ErrorCollector.report(e, "SidebarContent.saveFramework") }
+                        // v0.34.3 修复双数据源: 统一入册 FrameworkPeerStore (framework_peers.json),
+                        // 与 mDNS 发现共用同一通讯录 — 此前写 ACP_TRUSTED/{name}.json 导致
+                        // 手动添加的节点不出现在 framework.peers / 侧边栏 (添加后无效)
+                        val host = address.substringBeforeLast(':').ifBlank { address }
+                        val port = address.substringAfterLast(':', "").toIntOrNull() ?: com.mengpaw.kernel.ports.Ports.ACP
+                        val fp = com.mengpaw.plugin.framework.FrameworkPeerStore.computeFingerprint(name, "$host:$port")
+                        com.mengpaw.plugin.framework.FrameworkPeerStore.save(
+                            com.mengpaw.plugin.framework.FrameworkPeerStore.FrameworkPeer(
+                                fingerprint = fp, name = name, version = "手动添加",
+                                frameworkName = "MengPaw", address = host, port = port,
+                                frameworkType = frameworkType,
+                                lastSeen = System.currentTimeMillis()
+                            )
+                        )
+                        onDismiss()
                     }
                 },
                 enabled = name.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),

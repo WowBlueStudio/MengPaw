@@ -65,7 +65,9 @@ data class FrameworkContact(
     val version: String = "",
     val frameworkName: String = "",
     val remark: String = "",
-    val frameworkType: String = "mengpaw"
+    val frameworkType: String = "mengpaw",
+    val fingerprint: String = "",
+    val discovered: Boolean = false   // v0.34.3: 未入册的 mDNS 发现节点 (可添加)
 )
 
 /** Data class for new agent creation form. */

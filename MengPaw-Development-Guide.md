@@ -1041,6 +1041,13 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - **自由文本型 (content/命令/搜索词)** — 污染即文本本身, 无害不防护
 - CLI.md 表头加**参数纯净规则**通用说明; 系统提示词已同步 (v0.34.3 路径参数纯净规则)
 
+**框架发现调整 (v0.34.3, 用户五条需求)**:
+- **本机名片** `FrameworkIdentity` (配置/framework_identity.json): 框架名称可编辑 (框架设置页), 指纹码显示 (6 位短码 xxx-xxx); 名称缺省时对端显示指纹短码, 自定义后显示名称 (mDNS display 属性)
+- **指纹绑 MAC**: 本机注册广播 mac 属性 (API 33+, NetworkInterface 获取), 对端指纹 = SHA256(name|mac) — 换 IP 不变; 低版本无 mac 回退地址 (用户判定不解决)
+- **发现即入册取消**: `FrameworkDiscovery.discoveredPeers` 内存列表, 侧边栏显示"添加"按钮确认入册; 修复 AddFrameworkDialog 双数据源 (原写 ACP_TRUSTED/{name}.json, 通讯录读 framework_peers.json — 手动添加后无效根因), 统一写 FrameworkPeerStore
+- **扫描时机**: 后台不持续扫; 打开侧边栏 → startContinuousDiscovery (10s 周期 + 10s 刷新通讯录), 关闭 → stopContinuousDiscovery
+- **联络失败提醒**: framework.connect 失败 → NotifyBus 横幅 (WARN)
+
 **per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
 
 

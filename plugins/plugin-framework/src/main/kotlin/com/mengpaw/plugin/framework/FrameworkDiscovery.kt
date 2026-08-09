@@ -32,6 +32,8 @@ class FrameworkDiscovery(private val context: Context) {
     private var discovering = false
     private var discoveryLoop: Job? = null
     private val discoveryScope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    /** 发现结果 (v0.34.3: 不再自动入册) — 未入册节点在此展示, 用户确认后 addPeer 入册。 */
+    val discoveredPeers = java.util.concurrent.CopyOnWriteArrayList<FrameworkPeerStore.FrameworkPeer>()
 
     /** 设备显示名称 */
     var deviceName: String = Build.MODEL ?: "MengPaw"
@@ -82,6 +84,9 @@ class FrameworkDiscovery(private val context: Context) {
             info.setAttribute("version", frameworkVersion)
             info.setAttribute("capabilities", capabilities.joinToString(","))
             info.setAttribute("agents", agentNames.joinToString(","))
+            // v0.34.3 名片: display = 自定义框架名 (空=缺省, 对端显示指纹码); mac = 指纹绑定标识
+            info.setAttribute("display", FrameworkIdentity.displayName)
+            info.setAttribute("mac", FrameworkIdentity.localMacAddress() ?: "")
         }
         try { nsd.registerService(info, NsdManager.PROTOCOL_DNS_SD, registrationListener) }
         catch (e: Exception) { KernelLog.w("FrameworkDiscovery", "register failed: ${e.message}") }
@@ -99,19 +104,26 @@ class FrameworkDiscovery(private val context: Context) {
         }
     }
 
-    /** 启动持续发现循环 — 每 30s 重新扫描一次 */
+    /** 启动持续发现循环 — 每 10s 重新扫描一次 (v0.34.3: 侧边栏打开时调用) */
     fun startContinuousDiscovery() {
         startDiscovery()
         discoveryLoop?.cancel()
         discoveryLoop = discoveryScope.launch(Dispatchers.IO) {
             while (isActive) {
-                delay(30_000)
+                delay(10_000)
                 // 停止旧扫描 → 重启，确保发现列表持续刷新
                 stopDiscovery()
                 delay(500)
                 startDiscovery()
             }
         }
+    }
+
+    /** 停止持续发现循环 (v0.34.3: 关闭侧边栏时调用) — 保留已发现内存列表。 */
+    fun stopContinuousDiscovery() {
+        discoveryLoop?.cancel()
+        discoveryLoop = null
+        stopDiscovery()
     }
 
     fun unregister() {
@@ -169,19 +181,30 @@ class FrameworkDiscovery(private val context: Context) {
         val agents = if (android.os.Build.VERSION.SDK_INT >= 33)
             info.attributes["agents"]?.let { String(it) }?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
         else emptyList()
-        val fp = FrameworkPeerStore.computeFingerprint(name, addr)
+        // v0.34.3: 指纹绑 MAC — mDNS 广播 mac 属性 (API 33+); 低版本无 mac 回退地址 (不解决)
+        val mac = if (android.os.Build.VERSION.SDK_INT >= 33)
+            info.attributes["mac"]?.let { String(it) }?.takeIf { it.isNotBlank() } else null
+        val display = if (android.os.Build.VERSION.SDK_INT >= 33)
+            info.attributes["display"]?.let { String(it) }?.takeIf { it.isNotBlank() } else null
+        val fp = FrameworkPeerStore.computeFingerprint(name, mac ?: addr)
         val now = System.currentTimeMillis()
         val peer = FrameworkPeerStore.FrameworkPeer(
-            fingerprint = fp, name = name, version = version,
+            fingerprint = fp,
+            // 名片规则: 对端设置了自定义框架名 → 显示它; 缺省 → 显示指纹短码 (v0.34.3)
+            name = display ?: fp.take(3) + "-" + fp.drop(3).take(3),
+            version = version,
             frameworkName = fwName,
             address = addr, port = info.port,
             capabilities = caps, agents = agents,
             lastSeen = now,
             trusted = FrameworkPeerStore.findByFingerprint(fp)?.trusted ?: false
         )
-        FrameworkPeerStore.save(peer)
-        KernelLog.i("FrameworkDiscovery", "Found: $name ($fwName v$version) @ $addr:$info.port agents=${agents.size}")
+        // v0.34.3: 发现即入册取消 — 结果进内存列表 (侧边栏展示, 用户确认后入册)
+        discoveredPeers.removeAll { it.fingerprint == fp }
+        discoveredPeers.add(peer)
+        KernelLog.i("FrameworkDiscovery", "Found: ${peer.name} ($fwName v$version) @ $addr:$info.port agents=${agents.size}")
     }
+
 
     fun startDiscovery() {
         val nsd = nsdManager ?: return

@@ -60,5 +60,22 @@ internal fun loadFrameworkContacts(): List<FrameworkContact> {
             ))
         }
     }
+    // v0.34.3: 合并发现结果 (未入册, discovered=true) — 发现即入册已取消, 用户确认后添加
+    com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.discoveredPeers?.toList()?.forEach { peer ->
+        if (contacts.none { it.name == peer.name && it.address == "${peer.address}:${peer.port}" }) {
+            contacts.add(FrameworkContact(
+                name = peer.name,
+                address = "${peer.address}:${peer.port}",
+                online = peer.lastSeen > System.currentTimeMillis() - 120_000,
+                trusted = peer.trusted,
+                agents = peer.agents,
+                version = peer.version,
+                frameworkName = peer.frameworkName,
+                frameworkType = peer.frameworkType,
+                fingerprint = peer.fingerprint,
+                discovered = true
+            ))
+        }
+    }
     return contacts
 }

@@ -83,7 +83,16 @@ class FrameworkPlugin : Plugin {
         )
         return adapter.connect(target).fold(
             onSuccess = { ExecutionResult.ok("已连接 ${peer.frameworkType} 节点: ${peer.name} (${peer.address})") },
-            onFailure = { ExecutionResult.fail("连接失败: ${it.message}") }
+            onFailure = {
+                // v0.34.3: 联络无效 → 横幅提醒 (侧边栏关闭后用户能感知)
+                try {
+                    com.mengpaw.kernel.namespace.NotifyBus.banner(
+                        "⚠️ 无法联络框架 ${peer.name} (${peer.address}): ${it.message?.take(60) ?: "连接失败"}",
+                        com.mengpaw.kernel.namespace.NotifyBus.NotifyLevel.WARN
+                    )
+                } catch (_: Exception) {}
+                ExecutionResult.fail("连接失败: ${it.message}")
+            }
         )
     }
 
@@ -145,24 +154,24 @@ class FrameworkPlugin : Plugin {
 
     private suspend fun handleDiscover(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         discovery?.startDiscovery()
-        // 默认异步: 立即返回, 让 Agent 稍后用 peers 查看; --wait 保持同步等 3s
+        // v0.34.3: 发现结果在内存 (discoveredPeers), 不再自动入册 — 用户确认后入册
         if (!args.contains("--wait")) {
             return ExecutionResult.ok(
-                "🔍 mDNS 扫描已启动 (约 3 秒完成) — 稍后执行 framework.peers 查看结果, 或 framework.discover --wait 同步等待。\n" +
+                "🔍 mDNS 扫描已启动 (约 3 秒完成) — 稍后执行 framework.discover --wait 查看发现结果;\n" +
+                "发现的节点需确认后入册 (framework.add <名称> <IP> <端口> 或侧边栏添加按钮)。\n" +
                 "未发现时检查: 同一 WiFi / 防火墙; 或用 framework.add <名称> <IP> <端口> 手动添加节点。"
             )
         }
         kotlinx.coroutines.delay(3000)
-        val peers = FrameworkPeerStore.loadAll()
+        val peers = discovery?.discoveredPeers?.toList().orEmpty()
         if (peers.isEmpty()) return ExecutionResult.ok(
-            "未发现局域网框架。请确保其他设备已启动 MengPaw 并在同一 WiFi; 或手动添加: framework.add <名称> <IP> <端口>。")
-        val sb = StringBuilder("发现 ${peers.size} 个框架：\n\n")
+            "未发现局域网框架。请确保其他设备已启动 MengPaw 并在同一 WiFi; 或手动添加: framework.add <名称> <IP> <端口>。\n" +
+            "已入册节点: framework.peers")
+        val sb = StringBuilder("发现 ${peers.size} 个框架 (未入册):\n\n")
         peers.forEach { p ->
-            val online = if (p.lastSeen > System.currentTimeMillis() - 120_000) "🟢" else "⚫"
-            val trust = if (p.trusted) "✓" else "?"
-            sb.appendLine("$online [$trust] ${p.name} · v${p.version} · ${p.address}:${p.port}")
+            sb.appendLine("${p.name} · v${p.version} · ${p.address}:${p.port}")
             sb.appendLine("   指纹: ${p.fingerprint}")
-            if (p.capabilities.isNotEmpty()) sb.appendLine("   能力: ${p.capabilities.joinToString()}")
+            sb.appendLine("   入册: framework.add ${p.name} ${p.address} ${p.port} (或侧边栏添加)")
             sb.appendLine()
         }
         return ExecutionResult.ok(sb.toString().trimEnd())

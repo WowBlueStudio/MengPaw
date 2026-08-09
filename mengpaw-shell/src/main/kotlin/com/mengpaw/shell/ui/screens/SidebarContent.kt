@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
+import kotlinx.coroutines.delay
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.shell.ui.localization.AppStrings
 import java.io.File
@@ -97,6 +98,22 @@ fun SidebarContent(
     // Load saved framework contacts from ACP_TRUSTED + discovered peers
     val frameworks = remember {
         mutableStateListOf<FrameworkContact>().also { it.addAll(loadFrameworkContacts()) }
+    }
+
+    // v0.34.3 框架发现调整: 打开侧边栏 → 启动 10s 发现循环 + 周期刷新通讯录; 关闭 → 停止
+    LaunchedEffect(Unit) {
+        com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.startContinuousDiscovery()
+        while (true) {
+            delay(10_000)
+            val fresh = loadFrameworkContacts()
+            frameworks.clear()
+            frameworks.addAll(fresh)
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.stopContinuousDiscovery()
+        }
     }
 
     Column(Modifier.fillMaxHeight().width(280.dp).background(ThemeColors.bgPrimary).padding(ArcoSpacing.lg).verticalScroll(rememberScrollState())) {

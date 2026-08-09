@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -39,6 +40,59 @@ fun FrameworkSettingsContent(
     toolItems: List<FrameworkItem> = emptyList(),
     skillItems: List<FrameworkItem> = emptyList()
 ) {
+    // ── 框架名片 (v0.34.3): 本机名称编辑 + 指纹码显示 — 配对识别用 ──
+    SectionHeader(if (state.useChinese) "框架名片" else "Framework Identity")
+    var identityName by remember {
+        mutableStateOf(com.mengpaw.plugin.framework.FrameworkIdentity.displayName)
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCardHigh
+    ) {
+        Column(Modifier.padding(ArcoSpacing.lg)) {
+            Text(if (state.useChinese) "框架名称 (其他设备显示; 留空则显示指纹码)" else "Framework name (shown to peers; empty = fingerprint)",
+                style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = identityName,
+                    onValueChange = { identityName = it },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    placeholder = { Text(if (state.useChinese) "留空 = 缺省 (显示指纹码)" else "Empty = default (show fingerprint)") }
+                )
+                Spacer(Modifier.width(ArcoSpacing.sm))
+                Button(
+                    onClick = {
+                        com.mengpaw.plugin.framework.FrameworkIdentity.setDisplayName(identityName)
+                        // 名称变更 → 重新注册 mDNS (serviceName 不变, display 属性随下次注册生效)
+                        com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.unregister()
+                        com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.register()
+                    },
+                    shape = RoundedCornerShape(ArcoRadius.md),
+                    colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand)
+                ) { Text(if (state.useChinese) "保存" else "Save", color = Color.White) }
+            }
+            Spacer(Modifier.height(ArcoSpacing.sm))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (state.useChinese) "本机指纹码" else "Local fingerprint",
+                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.width(ArcoSpacing.md))
+                Text(com.mengpaw.plugin.framework.FrameworkIdentity.shortCode,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ThemeColors.brand, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            }
+            Text(if (state.useChinese)
+                "指纹绑 MAC, 换 IP 不变; 配对时告知对方此码, 对方以此识别你的设备。"
+                else "Fingerprint is bound to MAC (stable across IP changes); tell this code to peers for identification.",
+                style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+        }
+    }
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
     SectionHeader(state.strings.frameworkApiProvider)
 
     if (state.savedProviders.isNotEmpty()) {
@@ -236,4 +290,3 @@ fun FrameworkSettingsContent(
         }
     }
 }
-

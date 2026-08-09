@@ -131,6 +131,33 @@ internal fun FrameworkDirectorySection(
                     val displayName = framework.remark.ifBlank { framework.name }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(displayName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                        // v0.34.3: 未入册发现节点 → 行内"添加"按钮 (确认后入册)
+                        if (framework.discovered) {
+                            Spacer(Modifier.width(4.dp))
+                            TextButton(
+                                onClick = {
+                                    val host = framework.address.substringBeforeLast(':').ifBlank { framework.address }
+                                    val port = framework.address.substringAfterLast(':', "").toIntOrNull()
+                                        ?: com.mengpaw.kernel.ports.Ports.ACP
+                                    com.mengpaw.plugin.framework.FrameworkPeerStore.save(
+                                        com.mengpaw.plugin.framework.FrameworkPeerStore.FrameworkPeer(
+                                            fingerprint = framework.fingerprint.ifBlank {
+                                                com.mengpaw.plugin.framework.FrameworkPeerStore
+                                                    .computeFingerprint(framework.name, "$host:$port")
+                                            },
+                                            name = framework.name, version = framework.version,
+                                            frameworkName = framework.frameworkName,
+                                            address = host, port = port,
+                                            agents = framework.agents,
+                                            lastSeen = System.currentTimeMillis(),
+                                            frameworkType = framework.frameworkType
+                                        )
+                                    )
+                                },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                            ) { Text(if (strings.isChinese) "添加" else "Add",
+                                fontSize = 12.sp, color = ThemeColors.brand) }
+                        }
                         if (framework.remark.isNotBlank()) {
                             Spacer(Modifier.width(4.dp))
                             Text(framework.name, style = MaterialTheme.typography.labelSmall,
