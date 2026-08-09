@@ -32,8 +32,7 @@ import java.io.File
 fun AgentCardDialog(
     strings: AppStrings,
     agentName: String,
-    onDismiss: () -> Unit,
-    onSwitchTo: () -> Unit
+    onDismiss: () -> Unit
 ) {
     val agentDir = File(com.mengpaw.kernel.DataPaths.AGENTS, agentName)
     val workspacePath = agentDir.absolutePath
@@ -54,14 +53,17 @@ fun AgentCardDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(strings.agentCardTitle, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = {
+                // v0.35.1: 图形按钮 (编辑 ↔ 保存)
+                IconButton(onClick = {
                     if (isEditing) {
                         val newProfile = profile.copy(name = editName, bio = editIntro)
                         AgentProfile.save(agentName, newProfile)
                     }
                     isEditing = !isEditing
                 }) {
-                    Text(if (isEditing) strings.cardSave else strings.cardEdit, color = ThemeColors.brand, fontSize = 13.sp)
+                    Icon(if (isEditing) Icons.Outlined.Check else Icons.Outlined.Edit,
+                        contentDescription = if (isEditing) strings.cardSave else strings.cardEdit,
+                        tint = ThemeColors.brand)
                 }
             }
         },
@@ -116,60 +118,32 @@ fun AgentCardDialog(
                     Text(editIntro.ifBlank { strings.agentCardNoIntro }, style = MaterialTheme.typography.bodySmall,
                         color = if (editIntro.isBlank()) ThemeColors.textSecondary.copy(alpha = 0.6f) else ThemeColors.textPrimary)
                 }
-                Spacer(Modifier.height(ArcoSpacing.md))
-
-                val mdFiles = remember(agentName) {
-                    try { agentDir.listFiles()?.filter { it.extension == "md" }?.map { it.name }?.sorted() ?: emptyList() } catch (_: Exception) { emptyList() }
-                }
-                if (mdFiles.isNotEmpty()) {
-                    Text(String.format(strings.agentCardWorkspaceFiles, mdFiles.size), style = MaterialTheme.typography.labelSmall,
-                        color = ThemeColors.textSecondary, modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(4.dp))
-                    Surface(color = ThemeColors.bgCardHigh, shape = RoundedCornerShape(ArcoRadius.sm),
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 140.dp)) {
-                        Column(Modifier.padding(ArcoSpacing.sm).verticalScroll(rememberScrollState())) {
-                            mdFiles.forEach { fname ->
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 1.dp)) {
-                                    Icon(Icons.Outlined.Description, null, Modifier.size(12.dp), tint = ThemeColors.textSecondary)
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(fname, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, fontSize = 11.sp)
-                                }
-                            }
-                        }
-                    }
-                }
             }
         },
         confirmButton = {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                // P2 修复: 默认主 Agent 不可删除 — 原字面量硬编码, 改用唯一事实源常量
-                if (agentName != com.mengpaw.shell.ui.screens.DEFAULT_AGENT_NAME) {
-                    var showDeleteConfirm by remember { mutableStateOf(false) }
-                    TextButton(onClick = { showDeleteConfirm = true },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                        Text(strings.agentCardDelete, fontSize = 13.sp)
-                    }
-                    if (showDeleteConfirm) {
-                        AlertDialog(
-                            onDismissRequest = { showDeleteConfirm = false },
-                            title = { Text(strings.agentCardDeleteTitle) },
-                            text = { Text(String.format(strings.agentCardDeleteBody, agentName)) },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    val agentDir = File(com.mengpaw.kernel.DataPaths.AGENTS, agentName)
-                                    if (agentDir.exists()) agentDir.deleteRecursively()
-                                    showDeleteConfirm = false; onDismiss()
-                                }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text(strings.delete, fontWeight = FontWeight.Bold) }
-                            },
-                            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(strings.cancel) } }
-                        )
-                    }
+            // v0.35.1: 去掉"切换到此智能体"与"关闭"; 底部仅保留删除 (主 Agent 不可删)
+            if (agentName != com.mengpaw.shell.ui.screens.DEFAULT_AGENT_NAME) {
+                var showDeleteConfirm by remember { mutableStateOf(false) }
+                TextButton(onClick = { showDeleteConfirm = true },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                    Text(strings.agentCardDelete, fontSize = 13.sp)
                 }
-                Spacer(Modifier.weight(1f))
-                Button(onClick = onSwitchTo, colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
-                    shape = RoundedCornerShape(ArcoRadius.md)) { Text(strings.agentCardSwitch, color = Color.White, fontSize = 13.sp) }
+                if (showDeleteConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteConfirm = false },
+                        title = { Text(strings.agentCardDeleteTitle) },
+                        text = { Text(String.format(strings.agentCardDeleteBody, agentName)) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                val agentDir = File(com.mengpaw.kernel.DataPaths.AGENTS, agentName)
+                                if (agentDir.exists()) agentDir.deleteRecursively()
+                                showDeleteConfirm = false; onDismiss()
+                            }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text(strings.delete, fontWeight = FontWeight.Bold) }
+                        },
+                        dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(strings.cancel) } }
+                    )
+                }
             }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.close) } }
+        }
     )
 }

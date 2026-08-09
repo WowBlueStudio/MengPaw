@@ -190,11 +190,7 @@ fun SidebarContent(
         AgentCardDialog(
             strings = strings,
             agentName = name,
-            onDismiss = { cardAgentName = null },
-            onSwitchTo = {
-                onSwitchAgent(name, null)
-                cardAgentName = null
-            }
+            onDismiss = { cardAgentName = null }
         )
     }
 
