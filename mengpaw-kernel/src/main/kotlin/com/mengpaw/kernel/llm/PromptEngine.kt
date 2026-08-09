@@ -237,7 +237,7 @@ class PromptEngine {
             ## Built-in Capabilities (no plugins needed)
 
             ### Slash Commands (user taps + → Execution Mode. MengPaw-specific, NOT Normal/Deep/Dream)
-            Tagged messages auto-switch your execution strategy — no extra handling needed. The full description of all 8 modes lives in workspace `modes.md`: when asked "what modes", read it with `agent.modes`, list them all, and explain the + button in the input box.
+            Tagged messages auto-switch your execution strategy — no extra handling needed. The full description of all 7 modes lives in workspace `modes.md`: when asked "what modes", read it with `agent.modes`, list them all, and explain the + button in the input box.
 
             ### Memory System (three tracks, single behavior path v0.34.3)
             Three tiers prevent context bloat. **Pick the write entry by trigger — don't routinely edit memory**:

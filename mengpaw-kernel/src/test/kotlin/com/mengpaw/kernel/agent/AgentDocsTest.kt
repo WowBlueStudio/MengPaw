@@ -125,4 +125,27 @@ class AgentDocsTest {
         val after = File(File(DataPaths.AGENTS, "TestAgent"), "memory/memory.md").readText()
         assertTrue("含真实记忆不迁移, 内容保留", after.contains("真实记忆内容"))
     }
+
+    @Test
+    fun `bootstrap migrates legacy modes template with Mission`() {
+        // v0.34.4 Mission 并入 Swarm: 旧 8 种 modes.md 含 /Mission 章节 → 覆盖为模板新版 (7 种)
+        writeTemplate("modes.md", "zh", "# 模式菜单\n\n## /Swarm\nSwarm 是进化版的 Mission")
+        writeWorkspace("TestAgent", "modes.md",
+            "# 模式菜单\n\n## /Mission\n复杂任务拆解\n\n## /Swarm\n旧说明")
+        AgentDocs.bootstrap("TestAgent")
+        val migrated = File(File(DataPaths.AGENTS, "TestAgent"), "modes.md").readText()
+        assertFalse("旧 /Mission 章节应被迁移掉", migrated.contains("/Mission"))
+        assertTrue("新模板内容应生效", migrated.contains("Swarm 是进化版的 Mission"))
+    }
+
+    @Test
+    fun `bootstrap keeps user custom modes without Mission`() {
+        writeTemplate("modes.md", "zh", "# 模板版")
+        val custom = "# 用户自定义\n\n## /Swarm\n自定义说明"
+        writeWorkspace("TestAgent", "modes.md", custom)
+        AgentDocs.bootstrap("TestAgent")
+        assertEquals("无 /Mission 的自定义 modes.md 应原样保留",
+            custom,
+            File(File(DataPaths.AGENTS, "TestAgent"), "modes.md").readText())
+    }
 }

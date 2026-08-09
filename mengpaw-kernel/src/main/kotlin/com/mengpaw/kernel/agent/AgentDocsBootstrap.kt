@@ -23,6 +23,9 @@ internal class AgentDocsBootstrap {
         // FIX(自检报告 P1-4): 旧工作区迁移 — memory.md 仍是原样旧模板 (全部 ## 标题命中
         // 教学黑名单) 时, 覆盖为模板池新版 (瘦身模板)。幂等: 迁移后标题不再全黑名单, 自然跳过。
         migrateLegacyMemoryTemplate(agentName, language)
+        // v0.34.4 Mission 并入 Swarm: 旧版 modes.md 含 /Mission 章节 (bootstrap 只补缺失不覆盖),
+        // Agent 经 agent.modes 会看到已删除的命令 → 覆盖为模板新版。幂等: 迁移后无 /Mission, 自然跳过。
+        migrateLegacyModesTemplate(agentName, language)
         // Ensure long-term memory directory exists — 幂等，老工作区升级后也补建
         File(dir, "memory").mkdirs()
         // Ensure Notes directory exists — 记忆之外的笔记 (如其他 Agent 知识信息)
@@ -76,6 +79,21 @@ internal class AgentDocsBootstrap {
             }
         } catch (e: Exception) {
             KernelLog.w("AgentDocs", "migrateLegacyMemoryTemplate failed: ${e.message}")
+        }
+    }
+
+    /** 旧模板迁移 — modes.md 含 `## /Mission` 章节 (旧 8 种版) → 覆盖为模板新版 (7 种)。 */
+    private fun migrateLegacyModesTemplate(agentName: String, language: String) {
+        try {
+            val file = File(File(DataPaths.AGENTS, agentName), "modes.md")
+            if (!file.exists()) return
+            if (file.readText().contains("## /Mission")) {
+                if (resetDoc(agentName, "modes.md", language)) {
+                    KernelLog.i("AgentDocs", "migrate: legacy modes.md (Mission) → template ($agentName)")
+                }
+            }
+        } catch (e: Exception) {
+            KernelLog.w("AgentDocs", "migrateLegacyModesTemplate failed: ${e.message}")
         }
     }
 
