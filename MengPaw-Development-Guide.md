@@ -1018,7 +1018,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 命令 → ① SecurityPolicy.isAllowed()（白名单 + 黑名单 + 15 条危险模式）→ ② IntegrityGuard.validateCommand()（路径保护，接入 Pipeline 指令链）→ ③ **安全分级 (v0.34.3)** → ④ 执行
 
-**安全分级 (v0.34.3, P0-3 用户拍板)**: `CommandRiskLevels` 三级 — **普通** (新建/写入文件、通知等) 默认放行; **中危** (删除/修改、剪贴板、截图录屏、插件/技能启停) 默认拒绝, Agent 权限等级提升为「信任」(`AgentPermissionStore` per-agent, 智能体设置) 后放行; **高危** (清空/卸载/系统级/root/拍照) 每次执行经 `UserConfirmBus` 弹窗询问用户 (30s 超时默认拒绝, worker/后台环境不弹窗直接拒绝)。中危/高危命令仍须 JSON + `reason` 意图声明 (`HighRiskCommandGate`, 普通命令移出 reason 表)。分级与 reason 门禁在 `RiskGate.evaluate` 统一求值, 主循环 (可弹窗) 与 Swarm worker (不弹窗) 复用同一纯函数。
+**安全分级 (v0.34.3, P0-3 用户拍板)**: `CommandRiskLevels` 三级 — **普通** (新建/写入文件、通知等) 默认放行; **中危** (删除/修改、剪贴板、截图录屏、插件/技能启停) 默认拒绝, Agent 权限等级提升为「信任」(`AgentPermissionStore` per-agent, 智能体设置) 后放行; **高危** (清空/卸载/系统级/root/拍照) 每次执行经 `UserConfirmBus` 弹窗询问用户 (30s 超时默认拒绝, worker/后台环境不弹窗直接拒绝)。中危/高危命令仍须 JSON + `reason` 意图声明 (`HighRiskCommandGate`, 普通命令移出 reason 表)。分级与 reason 门禁在 `RiskGate.evaluate` 统一求值, 主循环 (可弹窗) 与 Swarm worker (不弹窗) 复用同一纯函数。**UI 表达 (v0.35.1 用户定案)**: `AgentPermissionPanel` 权限等级切换 — 标准=蓝色盾牌 / 信任=粉色盾牌, 无开关, 点击整个块切换; 普通行绿色 / 中危行随盾牌色 / 高危行红色。
 
 **P0-1/P2-8 单一事实源收尾 (v0.34.3)**: ① 插件表 — `BuiltinPluginRegistry` (kernel) 由 shell `PluginRegistrar.BUILTIN_PLUGIN_INFO`/`REMOTE_PLUGIN_BRIEFS` + `PluginClassRegistry.ALL_KNOWN_CLASSES` 注入, 插件发现/通讯录/文档消费方共用, 历史幻影条目 (notification-plugin/workflow/incubator/cdp/inspector/agent-mission/agent-loop) 永久删除。② 命令表 — `CommandSearch` (BuiltinCommandIndex 单一数据源) 为 self.search/命令发现唯一描述源, `AgentCliDocTables` 四张手写表删除, 消除双份描述漂移。③ **v0.34.3 后 CLI.md 整体移除** — 原 CliDocSyncTest (插件表链式检查) 随生成器删除。
 
