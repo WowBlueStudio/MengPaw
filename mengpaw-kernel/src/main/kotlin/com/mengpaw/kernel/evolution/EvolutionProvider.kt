@@ -83,6 +83,7 @@ object EvolutionProviderRegistry {
  * (agent.memory.keep / agent.write / self.search)。这里的命令是处置侧的动作端点:
  * - audit        绩效报告(失败分布/复现率/教训列表)
  * - report       框架反馈 — Agent 发现框架缺陷时写给开发者
+ * - feedback     框架反馈状态机 — ls 查看 / mark 标记 (new/ack/scheduled/fixed)
  * - learn.command 指令集丰富 — 把正确用法/关键词登记进命令搜索索引
  * - reactions    查看用户反应档案(用户分身数据源)
  * - mark-corrected 标记失败模式已沉淀修正(绩效闭环)
@@ -97,6 +98,7 @@ object EvolutionEngine : EvolutionProvider {
         when (command) {
             "audit" -> audit(args, ctx)
             "report" -> report(args, ctx)
+            "feedback" -> feedback(args, ctx)
             "learn.command" -> learnCommand(args, ctx)
             "reactions" -> reactions(args, ctx)
             "mark-corrected" -> markCorrected(args, ctx)
@@ -129,6 +131,12 @@ object EvolutionEngine : EvolutionProvider {
             val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
             val file = File(dir, "$ts.md")
             file.writeText(buildString {
+                // v0.34.3 P2-9: 状态 frontmatter — 反馈闭环状态机 (new→ack→scheduled→fixed)
+                appendLine("---")
+                appendLine("status: new")
+                appendLine("submitted_at: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}")
+                appendLine("---")
+                appendLine()
                 appendLine("# 框架反馈 (Agent 进化)")
                 appendLine()
                 appendLine("- 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}")
@@ -149,6 +157,78 @@ object EvolutionEngine : EvolutionProvider {
         } catch (e: Exception) {
             ExecutionResult.fail("写入失败: ${e.message}", errorCode = ErrorCodes.ERR_IO)
         }
+    }
+
+    /** 反馈状态值域 (v0.34.3 P2-9)。 */
+    private val FEEDBACK_STATUSES = setOf("new", "ack", "scheduled", "fixed")
+
+    /**
+     * 框架反馈状态机 — Agent 上报后有闭环感知 (谁读了/排期了/修了), 不再石沉大海。
+     * Usage: evolution.feedback [ls|mark <文件名> <new|ack|scheduled|fixed>]
+     */
+    private suspend fun feedback(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val sub = args.firstOrNull() ?: "ls"
+        val dir = File(DataPaths.evolutionFeedbackDir(agent(ctx)))
+        return when (sub) {
+            "ls", "list" -> {
+                if (!dir.isDirectory) return ExecutionResult.ok("(暂无框架反馈 — evolution.report <描述> 提交)")
+                val files = dir.listFiles()?.filter { it.isFile && it.extension == "md" }
+                    ?.sortedByDescending { it.name } ?: emptyList()
+                if (files.isEmpty()) ExecutionResult.ok("(暂无框架反馈 — evolution.report <描述> 提交)")
+                else ExecutionResult.ok(buildString {
+                    appendLine("框架反馈 (${files.size} 条, ${dir.absolutePath}):")
+                    files.forEach { f ->
+                        appendLine("  [${feedbackStatus(f) ?: "new"}] ${f.name}")
+                    }
+                    appendLine()
+                    appendLine("标记状态: evolution.feedback mark <文件名> <new|ack|scheduled|fixed>")
+                })
+            }
+            "mark" -> {
+                if (args.size < 3) {
+                    return ExecutionResult.fail("用法: evolution.feedback mark <文件名> <new|ack|scheduled|fixed>")
+                }
+                val name = args[1]
+                val status = args[2].lowercase()
+                if (status !in FEEDBACK_STATUSES) {
+                    return ExecutionResult.fail("状态必须是: ${FEEDBACK_STATUSES.joinToString("/")}")
+                }
+                val f = File(dir, name)
+                if (!f.isFile) return ExecutionResult.fail("反馈文件不存在: $name (evolution.feedback 查看列表)")
+                if (setFeedbackStatus(f, status)) ExecutionResult.ok("已标记 $name → $status")
+                else ExecutionResult.fail("标记失败 (文件不可写)")
+            }
+            else -> ExecutionResult.fail("用法: evolution.feedback [ls|mark <文件名> <状态>]")
+        }
+    }
+
+    /** 读 frontmatter status (无 frontmatter 视为 new)。 */
+    private fun feedbackStatus(f: File): String? {
+        return try {
+            val head = f.readText().take(512)
+            if (!head.startsWith("---")) null
+            else Regex("status:\\s*(\\w+)").find(head)?.groupValues?.get(1)
+        } catch (_: Exception) { null }
+    }
+
+    /** 更新 frontmatter status (无 frontmatter 则前置补写; 原子写)。 */
+    private fun setFeedbackStatus(f: File, status: String): Boolean {
+        return try {
+            val text = f.readText()
+            val head = text.take(512)
+            val newText = if (head.startsWith("---") && Regex("status:\\s*\\w+").containsMatchIn(head)) {
+                text.replaceFirst(Regex("status:\\s*\\w+"), "status: $status")
+            } else {
+                "---\nstatus: $status\n---\n\n" + text
+            }
+            val tmp = File(f.parentFile, "${f.name}.tmp")
+            tmp.writeText(newText)
+            java.nio.file.Files.move(
+                tmp.toPath(), f.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+            true
+        } catch (_: Exception) { false }
     }
 
     /**

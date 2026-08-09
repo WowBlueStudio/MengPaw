@@ -746,7 +746,7 @@ MCP 协议极其简单——JSON-RPC + 三个原语（tool / resource / prompt�
 |---|---|---|---|
 | `9876` (ACP) | **0.0.0.0 全部接口** (设备间通道, 故意) | 设备↔设备直连: 会话同步/工作区/委托/REVOKE/MCP-over-ACP | peerId↔来源 IP 绑定 (`AcpServer.bindPeerIp`); 敏感类型额外要求 IP 匹配; 设备级认证靠 `sharedSecret` (pairing 派生, 未设置启动即告警) |
 | `9880` (BROWSER_MCP) | `127.0.0.1` 回环 | Shell ↔ 浏览器进程 HTTP 桥 | Bearer token (`McpHttpServer` 无 token 一律 401, fail-closed) |
-| `9881` (MCP_LOCAL) | `127.0.0.1` 回环 | 本机 MCP 网关 (plugin-framework) | 无 (仅回环可连, 本机 MCP 客户端直连) |
+| `9881` (MCP_LOCAL) | `127.0.0.1` 回环 | 本机 MCP 网关 (plugin-framework) | Bearer token (`McpGatewayAuth`, v0.34.3 — 无/错 token 一律 401 fail-closed; token 持久化 `配置/mcp_gateway_token`, `self.mcp token` 获取) |
 
 安全要点: 唯一暴露到局域网的是 ACP `9876` — 这是设备间通道的设计意图 (对端设备必须能直连)。防护层级: ① msg.from 不可信, 所有 peerId 绑定到实际来源 socket IP; ② 敏感消息类型 (会话/工作区/REVOKE/MCP) 额外要求来源 IP 与该 peerId 历史通信 IP 匹配, 防局域网冒充; ③ 生产配对必须传 `AcpServer(profile, port, derivedSecret)` 派生密钥, 不要使用 `AcpHolder` 默认占位值。其余两端口回环绑定, 仅本机进程可达。
 
@@ -1016,6 +1016,12 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 命令 → ① SecurityPolicy.isAllowed()（白名单 + 黑名单 + 15 条危险模式）→ ② IntegrityGuard.validateCommand()（路径保护，接入 Pipeline 指令链）→ ③ **安全分级 (v0.34.3)** → ④ 执行
 
 **安全分级 (v0.34.3, P0-3 用户拍板)**: `CommandRiskLevels` 三级 — **普通** (新建/写入文件、通知等) 默认放行; **中危** (删除/修改、剪贴板、截图录屏、插件/技能启停) 默认拒绝, Agent 权限等级提升为「信任」(`AgentPermissionStore` per-agent, 智能体设置) 后放行; **高危** (清空/卸载/系统级/root/拍照) 每次执行经 `UserConfirmBus` 弹窗询问用户 (30s 超时默认拒绝, worker/后台环境不弹窗直接拒绝)。中危/高危命令仍须 JSON + `reason` 意图声明 (`HighRiskCommandGate`, 普通命令移出 reason 表)。分级与 reason 门禁在 `RiskGate.evaluate` 统一求值, 主循环 (可弹窗) 与 Swarm/Mission worker (不弹窗) 复用同一纯函数。
+
+**P0-1/P2-8 单一事实源收尾 (v0.34.3)**: ① 插件表 — `BuiltinPluginRegistry` (kernel) 由 shell `PluginRegistrar.BUILTIN_PLUGIN_INFO`/`REMOTE_PLUGIN_BRIEFS` + `PluginClassRegistry.ALL_KNOWN_CLASSES` 注入, CLI.md 内置/远程插件表动态生成, 历史幻影条目 (notification-plugin/workflow/incubator/cdp/inspector/agent-mission/agent-loop) 永久删除; 新增内置插件只需在 PluginRegistrar 登记, 无需改 CLI.md。② 命令表 — CLI.md 的 self/evolution/agent/security/plugin 表改为从 `CommandSearch` (BuiltinCommandIndex 单一数据源) 动态生成, `AgentCliDocTables` 四张手写表删除, 消除双份描述漂移; sys 表保留硬编码 (kernel 不依赖 core), 同步规则已注释在 CliDocGenerator (变更 SysExecutor 命令须同步 51 行表)。③ 链式检查 — `CliDocSyncTest` 锁死"CLI.md 插件表条目必须来自注册源"。
+
+**P1-5 死配置收尾 (v0.34.3)**: heartbeat/trumanshow 引导块注入条件从"文件非空"改为"文件非空 **且** 存在对应已启用触发器 (CRON/SCHEDULE)"; 触发器指纹纳入提示词缓存失效 — 增删/启停触发器即时重建提示词, 零触发器不再每轮注入死配置引导。
+
+**P2-9 进化反馈闭环 (v0.34.3)**: `evolution.report` 落盘带 `status: new` frontmatter; 新增 `evolution.feedback [ls|mark <文件> <new|ack|scheduled|fixed>]` — Agent 上报后能查看/标记状态, 不再石沉大海 (开发者处置: ack 已读 → scheduled 排期 → fixed 修复)。
 
 **per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
 

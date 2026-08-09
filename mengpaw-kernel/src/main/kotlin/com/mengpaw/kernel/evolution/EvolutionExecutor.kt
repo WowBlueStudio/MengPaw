@@ -19,6 +19,7 @@ object EvolutionExecutor {
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         "audit" to { args, ctx -> dispatch("audit", args, ctx) },
         "report" to { args, ctx -> dispatch("report", args, ctx) },
+        "feedback" to { args, ctx -> dispatch("feedback", args, ctx) },
         "learn.command" to { args, ctx -> dispatch("learn.command", args, ctx) },
         "reactions" to { args, ctx -> dispatch("reactions", args, ctx) },
         "mark-corrected" to { args, ctx -> dispatch("mark-corrected", args, ctx) }

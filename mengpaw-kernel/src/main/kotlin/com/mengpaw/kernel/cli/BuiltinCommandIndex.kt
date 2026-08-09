@@ -70,6 +70,9 @@ object BuiltinCommandIndex {
         idx("evolution.report", "发现框架缺陷时写技术反馈给开发者 (落盘+推送)", "evolution.report <描述>",
             listOf("反馈", "缺陷", "Bug", "框架", "报错", "上报"),
             listOf("report", "feedback", "bug", "framework", "issue"))
+        idx("evolution.feedback", "查看/标记框架反馈状态 (new/ack/scheduled/fixed 闭环)", "evolution.feedback [ls|mark <文件> <状态>]",
+            listOf("反馈", "状态", "闭环", "已读", "已修复", "已排期"),
+            listOf("feedback", "status", "closed loop", "ack", "fixed", "scheduled"))
         idx("evolution.learn.command", "把正确命令用法/同义词登记进指令集搜索索引", "evolution.learn.command <命令> <描述> [--keywords 词,词]",
             listOf("指令", "命令", "学习", "关键词", "索引", "丰富"),
             listOf("learn", "command", "keyword", "index"))
