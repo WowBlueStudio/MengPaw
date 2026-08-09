@@ -50,25 +50,31 @@ class PlanModeExecutor(
         }
 
         agentEngine.updateAgentOutput(formatPlanSummary(plan))
+        // v0.34.3 /plan UI: 发布计划给 UI (右侧竖列/侧栏列表)
+        com.mengpaw.kernel.agent.PlanMonitor.start(plan, agentEngine.agentName)
 
         val results = mutableListOf<String>()
         for (step in plan.steps) {
             currentCoroutineContext().ensureActive()  // 取消契约: stop() 后立即中断剩余步骤
             step.status = PlanStepStatus.RUNNING
+            com.mengpaw.kernel.agent.PlanMonitor.updateStep(step.index, PlanStepStatus.RUNNING)
             agentEngine.updateAgentState(AgentState.Running("[Step ${step.index + 1}/${plan.totalSteps}] ${step.description}", step.index + 1, plan.totalSteps))
             try {
                 val stepResult = executePlanStep(step, maxStepsPerPlanStep, llmProvider, onDelta)
                 results.add("[OK] Step ${step.index + 1}: ${stepResult}")
                 step.status = PlanStepStatus.COMPLETED
+                com.mengpaw.kernel.agent.PlanMonitor.updateStep(step.index, PlanStepStatus.COMPLETED)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // 取消契约: 必须先 rethrow; P2 — 状态机复位, 否则 _state 残留 Running
                 agentEngine.updateAgentState(AgentState.Idle)
+                com.mengpaw.kernel.agent.PlanMonitor.stop()
                 throw e
             } catch (e: Exception) {
                 ErrorCollector.report(ErrorType.AGENT_CRASH, "PlanModeExecutor",
                     "Step ${step.index + 1}: ${step.description}", throwable = e, agentName = agentEngine.agentName)
                 results.add("[FAIL] Step ${step.index + 1}: ${e.message}")
                 step.status = PlanStepStatus.FAILED
+                com.mengpaw.kernel.agent.PlanMonitor.updateStep(step.index, PlanStepStatus.FAILED)
             }
             agentEngine.updateAgentOutput("${results.joinToString("\n")}\nProgress: ${plan.completedSteps}/${plan.totalSteps} steps done")
         }
@@ -88,6 +94,7 @@ class PlanModeExecutor(
         }
 
         agentEngine.updateAgentState(AgentState.Finished(summary))
+        com.mengpaw.kernel.agent.PlanMonitor.stop()
         return summary
     }
 

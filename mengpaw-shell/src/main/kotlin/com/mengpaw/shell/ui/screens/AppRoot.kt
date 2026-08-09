@@ -5,6 +5,7 @@ package com.mengpaw.shell.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Surface
@@ -217,25 +218,31 @@ private fun AppRootContent(
                 )
             },
             rightSidebarContent = { close ->
-                HistorySidebar(
-                    localGroups = localGroups,
-                    frameworkNames = frameworkNames,
-                    frameworkGroups = frameworkGroups,
-                    hideCompacted = hideCompacted,
-                    onToggleHideCompacted = { agentViewModel.toggleHideCompacted() },
-                    hideArchived = hideArchived,
-                    onToggleHideArchived = { agentViewModel.toggleHideArchived() },
-                    onSelectSession = { record ->
-                        agentViewModel.switchToSession(record)
-                        close()
-                    },
-                    onDeleteSession = { agentViewModel.deleteSession(it) },
-                    onCompactSession = { agentViewModel.compactSession(it) },
-                    onNewSessionFor = { agentName, framework ->
-                        agentViewModel.newSessionFor(agentName, framework)
-                        close()
+                // v0.34.3 /plan UI: 右侧边栏 = 历史会话 (上) + 计划模式列表 (底部)
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f)) {
+                        HistorySidebar(
+                            localGroups = localGroups,
+                            frameworkNames = frameworkNames,
+                            frameworkGroups = frameworkGroups,
+                            hideCompacted = hideCompacted,
+                            onToggleHideCompacted = { agentViewModel.toggleHideCompacted() },
+                            hideArchived = hideArchived,
+                            onToggleHideArchived = { agentViewModel.toggleHideArchived() },
+                            onSelectSession = { record ->
+                                agentViewModel.switchToSession(record)
+                                close()
+                            },
+                            onDeleteSession = { agentViewModel.deleteSession(it) },
+                            onCompactSession = { agentViewModel.compactSession(it) },
+                            onNewSessionFor = { agentName, framework ->
+                                agentViewModel.newSessionFor(agentName, framework)
+                                close()
+                            }
+                        )
                     }
-                )
+                    com.mengpaw.shell.ui.components.PlanListSection()
+                }
             }
         )
     }

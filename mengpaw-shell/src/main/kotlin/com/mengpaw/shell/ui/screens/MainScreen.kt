@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mengpaw.shell.ui.components.MissionMonitorOverlay
 import com.mengpaw.shell.ui.components.NotifyBannerHost
+import com.mengpaw.shell.ui.components.PlanStatusRail
 import com.mengpaw.shell.ui.MAX_CONTENT_WIDTH
 import com.mengpaw.shell.ui.isWide
 import com.mengpaw.design.theme.ThemeColors
@@ -329,6 +330,11 @@ fun MainScreen(
                                 } // close inner Box wrapping LazyColumn
 
                             } // close Column
+
+                            // v0.34.3 /plan UI: 消息区右侧状态竖列 (隐藏侧边栏时可见)
+                            Box(Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
+                                PlanStatusRail(onOpen = { showRightSidebar = true })
+                            }
                     } // close Box wrapping LazyColumn
 
                     // Persistent right sidebar (tablet only) — 拆至 MainScreenSidebars.kt
