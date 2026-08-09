@@ -1054,6 +1054,8 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - 显示短码 = 设备标识尾 6 位 hex (xxx-xxx), 配对核对用; 对端缺省名称时显示短码
 - 旧哈希指纹条目 (16 hex) 发现时按 address 迁移清理
 
+**安全规则-框架信任列表修复 (v0.34.3)**: 原列表只读 `PromptFirewall.listTrusted()` (ACP 配对信任), 与框架通讯录信任 (`FrameworkPeerStore.trusted`, 侧边栏/`framework.trust` 操作的真实信任源) 脱节 — 侧边栏信任的框架不显示、无操作按钮、进入页面不刷新。修复: 列表以框架通讯录信任为准 (名称/地址/短码), 支持**撤销信任**; ACP 已配对设备作为次级展示, 支持**解除配对**; 展开时实时刷新。
+
 **per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
 
 

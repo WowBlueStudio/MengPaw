@@ -31,7 +31,18 @@ fun SecurityRulesSection(
     SectionHeader(strings.securityRules)
 
     var showTrusted by remember { mutableStateOf(false) }
-    val trustedPeers = remember { com.mengpaw.kernel.security.PromptFirewall.listTrusted() }
+    var trustVersion by remember { mutableStateOf(0) }
+    // v0.34.3 修复"未起效": 框架信任列表以 FrameworkPeerStore.trusted 为准
+    // (侧边栏/框架命令操作的真实信任源) — 此前只读 ACP 配对信任, 侧边栏信任的
+    // 框架不显示且无操作按钮。ACP 配对 (PromptFirewall) 作为次级展示。
+    val frameworkTrusted = remember(showTrusted, trustVersion) {
+        if (!showTrusted) emptyList()
+        else com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll().filter { it.trusted }
+    }
+    val acpTrusted = remember(showTrusted, trustVersion) {
+        if (!showTrusted) emptyList()
+        else com.mengpaw.kernel.security.PromptFirewall.listTrusted()
+    }
     Surface(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).clickable { showTrusted = !showTrusted },
         shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCard
@@ -42,28 +53,53 @@ fun SecurityRulesSection(
                 Spacer(Modifier.width(ArcoSpacing.sm))
                 Column(Modifier.weight(1f)) {
                     Text(strings.securityTrustedFramework, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                    Text(String.format(strings.securityTrustedCount, trustedPeers.size), fontSize = 12.sp, color = ThemeColors.textSecondary)
+                    Text(String.format(strings.securityTrustedCount, frameworkTrusted.size), fontSize = 12.sp, color = ThemeColors.textSecondary)
                 }
                 Icon(if (showTrusted) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp), tint = ThemeColors.textSecondary)
             }
             AnimatedVisibility(visible = showTrusted) {
                 Column(Modifier.padding(top = ArcoSpacing.sm)) {
-                    if (trustedPeers.isEmpty()) {
+                    if (frameworkTrusted.isEmpty() && acpTrusted.isEmpty()) {
                         Text(strings.securityNoTrusted, fontSize = 12.sp, color = ThemeColors.textSecondary)
                     } else {
-                        trustedPeers.forEach { peerId ->
-                            val fingerprint = remember(peerId) {
-                                try { java.io.File(com.mengpaw.kernel.DataPaths.ACP_TRUSTED, "$peerId.trusted").readText().take(16) } catch (e: Exception) { KernelLog.w("SecurityRules", "read fingerprint failed: ${e.message}"); "—" }
-                            }
+                        // ── 框架通讯录信任 (可撤销) ──
+                        frameworkTrusted.forEach { peer ->
                             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Outlined.Devices, null, Modifier.size(16.dp), tint = ArcoColors.Green6)
                                 Spacer(Modifier.width(ArcoSpacing.sm))
                                 Column(Modifier.weight(1f)) {
-                                    Text(peerId, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                                    Text(String.format(strings.securityFingerprint, fingerprint), fontSize = 11.sp, color = ThemeColors.textSecondary)
+                                    Text(peer.name, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                    Text("${peer.address}:${peer.port} · ${com.mengpaw.plugin.framework.FrameworkPeerStore.shortCodeOf(peer.fingerprint)}",
+                                        fontSize = 11.sp, color = ThemeColors.textSecondary)
                                 }
-                                Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green1) {
-                                    Text(strings.securityTrusted, Modifier.padding(horizontal = 6.dp, vertical = 1.dp), fontSize = 10.sp, color = ArcoColors.Green6)
+                                TextButton(onClick = {
+                                    com.mengpaw.plugin.framework.FrameworkPeerStore.save(peer.copy(trusted = false))
+                                    trustVersion++
+                                }) {
+                                    Text(if (strings.isChinese) "撤销" else "Untrust",
+                                        fontSize = 12.sp, color = ArcoColors.Red6)
+                                }
+                            }
+                        }
+                        // ── ACP 已配对设备 (次级, 可解除) ──
+                        if (acpTrusted.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(if (strings.isChinese) "ACP 已配对设备" else "ACP paired devices",
+                                fontSize = 11.sp, color = ThemeColors.textSecondary)
+                            acpTrusted.forEach { peerId ->
+                                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.Lock, null, Modifier.size(14.dp), tint = ArcoColors.Green6)
+                                    Spacer(Modifier.width(ArcoSpacing.sm))
+                                    Text(peerId, fontSize = 12.sp, color = ThemeColors.textPrimary,
+                                        modifier = Modifier.weight(1f), maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    TextButton(onClick = {
+                                        com.mengpaw.kernel.security.PromptFirewall.untrust(peerId)
+                                        trustVersion++
+                                    }) {
+                                        Text(if (strings.isChinese) "解除" else "Untrust",
+                                            fontSize = 12.sp, color = ArcoColors.Red6)
+                                    }
                                 }
                             }
                         }
