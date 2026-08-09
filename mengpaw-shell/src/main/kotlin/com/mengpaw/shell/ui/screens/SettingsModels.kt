@@ -100,10 +100,11 @@ enum class LoopMode(val label: String, val desc: String, val enLabel: String, va
         "Goal Mode", "Single goal, stops when done"),
     MISSION("Mission 模式", "建立临时子 Agent 分解任务链，逐步执行",
         "Mission Mode", "Decompose into subtask chain with temporary sub-agents"),
-    SWARM("火种模式", "星星之火，可以燎原：并行 Worker 协作，可按角色混合模型",
-        "Swarm Mode", "Parallel workers with role-based model routing"),
-    FLEET("步坦协同模式", "装甲集群推进+步兵协同清剿：多 Agent 编队协同，跨设备分布式执行复杂任务",
-        "Combined Arms Mode", "Multi-agent combined-arms coordination for distributed complex tasks")
+    // v0.34.3: 中文名带斜杠命令前缀 — 让 Loop 模式设置与 /Swarm /Fleet 直观关联
+    SWARM("Swarm 火种模式", "星星之火，可以燎原：并行 Worker 协作，可按角色混合模型 (/Swarm)",
+        "Swarm Mode", "Parallel workers with role-based model routing (/Swarm)"),
+    FLEET("Fleet 步坦协同模式", "装甲集群推进+步兵协同清剿：多 Agent 编队协同，跨设备分布式执行复杂任务 (/Fleet)",
+        "Fleet Mode", "Multi-agent combined-arms coordination for distributed complex tasks (/Fleet)")
 }
 
 /** 主题模式 — 亮色 / 暗色 / 跟随系统。 */
