@@ -48,6 +48,11 @@
 | 工具轮 | assistant | **Observation 块**（`Command: X\nResult: Y`，多条合并一条消息） |
 | 中断恢复 | user 前缀 | `buildInterruptedRecoveryBlock`（上轮中断时注入已完成工具摘要） |
 
+**系统提示词结构 (v0.34.3 变更)**：
+- **约束文档 brief 化 (P1-4 方案A)**：docsBlock 中 profile.md/agents.md/soul.md 不再全文注入，改为 frontmatter `summary` + `完整内容: agent.read <path>` 外链；memory.md 长期记忆保持全文注入。无 frontmatter 的旧文档取首行 300 字符兜底。
+- **缓存失效条件扩展**：除工作区文档 mtime / pinned 技能 / TEMPLATE_HASH / 进化数据指纹（failures.jsonl+commands.json）外，新增**触发器指纹**（全部触发器 id:type:enabled 拼接）——heartbeat/trumanshow 引导块按触发器注入，增删/启停触发器即时重建提示词。
+- **模板内容更新**：安全分级教学（普通/中危/高危 + reason 门禁）、记忆行为侧决策树（keep/record/project.save 按触发时机，中期只写不编辑）、交付纪律（先落盘→agent.ls 验证→再输出链接）、**系统完整性探针指令**（要求 Final Answer 末尾附 `<!--mok-->`）。
+
 关键事实：
 - **Observation 以 assistant 角色入库**（非 tool/user 角色）——`AgentEngine.kt:776`
 - **最终答案轮入库两条 assistant**：原始 ReAct 文本（`:643`）+ 纯答案（`:658`）
@@ -80,9 +85,12 @@ Action Input:
 ```text
 Thought: 信息齐全了。
 Final Answer: 你的电量是 85%……
+<!--mok-->   ← 探针标记 (v0.34.3, 模型遵循探针指令时附加)
 ```
 
 **非 ReAct 模型**（无任何标记的自然回复）→ 框架按最终答案处理。
+
+**探针标记处理 (v0.34.3, P0-2 ③)**：Final Answer 末尾的 `<!--mok-->` 在返回前剥离（不污染 UI/最终答案），原始 ReAct 文本仍含标记入库留痕；连续 5 轮失配 → KernelLog 告警（疑似第三方服务端篡改/剥离系统提示词）。单轮失配容忍（模型遵从性差异）。
 
 ## 4. parse 解析规则（`PromptEngine.kt:540`）
 
@@ -105,9 +113,10 @@ Final Answer: 你的电量是 85%……
 
 1. `actionList = parsed.actions`（去重：同命令同参数只执行一次——模型偶发重复输出同一 Action）
 2. 命令行 = `"${name} ${参数空格拼接}"`（JSON 参数双轨制：`ToolCall.paramFormatError()` 门卫——JSON 形态不被 CLI 误解析，命中即返回 PARAM_FORMAT_ERROR 不执行）
-3. `detectLoop`：同命令 5 次窗口重复 → 终止（安全命令豁免）
-4. 并行执行：`async(BACKGROUND) { withTimeout(60s) { pipeline.execute(cmd, context) } }`
-5. 超时 → `命令超时 (60s)…` 错误结果
+3. 门禁链 = reason 门禁（中危/高危需 JSON+reason）→ **安全分级 `RiskGate.evaluate`**（普通放行 / 中危按 Agent 权限等级 / 高危弹窗确认；`agent.write/mkdir` 写入工作区/输出目录外降级中危——写路径边界 v0.34.3）→ 来源黑名单 → 执行
+4. `detectLoop`：同命令 5 次窗口重复 → 终止（安全命令豁免）
+5. 并行执行：`async(BACKGROUND) { withTimeout(60s) { pipeline.execute(cmd, context) } }`
+6. 超时 → `命令超时 (60s)…` 错误结果
 
 ## 6. Observation 组装（框架写给 LLM 的"结果"）
 
@@ -116,6 +125,8 @@ Final Answer: 你的电量是 85%……
 | 成功 | `result.output`（命令原始输出文本） |
 | 失败 | `Error [错误码]: 错误文本`（错误码注入——PARAM_FORMAT_ERROR/NETWORK_OFFLINE/…，模型可见） |
 | 剪枝 | `toolResultManager.pruneToolResult`（长结果按预算截断，防上下文膨胀） |
+
+**框架级注入条目 (v0.34.3)**：除 untrusted 数据外，Observation 合并时可能追加框架级提醒（非包裹，直接可见）——攻击来源黑名单提醒（v0.34.1）、**主动行为告警**（`ProactiveBehaviorDetector` 连续 ≥4 条写/外联命令无读间隔，每会话一次，v0.34.3 P0-2 ①）。
 
 多 Action 批：每条 `Command: X\nResult: Y` 独立成段，**合并为一条 assistant 消息**入库（`\n\n` 分隔）；`onStep` 逐条回调（thought 只在第一条 Action 上携带，后续空——UI 渲染纯工具行防重复）。
 
@@ -128,6 +139,8 @@ Final Answer: 你的电量是 85%……
 | 命令循环（同命令 5 次） | 终止（LOOP_DETECTED） |
 | 50 步上限 | 自适应扩展至 1.5×（仍在产出时），最终强制收尾 |
 | 中断回合 | 恢复块注入（已完成工具摘要给下一轮 LLM） |
+| 主动行为异常 | 连续写/外联无读间隔 ≥4 → Observation 注入告警（只提示不阻断） |
+| 探针连续失配 | 连续 5 轮 Final Answer 无 `<!--mok-->` → 日志告警（疑似服务端篡改系统提示词） |
 
 ## 8. 各执行模式差异
 
