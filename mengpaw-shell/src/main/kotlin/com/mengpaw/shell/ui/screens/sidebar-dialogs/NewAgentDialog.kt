@@ -7,8 +7,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -41,29 +46,52 @@ fun NewAgentDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(strings.newAgentTitle, fontWeight = FontWeight.Bold) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = RoundedCornerShape(ArcoRadius.lg), color = ThemeColors.brandContainer,
+                    modifier = Modifier.size(40.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.PersonAdd, null, Modifier.size(22.dp), tint = ThemeColors.brand)
+                    }
+                }
+                Spacer(Modifier.width(ArcoSpacing.md))
+                Text(strings.newAgentTitle, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
+        },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(ArcoSpacing.md)) {
                 OutlinedTextField(value = name, onValueChange = { name = it; if (workspaceFolder.isBlank()) workspaceFolder = it },
                     label = { Text(strings.newAgentNameLabel) }, placeholder = { Text(strings.newAgentNamePlaceholder) },
-                    singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md))
+                    singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md),
+                    leadingIcon = { Icon(Icons.Outlined.PersonAdd, null, tint = ThemeColors.textSecondary) })
                 OutlinedTextField(value = workspaceFolder, onValueChange = { workspaceFolder = it },
                     label = { Text(strings.newAgentFolderLabel) }, placeholder = { Text(strings.newAgentFolderPlaceholder) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md),
-                    supportingText = { Text(String.format(strings.newAgentFolderHint, "${com.mengpaw.kernel.DataPaths.AGENTS}/${workspaceFolder.ifBlank { name }}"), fontSize = 10.sp, color = ThemeColors.textSecondary) })
+                    leadingIcon = { Icon(Icons.Outlined.FolderOpen, null, tint = ThemeColors.textSecondary) },
+                    supportingText = {
+                        val full = "${com.mengpaw.kernel.DataPaths.AGENTS}/${workspaceFolder.ifBlank { name }}"
+                        Text(String.format(strings.newAgentFolderHint, full.replaceFirst(Regex("^/data/data/"), "./")),
+                            fontSize = 10.sp, color = ThemeColors.textSecondary)
+                    })
                 OutlinedTextField(value = intro, onValueChange = { intro = it },
                     label = { Text(strings.newAgentIntroLabel) }, placeholder = { Text(strings.newAgentIntroPlaceholder) },
-                    minLines = 2, maxLines = 4, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md))
+                    minLines = 3, maxLines = 5, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(ArcoRadius.md),
+                    leadingIcon = { Icon(Icons.Outlined.Description, null, tint = ThemeColors.textSecondary) })
             }
         },
         confirmButton = {
-            Button(
-                // P1 修复: workspaceFolder 可能含路径分隔符/穿越段 — 保存前消毒
-                onClick = { if (name.isNotBlank()) onConfirm(NewAgentForm(name = name.trim(), workspaceFolder = sanitizeFolderName(workspaceFolder.ifBlank { name }), intro = intro.trim())) },
-                enabled = name.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
-                shape = RoundedCornerShape(ArcoRadius.md)
-            ) { Text(strings.newAgentCreate, color = Color.White) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(strings.cancel) } }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onDismiss) { Text(strings.cancel) }
+                Spacer(Modifier.weight(1f))
+                Button(
+                    // P1 修复: workspaceFolder 可能含路径分隔符/穿越段 — 保存前消毒
+                    onClick = { if (name.isNotBlank()) onConfirm(NewAgentForm(name = name.trim(), workspaceFolder = sanitizeFolderName(workspaceFolder.ifBlank { name }), intro = intro.trim())) },
+                    enabled = name.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = ThemeColors.brand),
+                    shape = RoundedCornerShape(ArcoRadius.md),
+                    contentPadding = PaddingValues(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.sm)
+                ) { Text(strings.newAgentCreate, color = Color.White) }
+            }
+        }
     )
 }
