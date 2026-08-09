@@ -81,6 +81,16 @@ private fun AppRootContent(
         return
     }
 
+    // v0.35.1: 输出目录授权引导 — Android 11+ 未授权 (公共 /MengPaw/ 不可写) 时启动即弹;
+    // 授权返回后 onResume refreshOutput 切公共目录, 轮询检测到已满足条件自动关闭
+    var showOutputPrompt by remember { mutableStateOf(needsOutputPermission()) }
+    LaunchedEffect(Unit) {
+        while (showOutputPrompt && needsOutputPermission()) {
+            kotlinx.coroutines.delay(1000)
+        }
+        showOutputPrompt = false
+    }
+
     // ── 全局返回手势：逐层回退，主页再退到后台 ──
     val overlayActive = showSettings || showPlugins || showLicense || showAttribution
     BackHandler(enabled = overlayActive) {
@@ -245,6 +255,11 @@ private fun AppRootContent(
                 }
             }
         )
+
+        // ── 输出目录授权引导 (全屏最上层) ──
+        if (showOutputPrompt) {
+            OutputPermissionPrompt(onDismiss = { showOutputPrompt = false })
+        }
     }
 
     // ── Pre-computed settings data (设置页六类列表 → AppRootSettingsItems.kt) ──

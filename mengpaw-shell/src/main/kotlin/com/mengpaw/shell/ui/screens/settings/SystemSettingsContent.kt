@@ -26,6 +26,7 @@ import com.mengpaw.shell.ui.components.TokenLineChart
 import com.mengpaw.shell.ui.components.TokenStatsCollector
 import com.mengpaw.shell.ui.components.formatTokenCount
 import com.mengpaw.design.components.SectionHeader
+import kotlinx.coroutines.delay
 
 @Composable
 fun SystemSettingsContent(
@@ -133,7 +134,15 @@ fun SystemSettingsContent(
 
     // ── 输出目录 (v0.34.3): 公共 /storage/emulated/0/MengPaw/ 用户可见;
     //    未授权时引导跳转"所有文件访问"设置页 (MANAGE_EXTERNAL_STORAGE) ──
-    val outDir = java.io.File(com.mengpaw.kernel.DataPaths.OUTPUT)
+    // v0.35.1: 轮询刷新 — 授权返回 (MainActivity.onResume refreshOutput) 后实时更新显示
+    var outPath by remember { mutableStateOf(com.mengpaw.kernel.DataPaths.OUTPUT) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            outPath = com.mengpaw.kernel.DataPaths.OUTPUT
+            delay(2000)
+        }
+    }
+    val outDir = java.io.File(outPath)
     val outWritable = outDir.canWrite()
     Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
         Icon(if (outWritable) Icons.Outlined.FolderOpen else Icons.Outlined.Warning,
@@ -141,7 +150,7 @@ fun SystemSettingsContent(
         Spacer(Modifier.width(ArcoSpacing.md))
         Column(Modifier.weight(1f)) {
             Text("输出目录", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-            Text(com.mengpaw.kernel.DataPaths.OUTPUT,
+            Text(outPath,
                 style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (!outWritable) {

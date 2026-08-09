@@ -60,6 +60,11 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         com.mengpaw.core.namespace.SysExecutor.setActivity(this)
+        // v0.35.1: 从『所有文件访问』授权页返回后重新探测输出目录 —
+        // 启动时未授权回退私有 Android/data/..., 授权后实时切到公共 /MengPaw/
+        try {
+            com.mengpaw.core.DataPathsInitializer.refreshOutput(this)
+        } catch (_: Exception) {}
     }
 
     /** Clear Activity reference to prevent leaks. */
