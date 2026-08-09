@@ -65,6 +65,8 @@ class MemoryTwinPlugin : Plugin {
         @Volatile var agentName: String = "MengPaw"
         @Volatile var acpServer: AcpServer? = null
         @Volatile var acpTransport: AcpTransport? = null
+        /** 当前注册在共享 AcpHolder.server 上的孪生 handler (v0.35.4 共享 server 后防重复注册)。 */
+        @Volatile var twinAcpHandler: TwinAcpHandler? = null
         @Volatile var twinProfile: com.mengpaw.kernel.agent.AgentProfile? = null
         @Volatile var agentEngine: com.mengpaw.kernel.AgentEngine? = null
         /** MainActivity 激活时创建的 engine — cmdStart 复用, 避免双引擎 (v0.22.0 债务修复)。 */

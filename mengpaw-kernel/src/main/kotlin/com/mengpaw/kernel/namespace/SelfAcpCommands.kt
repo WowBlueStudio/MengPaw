@@ -23,10 +23,8 @@ internal class SelfAcpCommands {
 
     private val ACP_SUBCOMMANDS: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         "start" to { _, _ ->
-            val transport = com.mengpaw.kernel.acp.AcpHttpTransport(AcpHolder.server)
-            AcpHolder.transport = transport
-            AcpHolder.server.registerTransport(transport)
-            transport.startListener()
+            // v0.35.4: 复用 AcpHolder.ensureListening — 与框架配对/孪生共享同一监听
+            AcpHolder.ensureListening()
             ExecutionResult.ok("ACP 已启动，端口 ${com.mengpaw.kernel.ports.Ports.ACP}。其他设备可通过 self.acp discover 发现本设备。")
         },
         "stop" to { _, _ ->

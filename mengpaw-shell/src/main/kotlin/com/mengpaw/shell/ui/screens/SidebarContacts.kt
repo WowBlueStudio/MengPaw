@@ -60,22 +60,7 @@ internal fun loadFrameworkContacts(): List<FrameworkContact> {
             ))
         }
     }
-    // v0.34.3: 合并发现结果 (未入册, discovered=true) — 发现即入册已取消, 用户确认后添加
-    com.mengpaw.plugin.framework.FrameworkDiscovery.instance?.discoveredPeers?.toList()?.forEach { peer ->
-        if (contacts.none { it.name == peer.name && it.address == "${peer.address}:${peer.port}" }) {
-            contacts.add(FrameworkContact(
-                name = peer.name,
-                address = "${peer.address}:${peer.port}",
-                online = peer.lastSeen > System.currentTimeMillis() - 120_000,
-                trusted = peer.trusted,
-                agents = peer.agents,
-                version = peer.version,
-                frameworkName = peer.frameworkName,
-                frameworkType = peer.frameworkType,
-                fingerprint = peer.fingerprint,
-                discovered = true
-            ))
-        }
-    }
+    // v0.35.4 修复 (用户反馈): 通讯录列表不再合并未入册的 mDNS 发现节点 —
+    // 未添加的项目只出现在"添加框架"页面的局域网扫描列表, 用户确认后入册
     return contacts
 }

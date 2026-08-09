@@ -132,6 +132,9 @@ class FrameworkPlugin : Plugin {
             pairHandler?.let {
                 com.mengpaw.kernel.namespace.AcpHolder.server.registerHandler(it)
             }
+            // v0.35.4 修复: 确保 ACP 端口在监听 — 此前只有手动 self.acp start 才接收
+            // 配对请求, 对端"添加"后本机收不到弹窗/红点
+            com.mengpaw.kernel.namespace.AcpHolder.ensureListening()
         } catch (e: Exception) {
             com.mengpaw.kernel.KernelLog.w("FrameworkPlugin", "register pair handler failed: ${e.message}")
         }

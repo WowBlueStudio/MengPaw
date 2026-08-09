@@ -13,4 +13,18 @@ object AcpHolder {
         sharedSecret = "acp-default-require-derive-key-for-production"
     )
     var transport: com.mengpaw.kernel.acp.AcpHttpTransport? = null
+
+    /**
+     * 确保 ACP 端口在监听 (v0.35.4): 框架配对 handler 注册在 [server] 上,
+     * 此前只有手动 `self.acp start` 才创建 transport — 对端收不到配对请求。
+     * 幂等: 已有监听则直接复用; 端口被占用时 startListener 内部静默失败。
+     */
+    fun ensureListening(): com.mengpaw.kernel.acp.AcpHttpTransport {
+        transport?.let { if (it.isConnected()) return it }
+        val t = com.mengpaw.kernel.acp.AcpHttpTransport(server, com.mengpaw.kernel.ports.Ports.ACP)
+        server.registerTransport(t)
+        transport = t
+        t.startListener()
+        return t
+    }
 }

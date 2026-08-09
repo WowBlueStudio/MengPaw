@@ -375,6 +375,10 @@ class AppStrings {
     var pairClearProcessed: String = ""
     var pairManualAdd: String = ""
     var pairAddedLocal: String = ""
+    var frameworkPairRequestTitle: String = ""
+    var pairRequestBody: String = ""
+    var pairRequestHint: String = ""
+    var pairRequestLater: String = ""
     // v0.35.2 审查: 气泡图标操作行 / 输出目录区块 / 安全分级面板 / 权限引导 / 名片标签
     var bubbleCopy: String = ""
     var bubbleBigBang: String = ""

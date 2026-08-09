@@ -22,8 +22,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.design.theme.ThemeColors
+import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.shell.ui.localization.AppStrings
 import java.io.File
@@ -72,6 +75,29 @@ fun SidebarContent(
     var cardAgentName by remember { mutableStateOf<String?>(null) }
     // v0.35.4: 名片直接持联系人 — 手机端 ACP 配对未入册的框架也能正确显示信任按钮
     var cardFramework by remember { mutableStateOf<FrameworkContact?>(null) }
+
+    // ── 框架配对请求弹窗 (v0.35.4) — 收到 FRAMEWORK_PAIR_REQUEST 时提醒用户 ──
+    var incomingPairRequest by remember { mutableStateOf<com.mengpaw.plugin.framework.FrameworkPairStore.PairRequest?>(null) }
+    val knownPendingIds = remember { mutableStateOf<Set<String>>(emptySet()) }
+    val pairScope = rememberCoroutineScope()
+    DisposableEffect(Unit) {
+        val listener: () -> Unit = {
+            val pending = com.mengpaw.plugin.framework.FrameworkPairStore.pending()
+            val newIds = pending.map { it.requestId }.toSet() - knownPendingIds.value
+            knownPendingIds.value = pending.map { it.requestId }.toSet()
+            // 已处理 (同意/拒绝) 的请求自动收起弹窗
+            incomingPairRequest?.let { cur ->
+                if (pending.none { it.requestId == cur.requestId }) incomingPairRequest = null
+            }
+            // 仅对新到达的请求弹窗 (App 重启后的历史 pending 不弹)
+            if (newIds.isNotEmpty() && incomingPairRequest == null) {
+                incomingPairRequest = pending.firstOrNull { it.requestId in newIds }
+            }
+        }
+        listener()
+        com.mengpaw.plugin.framework.FrameworkPairStore.addListener(listener)
+        onDispose { com.mengpaw.plugin.framework.FrameworkPairStore.removeListener(listener) }
+    }
 
     // ── New Agent dialog state ──
     var showNewAgentDialog by remember { mutableStateOf(false) }
@@ -201,6 +227,45 @@ fun SidebarContent(
             framework = contact,
             onDismiss = { cardFramework = null }
         )
+    }
+
+    // ── 收到框架配对请求 → 弹窗 (添加框架页面打开时不弹, 请求已在列表内) ──
+    incomingPairRequest?.let { req ->
+        if (!showAddFramework) {
+            AlertDialog(
+                onDismissRequest = { incomingPairRequest = null },
+                title = { Text(strings.frameworkPairRequestTitle, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text(String.format(strings.pairRequestBody, req.fromName),
+                            style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                        Spacer(Modifier.height(8.dp))
+                        Text("${req.fromAddress}:${req.fromPort} · ${com.mengpaw.plugin.framework.FrameworkPeerStore.shortCodeOf(req.fromFingerprint)}",
+                            style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                        Spacer(Modifier.height(8.dp))
+                        Text(strings.pairRequestHint,
+                            style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val r = req
+                        pairScope.launch(Dispatchers.IO) { com.mengpaw.plugin.framework.FrameworkPairEngine.accept(r) }
+                        incomingPairRequest = null
+                    }) { Text(strings.pairAccept, color = ThemeColors.brand, fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = { incomingPairRequest = null }) { Text(strings.pairRequestLater) }
+                        TextButton(onClick = {
+                            val r = req
+                            pairScope.launch(Dispatchers.IO) { com.mengpaw.plugin.framework.FrameworkPairEngine.decline(r) }
+                            incomingPairRequest = null
+                        }) { Text(strings.pairDecline, color = ArcoColors.Red6) }
+                    }
+                }
+            )
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════

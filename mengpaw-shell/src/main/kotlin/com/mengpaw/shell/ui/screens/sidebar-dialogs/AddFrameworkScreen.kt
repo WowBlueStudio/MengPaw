@@ -71,14 +71,7 @@ fun AddFrameworkScreen(strings: AppStrings, onDismiss: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(max = 480.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // ── 居中类型图标 + 标题 (名片风格) ──
-                Surface(shape = RoundedCornerShape(ArcoRadius.lg), color = ThemeColors.brandContainer,
-                    modifier = Modifier.size(64.dp)) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Outlined.DeviceHub, null, Modifier.size(30.dp), tint = ThemeColors.brand)
-                    }
-                }
-                Spacer(Modifier.height(ArcoSpacing.sm))
+                // v0.35.4 修复: 去掉居中大图标 (用户: 添加页面不应有头像) — 仅保留标题
                 Text(strings.addFrameworkTitle, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
                     color = ThemeColors.textPrimary)
                 Spacer(Modifier.height(ArcoSpacing.lg))
@@ -201,13 +194,16 @@ fun AddFrameworkScreen(strings: AppStrings, onDismiss: () -> Unit) {
                     }
                 }
 
-                if (feedback.isNotBlank()) {
-                    Spacer(Modifier.height(ArcoSpacing.sm))
-                    Text(feedback, fontSize = 12.sp, color = ThemeColors.brand)
-                }
             }
         },
-        confirmButton = {}
+        confirmButton = {
+            // v0.35.4 修复: 发送反馈固定显示在底部按钮区 — 此前在滚动区底部,
+            // 内容超高时用户看不到"已发送/发送失败", 误以为按钮没反应
+            if (feedback.isNotBlank()) {
+                Text(feedback, fontSize = 12.sp, color = ThemeColors.brand,
+                    modifier = Modifier.fillMaxWidth(), maxLines = 2)
+            }
+        }
     )
 }
 

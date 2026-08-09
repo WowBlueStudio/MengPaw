@@ -63,16 +63,28 @@ internal suspend fun installAndActivateTwin(context: android.content.Context, na
 /** 启动 ACP 服务 + 注册 TwinAcpHandler (接收配对请求) — internal: MainActivity.autoRestoreTwinIfNeeded 也调用 */
 internal suspend fun startAcpForTwin(ctx: android.content.Context, agentName: String) {
     try {
+        // v0.35.4 修复: 与框架配对共用 AcpHolder.server — FrameworkPairHandler 注册在
+        // 同一 server 上, 否则实际监听 9876 的独立孪生 server 收不到 FRAMEWORK_PAIR_*
+        val server = com.mengpaw.kernel.namespace.AcpHolder.server
         val profile = com.mengpaw.kernel.agent.AgentProfile.load(agentName)
-        // SECURITY: Derive shared secret from device fingerprint for baseline auth
+        server.updateProfile(profile)
+
+        // 幂等: 同 agent 重复激活 (autoRestore + 用户激活) 直接复用, 不重复注册 handler
+        val existingEngine = com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.activeEngine
+        if (existingEngine != null &&
+            com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.agentName == agentName &&
+            com.mengpaw.kernel.namespace.AcpHolder.transport?.isConnected() == true
+        ) {
+            android.util.Log.i("MengPawTwin", "孪生已激活, 复用现有 ACP 服务")
+            return
+        }
+        // 切换 agent 重建: 先停旧自动同步 + 摘除旧 handler
+        existingEngine?.stopAutoSync()
+        com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.twinAcpHandler?.let { server.unregisterHandler(it) }
+
+        // SECURITY: 设备指纹用于孪生身份 (密钥派生在配对流程, server 认证走 AcpCrypto)
         val deviceFingerprint = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() } catch (_: Exception) { "device-${System.currentTimeMillis()}" }
-        val sharedSecret = java.security.MessageDigest.getInstance("SHA-256")
-            .digest("twin:$deviceFingerprint:$agentName".toByteArray())
-            // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
-            .joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
-        val server = com.mengpaw.kernel.acp.AcpServer(profile, com.mengpaw.kernel.ports.Ports.ACP, sharedSecret)
-        val transport = com.mengpaw.kernel.acp.AcpHttpTransport(server, com.mengpaw.kernel.ports.Ports.ACP)
-        server.registerTransport(transport)
+        val transport = com.mengpaw.kernel.namespace.AcpHolder.ensureListening()
 
         // 注册 TwinAcpHandler — 处理 CAPABILITY_ANNOUNCE 等孪生消息
         val syncEngine = com.mengpaw.plugin.memorytwin.TwinSyncEngine(
@@ -81,6 +93,7 @@ internal suspend fun startAcpForTwin(ctx: android.content.Context, agentName: St
             deviceName = android.os.Build.MODEL ?: "Android")
         val handler = com.mengpaw.plugin.memorytwin.TwinAcpHandler(syncEngine)
         server.registerHandler(handler)
+        com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.twinAcpHandler = handler
 
         // ── MCP-over-ACP 桥 (协议升级: 远程 MCP 调用走配对加密通道) ──
         try {
@@ -110,7 +123,6 @@ internal suspend fun startAcpForTwin(ctx: android.content.Context, agentName: St
         })
         android.util.Log.i("MengPawTwin", "已注册 + 自动同步 + ${frameworkPeers.size} 个节点")
 
-        transport.startListener()
         com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpServer = server
         com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.acpTransport = transport
         com.mengpaw.plugin.memorytwin.MemoryTwinPlugin.twinProfile = profile

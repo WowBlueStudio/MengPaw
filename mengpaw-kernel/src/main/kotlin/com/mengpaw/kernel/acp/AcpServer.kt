@@ -31,7 +31,7 @@ private fun java.io.File.atomicWriteText(text: String) {
 }
 
 class AcpServer(
-    private val profile: AgentProfile,
+    private var profile: AgentProfile,
     private val port: Int = Ports.ACP,
     /** Shared secret for peer authentication. Must be set to enable secure pairing.
      *  Use AcpCrypto.deriveKey() to generate this from paired device fingerprints. */
@@ -45,6 +45,14 @@ class AcpServer(
                 "WARNING: ACP sharedSecret is empty — device-to-device authentication is DISABLED. " +
                 "Set a shared secret via AcpServer(profile, secret=\"your-secret\") to enable peer auth.")
         }
+    }
+
+    /**
+     * 更新会话 profile (v0.35.4): 孪生/框架共用 AcpHolder.server 后,
+     * 激活/切换 agent 时更新 DISCOVER 响应与 delegate/share 消息的来源身份。
+     */
+    fun updateProfile(newProfile: AgentProfile) {
+        profile = newProfile
     }
     // 并发安全: handleMessage 可被多协程/多 transport 并发调用 —
     // peers 用 ConcurrentHashMap ([] 操作符/values 快照均可用), handlers 用 CopyOnWriteArrayList 快照遍历
@@ -86,6 +94,9 @@ class AcpServer(
     /** Enable MCP-over-ACP bridge. Must be called after McpServer is initialized. */
     fun enableMcpBridge(mcpServer: com.mengpaw.kernel.mcp.McpServer) {
         val bridge = McpOverAcpBridge(mcpServer)
+        // v0.35.4: 共享 server 后可能重复激活 — 旧 bridge 先移除, 避免 handler 重复
+        mcpBridge?.let { handlers.remove(it) }
+        handlers.remove(bridge)
         mcpBridge = bridge
         handlers.add(bridge)
     }
