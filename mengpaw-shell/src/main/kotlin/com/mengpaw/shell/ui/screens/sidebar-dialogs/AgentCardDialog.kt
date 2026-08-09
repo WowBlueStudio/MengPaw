@@ -36,8 +36,8 @@ fun AgentCardDialog(
 ) {
     val agentDir = File(com.mengpaw.kernel.DataPaths.AGENTS, agentName)
     val workspacePath = agentDir.absolutePath
-    // v0.35.1: 显示短路径 — 去掉 BASE 前缀 (如 "Agent文档/MengPaw"), 非 BASE 下保留原样
-    val shortWorkspace = workspacePath.removePrefix(com.mengpaw.kernel.DataPaths.BASE + "/")
+    // v0.35.1: 短路径 — 从 ./com.mengpaw.shell/ 开始 (如 ./com.mengpaw.shell/files/Agent文档/MengPaw)
+    val shortWorkspace = workspacePath.replaceFirst(Regex("^/data/data/"), "./")
 
     val profile = remember(agentName) { AgentProfile.load(agentName) }
     var editName by remember { mutableStateOf(profile.name.ifBlank { agentName }) }
