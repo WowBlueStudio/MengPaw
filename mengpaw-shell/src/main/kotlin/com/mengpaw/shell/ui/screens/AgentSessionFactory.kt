@@ -139,7 +139,6 @@ class AgentSessionFactory(
             it.setAgentLanguage(globalAgentLang)
             it.configureCacheStrategy(globalEndpoint)
             // FIX(自检报告 P0-2): 预热 CLI.md — 幂等 (插件活跃数比对, 配置反复 apply 不重复写盘)
-            it.ensureCliDoc()
             engineRef[0] = it  // postMw 延迟读引擎折叠档位（P2 修复）
         }
 

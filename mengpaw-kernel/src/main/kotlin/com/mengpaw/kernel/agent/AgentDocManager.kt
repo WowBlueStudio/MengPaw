@@ -16,15 +16,13 @@ import java.io.File
  *   ├── Soul.md        # Style & execution mode
  *   ├── Profile.md     # Identity & relationships
  *   ├── memory/        # Single-track memory: memory.md (long) + memory_{date}.md (mid) + project_*_memory.md
- *   └── CLI.md         # Auto-generated command reference
  *
- * CLI.md 生成已拆至 [CliDocGenerator], 命令描述表拆至 [AgentCliDocTables]
- * (400 行文件拆分)。
+ * v0.34.3: CLI.md 工作区文档删除 — 命令发现走 self.tools/self.search, agent.cli 为指引。
  */
 class AgentDocManager(
     agentId: String = "agent-001",
     private val baseDir: String = com.mengpaw.kernel.DataPaths.AGENTS,
-    /** Plugin manager for CLI doc generation. Can be set after construction. */
+    /** Plugin manager (供 AgentExecutor 注入命令键集等). */
     @Volatile var pluginManager: PluginManager? = null
 ) {
     // FIX(自检报告 P0-2): 原硬编码 "agent-001" — 模板写入 {AGENTS}/{name}/ 而命令层读
@@ -40,52 +38,10 @@ class AgentDocManager(
     @Volatile
     var registeredAgentCommands: List<String> = emptyList()
 
-    /** CLI.md 生成器 (拆自本类)。 */
-    private val cliDocGenerator = CliDocGenerator(this)
-
     internal val agentDir: File get() = File(baseDir, agentId)
 
     /** 将文档系统绑定到指定 Agent 工作区目录（生产会话在 setAgentIdentity 时调用）。 */
     fun bindAgent(agentName: String) { agentId = agentName }
-
-    /**
-     * CLI.md 是否缺失/过期 — 比对文件头 "活跃插件: N" 与"命令指纹"。
-     * 插件 install/disable 改变 activeCount 后下次查询即自愈, 零写开销。
-     * 命令集指纹 (v0.34.0): 新增/删除命令也触发重生成 — 此前仅比活跃插件数,
-     * 插件数不变时命令集变更 (如新增 agent.audit) 永不反映到文档, Agent 读到
-     * 陈旧 CLI.md 会误判"命令未注册" (巡检 P1/P4① 根因)。旧文件无指纹 → 强制重生成一次。
-     */
-    fun cliDocStale(pluginManager: PluginManager?): Boolean {
-        val f = file(AgentDocType.CLI)
-        if (!f.exists()) return true
-        if (pluginManager == null) return false
-        val header = try { f.readText().take(200) } catch (_: Exception) { return true }
-        val stored = Regex("活跃插件:\\s*(\\d+)").find(header)?.groupValues?.get(1)?.toIntOrNull()
-        if (stored == null || stored != pluginManager.activeCount()) return true
-        val storedFp = Regex("命令指纹:\\s*([0-9a-f]+)").find(header)?.groupValues?.get(1)
-        return storedFp == null || storedFp != commandFingerprint(pluginManager)
-    }
-
-    /**
-     * 命令集指纹 — agent.* 命令键 + self.* 命令键 + security.* 命令键 + 活跃插件数 的 MD5 前缀。
-     * 生成与比对共用此函数 (CliDocGenerator 写头, cliDocStale 验证), 永不漂移。
-     * security 键必入 seed — 新命名空间漏进 seed 会导致 CLI.md 永不重生成 (v0.34.1 教训)。
-     */
-    internal fun commandFingerprint(pluginManager: PluginManager): String {
-        val seed = registeredAgentCommands.joinToString(",") + "|" +
-            com.mengpaw.kernel.namespace.SelfExecutor.commands.keys.sorted().joinToString(",") + "|" +
-            com.mengpaw.kernel.namespace.SecurityExecutor.commands.keys.sorted().joinToString(",") + "|" +
-            pluginManager.activeCount()
-        val md = java.security.MessageDigest.getInstance("MD5")
-        return md.digest(seed.toByteArray())
-            .joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }.take(16)
-    }
-
-    /** 预热 CLI.md — 幂等 (计数比对, 配置反复 apply 不重复写盘)。 */
-    fun ensureCliDoc() {
-        val pm = pluginManager
-        if (pm != null && cliDocStale(pm)) regenerateCliDoc(pm)
-    }
 
     // ── Initialization ────────────────────────────────────────────────
 
@@ -102,9 +58,6 @@ class AgentDocManager(
             ErrorCollector.report(e, "AgentDocManager.initAgentDocs")
         }
 
-        // CLI.md — always regenerate from active plugin list (skip if no plugin manager yet)
-        val pm = pluginManager
-        if (pm != null) regenerateCliDoc(pm)
     }
 
     // ── Read ──────────────────────────────────────────────────────────
@@ -167,11 +120,8 @@ class AgentDocManager(
     }
 
     // ── CLI reference ─────────────────────────────────────────────────
-
-    /** Regenerate CLI.md — Agent's primary command reference with permission guides & tutorials. */
-    fun regenerateCliDoc(pluginManager: PluginManager) {
-        cliDocGenerator.regenerateCliDoc(pluginManager)
-    }
+    // v0.34.3: CLI.md 工作区文档删除 — 命令发现走 self.tools/self.search,
+    // agent.cli 为轻量指引 (CliDocGenerator 一并移除)
 
     // ── Internal helpers ──────────────────────────────────────────────
 
@@ -180,8 +130,8 @@ class AgentDocManager(
     // ── Default document templates ────────────────────────────────────
 
     companion object {
-        // v0.34.3 P2-8: SELF/PLUGIN/AGENT/SECURITY 命令表删除 —
-        // CLI.md 从 CommandSearch (BuiltinCommandIndex 单一数据源) 动态生成。
+        // v0.34.3: SELF/PLUGIN/AGENT/SECURITY 命令表删除 (P2-8 单一数据源),
+        // CLI.md 工作区文档整体移除 — 命令发现走 self.tools/self.search。
 
         /** 浏览器协作能力 — readable by Agent via CLI (v0.22.1 重写: 真实三通道, 移除未接线的 45 命令手册). */
         val BROWSER_TOOLS_MD = AgentCliDocTables.BROWSER_TOOLS_MD

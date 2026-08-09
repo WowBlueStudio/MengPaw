@@ -171,12 +171,16 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     }
 
     private suspend fun cli(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        // FIX(自检报告 P0-2): 惰性生成 — CLI.md 缺失或插件活跃数变化时自动重生成,
-        // 插件 install/disable 后下次查询即拿到最新表, 不依赖任何插件变更钩子。
-        val pm = docManager.pluginManager
-        if (pm != null && docManager.cliDocStale(pm)) docManager.regenerateCliDoc(pm)
-        val cliDoc = docManager.getDoc(AgentDocType.CLI)
-        return ExecutionResult.ok(cliDoc.ifEmpty { "(CLI.md 尚未生成 — 插件系统未就绪)" })
+        // v0.34.3: CLI.md 工作区文档删除 — 命令发现走 self.tools/self.search,
+        // agent.cli 保留为轻量指引入口 (22KB 全表不再每轮负担)。
+        return ExecutionResult.ok(
+            "## 命令发现指引 (v0.34.3, CLI.md 已移除)\n\n" +
+            "- 完整命令列表: self.tools [命名空间]\n" +
+            "- 自然语言搜索: self.search <描述> [--top N]\n" +
+            "- 端口参考: self.ports\n\n" +
+            "**参数纯净规则**: 路径/名称/URL/时间戳参数必须是单个参数, 禁止附加描述文本; 含空格用引号包裹。\n" +
+            "**安全分级**: 普通放行 / 中危需信任权限 / 高危弹窗确认 (JSON+reason)。"
+        )
     }
 
     private suspend fun profile(args: List<String>, ctx: ExecutionContext): ExecutionResult {

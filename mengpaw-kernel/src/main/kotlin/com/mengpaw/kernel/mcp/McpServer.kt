@@ -43,7 +43,6 @@ class McpServer(private val pluginManager: PluginManager) {
         val res = mutableListOf(
             McpResource("agents://docs/Agents.md", "Agent 安全规则", "模型安全行为约束", "text/markdown"),
             McpResource("agents://docs/Soul.md", "Agent 灵魂设定", "执行风格与模式", "text/markdown"),
-            McpResource("agents://docs/CLI.md", "CLI 命令参考", "框架与插件命令", "text/markdown"),
             McpResource("memory://index", "记忆索引", "被动查询记忆索引", "application/json")
         )
         resourceProviders.forEach { res.addAll(it.getResources()) }

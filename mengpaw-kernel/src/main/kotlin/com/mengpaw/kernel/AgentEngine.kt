@@ -252,9 +252,6 @@ class AgentEngine(
      * 预热 CLI.md — 幂等 (插件活跃数比对, 配置反复 apply 不重复写盘)。
      * 会话创建时调用, 使 CLI.md 在会话就绪时已落盘 (agent.cli / agent.read cli.md 即见)。
      */
-    fun ensureCliDoc() {
-        try { agentDocManager.ensureCliDoc() } catch (_: Exception) {}
-    }
 
     private fun rebuildSystemPrompt() {
         runtime.resetCompactState()

@@ -89,9 +89,9 @@ object BuiltinCommandIndex {
         idx("agent.docs", "列出 Agent 工作区的所有文档文件 (Soul/Agents/Memory/Boost/Profile)", "agent.docs",
             listOf("文档", "工作区", "文件", "列表", "所有", "Soul", "Profile", "Agents"),
             listOf("docs", "documents", "workspace", "files", "list", "soul", "profile"))
-        idx("agent.cli", "查看 Agent 所有可用命令的完整参考手册", "agent.cli",
-            listOf("CLI", "命令", "手册", "参考", "帮助", "文档"),
-            listOf("CLI", "command", "manual", "reference", "help"))
+        idx("agent.cli", "命令发现指引 (CLI.md 已移除 — 完整命令用 self.tools / self.search)", "agent.cli",
+            listOf("CLI", "命令", "指引", "参考", "帮助", "文档"),
+            listOf("CLI", "command", "guide", "reference", "help"))
         idx("agent.profile", "查看 Agent 身份档案 (名称/角色/偏好)", "agent.profile",
             listOf("档案", "身份", "Profile", "角色", "偏好", "介绍"),
             listOf("profile", "identity", "role", "preference", "intro"))
@@ -202,7 +202,7 @@ object BuiltinCommandIndex {
             listOf("梦境", "整理", "压缩", "归档", "分析", "回顾", "Dream", "记忆管理"),
             listOf("dream", "compress", "archive", "analyze", "review", "organize", "memory"),
             group = "memory.core")
-        idx("agent.cleanup", "清理过期文件 (30 天旧截图/收件箱/临时文件)", "agent.cleanup",
+        idx("agent.cleanup", "清理过期文件 (3 天以上旧截图原图 / 30 天以上收件箱)", "agent.cleanup [--dry-run]",
             listOf("清理", "删除", "过期", "临时", "空间", "释放", "Cleanup"),
             listOf("cleanup", "clean", "delete", "purge", "free space", "temp"))
         idx("agent.storage", "查看工作区存储占用和限额", "agent.storage",

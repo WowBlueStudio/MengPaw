@@ -89,13 +89,11 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 **命令搜索索引 (BM25) 机制 (v0.31.0 修复脱节)**: `CommandSearch` 索引 = `BuiltinCommandIndex` 静态种子 (~150 条精编中英同义词) + `PluginManager.registerSearchIndex` 动态条目 (插件激活) + `SysExecutor` 初始化补种 (50 条 sys.* 命令带中文同义词表, kernel 种子无法覆盖 Android 反射实现)。**可用性由 self.search 按真实注册表 (CommandRegistry.has) 过滤** — 种子命中但执行器不存在的命令 (插件未安装/停用) 不外泄, 过滤后不足时从候选中补足; 插件激活即恢复可搜, 无需动索引本身 (避免 removeByNamespace 破坏精编种子)。**中文整词组查询** (v0.31.0): 中文无空格分词, 自然语言词组 ("批量验证"/"添加日历事件") 整词作 token 此前 score=0 完全漏配 (自检报告 "日历/屏幕/录音" 搜不到 sys.* 的深层根因), 现对 3+ 字 CJK token 追加字符级双字滑动窗口 ("校验插件"→校验/验插/插件) — 词内任意双字独立命中, 英文与 2 字词不动 (原评分格局不变)。
 
-**框架特性发现性铁律 (v0.31.0, plugin.verify 教训)**: 代码存在 ≠ Agent 可触达。Agent 对框架能力的全部认知来源: `BuiltinCommandIndex` (self.search) / CLI.md 双表 (agent.cli) / 系统提示词「常用命令」/ `self.tools` (仅裸命令名, 无用法)。**任何特性必须同时出现在全部触达源, 缺一处即"代码存在但 Agent 无法直接触达"→ 盲试 → 自检必然误报**。案例: plugin.verify --all 代码自 v0.14.0 完整支持, 但索引/CLI.md 双表/提示词三缺, Agent 报告"自相矛盾"。新增命令或旗标时 (尤其 plugin.* 管理命令) 四源同步: ① BuiltinCommandIndex 条目 (usage 含全部旗标形态) ② CLI.md ③ 提示词常用命令行 ④ 本 Guide §5.1。
+**框架特性发现性铁律 (v0.31.0, plugin.verify 教训; v0.34.3 修订)**: 代码存在 ≠ Agent 可触达。Agent 对框架能力的认知来源: `BuiltinCommandIndex` (self.search, 含 usage/描述) / `self.tools` (运行时枚举) / 系统提示词「常用命令」/ 本 Guide §5.1。**任何特性必须同时出现在全部触达源, 缺一处即"代码存在但 Agent 无法直接触达"→ 盲试 → 自检必然误报**。新增命令或旗标时 (尤其 plugin.* 管理命令) 三源同步: ① BuiltinCommandIndex 条目 (usage 含全部旗标形态) ② 系统提示词常用命令行 ③ 本 Guide §5.1; `self.tools` 为运行时枚举无需同步。**v0.34.3: CLI.md 工作区文档整体移除** — 22KB 全表不再每轮负担, `agent.cli` 改为轻量指引 (self.tools/self.search 入口 + 参数纯净规则 + 安全分级), 命令发现完全走 `self.tools`/`self.search` (见「CLI.md 移除」节)。
 
 **新增命令反歧义五问 (v0.34.3, AntiAmbiguityTest 锁死)**: 参数污染 (Agent 把描述文本拼进路径/URL/时间戳) 是全量审计后的高发歧义。**新增/重构任何命令前先回答五问**: ① 参数是拼接型 (joinToString 全拼) 还是单 token 位置型? ② 若是路径/标识符/URL/时间戳类 — 必须接入 `ParamGuard.pollutedHint` (拼接型) 或 `ParamGuard.extraArgsHint` (单 token 型), 并在 AntiAmbiguityTest 登记; ③ 若是自由文本型 (content/命令/搜索词) — 无需防护, 但 usage 要注明"可含空格"; ④ usage/描述是否标清参数边界 (单个参数 vs 多 token)? ⑤ 系统提示词/CLI.md 参数纯净规则是否仍覆盖? **AntiAmbiguityTest 源码断言所有已登记防护点在位** — 重构移除防护即测试失败。
 
-**CLI.md 完整性机制 (v0.31.0 全量对照修复)**: agent.cli 自称"主要命令参考"但覆盖率仅 49% (self 8/16, agent 8/40, sys 11/51 — 连 self.tools/self.search 发现入口和 agent.read/write/ls 工作区核心都不在)。修复: ① self/agent 表改为**运行时键集生成** — self 表遍历 `SelfExecutor.commands.keys`, agent 表遍历 `AgentDocManager.registeredAgentCommands` (AgentExecutor 构造 init 注入), 新增命令自动入手册, 永无双份维护; ② 描述表 SELF_COMMANDS/AGENT_COMMANDS/PLUGIN_COMMANDS (internal) 提供 usage/说明, 查不到的行降级提示"见 self.search <命令>"; ③ sys 表硬编码补全 51 条 (kernel 不能引用 core, 修改 sys.* 时需同步此表); ④ IndexCoverageTest 锁死三件事: 索引覆盖注册表 (无触达断裂)、索引无幽灵、CLI.md 描述表键集与注册键集双向一致。
-
-**CLI.md 陈旧自愈 (v0.34.0, 巡检 P1/P4① 根因)**: 陈旧判定此前仅比对文件头「活跃插件: N」— 插件数不变时命令集变更 (内核升级新增 agent.audit 等) 永不反映到设备上已生成的 CLI.md, Agent 读旧表合理误判"命令未注册/文档不一致"。修复: 生成头部加 **「命令指纹」** 行 = MD5(agent 命令键 + self 命令键 + 活跃插件数), `cliDocStale` 双条件比对 — 指纹或计数任一变化即重生成; 旧文件无指纹 → 强制重生成一次 (自动迁移)。指纹生成与比对共用 `AgentDocManager.commandFingerprint` (CliDocGenerator 写头, cliDocStale 验证), 单点维护。
+**CLI.md 移除 (v0.34.3, 用户拍板)**: CLI.md 工作区文档整体删除 — 生成链路 (CliDocGenerator/AgentDocManager.ensureCliDoc/cliDocStale/命令指纹/AgentDocType.CLI) 全部移除, `agent.cli` 改为轻量指引 (self.tools/self.search/self.ports 入口 + 参数纯净规则 + 安全分级), 22KB 全表不再每轮负担。历史遗留: ① 完整性/陈旧自愈机制 (v0.31.0/v0.34.0) 随生成器删除 — 命令发现由 `self.tools` (运行时枚举, 天然新鲜) + `self.search` (CommandSearch, IndexCoverageTest 锁覆盖) 承担; ② 描述与实现错配的教训 (agent.audit/plugin.auto 手写种子错误潜伏 9 版, 经 P2-8 合并暴露) → AntiAmbiguityTest 语义锁防再犯; ③ 设备上旧工作区残留 cli.md 文件无害 (agent.cli 不再读, agent.docs 不再列出), 孪生同步仍排除。
 
 ### 2.4 依赖关系
 
@@ -199,7 +197,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|
-| `agent/` | 32 | AgentExecutor (+ AgentFileCommands/AgentStorageCommands/AgentSessionCommands), AgentEngineTypes, MissionModeExecutor, GoalModeExecutor, PlanModeExecutor, SwarmModeExecutor, DreamEngine, ToolResultManager, AgentProfile, AgentDocManager (+ CliDocGenerator/AgentCliDocTables), AgentDocs (+ AgentDocsMemory/AgentDocsBootstrap/AgentDocsReaders/AgentDocsListeners), AgentMemoryExecutor (+ AgentMemoryReadCommands/AgentMemoryMutateCommands) 等 |
+| `agent/` | 32 | AgentExecutor (+ AgentFileCommands/AgentStorageCommands/AgentSessionCommands), AgentEngineTypes, MissionModeExecutor, GoalModeExecutor, PlanModeExecutor, SwarmModeExecutor, DreamEngine, ToolResultManager, AgentProfile, AgentDocManager (+ AgentCliDocTables), AgentDocs (+ AgentDocsMemory/AgentDocsBootstrap/AgentDocsReaders/AgentDocsListeners), AgentMemoryExecutor (+ AgentMemoryReadCommands/AgentMemoryMutateCommands) 等 |
 | `llm/` | 15 | AdaptiveLlmProvider (+ LlmPayload/SseStreamParser), LlmProvider, LlmRequestBuilder, PromptEngine (+ PromptSystemBuilder/ReActParser/ReActTypes — 模板常量留在 PromptEngine 供 PromptGhostReferenceTest 扫描), RemoteApi, TranslateMiddleware, LlmHttpClient (共享 HTTP 客户端, v0.29.2), **AttachmentPayload (v0.33.0+ 附件二进制键)** |
 | `cli/` | 9 | CliInterpreter, CommandRegistry, CommandExecutor, Pipeline, CommandSearch (BM25), CliAudit |
 | `acp/` | 8 | AcpProtocol, AcpServer, AcpCrypto, AcpTransport, DelegateHandler, McpOverAcpBridge, ShareMemoryHandler |
@@ -397,7 +395,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 8 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起, 哈希链账本已移除) + 短码配对 + 心跳保活 + QoS 自适应。
 
-**设计**: 孪生 = 同步整个 `{agent}/` 工作区文档, 保持跨设备一致。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trumanshow.md/{date}_dream.md) + `memory/` 全部; **排除**: CLI.md (Android 操作指南)、inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。
+**设计**: 孪生 = 同步整个 `{agent}/` 工作区文档, 保持跨设备一致。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trumanshow.md/{date}_dream.md) + `memory/` 全部; **排除**: inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。(CLI.md 已随 v0.34.3 移除, 不再生成/同步)
 
 #### 组件
 
@@ -622,7 +620,7 @@ twin.lost <peer> / twin.recover <peer>
 
 **反模式警告 (v0.34.3 修订)**: 原定案"常驻约束必须全文注入"经自检报告 P1-4 与用户拍板修订 — 模板占位符全文 (名字空/用户资料空) 有效信息≈0 却每轮白烧 token; 但**已填充的身份/灵魂/操作手册仍是行为约束**, 系统提示词安全节承担核心底线 (API Key 禁区/先问再破坏/trash>rm/信任边界), 文档经 `agent.read` 按需取。链接式文件的读取是 LLM 自由裁量 — brief 注入把"有什么、去哪读"固定进每轮, 降低漏读概率。前缀缓存 (DeepSeek 50×) 对两类都正常命中。附件路径行同理 (user 消息正文, 见 §4.1.3)。
 
-**静态参考数据分层（v0.32.1+, 自检报告 P0-1）**: 与反模式警告的边界 — 行为约束（soul/agents/profile/记忆）**必须**常驻明文, 纯参考数据（端口表）**不**常驻。v0.32.1 起整张网络端口表移出提示词, 改为一行指针: `端口/网络接口一览: self.ports`（`__PORTS_TABLE__` 占位符与注入逻辑删除, `self.ports` 成为端口单一事实源, CLI.md 端口章节保留供查阅）。同批压缩: Tribe 节（默认未安装, 4 行→1 行指针 `self.tools tribe`）、浏览器协作节（5 行→3 行, browser-mcp 默认未安装不展开 9880 细节）。TEMPLATE_HASH 自动失效缓存, 生产前缀缓存一次性失效。判断标准: 该内容 Agent 是否在每轮都需要它才能正确行动 — 参考数据按需取, 约束每轮给。
+**静态参考数据分层（v0.32.1+, 自检报告 P0-1; v0.34.3 修订）**: 与反模式警告的边界 — 行为约束（soul/agents/profile/记忆）**必须**常驻明文, 纯参考数据（端口表）**不**常驻。v0.32.1 起整张网络端口表移出提示词, 改为一行指针: `端口/网络接口一览: self.ports`（`__PORTS_TABLE__` 占位符与注入逻辑删除, `self.ports` 成为端口单一事实源; CLI.md 随 v0.34.3 移除）。同批压缩: Tribe 节（默认未安装, 4 行→1 行指针 `self.tools tribe`）、浏览器协作节（5 行→3 行, browser-mcp 默认未安装不展开 9880 细节）。TEMPLATE_HASH 自动失效缓存, 生产前缀缓存一次性失效。判断标准: 该内容 Agent 是否在每轮都需要它才能正确行动 — 参考数据按需取, 约束每轮给。
 
 **身份未就绪提醒 (v0.32.1+, 自检报告 P1-6)**: 引导状态机以**纯文本规则判定, 零状态存储**实现 — profile.md 名字未填时 docsBlock 追加「身份未就绪」提醒段 (zh/en 按 lang 分支), 填好后 mtime 失配触发 buildSystemPrompt 缓存重建, 提醒段自动消失。判定 `PromptEngine.hasFilledName` 兼容两种格式 (模板 `- **名字：**` 与 AgentProfile `- 名称:`, 正则取**首个**名字行 — 模板中身份段在用户资料段之前); 值清洗: 去 `**`/括号后为空、命中占位集合 (模板占位 + 未命名/未设置/待填写/n/a/tbd 等) 视为未填。与 boost.md 完全独立。
 
@@ -679,7 +677,7 @@ Agent CLI → SelfExecutor.notifyMessage/notifyBanner
 ### 4.6 被动索引系统
 
 Agent 通过内核命令按需加载文档：
-- `agent.cli` — CLI 完整参考 (含 browser-tools 段)
+- `agent.cli` — 命令发现指引 (self.tools/self.search/self.ports 入口)
 - `agent.docs` — 列出所有 Agent 文档
 - `skill.ls` + `skill.run <name>` — 先索引再加载具体 Skill
 
@@ -774,7 +772,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
   中期 rm/edit/delete — 梦境自动整理, Agent 不使用 (命令保留供用户手动清理)
 ```
 
-核心变化: **中期记忆是「摘要记录 → 梦境整理」的单一路线** — Agent 只写不编辑 (梦境 `agent.dream` 自动提炼入长期); 读中期仅在用户主动提及历史时。系统提示词记忆节/agents.md 模板/CLI.md/BM25 索引描述同步按此语义标注, 移除"每层完整 CRUD"的对称引导。
+核心变化: **中期记忆是「摘要记录 → 梦境整理」的单一路线** — Agent 只写不编辑 (梦境 `agent.dream` 自动提炼入长期); 读中期仅在用户主动提及历史时。系统提示词记忆节/agents.md 模板/BM25 索引描述同步按此语义标注, 移除"每层完整 CRUD"的对称引导。
 
 ```
 长期记忆 (memory/memory.md)
@@ -1021,7 +1019,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **安全分级 (v0.34.3, P0-3 用户拍板)**: `CommandRiskLevels` 三级 — **普通** (新建/写入文件、通知等) 默认放行; **中危** (删除/修改、剪贴板、截图录屏、插件/技能启停) 默认拒绝, Agent 权限等级提升为「信任」(`AgentPermissionStore` per-agent, 智能体设置) 后放行; **高危** (清空/卸载/系统级/root/拍照) 每次执行经 `UserConfirmBus` 弹窗询问用户 (30s 超时默认拒绝, worker/后台环境不弹窗直接拒绝)。中危/高危命令仍须 JSON + `reason` 意图声明 (`HighRiskCommandGate`, 普通命令移出 reason 表)。分级与 reason 门禁在 `RiskGate.evaluate` 统一求值, 主循环 (可弹窗) 与 Swarm/Mission worker (不弹窗) 复用同一纯函数。
 
-**P0-1/P2-8 单一事实源收尾 (v0.34.3)**: ① 插件表 — `BuiltinPluginRegistry` (kernel) 由 shell `PluginRegistrar.BUILTIN_PLUGIN_INFO`/`REMOTE_PLUGIN_BRIEFS` + `PluginClassRegistry.ALL_KNOWN_CLASSES` 注入, CLI.md 内置/远程插件表动态生成, 历史幻影条目 (notification-plugin/workflow/incubator/cdp/inspector/agent-mission/agent-loop) 永久删除; 新增内置插件只需在 PluginRegistrar 登记, 无需改 CLI.md。② 命令表 — CLI.md 的 self/evolution/agent/security/plugin 表改为从 `CommandSearch` (BuiltinCommandIndex 单一数据源) 动态生成, `AgentCliDocTables` 四张手写表删除, 消除双份描述漂移; sys 表保留硬编码 (kernel 不依赖 core), 同步规则已注释在 CliDocGenerator (变更 SysExecutor 命令须同步 51 行表)。③ 链式检查 — `CliDocSyncTest` 锁死"CLI.md 插件表条目必须来自注册源"。
+**P0-1/P2-8 单一事实源收尾 (v0.34.3)**: ① 插件表 — `BuiltinPluginRegistry` (kernel) 由 shell `PluginRegistrar.BUILTIN_PLUGIN_INFO`/`REMOTE_PLUGIN_BRIEFS` + `PluginClassRegistry.ALL_KNOWN_CLASSES` 注入, 插件发现/通讯录/文档消费方共用, 历史幻影条目 (notification-plugin/workflow/incubator/cdp/inspector/agent-mission/agent-loop) 永久删除。② 命令表 — `CommandSearch` (BuiltinCommandIndex 单一数据源) 为 self.search/命令发现唯一描述源, `AgentCliDocTables` 四张手写表删除, 消除双份描述漂移。③ **v0.34.3 后 CLI.md 整体移除** — 原 CliDocSyncTest (插件表链式检查) 随生成器删除。
 
 **P1-5 死配置收尾 (v0.34.3)**: heartbeat/trumanshow 引导块注入条件从"文件非空"改为"文件非空 **且** 存在对应已启用触发器 (CRON/SCHEDULE)"; 触发器指纹纳入提示词缓存失效 — 增删/启停触发器即时重建提示词, 零触发器不再每轮注入死配置引导。
 
@@ -1039,7 +1037,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - **全拼型 (joinToString)** — 污染进关键参数 → 解析失败循环: agent.read/ls/rm/mkdir (已修) + agent.memory.mid.rm/project.rm 时间戳拼接 (新增前置拒绝)
 - **单 token 位置参数型 (fs/root/skill/net)** — 多余 token 静默忽略 → 不失败但 Agent 不知情: fs.cp/mv/stat + net.curl 成功/失败结果附**多余参数提示** ("多余的「等待结果」已被忽略")
 - **自由文本型 (content/命令/搜索词)** — 污染即文本本身, 无害不防护
-- CLI.md 表头加**参数纯净规则**通用说明; 系统提示词已同步 (v0.34.3 路径参数纯净规则)
+- `agent.cli` 指引含**参数纯净规则**; 系统提示词已同步 (v0.34.3 路径参数纯净规则)
 
 **框架发现调整 (v0.34.3, 用户五条需求)**:
 - **本机名片** `FrameworkIdentity` (配置/framework_identity.json): 框架名称可编辑 (框架设置页), 指纹码显示 (6 位短码 xxx-xxx); 名称缺省时对端显示指纹短码, 自定义后显示名称 (mDNS display 属性)
@@ -1092,7 +1090,7 @@ Prompt 注入检测防火墙（ACP GUEST 命令级黑白名单 + 信任管理）
 - **模板驱动展开**: 按模板键序展开 POSITIONAL/FLAG 参数, `reason` 与模板外键排除 — 防键序不稳定导致参数错位; 缺参数键 → `Error [PARAM_FORMAT_ERROR]` 列出缺失键
 - **三循环一致**: AgentReActLoop / SwarmWorkerRunner / MissionModeExecutor 共用同一纯函数门禁（swarm/mission 不可绕过）; worker 无用户交互, 命中仅日志
 - **reason 审计**: 复用已声明从未发射的 `TOOL_EXECUTED` EventKind — `recordSessionEvent` 落 payload `{command, reason(截断200), source}`, 审计可查
-- 软层教学三处: 系统提示词 zh/en（JSON+reason 示例 + REASON_REQUIRED 拒绝示范）+ CLI.md 高危命令教学小节 + 错误文本内嵌示例
+- 软层教学两处: 系统提示词 zh/en（JSON+reason 示例 + REASON_REQUIRED 拒绝示范）+ 错误文本内嵌示例 (CLI.md 高危命令教学小节随文档移除)
 
 **⑦ 攻击提醒与拉黑闭环** (`SourceBlocklist`, PolicyStore 范式持久化):
 - 工具结果命中 `InjectionPatterns.findMatch`（目的明确攻击）→ 三分支 Observation 组装:
@@ -1110,7 +1108,7 @@ Prompt 注入检测防火墙（ACP GUEST 命令级黑白名单 + 信任管理）
 
 #### 6.4.2 Agent文档/ 整洁性: 无主进化档案迁移 + 统一 Agent 工作区判定 (v0.34.3)
 
-**问题链路 (default 被识别为假 Agent)**: 进化系统无主失败记录（agentName=null, 如后台 Pipeline 错误）经 `EvolutionStore.agentFileOf` 回退到保留字 `"default"`, 在 `Agent文档/default/evolution/` 落盘失败档案 → 7 处 Agent 发现/列表扫描（MainActivity、SidebarContent、BrowserThemeConfig、DreamWorker、TribeInboxWatcher、TribeTeamCommands、FrameworkDiscovery）各持一份**散落排除名单**, 全部漏掉 `"default"` → 目录被识别为 Agent → 一旦被识别, 会话 bootstrap（AgentDocs.bootstrap + ensureCliDoc）把 cli.md/soul.md 等模板写进 default/ → 越看越像真 Agent（自我强化闭环）。
+**问题链路 (default 被识别为假 Agent)**: 进化系统无主失败记录（agentName=null, 如后台 Pipeline 错误）经 `EvolutionStore.agentFileOf` 回退到保留字 `"default"`, 在 `Agent文档/default/evolution/` 落盘失败档案 → 7 处 Agent 发现/列表扫描（MainActivity、SidebarContent、BrowserThemeConfig、DreamWorker、TribeInboxWatcher、TribeTeamCommands、FrameworkDiscovery）各持一份**散落排除名单**, 全部漏掉 `"default"` → 目录被识别为 Agent → 一旦被识别, 会话 bootstrap（AgentDocs.bootstrap）把 soul.md 等模板写进 default/ → 越看越像真 Agent（自我强化闭环）。v0.34.3 后 ensureCliDoc 移除, 不再额外写入 cli.md。
 
 **修复**:
 - **无主档案改道**: `DataPaths.EVOLUTION = "{BASE}/进化档案"` 顶层目录; `evolutionDir/evolutionFailuresFile/evolutionReactionsFile/evolutionFeedbackDir` 接受 `String?`, null/空白/**保留字 "default"** 一律归进化档案/ — `Agent文档/` 只允许真 Agent 工作区。有主 Agent 的进化档案仍留各自工作区

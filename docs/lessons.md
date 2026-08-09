@@ -552,5 +552,13 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **修复**：`commandTimeoutMs` 500 → 1500（仍 < `sleep 3`，超时语义不变；给恢复命令留足启动时间）。
 - **教训**：涉及真实子进程（sh/ADB/外部工具）的测试，超时窗口必须 ≥ 进程启动成本的 3 倍，且要在全量并行负载下验证——单独跑绿 ≠ 全量绿。
 
+### 15.22 描述与实现错配潜伏 9 版：双源并存 + 合并时无语义核对（2026-08-09，CLI.md 移除）
+
+- **现象**：CLI.md 审查发现 `agent.audit` 描述"7 类安全检查"（实现是审计日志）、`plugin.auto` 描述"自动更新策略"（实现是省电），自 v0.16.0 引入后潜伏 9 个版本。
+- **根因链**：① v0.16.0 手写 BuiltinCommandIndex idx 时描述凭空写错（与实现从未一致）；② 正确描述（AgentCliDocTables）与错误描述（BuiltinCommandIndex）**双源并存 9 版**——agent.cli 一直显示正确的，错误只在 self.search 索引里；③ v0.34.3 P2-8 合并"单一数据源"时把 CLI.md 描述来源切到 CommandSearch（错误源），错配第一次进文档才暴露；④ IndexCoverageTest 只锁键集不锁语义，手写错误无测试拦截。
+- **处置**：修正描述 + AntiAmbiguityTest 加**描述语义锁**（audit 含"审计"不含"安全检查"、auto 含"省电"不含"自动更新"、cleanup 含"截图/收件箱"、output 标"只读"）。
+- **CLI.md 整体移除 (v0.34.3 用户拍板)**：22KB 命令参考不再生成/常驻 — `agent.cli` 改为轻量指引，命令发现完全走 `self.tools`（运行时枚举，天然新鲜）+ `self.search`（CommandSearch，IndexCoverageTest 锁覆盖）。生成链路（CliDocGenerator/ensureCliDoc/命令指纹/CliDocSyncTest）全部删除；设备旧残留 cli.md 无害。
+- **教训**：① 手写元数据（描述/关键词）必须对照实现，且要语义测试锁；② **双源并存 = 定时炸弹**——合并时选错源会把潜伏错误带入生产路径；③ 大型参考文档（22KB）对 Agent 是每轮负担，"自动生成"不等于"值得常驻"，运行时枚举+检索索引是更轻的发现路径。
+
 
 *最后更新: 2026-08-09 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

@@ -53,7 +53,7 @@ class AgentDocManagerTest {
         )
 
         val docs = AgentDocManager(agentId = "TestAgent").listDocs()
-        assertEquals("6 个 AgentDocType 文档", 6, docs.size)
+        assertEquals("5 个 AgentDocType 文档 (v0.34.3 CLI 移除)", 5, docs.size)
 
         // summary + read_when (多条目 / 分隔)
         assertTrue("应含 summary 与 read_when", docs.any {
@@ -75,7 +75,7 @@ class AgentDocManagerTest {
     @Test
     fun `missing doc file falls back to plain name`() {
         val docs = AgentDocManager(agentId = "GhostAgent").listDocs()
-        assertEquals(6, docs.size)
+        assertEquals(5, docs.size)
         assertTrue("文件不存在退化为文件名", docs.all { !it.contains("—") })
     }
 
@@ -92,7 +92,7 @@ class AgentDocManagerTest {
         val docs = AgentDocManager(agentId = "EvoAgent").listDocs()
         assertTrue("有档案时 agent.docs 应显示 evolution/ 目录",
             docs.any { it.startsWith("evolution/ — 进化档案") && it.contains("failures.jsonl") })
-        assertEquals("6 文档 + 1 进化档案", 7, docs.size)
+        assertEquals("5 文档 + 1 进化档案", 6, docs.size)
     }
 
     @Test
@@ -101,36 +101,8 @@ class AgentDocManagerTest {
 
         val docs = AgentDocManager(agentId = "NoEvoAgent").listDocs()
         assertTrue("无档案时不显示 evolution/", docs.none { it.startsWith("evolution/") })
-        assertEquals("保持 6 个文档", 6, docs.size)
+        assertEquals("保持 5 个文档", 5, docs.size)
     }
 
-    // ── CLI.md 陈旧检测: 命令集指纹 (v0.34.0) ──
-
-    @Test
-    fun `命令集变化后 cliDocStale 判定为陈旧`() {
-        workspace("TestAgent")
-        val pm = com.mengpaw.kernel.plugin.PluginManager()
-        val mgr = AgentDocManager(agentId = "TestAgent")
-
-        mgr.regenerateCliDoc(pm)
-        assertFalse("生成后应立即新鲜", mgr.cliDocStale(pm))
-
-        // 模拟内核升级新增命令 (如 agent.audit) — 活跃插件数不变
-        mgr.registeredAgentCommands = listOf("audit")
-        assertTrue("命令集变化必须触发重生成", mgr.cliDocStale(pm))
-
-        // 重生成后恢复新鲜
-        mgr.regenerateCliDoc(pm)
-        assertFalse("重生成后恢复新鲜", mgr.cliDocStale(pm))
-    }
-
-    @Test
-    fun `无指纹的旧 CLI 文件强制重生成一次`() {
-        workspace("TestAgent")
-        val f = File(File(DataPaths.AGENTS, "TestAgent"), "cli.md")
-        // 旧版文件: 仅「活跃插件」行, 无命令指纹
-        f.writeText("# MengPaw CLI 命令参考\n> 生成时间: 2026-01-01T00:00:00Z\n> 活跃插件: 0\n\n## 内置命令")
-        val pm = com.mengpaw.kernel.plugin.PluginManager()
-        assertTrue("旧文件无指纹必须强制重生成", AgentDocManager(agentId = "TestAgent").cliDocStale(pm))
-    }
+    // v0.34.3: CLI.md 工作区文档删除 — 陈旧检测/指纹测试随 CliDocGenerator 一并移除
 }

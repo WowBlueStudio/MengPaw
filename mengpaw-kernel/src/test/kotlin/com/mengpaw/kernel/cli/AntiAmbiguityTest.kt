@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.cli
 
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
@@ -84,5 +85,30 @@ class AntiAmbiguityTest {
     fun `ParamGuard 描述词表非空且覆盖实证词`() {
         assertTrue("描述词表应含用户实证词", ParamGuard.DESCRIPTION_WORDS.contains("等待结果"))
         assertTrue("描述词表应非空", ParamGuard.DESCRIPTION_WORDS.isNotEmpty())
+    }
+
+    @Test
+    fun `关键命令描述与实现语义锁定`() {
+        // v0.34.3 教训: BuiltinCommandIndex v0.16.0 手写 idx 时 agent.audit/plugin.auto
+        // 描述与实现不符, 潜伏 9 版后经 P2-8 合并暴露进 CLI.md。锁语义防再犯。
+        val text = src("com/mengpaw/kernel/cli/BuiltinCommandIndex.kt")
+        fun idxLine(name: String): String =
+            text.lines().firstOrNull { it.contains("idx(\"$name\"") }
+                ?: error("BuiltinCommandIndex 缺 $name 条目")
+
+        val audit = idxLine("agent.audit")
+        assertTrue("agent.audit 描述应含'审计' (实现是审计日志)", audit.contains("审计"))
+        assertFalse("agent.audit 描述不得再写'安全检查' (实现是审计日志)", audit.contains("安全检查"))
+
+        val auto = idxLine("plugin.auto")
+        assertTrue("plugin.auto 描述应含'省电' (实现是 wake/sleep/sleep-idle)", auto.contains("省电"))
+        assertFalse("plugin.auto 描述不得再写'自动更新' (实现是省电)", auto.contains("自动更新"))
+
+        val cleanup = idxLine("agent.cleanup")
+        assertTrue("agent.cleanup 描述应含'截图'", cleanup.contains("截图"))
+        assertTrue("agent.cleanup 描述应含'收件箱'", cleanup.contains("收件箱"))
+
+        val output = idxLine("agent.output")
+        assertTrue("agent.output 描述应标'只读'", output.contains("只读"))
     }
 }

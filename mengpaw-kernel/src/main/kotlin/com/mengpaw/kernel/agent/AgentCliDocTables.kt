@@ -4,13 +4,11 @@
 package com.mengpaw.kernel.agent
 
 /**
- * CLI.md 生成用命令描述表 — 拆自 AgentDocManager companion (400 行文件拆分)。
- * AgentDocManager companion 保留同名声明的委托, 外部引用 (IndexCoverageTest /
- * AgentExecutor.browserTools) 不受影响。
+ * 浏览器协作能力文档 (v0.34.3: 命令描述表随 CLI.md 移除, 本对象仅存 BROWSER_TOOLS_MD)。
  */
 internal object AgentCliDocTables {
-    // v0.34.3 P2-8: SELF/PLUGIN/AGENT/SECURITY 命令表删除 — CLI.md 改为从
-    // CommandSearch (BuiltinCommandIndex 单一数据源) 动态生成, 消除双份手写表。
+    // v0.34.3: SELF/PLUGIN/AGENT/SECURITY 命令表删除 (P2-8 单一数据源),
+    // CLI.md 工作区文档整体移除 — 命令发现走 self.tools/self.search。
 
     /** 浏览器协作能力 — readable by Agent via CLI (v0.22.1 重写: 真实三通道, 移除未接线的 45 命令手册). */
     val BROWSER_TOOLS_MD = """
