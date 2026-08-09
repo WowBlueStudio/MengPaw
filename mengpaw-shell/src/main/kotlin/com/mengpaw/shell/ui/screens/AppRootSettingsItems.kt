@@ -32,6 +32,27 @@ internal fun toolSourceFor(fullName: String): String {
     return if (ns in CORE_TOOL_NAMESPACES) "core" else "plugin"
 }
 
+/**
+ * 工具副标题精简 (v0.35.4): 完整描述 → 首段 (优先剥插件名前缀与括号补充),
+ * 超长截断 + "…"。手机侧副标题此前与展开释义相同且被 maxLines 截断 —
+ * 精简后不展开也能看懂命令大致用法; 展开区仍展示完整释义 (docMarkdown)。
+ */
+internal fun shortToolSummary(description: String, maxChars: Int = 24): String {
+    if (description.isBlank()) return ""
+    val first = description
+        .split(Regex("[。；;、\\n\\r]"))
+        .firstOrNull { it.isNotBlank() }?.trim() ?: return ""
+    // 剥插件命令 "[插件名] " 前缀 (PluginManager 拼接的 displayDesc 形态)
+    var s = first.replaceFirst(Regex("^\\[[^\\]]{1,32}\\]\\s*"), "")
+    // 优先取括号补充前的主句 (中英文括号)
+    val bracketIdx = s.indexOfFirst { it == '(' || it == '（' }
+    if (bracketIdx > 0) {
+        val head = s.substring(0, bracketIdx).trim()
+        if (head.isNotEmpty() && head.length <= maxChars) s = head
+    }
+    return if (s.length <= maxChars) s else s.take(maxChars - 1).trimEnd() + "…"
+}
+
 /** 设置页六类列表 + 工作区刷新回调。 */
 data class AppRootSettingsItems(
     val pluginItems: List<FrameworkItem>,
@@ -105,7 +126,8 @@ internal fun rememberAppRootSettingsItems(
                 FrameworkItem(
                     name = info.name,
                     category = ItemCategory.BUILTIN, // 徽标由 GlobalToolPoolPanel 按 source 渲染
-                    summary = info.description,
+                    summary = shortToolSummary(info.description),
+                    docMarkdown = info.description, // 展开区展示完整释义
                     source = toolSourceFor(info.name)
                 )
             }
@@ -203,7 +225,7 @@ internal fun rememberAppRootSettingsItems(
                     docMarkdown = com.mengpaw.plugin.agenttools.AgentToolsStore.toMarkdown(set),
                     children = set.commands.map { cmd ->
                         FrameworkItem(name = cmd.name, category = ItemCategory.CUSTOM,
-                            summary = cmd.description,
+                            summary = shortToolSummary(cmd.description),
                             docMarkdown = listOf(cmd.usage, cmd.description).filter { it.isNotBlank() }.joinToString("\n\n"))
                     })
             }

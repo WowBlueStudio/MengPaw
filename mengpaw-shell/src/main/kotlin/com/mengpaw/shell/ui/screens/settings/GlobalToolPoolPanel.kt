@@ -104,9 +104,12 @@ internal fun GlobalToolPoolPanel(
                                                     null, Modifier.size(16.dp), tint = ThemeColors.textSecondary)
                                             }
                                             AnimatedVisibility(visible = cmdExpanded) {
-                                                // 展开显示完整描述 (summary 行被 maxLines=1 截断, 这里给全文)
-                                                Text(item.summary, Modifier.padding(top = ArcoSpacing.xs), fontSize = 12.sp,
-                                                    color = ThemeColors.textSecondary, lineHeight = 20.sp)
+                                                // 展开显示完整释义 (副标题已精简, 全文在 docMarkdown)
+                                                val fullText = item.docMarkdown.ifBlank { item.summary }
+                                                if (fullText.isNotBlank()) {
+                                                    Text(fullText, Modifier.padding(top = ArcoSpacing.xs), fontSize = 12.sp,
+                                                        color = ThemeColors.textSecondary, lineHeight = 20.sp)
+                                                }
                                             }
                                         }
                                     }
