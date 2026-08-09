@@ -1042,7 +1042,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **框架发现调整 (v0.34.3, 用户五条需求)**:
 - **本机名片** `FrameworkIdentity` (配置/framework_identity.json): 框架名称可编辑 (框架设置页), 指纹码显示 (6 位短码 xxx-xxx); 名称缺省时对端显示指纹短码, 自定义后显示名称 (mDNS display 属性)
-- **指纹绑 MAC**: 本机注册广播 mac 属性 (API 33+, NetworkInterface 获取), 对端指纹 = SHA256(name|mac) — 换 IP 不变; 低版本无 mac 回退地址 (用户判定不解决)
+- **指纹绑设备标识 (v0.34.3 MAC → v0.35.1 ANDROID_ID 兜底)**: 本机注册广播 `did` 属性 (API 33+); 设备标识 = 真实 MAC (Android 9- 可拿) → **ANDROID_ID 兜底** (Android 10+ 普通应用拿不到真实 Wi-Fi MAC: NetworkInterface.getHardwareAddress 返回 null, WifiManager 恒 02:00:00:00:00:00 — 原实现回退 no-mac 导致所有设备指纹相同, 用户实测发现)。换 IP 不变; 旧 `mengpaw|no-mac` 垃圾条目启动清理; 兼容旧版 mac 属性 (跨版本回退地址)
 - **发现即入册取消**: `FrameworkDiscovery.discoveredPeers` 内存列表, 侧边栏显示"添加"按钮确认入册; 修复 AddFrameworkDialog 双数据源 (原写 ACP_TRUSTED/{name}.json, 通讯录读 framework_peers.json — 手动添加后无效根因), 统一写 FrameworkPeerStore
 - **扫描时机**: 后台不持续扫; 打开侧边栏 → startContinuousDiscovery (10s 周期 + 10s 刷新通讯录), 关闭 → stopContinuousDiscovery
 - **联络失败提醒**: framework.connect 失败 → NotifyBus 横幅 (WARN)

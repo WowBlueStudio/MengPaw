@@ -3,6 +3,8 @@
 
 package com.mengpaw.plugin.framework
 
+import android.content.Context
+import android.provider.Settings
 import com.mengpaw.kernel.DataPaths
 import org.json.JSONObject
 import java.io.File
@@ -11,11 +13,17 @@ import java.io.File
  * 本机框架名片 (v0.34.3 框架发现调整) — 持久化 {BASE}/配置/framework_identity.json。
  *
  * - displayName: 自定义框架名 (空 = 缺省, 其他设备显示指纹码)
- * - fingerprint: 本机绑定标识 = "mengpaw|MAC" — 换 IP 不变; 显示短码 = MAC 后 6 位 (xxx-xxx)
+ * - fingerprint: 本机绑定标识 = "mengpaw|设备标识" — 换 IP 不变; 显示短码 = 设备标识尾 6 位 (xxx-xxx)
+ * - 设备标识 (v0.35.1): Android 10+ 普通应用拿不到真实 Wi-Fi MAC (NetworkInterface.getHardwareAddress
+ *   返回 null, WifiManager 返回 02:00:00:00:00:00) — 优先真实 MAC (Android 9-), 否则 ANDROID_ID 兜底
+ *   (免权限、每设备唯一、卸载重装不变), 双端都无则 no-device-id (理论不出现)。
  */
 object FrameworkIdentity {
 
     private val file: File get() = File(DataPaths.CONFIG, "framework_identity.json")
+
+    /** load(context) 缓存 — 设备标识 (ANDROID_ID) 需要 ContentResolver。 */
+    private var appContext: Context? = null
 
     @Volatile var displayName: String = ""
         private set
@@ -29,7 +37,8 @@ object FrameworkIdentity {
         get() = FrameworkPeerStore.shortCodeOf(fingerprint)
 
     /** 加载身份 (启动时调用) — 懒加载。 */
-    fun load() {
+    fun load(context: Context) {
+        appContext = context.applicationContext
         try {
             if (!file.exists()) { fingerprint = computeLocalFingerprint(); return }
             val obj = JSONObject(file.readText())
@@ -47,14 +56,25 @@ object FrameworkIdentity {
         persist()
     }
 
-    /** 本机绑定标识 = "mengpaw|MAC" — 换 IP 不变; 无 MAC (低版本/模拟器) 回退 no-mac。 */
+    /** 本机绑定标识 = "mengpaw|设备标识" — 换 IP 不变。 */
     private fun computeLocalFingerprint(): String {
-        val mac = localMacAddress() ?: "no-mac"
-        return FrameworkPeerStore.computeFingerprint("mengpaw", mac)
+        return FrameworkPeerStore.computeFingerprint("mengpaw", deviceId())
     }
 
-    /** 本机 WiFi MAC — NetworkInterface 遍历取非回环硬件地址 (无需权限)。
-     *  internal 供 FrameworkDiscovery 注册 mDNS mac 属性复用。 */
+    /**
+     * 设备标识 — 真实 MAC 优先 (Android 9- 可拿); Android 10+ 拿不到 →
+     * ANDROID_ID 兜底 (免权限, 每设备唯一, 卸载重装不变)。mDNS 广播与配对请求复用。
+     */
+    fun deviceId(): String {
+        localMacAddress()?.let { return it }
+        val ctx = appContext ?: return "no-device-id"
+        return try {
+            val aid = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ANDROID_ID)
+            if (aid.isNullOrBlank() || aid == "9774d56d682e549c") "no-device-id" else "android-id-$aid"
+        } catch (_: Exception) { "no-device-id" }
+    }
+
+    /** 本机真实 MAC — NetworkInterface 遍历取非回环硬件地址; Android 10+ 恒 null (系统限制)。 */
     internal fun localMacAddress(): String? {
         return try {
             java.net.NetworkInterface.getNetworkInterfaces()?.toList()
@@ -83,6 +103,7 @@ object FrameworkIdentity {
     fun resetForTest() {
         displayName = ""
         fingerprint = ""
+        appContext = null
         file.delete()
     }
 }

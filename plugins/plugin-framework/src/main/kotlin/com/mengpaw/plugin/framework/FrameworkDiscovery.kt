@@ -84,9 +84,10 @@ class FrameworkDiscovery(private val context: Context) {
             info.setAttribute("version", frameworkVersion)
             info.setAttribute("capabilities", capabilities.joinToString(","))
             info.setAttribute("agents", agentNames.joinToString(","))
-            // v0.34.3 名片: display = 自定义框架名 (空=缺省, 对端显示指纹码); mac = 指纹绑定标识
+            // v0.34.3 名片: display = 自定义框架名 (空=缺省, 对端显示指纹码);
+            // v0.35.1 绑定标识: did = 设备标识 (Android 10+ 拿不到真实 MAC → ANDROID_ID 兜底)
             info.setAttribute("display", FrameworkIdentity.displayName)
-            info.setAttribute("mac", FrameworkIdentity.localMacAddress() ?: "")
+            info.setAttribute("did", FrameworkIdentity.deviceId())
         }
         try { nsd.registerService(info, NsdManager.PROTOCOL_DNS_SD, registrationListener) }
         catch (e: Exception) { KernelLog.w("FrameworkDiscovery", "register failed: ${e.message}") }
@@ -98,6 +99,14 @@ class FrameworkDiscovery(private val context: Context) {
                 .forEach {
                     FrameworkPeerStore.remove(it.fingerprint)
                     KernelLog.i("FrameworkDiscovery", "purged self peer: ${it.name} @ ${it.address}")
+                }
+            // v0.35.1: 清理 Android 10+ MAC 不可得时代的共用指纹 "mengpaw|no-mac" —
+            // 修复前所有设备指纹相同, 通讯录中残留的重复条目无意义
+            FrameworkPeerStore.loadAll()
+                .filter { it.fingerprint == "mengpaw|no-mac" }
+                .forEach {
+                    FrameworkPeerStore.remove(it.fingerprint)
+                    KernelLog.i("FrameworkDiscovery", "purged no-mac peer: ${it.name} @ ${it.address}")
                 }
         } catch (e: Exception) {
             KernelLog.w("FrameworkDiscovery", "purge self peers failed: ${e.message}")
@@ -181,12 +190,15 @@ class FrameworkDiscovery(private val context: Context) {
         val agents = if (android.os.Build.VERSION.SDK_INT >= 33)
             info.attributes["agents"]?.let { String(it) }?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
         else emptyList()
-        // v0.34.3: 指纹绑 MAC — mDNS 广播 mac 属性 (API 33+); 低版本无 mac 回退地址 (不解决)
-        val mac = if (android.os.Build.VERSION.SDK_INT >= 33)
-            info.attributes["mac"]?.let { String(it) }?.takeIf { it.isNotBlank() } else null
+        // v0.35.1: 指纹绑设备标识 — mDNS 广播 did 属性 (API 33+); 兼容旧版 mac 属性;
+        // 均缺失 (低版本对端) 回退地址 (换 IP 指纹变, 跨版本妥协)
+        val deviceId = if (android.os.Build.VERSION.SDK_INT >= 33)
+            info.attributes["did"]?.let { String(it) }?.takeIf { it.isNotBlank() }
+                ?: info.attributes["mac"]?.let { String(it) }?.takeIf { it.isNotBlank() }
+        else null
         val display = if (android.os.Build.VERSION.SDK_INT >= 33)
             info.attributes["display"]?.let { String(it) }?.takeIf { it.isNotBlank() } else null
-        val fp = FrameworkPeerStore.computeFingerprint("mengpaw", mac ?: addr)
+        val fp = FrameworkPeerStore.computeFingerprint("mengpaw", deviceId ?: addr)
         val now = System.currentTimeMillis()
         // v0.34.3 迁移: 旧哈希指纹条目 (16 hex 无 |) 按 address 清理, 换新绑定标识
         try {

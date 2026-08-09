@@ -163,7 +163,7 @@ class MainActivity : ComponentActivity() {
 
         // ── 框架发现 (mDNS) ──
         try {
-            com.mengpaw.plugin.framework.FrameworkIdentity.load()  // v0.34.3 名片 (名称/指纹)
+            com.mengpaw.plugin.framework.FrameworkIdentity.load(this@MainActivity)  // v0.34.3 名片 (名称/指纹)
             com.mengpaw.plugin.framework.FrameworkDiscovery.instance =
                 com.mengpaw.plugin.framework.FrameworkDiscovery(this@MainActivity).apply {
                     frameworkName = "MengPaw"
