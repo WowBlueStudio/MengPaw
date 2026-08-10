@@ -19,6 +19,9 @@ artifacts.json 由 build-plugins.ps1 生成:
     - builtin 条目: 不写 downloadUrl (内置无需下载), 但更新 checksum/size 作参考
     - 更新顶层 updated 字段为当前日期
     - 保留未构建插件的一切字段不变
+    - 版本号一律不回写: 内置随壳更新(version=""), 非内置由源码 PluginMetadata
+      统一定义 (如 0.3.0), 本脚本禁止用壳版本覆盖 — 历史教训: 无条件
+      entry["version"]=version 曾反复写回用户清空的版本号 (v0.20.1/v0.20.2 飘移)
 """
 
 import json
@@ -89,7 +92,6 @@ def main():
         entry["size"] = size
         if changelog:
             entry["changelog"] = changelog
-        entry["version"] = version
         status = entry.get("status", "remote")
         if status in ("remote", "embedded"):
             # downloadUrl 由发布者在 plugins.json 中手写 (含 tag), 脚本不猜测域名

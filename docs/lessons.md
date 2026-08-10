@@ -624,5 +624,22 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
   ⑤ 主仓库 remote 插件同样适用——14 个内置插件直接编译进 APK 不受影响，8 个 remote
   插件发布前必须重新打包为 dex JAR 并更新 plugins.json URL/checksum。
 
+### 15.29 版本号"随壳飘移"：工具链无条件回写 plugins.json version（2026-08-10，v0.35.6）
+
+- **现象**：用户两次手工清空内置插件版本号（2026-07-27 `992014d`），但 plugins.json
+  里版本号又变回 0.20.1/0.20.2（跟随壳版本），取消从未生效。
+- **根因链**：① `e189426`（v0.20.1 release）引入工具链 `build-plugins.ps1` +
+  `update-plugins-json.py`；② `update-plugins-json.py` 对每个构建过的插件**无条件**
+  `entry["version"] = version`，version 取自 `gradle.properties` 的 `mengpaw.version`
+  （壳版本）——builtin 与 remote 一视同仁；③ 任何一次插件构建/发布流程都会把
+  plugins.json 版本号覆盖为壳版本，与"内置无版本号 / 非内置独立版本"两套语义都冲突。
+- **处置**：① `update-plugins-json.py` 删除 version 回写，只写 checksum/size/changelog；
+  ② 非内置插件版本唯一事实源 = 源码 `PluginMetadata.version`（8 个 remote 插件统一
+  `0.3.0`），plugins.json 与之对齐；③ 内置插件保持 version="" 随壳更新。
+- **教训**：① **工具链回写字段必须有明确归属**——"哪一层定义版本号"不定清楚，
+  手工修改必然被工具覆盖；② 壳版本（mengpaw.version）只属于 APK/内置分发，remote
+  插件有自己的版本生命周期，两者必须解耦；③ 用户连续两次修改同一处失效时，先查
+  是否存在自动回写/生成流程，而不是继续手工改第三次。
+
 
 *最后更新: 2026-08-09 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

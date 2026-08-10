@@ -284,6 +284,8 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 > 插件数统一口径：**21 模块**（settings.gradle.kts；外部连接器已移至独立仓库 mengpaw-connectors，见下）| **14 内置**（BUILTIN_PLUGIN_IDS，含 v0.29.0 内置的 tavily；mengpaw-shell 打包）| **plugins.json 29 条目**（13 builtin + 14 remote + 2 embedded）
 
 > **内置插件无版本号原则（设计定案）**：内置插件随 shell APK 一起发布，版本跟随 shell，不会陈旧、不会单独更新——因此内置插件**不维护、不展示、不对照版本号**（PluginMetadata.version 对内置插件无语义；巡检/审查若报「内置插件版本不一致」为伪问题）。版本号仅对远程插件（plugins.json 条目 + tag `plugins-v*`）有意义，见连接器一致性铁律。
+>
+> **非内置插件版本唯一事实源（v0.35.6 定案）**：remote 插件**不随壳发布**，版本号一律由源码 `PluginMetadata.version` 统一定义（当前 8 个 remote 插件统一为 `0.3.0`），plugins.json 条目 version 与之一致。`update-plugins-json.py` **禁止回写 version 字段**（历史教训：无条件 `entry["version"]=version` 用壳版本反复覆盖手工定义，导致版本号"随壳飘移"）。改版本 = 改源码 + 改 plugins.json 两处，工具链只回写 checksum/size/changelog。
 
 #### 基础功能 (6)
 
@@ -1309,6 +1311,7 @@ library AAR（内含 `classes.jar` JVM 字节码）**无法在真机激活**，�
 
 - `scripts/build-plugins.ps1` — 模块列表动态派生自 settings.gradle.kts（22 模块），逐模块 assembleRelease，产物复制到 `releases/plugins/plugin-<name>-<version>-release.aar`，自动回写 plugins.json 的 checksum/size/changelog（remote 条目）
 - `scripts/update-plugins-json.py` — JSON 写回（规避 PowerShell 5.1 的 ConvertTo-Json 中文转义缺陷）
+- `scripts/update-plugins-json.py` 只回写 checksum/size/changelog，**不回写 version**（非内置版本由源码统一定义，内置随壳保持空）
 - `scripts/validate-plugins.ps1` — 只读校验：结构/id 唯一/字段完整/SemVer/URL 与 checksum 一致性/与代码交叉校验（namespaceFor 派生规则、shell 捆绑 vs plugins.json builtin 对应）
 - `scripts/package-plugins-dex.ps1` — 把 8 个 remote 插件 AAR 打包为宿主可加载的 dex JAR（含 `META-INF/plugin-class` 主类清单），产物输出 `releases/plugins-dex/*-release.jar`，发布 remote 插件前必须运行
 - 插件 AAR 发布 tag：`plugins-vX.Y.Z`（独立于版本 tag `vX.Y.Z`）
