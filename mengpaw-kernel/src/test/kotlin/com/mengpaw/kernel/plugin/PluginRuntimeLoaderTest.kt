@@ -38,9 +38,9 @@ class PluginRuntimeLoaderTest {
         )
         val entry = MarketplaceEntry(id = "connector-openclaw-plugin", name = "OpenClaw 连接器", version = "0.1.0")
         val result = runBlocking { PluginRuntimeLoader.load(PluginManager(), jar, entry) }
-        assertTrue("应返回可操作错误而非静默假安装: $result", result != null)
-        assertTrue("错误应说明缺 classes.dex: $result", result!!.contains("classes.dex"))
-        assertTrue("错误应给出 dex JAR 修复方向: $result", result.contains("dex JAR"))
+        assertTrue("应返回失败而非静默假安装: $result", result != null && result.isFailure)
+        assertTrue("错误应说明缺 classes.dex: $result", result!!.exceptionOrNull()?.message?.contains("classes.dex") == true)
+        assertTrue("错误应给出 dex JAR 修复方向: $result", result.exceptionOrNull()?.message?.contains("dex JAR") == true)
     }
 
     @Test

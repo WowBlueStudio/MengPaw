@@ -159,19 +159,9 @@ class PluginExecutor(
         }
 
         // Attempt runtime loading via DexClassLoader (实现见 PluginRuntimeLoader)
+        // 语义: success=激活成功 / failure=明确激活失败 (报错, 不假安装) / null=环境不支持 (desktop 回退占位)
         val loadResult = PluginRuntimeLoader.load(pluginManager, downloaded, entry)
-        return if (loadResult != null) {
-            val ns = pluginNamespaceFor(entry.id)
-            val cmdList = entry.commands.joinToString(", ") { it.removePrefix("$ns.") }
-            val sourceNote = if (customIndexUrl != null) "\n来源: $customIndexUrl" else ""
-            ExecutionResult.ok(
-                "✅ ${entry.name} v${entry.version} 安装成功$sourceNote\n" +
-                "命令: $cmdList\n" +
-                "💡 skill.run plugin-index 查看插件手册索引\n" +
-                "💡 self.tools $ns 验证命令已注册\n" +
-                "💡 plugin.info ${entry.id} 查看完整文档"
-            )
-        } else {
+        return if (loadResult == null) {
             // File downloaded but DexClassLoader can't activate — register metadata anyway
             try {
                 val dummyPlugin = object : com.mengpaw.kernel.plugin.Plugin {
@@ -196,6 +186,27 @@ class PluginExecutor(
                     errorCode = ErrorCodes.ERR_INTERNAL
                 )
             }
+        } else {
+            loadResult.fold(
+                onSuccess = {
+                    val ns = pluginNamespaceFor(entry.id)
+                    val cmdList = entry.commands.joinToString(", ") { it.removePrefix("$ns.") }
+                    val sourceNote = if (customIndexUrl != null) "\n来源: $customIndexUrl" else ""
+                    ExecutionResult.ok(
+                        "✅ ${entry.name} v${entry.version} 安装成功$sourceNote\n" +
+                        "命令: $cmdList\n" +
+                        "💡 skill.run plugin-index 查看插件手册索引\n" +
+                        "💡 self.tools $ns 验证命令已注册\n" +
+                        "💡 plugin.info ${entry.id} 查看完整文档"
+                    )
+                },
+                onFailure = {
+                    ExecutionResult.fail(
+                        "安装失败: ${it.message ?: "插件激活失败"}",
+                        errorCode = ErrorCodes.ERR_INTERNAL
+                    )
+                }
+            )
         }
     }
 

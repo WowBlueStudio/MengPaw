@@ -20,9 +20,12 @@ internal object PluginRuntimeLoader {
      *
      * On Android, dynamically loaded code must be in DEX format (not raw JAR class files).
      * Plugins distributed via the marketplace should be packaged as DEX-containing JARs.
-     * Returns a success message on load, or null if loading is not possible.
+     * 返回语义:
+     * - [Result.success]: 激活成功 (消息)
+     * - [Result.failure]: 明确的激活失败 (产物不可加载/主类不符) — 不得假安装
+     * - null: 当前环境不支持运行时加载 (JVM/desktop) — 由调用方回退占位注册
      */
-    suspend fun load(pluginManager: PluginManager, jarFile: File, entry: MarketplaceEntry): String? {
+    suspend fun load(pluginManager: PluginManager, jarFile: File, entry: MarketplaceEntry): Result<String>? {
         return try {
             // ── SHA256 integrity verification BEFORE loading ──
             // Verify that the downloaded JAR matches the expected checksum from
@@ -35,7 +38,9 @@ internal object PluginRuntimeLoader {
                 val actual = sha256Hex(jarFile.readBytes())
                 if (!actual.equals(expected, ignoreCase = true)) {
                     KernelLog.w("PluginExecutor", "SHA256 mismatch for ${entry.id}: expected $expected, got $actual")
-                    return "Integrity check failed for ${entry.id}: JAR checksum does not match marketplace entry. The file may be corrupted or tampered."
+                    return Result.failure(IllegalStateException(
+                        "Integrity check failed for ${entry.id}: JAR checksum does not match marketplace entry. The file may be corrupted or tampered."
+                    ))
                 }
             } else {
                 KernelLog.w("PluginExecutor", "No checksum in marketplace entry for ${entry.id} — skipping integrity verification (UNTRUSTED)")
@@ -52,8 +57,10 @@ internal object PluginRuntimeLoader {
                 emptyList()
             }
             if (zipEntries.none { it == "classes.dex" }) {
-                return "无法激活 ${entry.id}: 发布产物不含 classes.dex (DexClassLoader 只接受 dex 容器)。" +
-                    "标准 AAR 不可用 — 请发布 fat dex JAR (连接器见 mengpaw-connectors/scripts/package-connectors.ps1)。"
+                return Result.failure(IllegalStateException(
+                    "无法激活 ${entry.id}: 发布产物不含 classes.dex (DexClassLoader 只接受 dex 容器)。" +
+                        "标准 AAR 不可用 — 请发布 fat dex JAR (连接器见 mengpaw-connectors/scripts/package-connectors.ps1)。"
+                ))
             }
 
             val optimizedDir = File(jarFile.parentFile, "odex-${entry.id}")
@@ -93,13 +100,13 @@ internal object PluginRuntimeLoader {
 
             if (pluginInstance == null) return null
             if (pluginInstance !is Plugin) {
-                return "Plugin class $loadedClass does not implement Plugin interface"
+                return Result.failure(IllegalStateException("Plugin class $loadedClass does not implement Plugin interface"))
             }
 
             pluginManager.install(pluginInstance).getOrThrow()
             pluginManager.activate(entry.id).getOrThrow()
 
-            "Downloaded and activated ${entry.id} v${entry.version} (runtime-loaded via DexClassLoader)"
+            Result.success("Downloaded and activated ${entry.id} v${entry.version} (runtime-loaded via DexClassLoader)")
         } catch (e: ClassNotFoundException) {
             KernelLog.w("PluginExecutor", "loadPluginJar(${entry.id}): dalvik DexClassLoader not available (JVM/desktop)")
             null
