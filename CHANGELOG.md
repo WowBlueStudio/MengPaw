@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.35.6 (2026-08-10) — 远程插件假安装根治 + 插件版本号规则统一 + dex JAR 发布
+
+### 新增
+- **远程插件可加载闭环**: 发布 8 个 remote 插件 fat dex JAR (0.3.0, tag `plugins-v0.3.0`) —
+  标准 AAR 无法被 DexClassLoader 加载的"假安装"问题根治, 客户端下载安装即真实激活
+- **加载器支持 `META-INF/plugin-class` 主类清单**: 任意包名/类名的插件主类可被发现
+  (连字符命名空间不再依赖非法候选类名), 产物缺 classes.dex 时安装明确报错而非静默占位
+- **插件版本号规则统一 (用户定案)**: 内置/内嵌插件版本清空随壳更新; 非内置插件版本由
+  源码 `PluginMetadata.version` 统一定义 (8 个 remote 插件统一 0.3.0); 工具链
+  `update-plugins-json.py` 不再回写 version (杜绝"版本号随壳飘移")
+- **tavily-plugin 补录市场索引**: 此前已捆绑但 plugins.json 缺失条目, 校验器 ERROR 消除
+
+### 修复
+- 8 个 remote 插件: QwenPaw 通道配置死锁 (默认 rest + 支持 ssh-acp) / CLI 路径双重引号 /
+  OpenClaw 连接状态误报 (等待 WebSocket 握手) / QwenPaw REST 假在线 (连接时 TCP 探测)
+- 连接器内核依赖升级 v0.23.0 → v0.35.5, SPI/Plugin API 二进制兼容验证
+- validate-plugins.ps1: embedded 条目允许空版本 (随壳语义)
+
+### 发行
+- APK: `mengpaw-shell-v0.35.6-release.apk`（签名 CN=MengPaw, OU=Studio, O=WowBlue）
+- plugins.json: 8 个 remote 插件 URL 指向 plugins-v0.3.0 dex JAR; tavily-plugin 新增 builtin 条目;
+  内置/内嵌条目版本清空
+- 测试数: 全量 1291 (kernel 529 + core 90 + shell 148 + browser 34 + 插件 490) — 0 failures（§3.7 实测快照）
+
 ## v0.35.5 (2026-08-10) — ACP 传输修复 + Fleet 深度进化 (委派/文件互传/能力收集/平台化) + 信任方案 A
 
 ### 新增

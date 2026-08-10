@@ -507,27 +507,27 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 906 测试，v0.35.5 实测快照：kernel 525 + core 45 + shell 74 + browser 17 + 插件 245，0 failures)
+### 3.7 测试 (16 模块 1291 测试，v0.35.6 实测快照：kernel 529 + core 90 + shell 148 + browser 34 + 插件 490，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 525 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm (v0.34.4 Mission 并入 — DONE 降级回归)、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行引号保护 + 进化闭环/幻觉门禁/回合内重试循环停指令/失败截断上下文剪取/进化产物 v2 (2026-08-08/09) + readFully 分片读满 + IPv6 host 规范化 + SwarmRuntimeStore + Fleet 委派/文件互传/能力收集/命令平台化/能力卡纯 JVM 采集 (v0.35.5/v0.36, 41 用例)** |
-| mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
-| mengpaw-shell | 74 | ComplexityDetector 分档 (8+ 分 SWARM 回归, v0.34.4 Mission 并入)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵、extractSkillSource frontmatter 解析、toolSourceFor 来源分类、**FrameworkCardDialog peerFromContact 合成 + ShortToolSummary 副标题精简 (v0.35.4 新增 9 用例)** |
-| mengpaw-browser | 17 | **smartNavigate 智能导航 (v0.34.1+ 交接首测: URL/域名/纯数字不误判/关键词编码/fromKey 回退)**、AdBlocker 规则 (域名精确匹配/子域继承/路径规则/模式命中/非法 URL 降级) |
-| plugin-hermes (tribe) | 34 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 (P0 回归) |
-| plugin-memory-twin | 34 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
-| plugin-browser-search | 27 | SSRF 校验全矩阵 (私有 IP/回环/云元数据/scheme 白名单)、引擎检测 |
-| plugin-agent-tools | 22 | 工具集解析 |
-| plugin-skill | 23 | 路径消毒 (../ 越界/反斜杠穿越)、frontmatter 解析、命令层落实、source 来源标记 (预置/用户) |
-| plugin-net | 15 | SSRF 黑名单矩阵、validateUrl scheme 白名单、代理字符串逻辑 |
-| plugin-tavily | 15 | API Key 混淆往返/无明文窗口泄漏 |
-| plugin-framework | 28 | McpGateway 4MB 上限/非法 Content-Length 413、指纹 hex、peer JSON 往返、**FrameworkPairStore 持久化/计数/状态 + FrameworkPairHandler 请求落盘/接受入册 + 信任门禁 frameworkTrustGate + ACP 信任键 acpPeerIdFor + 发现地址 preferIpv4 (v0.35.5, 7 用例)** |
-| plugin-update | 12 | 版本比较、sha256 向量、镜像 URL、自动检查 CAS 幂等 |
-| plugin-concise | 10 | 简洁模式 |
-| plugin-root | 10 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 (execute 不测 — 真实 su) |
-| plugin-fs | 9 | 路径消毒、cp/mv/stat 语义 |
-| plugin-dev | 6 | dev.plugin 审计/关键词链路 |
+| mengpaw-kernel | 529 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** |
+| mengpaw-core | 90 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex |
+| mengpaw-shell | 148 | ComplexityDetector 分档、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简 |
+| mengpaw-browser | 34 | smartNavigate 智能导航、AdBlocker 规则全矩阵 |
+| plugin-hermes (tribe) | 68 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 |
+| plugin-memory-twin | 68 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
+| plugin-browser-search | 54 | SSRF 校验全矩阵、引擎检测 |
+| plugin-agent-tools | 44 | 工具集解析 |
+| plugin-skill | 46 | 路径消毒、frontmatter 解析、命令层落实、source 来源标记 |
+| plugin-net | 30 | SSRF 黑名单矩阵、validateUrl scheme 白名单、代理字符串逻辑 |
+| plugin-tavily | 30 | API Key 混淆往返/无明文窗口泄漏 |
+| plugin-framework | 56 | McpGateway 4MB 上限、指纹 hex、peer JSON 往返、FrameworkPairStore/FrameworkPairHandler、信任门禁 frameworkTrustGate、preferIpv4 |
+| plugin-update | 24 | 版本比较、sha256 向量、镜像 URL、自动检查 CAS 幂等 |
+| plugin-concise | 20 | 简洁模式 |
+| plugin-root | 20 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 |
+| plugin-fs | 18 | 路径消毒、cp/mv/stat 语义 |
+| plugin-dev | 12 | dev.plugin 审计/关键词链路 |
 | plugin-dev | 6 | 审计/示例/支持拆分后的行为保持 |
 | plugin-fs | 9 | 沙箱边界、symlink 检测 (P2 回归, Windows 探测式 skip) |
 
