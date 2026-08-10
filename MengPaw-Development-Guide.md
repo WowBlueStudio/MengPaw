@@ -186,7 +186,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 | 平台 | 优势 | 障碍 | 可行性 |
 |------|------|------|--------|
-| **桌面端 (Linux/Win/Mac)** | kernel 零改动，23 插件全复用；桌面端 sys 命令比 Android 更强（无权限限制）；Compose Multiplatform 成熟 | 需写一个 6 文件的 `mengpaw-desktop` 适配层 | 2-3 周可达 MVP，是下一步最自然的方向 |
+| **桌面端 (Linux/Win/Mac)** | kernel 零改动，23 插件全复用；桌面端 sys 命令比 Android 更强（无权限限制）；Compose Multiplatform 成熟 | 需写一个 6 文件的 `mengpaw-desktop` 适配层 | **定案必做 (v0.36 用户拍板)** — 2-3 周可达 MVP；**MengPaw-Win 是 Fleet 对等指挥的前提**：承载 PC 总指挥（发起方）与坦克执行端（编译/构建/测试工具链），落地前 PC 指挥由连接器适配 + Android 指挥兜底 |
 | **鸿蒙** | kernel 可用；鸿蒙分布式设备管理是 Android 米家 App 的超集——同一个 IoT 控制需求在鸿蒙上更干净；同一个能力在不同平台只是碎片形态不同 | UI 需 ArkUI 全部重写；分发模型不同（AppGallery，不能 sideload APK）；碎片生态还在生长 | 技术可行但等待碎片成熟更重要 |
 | **iOS** | kernel 能编译（Kotlin/Native + ktor Darwin engine） | ProcessBuilder 不可用（CLI 执行是 Agent 核心循环）；文件系统隔离（fs.* 无意义）；动态代码加载禁止（插件系统废掉）；后台限制极严 | 能编译≠产品有意义。这是哲学问题，不是技术问题 |
 
@@ -857,7 +857,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 > ① **委派闭环**: `fleet.delegate` 生成委派 ID + 回传地址 → `TWIN_DELEGATE` (delegateId/callback) → 对端信任校验 → inbox (注明"完成后 `fleet.reply <ID> <结果>`") → `FLEET_RESULT` → `FleetResultHandler` 校验归属 → 状态回收 → `fleet.status`。持久化 `{BASE}/配置/fleet_tasks.json` (原子写, 24h 僵尸清理)。
 > ② **文件互传闭环** (非孪生同步, 任意格式): `fleet.send` → `FLEET_FILE` (文件名 + base64 + sha256 + size, 64MB 上限) → 对端 `FleetFileHandler` 路径消毒 + 原子落盘 `{BASE}/Fleet共享/` (DataPaths.FLEET_SHARE) → `fleet.files` 查看。APK/PDF/任意产物均可互传, 是跨平台部署的产物通道。
 > ③ **能力收集闭环**: `fleet.scan` (指挥所) 广播 `FLEET_CAPABILITY` 请求 (附回调地址) → 对端 `FleetCapabilityHandler` 经 `FleetCapabilityRegistry` (shell 注入 Android 收集器) 生成能力卡回传 → 指挥所缓存 → 写入 `{AGENTS}/{agent}/Notes/fleet_capabilities.md` (框架名/环境/硬件/磁盘/开发环境 — 规划分配依据)。`fleet.capability` 自查本机卡。
-> ④ **发起方即总指挥定案 (v0.36 用户拍板)**: 协议/存储天然对等 — `FleetRuntimeStore` 记录 commander=发起方, `FLEET_RESULT` 回传发起方, 谁发起谁汇总。有 MengPaw PC 走 ACP 委派最优 (PC 发起则 PC 指挥); 只有 Codex/Trae IDE 等非 MengPaw 框架时, 经连接器 (framework.connect/call) 适配其能力, 规划分配与结果整理在发起方完成。**当前 fleet.\* 命令由 Android shell 注入** — PC 端作指挥舰需命令层平台化 (内核注册或 PC 端等价注入, 下一阶段)。
+> ④ **发起方即总指挥定案 (v0.36 用户拍板)**: 协议/存储天然对等 — `FleetRuntimeStore` 记录 commander=发起方, `FLEET_RESULT` 回传发起方, 谁发起谁汇总。有 MengPaw PC 走 ACP 委派最优 (PC 发起则 PC 指挥); 只有 Codex/Trae IDE 等非 MengPaw 框架时, 经连接器 (framework.connect/call) 适配其能力, 规划分配与结果整理在发起方完成。**MengPaw-Win 后期必做 (定案)**: 桌面端完整运行时 = 对等指挥的前提 — kernel/插件全复用 + 重写 mengpaw-core 适配层 + fleet 命令/能力 provider 注入; 落地前 PC 指挥由连接器适配 + Android 指挥兜底, 当前 fleet.\* 命令为 Android shell 注入 (命令层平台化排入下一阶段)。
 
 #### evolution — 进化系统 (5, 内核注册, 提供者由同捆插件 plugin-evolution 提供)
 `audit` | `report <描述>` | `learn.command <命令> <描述> [--keywords 词,词]` | `reactions` | `mark-corrected <id>`
