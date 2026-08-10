@@ -62,6 +62,8 @@ data class SwarmResultCard(
 class SwarmBudget(private val maxTotalSteps: Int) {
     private val consumed = AtomicInteger(0)
 
+    /** 总预算上限 — 运行时持久化/进度展示用 (v0.35.5)。 */
+    val maxSteps: Int get() = maxTotalSteps
     val consumedSteps: Int get() = consumed.get()
     val exhausted: Boolean get() = consumed.get() >= maxTotalSteps
 

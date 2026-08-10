@@ -160,9 +160,10 @@ class FrameworkDiscovery(private val context: Context) {
             catch (e: Exception) { KernelLog.w("FrameworkDiscovery", "resolve failed: ${e.message}") }
         }
         override fun onServiceLost(info: NsdServiceInfo) {
+            val addr = preferIpv4(hostAddressesOf(info))?.hostAddress ?: ""
             val fp = FrameworkPeerStore.computeFingerprint(
                 "mengpaw",
-                info.host?.hostAddress ?: ""
+                addr
             )
             KernelLog.i("FrameworkDiscovery", "Lost: ${info.serviceName}")
         }
@@ -175,7 +176,9 @@ class FrameworkDiscovery(private val context: Context) {
     /** 解析成功处理 — 提取自共享 resolveListener (v0.34.1: 每次发现 new listener 防并发竞态) */
     private fun handleResolved(info: NsdServiceInfo) {
         val name = info.serviceName.removePrefix("MengPaw-")
-        val addr = info.host?.hostAddress ?: return
+        // v0.35.5: 多地址优先 IPv4 — 此前取 info.host 首个地址, 双栈网络可能命中
+        // IPv6 link-local (fe80::%wlan0), sendDirect 无法直连
+        val addr = preferIpv4(hostAddressesOf(info))?.hostAddress ?: return
         // 自发现过滤（IP 比对兜底）: 实例名可能被系统改名，名字比对不可靠
         if (isLocalAddress(addr)) return
         // 属性读取 API 33+
@@ -227,6 +230,13 @@ class FrameworkDiscovery(private val context: Context) {
         KernelLog.i("FrameworkDiscovery", "Found: ${peer.name} ($fwName v$version) @ $addr:$info.port agents=${agents.size}")
     }
 
+    /** 收集 NSD 解析到的全部地址 (API 31+ hostAddresses; 低版本回退 info.host)。 */
+    private fun hostAddressesOf(info: NsdServiceInfo): List<java.net.InetAddress> {
+        return try {
+            if (android.os.Build.VERSION.SDK_INT >= 31) info.hostAddresses?.toList() ?: emptyList()
+            else listOfNotNull(info.host)
+        } catch (_: Exception) { listOfNotNull(info.host) }
+    }
 
     fun startDiscovery() {
         val nsd = nsdManager ?: return
@@ -252,3 +262,7 @@ class FrameworkDiscovery(private val context: Context) {
         } catch (_: Exception) { false }
     }
 }
+
+/** 地址选择 (v0.35.5): 优先 IPv4, 无则回退 IPv6 — 同 WiFi 双栈下 IPv4 直连最稳。 */
+internal fun preferIpv4(addrs: List<java.net.InetAddress>): java.net.InetAddress? =
+    addrs.firstOrNull { it is java.net.Inet4Address } ?: addrs.firstOrNull()

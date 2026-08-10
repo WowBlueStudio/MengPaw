@@ -63,6 +63,11 @@ object BuiltinCommandIndex {
             listOf("横幅", "通知", "弹窗", "提示", "警告", "成功"),
             listOf("banner", "notify", "popup", "alert", "warning", "success"))
 
+        // ── swarm: 火种模式运行时状态 (v0.35.5) ──
+        idx("swarm.status", "查看火种模式 (Swarm/Fleet) 进行中或未完成的运行时状态 (任务/步数预算/子任务进度)", "swarm.status",
+            listOf("火种", "Swarm", "Fleet", "进度", "子任务", "预算", "状态", "并行"),
+            listOf("swarm", "fleet", "progress", "subtask", "budget", "status", "parallel"))
+
         // ── evolution: Agent 进化 (从失败中学习) ──
         idx("evolution.audit", "查看进化绩效: 失败分布/复现率/已沉淀教训", "evolution.audit",
             listOf("进化", "绩效", "失败", "复盘", "教训", "复现", "自省"),

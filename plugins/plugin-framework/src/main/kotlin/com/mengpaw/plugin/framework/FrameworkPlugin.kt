@@ -157,24 +157,27 @@ class FrameworkPlugin : Plugin {
         val peerName = args.firstOrNull()
             ?: return ExecutionResult.fail("用法: framework.connect <peer-name>", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_INVALID_INPUT)
         val peer = FrameworkPeerStore.loadAll().find { it.name == peerName }
-            ?: return ExecutionResult.fail("通讯录中无此节点: $peerName")
-        val adapter = com.mengpaw.kernel.spi.FrameworkAdapterRegistry.find(peer.frameworkType)
+        // v0.35.5 信任门禁: 未信任节点禁止连接/委派 — 对齐"信任后即可 framework.connect"的引导语义
+        frameworkTrustGate(peerName, peer)?.let { return it }
+        val p = peer ?: return ExecutionResult.fail("通讯录中无此节点: $peerName",
+            errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_NOT_FOUND)
+        val adapter = com.mengpaw.kernel.spi.FrameworkAdapterRegistry.find(p.frameworkType)
             ?: return ExecutionResult.fail(
-                "框架类型 '${peer.frameworkType}' 无连接器 — 请安装对应连接器插件 (plugin.search connector)",
+                "框架类型 '${p.frameworkType}' 无连接器 — 请安装对应连接器插件 (plugin.search connector)",
                 errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_NOT_FOUND
             )
         val target = com.mengpaw.kernel.spi.FrameworkTarget(
-            name = peer.name, type = peer.frameworkType,
-            address = peer.address.split(":").firstOrNull() ?: peer.address,
-            port = peer.port
+            name = p.name, type = p.frameworkType,
+            address = p.address.split(":").firstOrNull() ?: p.address,
+            port = p.port
         )
         return adapter.connect(target).fold(
-            onSuccess = { ExecutionResult.ok("已连接 ${peer.frameworkType} 节点: ${peer.name} (${peer.address})") },
+            onSuccess = { ExecutionResult.ok("已连接 ${p.frameworkType} 节点: ${p.name} (${p.address})") },
             onFailure = {
                 // v0.34.3: 联络无效 → 横幅提醒 (侧边栏关闭后用户能感知)
                 try {
                     com.mengpaw.kernel.namespace.NotifyBus.banner(
-                        "⚠️ 无法联络框架 ${peer.name} (${peer.address}): ${it.message?.take(60) ?: "连接失败"}",
+                        "⚠️ 无法联络框架 ${p.name} (${p.address}): ${it.message?.take(60) ?: "连接失败"}",
                         com.mengpaw.kernel.namespace.NotifyBus.NotifyLevel.WARN
                     )
                 } catch (_: Exception) {}
@@ -189,9 +192,12 @@ class FrameworkPlugin : Plugin {
         val peerName = args[0]
         val tool = args[1]
         val peer = FrameworkPeerStore.loadAll().find { it.name == peerName }
-            ?: return ExecutionResult.fail("通讯录中无此节点: $peerName")
-        val adapter = com.mengpaw.kernel.spi.FrameworkAdapterRegistry.find(peer.frameworkType)
-            ?: return ExecutionResult.fail("框架类型 '${peer.frameworkType}' 无连接器")
+        // v0.35.5 信任门禁: 与 connect 同源 — 未信任节点禁止调用远端工具
+        frameworkTrustGate(peerName, peer)?.let { return it }
+        val p = peer ?: return ExecutionResult.fail("通讯录中无此节点: $peerName",
+            errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_NOT_FOUND)
+        val adapter = com.mengpaw.kernel.spi.FrameworkAdapterRegistry.find(p.frameworkType)
+            ?: return ExecutionResult.fail("框架类型 '${p.frameworkType}' 无连接器")
         if (!adapter.isOnline()) return ExecutionResult.fail("连接器未在线 — 先执行 framework.connect $peerName")
         val jsonArgs = if (args.size > 2) {
             try {
@@ -375,4 +381,25 @@ class FrameworkPlugin : Plugin {
         }
         return ExecutionResult.ok("${peer.name} 无响应 (${peer.address}:${peer.port})")
     }
+}
+
+/**
+ * framework.connect/call 信任门禁 (v0.35.5) — 通讯录节点不存在或未信任时返回拒绝结果,
+ * 已信任返回 null (放行)。纯函数, 供命令层共用 + 回归测试。
+ */
+internal fun frameworkTrustGate(
+    peerName: String,
+    peer: FrameworkPeerStore.FrameworkPeer?
+): ExecutionResult? {
+    if (peer == null) {
+        return ExecutionResult.fail("通讯录中无此节点: $peerName",
+            errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_NOT_FOUND)
+    }
+    if (!peer.trusted) {
+        return ExecutionResult.fail(
+            "节点未信任: $peerName — 请先执行 framework.trust ${peer.fingerprint.ifBlank { peerName }} --yes 信任后委派",
+            errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_PERMISSION_DENIED
+        )
+    }
+    return null
 }

@@ -172,14 +172,15 @@ class AcpServer(
      * 明文传输, 与配对类消息"建立信任"的无防火墙语义一致 (配对请求不含敏感数据)。
      */
     suspend fun sendDirect(msg: AcpMessage, address: String, port: Int, timeoutMs: Int = 4000): Boolean {
-        // 地址消毒 (v0.35.2 审查): 仅允许 IP/主机名, 拒绝协议/路径/空格 — 防 URL 注入
-        val cleanAddress = address.trim().removePrefix("http://").removePrefix("https://")
-        if (cleanAddress.isBlank() || !Regex("^[0-9A-Za-z.\\-:]+$").matches(cleanAddress)) {
+        // 地址消毒 + IPv6 规范化 (v0.35.2 审查 + v0.35.5 IPv6): 仅允许 IP/主机名,
+        // 拒绝协议/路径/空格 — 防 URL 注入; IPv6 (含冒号) 自动加方括号, scope 百分号编码
+        val host = normalizeHostForUrl(address)
+        if (host == null) {
             com.mengpaw.kernel.KernelLog.w("AcpServer", "sendDirect: 非法地址拒绝: $address")
             return false
         }
         return try {
-            val url = java.net.URL("http://$cleanAddress:$port/acp")
+            val url = java.net.URL("http://$host:$port/acp")
             val conn = url.openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json")
@@ -191,9 +192,27 @@ class AcpServer(
             }
             conn.responseCode in 200..299
         } catch (e: Exception) {
-            com.mengpaw.kernel.KernelLog.w("AcpServer", "sendDirect 失败: $cleanAddress:$port — ${e.message}")
+            com.mengpaw.kernel.KernelLog.w("AcpServer", "sendDirect 失败: $host:$port — ${e.message}")
             false
         }
+    }
+
+    /**
+     * 直连地址规范化 (v0.35.5) — 返回可直接拼进 URL 的 host 段, 非法返回 null:
+     * - 剥 http(s):// 前缀、trim
+     * - IPv4/主机名: 仅字母数字点连字符
+     * - IPv6 (含 ':'): 去已有方括号, scope 分隔符 % 编码为 %25, 再包 [ ]
+     */
+    internal fun normalizeHostForUrl(address: String): String? {
+        val clean = address.trim().removePrefix("http://").removePrefix("https://")
+        if (clean.isBlank()) return null
+        if (':' in clean) {
+            val raw = clean.removePrefix("[").removeSuffix("]")
+            val encoded = raw.replace("%", "%25")
+            if (!Regex("^[0-9A-Za-z.:%\\-]+$").matches(encoded)) return null
+            return "[$encoded]"
+        }
+        return if (Regex("^[0-9A-Za-z.\\-]+$").matches(clean)) clean else null
     }
 
     suspend fun handleMessage(raw: String): AcpResult {

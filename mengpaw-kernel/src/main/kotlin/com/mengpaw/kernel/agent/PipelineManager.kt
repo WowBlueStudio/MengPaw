@@ -155,6 +155,9 @@ class PipelineManager(
         // Built-in: security namespace (攻击来源黑名单, always available)
         registry.registerNamespace("security", com.mengpaw.kernel.namespace.SecurityExecutor.commands, SECURITY_SIGNATURES)
 
+        // Built-in: swarm namespace (火种模式运行时状态, v0.35.5)
+        registry.registerNamespace("swarm", com.mengpaw.kernel.agent.SwarmExecutor.commands)
+
         // Additional namespaces (e.g. "sys" from Android adapter)
         additionalNamespaces.forEach { (ns, commands) ->
             registry.registerNamespace(ns, commands)

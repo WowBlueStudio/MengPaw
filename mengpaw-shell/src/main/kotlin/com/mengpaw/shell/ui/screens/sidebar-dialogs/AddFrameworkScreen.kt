@@ -3,7 +3,9 @@
 
 package com.mengpaw.shell.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +47,8 @@ fun AddFrameworkScreen(strings: AppStrings, onDismiss: () -> Unit) {
     var discovered by remember { mutableStateOf<List<FrameworkPeerStore.FrameworkPeer>>(emptyList()) }
     var isDiscovering by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf("") }
+    // v0.35.5: 已处理请求归档 — 可查看同意/拒绝历史 (此前只显示待处理 + 清除按钮)
+    var historyExpanded by remember { mutableStateOf(false) }
 
     // 请求列表响应式: 监听 Store 变化 (同意/拒绝/新请求到达即时刷新)
     DisposableEffect(Unit) {
@@ -79,7 +83,8 @@ fun AddFrameworkScreen(strings: AppStrings, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(ArcoSpacing.sm))
 
                 // ── ① 待处理配对请求 ──
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
+                    .clickable { historyExpanded = !historyExpanded }) {
                     Text(strings.pairPendingRequests, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
                         color = ThemeColors.textPrimary, modifier = Modifier.weight(1f))
                     if (processedCount > 0) {
@@ -98,6 +103,44 @@ fun AddFrameworkScreen(strings: AppStrings, onDismiss: () -> Unit) {
                     requests.forEach { req ->
                         PairRequestCard(strings = strings, req = req, scope = scope) { message ->
                             feedback = message
+                        }
+                    }
+                }
+                Spacer(Modifier.height(ArcoSpacing.md))
+
+                // ── ①b 已处理请求归档 (v0.35.5) ──
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(strings.pairHistory, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                        color = ThemeColors.textPrimary, modifier = Modifier.weight(1f))
+                    Icon(if (historyExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        null, Modifier.size(18.dp), tint = ThemeColors.textSecondary)
+                }
+                AnimatedVisibility(visible = historyExpanded) {
+                    val history = com.mengpaw.plugin.framework.FrameworkPairStore.loadAll()
+                        .filter { it.status != com.mengpaw.plugin.framework.FrameworkPairStore.PairStatus.PENDING }
+                    if (history.isEmpty()) {
+                        Text(strings.pairHistoryEmpty, fontSize = 12.sp, color = ThemeColors.textSecondary,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.xs))
+                    } else {
+                        history.forEach { req ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(if (req.status == com.mengpaw.plugin.framework.FrameworkPairStore.PairStatus.ACCEPTED)
+                                    Icons.Outlined.CheckCircle else Icons.Outlined.Cancel,
+                                    null, Modifier.size(14.dp),
+                                    tint = if (req.status == com.mengpaw.plugin.framework.FrameworkPairStore.PairStatus.ACCEPTED)
+                                        ArcoColors.Green6 else ArcoColors.Red6)
+                                Spacer(Modifier.width(6.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(req.fromName, fontSize = 12.sp, color = ThemeColors.textPrimary)
+                                    Text("${req.fromAddress} · ${java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(req.requestedAt))}",
+                                        fontSize = 10.sp, color = ThemeColors.textSecondary)
+                                }
+                                Text(if (req.status == com.mengpaw.plugin.framework.FrameworkPairStore.PairStatus.ACCEPTED)
+                                    strings.pairAccepted else strings.pairDeclined,
+                                    fontSize = 11.sp,
+                                    color = if (req.status == com.mengpaw.plugin.framework.FrameworkPairStore.PairStatus.ACCEPTED)
+                                        ArcoColors.Green6 else ArcoColors.Red6)
+                            }
                         }
                     }
                 }

@@ -6,6 +6,7 @@ package com.mengpaw.kernel
 import com.mengpaw.kernel.agent.SwarmBudget
 import com.mengpaw.kernel.agent.SwarmResultCard
 import com.mengpaw.kernel.agent.SwarmRoles
+import com.mengpaw.kernel.agent.SwarmRuntimeStore
 import com.mengpaw.kernel.agent.SwarmSubtask
 import com.mengpaw.kernel.agent.SwarmSubtaskStatus
 import com.mengpaw.kernel.llm.LlmProvider
@@ -84,6 +85,10 @@ class SwarmModeExecutor(
 
             val budget = SwarmBudget(maxTotalSteps)
             val semaphore = Semaphore(maxParallel)
+            // v0.35.5: 运行时持久化 — swarm.status 可查进度; 进程被杀后残留可恢复查看
+            val startedAt = System.currentTimeMillis()
+            val updateRuntime = { saveRuntime(guardedTask, startedAt, budget, subtasks) }
+            updateRuntime()
             agentEngine.updateAgentState(AgentState.Running("火种: ${subtasks.size} 个子任务", 0, subtasks.size))
 
             // ── Phase 1+2: 并行 Worker 执行 + Verifier 验证 (每子任务一个协程, WIP 闸限流) ──
@@ -91,7 +96,7 @@ class SwarmModeExecutor(
                 subtasks.map { sub ->
                     async(KernelDispatchers.BACKGROUND) {
                         semaphore.withPermit {
-                            runSubtaskPipeline(sub, roles, budget, maxStepsPerSubtask, maxRetriesPerSubtask, onStep)
+                            runSubtaskPipeline(sub, roles, budget, maxStepsPerSubtask, maxRetriesPerSubtask, onStep, updateRuntime)
                         }
                     }
                 }.awaitAll()
@@ -112,13 +117,42 @@ class SwarmModeExecutor(
                 appendLine()
                 append(synthesis)
             }
+            SwarmRuntimeStore.clear()
             agentEngine.updateAgentState(AgentState.Finished(report))
             return report
         } catch (e: CancellationException) {
             // 取消传播契约: 必须先 rethrow; P2 — 状态机复位, 否则 _state 残留 Running
+            // 取消/进程被杀不清 runtime 残留 — swarm.status 可查看未完成任务 (2h 后自动清理)
             agentEngine.updateAgentState(AgentState.Idle)
             throw e
         }
+    }
+
+    /** 持久化当前火种运行时快照 (v0.35.5)。 */
+    private fun saveRuntime(
+        task: String,
+        startedAt: Long,
+        budget: SwarmBudget,
+        subtasks: List<SwarmSubtask>
+    ) {
+        SwarmRuntimeStore.save(
+            SwarmRuntimeStore.Runtime(
+                task = task,
+                startedAt = startedAt,
+                totalSteps = budget.maxSteps,
+                consumedSteps = budget.consumedSteps,
+                subtasks = subtasks.map {
+                    SwarmRuntimeStore.SubtaskState(
+                        id = it.id,
+                        description = it.description,
+                        status = it.status.name,
+                        retries = it.retryCount,
+                        summary = it.output.take(120)
+                    )
+                },
+                updatedAt = System.currentTimeMillis()
+            )
+        )
     }
 
     // ── 单子任务流水线: JIT 看板 + Andon 协议 ──────────────────────
@@ -130,7 +164,8 @@ class SwarmModeExecutor(
         budget: SwarmBudget,
         maxSteps: Int,
         maxRetries: Int,
-        onStep: ((AgentEngine.TraceStep) -> Unit)? = null
+        onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
+        updateRuntime: () -> Unit = {}
     ): SwarmResultCard {
         // 闸1: 总预算提前跳过 (排队 worker 拿到许可后立即退化, 不空转)
         if (budget.exhausted) return SwarmResultCard.skipped(subtask.id)
@@ -141,6 +176,8 @@ class SwarmModeExecutor(
             val role = if (subtask.retryCount > 0 || feedback.isNotBlank()) retryRoleFor(subtask.role, roles) else subtask.role
             val provider = providerFor(role, roles)
             val outcome = workerRunner.runWorker(subtask, provider, maxSteps, budget, feedback, onStep)
+            // 进度快照: 每轮 worker 完成后更新 (并行 worker 各自持锁内串行, 原子写无竞争)
+            updateRuntime()
 
             // 预算耗尽: 不可重试, 直接终止该子任务
             if (outcome.budgetExhausted) {
