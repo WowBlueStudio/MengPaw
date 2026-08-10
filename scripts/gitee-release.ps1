@@ -1,51 +1,79 @@
-# Gitee 访问令牌 — 从环境变量读取, 严禁硬编码进仓库 (红线 4: API Key 不得入代码仓库)
+# SPDX-FileCopyrightText: 2026 ShenZhen wowblue culture and technology CO.,LTD.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+<#
+.SYNOPSIS
+    创建/更新 Gitee release 并上传附件 (幂等)。
+
+.DESCRIPTION
+    从环境变量 GITEE_TOKEN 读取令牌 (红线 4: 严禁硬编码进仓库)。
+    tag 已存在 release 时复用其 id (幂等), 不存在则创建; 然后逐个上传附件。
+
+.EXAMPLE
+    # 上传 v0.35.6 的 shell APK
+    powershell -ExecutionPolicy Bypass -File scripts/gitee-release.ps1 `
+        -Owner WowBlueStudio -Repo MengPaw -Tag v0.35.6 -Name "MengPaw v0.35.6" `
+        -Assets D:\MengPaw\mengpaw-shell\build\outputs\apk\release\mengpaw-shell-v0.35.6-release.apk
+
+.EXAMPLE
+    # 上传插件 dex JAR 到 mengpaw-connectors 的 plugins-v0.3.0
+    powershell -ExecutionPolicy Bypass -File scripts/gitee-release.ps1 `
+        -Owner wowbluestudio -Repo mengpaw-connectors -Tag plugins-v0.3.0 `
+        -Name "Plugins v0.3.0" -Assets (Get-ChildItem D:\MengPaw\releases\plugins-dex\*.jar).FullName
+#>
+
+param(
+    [string]$Owner = "WowBlueStudio",
+    [Parameter(Mandatory = $true)][string]$Repo,
+    [Parameter(Mandatory = $true)][string]$Tag,
+    [string]$Name = "",
+    [string]$Notes = "",
+    [string]$TargetBranch = "master",
+    [Parameter(Mandatory = $true)][string[]]$Assets
+)
+
+$ErrorActionPreference = "Stop"
+
+# ── 令牌 (环境变量, 禁止硬编码) ─────────────────────────────────
 $token = $env:GITEE_TOKEN
 if (-not $token) {
     Write-Error "未设置 GITEE_TOKEN 环境变量。设置方法: [Environment]::SetEnvironmentVariable('GITEE_TOKEN','<你的 Gitee 私人令牌>','User')"
     exit 1
 }
-$owner = "WowBlueStudio"
-$repo = "MengPaw"
-$tag = "v0.6.2"
 
-# Read v0.6.2 section from CHANGELOG (lines 1-34)
-$changelog = Get-Content "D:\MengPaw\CHANGELOG.md" -First 34 -Raw
+$releaseName = if ($Name) { $Name } else { "Release $Tag" }
+$apiBase = "https://gitee.com/api/v5/repos/$Owner/$Repo"
 
-# Create release
-Write-Host "Creating Gitee release for $tag..."
-$releaseBody = @{
-    access_token = $token
-    tag_name = $tag
-    name = "MengPaw v0.6.2 — Agent 逻辑修复 + API 模型更新 + DeepSeek 解析修复"
-    body = $changelog
-    target_commitish = "master"
-} | ConvertTo-Json -Compress
-
-$release = Invoke-RestMethod -Uri "https://gitee.com/api/v5/repos/$owner/$repo/releases" `
-    -Method Post -Body $releaseBody -ContentType "application/json"
-
-Write-Host "Release ID: $($release.id)"
-
-# Upload Shell APK
-Write-Host "Uploading shell APK..."
-$shellApk = "D:\MengPaw\mengpaw-shell\build\outputs\apk\release\mengpaw-shell-v0.6.2-release.apk"
-$shellResult = Invoke-RestMethod -Uri "https://gitee.com/api/v5/repos/$owner/$repo/releases/$($release.id)/attach_files" `
-    -Method Post `
-    -Form @{
+# ── 幂等: tag 已有 release 则复用, 否则创建 ────────────────────
+$releaseId = $null
+try {
+    $existing = Invoke-RestMethod -Uri "$apiBase/releases/tags/$Tag" -Method Get -TimeoutSec 30
+    $releaseId = $existing.id
+    Write-Host "已存在 release, 复用 id=$releaseId" -ForegroundColor Yellow
+} catch {
+    Write-Host "创建 release: $releaseName ..." -ForegroundColor Cyan
+    $body = @{
         access_token = $token
-        file = Get-Item $shellApk
-    }
-Write-Host "Shell APK: $($shellResult.browser_download_url)"
+        tag_name = $Tag
+        name = $releaseName
+        body = $Notes
+        target_commitish = $TargetBranch
+    } | ConvertTo-Json -Compress
+    $created = Invoke-RestMethod -Uri "$apiBase/releases" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 60
+    $releaseId = $created.id
+    Write-Host "创建成功, id=$releaseId" -ForegroundColor Green
+}
 
-# Upload Browser APK
-Write-Host "Uploading browser APK..."
-$browserApk = "D:\MengPaw\mengpaw-browser\build\outputs\apk\release\mengpaw-browser-v0.4.0-release.apk"
-$browserResult = Invoke-RestMethod -Uri "https://gitee.com/api/v5/repos/$owner/$repo/releases/$($release.id)/attach_files" `
-    -Method Post `
-    -Form @{
+# ── 上传附件 ────────────────────────────────────────────────────
+$uploaded = @()
+foreach ($asset in $Assets) {
+    $file = Get-Item $asset -ErrorAction Stop
+    Write-Host "上传: $($file.Name) ($([math]::Round($file.Length/1KB,1)) KB) ..." -ForegroundColor Cyan
+    $result = Invoke-RestMethod -Uri "$apiBase/releases/$releaseId/attach_files" -Method Post -Form @{
         access_token = $token
-        file = Get-Item $browserApk
-    }
-Write-Host "Browser APK: $($browserResult.browser_download_url)"
+        file = $file
+    } -TimeoutSec 300
+    $uploaded += $result.browser_download_url
+    Write-Host "  -> $($result.browser_download_url)" -ForegroundColor Green
+}
 
-Write-Host "Done! https://gitee.com/$owner/$repo/releases/tag/$tag"
+Write-Host "完成: https://gitee.com/$Owner/$Repo/releases/tag/$Tag (上传 $($uploaded.Count) 个附件)" -ForegroundColor Cyan
