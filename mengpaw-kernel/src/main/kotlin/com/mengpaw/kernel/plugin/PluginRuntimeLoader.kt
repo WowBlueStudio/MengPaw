@@ -41,16 +41,34 @@ internal object PluginRuntimeLoader {
                 KernelLog.w("PluginExecutor", "No checksum in marketplace entry for ${entry.id} — skipping integrity verification (UNTRUSTED)")
             }
 
+            // ── 宿主可加载产物检查 (v0.35.6) ──
+            // DexClassLoader 只接受含 classes.dex 的容器 (dex/jar/apk)。标准 AAR 内是
+            // classes.jar (JVM 字节码), 直接传入必然加载失败 → 给出可操作提示而非静默假安装。
+            val zipEntries = try {
+                java.util.zip.ZipFile(jarFile).use { zip ->
+                    zip.entries().asSequence().map { it.name }.toList()
+                }
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (zipEntries.none { it == "classes.dex" }) {
+                return "无法激活 ${entry.id}: 发布产物不含 classes.dex (DexClassLoader 只接受 dex 容器)。" +
+                    "标准 AAR 不可用 — 请发布 fat dex JAR (连接器见 mengpaw-connectors/scripts/package-connectors.ps1)。"
+            }
+
             val optimizedDir = File(jarFile.parentFile, "odex-${entry.id}")
             optimizedDir.mkdirs()
 
-            // Try multiple class name patterns: PascalCase by convention, then PluginMain fallback
+            // 主类定位: META-INF/plugin-class 清单优先 (支持任意包名/类名, 连接器等
+            // 含连字符命名空间的插件), 回退 PascalCase 约定 + PluginMain legacy。
             val ns = pluginNamespaceFor(entry.id)
             val pascalNs = ns.replaceFirstChar { it.uppercase() }
-            val candidateNames = listOf(
-                "com.mengpaw.plugin.$ns.${pascalNs}Plugin",  // e.g. TavilyPlugin
-                "com.mengpaw.plugin.$ns.PluginMain",          // legacy
-            )
+            val manifestClass = readPluginClass(jarFile)
+            val candidateNames = buildList {
+                manifestClass?.let { add(it) }
+                add("com.mengpaw.plugin.$ns.${pascalNs}Plugin")  // e.g. TavilyPlugin
+                add("com.mengpaw.plugin.$ns.PluginMain")          // legacy
+            }
 
             // Use DexClassLoader via reflection (Android-only; safe fallback on JVM)
             var pluginInstance: Any? = null
@@ -126,5 +144,20 @@ internal object PluginRuntimeLoader {
         val md = java.security.MessageDigest.getInstance("SHA-256")
         // Locale.ROOT: 默认 Locale 下 %02x 输出畸形 (阿拉伯语设备 — P2 修复)
         return md.digest(bytes).joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
+    }
+
+    /**
+     * 读插件 JAR 内 META-INF/plugin-class 主类清单 (发布工具写入, 见连接器仓库
+     * scripts/package-connectors.ps1)。不存在/损坏时回退 null → 走候选类名规则。
+     */
+    internal fun readPluginClass(jarFile: File): String? = try {
+        java.util.zip.ZipFile(jarFile).use { zip ->
+            val entry = zip.getEntry("META-INF/plugin-class") ?: return null
+            zip.getInputStream(entry).bufferedReader(Charsets.UTF_8).use { reader ->
+                reader.readText().trim().ifBlank { null }
+            }
+        }
+    } catch (_: Exception) {
+        null
     }
 }

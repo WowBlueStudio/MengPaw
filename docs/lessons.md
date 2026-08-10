@@ -595,5 +595,27 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **处置**：① 命令平台化顺序必须是"先注册 → 再索引 → 最后提示词" (三源同步但注册是前提); ② JSON 替换类测试优先构造文件内容而非正则改串; ③ 协议层测试区分"工厂拒绝"与"handler 拒绝"两个层面。
 - **教训**：① 命名空间归属变化 (shell 注入 ↔ 内核常驻) 会触发四源同步链 (索引/注册表/提示词/§5.1) 的每一环, 按序验证; ② kotlinx.serialization prettyPrint 格式不能靠肉眼写正则; ③ 跨层校验 (工厂 vs handler) 的测试意图要写清是哪一层在拒绝。
 
+### 15.28 远程插件"假安装"：标准 AAR 无法被 DexClassLoader 加载（2026-08-10，v0.35.6）
+
+- **现象**：连接器（mengpaw-connectors）发布 AAR 后 `plugin.install` 显示成功，但
+  `framework.adapters` 恒为空、`framework.connect` 报"框架类型无连接器"。
+- **根因链**：① 发布产物是标准 Android library AAR（内含 `classes.jar` JVM 字节码），
+  而 `PluginRuntimeLoader` 用 `DexClassLoader` 只认含 `classes.dex` 的容器——AAR 直接
+  加载必失败；② 加载失败后 `PluginExecutor` 注册 **dummy 占位插件**（"register metadata
+  anyway"），UI 显示"已安装"但真实类从未实例化、`onInstall` 从未执行、SPI 从未注册；
+  ③ 候选类名规则 `com.mengpaw.plugin.<ns>.<PascalNs>Plugin` 对含连字符命名空间
+  （`connector-claude-code`）生成非法类名，即使有 dex 也定位不到；④ 宿主 APK 未内置
+  jsch/okhttp，普通 AAR 依赖链路也断。
+- **处置**：① `PluginRuntimeLoader` 进化——产物缺 `classes.dex` 时安装直接报错并给出
+  dex JAR 修复方向（不再静默假安装）；② 新增 `META-INF/plugin-class` 主类清单优先
+  （任意包名/类名），回退候选规则；③ 连接器仓库新增 `scripts/package-connectors.ps1`，
+  d8 合并 `classes.jar` + common + jsch/okhttp/okio 为 fat dex JAR 并写主类清单；
+  ④ 连接器内核依赖升级 v0.23.0 → v0.35.5（SPI/Plugin API 验证二进制兼容）。
+- **教训**：① **"安装成功"≠"插件激活"**——remote 插件安装后必须验证注册表/命令
+  真实生效，`plugin.info` 与 `framework.adapters` 交叉核对；② 发布 remote 插件的产物
+  形态必须与加载器（DexClassLoader + dex 容器）匹配，标准 AAR 只适用于编译进 APK 的
+  builtin 插件；③ 连字符命名空间是候选类名规则盲区，任何新插件 id 含连字符就必须走
+  manifest 清单或改 id；④ 依赖未进 dex 容器（fat）则运行时必 NoClassDefFoundError。
+
 
 *最后更新: 2026-08-09 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

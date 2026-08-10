@@ -1278,6 +1278,20 @@ interface Plugin {
 - `scripts/validate-plugins.ps1` — 校验 plugins.json（字段/命名空间/checksum 与 AAR 一致性）
 - 插件 AAR 发布用独立 tag `plugins-vX.Y.Z`；`.claude/skills/plugin-dev.md` 为插件开发/发布 skill
 
+**远程插件产物必须是 dex 容器（v0.35.6 铁律）**：`PluginRuntimeLoader` 用
+`DexClassLoader` 加载下载产物，只接受含 `classes.dex` 的 JAR——标准 Android
+library AAR（内含 `classes.jar` JVM 字节码）**无法在真机激活**，安装后只会注册
+占位元数据（假安装）。发布 remote 插件必须：
+1. 用 d8 把 `classes.jar`（含第三方依赖，如 jsch/okhttp）合并为 `classes.dex`，
+   打包成 `<id>.jar`（连接器仓库已提供 `scripts/package-connectors.ps1` 参考实现）；
+2. JAR 内写 `META-INF/plugin-class` 声明主类全限定名（支持任意包名/类名，
+   含连字符命名空间的连接器不再依赖候选类名规则）；
+3. plugins.json 的 downloadUrl/mirrorUrl 指向 `.jar` 产物并回写 checksum/size。
+
+加载器定位主类顺序：`META-INF/plugin-class` 清单 → 候选类名
+（`com.mengpaw.plugin.<ns>.<PascalNs>Plugin` / `<ns>.PluginMain` legacy）。
+产物缺 `classes.dex` 时安装直接报错并提示 dex JAR 修复方向，不再静默假安装。
+
 ### 7.4 开发流程
 
 `dev.plugin.create --type script|native` → `dev.plugin.audit --target <id>` → `dev.plugin.keywords --target <id>` → `dev.plugin.share --plugin <id> --to <框架>`，通过 dev-plugin（捆绑在 Shell 中）即可完成。
