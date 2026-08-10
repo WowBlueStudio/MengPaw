@@ -1,4 +1,9 @@
-$token = "a0808ed6b6665379a4702472d0ea9b70"
+# Gitee 访问令牌 — 从环境变量读取, 严禁硬编码进仓库 (红线 4: API Key 不得入代码仓库)
+$token = $env:GITEE_TOKEN
+if (-not $token) {
+    Write-Error "未设置 GITEE_TOKEN 环境变量。设置方法: [Environment]::SetEnvironmentVariable('GITEE_TOKEN','<你的 Gitee 私人令牌>','User')"
+    exit 1
+}
 $owner = "WowBlueStudio"
 $repo = "MengPaw"
 $tag = "v0.6.2"
