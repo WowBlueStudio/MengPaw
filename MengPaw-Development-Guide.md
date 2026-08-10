@@ -505,11 +505,11 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 858 测试，v0.35.4 实测快照：kernel 484 + core 45 + shell 74 + browser 17 + 插件 238，0 failures)
+### 3.7 测试 (16 模块 862 测试，v0.35.4 实测快照 + v0.35.5 ACP 传输修复：kernel 488 + core 45 + shell 74 + browser 17 + 插件 238，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 484 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm (v0.34.4 Mission 并入 — DONE 降级回归)、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行引号保护 + 进化闭环/幻觉门禁(静默·无上限拒绝)/回合内重试循环停指令/失败截断上下文剪取/进化产物 v2(去重·可追溯·持久化)/进化认知引导+指纹缓存失效/读回验证 (2026-08-08/09)** |
+| mengpaw-kernel | 488 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm (v0.34.4 Mission 并入 — DONE 降级回归)、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行引号保护 + 进化闭环/幻觉门禁(静默·无上限拒绝)/回合内重试循环停指令/失败截断上下文剪取/进化产物 v2(去重·可追溯·持久化)/进化认知引导+指纹缓存失效/读回验证 (2026-08-08/09) + readFully 分片读满 (v0.35.5, 4 用例)** |
 | mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
 | mengpaw-shell | 74 | ComplexityDetector 分档 (8+ 分 SWARM 回归, v0.34.4 Mission 并入)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵、extractSkillSource frontmatter 解析、toolSourceFor 来源分类、**FrameworkCardDialog peerFromContact 合成 + ShortToolSummary 副标题精简 (v0.35.4 新增 9 用例)** |
 | mengpaw-browser | 17 | **smartNavigate 智能导航 (v0.34.1+ 交接首测: URL/域名/纯数字不误判/关键词编码/fromKey 回退)**、AdBlocker 规则 (域名精确匹配/子域继承/路径规则/模式命中/非法 URL 降级) |
@@ -1057,6 +1057,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - **同意双向入册**: 接受方本地入册发起方 + 回发 `FRAMEWORK_PAIR_ACCEPT` (携带本机名片); 发起方收到后入册接受方 — 双方通讯录互通
 - **非 MengPaw 框架**: 无 ACP 配对能力, 手动添加仍直接本地入册 (保持兼容); 手动添加 MengPaw 节点也走请求流程
 - **v0.35.4 修复 (用户反馈)**: ① **接收链路断裂** — `FrameworkPairHandler` 注册在 `AcpHolder.server`, 但该 server 默认无监听; 实际监听 9876 的是孪生激活时创建的独立 server, 请求到对端被静默丢弃。修复: 孪生改共用 `AcpHolder.server` (`AcpHolder.ensureListening()` 幂等启动监听, `self.acp start` 同步复用), 框架插件安装时自动确保监听 — 落盘/横幅/红点全部生效; ② **收到请求弹窗**: 侧边栏监听 `FrameworkPairStore.pending` 新增 → AlertDialog (同意/拒绝/稍后, 添加框架页面打开时不重复弹); ③ **添加按钮反馈**: 发送结果从滚动区底部移到对话框底部按钮区固定显示 (此前内容超高时看不到"已发送/失败", 误以为没反应); ④ **添加页面去头像**: 移除居中 64dp 类型大图标, 仅保留标题
+- **v0.35.5 修复 (用户实测)**: 扫描到对方设备但点"添加"提示发送失败 — `AcpHttpTransport.handleHttpRequest` 单次 `reader.read()` 读 body 不保证读满 (WiFi 分片), 真实配对请求 ~250B 被截断 → 对端 400 "Invalid ACP message"。修复: 提取 `readFully()` 循环读满 (EOF 提前返回已读部分), `AcpTransportReadFullyTest` 4 用例锁行为; 孪生大消息 (WS_MANIFEST 等) 同步受益
 
 **框架名片重构 (v0.35.1, 用户定案)**: `FrameworkCardDialog` 去标题文字 + 整体 UI 重构 — 类型图标 (64dp) / 框架名称 (19sp) / 备注名 (编辑态输入框) / 信息卡片 (系统环境 + 名称-版本号两行合一) / 智能体列表 (胶囊 chips); 编辑改图形按钮 (Edit/Check), 去掉"关闭" (点外部/返回键关闭); 框架所在系统环境 = mDNS 新增 `platform` 属性广播 + peer 持久化 `platform` 字段 (未知回退); 底部按钮: 删除 + **信任框架/解除信任** (按状态切换, 解除同时清理 ACP 信任与孪生配对文件, 保存/信任后 UI 实时刷新)。**v0.35.4 修复 (用户反馈)**: 信任按钮此前只在 `FrameworkPeerStore.findByName` 命中时渲染 — 手机上"ACP 配对但未入册"的框架 (peer==null) 名片丢失信任按钮。修复: 名片改接收完整 `FrameworkContact` (长按传联系人, 不再只传名字), peer 解析按名称→指纹兜底; 有效信任 = 通讯录信任或 ACP 配对信任 (`PromptFirewall`, 指纹/联系人名双键); 未入册的 ACP 联系人点"信任框架"自动入册 (address 拆 host/port + computeFingerprint), 已配对则显示"解除信任" (清理 ACP 信任与孪生文件); **通讯录列表不再出现未入册 mDNS 节点** — 行内"添加"按钮移除, 统一走添加框架页面扫描列表。
 

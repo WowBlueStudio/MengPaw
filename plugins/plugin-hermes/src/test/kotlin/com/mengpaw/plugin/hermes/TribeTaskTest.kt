@@ -135,7 +135,11 @@ class TribeTaskTest {
             result = "完成",
             parentTaskId = "parent-1",
             depth = 2,
-            delegateMode = DelegateMode.ACP
+            delegateMode = DelegateMode.ACP,
+            // 固定时间戳 — createdAt/updatedAt 构造时各自取 currentTimeMillis,
+            // 毫秒边界跨秒时往返断言偶发失败 (与序列化逻辑无关)
+            createdAt = 1_700_000_000_000L,
+            updatedAt = 1_700_000_000_001L
         )
         val roundTrip = TribeTask.fromJson(TribeTask.toJson(original))
         assertEquals(original, roundTrip)

@@ -192,10 +192,10 @@ class AcpHttpTransport(
                     contentLength = line.substringAfter(":").trim().toIntOrNull() ?: 0
                 line = reader.readLine()
             }
-            // Read body
-            val body = CharArray(contentLength)
-            if (contentLength > 0) reader.read(body, 0, contentLength)
-            var bodyStr = String(body)
+            // v0.35.5 修复: body 必须循环读满 — 单次 read 不保证返回全部字节
+            // (WiFi 分片/缓冲), 真实配对请求 ~250B 常被截断 → JSON 解析 400
+            // "Invalid ACP message", 用户点击"添加"提示发送失败
+            var bodyStr = readFully(reader, contentLength)
 
             // Decrypt if peer sent encrypted
             val isEncrypted = headers["x-mengpaw-encrypt"] == "AES-256-CBC"
@@ -254,6 +254,22 @@ class AcpHttpTransport(
             try { socket.close() } catch (_: Exception) {}
         }
     }
+}
+
+/**
+ * 从 [reader] 循环读取 [length] 字节并转字符串 (v0.35.5) —
+ * 单次 `read()` 不保证返回全部字节 (网络分片/缓冲), 必须循环至读满。
+ * 连接提前关闭时返回已读部分; 供 handleHttpRequest 解析 ACP 消息 body。
+ */
+internal fun readFully(reader: java.io.BufferedReader, length: Int): String {
+    val body = CharArray(length)
+    var read = 0
+    while (read < length) {
+        val n = reader.read(body, read, length - read)
+        if (n < 0) break
+        read += n
+    }
+    return String(body, 0, read)
 }
 // NSD peer discovery is a future feature.
 // When needed, implement with android.net.nsd.NsdManager.

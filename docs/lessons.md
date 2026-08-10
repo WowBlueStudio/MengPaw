@@ -581,5 +581,12 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **处置**：① 孪生改共用 `AcpHolder.server`（`AcpHolder.ensureListening()` 幂等监听，`self.acp start` 同步复用，框架插件安装时自动确保监听）；② 收到请求侧边栏 AlertDialog 弹窗（同意/拒绝/稍后）；③ 通讯录列表移除 discovered 合并，未入册节点只在添加框架页面扫描列表出现；④ 发送反馈固定显示在对话框底部按钮区。
 - **教训**：① **两个 server 监听同一端口 = 必然有一个收不到 handler**——协议消息分发必须先确认"谁在监听、handler 注册在谁身上"，再谈功能；② 插件间不可互相依赖时，共享实例（如 AcpHolder）就是唯一正确解耦点；③ 用户报"添加没反应"先查接收链路（对端是否真的收到），再查 UI 反馈可见性。
 
+### 15.26 HTTP body 单次 read 截断：配对请求 ~250B 全被拒（2026-08-10，v0.35.5）
+
+- **现象**：v0.35.4 交付后用户实测——mDNS 能扫到对方设备，点"添加"提示"发送失败-请确认对方在线"；`sendDirect 失败: <ip>:9876 — null`。
+- **根因链**：① `AcpHttpTransport.handleHttpRequest` 用 `reader.read(body, 0, contentLength)` **单次读取**，不保证读满（网络分片/缓冲）；② 真实配对请求 JSON ~250-300 字节，WiFi 下常被截断 → 对端 `decodeFromString` 失败返回 400 "Invalid ACP message"；③ 对端 400 时 `sendDirect` 的 `responseCode in 200..299` 为 false 返回失败——但日志显示异常 null 是因为另有超时路径，调试时先别被日志误导；④ 用 nc 实测：75 字节小 body 返回 200、258 字节真实 body 返回 400，铁证分片截断。
+- **处置**：提取 `readFully(reader, length)` 循环读满（EOF 提前返回已读部分）；`AcpTransportReadFullyTest` 4 用例（强制 16 字节分片还原完整 JSON/小 body/空 body/连接提前关闭）。该 bug 同时影响孪生大消息（WS_MANIFEST 等），一并修复。
+- **教训**：① **HTTP/流式读取必须循环至读满**，单次 `read()` 返回值可能小于请求长度——这是网络编程第一课，AC P 层潜伏到用户实测才暴露；② 复现"发送失败"类问题，直接在设备间用 nc 构造真实消息逐层验证（小 body 通、大 body 断）比猜日志高效；③ 设备侧 logcat 的 `sendDirect 失败 — null` 异常 message 为空时，优先怀疑对端 4xx/连接被重置，而不是本机网络。
+
 
 *最后更新: 2026-08-09 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*
