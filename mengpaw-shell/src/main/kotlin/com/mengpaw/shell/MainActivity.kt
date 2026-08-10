@@ -158,7 +158,7 @@ class MainActivity : ComponentActivity() {
                 "mengpaw-${com.mengpaw.plugin.framework.FrameworkPeerStore.shortCodeOf(com.mengpaw.plugin.framework.FrameworkIdentity.fingerprint)}"
             }
             com.mengpaw.kernel.agent.FleetPlatform.capabilityProvider = {
-                com.mengpaw.shell.ui.screens.FleetCapabilityCollector.collectJson()
+                com.mengpaw.shell.ui.screens.AndroidFleetCapabilityCollector.collectJson()
             }
         } catch (_: Exception) {}
 
