@@ -55,11 +55,9 @@ class IndexCoverageTest {
         BuiltinCommandIndex.buildAll()
         val indexed = CommandSearch.all().map { it.fullName }.toSet()
         val registered = buildRegistry().list().toSet()
-        // 设计内动态机制: framework.* (捆绑插件) + sys.* (core 补种) + fleet.* (shell 注入 additionalNamespaces)
+        // 设计内动态机制: framework.* (捆绑插件) + sys.* (core 补种)
         val ghosts = indexed - registered
-        val unexpected = ghosts.filter {
-            !it.startsWith("framework.") && !it.startsWith("sys.") && !it.startsWith("fleet.")
-        }
+        val unexpected = ghosts.filter { !it.startsWith("framework.") && !it.startsWith("sys.") }
         assertTrue(
             "索引有但注册表无 (幽灵): ${unexpected.joinToString()}",
             unexpected.isEmpty()

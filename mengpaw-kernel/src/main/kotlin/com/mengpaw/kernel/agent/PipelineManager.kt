@@ -158,6 +158,9 @@ class PipelineManager(
         // Built-in: swarm namespace (火种模式运行时状态, v0.35.5)
         registry.registerNamespace("swarm", com.mengpaw.kernel.agent.SwarmExecutor.commands)
 
+        // Built-in: fleet namespace (舰队指挥常驻内核, v0.36 平台化 — 平台能力经 FleetPlatform 注入)
+        registry.registerNamespace("fleet", com.mengpaw.kernel.agent.FleetExecutor.commands)
+
         // Additional namespaces (e.g. "sys" from Android adapter)
         additionalNamespaces.forEach { (ns, commands) ->
             registry.registerNamespace(ns, commands)

@@ -30,10 +30,10 @@ class FleetCapabilityHandler : AcpHandler {
             // 指挥所请求上报: 本机生成能力卡并回传 (回传地址随请求携带)
             val callbackAddress = payload["callbackAddress"]?.jsonPrimitive?.content ?: ""
             val callbackPort = payload["callbackPort"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
-            val cardJson = FleetCapabilityRegistry.provider?.invoke()
+            val cardJson = com.mengpaw.kernel.agent.FleetPlatform.capabilityProvider?.invoke()
             if (cardJson != null && callbackAddress.isNotBlank()) {
                 val reply = AcpMessage.fleetCapability(
-                    from = FleetCapabilityRegistry.localPeerId?.invoke() ?: message.to,
+                    from = com.mengpaw.kernel.agent.FleetPlatform.localPeerIdProvider?.invoke() ?: message.to,
                     to = message.from, capabilityJson = cardJson)
                 server.sendDirect(reply, callbackAddress, callbackPort)
             }
@@ -46,12 +46,4 @@ class FleetCapabilityHandler : AcpHandler {
         }
         return AcpResult(false, "invalid_capability_card")
     }
-}
-
-/** 能力卡生成注入点 — shell 层注册 Android/连接器环境信息, kernel 保持平台无关。 */
-object FleetCapabilityRegistry {
-    /** 返回本机能力卡 JSON (null = 不可用)。 */
-    @Volatile var provider: (() -> String)? = null
-    /** 返回本机 ACP 身份 (mengpaw-<短码>) — 回传消息的 from。 */
-    @Volatile var localPeerId: (() -> String)? = null
 }

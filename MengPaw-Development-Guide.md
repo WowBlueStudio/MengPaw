@@ -505,11 +505,11 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 896 测试，v0.35.5 实测快照：kernel 515 + core 45 + shell 74 + browser 17 + 插件 245，0 failures)
+### 3.7 测试 (16 模块 903 测试，v0.35.5 实测快照：kernel 522 + core 45 + shell 74 + browser 17 + 插件 245，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 515 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm (v0.34.4 Mission 并入 — DONE 降级回归)、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行引号保护 + 进化闭环/幻觉门禁/回合内重试循环停指令/失败截断上下文剪取/进化产物 v2 (2026-08-08/09) + readFully 分片读满 + IPv6 host 规范化 + SwarmRuntimeStore + Fleet 委派/文件互传/能力收集闭环 (v0.35.5/v0.36, 31 用例)** |
+| mengpaw-kernel | 522 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm (v0.34.4 Mission 并入 — DONE 降级回归)、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行引号保护 + 进化闭环/幻觉门禁/回合内重试循环停指令/失败截断上下文剪取/进化产物 v2 (2026-08-08/09) + readFully 分片读满 + IPv6 host 规范化 + SwarmRuntimeStore + Fleet 委派/文件互传/能力收集/命令平台化闭环 (v0.35.5/v0.36, 38 用例)** |
 | mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
 | mengpaw-shell | 74 | ComplexityDetector 分档 (8+ 分 SWARM 回归, v0.34.4 Mission 并入)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵、extractSkillSource frontmatter 解析、toolSourceFor 来源分类、**FrameworkCardDialog peerFromContact 合成 + ShortToolSummary 副标题精简 (v0.35.4 新增 9 用例)** |
 | mengpaw-browser | 17 | **smartNavigate 智能导航 (v0.34.1+ 交接首测: URL/域名/纯数字不误判/关键词编码/fromKey 回退)**、AdBlocker 规则 (域名精确匹配/子域继承/路径规则/模式命中/非法 URL 降级) |
@@ -851,13 +851,13 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 `status` | `run <任务>`
 > 火种模式 (Swarm/Fleet) 运行时 — `run` 主动触发 (Agent 自主决策, 用户拍板 v0.35.5): 拆解→并行 Worker→验证→合成; 评分 8+ 或 `/Swarm` `/Fleet` 也会进入。运行时持久化 `SwarmRuntimeStore` (原子写 `{BASE}/配置/swarm_runtime.json`, worker 并行快照 synchronized 串行化; 进程被杀残留可查, 超 2h 僵尸自动清理; 正常结束清除); `status` 查询任务/步数预算/子任务进度。
 
-#### fleet — 舰队指挥 (8, v0.36 深度进化, shell 注入 additionalNamespaces)
+#### fleet — 舰队指挥 (8, v0.36 平台化, 内核常驻 PipelineManager 注册)
 `peers` | `delegate <peer-name> <task>` | `status` | `reply <delegateId> <结果> [--fail]` | `send <peer-name> <文件路径>` | `files` | `capability` | `scan`
 > **跨平台生产利器 (v0.36 用户定案)** — **发起方即总指挥**: 谁发出任务谁就是任务的总指挥 (Fleet 对等 P2P, 任何一端发起即指挥舰; Android 优先仅为当前实现默认, 非架构约束) / 坦克·步兵 (执行方, 可自行 `swarm.run` 进入火种模式) / 同步交付。四大闭环:
 > ① **委派闭环**: `fleet.delegate` 生成委派 ID + 回传地址 → `TWIN_DELEGATE` (delegateId/callback) → 对端信任校验 → inbox (注明"完成后 `fleet.reply <ID> <结果>`") → `FLEET_RESULT` → `FleetResultHandler` 校验归属 → 状态回收 → `fleet.status`。持久化 `{BASE}/配置/fleet_tasks.json` (原子写, 24h 僵尸清理)。
 > ② **文件互传闭环** (非孪生同步, 任意格式): `fleet.send` → `FLEET_FILE` (文件名 + base64 + sha256 + size, 64MB 上限) → 对端 `FleetFileHandler` 路径消毒 + 原子落盘 `{BASE}/Fleet共享/` (DataPaths.FLEET_SHARE) → `fleet.files` 查看。APK/PDF/任意产物均可互传, 是跨平台部署的产物通道。
 > ③ **能力收集闭环**: `fleet.scan` (指挥所) 广播 `FLEET_CAPABILITY` 请求 (附回调地址) → 对端 `FleetCapabilityHandler` 经 `FleetCapabilityRegistry` (shell 注入 Android 收集器) 生成能力卡回传 → 指挥所缓存 → 写入 `{AGENTS}/{agent}/Notes/fleet_capabilities.md` (框架名/环境/硬件/磁盘/开发环境 — 规划分配依据)。`fleet.capability` 自查本机卡。
-> ④ **发起方即总指挥定案 (v0.36 用户拍板)**: 协议/存储天然对等 — `FleetRuntimeStore` 记录 commander=发起方, `FLEET_RESULT` 回传发起方, 谁发起谁汇总。有 MengPaw PC 走 ACP 委派最优 (PC 发起则 PC 指挥); 只有 Codex/Trae IDE 等非 MengPaw 框架时, 经连接器 (framework.connect/call) 适配其能力, 规划分配与结果整理在发起方完成。**桌面三端后期必做 (MengPaw-Win / OSX / Linux, 定案)**: 完整运行时 = 对等指挥的前提 — kernel/插件全复用 + 各端 mengpaw-core 适配层 + fleet 命令/能力 provider 注入, 三端与 Android 互为对等指挥; **MengPaw OS = 全平台统一愿景 (长期)**: 同一 kernel + ACP/Fleet 协议在所有形态对等互通。落地前 PC 指挥由连接器适配 + Android 指挥兜底, 当前 fleet.\* 命令为 Android shell 注入 (命令层平台化排入下一阶段)。
+> ④ **发起方即总指挥定案 (v0.36 用户拍板)**: 协议/存储天然对等 — `FleetRuntimeStore` 记录 commander=发起方, `FLEET_RESULT` 回传发起方, 谁发起谁汇总。有 MengPaw PC 走 ACP 委派最优 (PC 发起则 PC 指挥); 只有 Codex/Trae IDE 等非 MengPaw 框架时, 经连接器 (framework.connect/call) 适配其能力, 规划分配与结果整理在发起方完成。**桌面三端后期必做 (MengPaw-Win / OSX / Linux, 定案)**: 完整运行时 = 对等指挥的前提 — kernel/插件全复用 + 各端 mengpaw-core 适配层 + `FleetPlatform` 平台注入 (通讯录/网络/身份/能力卡), 三端与 Android 互为对等指挥; **MengPaw OS = 全平台统一愿景 (长期)**: 同一 kernel + ACP/Fleet 协议在所有形态对等互通。**命令层已平台化 (v0.36)**: `FleetExecutor` 常驻内核注册 (PipelineManager), 平台依赖经 `FleetPlatform` 注入 — Android 在 MainActivity 注册, 桌面三端注入各自实现即可开箱指挥; 落地前 PC 指挥由连接器适配 + Android 指挥兜底。
 
 #### evolution — 进化系统 (5, 内核注册, 提供者由同捆插件 plugin-evolution 提供)
 `audit` | `report <描述>` | `learn.command <命令> <描述> [--keywords 词,词]` | `reactions` | `mark-corrected <id>`

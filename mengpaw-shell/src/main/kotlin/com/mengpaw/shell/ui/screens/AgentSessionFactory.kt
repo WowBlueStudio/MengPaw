@@ -133,9 +133,8 @@ class AgentSessionFactory(
             postCallMiddleware = postMw,
             scrollContext = scroll,
             additionalNamespaces = mapOf(
-                "sys" to com.mengpaw.core.namespace.SysExecutor.commands,
-                // v0.36 舰队指挥 (shell 注入 — 需访问 framework 通讯录 + 内核 FleetRuntimeStore)
-                "fleet" to FleetShellCommands.commands
+                // v0.36 平台化: fleet 已下沉内核常驻 (FleetExecutor), 此处仅保留平台适配命名空间
+                "sys" to com.mengpaw.core.namespace.SysExecutor.commands
             )
         ).also {
             it.integrityProvider = com.mengpaw.core.security.IntegrityGuard.globalInstance

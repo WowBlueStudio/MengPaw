@@ -141,13 +141,24 @@ class MainActivity : ComponentActivity() {
         // ── 孪生恢复 ──
         try { autoRestoreTwinIfNeeded() } catch (_: Exception) {}
 
-        // ── v0.36 舰队能力上报: 注入本机能力卡生成器 (响应指挥所 fleet.scan) ──
+        // ── v0.36 Fleet 平台注入: fleet 命令常驻内核, 平台能力 (通讯录/网络/身份/能力卡) 在此注册 ──
         try {
-            com.mengpaw.kernel.acp.FleetCapabilityRegistry.provider = {
-                com.mengpaw.shell.ui.screens.FleetCapabilityCollector.collectJson()
+            com.mengpaw.kernel.agent.FleetPlatform.membersProvider = {
+                com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll()
+                    .filter { it.trusted }
+                    .map { com.mengpaw.kernel.agent.FleetMember(
+                        name = it.name, fingerprint = it.fingerprint,
+                        frameworkType = it.frameworkType, address = it.address,
+                        port = it.port, trusted = it.trusted, lastSeen = it.lastSeen) }
             }
-            com.mengpaw.kernel.acp.FleetCapabilityRegistry.localPeerId = {
+            com.mengpaw.kernel.agent.FleetPlatform.localIpv4Provider = {
+                com.mengpaw.plugin.framework.FrameworkPairEngine.localIpv4()
+            }
+            com.mengpaw.kernel.agent.FleetPlatform.localPeerIdProvider = {
                 "mengpaw-${com.mengpaw.plugin.framework.FrameworkPeerStore.shortCodeOf(com.mengpaw.plugin.framework.FrameworkIdentity.fingerprint)}"
+            }
+            com.mengpaw.kernel.agent.FleetPlatform.capabilityProvider = {
+                com.mengpaw.shell.ui.screens.FleetCapabilityCollector.collectJson()
             }
         } catch (_: Exception) {}
 
