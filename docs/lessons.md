@@ -588,5 +588,12 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **处置**：提取 `readFully(reader, length)` 循环读满（EOF 提前返回已读部分）；`AcpTransportReadFullyTest` 4 用例（强制 16 字节分片还原完整 JSON/小 body/空 body/连接提前关闭）。该 bug 同时影响孪生大消息（WS_MANIFEST 等），一并修复。
 - **教训**：① **HTTP/流式读取必须循环至读满**，单次 `read()` 返回值可能小于请求长度——这是网络编程第一课，AC P 层潜伏到用户实测才暴露；② 复现"发送失败"类问题，直接在设备间用 nc 构造真实消息逐层验证（小 body 通、大 body 断）比猜日志高效；③ 设备侧 logcat 的 `sendDirect 失败 — null` 异常 message 为空时，优先怀疑对端 4xx/连接被重置，而不是本机网络。
 
+### 15.27 Fleet 平台化三坑：幽灵索引/JSON 空格/工厂层校验（2026-08-10，v0.35.5）
+
+- **现象**：Fleet 命令从 shell 注入下沉内核的过程中, 全量测试连环红。
+- **根因链**：① **幽灵索引** — fleet.* 先加进 BuiltinCommandIndex (BM25 种子) 时还是 shell 注入命名空间, kernel 注册表没有 → IndexCoverageTest "索引有但注册表无" 立即失败 (先豁免, 下沉内核后移除豁免, 命令名必须与注册态一致); ② **kotlinx prettyPrint 空格** — 序列化输出 `"updatedAt": 178...` (冒号后带空格), 测试正则 `"updatedAt":\d+` 不匹配 → 僵尸清理测试假失败 (正则带 `\s*` 或直接构造过期 JSON 文件); ③ **工厂层校验前置** — `Json.parseToJsonElement("{broken")` 在消息工厂构造时就抛异常, handler 层永远收不到非法卡 — 测试"非法卡拒绝"必须用"合法 JSON 但结构不符" (缺必填字段), 而不是语法非法 JSON。
+- **处置**：① 命令平台化顺序必须是"先注册 → 再索引 → 最后提示词" (三源同步但注册是前提); ② JSON 替换类测试优先构造文件内容而非正则改串; ③ 协议层测试区分"工厂拒绝"与"handler 拒绝"两个层面。
+- **教训**：① 命名空间归属变化 (shell 注入 ↔ 内核常驻) 会触发四源同步链 (索引/注册表/提示词/§5.1) 的每一环, 按序验证; ② kotlinx.serialization prettyPrint 格式不能靠肉眼写正则; ③ 跨层校验 (工厂 vs handler) 的测试意图要写清是哪一层在拒绝。
+
 
 *最后更新: 2026-08-09 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

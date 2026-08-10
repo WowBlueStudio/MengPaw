@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.35.5 (2026-08-10) — ACP 传输修复 + Fleet 深度进化 (委派/文件互传/能力收集/平台化) + 信任方案 A
+
+### 新增
+- **Fleet 深度进化 (v0.36 方向)**: ① 委派闭环 — `fleet.delegate/status/reply` + `FLEET_RESULT` 回传 + `FleetRuntimeStore` 状态回收; ② 文件互传 — `fleet.send/files`, 任意格式经 ACP 落 `{BASE}/Fleet共享/` (64MB 上限, 非孪生同步); ③ 能力收集 — `fleet.scan/capability`, 指挥所收集成员能力卡写入 Notes (规划分配依据); ④ **发起方即总指挥定案** (对等 P2P); ⑤ **命令平台化** — `FleetExecutor` 内核常驻 + `FleetPlatform` 注入 + 纯 JVM 能力卡采集, 桌面三端 (Win/OSX/Linux) 开箱指挥 (MengPaw OS 统一愿景定案)
+- **swarm.run 指令**: Agent 可自主进入火种模式 (拆解→并行 Worker→验证→合成); Swarm 运行时持久化 + `swarm.status` 进度查询 (进程被杀可恢复查看)
+- **framework.delegate 指挥舰委派**: 带 delegateId + 回传地址, 对端执行完自动回传
+- **配对请求归档 UI**: 添加框架页显示已处理请求 (同意/拒绝历史)
+
+### 修复
+- **ACP HTTP body 单次 read 截断**: 配对请求 ~250B 被截断 → 对端 400 "发送失败" (`readFully` 循环读满, 孪生大消息同步受益)
+- **connect/call/delegate 信任门禁**: 未信任节点禁止连接/委派 (引导 `framework.trust --yes`)
+- **IPv6 直连支持**: `sendDirect` 地址规范化 (方括号 + scope 编码), mDNS 多地址优先 IPv4
+- **信任方案 A (用户拍板)**: `framework.trust` 同时打通 ACP 入站域 (`PromptFirewall`), 所有 ACP 框架一视同仁; 解除信任同步清理
+- **TribeTaskTest 时间戳毫秒边界**: 全量并行偶发失败 (固定时间戳)
+
+### 发行
+- APK: `mengpaw-shell-v0.35.5-release.apk`（签名 CN=MengPaw, OU=Studio, O=WowBlue）
+- plugins.json 无变更（本轮无插件发布）
+- 测试数: kernel 525 + core 45 + shell 74 + browser 17 + 插件 245 — 全量 906, 0 failures（§3.7 实测快照）
+
 ## v0.35.4 (2026-08-10) — 框架信任/通讯录添加流程修复 + Tools 副标题精简
 
 ### 修复
