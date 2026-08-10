@@ -196,7 +196,7 @@
     {
       "id": "update-plugin",
       "name": "自动更新",
-      "version": "0.20.2",
+      "version": "0.3.0",
       "type": "native",
       "author": "MengPaw",
       "description": "WiFi 环境自动检测更新，冷启动检查，去轮询CoroutineScope泄漏，GitHub→Gitee→ghproxy 三级回退",
@@ -222,7 +222,7 @@
     {
       "id": "translate-plugin",
       "name": "翻译引擎",
-      "version": "0.20.2",
+      "version": "0.3.0",
       "type": "native",
       "author": "MengPaw",
       "description": "多语言翻译：Google 翻译集成 + 语种自动检测（自动识别源语言）",
@@ -243,7 +243,7 @@
     {
       "id": "error-report-plugin",
       "name": "错误上报",
-      "version": "0.20.2",
+      "version": "0.3.0",
       "type": "native",
       "author": "MengPaw",
       "description": "官方错误收集与上报：error.bridge JSON桥接 + error.upload WiFi自动上传，序列化重写",
@@ -270,7 +270,7 @@
     {
       "id": "render-plugin",
       "name": "API 生图引擎",
-      "version": "0.20.2",
+      "version": "0.3.0",
       "type": "native",
       "author": "MengPaw",
       "description": "多后端 API 生图：GPT Image (原DALL-E) / Replicate / Stability，模型更新至 2026.07",
@@ -328,7 +328,7 @@
     {
       "id": "comfy-plugin",
       "name": "ComfyUI 工作流",
-      "version": "0.20.2",
+      "version": "0.3.0",
       "type": "native",
       "author": "MengPaw",
       "description": "ComfyUI 工作流搭建：节点编排/JSON 导出/API 执行/MP浏览器预览，错误消息含 CORS 排查指引",
@@ -353,7 +353,7 @@
     {
       "id": "browser-push-plugin",
       "name": "跨设备推送",
-      "version": "0.20.2",
+      "version": "0.3.0",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 跨设备推送网页，基于 ACP 协议",
@@ -374,7 +374,7 @@
     {
       "id": "browser-search-plugin",
       "name": "网页转档",
-      "version": "0.20.2",
+      "version": "0.3.0",
       "type": "native",
       "author": "MengPaw",
       "description": "网页转 Markdown 管道：clean 提取正文 → md 生成文档 → outputs/clear 输出管理；网页抓取复用 net.curl，高质量搜索用 tavily",
@@ -398,7 +398,7 @@
     {
       "id": "browser-mcp-plugin",
       "name": "浏览器 MCP",
-      "version": "0.20.2",
+      "version": "0.3.0",
       "type": "native",
       "author": "MengPaw",
       "description": "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取/调用（MP浏览器专用）",

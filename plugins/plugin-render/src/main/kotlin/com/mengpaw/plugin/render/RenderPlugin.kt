@@ -31,7 +31,7 @@ import java.io.File
  */
 class RenderPlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "render-plugin", name = "API 生图引擎", version = "0.20.2",
+        id = "render-plugin", name = "API 生图引擎", version = "0.3.0",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "多后端API生图：Replicate/Stability/DALL-E，提交Job→轮询→下载→预览",
         permissions = emptyList(), minCoreVersion = "0.2.0",

@@ -35,7 +35,7 @@ class TranslatePlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "translate-plugin",
         name = "翻译引擎",
-        version = "0.20.2",
+        version = "0.3.0",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "Google 翻译 — 支持 130+ 语言，免费免设置",

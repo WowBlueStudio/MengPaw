@@ -32,7 +32,7 @@ class BrowserMcpPlugin : Plugin, McpToolProvider {
     override val metadata = PluginMetadata(
         id = "browser-mcp-plugin",
         name = "浏览器 MCP",
-        version = "0.20.2",
+        version = "0.3.0",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取/执行脚本 (设备内 HTTP 桥)",

@@ -43,7 +43,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class UpdatePlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "update-plugin", name = "自动更新", version = "0.20.2",
+        id = "update-plugin", name = "自动更新", version = "0.3.0",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "WiFi 环境自动检测更新，可选自动下载安装。检查 GitHub Releases。",
         permissions = listOf("INTERNET", "ACCESS_NETWORK_STATE", "REQUEST_INSTALL_PACKAGES"),

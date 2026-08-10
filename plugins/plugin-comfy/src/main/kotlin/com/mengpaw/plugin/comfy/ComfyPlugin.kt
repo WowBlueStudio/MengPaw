@@ -21,7 +21,7 @@ import java.io.File
 
 class ComfyPlugin : Plugin {
     override val metadata = PluginMetadata(
-        id = "comfy-plugin", name = "ComfyUI 工作流", version = "0.20.2",
+        id = "comfy-plugin", name = "ComfyUI 工作流", version = "0.3.0",
         type = PluginType.NATIVE, author = "MengPaw",
         description = "ComfyUI工作流搭建：节点编排/JSON导出/API执行/MP浏览器预览",
         permissions = emptyList(), minCoreVersion = "0.2.0",

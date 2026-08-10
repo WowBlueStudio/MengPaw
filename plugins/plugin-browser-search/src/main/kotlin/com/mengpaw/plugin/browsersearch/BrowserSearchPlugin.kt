@@ -38,7 +38,7 @@ class BrowserSearchPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "browser-search-plugin",
         name = "网页转档",
-        version = "0.20.2",
+        version = "0.3.0",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "网页转 Markdown 管道：clean 提取正文 → md 生成文档 → outputs/clear 输出管理；网页抓取复用 net.curl，高质量搜索用 tavily",

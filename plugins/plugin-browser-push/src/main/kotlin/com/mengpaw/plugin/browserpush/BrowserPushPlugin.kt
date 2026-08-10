@@ -31,7 +31,7 @@ class BrowserPushPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "browser-push-plugin",
         name = "跨设备推送",
-        version = "0.20.2",
+        version = "0.3.0",
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "Agent 跨设备推送网页。需对端授权。基于 ACP 协议。",
