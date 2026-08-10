@@ -15,7 +15,7 @@ import java.util.Base64
  * fleet 命名空间命令 (v0.36 深度进化) — 舰队指挥 (shell 注入 additionalNamespaces,
  * 可访问 framework 通讯录与内核 FleetRuntimeStore)。
  *
- * 角色模型: 指挥舰 (发起方) / 坦克·步兵 (执行方, 可自行进入火种模式) / 同步交付。
+ * 角色模型: 谁发起谁指挥 (发起方 = 总指挥) / 坦克·步兵 (执行方, 可自行进入火种模式) / 同步交付。
  * 闭环: fleet.delegate → TWIN_DELEGATE (带 delegateId+回传地址) → 对端 inbox →
  * 对端执行完 fleet.reply → FLEET_RESULT → 指挥舰 FleetRuntimeStore 状态回收 → fleet.status。
  */

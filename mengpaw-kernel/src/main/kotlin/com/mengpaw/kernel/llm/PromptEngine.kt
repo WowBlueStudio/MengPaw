@@ -148,7 +148,7 @@ class PromptEngine {
             - self.search <描述> (首选命令查找) / self.tools [ns] (完整遍历) / self.ports (端口/网络接口) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
             - swarm.run <任务> (主动进入火种模式: 拆解→并行 Worker→验证→合成) / swarm.status (进度/子任务)
             - framework.delegate <节点> <任务> (指挥舰: 委派到已信任框架执行, 对端可自行进入火种模式, 结果经孪生同步回传)
-            - fleet.peers (舰队成员) / fleet.delegate <节点> <任务> (委派, 完成自动回传) / fleet.status (任务状态) / fleet.reply <委派ID> <结果> (执行方回传)
+            - fleet.peers (舰队成员) / fleet.delegate <节点> <任务> (委派 — 谁发起谁指挥, 完成自动回传) / fleet.status (任务状态) / fleet.reply <委派ID> <结果> (执行方回传)
             - fleet.send <节点> <文件路径> (任意格式文件互传, 接收方落 Fleet共享) / fleet.scan (指挥所收集成员能力→Notes, 规划分配依据)
             - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
             - plugin.marketplace/search/install/list/info/verify/auto / sys.permission.list/request
@@ -271,7 +271,7 @@ class PromptEngine {
             - self.search <desc> (preferred) / self.tools [ns] (full listing) / self.ports (ports/network interfaces) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
             - swarm.run <task> (enter Swarm mode: decompose → parallel workers → verify → synthesize) / swarm.status (progress/subtasks)
             - framework.delegate <peer> <task> (flagship: dispatch to a trusted framework; peer may self-enter Swarm; results sync back via twin)
-            - fleet.peers (fleet members) / fleet.delegate <peer> <task> (dispatch, auto result callback) / fleet.status (task status) / fleet.reply <delegateId> <result> (executor callback)
+            - fleet.peers (fleet members) / fleet.delegate <peer> <task> (dispatch — the initiator commands, auto result callback) / fleet.status (task status) / fleet.reply <delegateId> <result> (executor callback)
             - fleet.send <peer> <file> (any-format LAN transfer to Fleet share) / fleet.scan (commander collects member capabilities → Notes for planning)
             - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
             - plugin.marketplace/search/install/list/info/verify/auto / sys.permission.list/request
