@@ -642,4 +642,33 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
   是否存在自动回写/生成流程，而不是继续手工改第三次。
 
 
-*最后更新: 2026-08-09 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*
+
+## 16. 外置插件整体迁移 mengpaw-connectors（v0.35.6）
+
+### 16.1 外置插件源码迁入独立仓库时的四类连带改动
+
+8 个普通 remote 插件（update/translate/error-report/render/comfy/browser-push/browser-search/browser-mcp）
+从主仓库 `plugins/` 迁入 [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)（MIT）后，
+四类连带改动缺一不可：
+- **构建依赖**：`implementation(project(":mengpaw-kernel"))` → JitPack 构件
+  `com.github.WowBlueStudio.MengPaw:mengpaw-kernel:<tag>`（版本由插件仓库根 `kernelVersion` 统一控制）；
+- **协议**：SPDX 头 `AGPL-3.0-or-later OR LicenseRef-Commercial` → `MIT`（插件仓库整体 MIT，
+  含 build.gradle.kts 与全部 .kt 源文件，不得残留 LicenseRef）；
+- **打包链路**：主仓库 `package-plugins-dex.ps1` 删除，插件仓库 `package-plugins.ps1` 统一
+  打包 13 个外置插件（8 普通 `-release.jar` + 5 连接器 `-plugin.jar`）；
+- **市场索引**：plugins.json 的 downloadUrl/mirrorUrl/checksum/size 指向新 tag 产物，version 不动
+  （非内置版本唯一事实源仍是源码 `PluginMetadata.version`）。
+
+### 16.2 迁移后必须验证的隐藏依赖
+
+- **serialization 插件**：迁移模块若用 `org.jetbrains.kotlin.plugin.serialization`，插件仓库根
+  `build.gradle.kts` 必须声明该插件版本（`apply false`），否则报 "Plugin not found"；
+- **宿主内置依赖假设**：普通插件依赖 ktor/serialization/coroutines，宿主 APK 已内置无需 fat；
+  连接器依赖 jsch/okhttp/okio 宿主未内置，必须 fat 进 dex jar——两类插件打包方式不同，
+  脚本须按模块分组处理；
+- **PowerShell 数组拼接**：`$inputs += $a + $array` 会破坏数组语义导致 d8 报
+  "internal error"，应写 `$inputs = $inputs + @($a) + $array`；
+- **迁移后产物字节必然变化**（构建元数据/时间戳），即使代码零改动 checksum 也会变——
+  必须重新发布 tag 并回写 plugins.json，否则客户端 SHA256 校验失败。
+
+*最后更新: 2026-08-11 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移*

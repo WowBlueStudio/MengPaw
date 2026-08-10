@@ -67,7 +67,7 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS 双向桥)
 │   └── plugin/                 # 浏览器内置插件 (22 命令)
 │
-└── plugins/                    # 22 个功能插件 (同级，均只依赖 kernel)
+└── plugins/                    # 14 个内置插件 (同级，均只依赖 kernel，随 APK 捆绑)
     ├── plugin-fs/              # 文件系统 (5 命令)
     ├── plugin-net/             # HTTP 网络 (3 命令)
     ├── plugin-skill/           # 双层技能系统 (4 命令) ⭐💎
@@ -80,16 +80,13 @@ mengpaw/
     ├── plugin-dream/           # 梦境模式 (内置不可移除, SPI 可替换) ⭐
     ├── plugin-dev/             # 插件开发工具链 ⭐💎
     ├── plugin-tavily/          # AI 搜索
-    ├── plugin-render/          # 图像生成
-    ├── plugin-comfy/           # ComfyUI 集成
-    ├── plugin-translate/       # 翻译
-    ├── plugin-error-report/    # 错误上报
-    ├── plugin-update/          # 自动更新
-    ├── plugin-browser-push/    # 跨设备推送
-    └── plugin-browser-search/  # 网页转档
+    └── plugin-concise/         # 言简意赅 (停用即恢复原提示词) ⭐
 ```
 
 > ⭐ = 捆绑在 Shell APK 中 · 💎 = WowBlue 原创（领先同类框架，见下节）
+>
+> 13 个外置插件（更新/翻译/上报/生图/ComfyUI/推送/转档/MCP + 5 连接器）源码与分发均在独立仓库
+> [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)（MIT），经插件市场 `plugin.install` 安装。
 
 ## 架构
 

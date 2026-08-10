@@ -33,15 +33,7 @@ include(":plugin-skill")
 include(":plugin-clipboard")
 include(":plugin-tavily")
 include(":plugin-hermes")
-include(":plugin-render")
-include(":plugin-comfy")
-include(":plugin-translate")
 include(":plugin-dev")
-include(":plugin-error-report")
-include(":plugin-browser-push")
-include(":plugin-browser-search")
-include(":plugin-browser-mcp")
-include(":plugin-update")
 include(":plugin-memory-twin")
 include(":plugin-root")
 include(":plugin-agent-tools")
@@ -50,7 +42,8 @@ include(":plugin-evolution")
 include(":plugin-concise")
 
 // plugin-agent-loop and plugin-agent-mission removed — modes now built into AgentEngine
-// Connectors moved to standalone repo mengpaw-connectors (MIT) — see COMMERCIAL-LICENSE.md §11.4
+// Remote plugins (update/translate/error-report/render/comfy/browser-push/browser-search/browser-mcp)
+// and connectors moved to standalone repo mengpaw-connectors (MIT) — see COMMERCIAL-LICENSE.md §11.4
 
 // Map plugin modules to their directory under plugins/
 project(":plugin-framework").projectDir = File(rootDir, "plugins/plugin-framework")
@@ -60,15 +53,7 @@ project(":plugin-skill").projectDir = File(rootDir, "plugins/plugin-skill")
 project(":plugin-clipboard").projectDir = File(rootDir, "plugins/plugin-clipboard")
 project(":plugin-tavily").projectDir = File(rootDir, "plugins/plugin-tavily")
 project(":plugin-hermes").projectDir = File(rootDir, "plugins/plugin-hermes")
-project(":plugin-render").projectDir = File(rootDir, "plugins/plugin-render")
-project(":plugin-comfy").projectDir = File(rootDir, "plugins/plugin-comfy")
-project(":plugin-translate").projectDir = File(rootDir, "plugins/plugin-translate")
 project(":plugin-dev").projectDir = File(rootDir, "plugins/plugin-dev")
-project(":plugin-error-report").projectDir = File(rootDir, "plugins/plugin-error-report")
-project(":plugin-browser-push").projectDir = File(rootDir, "plugins/plugin-browser-push")
-project(":plugin-browser-search").projectDir = File(rootDir, "plugins/plugin-browser-search")
-project(":plugin-browser-mcp").projectDir = File(rootDir, "plugins/plugin-browser-mcp")
-project(":plugin-update").projectDir = File(rootDir, "plugins/plugin-update")
 project(":plugin-memory-twin").projectDir = File(rootDir, "plugins/plugin-memory-twin")
 project(":plugin-root").projectDir = File(rootDir, "plugins/plugin-root")
 project(":plugin-agent-tools").projectDir = File(rootDir, "plugins/plugin-agent-tools")
@@ -76,5 +61,4 @@ project(":plugin-dream").projectDir = File(rootDir, "plugins/plugin-dream")
 project(":plugin-evolution").projectDir = File(rootDir, "plugins/plugin-evolution")
 project(":plugin-concise").projectDir = File(rootDir, "plugins/plugin-concise")
 // plugin-agent-loop / plugin-agent-mission dir mappings removed — modes built into AgentEngine
-// plugin-connector-* dir mappings removed — moved to standalone repo mengpaw-connectors
-
+// plugin-connector-* and remote plugin dir mappings removed — moved to standalone repo mengpaw-connectors

@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased (2026-08-11) — 外置插件整体迁移 mengpaw-connectors
+
+### 变更
+- **8 个普通外置插件源码迁入独立仓库 mengpaw-connectors (MIT)**: update / translate /
+  error-report / render / comfy / browser-push / browser-search / browser-mcp 不再随主仓库
+  构建, 主仓库仅保留 14 个内置插件模块 (全部捆绑 Shell APK)
+- **协议同步**: 迁移插件 SPDX 头由 `AGPL-3.0-or-later OR LicenseRef-Commercial` 改为 `MIT`
+  (插件仓库整体宽松许可)
+- **打包链路迁移**: 主仓库 `scripts/package-plugins-dex.ps1` 移除; mengpaw-connectors
+  `scripts/package-plugins.ps1` 统一打包 13 个外置插件 (8 普通 + 5 连接器)
+- **plugins.json v8**: 13 个 remote 条目 downloadUrl/mirrorUrl 指向 `plugins-v0.4.0`,
+  checksum/size 按新产物回写, version 不动
+- **口径统一**: 开发指南 §3.5 / README / PROTOCOL 更新为「主仓库 14 模块 (内置) +
+  13 外置插件 (mengpaw-connectors)」
+
 ## v0.35.6 (2026-08-10) — 远程插件假安装根治 + 插件版本号规则统一 + dex JAR 发布
 
 ### 新增

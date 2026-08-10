@@ -65,7 +65,7 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS bidirectional bridge)
 │   └── plugin/                 # In-browser plugins (22 commands)
 │
-└── plugins/                    # 22 feature plugins (siblings, all depend only on kernel)
+└── plugins/                    # 14 built-in plugins (siblings, all depend only on kernel, bundled in APK)
     ├── plugin-fs/              # File system (5 commands)
     ├── plugin-net/             # HTTP network (3 commands)
     ├── plugin-skill/           # Two-tier skill system (4 commands) ⭐💎
@@ -78,16 +78,15 @@ mengpaw/
     ├── plugin-dream/           # Dream mode (built-in, SPI-replaceable) ⭐
     ├── plugin-dev/             # Plugin dev toolchain ⭐💎
     ├── plugin-tavily/          # AI search
-    ├── plugin-render/          # Image generation
-    ├── plugin-comfy/           # ComfyUI integration
-    ├── plugin-translate/       # Translation
-    ├── plugin-error-report/    # Error reporting
-    ├── plugin-update/          # Auto update
-    ├── plugin-browser-push/    # Cross-device push
-    └── plugin-browser-search/  # Page archiving
+    └── plugin-concise/         # Concise mode (disable to restore original prompt) ⭐
 ```
 
 > ⭐ = bundled in the Shell APK · 💎 = WowBlue original (leading similar frameworks, see below)
+>
+> The 13 external plugins (update / translate / error-report / render / comfy / browser-push /
+> browser-search / browser-mcp + 5 connectors) live in the standalone repo
+> [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors) (MIT) and are
+> installed from the plugin marketplace via `plugin.install`.
 
 ## Architecture
 

@@ -145,7 +145,7 @@ override suspend fun onUninstall() {
 | 框架 | 类型 | 通道 | 连接器 | 状态 |
 |---|---|---|---|---|
 | MengPaw | ACP | HTTP :9876 | 内置 (内核) | ✅ |
-| MP 浏览器 | MCP | HTTP :9880 | 内置 (plugin-browser-mcp) | ✅ |
+| MP 浏览器 | MCP | HTTP :9880 | 外置 remote (plugin-browser-mcp, mengpaw-connectors) | 📦 已发布 |
 | 任意 MCP 客户端 | MCP | HTTP :9881 | 内置 (plugin-framework 网关) | ✅ |
 | OpenClaw / Qclaw | WS | :18789 | connector-openclaw | 📦 已发布 |
 | QwenPaw / Coze | REST | :8080 | connector-qwenpaw | 📦 已发布 |
