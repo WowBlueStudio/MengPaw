@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.35.3 | **更新**: 2026-08-09 | **架构**: 微内核(123文件) + AgentRuntime + 22插件模块(14捆绑随壳更新) + 双许可(社区AGPL + 商业授权) + 连接器拆分独立仓库(MIT) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 7斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.3
+> **版本**: 0.35.4 | **更新**: 2026-08-10 | **架构**: 微内核(123文件) + AgentRuntime + 22插件模块(14捆绑随壳更新) + 双许可(社区AGPL + 商业授权) + 连接器拆分独立仓库(MIT) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 7斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.3
 
 ---
 
@@ -505,13 +505,13 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 1184 测试，v0.35.2 实测快照：kernel 484 + core 90 + shell 114 + browser 34 + 插件 462，0 failures)
+### 3.7 测试 (16 模块 858 测试，v0.35.4 实测快照：kernel 484 + core 45 + shell 74 + browser 17 + 插件 238，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
 | mengpaw-kernel | 484 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm (v0.34.4 Mission 并入 — DONE 降级回归)、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行引号保护 + 进化闭环/幻觉门禁(静默·无上限拒绝)/回合内重试循环停指令/失败截断上下文剪取/进化产物 v2(去重·可追溯·持久化)/进化认知引导+指纹缓存失效/读回验证 (2026-08-08/09)** |
 | mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
-| mengpaw-shell | 114 | ComplexityDetector 分档 (8+ 分 SWARM 回归, v0.34.4 Mission 并入)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵、extractSkillSource frontmatter 解析、toolSourceFor 来源分类 |
+| mengpaw-shell | 74 | ComplexityDetector 分档 (8+ 分 SWARM 回归, v0.34.4 Mission 并入)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵、extractSkillSource frontmatter 解析、toolSourceFor 来源分类、**FrameworkCardDialog peerFromContact 合成 + ShortToolSummary 副标题精简 (v0.35.4 新增 9 用例)** |
 | mengpaw-browser | 17 | **smartNavigate 智能导航 (v0.34.1+ 交接首测: URL/域名/纯数字不误判/关键词编码/fromKey 回退)**、AdBlocker 规则 (域名精确匹配/子域继承/路径规则/模式命中/非法 URL 降级) |
 | plugin-hermes (tribe) | 34 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 (P0 回归) |
 | plugin-memory-twin | 34 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
@@ -520,7 +520,7 @@ twin.lost <peer> / twin.recover <peer>
 | plugin-skill | 23 | 路径消毒 (../ 越界/反斜杠穿越)、frontmatter 解析、命令层落实、source 来源标记 (预置/用户) |
 | plugin-net | 15 | SSRF 黑名单矩阵、validateUrl scheme 白名单、代理字符串逻辑 |
 | plugin-tavily | 15 | API Key 混淆往返/无明文窗口泄漏 |
-| plugin-framework | 14 | McpGateway 4MB 上限/非法 Content-Length 413、指纹 hex、peer JSON 往返 |
+| plugin-framework | 21 | McpGateway 4MB 上限/非法 Content-Length 413、指纹 hex、peer JSON 往返、**FrameworkPairStore 持久化/计数/状态 + FrameworkPairHandler 请求落盘/接受入册 (v0.35.1+)** |
 | plugin-update | 12 | 版本比较、sha256 向量、镜像 URL、自动检查 CAS 幂等 |
 | plugin-concise | 10 | 简洁模式 |
 | plugin-root | 10 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 (execute 不测 — 真实 su) |

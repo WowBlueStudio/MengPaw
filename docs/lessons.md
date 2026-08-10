@@ -574,5 +574,12 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **处置**：① 依赖 kernel 新 API 的模块先单独 `:mengpaw-kernel:test`（产出最新 jar）再编插件/shell；② 组合命令失败时逐模块拆开定位，避免被 Gradle 报告误导（错误指向的模块未必是真正根因）；③ 兜底 `:模块:clean` 后重编译。
 - **教训**：① 改内核 API 后，验证顺序必须是 kernel → 依赖模块 → shell，全量 `test` 放最后；② Gradle 组合任务的错误报告在增量缓存异常时不可信，拆开跑是正解；③ 本项目勿并行多个 Gradle 任务（与 clean 互踩同源）。
 
+### 15.25 ACP 双 server 监听断裂：框架配对请求静默丢失（2026-08-10，v0.35.4）
+
+- **现象**：用户实测——添加框架按钮点了没反应、对端收不到弹窗、通讯录混入未添加的发现节点。
+- **根因链**：① `FrameworkPairHandler` 注册在全局 `AcpHolder.server`，但该 server 默认**无 transport 监听**（只有手动 `self.acp start` 才创建）；② 孪生激活时另建独立 `AcpServer`+transport 监听 9876，只注册 TwinAcpHandler——框架配对请求到对端被静默丢弃（返回默认 ack 200）；③ 通讯录 `loadFrameworkContacts()` 又合并未入册 mDNS 节点，列表出现"未添加"项目，语义混乱。
+- **处置**：① 孪生改共用 `AcpHolder.server`（`AcpHolder.ensureListening()` 幂等监听，`self.acp start` 同步复用，框架插件安装时自动确保监听）；② 收到请求侧边栏 AlertDialog 弹窗（同意/拒绝/稍后）；③ 通讯录列表移除 discovered 合并，未入册节点只在添加框架页面扫描列表出现；④ 发送反馈固定显示在对话框底部按钮区。
+- **教训**：① **两个 server 监听同一端口 = 必然有一个收不到 handler**——协议消息分发必须先确认"谁在监听、handler 注册在谁身上"，再谈功能；② 插件间不可互相依赖时，共享实例（如 AcpHolder）就是唯一正确解耦点；③ 用户报"添加没反应"先查接收链路（对端是否真的收到），再查 UI 反馈可见性。
+
 
 *最后更新: 2026-08-09 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*

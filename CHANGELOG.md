@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.35.4 (2026-08-10) — 框架信任/通讯录添加流程修复 + Tools 副标题精简
+
+### 修复
+- **框架信任列表折叠计数归零**: 折叠时"已信任 N 个框架设备"恒 0 — 改为始终读真实信任列表, 折叠/展开计数一致 (展开仅控制列表显示)
+- **手机端框架名片丢失信任框架按钮**: ACP 配对但未入册的框架 (peer==null) 名片无信任按钮 — 名片改接收完整 `FrameworkContact`, peer 按名称→指纹兜底解析; 有效信任 = 通讯录信任或 ACP 配对信任; 未入册 ACP 联系人点"信任"自动入册
+- **框架通讯录添加流程**: ① 接收链路断裂 — `FrameworkPairHandler` 注册在无监听的 `AcpHolder.server`, 实际监听 9876 的是孪生独立 server, 请求到对端被静默丢弃 → 孪生/框架共用 `AcpHolder.server` + `ensureListening()` 幂等监听, 落盘/横幅/红点生效; ② 收到配对请求弹窗 (同意/拒绝/稍后); ③ 添加按钮发送反馈固定显示在底部按钮区 (此前在滚动区底部不可见, 误以为没反应); ④ 添加页面去掉居中大图标; ⑤ 通讯录列表不再出现未入册 mDNS 发现节点
+- **Tools 副标题精简**: 副标题此前直接取完整释义且被 maxLines 截断 — `shortToolSummary()` 首段/剥插件名前缀/剥括号补充 + 24 字符上限, 展开区保留全文 (全局工具 + 智能体工具)
+- **Android 15/16 前台服务超时崩溃 (vivo 实测 0.35.3)**: ShellService 声明 `dataSync|specialUse`, dataSync 前台服务 6 小时超时被系统强杀 (`ForegroundServiceDidNotStopInTimeException`) — 改为仅 `specialUse` (agent_keepalive 常驻), 超时崩溃消除
+
+### 发行
+- APK: `mengpaw-shell-v0.35.4-release.apk`（签名 CN=MengPaw, OU=Studio, O=WowBlue）
+- plugins.json 无变更（本轮无插件发布）
+- 测试数: kernel 484 + core 45 + shell 74 (unit) + browser 17 + 插件 238 — 全量 858, 0 failures（§3.7 实测快照）
+
 ## v0.35.3 (2026-08-09) — 暗色模式深蓝字体换白 + 九维/闭环审计修复
 
 ### 新增

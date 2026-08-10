@@ -20,8 +20,12 @@ class FrameworkPairTest {
 
     @Before
     fun initPaths() {
-        DataPaths.initialize(System.getProperty("java.io.tmpdir") + "/mengpaw_pair_test")
-        File(DataPaths.BASE).deleteRecursively()
+        // v0.35.4: 唯一目录 — 此前固定 mengpaw_pair_test, 全量 `./gradlew test`
+        // 并行执行 debug/release 两个 test variant 时互删目录/写文件竞态
+        // (偶发 "write failed" + pendingCount 错乱; 单独跑只跑一个 variant 全绿)
+        DataPaths.initialize(
+            File(System.getProperty("java.io.tmpdir"), "mengpaw_pair_test-${System.nanoTime()}").absolutePath
+        )
     }
 
     private fun request() = FrameworkPairStore.PairRequest(
