@@ -6,7 +6,7 @@
     {
       "id": "concise-plugin",
       "name": "言简意赅",
-      "version": "0.1.0",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），让模型回答更简洁。可停用，停用即恢复原提示词",
@@ -46,9 +46,23 @@
       "changelog": "### 新增\n- **智能体进化 SPI 化**: 内核 EvolutionProvider 接口 + 注册表; 内置默认实现注册为 evolution-plugin (不可移除)。\n- 第三方插件可实现 EvolutionProvider 在 onInstall 时注册覆盖 (后注册者胜), 卸载后回退内核默认。"
     },
     {
+      "id": "tavily-plugin",
+      "name": "AI 搜索",
+      "version": "",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "AI 优化搜索引擎：结构化搜索结果 + 网页内容提取 (v0.28.7 内置)",
+      "status": "builtin",
+      "minCoreVersion": "0.2.0",
+      "commands": ["tavily.search", "tavily.extract", "tavily.setup"],
+      "checksum": "",
+      "size": 0,
+      "changelog": "### 新增\n- **Tavily 搜索内置 (v0.28.7)**: AI 优化搜索引擎接入 — tavily.search/extract/setup, 随 Shell APK 分发。"
+    },
+    {
       "id": "framework-plugin",
       "name": "框架发现",
-      "version": "0.20.2",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理",
@@ -69,7 +83,7 @@
     {
       "id": "fs-plugin",
       "name": "文件系统",
-      "version": "0.20.2",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "文件系统增量操作：cp, mv, stat, grep, glob (读写用内核 agent.read/write/ls/rm/mkdir)",
@@ -89,7 +103,7 @@
     {
       "id": "net-plugin",
       "name": "网络请求",
-      "version": "0.20.2",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "HTTP 请求：GET/POST，支持自定义 Header 和超时",
@@ -107,7 +121,7 @@
     {
       "id": "memory-twin-plugin",
       "name": "记忆孪生",
-      "version": "0.20.2",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "跨设备记忆孪生同步 — 哈希链账本 + ACP P2P + 心跳保活 + QoS自适应 + 手动IP发现",
@@ -138,7 +152,7 @@
     {
       "id": "skill-plugin",
       "name": "技能系统",
-      "version": "0.20.2",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "可复用的 Agent 剧本系统（YAML+Markdown），含 3 个默认 Skill",
@@ -157,7 +171,7 @@
     {
       "id": "clipboard-plugin",
       "name": "剪贴板",
-      "version": "0.20.2",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "系统剪贴板读写操作",
@@ -175,7 +189,7 @@
     {
       "id": "dev-plugin",
       "name": "插件开发工具",
-      "version": "0.20.2",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "创建、审计、分享自建插件 — Agent 可自主扩展 MengPaw 功能",
@@ -291,7 +305,7 @@
     {
       "id": "tribe-plugin",
       "name": "部落协作 (Tribe)",
-      "version": "0.20.2",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "多 Agent 部落协作：LAN 自动组队、Kanban 委派（优先级+超时+嵌套链）、LLM 路由、任务模板、Fleet 并行、广播讨论、记忆去重压缩、上下文裁剪、ACP 实时、心跳。对应模块 plugin-hermes（随 APK 捆绑，含 hermes.* 兼容命令）",
@@ -418,7 +432,7 @@
     {
       "id": "agent-mission-plugin",
       "name": "Mission",
-      "version": "0.1.1",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "Mission 模式已嵌入 AgentEngine.runWithMission()，内置功能",
@@ -433,7 +447,7 @@
     {
       "id": "agent-loop-plugin",
       "name": "Agent Loop",
-      "version": "0.1.1",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "Goal 模式已嵌入 AgentEngine.run()，内置功能",
@@ -449,7 +463,7 @@
     {
       "id": "root-plugin",
       "name": "Root 权限",
-      "version": "0.20.2",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "Root 权限管理 — su 命令执行/应用管理/完整文件系统/系统修改/备份恢复/审计日志",
@@ -484,7 +498,7 @@
     {
       "id": "tools-plugin",
       "name": "Agent 命令集",
-      "version": "0.20.2",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
       "description": "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用",
@@ -511,7 +525,7 @@
       "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-openclaw.aar",
       "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.1.0/plugin-connector-openclaw.aar",
       "minCoreVersion": "0.20.0",
-      "commands": [],
+      "commands": ["connector-openclaw.info"],
       "checksum": "sha256:a1d06fba2135525754d6cb601b31533fc18b67399ceb8ad25adef1da12055b35",
       "size": 12507,
       "changelog": "### 新增\n- **OpenClaw 连接器**: 实现内核 FrameworkAdapter SPI, 经 WebSocket 对接 OpenClaw (18789)。\n- 安装后自动注册 — `framework.adapters` 可见, `framework.connect <peer>` 即可对接。"

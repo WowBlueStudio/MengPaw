@@ -22,7 +22,7 @@ class ConcisePlugin : Plugin {
     override val metadata = PluginMetadata(
         id = PLUGIN_ID,
         name = "言简意赅",
-        version = "0.2.0",
+        version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "提示词前缀注入简洁引导，回答更简洁且保留 Markdown 与分步思考（只动前缀）",

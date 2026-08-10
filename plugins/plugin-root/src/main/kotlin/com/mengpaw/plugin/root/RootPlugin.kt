@@ -61,7 +61,7 @@ class RootPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "root-plugin",
         name = "Root 权限",
-        version = "0.1.0",
+        version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "Root 权限管理 — su 命令执行/应用管理/文件系统/系统修改/备份恢复/审计日志",

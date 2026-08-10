@@ -25,7 +25,7 @@ class AgentToolsPlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "tools-plugin",
         name = "Agent 命令集",
-        version = "0.1.0",
+        version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "Agent 命令集注册 — 导入外部 CLI 命令集(gh/飞书等)，摘要注入系统提示词快速调用",

@@ -49,7 +49,7 @@ class TribePlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "tribe-plugin",
         name = "部落协作",
-        version = "0.5.0",
+        version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
         description = "多 Agent 部落协作：LAN 自动组队、Kanban 委派（优先级+超时+嵌套链）、LLM 路由、任务模板、Fleet 并行、广播讨论、记忆去重压缩、上下文裁剪、ACP 实时消息、心跳检测",

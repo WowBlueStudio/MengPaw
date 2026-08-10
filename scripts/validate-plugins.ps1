@@ -82,8 +82,8 @@ foreach ($p in $plugins) {
     foreach ($f in @("id", "name", "type", "author", "description", "status")) {
         if (-not $p.$f) { Add-Error "[$($p.id)] missing required field: $f" }
     }
-    # version: required for non-builtin (builtin follows APK version, empty is valid)
-    if (-not $p.version -and $p.status -ne "builtin") {
+    # version: required for non-builtin/embedded (builtin/embedded 随壳更新, 空版本合法)
+    if (-not $p.version -and $p.status -notin @("builtin", "embedded")) {
         Add-Error "[$($p.id)] missing required field: version"
     }
     if ($p.status -and $validStatus -notcontains $p.status) { Add-Error "[$($p.id)] invalid status: $($p.status)" }
