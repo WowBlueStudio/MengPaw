@@ -1310,6 +1310,7 @@ library AAR（内含 `classes.jar` JVM 字节码）**无法在真机激活**，�
 - `scripts/build-plugins.ps1` — 模块列表动态派生自 settings.gradle.kts（22 模块），逐模块 assembleRelease，产物复制到 `releases/plugins/plugin-<name>-<version>-release.aar`，自动回写 plugins.json 的 checksum/size/changelog（remote 条目）
 - `scripts/update-plugins-json.py` — JSON 写回（规避 PowerShell 5.1 的 ConvertTo-Json 中文转义缺陷）
 - `scripts/validate-plugins.ps1` — 只读校验：结构/id 唯一/字段完整/SemVer/URL 与 checksum 一致性/与代码交叉校验（namespaceFor 派生规则、shell 捆绑 vs plugins.json builtin 对应）
+- `scripts/package-plugins-dex.ps1` — 把 8 个 remote 插件 AAR 打包为宿主可加载的 dex JAR（含 `META-INF/plugin-class` 主类清单），产物输出 `releases/plugins-dex/*-release.jar`，发布 remote 插件前必须运行
 - 插件 AAR 发布 tag：`plugins-vX.Y.Z`（独立于版本 tag `vX.Y.Z`）
 
 ---

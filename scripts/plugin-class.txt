@@ -1,0 +1,13 @@
+# 远程插件主类清单 — 格式: <模块目录名>: <插件主类全限定名>
+# 由 scripts/package-plugins-dex.ps1 写入各 fat dex JAR 的 META-INF/plugin-class。
+# 加载器定位顺序: META-INF/plugin-class → 候选类名 (见 PluginRuntimeLoader)。
+# error-report/browser-push/browser-search/browser-mcp 的主类与候选规则不匹配,
+# 必须依赖本清单 (包名无连字符段, 候选规则生成的连字符类名非法)。
+plugin-update: com.mengpaw.plugin.update.UpdatePlugin
+plugin-translate: com.mengpaw.plugin.translate.TranslatePlugin
+plugin-error-report: com.mengpaw.plugin.errorreport.ErrorReportPlugin
+plugin-render: com.mengpaw.plugin.render.RenderPlugin
+plugin-comfy: com.mengpaw.plugin.comfy.ComfyPlugin
+plugin-browser-push: com.mengpaw.plugin.browserpush.BrowserPushPlugin
+plugin-browser-search: com.mengpaw.plugin.browsersearch.BrowserSearchPlugin
+plugin-browser-mcp: com.mengpaw.plugin.browsermcp.BrowserMcpPlugin

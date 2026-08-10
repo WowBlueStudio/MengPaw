@@ -610,12 +610,19 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
   dex JAR 修复方向（不再静默假安装）；② 新增 `META-INF/plugin-class` 主类清单优先
   （任意包名/类名），回退候选规则；③ 连接器仓库新增 `scripts/package-connectors.ps1`，
   d8 合并 `classes.jar` + common + jsch/okhttp/okio 为 fat dex JAR 并写主类清单；
-  ④ 连接器内核依赖升级 v0.23.0 → v0.35.5（SPI/Plugin API 验证二进制兼容）。
+  ④ 连接器内核依赖升级 v0.23.0 → v0.35.5（SPI/Plugin API 验证二进制兼容）；
+  ⑤ 主仓库新增 `scripts/package-plugins-dex.ps1` 覆盖 8 个 remote 插件
+  （update/translate/error-report/render/comfy/browser-push/browser-search/browser-mcp）——
+  其中 error-report/browser-push/browser-search/browser-mcp 的主类与候选规则不匹配
+  （包名无连字符段），必须依赖 manifest 清单。8 个 dex JAR 已生成于
+  `releases/plugins-dex/`，plugins.json 指向 `.jar` 的回写/发布待用户拍板。
 - **教训**：① **"安装成功"≠"插件激活"**——remote 插件安装后必须验证注册表/命令
   真实生效，`plugin.info` 与 `framework.adapters` 交叉核对；② 发布 remote 插件的产物
   形态必须与加载器（DexClassLoader + dex 容器）匹配，标准 AAR 只适用于编译进 APK 的
   builtin 插件；③ 连字符命名空间是候选类名规则盲区，任何新插件 id 含连字符就必须走
-  manifest 清单或改 id；④ 依赖未进 dex 容器（fat）则运行时必 NoClassDefFoundError。
+  manifest 清单或改 id；④ 依赖未进 dex 容器（fat）则运行时必 NoClassDefFoundError；
+  ⑤ 主仓库 remote 插件同样适用——14 个内置插件直接编译进 APK 不受影响，8 个 remote
+  插件发布前必须重新打包为 dex JAR 并更新 plugins.json URL/checksum。
 
 
 *最后更新: 2026-08-09 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）*
