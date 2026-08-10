@@ -41,6 +41,7 @@ if (-not $token) {
 }
 
 $releaseName = if ($Name) { $Name } else { "Release $Tag" }
+$releaseNotes = if ($Notes) { $Notes } else { "MengPaw release $Tag" }  # Gitee 要求描述非空
 $apiBase = "https://gitee.com/api/v5/repos/$Owner/$Repo"
 
 # ── 幂等: tag 已有 release 则复用, 否则创建 ────────────────────
@@ -56,7 +57,7 @@ if ($existing -and $existing.id) {
         access_token = $token
         tag_name = $Tag
         name = $releaseName
-        body = $Notes
+        body = $releaseNotes
         target_commitish = $TargetBranch
     } | ConvertTo-Json -Compress
     $created = Invoke-RestMethod -Uri "$apiBase/releases" -Method Post -Body $body -ContentType "application/json" -TimeoutSec 60
