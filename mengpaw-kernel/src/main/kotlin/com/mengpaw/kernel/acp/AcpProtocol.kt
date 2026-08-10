@@ -41,6 +41,7 @@ enum class AcpMessageType {
     FRAMEWORK_PAIR_REQUEST, // 框架通讯录配对请求（发现节点 → 请求入册, 对方确认后双向入册）
     FRAMEWORK_PAIR_ACCEPT,  // 框架配对请求同意（双方入册）
     FRAMEWORK_PAIR_DECLINE, // 框架配对请求拒绝
+    FLEET_RESULT,           // 舰队委派结果回传 (v0.36: 对端执行完 → 指挥舰状态回收)
     MCP_REQUEST,            // MCP JSON-RPC 请求 (tools/list, tools/call, etc.)
     MCP_RESPONSE,           // MCP JSON-RPC 响应 (通过 ACP 返回)
     // ── Session Sync (会话同步 / Upstream Links) ──
@@ -112,13 +113,29 @@ data class AcpMessage(
                     put("nonce", JsonPrimitive(nonce))
                 }.toString())
 
-        fun twinDelegate(from: String, to: String, task: String, requirements: String = "[]") =
-            AcpMessage(from, to, AcpMessageType.TWIN_DELEGATE.name,
-                kotlinx.serialization.json.buildJsonObject {
-                    put("task", JsonPrimitive(task))
-                    put("sessionId", JsonPrimitive(from))
-                    put("requirements", kotlinx.serialization.json.Json.parseToJsonElement(requirements))
-                }.toString())
+        fun twinDelegate(
+            from: String, to: String, task: String, requirements: String = "[]",
+            delegateId: String = "", callbackAddress: String = "", callbackPort: Int = 0
+        ) = AcpMessage(from, to, AcpMessageType.TWIN_DELEGATE.name,
+            kotlinx.serialization.json.buildJsonObject {
+                put("task", JsonPrimitive(task))
+                put("sessionId", JsonPrimitive(from))
+                put("requirements", kotlinx.serialization.json.Json.parseToJsonElement(requirements))
+                // v0.36 舰队闭环: 委派 ID + 回传地址 — 对端执行完后 fleet.reply 回传结果
+                if (delegateId.isNotBlank()) put("delegateId", JsonPrimitive(delegateId))
+                if (callbackAddress.isNotBlank()) put("callbackAddress", JsonPrimitive(callbackAddress))
+                if (callbackPort > 0) put("callbackPort", JsonPrimitive(callbackPort))
+            }.toString())
+
+        /** FLEET_RESULT: 对端执行完舰队委派, 结果回传指挥舰 (delegateId 关联)。 */
+        fun fleetResult(
+            from: String, to: String, delegateId: String, result: String, success: Boolean
+        ) = AcpMessage(from, to, AcpMessageType.FLEET_RESULT.name,
+            kotlinx.serialization.json.buildJsonObject {
+                put("delegateId", JsonPrimitive(delegateId))
+                put("result", JsonPrimitive(result))
+                put("success", JsonPrimitive(success))
+            }.toString(), requestId = delegateId)
 
         // ── Session Sync factory methods ────────────────────────────
 

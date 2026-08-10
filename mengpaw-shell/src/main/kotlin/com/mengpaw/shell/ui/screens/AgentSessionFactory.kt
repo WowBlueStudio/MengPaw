@@ -132,7 +132,11 @@ class AgentSessionFactory(
             middleware = AgentMiddleware.chain(memoryMw, tribeMw, agentToolsMw, conciseMw),
             postCallMiddleware = postMw,
             scrollContext = scroll,
-            additionalNamespaces = mapOf("sys" to com.mengpaw.core.namespace.SysExecutor.commands)
+            additionalNamespaces = mapOf(
+                "sys" to com.mengpaw.core.namespace.SysExecutor.commands,
+                // v0.36 舰队指挥 (shell 注入 — 需访问 framework 通讯录 + 内核 FleetRuntimeStore)
+                "fleet" to FleetShellCommands.commands
+            )
         ).also {
             it.integrityProvider = com.mengpaw.core.security.IntegrityGuard.globalInstance
             it.setAgentIdentity(name, framework, model)

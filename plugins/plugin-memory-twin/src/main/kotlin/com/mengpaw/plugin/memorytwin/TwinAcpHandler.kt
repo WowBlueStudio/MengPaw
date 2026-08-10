@@ -172,7 +172,12 @@ class TwinAcpHandler(
             return AcpResult(false, "untrusted_delegate",
                 "Task delegation requires paired trust. Complete twin pairing first.")
         }
-        syncEngine.onTwinDelegateReceived(msg.from, task, requirementsStr)
+        // v0.36 舰队闭环: delegateId + 回传地址 — 执行完后 fleet.reply 回传指挥舰
+        val delegateId = payload?.get("delegateId")?.jsonPrimitive?.content ?: ""
+        val callbackAddress = payload?.get("callbackAddress")?.jsonPrimitive?.content ?: ""
+        val callbackPort = payload?.get("callbackPort")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+        syncEngine.onTwinDelegateReceived(
+            msg.from, task, requirementsStr, delegateId, callbackAddress, callbackPort)
         return AcpResult(true, "delegate_queued")
     }
 

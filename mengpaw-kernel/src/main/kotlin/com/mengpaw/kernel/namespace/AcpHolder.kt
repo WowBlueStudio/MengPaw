@@ -14,6 +14,11 @@ object AcpHolder {
     )
     var transport: com.mengpaw.kernel.acp.AcpHttpTransport? = null
 
+    init {
+        // v0.36 舰队闭环: 结果回传 handler 常驻注册 — 对端 FLEET_RESULT 直达 FleetRuntimeStore
+        try { server.registerHandler(com.mengpaw.kernel.acp.FleetResultHandler()) } catch (_: Exception) {}
+    }
+
     /**
      * 确保 ACP 端口在监听 (v0.35.4): 框架配对 handler 注册在 [server] 上,
      * 此前只有手动 `self.acp start` 才创建 transport — 对端收不到配对请求。

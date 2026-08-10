@@ -337,6 +337,18 @@ object BuiltinCommandIndex {
         idx("framework.delegate", "指挥舰委派 — 把任务直发已信任框架执行 (对端 Agent 自主处理, 可自行进入火种模式, 结果经孪生同步回传)", "framework.delegate <peer-name> <task>",
             listOf("委派", "指挥", "远程", "执行", "跨设备", "调度", "任务", "指挥舰"),
             listOf("delegate", "command", "dispatch", "remote", "cross-device", "task"))
+        idx("fleet.peers", "舰队成员总览 — 已信任框架列表 (名称/类型/地址/在线状态)", "fleet.peers",
+            listOf("舰队", "成员", "总览", "框架", "信任", "在线"),
+            listOf("fleet", "peers", "members", "frameworks", "trusted", "online"))
+        idx("fleet.delegate", "指挥舰委派 — 委派任务到已信任框架执行 (带委派 ID, 对端完成后自动回传结果)", "fleet.delegate <peer-name> <task>",
+            listOf("舰队", "委派", "指挥", "远程", "执行", "跨设备", "调度"),
+            listOf("fleet", "delegate", "dispatch", "remote", "execute", "cross-device"))
+        idx("fleet.status", "舰队任务状态 — 委派 ID/任务/状态 (SENT/DONE/FAILED)/结果回收", "fleet.status",
+            listOf("舰队", "任务", "状态", "委派", "进度", "结果"),
+            listOf("fleet", "status", "task", "delegate", "progress", "result"))
+        idx("fleet.reply", "执行方回传结果 — 委派执行完后把结果发回指挥舰 (inbox 任务文件注明委派 ID)", "fleet.reply <delegateId> <结果> [--fail]",
+            listOf("舰队", "回传", "结果", "委派", "回复", "完成"),
+            listOf("fleet", "reply", "result", "delegate", "complete", "callback"))
         idx("framework.adapters", "列出已注册的连接器及其在线状态", "framework.adapters",
             listOf("连接器", "适配器", "列表", "在线", "MCP网关"),
             listOf("adapters", "connectors", "list", "gateway", "status"))

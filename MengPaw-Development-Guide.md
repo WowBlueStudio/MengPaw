@@ -505,11 +505,11 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 878 测试，v0.35.5 实测快照：kernel 497 + core 45 + shell 74 + browser 17 + 插件 245，0 failures)
+### 3.7 测试 (16 模块 887 测试，v0.35.5 实测快照：kernel 506 + core 45 + shell 74 + browser 17 + 插件 245，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 497 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm (v0.34.4 Mission 并入 — DONE 降级回归)、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行引号保护 + 进化闭环/幻觉门禁/回合内重试循环停指令/失败截断上下文剪取/进化产物 v2 (2026-08-08/09) + readFully 分片读满 + IPv6 host 规范化 + SwarmRuntimeStore 持久化/僵尸清理 (v0.35.5, 13 用例)** |
+| mengpaw-kernel | 506 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复 (SessionManager 30 用例拆 6 文件)、命令注册、swarm (v0.34.4 Mission 并入 — DONE 降级回归)、PinnedSkills 清单 (原子写/损坏降级/路径消毒)、pinned 指针注入 (尾插/指纹失效/缺失降级)、**高危门禁多行引号保护 + 进化闭环/幻觉门禁/回合内重试循环停指令/失败截断上下文剪取/进化产物 v2 (2026-08-08/09) + readFully 分片读满 + IPv6 host 规范化 + SwarmRuntimeStore + FleetRuntimeStore/FLEET_RESULT 回传闭环 (v0.35.5/v0.36, 22 用例)** |
 | mengpaw-core | 45 | InMemoryPreferences 语义 (put null 即 remove)、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex (Locale.ROOT) |
 | mengpaw-shell | 74 | ComplexityDetector 分档 (8+ 分 SWARM 回归, v0.34.4 Mission 并入)、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、DEFAULT_AGENT_NAME 哨兵、extractSkillSource frontmatter 解析、toolSourceFor 来源分类、**FrameworkCardDialog peerFromContact 合成 + ShortToolSummary 副标题精简 (v0.35.4 新增 9 用例)** |
 | mengpaw-browser | 17 | **smartNavigate 智能导航 (v0.34.1+ 交接首测: URL/域名/纯数字不误判/关键词编码/fromKey 回退)**、AdBlocker 规则 (域名精确匹配/子域继承/路径规则/模式命中/非法 URL 降级) |
@@ -850,6 +850,10 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 #### swarm — 火种模式 (2, v0.35.5)
 `status` | `run <任务>`
 > 火种模式 (Swarm/Fleet) 运行时 — `run` 主动触发 (Agent 自主决策, 用户拍板 v0.35.5): 拆解→并行 Worker→验证→合成; 评分 8+ 或 `/Swarm` `/Fleet` 也会进入。运行时持久化 `SwarmRuntimeStore` (原子写 `{BASE}/配置/swarm_runtime.json`, worker 并行快照 synchronized 串行化; 进程被杀残留可查, 超 2h 僵尸自动清理; 正常结束清除); `status` 查询任务/步数预算/子任务进度。
+
+#### fleet — 舰队指挥 (4, v0.36 深度进化, shell 注入 additionalNamespaces)
+`peers` | `delegate <peer-name> <task>` | `status` | `reply <delegateId> <结果> [--fail]`
+> **跨平台生产利器** — 指挥舰 (发起方) / 坦克·步兵 (执行方, 可自行 `swarm.run` 进入火种模式) / 同步交付。闭环: `fleet.delegate` 生成委派 ID + 回传地址 → 直发 `TWIN_DELEGATE` (payload 扩展 delegateId/callbackAddress/callbackPort) → 对端 `TwinAcpHandler` 信任校验 → `FleetRuntimeStore.recordIncoming` (回传地址) + inbox 落盘 (注明"执行完成后 `fleet.reply <委派ID> <结果>`") → 对端执行完 `fleet.reply` → 回发 `FLEET_RESULT` → 指挥舰 `FleetResultHandler` 校验 delegateId 归属 → `FleetRuntimeStore` DONE/FAILED + 结果回收 → `fleet.status` 查询。信任一视同仁 (方案 A); 结果双通道: 回传协议 + 孪生工作区同步。持久化 `{BASE}/配置/fleet_tasks.json` (原子写, 24h 僵尸清理)。
 
 #### evolution — 进化系统 (5, 内核注册, 提供者由同捆插件 plugin-evolution 提供)
 `audit` | `report <描述>` | `learn.command <命令> <描述> [--keywords 词,词]` | `reactions` | `mark-corrected <id>`

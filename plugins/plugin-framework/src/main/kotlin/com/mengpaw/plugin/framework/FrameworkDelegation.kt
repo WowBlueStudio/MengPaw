@@ -61,13 +61,22 @@ internal suspend fun frameworkDelegateCmd(args: List<String>, ctx: ExecutionCont
         errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_NOT_FOUND)
 
     // 直发 TWIN_DELEGATE: from = mengpaw-<本机指纹短码> (对端 PromptFirewall 信任键, 方案 A)
+    // v0.36 舰队闭环: 携带 delegateId + 回传地址 — 对端执行完 fleet.reply 回传结果
+    val delegateId = java.util.UUID.randomUUID().toString().replace("-", "").take(10)
+    val callbackAddress = com.mengpaw.plugin.framework.FrameworkPairEngine.localIpv4() ?: p.address
     val from = acpPeerIdFor(com.mengpaw.plugin.framework.FrameworkIdentity.fingerprint)
-    val msg = com.mengpaw.kernel.acp.AcpMessage.twinDelegate(from = from, to = "*", task = task)
+    com.mengpaw.kernel.agent.FleetRuntimeStore.startTask(
+        delegateId, task, p.name,
+        commander = "mengpaw-${FrameworkPeerStore.shortCodeOf(com.mengpaw.plugin.framework.FrameworkIdentity.fingerprint)}")
+    val msg = com.mengpaw.kernel.acp.AcpMessage.twinDelegate(
+        from = from, to = "*", task = task,
+        delegateId = delegateId, callbackAddress = callbackAddress,
+        callbackPort = com.mengpaw.kernel.ports.Ports.ACP)
     val sent = com.mengpaw.kernel.namespace.AcpHolder.server.sendDirect(msg, p.address, p.port)
     return if (sent) {
         ExecutionResult.ok(
-            "已委派到 ${p.name} (${p.address}:${p.port})\n" +
-            "对端 Agent 将自主执行 — 可自行进入火种模式推进; 结果经孪生工作区同步回传。")
+            "已委派到 ${p.name} (${p.address}:${p.port}) — 委派 ID: $delegateId\n" +
+            "对端 Agent 将自主执行 (可自行进入火种模式推进), 完成后自动回传; fleet.status 查看进度。")
     } else {
         ExecutionResult.fail(
             "委派发送失败: ${p.name} (${p.address}:${p.port}) 不可达\n" +

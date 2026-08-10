@@ -334,7 +334,9 @@ class AcpServer(
             AcpMessageType.CAPABILITY_ANNOUNCE, AcpMessageType.TWIN_DELEGATE,
             AcpMessageType.PAIR_CHALLENGE, AcpMessageType.PAIR_CONFIRM,
             AcpMessageType.FRAMEWORK_PAIR_REQUEST, AcpMessageType.FRAMEWORK_PAIR_ACCEPT,
-            AcpMessageType.FRAMEWORK_PAIR_DECLINE -> {
+            AcpMessageType.FRAMEWORK_PAIR_DECLINE,
+            // v0.36 舰队结果回传 — handler 内部校验 delegateId 归属 (无防火墙, 与配对同语义)
+            AcpMessageType.FLEET_RESULT -> {
                 var customResult: AcpResult? = null
                 for (handler in handlers) {
                     if (type in handler.supportedTypes) {

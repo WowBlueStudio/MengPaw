@@ -137,10 +137,20 @@ internal class TwinSyncPeerRegistry(
     }
 
     /** Called when a peer delegates a task. */
-    fun onTwinDelegateReceived(fromPeerId: String, task: String, requirements: String) {
+    fun onTwinDelegateReceived(
+        fromPeerId: String, task: String, requirements: String,
+        delegateId: String = "", callbackAddress: String = "", callbackPort: Int = 0
+    ) {
         if (!com.mengpaw.kernel.security.PromptFirewall.isTrusted(fromPeerId)) {
             android.util.Log.w("MengPawTwin", "拒绝未配对设备的委派任务: $fromPeerId")
             return
+        }
+        // v0.36 舰队闭环: 记录回传地址 (对端 fleet.reply 用), inbox 落盘含回传指引
+        if (delegateId.isNotBlank()) {
+            try {
+                com.mengpaw.kernel.agent.FleetRuntimeStore.recordIncoming(
+                    delegateId, task, fromPeerId, callbackAddress, callbackPort)
+            } catch (_: Exception) {}
         }
         scope.launch {
             val inboxDir = File(DataPaths.AGENTS, "$agentName/inbox")
@@ -152,6 +162,11 @@ internal class TwinSyncPeerRegistry(
                     appendLine("> 来自: $fromPeerId")
                     appendLine("> 时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
                     if (requirements.isNotBlank()) appendLine("> 能力需求: $requirements")
+                    if (delegateId.isNotBlank()) {
+                        appendLine("> 委派 ID: $delegateId")
+                        appendLine()
+                        appendLine("执行完成后必须回传结果: `fleet.reply $delegateId <结果文本>`")
+                    }
                     appendLine()
                     appendLine(task)
                 }

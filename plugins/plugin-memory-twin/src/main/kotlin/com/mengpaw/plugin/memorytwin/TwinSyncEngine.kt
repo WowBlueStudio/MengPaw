@@ -148,8 +148,10 @@ class TwinSyncEngine(
     fun onCapabilityReceived(peerId: String, cardJson: String) = peerRegistry.onCapabilityReceived(peerId, cardJson)
 
     /** Called when a peer delegates a task. */
-    fun onTwinDelegateReceived(fromPeerId: String, task: String, requirements: String) =
-        peerRegistry.onTwinDelegateReceived(fromPeerId, task, requirements)
+    fun onTwinDelegateReceived(
+        fromPeerId: String, task: String, requirements: String,
+        delegateId: String = "", callbackAddress: String = "", callbackPort: Int = 0
+    ) = peerRegistry.onTwinDelegateReceived(fromPeerId, task, requirements, delegateId, callbackAddress, callbackPort)
 
     // ── Sync protocol (delegated) ──────────────────────────────────
 
