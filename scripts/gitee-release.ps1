@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 ShenZhen wowblue culture and technology CO.,LTD.
+﻿# SPDX-FileCopyrightText: 2026 ShenZhen wowblue culture and technology CO.,LTD.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 <#
 .SYNOPSIS
@@ -44,12 +44,13 @@ $releaseName = if ($Name) { $Name } else { "Release $Tag" }
 $apiBase = "https://gitee.com/api/v5/repos/$Owner/$Repo"
 
 # ── 幂等: tag 已有 release 则复用, 否则创建 ────────────────────
-$releaseId = $null
-try {
-    $existing = Invoke-RestMethod -Uri "$apiBase/releases/tags/$Tag" -Method Get -TimeoutSec 30
+# Gitee API 对不存在的 release 返回 HTTP 200 + body "null" — 必须显式判空
+$existingRaw = & curl.exe -s "$apiBase/releases/tags/$Tag"
+$existing = if ($existingRaw -and $existingRaw -ne "null") { $existingRaw | ConvertFrom-Json } else { $null }
+if ($existing -and $existing.id) {
     $releaseId = $existing.id
     Write-Host "已存在 release, 复用 id=$releaseId" -ForegroundColor Yellow
-} catch {
+} else {
     Write-Host "创建 release: $releaseName ..." -ForegroundColor Cyan
     $body = @{
         access_token = $token
@@ -68,10 +69,10 @@ $uploaded = @()
 foreach ($asset in $Assets) {
     $file = Get-Item $asset -ErrorAction Stop
     Write-Host "上传: $($file.Name) ($([math]::Round($file.Length/1KB,1)) KB) ..." -ForegroundColor Cyan
-    $result = Invoke-RestMethod -Uri "$apiBase/releases/$releaseId/attach_files" -Method Post -Form @{
-        access_token = $token
-        file = $file
-    } -TimeoutSec 300
+    # PS 5.1 无 -Form, 用系统自带 curl.exe 传 multipart (Win10 1803+ 内置)
+    $raw = & curl.exe -s -X POST "$apiBase/releases/$releaseId/attach_files" -F "access_token=$token" -F "file=@$($file.FullName)"
+    $result = $raw | ConvertFrom-Json
+    if (-not $result.browser_download_url) { throw "Gitee 上传失败: $($raw -join ' ')" }
     $uploaded += $result.browser_download_url
     Write-Host "  -> $($result.browser_download_url)" -ForegroundColor Green
 }
