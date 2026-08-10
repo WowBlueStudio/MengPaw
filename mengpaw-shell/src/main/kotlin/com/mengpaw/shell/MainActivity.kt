@@ -141,6 +141,16 @@ class MainActivity : ComponentActivity() {
         // ── 孪生恢复 ──
         try { autoRestoreTwinIfNeeded() } catch (_: Exception) {}
 
+        // ── v0.36 舰队能力上报: 注入本机能力卡生成器 (响应指挥所 fleet.scan) ──
+        try {
+            com.mengpaw.kernel.acp.FleetCapabilityRegistry.provider = {
+                com.mengpaw.shell.ui.screens.FleetCapabilityCollector.collectJson()
+            }
+            com.mengpaw.kernel.acp.FleetCapabilityRegistry.localPeerId = {
+                "mengpaw-${com.mengpaw.plugin.framework.FrameworkPeerStore.shortCodeOf(com.mengpaw.plugin.framework.FrameworkIdentity.fingerprint)}"
+            }
+        } catch (_: Exception) {}
+
         // ── Token 统计 ──
         try { com.mengpaw.shell.ui.components.TokenStatsCollector.load() } catch (_: Exception) {}
 

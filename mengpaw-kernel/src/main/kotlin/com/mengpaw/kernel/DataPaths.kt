@@ -46,6 +46,8 @@ object DataPaths {
     val EVOLUTION get() = "$BASE/进化档案"
     // ── 语音录制 (v0.33.0+) ──
     val RECORDINGS get() = "$BASE/录音"
+    /** Fleet 局域网互传共享目录 (v0.36) — 所有格式文件可互传, 非孪生同步范围。 */
+    val FLEET_SHARE get() = "$BASE/Fleet共享"
     val AGENT_TEMPLATES get() = "$BASE/agent-templates"
     val SOCKET get() = "$BASE/mengpaw.sock"
     val AGENT_INBOX get() = "$AGENTS/inbox"

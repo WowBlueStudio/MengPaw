@@ -15,8 +15,12 @@ object AcpHolder {
     var transport: com.mengpaw.kernel.acp.AcpHttpTransport? = null
 
     init {
-        // v0.36 舰队闭环: 结果回传 handler 常驻注册 — 对端 FLEET_RESULT 直达 FleetRuntimeStore
-        try { server.registerHandler(com.mengpaw.kernel.acp.FleetResultHandler()) } catch (_: Exception) {}
+        // v0.36 舰队闭环 handler 常驻注册 — 结果回传 / 文件互传 / 能力上报
+        try {
+            server.registerHandler(com.mengpaw.kernel.acp.FleetResultHandler())
+            server.registerHandler(com.mengpaw.kernel.acp.FleetFileHandler())
+            server.registerHandler(com.mengpaw.kernel.acp.FleetCapabilityHandler())
+        } catch (_: Exception) {}
     }
 
     /**

@@ -336,7 +336,10 @@ class AcpServer(
             AcpMessageType.FRAMEWORK_PAIR_REQUEST, AcpMessageType.FRAMEWORK_PAIR_ACCEPT,
             AcpMessageType.FRAMEWORK_PAIR_DECLINE,
             // v0.36 舰队结果回传 — handler 内部校验 delegateId 归属 (无防火墙, 与配对同语义)
-            AcpMessageType.FLEET_RESULT -> {
+            AcpMessageType.FLEET_RESULT,
+            // v0.36 舰队文件互传 + 能力上报 — handler 内部消毒/校验
+            AcpMessageType.FLEET_FILE,
+            AcpMessageType.FLEET_CAPABILITY -> {
                 var customResult: AcpResult? = null
                 for (handler in handlers) {
                     if (type in handler.supportedTypes) {

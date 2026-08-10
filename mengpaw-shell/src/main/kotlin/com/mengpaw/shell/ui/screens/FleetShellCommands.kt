@@ -4,9 +4,12 @@
 package com.mengpaw.shell.ui.screens
 
 import com.mengpaw.kernel.acp.AcpMessage
+import com.mengpaw.kernel.agent.FleetCapability
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.ports.Ports
+import java.io.File
+import java.util.Base64
 
 /**
  * fleet 命名空间命令 (v0.36 深度进化) — 舰队指挥 (shell 注入 additionalNamespaces,
@@ -22,7 +25,12 @@ object FleetShellCommands {
         "peers" to ::peersCmd,
         "delegate" to ::delegateCmd,
         "status" to ::statusCmd,
-        "reply" to ::replyCmd
+        "reply" to ::replyCmd,
+        // v0.36 文件互传 + 能力收集
+        "send" to ::sendCmd,
+        "files" to ::filesCmd,
+        "capability" to ::capabilityCmd,
+        "scan" to ::scanCmd
     )
 
     /** 舰队成员总览 — 已信任框架 = 舰队成员 (方案 A: 一视同仁)。 */
@@ -114,5 +122,106 @@ object FleetShellCommands {
         val sent = com.mengpaw.kernel.namespace.AcpHolder.server.sendDirect(msg, task.callbackAddress, task.callbackPort)
         return if (sent) ExecutionResult.ok("已回传结果到指挥舰 (${task.callbackAddress}:${task.callbackPort})")
         else ExecutionResult.fail("回传失败: 指挥舰不可达 (${task.callbackAddress}:${task.callbackPort})")
+    }
+
+    /** 发送文件到已信任成员 — 任意格式, 接收方落 Fleet共享 目录 (非孪生同步)。 */
+    private suspend fun sendCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.size < 2) return ExecutionResult.fail("用法: fleet.send <peer-name> <本地文件路径>")
+        val peerName = args[0]
+        val path = args.drop(1).joinToString(" ")
+        val peer = com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll().find { it.name == peerName }
+            ?: return ExecutionResult.fail("通讯录中无此节点: $peerName")
+        if (!peer.trusted) return ExecutionResult.fail("节点未信任: $peerName — 先 framework.trust --yes")
+
+        val file = File(path)
+        if (!file.exists() || !file.isFile) return ExecutionResult.fail("文件不存在: $path")
+        if (file.length() > com.mengpaw.kernel.acp.FleetFileHandler.MAX_FILE_BYTES) {
+            return ExecutionResult.fail("文件超过 64MB 上限: ${file.length() / 1024 / 1024}MB")
+        }
+        val bytes = try { file.readBytes() } catch (e: Exception) {
+            return ExecutionResult.fail("读取失败: ${e.message}")
+        }
+        val sha = sha256Hex(bytes)
+        val msg = AcpMessage.fleetFile(
+            from = localPeerId(), to = "*", fileName = file.name,
+            contentBase64 = Base64.getEncoder().encodeToString(bytes), sha256 = sha, size = bytes.size.toLong())
+        val sent = com.mengpaw.kernel.namespace.AcpHolder.server.sendDirect(msg, peer.address, peer.port)
+        return if (sent) ExecutionResult.ok("已发送 ${file.name} (${bytes.size / 1024}KB) 到 ${peer.name}")
+        else ExecutionResult.fail("发送失败: ${peer.name} 不可达 (${peer.address}:${peer.port})")
+    }
+
+    /** 本机 Fleet共享 目录文件列表。 */
+    private suspend fun filesCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val dir = File(com.mengpaw.kernel.DataPaths.FLEET_SHARE)
+        val files = if (dir.exists()) dir.listFiles { f -> f.isFile && !f.name.endsWith(".tmp") }
+            ?.sortedByDescending { it.lastModified() } ?: emptyList() else emptyList()
+        if (files.isEmpty()) {
+            return ExecutionResult.ok("Fleet共享 目录为空: ${dir.absolutePath}\n接收的文件自动落盘于此; 发送用 fleet.send <节点> <路径>")
+        }
+        return ExecutionResult.ok(buildString {
+            appendLine("## Fleet共享 (${files.size}) — ${dir.absolutePath}")
+            files.forEach { f ->
+                appendLine("- ${f.name} · ${f.length() / 1024}KB · ${java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(f.lastModified()))}")
+            }
+        }.trimEnd())
+    }
+
+    /** 本机能力卡 (自查/调试)。 */
+    private suspend fun capabilityCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val card = FleetCapability.fromJson(FleetCapabilityCollector.collectJson())
+            ?: return ExecutionResult.fail("能力卡生成失败")
+        return ExecutionResult.ok(buildString {
+            appendLine("## 本机能力 (${card.frameworkName})")
+            appendLine("- 类型: ${card.frameworkType} · 版本: ${card.version}")
+            appendLine("- 环境: ${card.environment} · 设备: ${card.deviceName}")
+            appendLine("- 硬件: ${card.cpuCores} 核 · 内存 ${card.ramMB}MB · 磁盘剩余 ${card.diskFreeMB}MB")
+            if (card.devTools.isNotEmpty()) appendLine("- 开发环境: ${card.devTools.joinToString(" / ")}")
+        }.trimEnd())
+    }
+
+    /**
+     * 指挥所能力扫描 — 向所有已信任成员广播请求, 收集后写入 Notes:
+     * `{AGENTS}/{agent}/Notes/fleet_capabilities.md` (规划分配依据)。
+     */
+    private suspend fun scanCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val members = com.mengpaw.plugin.framework.FrameworkPeerStore.loadAll().filter { it.trusted }
+        if (members.isEmpty()) return ExecutionResult.fail("舰队无成员 — 先添加并信任框架")
+        val callbackAddress = com.mengpaw.plugin.framework.FrameworkPairEngine.localIpv4()
+            ?: return ExecutionResult.fail("无法确定本机局域网地址")
+        com.mengpaw.kernel.agent.FleetCapability.cache.clear()
+        members.forEach { p ->
+            val msg = AcpMessage.fleetCapability(
+                from = localPeerId(), to = "*", capabilityJson = "{}",
+                request = true, callbackAddress = callbackAddress, callbackPort = Ports.ACP)
+            com.mengpaw.kernel.namespace.AcpHolder.server.sendDirect(msg, p.address, p.port)
+        }
+        // 等待对端上报 (3s 窗口)
+        kotlinx.coroutines.delay(3000)
+        val caps = com.mengpaw.kernel.agent.FleetCapability.cache.toMap()
+        val notes = FleetCapability.formatNotes(caps)
+        val agent = ctx.agentName ?: "MengPaw"
+        val notesFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$agent/Notes/fleet_capabilities.md")
+        try {
+            notesFile.parentFile?.mkdirs()
+            val tmp = File(notesFile.parentFile, "fleet_capabilities.md.tmp")
+            tmp.writeText(notes)
+            java.nio.file.Files.move(tmp.toPath(), notesFile.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            if (tmp.exists()) try { tmp.delete() } catch (_: Exception) {}
+        } catch (e: Exception) {
+            return ExecutionResult.fail("Notes 写入失败: ${e.message}")
+        }
+        return ExecutionResult.ok(
+            "能力扫描完成: 收到 ${caps.size}/${members.size} 份上报\n" +
+            "已写入 Notes: $notesFile\n" +
+            if (caps.isEmpty()) "提示: 对端需 0.36 以上版本且已启动 ACP 监听" else "")
+    }
+
+    private fun localPeerId(): String =
+        "mengpaw-${com.mengpaw.plugin.framework.FrameworkPeerStore.shortCodeOf(com.mengpaw.plugin.framework.FrameworkIdentity.fingerprint)}"
+
+    private fun sha256Hex(bytes: ByteArray): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+        return digest.joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
     }
 }

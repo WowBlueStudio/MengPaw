@@ -349,6 +349,18 @@ object BuiltinCommandIndex {
         idx("fleet.reply", "执行方回传结果 — 委派执行完后把结果发回指挥舰 (inbox 任务文件注明委派 ID)", "fleet.reply <delegateId> <结果> [--fail]",
             listOf("舰队", "回传", "结果", "委派", "回复", "完成"),
             listOf("fleet", "reply", "result", "delegate", "complete", "callback"))
+        idx("fleet.send", "舰队文件互传 — 任意格式文件直发已信任成员, 接收方落 Fleet共享 目录 (非孪生同步)", "fleet.send <peer-name> <本地文件路径>",
+            listOf("舰队", "发送", "文件", "互传", "共享", "传输", "APK"),
+            listOf("fleet", "send", "file", "share", "transfer", "apk"))
+        idx("fleet.files", "本机 Fleet共享 目录文件列表 (接收的文件自动落盘于此)", "fleet.files",
+            listOf("舰队", "共享", "文件", "列表", "接收"),
+            listOf("fleet", "files", "share", "received", "list"))
+        idx("fleet.capability", "本机舰队能力卡 — 框架/环境/硬件/磁盘/开发环境 (自查)", "fleet.capability",
+            listOf("舰队", "能力", "硬件", "环境", "磁盘", "开发"),
+            listOf("fleet", "capability", "hardware", "environment", "disk", "dev"))
+        idx("fleet.scan", "指挥所能力扫描 — 广播请求全部已信任框架上报能力, 收集后写入 Notes/fleet_capabilities.md (规划分配依据)", "fleet.scan",
+            listOf("舰队", "扫描", "能力", "收集", "上报", "Notes", "规划"),
+            listOf("fleet", "scan", "capability", "collect", "report", "notes", "planning"))
         idx("framework.adapters", "列出已注册的连接器及其在线状态", "framework.adapters",
             listOf("连接器", "适配器", "列表", "在线", "MCP网关"),
             listOf("adapters", "connectors", "list", "gateway", "status"))

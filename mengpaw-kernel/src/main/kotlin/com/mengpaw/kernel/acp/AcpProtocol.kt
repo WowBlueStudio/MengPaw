@@ -42,6 +42,8 @@ enum class AcpMessageType {
     FRAMEWORK_PAIR_ACCEPT,  // 框架配对请求同意（双方入册）
     FRAMEWORK_PAIR_DECLINE, // 框架配对请求拒绝
     FLEET_RESULT,           // 舰队委派结果回传 (v0.36: 对端执行完 → 指挥舰状态回收)
+    FLEET_FILE,             // 舰队文件互传 (v0.36: 任意格式文件经局域网 Fleet共享 目录互传)
+    FLEET_CAPABILITY,       // 舰队能力上报 (v0.36: 框架/环境/硬件/磁盘/开发环境 → 指挥所 Notes)
     MCP_REQUEST,            // MCP JSON-RPC 请求 (tools/list, tools/call, etc.)
     MCP_RESPONSE,           // MCP JSON-RPC 响应 (通过 ACP 返回)
     // ── Session Sync (会话同步 / Upstream Links) ──
@@ -136,6 +138,36 @@ data class AcpMessage(
                 put("result", JsonPrimitive(result))
                 put("success", JsonPrimitive(success))
             }.toString(), requestId = delegateId)
+
+        /**
+         * FLEET_FILE: 局域网文件互传 — payload 含文件名 + base64 内容 + sha256。
+         * 接收方落盘到 Fleet共享 目录 (路径消毒), 不属于孪生同步。
+         */
+        fun fleetFile(
+            from: String, to: String, fileName: String, contentBase64: String,
+            sha256: String, size: Long
+        ) = AcpMessage(from, to, AcpMessageType.FLEET_FILE.name,
+            kotlinx.serialization.json.buildJsonObject {
+                put("fileName", JsonPrimitive(fileName))
+                put("content", JsonPrimitive(contentBase64))
+                put("sha256", JsonPrimitive(sha256))
+                put("size", JsonPrimitive(size))
+            }.toString(), requestId = fileName)
+
+        /**
+         * FLEET_CAPABILITY: 框架能力上报 — payload = FleetCapability JSON。
+         * request=true 表示指挥所请求上报 (对端收到后回传自身能力卡)。
+         */
+        fun fleetCapability(
+            from: String, to: String, capabilityJson: String, request: Boolean = false,
+            callbackAddress: String = "", callbackPort: Int = 0
+        ) = AcpMessage(from, to, AcpMessageType.FLEET_CAPABILITY.name,
+            kotlinx.serialization.json.buildJsonObject {
+                put("request", JsonPrimitive(request))
+                put("capability", Json.parseToJsonElement(capabilityJson))
+                if (callbackAddress.isNotBlank()) put("callbackAddress", JsonPrimitive(callbackAddress))
+                if (callbackPort > 0) put("callbackPort", JsonPrimitive(callbackPort))
+            }.toString())
 
         // ── Session Sync factory methods ────────────────────────────
 
