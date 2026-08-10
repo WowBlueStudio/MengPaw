@@ -67,6 +67,9 @@ object BuiltinCommandIndex {
         idx("swarm.status", "查看火种模式 (Swarm/Fleet) 进行中或未完成的运行时状态 (任务/步数预算/子任务进度)", "swarm.status",
             listOf("火种", "Swarm", "Fleet", "进度", "子任务", "预算", "状态", "并行"),
             listOf("swarm", "fleet", "progress", "subtask", "budget", "status", "parallel"))
+        idx("swarm.run", "主动以火种模式执行任务 (拆解→并行 Worker→验证→合成; 评分 8+ 也会自动进入)", "swarm.run <任务>",
+            listOf("火种", "Swarm", "并行", "执行", "拆解", "Fleet", "任务"),
+            listOf("swarm", "fleet", "run", "parallel", "decompose", "execute"))
 
         // ── evolution: Agent 进化 (从失败中学习) ──
         idx("evolution.audit", "查看进化绩效: 失败分布/复现率/已沉淀教训", "evolution.audit",
@@ -331,6 +334,9 @@ object BuiltinCommandIndex {
         idx("framework.pair.decline", "拒绝框架配对请求", "framework.pair.decline <requestId>",
             listOf("拒绝", "配对", "请求", "驳回"),
             listOf("pair", "decline", "request", "reject"))
+        idx("framework.delegate", "指挥舰委派 — 把任务直发已信任框架执行 (对端 Agent 自主处理, 可自行进入火种模式, 结果经孪生同步回传)", "framework.delegate <peer-name> <task>",
+            listOf("委派", "指挥", "远程", "执行", "跨设备", "调度", "任务", "指挥舰"),
+            listOf("delegate", "command", "dispatch", "remote", "cross-device", "task"))
         idx("framework.adapters", "列出已注册的连接器及其在线状态", "framework.adapters",
             listOf("连接器", "适配器", "列表", "在线", "MCP网关"),
             listOf("adapters", "connectors", "list", "gateway", "status"))

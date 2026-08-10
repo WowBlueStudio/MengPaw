@@ -146,7 +146,8 @@ class PromptEngine {
 
             ## 常用命令 (权威来源: self.tools)
             - self.search <描述> (首选命令查找) / self.tools [ns] (完整遍历) / self.ports (端口/网络接口) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
-            - swarm.status (火种模式进度/子任务状态; 任务评分 8+ 或 /Swarm /Fleet 进入火种模式)
+            - swarm.run <任务> (主动进入火种模式: 拆解→并行 Worker→验证→合成) / swarm.status (进度/子任务)
+            - framework.delegate <节点> <任务> (指挥舰: 委派到已信任框架执行, 对端可自行进入火种模式, 结果经孪生同步回传)
             - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
             - plugin.marketplace/search/install/list/info/verify/auto / sys.permission.list/request
             - self.status/avatar/theme / sys.app.launch / sys.intent.open
@@ -266,7 +267,8 @@ class PromptEngine {
 
             ## Common Commands (authority: self.tools)
             - self.search <desc> (preferred) / self.tools [ns] (full listing) / self.ports (ports/network interfaces) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
-            - swarm.status (Swarm/Fleet runtime progress; auto-entered on high-complexity tasks or via /Swarm /Fleet)
+            - swarm.run <task> (enter Swarm mode: decompose → parallel workers → verify → synthesize) / swarm.status (progress/subtasks)
+            - framework.delegate <peer> <task> (flagship: dispatch to a trusted framework; peer may self-enter Swarm; results sync back via twin)
             - agent.read/write/ls/rm/mkdir / agent.storage/cleanup/sessions/dream
             - plugin.marketplace/search/install/list/info/verify/auto / sys.permission.list/request
             - self.status/avatar/theme / sys.app.launch / sys.intent.open

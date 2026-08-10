@@ -293,7 +293,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | plugin-net | net | curl, get, post (3) | ⭐ |
 | plugin-skill | skill | ls, run, enable, disable (4) | ⭐ |
 | plugin-clipboard | clipboard | copy, paste, clear (3) | ⭐ |
-| plugin-framework | framework | discover, peers, trust, untrust, info, ping, connect, call, disconnect, adapters, pair.ls, pair.accept, pair.decline (13) | ⭐ |
+| plugin-framework | framework | discover, peers, trust, untrust, info, ping, connect, call, disconnect, adapters, pair.ls, pair.accept, pair.decline, delegate (14) | ⭐ |
 | plugin-agent-tools | tools | import, ls, remove, search (4) | ⭐ |
 
 #### AI / 搜索 (4)
@@ -505,7 +505,7 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 877 测试，v0.35.5 实测快照：kernel 497 + core 45 + shell 74 + browser 17 + 插件 244，0 failures)
+### 3.7 测试 (16 模块 878 测试，v0.35.5 实测快照：kernel 497 + core 45 + shell 74 + browser 17 + 插件 245，0 failures)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
@@ -520,7 +520,7 @@ twin.lost <peer> / twin.recover <peer>
 | plugin-skill | 23 | 路径消毒 (../ 越界/反斜杠穿越)、frontmatter 解析、命令层落实、source 来源标记 (预置/用户) |
 | plugin-net | 15 | SSRF 黑名单矩阵、validateUrl scheme 白名单、代理字符串逻辑 |
 | plugin-tavily | 15 | API Key 混淆往返/无明文窗口泄漏 |
-| plugin-framework | 27 | McpGateway 4MB 上限/非法 Content-Length 413、指纹 hex、peer JSON 往返、**FrameworkPairStore 持久化/计数/状态 + FrameworkPairHandler 请求落盘/接受入册 + 信任门禁 frameworkTrustGate + 发现地址 preferIpv4 (v0.35.5, 6 用例)** |
+| plugin-framework | 28 | McpGateway 4MB 上限/非法 Content-Length 413、指纹 hex、peer JSON 往返、**FrameworkPairStore 持久化/计数/状态 + FrameworkPairHandler 请求落盘/接受入册 + 信任门禁 frameworkTrustGate + ACP 信任键 acpPeerIdFor + 发现地址 preferIpv4 (v0.35.5, 7 用例)** |
 | plugin-update | 12 | 版本比较、sha256 向量、镜像 URL、自动检查 CAS 幂等 |
 | plugin-concise | 10 | 简洁模式 |
 | plugin-root | 10 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 (execute 不测 — 真实 su) |
@@ -847,9 +847,9 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 `status` | `config [key=value]` | `stats [events --tail N]` | `version` | `avatar` | `theme` | `mcp` | `trigger` | `acp` | `tools [namespace]` | `ports [--json]` | `search <query> [--top N]` | `search.stats` | `time [format]` | `notify.message <text>` | `notify.banner <text> [--level]`
 > `self.stats` 遥测 (v0.32.1+, 自检报告 P2-12): 追加 `Tokens: prompt=X completion=Y total=Z` 与 `Latency: last=Nms avg=Mms (K requests)` (真实 usage 源 — AdaptiveLlmProvider 非流式成功响应与流式内联 usage 事件处记录); `self.stats events [--tail N]` 输出 `{BASE}/events.jsonl` 尾部 (JSON lines, 原子追加, 512KB 封顶截尾, Sanitizer 脱敏; Pipeline 成功路径与 failAudit 均写命令事件)。
 
-#### swarm — 火种模式运行时 (1, v0.35.5)
-`status`
-> 火种模式 (Swarm/Fleet) 运行时状态查询 — 任务/步数预算/子任务进度 (`SwarmRuntimeStore` 原子写落盘 `{BASE}/配置/swarm_runtime.json`, worker 并行快照 synchronized 串行化; 进程被杀残留可查, 超 2h 无更新视为僵尸自动清理; 正常结束清除)。入口: 任务评分 8+ 自动进入或 `/Swarm` `/Fleet`; 进度查询 `swarm.status`。
+#### swarm — 火种模式 (2, v0.35.5)
+`status` | `run <任务>`
+> 火种模式 (Swarm/Fleet) 运行时 — `run` 主动触发 (Agent 自主决策, 用户拍板 v0.35.5): 拆解→并行 Worker→验证→合成; 评分 8+ 或 `/Swarm` `/Fleet` 也会进入。运行时持久化 `SwarmRuntimeStore` (原子写 `{BASE}/配置/swarm_runtime.json`, worker 并行快照 synchronized 串行化; 进程被杀残留可查, 超 2h 僵尸自动清理; 正常结束清除); `status` 查询任务/步数预算/子任务进度。
 
 #### evolution — 进化系统 (5, 内核注册, 提供者由同捆插件 plugin-evolution 提供)
 `audit` | `report <描述>` | `learn.command <命令> <描述> [--keywords 词,词]` | `reactions` | `mark-corrected <id>`
@@ -1063,6 +1063,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 - **v0.35.4 修复 (用户反馈)**: ① **接收链路断裂** — `FrameworkPairHandler` 注册在 `AcpHolder.server`, 但该 server 默认无监听; 实际监听 9876 的是孪生激活时创建的独立 server, 请求到对端被静默丢弃。修复: 孪生改共用 `AcpHolder.server` (`AcpHolder.ensureListening()` 幂等启动监听, `self.acp start` 同步复用), 框架插件安装时自动确保监听 — 落盘/横幅/红点全部生效; ② **收到请求弹窗**: 侧边栏监听 `FrameworkPairStore.pending` 新增 → AlertDialog (同意/拒绝/稍后, 添加框架页面打开时不重复弹); ③ **添加按钮反馈**: 发送结果从滚动区底部移到对话框底部按钮区固定显示 (此前内容超高时看不到"已发送/失败", 误以为没反应); ④ **添加页面去头像**: 移除居中 64dp 类型大图标, 仅保留标题
 - **v0.35.5 修复 (用户实测)**: 扫描到对方设备但点"添加"提示发送失败 — `AcpHttpTransport.handleHttpRequest` 单次 `reader.read()` 读 body 不保证读满 (WiFi 分片), 真实配对请求 ~250B 被截断 → 对端 400 "Invalid ACP message"。修复: 提取 `readFully()` 循环读满 (EOF 提前返回已读部分), `AcpTransportReadFullyTest` 4 用例锁行为; 孪生大消息 (WS_MANIFEST 等) 同步受益
 - **v0.35.5 信任门禁 + IPv6 (十二问闭环修复)**: ① `framework.connect/call` 增加 `peer.trusted` 校验 (未信任拒绝并引导 `framework.trust <fp> --yes`, `frameworkTrustGate` 纯函数 + 3 用例) — 此前"信任"仅展示语义不构成执行门禁; ② `sendDirect` 地址规范化 (`normalizeHostForUrl`): IPv6 自动加方括号 + scope 百分号编码, 5 用例; `FrameworkDiscovery` 多地址优先 IPv4 (`preferIpv4`, 3 用例) — 双栈 WiFi 下 IPv6 link-local 直连失败隐患消除
+- **v0.35.5 信任方案 A + 指挥舰 (用户拍板)**: ① **信任一视同仁**: `framework.trust` 同时写 ACP 入站域 (`PromptFirewall.trust("mengpaw-<指纹短码>", fp)`, 键与 `FrameworkPairEngine.localFrom` 一致), `untrust` 同步清除 — 所有 ACP 框架统一语义, 不区分 MengPaw/其他; 解除信任连孪生一起解符合逻辑, 不改; ② **指挥舰委派** `framework.delegate <节点> <任务>`: 信任门禁后直发 `TWIN_DELEGATE` 到对端 ACP 9876, 对端 TwinAcpHandler 信任校验 → inbox, 对端 Agent 自主执行 (可自行 `swarm.run` 进入火种模式), 结果经孪生工作区同步回传 — 手机发指令 / PC(坦克)执行 / 平板(步兵)测试 / 同步交付的闭环底座; ③ **Agent 模式指令** `swarm.run <任务>` (SwarmExecutor.attachEngine 注入, Agent 自主决策火种执行) + 系统提示词「执行模式/指挥舰」说明 (5.1); 气泡 UI 显示 /Swarm 即模式反馈 (5.3, 不加注)
 
 **框架名片重构 (v0.35.1, 用户定案)**: `FrameworkCardDialog` 去标题文字 + 整体 UI 重构 — 类型图标 (64dp) / 框架名称 (19sp) / 备注名 (编辑态输入框) / 信息卡片 (系统环境 + 名称-版本号两行合一) / 智能体列表 (胶囊 chips); 编辑改图形按钮 (Edit/Check), 去掉"关闭" (点外部/返回键关闭); 框架所在系统环境 = mDNS 新增 `platform` 属性广播 + peer 持久化 `platform` 字段 (未知回退); 底部按钮: 删除 + **信任框架/解除信任** (按状态切换, 解除同时清理 ACP 信任与孪生配对文件, 保存/信任后 UI 实时刷新)。**v0.35.4 修复 (用户反馈)**: 信任按钮此前只在 `FrameworkPeerStore.findByName` 命中时渲染 — 手机上"ACP 配对但未入册"的框架 (peer==null) 名片丢失信任按钮。修复: 名片改接收完整 `FrameworkContact` (长按传联系人, 不再只传名字), peer 解析按名称→指纹兜底; 有效信任 = 通讯录信任或 ACP 配对信任 (`PromptFirewall`, 指纹/联系人名双键); 未入册的 ACP 联系人点"信任框架"自动入册 (address 拆 host/port + computeFingerprint), 已配对则显示"解除信任" (清理 ACP 信任与孪生文件); **通讯录列表不再出现未入册 mDNS 节点** — 行内"添加"按钮移除, 统一走添加框架页面扫描列表。
 

@@ -70,6 +70,8 @@ class AgentEngine(
         }
         // 构建命令搜索索引 (BM25 + 双语同义词表) — 一次性初始化
         com.mengpaw.kernel.cli.BuiltinCommandIndex.buildAll()
+        // 注入火种引擎引用 — swarm.run 命令自主触发 Swarm/Fleet (v0.35.5)
+        com.mengpaw.kernel.agent.SwarmExecutor.attachEngine(this)
         // Sync integrity provider to pipeline manager
         pipelineManager.integrityProvider = integrityProvider
     }

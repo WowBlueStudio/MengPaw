@@ -3,6 +3,7 @@
 
 package com.mengpaw.kernel.agent
 
+import com.mengpaw.kernel.AgentEngine
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import java.text.SimpleDateFormat
@@ -15,9 +16,30 @@ import java.util.Locale
  */
 object SwarmExecutor {
 
+    /** AgentEngine 注入 (AgentEngine.init 调用) — swarm.run 触发火种执行。 */
+    @Volatile var agentEngine: AgentEngine? = null
+
+    fun attachEngine(engine: AgentEngine) { agentEngine = engine }
+
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
-        "status" to ::statusCmd
+        "status" to ::statusCmd,
+        "run" to ::runCmd
     )
+
+    /**
+     * 火种模式主动触发 (v0.35.5, 用户定案) — Agent 自主把任务切成
+     * 拆解→并行 Worker→验证→合成; 返回完整火种报告。
+     */
+    private suspend fun runCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val task = args.joinToString(" ").trim()
+        if (task.isBlank()) return ExecutionResult.fail("用法: swarm.run <任务> — 火种模式并行拆解执行")
+        val engine = agentEngine ?: return ExecutionResult.fail("火种引擎未就绪 (AgentEngine 未注入)")
+        return try {
+            ExecutionResult.ok(engine.runWithSwarm(task))
+        } catch (e: Exception) {
+            ExecutionResult.fail("火种执行失败: ${e.message ?: "未知错误"}")
+        }
+    }
 
     private suspend fun statusCmd(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val rt = SwarmRuntimeStore.load()

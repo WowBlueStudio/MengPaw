@@ -45,4 +45,11 @@ class FrameworkTrustGateTest {
     fun 已信任节点放行() {
         assertNull("已信任节点不应被门禁拦截", frameworkTrustGate("书房平板", peer(trusted = true)))
     }
+
+    @Test
+    fun ACP信任键与指纹短码一致() {
+        // 方案 A: 入站信任键 = mengpaw-<指纹短码>, 与 FrameworkPairEngine.localFrom 对齐
+        assertEquals("mengpaw-dde-eff", acpPeerIdFor("mengpaw|aa:bb:cc:dd:ee:ff"))
+        assertEquals("mengpaw-681-123", acpPeerIdFor("claude-code|192.168.1.123"))
+    }
 }

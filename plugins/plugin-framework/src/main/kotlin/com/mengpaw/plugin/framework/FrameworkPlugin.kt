@@ -41,7 +41,9 @@ class FrameworkPlugin : Plugin {
             "framework.connect", "framework.call",
             "framework.disconnect", "framework.adapters",
             // v0.35.2 审查闭环: Agent 侧配对请求操作入口
-            "framework.pair.ls", "framework.pair.accept", "framework.pair.decline"
+            "framework.pair.ls", "framework.pair.accept", "framework.pair.decline",
+            // v0.35.5 指挥舰闭环: 跨设备委派 (对端 Agent 自主执行, 可自行进入火种模式)
+            "framework.delegate"
         )
     )
 
@@ -59,7 +61,8 @@ class FrameworkPlugin : Plugin {
         "adapters" to { args, ctx -> handleAdapters(args, ctx) },
         "pair.ls" to { args, ctx -> handlePairLs(args, ctx) },
         "pair.accept" to { args, ctx -> handlePairAccept(args, ctx) },
-        "pair.decline" to { args, ctx -> handlePairDecline(args, ctx) }
+        "pair.decline" to { args, ctx -> handlePairDecline(args, ctx) },
+        "delegate" to { args, ctx -> frameworkDelegateCmd(args, ctx) }
     )
 
     private val discovery get() = FrameworkDiscovery.instance
@@ -341,6 +344,9 @@ class FrameworkPlugin : Plugin {
                 "信任状态未改变。确认请执行: framework.trust $fp --yes")
         }
         FrameworkPeerStore.save(peer.copy(trusted = true))
+        // 方案 A (v0.35.5 用户拍板): 所有 ACP 框架一视同仁 — 信任同时写 ACP 入站域
+        // (PromptFirewall), 键 = mengpaw-<指纹短码>, 与 FrameworkPairEngine.localFrom 一致
+        com.mengpaw.kernel.security.PromptFirewall.trust(acpPeerIdFor(fp), fp)
         return ExecutionResult.ok("已信任框架: ${peer.name} ($fp) — 可 framework.connect ${peer.name} 或 framework.call ${peer.name} <tool> 委派任务")
     }
 
@@ -349,6 +355,8 @@ class FrameworkPlugin : Plugin {
         val peer = FrameworkPeerStore.findByFingerprint(fp)
             ?: return ExecutionResult.fail("未找到指纹为 $fp 的框架")
         FrameworkPeerStore.save(peer.copy(trusted = false))
+        // 方案 A: 撤销信任同步清 ACP 入站域 (与名片"解除信任"行为一致)
+        com.mengpaw.kernel.security.PromptFirewall.untrust(acpPeerIdFor(fp))
         return ExecutionResult.ok("已撤销信任: ${peer.name} ($fp)")
     }
 
@@ -381,25 +389,4 @@ class FrameworkPlugin : Plugin {
         }
         return ExecutionResult.ok("${peer.name} 无响应 (${peer.address}:${peer.port})")
     }
-}
-
-/**
- * framework.connect/call 信任门禁 (v0.35.5) — 通讯录节点不存在或未信任时返回拒绝结果,
- * 已信任返回 null (放行)。纯函数, 供命令层共用 + 回归测试。
- */
-internal fun frameworkTrustGate(
-    peerName: String,
-    peer: FrameworkPeerStore.FrameworkPeer?
-): ExecutionResult? {
-    if (peer == null) {
-        return ExecutionResult.fail("通讯录中无此节点: $peerName",
-            errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_NOT_FOUND)
-    }
-    if (!peer.trusted) {
-        return ExecutionResult.fail(
-            "节点未信任: $peerName — 请先执行 framework.trust ${peer.fingerprint.ifBlank { peerName }} --yes 信任后委派",
-            errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_PERMISSION_DENIED
-        )
-    }
-    return null
 }
