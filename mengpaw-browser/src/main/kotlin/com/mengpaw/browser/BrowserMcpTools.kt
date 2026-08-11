@@ -11,7 +11,7 @@ import com.mengpaw.browser.plugin.BuiltinBrowserPlugin
  * 设备内 MCP 工具执行（自 BrowserActivity 拆出 — 400 行文件拆分批次 2）。
  *
  * 双路径分流:
- * - **内置 browser.* 命令** (BuiltinBrowserPlugin): 后台线程直接执行。命令内部经
+ * - **内置命令** (BuiltinBrowserPlugin, page.* 22 + browser.* 23): 后台线程直接执行。命令内部经
  *   webView.post 自行回主线程, 原 runOnUiThread 方案会让主线程阻塞在 evalJs 的
  *   latch.await 上, post 的 runnable 永远排不上 → 每次调用 2s 超时 (隐形失效)。
  * - **原生 6 工具** (navigate/screenshot/click/type/extract/eval): 主线程执行
@@ -58,7 +58,7 @@ internal fun runMcpTool(
 }
 
 /**
- * 内置 browser.* 命令执行器 (BuiltinBrowserPlugin — 命令键直接作 MCP 工具名,
+ * 内置命令执行器 (BuiltinBrowserPlugin — 命令键直接作 MCP 工具名,
  * Agent 经 browser.mcp.invoke <命令> 调用)。
  */
 private fun executeBuiltinTool(

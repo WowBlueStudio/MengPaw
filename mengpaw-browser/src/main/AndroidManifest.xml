@@ -3,8 +3,15 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 半自动武器方案决策 #2: 截图/输出落盘公共目录 (MengPaw/截图存档), 供 Shell 侧 Agent 读取 -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <!-- 设备内 MCP 桥认证: 写入 Shell 进程 token 通道 (signature 级, 同签名自动授予) (P0 修复) -->
     <uses-permission android:name="com.mengpaw.permission.MCP_BRIDGE" />
+
+    <!-- 半自动武器方案 Phase 2: am 桥调用权限 (signature 级, 仅同签名 Shell 可调) -->
+    <permission
+        android:name="com.mengpaw.permission.RUN_BROWSER_COMMAND"
+        android:protectionLevel="signature" />
 
     <application
         android:allowBackup="false"
@@ -56,5 +63,11 @@
                 <data android:scheme="content" android:mimeType="text/plain" android:pathPattern=".*\\.md" />
             </intent-filter>
         </activity>
+
+        <!-- Termux 式 am 桥: Shell 子进程经 signature 权限调用浏览器命令 (Phase 2) -->
+        <service
+            android:name=".service.RunCommandService"
+            android:exported="true"
+            android:permission="com.mengpaw.permission.RUN_BROWSER_COMMAND" />
     </application>
 </manifest>

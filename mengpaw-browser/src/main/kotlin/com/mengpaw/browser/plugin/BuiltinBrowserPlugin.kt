@@ -37,10 +37,13 @@ data class BrowserTab(
  *   browser.eval / click / type / scroll / content / screenshot
  *   browser.open / back / forward / title / url
  *
- * v0.32.x (400 行文件拆分批次 2): 42 条命令实现按组拆至
+ * v0.32.x (400 行文件拆分批次 2): 命令实现按组拆至
  *   [BrowserTabCommands]   (标签页 + 效率)
  *   [BrowserPageCommands]  (页面控制/等待/Cookie/对话框)
  *   [BrowserQueryCommands] (表单/查询/截图/坐标/视口)
+ * v0.8.0 (半自动武器 Phase 1): 新增 [BrowserPlaywrightCommands] — page.* Playwright
+ * 语义命令组（22 条）。v0.8.0 Phase 3 去重后 browser.* 保留 23 条（被 page.* 覆盖
+ * 的命令已删，决策 #4）— 合计 45 条命令。
  * 本类保留构造参数 + commands 聚合 + companion 开关, 公开 API 不变。
  */
 class BuiltinBrowserPlugin(
@@ -57,11 +60,17 @@ class BuiltinBrowserPlugin(
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> =
         BrowserTabCommands(ctx).commands +
         BrowserPageCommands(ctx).commands +
-        BrowserQueryCommands(ctx).commands
+        BrowserQueryCommands(ctx).commands +
+        BrowserPlaywrightCommands(ctx).commands
 
     companion object {
         /** Providers set by BrowserActivity for toggle-aware command execution. */
         @JvmStatic var quickClickEnabled: () -> Boolean = { true }
         @JvmStatic var screenshotMaxHeight: () -> Int = { 15000 }
+
+        /** am 桥共享实例 — BrowserActivity 初始化，RunCommandService 复用（半自动武器 Phase 2）。 */
+        @Volatile
+        @JvmStatic
+        var shared: BuiltinBrowserPlugin? = null
     }
 }

@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.mengpaw.browser.data.BrowserPrefs
 import com.mengpaw.browser.data.TabState
+import com.mengpaw.browser.util.BrowserStorage
 import com.mengpaw.browser.ui.theme.BrowserThemeConfig
 import com.mengpaw.core.AndroidLogger
 import com.mengpaw.core.DataPathsInitializer
@@ -58,6 +59,10 @@ class BrowserActivity : ComponentActivity() {
         val prefs = BrowserPrefs(this)
         com.mengpaw.browser.plugin.BuiltinBrowserPlugin.quickClickEnabled = { prefs.quickClickEnabled }
         com.mengpaw.browser.plugin.BuiltinBrowserPlugin.screenshotMaxHeight = { prefs.screenshotMaxHeight }
+        // am 桥共享实例（Phase 2）— RunCommandService 经 signature 权限调用同一命令引擎
+        com.mengpaw.browser.plugin.BuiltinBrowserPlugin.shared = builtinBrowserPlugin
+        // 半自动武器方案决策 #2: 首次打开弹窗引导授予「所有文件访问」(截图落公共目录)
+        ensureStoragePermission()
         enableEdgeToEdge()
         // Read theme from first Agent's theme.md (or default)
         val themeConfig = BrowserThemeConfig.load(this)
@@ -71,6 +76,39 @@ class BrowserActivity : ComponentActivity() {
                 BrowserApp(initialUrl = extractUrl(intent), initialMdContent = mdFileContent)
             }
         }
+    }
+
+    /** 决策 #2: 首次打开引导授予 MANAGE_EXTERNAL_STORAGE（API 30+ 跳系统设置页，非运行时弹窗）。 */
+    private fun ensureStoragePermission() {
+        if (BrowserStorage.hasStorageAccess()) return
+        val prefs = getSharedPreferences("mp_browser", android.content.Context.MODE_PRIVATE)
+        if (prefs.getBoolean("storage_permission_prompted", false)) return
+        prefs.edit().putBoolean("storage_permission_prompted", true).apply()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("需要存储权限")
+            .setMessage(
+                "MP 浏览器需要「所有文件访问」权限，用于把截图保存到公共目录\n" +
+                    "(MengPaw/截图存档)，Agent 才能读取并分析。\n\n" +
+                    "点击「去授权」后在系统设置中允许访问所有文件。"
+            )
+            .setPositiveButton("去授权") { _, _ ->
+                try {
+                    startActivity(
+                        android.content.Intent(
+                            android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                            android.net.Uri.parse("package:$packageName")
+                        )
+                    )
+                } catch (_: Exception) {
+                    try {
+                        startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                    } catch (_: Exception) {
+                        // 设备不支持跳转 — 放弃引导，命令层会持续提示（决策 #6）
+                    }
+                }
+            }
+            .setNegativeButton("暂不", null)
+            .show()
     }
 
     /**
@@ -168,7 +206,8 @@ class BrowserActivity : ComponentActivity() {
     /** OPEN_MD 提炼回传回调: (title, url, md) → 弹 Markdown 预览。 */
     internal var onOpenMd: ((String, String, String) -> Unit)? = null
 
-    // ── P1 fix: BuiltinBrowserPlugin 接线 (此前零实例化, 44 条 browser.* 命令不可达) ──
+    // ── P1 fix: BuiltinBrowserPlugin 接线 (此前零实例化, browser.* 命令不可达);
+    //    v0.8.0 半自动武器: page.* + browser.* 45 条, 经 9880 桥 + am 桥暴露 ──
 
     /** BrowserApp (Compose) 暴露的标签页状态桥 — 命令经它操作真实 UI 状态。 */
     interface BrowserStateBridge {

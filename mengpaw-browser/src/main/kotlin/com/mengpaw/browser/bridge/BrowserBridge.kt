@@ -6,7 +6,7 @@ package com.mengpaw.browser.bridge
 import android.graphics.Bitmap
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import com.mengpaw.kernel.DataPaths
+import com.mengpaw.browser.util.BrowserStorage
 import java.io.File
 import java.io.FileOutputStream
 
@@ -351,7 +351,7 @@ class BrowserBridge(
             val canvas = android.graphics.Canvas(bitmap)
             webView.draw(canvas)
             val path = onScreenshot?.invoke(bitmap) ?: run {
-                val dir = File(DataPaths.SCREENSHOTS)
+                val dir = File(BrowserStorage.screenshotsDir())
                 dir.mkdirs()
                 val file = File(dir, "browser_${System.currentTimeMillis()}.png")
                 FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 90, it) }
@@ -364,33 +364,133 @@ class BrowserBridge(
         }
     }
 
-    // ── Quick Click (委托 FullPageScreenshotter) ────────────────────────
-
     /**
-     * Quick Click: capture a stitched full-page screenshot.
-     * 实现见 [FullPageScreenshotter.capture] — 视口逐段滚动截图拼接。
-     * Returns JSON with the file path, total width, total height, and segment count.
+     * 精确等待页面加载（page.goto 语义，替代 browser.nav 的固定 1.5s）。
+     *
+     * - `domcontentloaded`: progress==100 且 readyState interactive/complete；
+     * - `networkidle`: 加载完成后额外 300ms 无新网络活动（近似实现，WebView 无标准 API）。
+     * 超时返回错误 JSON（不抛异常，命令层如实转述）。
      */
-    @JavascriptInterface
-    fun screenshotFull(maxHeight: Int = 15000): String {
-        return screenshotter.capture(maxHeight)
+    fun waitForLoad(mode: String, timeoutMs: Int = 30000): String {
+        val deadline = System.currentTimeMillis() + timeoutMs.coerceIn(1000, 60000)
+        val networkIdle = mode == "networkidle"
+        var progress = webView.progress
+        var readyState = ""
+        while (System.currentTimeMillis() < deadline) {
+            progress = webView.progress
+            val r = evalJs("(function(){return document.readyState;})()")
+            readyState = r.trim().trim('"')
+            val loaded = progress >= 100 && (readyState == "complete" || readyState == "interactive")
+            if (loaded) {
+                if (networkIdle) {
+                    // 近似 networkidle: 加载完成后再观察 300ms 网络稳定
+                    try { Thread.sleep(300) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+                    if (webView.progress >= 100) {
+                        return """{"ok":true,"mode":"networkidle","progress":100,"readyState":"$readyState"}"""
+                    }
+                } else {
+                    return """{"ok":true,"mode":"domcontentloaded","progress":100,"readyState":"$readyState"}"""
+                }
+            }
+            try { Thread.sleep(100) } catch (_: InterruptedException) { Thread.currentThread().interrupt(); break }
+        }
+        return """{"ok":false,"error":"load timeout after ${timeoutMs}ms","progress":$progress,"readyState":"$readyState"}"""
     }
 
-    /**
-     * Quick Click: tap at absolute coordinates relative to the FULL page.
-     * 实现见 [FullPageScreenshotter.tap] — 按最近截图缩放比还原页面坐标后派发触摸事件。
-     */
-    @JavascriptInterface
-    fun coordClick(x: Int, y: Int): String {
-        return screenshotter.tap(x, y)
+    /** 导航 + 精确等待（page.goto）。loadUrl 必须主线程。 */
+    fun goto(url: String, waitMode: String = "domcontentloaded", timeoutMs: Int = 30000): String {
+        try {
+            webView.post { webView.loadUrl(url) }
+        } catch (e: Exception) {
+            return """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
+        }
+        return waitForLoad(waitMode, timeoutMs)
     }
 
-    /**
-     * Quick Click: scroll to a specific y-coordinate in the full page.
-     * 实现见 [FullPageScreenshotter.scrollToY]。
-     */
+    /** 派发按键事件（page.key）。特殊键走映射表，单字符按 ASCII。 */
     @JavascriptInterface
-    fun coordScroll(y: Int): String {
-        return screenshotter.scrollToY(y)
+    fun key(keyName: String): String {
+        return evalJs(keyScript(escapeJs(keyName)))
     }
+
+    /** 原始页面文本（保留换行）— page.content 的 --grep/--head/--tail 过滤基础。 */
+    @JavascriptInterface
+    fun contentRaw(maxChars: Int = 50000): String {
+        return evalJs(
+            "(function(){var t=document.body?document.body.innerText:'';" +
+                "return JSON.stringify({ok:true,title:document.title||'',url:location.href,text:t.substring(0,$maxChars)});})()"
+        )
+    }
+
+    /** 分段全页截图（决策 #5）— 超长页按段返回，坐标按段拆分。 */
+    @JavascriptInterface
+    fun screenshotFullSegments(maxHeight: Int = 15000): String {
+        return screenshotter.captureSegments(maxHeight)
+    }
+
+    /** 按段坐标点击（决策 #5）— 段号 + 段内截图坐标。 */
+    @JavascriptInterface
+    fun coordClickSegment(seg: Int, x: Int, y: Int): String {
+        return screenshotter.tapSegment(seg, x, y)
+    }
+
+    /** 按段坐标滚动（决策 #5）。 */
+    @JavascriptInterface
+    fun coordScrollSegment(seg: Int, y: Int): String {
+        return screenshotter.scrollToSegmentY(seg, y)
+    }
+
+    /** 元素截图 — 视口内滚动定位元素后裁剪（page.screenshot.element）。 */
+    @JavascriptInterface
+    fun screenshotElement(selector: String): String {
+        val safe = escapeJs(selector)
+        return try {
+            // 元素可能存在视口外 — 先滚动到元素位置再取 rect (getBoundingClientRect 为视口坐标)
+            val wv = webView
+            val scrollLatch = java.util.concurrent.CountDownLatch(1)
+            wv.post {
+                wv.evaluateJavascript(
+                    "(function(){var e=document.querySelector('$safe');if(!e)return 'not found';e.scrollIntoView({block:'center'});return 'ok';})()"
+                ) { scrollLatch.countDown() }
+            }
+            scrollLatch.await(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+            val rectJson = eval(
+                "(function(){var e=document.querySelector('$safe');if(!e)return JSON.stringify({ok:false,error:'not found'});var r=e.getBoundingClientRect();return JSON.stringify({ok:true,x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.width),h:Math.round(r.height)});})()"
+            )
+            val json = org.json.JSONObject(rectJson)
+            if (!json.optBoolean("ok", false)) {
+                return """{"ok":false,"error":"not found: $safe"}"""
+            }
+            val vpW = wv.width.coerceAtLeast(1)
+            val vpH = wv.height.coerceAtLeast(1)
+            val scale = if (vpW.toLong() * vpH > MAX_SCREENSHOT_PIXELS)
+                kotlin.math.sqrt(MAX_SCREENSHOT_PIXELS.toDouble() / (vpW.toLong() * vpH)).toFloat()
+            else 1f
+            val bmpW = (vpW * scale).toInt().coerceAtLeast(1)
+            val bmpH = (vpH * scale).toInt().coerceAtLeast(1)
+            val fullBitmap = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
+            val drawLatch = java.util.concurrent.CountDownLatch(1)
+            wv.post {
+                val c = android.graphics.Canvas(fullBitmap)
+                if (scale < 1f) c.scale(scale, scale)
+                wv.draw(c)
+                drawLatch.countDown()
+            }
+            drawLatch.await(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+            val x = (json.optInt("x", 0) * scale).toInt().coerceIn(0, bmpW - 1)
+            val y = (json.optInt("y", 0) * scale).toInt().coerceIn(0, bmpH - 1)
+            val w = minOf((json.optInt("w", fullBitmap.width) * scale).toInt().coerceAtLeast(1), fullBitmap.width - x)
+            val h = minOf((json.optInt("h", fullBitmap.height) * scale).toInt().coerceAtLeast(1), fullBitmap.height - y)
+            val cropped = Bitmap.createBitmap(fullBitmap, x, y, w, h)
+            fullBitmap.recycle()
+            val file = File(com.mengpaw.browser.util.BrowserStorage.screenshotsDir(), "element_${System.currentTimeMillis()}.png")
+            file.parentFile?.mkdirs()
+            FileOutputStream(file).use { cropped.compress(Bitmap.CompressFormat.PNG, 90, it) }
+            cropped.recycle()
+            """{"ok":true,"path":"${file.absolutePath}","rect":{"x":$x,"y":$y,"w":$w,"h":$h}}"""
+        } catch (e: Exception) {
+            """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
+        }
+    }
+
 }

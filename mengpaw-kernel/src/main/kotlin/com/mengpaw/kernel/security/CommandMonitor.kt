@@ -129,6 +129,18 @@ object CommandMonitor {
         // 1. 再解释形态 → 提取 payload 递归 (su/sudo 直接 BLOCK)
         when (val re = detectReinterpret(cmd)) {
             is Reinterpret.Blocked -> return "提权命令 (su/sudo) 已被安全策略禁止: $cmd"
+            Reinterpret.BlockedBrowserCommand -> return "浏览器命令白名单校验失败 — payload 必须以 page.* / browser.* 开头，拒绝任意 shell 命令: ${cmd.take(120)}"
+            is Reinterpret.BrowserCommand -> {
+                if (depth >= MAX_RECURSE_DEPTH) {
+                    return "浏览器命令嵌套超过 $MAX_RECURSE_DEPTH 层，已阻止: $cmd"
+                }
+                if (re.payload.isBlank()) {
+                    return "浏览器命令缺少执行内容，已阻止: $cmd"
+                }
+                // 浏览器命令由浏览器进程 (RunCommandService) 解析执行，不经 shell —
+                // 白名单前缀已校验，payload 内 & / $ 等字符对浏览器命令合法，不再递归元字符检查
+                return null
+            }
             is Reinterpret.Recurse -> {
                 if (depth >= MAX_RECURSE_DEPTH) {
                     return "再解释嵌套超过 $MAX_RECURSE_DEPTH 层，已阻止: $cmd"
@@ -189,11 +201,13 @@ object CommandMonitor {
     private sealed class Reinterpret {
         object None : Reinterpret()
         object Blocked : Reinterpret()
+        object BlockedBrowserCommand : Reinterpret()
+        class BrowserCommand(val payload: String) : Reinterpret()
         class Recurse(val payload: String) : Reinterpret()
         class Script(val path: String) : Reinterpret()
     }
 
-    /** 识别 sh -c / Termux am startservice / su -c 三种再解释形态。 */
+    /** 识别 sh -c / Termux am startservice / 浏览器 am startservice / su -c 再解释形态。 */
     private fun detectReinterpret(cmd: String): Reinterpret {
         val tokens = tokenize(cmd)
         if (tokens.isEmpty()) return Reinterpret.None
@@ -225,6 +239,23 @@ object CommandMonitor {
                 val raw = tokens[argsIdx + 1]
                 val payload = if (raw.startsWith("-c,")) raw.removePrefix("-c,") else raw
                 return Reinterpret.Recurse(payload)
+            }
+        }
+
+        // MengPaw Browser: am startservice ... com.mengpaw.browser.RUN_COMMAND_ARGUMENTS "-c,<命令串>"
+        // (半自动武器 Phase 2) — payload 白名单 = page.* / browser.* 命令集，拒绝任意 shell
+        if (tokens.any { it == "com.mengpaw.browser.RUN_COMMAND_ARGUMENTS" }) {
+            val argsIdx = tokens.indexOf("com.mengpaw.browser.RUN_COMMAND_ARGUMENTS")
+            if (argsIdx >= 0 && argsIdx + 1 < tokens.size) {
+                // 拼接后续 token 直到下一个 -- 开关（容忍未引号包裹的 URL 等参数）
+                val payloadTokens = tokens.drop(argsIdx + 1).takeWhile { !it.startsWith("--") }
+                val payload = payloadTokens.joinToString(" ")
+                    .let { if (it.startsWith("-c,")) it.removePrefix("-c,") else it }
+                val cmdName = payload.trim().split(Regex("\\s+")).firstOrNull() ?: ""
+                if (cmdName.startsWith("page.") || cmdName.startsWith("browser.")) {
+                    return Reinterpret.BrowserCommand(payload)
+                }
+                return Reinterpret.BlockedBrowserCommand
             }
         }
 

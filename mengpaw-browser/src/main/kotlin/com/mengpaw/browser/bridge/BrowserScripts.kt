@@ -147,6 +147,23 @@ internal fun waitForSelectorCheckScript(selector: String): String = """
 }catch(e){return JSON.stringify({ok:false,error:e.message});}})()
 """.trimIndent()
 
+/** 按键派发脚本 — page.key <key> 用。特殊键走映射表，单字符按 ASCII。 */
+internal fun keyScript(key: String): String = """
+    (function(){
+        var k = '$key';
+        var map = {Enter:13, Tab:9, Escape:27, Backspace:8, Delete:46,
+            ArrowUp:38, ArrowDown:40, ArrowLeft:37, ArrowRight:39,
+            Home:36, End:35, PageUp:33, PageDown:34};
+        var keyCode = map[k] || (k.length === 1 ? k.toUpperCase().charCodeAt(0) : 0);
+        var el = document.activeElement || document.body;
+        var opts = {key:k, keyCode:keyCode, which:keyCode, code:k, bubbles:true, cancelable:true};
+        el.dispatchEvent(new KeyboardEvent('keydown', opts));
+        el.dispatchEvent(new KeyboardEvent('keypress', opts));
+        el.dispatchEvent(new KeyboardEvent('keyup', opts));
+        return JSON.stringify({ok:true, key:k, tag:el.tagName});
+    })()
+""".trimIndent()
+
 /** localStorage/sessionStorage get。 */
 internal fun storageGetScript(storageType: String, key: String): String =
     "(function(){try{var v=${storageType}.getItem('$key');return v?JSON.stringify({ok:true,value:v}):JSON.stringify({ok:false,error:'not found'});}catch(e){return JSON.stringify({ok:false,error:e.message});}})()"

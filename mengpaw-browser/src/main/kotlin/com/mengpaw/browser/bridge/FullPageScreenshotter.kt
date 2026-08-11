@@ -5,6 +5,7 @@ package com.mengpaw.browser.bridge
 
 import android.graphics.Bitmap
 import android.webkit.WebView
+import com.mengpaw.browser.util.BrowserStorage
 import com.mengpaw.kernel.DataPaths
 import java.io.File
 import java.io.FileOutputStream
@@ -12,12 +13,15 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * Quick Click 全页缝合截图 + 坐标交互（自 BrowserBridge 拆出 — 400 行文件拆分批次 2）。
+ * 分段全页截图 + 坐标交互（半自动武器方案 Phase 1 重构，自 BrowserBridge 拆出）。
  *
- * - [capture]: 视口逐段滚动截图拼接为一张高图 (View.draw, API 26+ 兼容; capturePicture
- *   已在 API 33+ 移除)。超 MAX_SCREENSHOT_PIXELS 等比缩小绘制防 OOM。
- * - [tap]/[scrollToY]: 按 [lastScreenshotScale] 把 Agent 的截图坐标还原为页面坐标
- *   (截图超限缩小后坐标空间同步缩放 — 缩放状态归本类持有, coord 命令与 capture 一致)。
+ * - [captureSegments]: 超长页截断分多段发送（决策 #5），每段 ≈ 视口高独立落盘，
+ *   段数上限 [MAX_SEGMENTS]，超出截断并标注 `partial:true`。
+ * - [tapSegment]/[scrollToSegmentY]: 按段号 + 段内截图坐标还原页面坐标
+ *   (截图超限缩小后坐标空间同步缩放 — 缩放状态归本类持有, page.click 与截图一致)。
+ * - 截图落盘公共目录 (BrowserStorage.screenshotsDir, 决策 #2)，拒绝授权回退私有并提示。
+ * - 经验继承 (原缝合 capture 已删): capturePicture() 在 API 33+ 移除 (NoSuchMethodError
+ *   逃过 catch 必崩) → 主线程 View.draw；位图超 MAX_SCREENSHOT_PIXELS 等比缩小防 OOM。
  */
 internal class FullPageScreenshotter(
     private val webView: WebView,
@@ -31,133 +35,117 @@ internal class FullPageScreenshotter(
     /** P2 fix: 最近一次全页截图的缩放比 — tap/scrollToY 按此还原为页面坐标。 */
     private var lastScreenshotScale = 1f
 
+    /** 最近一次分段截图的未缩放视口宽/高 — tapSegment 还原页面坐标用（决策 #5）。 */
+    private var lastRawViewportW = 0
+    private var lastRawViewportH = 0
+    private var lastSegmentCount = 1
+
     /**
-     * Capture a stitched full-page screenshot.
-     * Scrolls the page viewport-by-viewport, captures each segment via [WebView.draw],
-     * and stitches them into ONE tall bitmap saved to DataPaths.SCREENSHOTS.
+     * 分段全页截图（半自动武器方案决策 #5）— 超长页截断分多段发送，坐标按段拆分。
      *
-     * Returns JSON with the file path, total width, total height, and segment count.
-     * The Agent can then use [tap] to tap at absolute coordinates within this image.
+     * 与 [capture] 缝合单张不同：每段 ≈ 视口高独立落盘，段数上限 [MAX_SEGMENTS]，
+     * 超出截断并标注 `partial:true`。每段返回独立坐标系统，Agent 用
+     * `page.click <seg> <x> <y>` 按段内坐标操作（经 [tapSegment] 还原页面坐标）。
      *
-     * EXPERIMENTAL: enabled by default (BrowserPrefs.quickClickEnabled).
+     * 返回 JSON:
+     * {"ok":true,"segmentCount":N,"partial":false,"maxHeight":H,
+     *  "segments":[{"seg":1,"path":"...","width":W,"height":H,"pageYStart":0,"scale":1.0},...]}
      */
-    fun capture(maxHeight: Int = 15000): String {
+    fun captureSegments(maxHeight: Int = 15000): String {
         return try {
-            // Get page dimensions via JS with a render-complete latch
             val dimsLatch = CountDownLatch(1)
             var dimsJson = ""
             webView.post {
                 webView.evaluateJavascript(
-                    "(function(){return JSON.stringify({w:document.documentElement.scrollWidth||document.body.scrollWidth||${webView.width},h:Math.min(document.documentElement.scrollHeight||document.body.scrollHeight||${webView.height},$maxHeight)})})()"
+                    "(function(){return JSON.stringify({w:document.documentElement.scrollWidth||document.body.scrollWidth||${webView.width},h:document.documentElement.scrollHeight||document.body.scrollHeight||${webView.height}})})()"
                 ) { r -> dimsJson = unquoteJs(r); dimsLatch.countDown() }
             }
             dimsLatch.await(3, TimeUnit.SECONDS)
 
             val dims = org.json.JSONObject(dimsJson.ifBlank { """{"w":${webView.width},"h":${webView.height}}""" })
-            val pageH = dims.optInt("h", webView.height).coerceAtMost(maxHeight).coerceAtLeast(1)
-            // P0 fix: 捕获宽度以 WebView 实际宽度为准 — capturePicture 移除后 draw 输出即视口
+            val pageH = dims.optInt("h", webView.height).coerceAtLeast(1)
             val rawW = webView.width.coerceAtLeast(1)
             val rawH = webView.height.coerceAtLeast(1)
-            // P2 fix: 位图内存上限防 OOM — 缝合图总像素超 MAX_SCREENSHOT_PIXELS (32MB) 时
-            // 整体等比缩小绘制 (canvas.scale), 返回 JSON 尺寸即实际位图尺寸, 坐标空间同步缩放;
-            // tap/scrollToY 经 lastScreenshotScale 还原为页面坐标。
-            val rawSegCount = minOf((pageH + rawH - 1) / rawH, MAX_SEGMENTS)
-            val rawStitchedH = minOf(pageH.toLong(), rawSegCount.toLong() * rawH)
-            val scale = if (rawW.toLong() * rawStitchedH > MAX_SCREENSHOT_PIXELS)
-                kotlin.math.sqrt(MAX_SCREENSHOT_PIXELS.toDouble() / (rawW.toLong() * rawStitchedH)).toFloat().coerceIn(0.2f, 1f)
+            // 超长页截断: max-height 上限 + 30 段上限, 超出标注 partial (决策 #5)
+            val cappedH = minOf(pageH, maxHeight.coerceAtLeast(rawH))
+            val totalSegments = minOf((cappedH + rawH - 1) / rawH, MAX_SEGMENTS)
+            val capturedH = minOf(cappedH.toLong(), totalSegments.toLong() * rawH).toInt()
+            val partial = pageH > capturedH
+
+            // 段内缩放: 超宽视口 (单段像素超限) 时等比缩小绘制
+            val segScale = if (rawW.toLong() * rawH > MAX_SCREENSHOT_PIXELS)
+                kotlin.math.sqrt(MAX_SCREENSHOT_PIXELS.toDouble() / (rawW.toLong() * rawH)).toFloat().coerceIn(0.2f, 1f)
             else 1f
-            lastScreenshotScale = scale
-            val drawW = (rawW * scale).toInt().coerceAtLeast(1)
-            val drawH = (rawH * scale).toInt().coerceAtLeast(1)
-            val vpHeight = drawH
-            val scaledPageH = (pageH * scale).toInt().coerceAtLeast(1)
-            val segmentCount = minOf((scaledPageH + vpHeight - 1) / vpHeight, MAX_SEGMENTS)
-            val stitchedH = minOf(scaledPageH, segmentCount * vpHeight)
-            // 极限兜底: 缩放下限 0.2 仍超内存上限的极端宽视口 — 直接报错引导用视口截图
-            if (drawW.toLong() * stitchedH > MAX_SCREENSHOT_PIXELS) {
-                throw IllegalStateException("页面尺寸过大 ($drawW×$stitchedH px) 超位图 32MB 上限，请改用 browser.screenshot (视口截图)")
-            }
+            val drawW = (rawW * segScale).toInt().coerceAtLeast(1)
+            val drawH = (rawH * segScale).toInt().coerceAtLeast(1)
 
-            val segments = mutableListOf<Bitmap>()
-            var pageY = 0  // 页面坐标 (未缩放) — scrollTo 用页面像素
+            lastScreenshotScale = segScale
+            lastRawViewportW = rawW
+            lastRawViewportH = rawH
+            lastSegmentCount = totalSegments.coerceAtLeast(1)
 
-            for (i in 0 until segmentCount) {
-                // Scroll + wait for render via post queue
+            val dir = File(BrowserStorage.screenshotsDir())
+            dir.mkdirs()
+            val ts = System.currentTimeMillis()
+            val segments = mutableListOf<String>()
+            for (i in 0 until totalSegments) {
+                val pageYStart = i * rawH
+                val segPageH = minOf(rawH, capturedH - pageYStart)
+                val segDrawH = (segPageH * segScale).toInt().coerceAtLeast(1)
                 val segLatch = CountDownLatch(1)
                 webView.post {
-                    webView.scrollTo(0, pageY)
-                    // Double-post ensures scroll happened before capture
-                    webView.post {
-                        segLatch.countDown()
-                    }
+                    webView.scrollTo(0, pageYStart)
+                    webView.post { segLatch.countDown() }
                 }
                 segLatch.await(500, TimeUnit.MILLISECONDS)
 
-                // P0 fix: capturePicture() 已在 API 33+ 移除 — 抛 NoSuchMethodError (Error 而非
-                // Exception, 逃过下方 catch 必崩)。改为主线程 View.draw — 滚动对齐后画当前视口段
-                // (语义等价: 每段 = 视口截图, 拼接为全页)。
-                val segBitmap = Bitmap.createBitmap(drawW, minOf(drawH, scaledPageH - i * vpHeight), Bitmap.Config.ARGB_8888)
+                val segBitmap = Bitmap.createBitmap(drawW, segDrawH, Bitmap.Config.ARGB_8888)
                 val drawLatch = CountDownLatch(1)
                 webView.post {
                     val c = android.graphics.Canvas(segBitmap)
-                    if (scale < 1f) c.scale(scale, scale)  // P2 fix: 超限时等比缩小绘制
+                    if (segScale < 1f) c.scale(segScale, segScale)
                     webView.draw(c)
                     drawLatch.countDown()
                 }
                 drawLatch.await(500, TimeUnit.MILLISECONDS)
-                segments.add(segBitmap)
-                pageY += rawH
-                if (pageY >= pageH) break
+                val segFile = File(dir, "page_${ts}_seg${i + 1}.png")
+                FileOutputStream(segFile).use { segBitmap.compress(Bitmap.CompressFormat.PNG, 90, it) }
+                segBitmap.recycle()
+                segments.add(
+                    """{"seg":${i + 1},"path":"${segFile.absolutePath}","width":$drawW,"height":$segDrawH,"pageYStart":$pageYStart,"scale":$segScale}"""
+                )
             }
-
-            // Stitch vertically
-            val stitched = Bitmap.createBitmap(drawW, stitchedH, Bitmap.Config.ARGB_8888)
-            val stitchCanvas = android.graphics.Canvas(stitched)
-            var offsetY = 0
-            for (seg in segments) { stitchCanvas.drawBitmap(seg, 0f, offsetY.toFloat(), null); offsetY += seg.height; seg.recycle() }
-
-            // Atomic write: tmp → rename
-            val dir = File(DataPaths.SCREENSHOTS)
-            dir.mkdirs()
-            val tmpFile = File(dir, "full_${System.currentTimeMillis()}.tmp")
-            val finalFile = File(dir, "full_${System.currentTimeMillis()}.png")
-            FileOutputStream(tmpFile).use { stitched.compress(Bitmap.CompressFormat.PNG, 85, it) }
-            val fileSize = tmpFile.length()
-            tmpFile.renameTo(finalFile)
-            stitched.recycle()
-
-            // Scroll back to top
             webView.post { webView.scrollTo(0, 0) }
 
-            """{"ok":true,"path":"${finalFile.absolutePath}","width":$drawW,"totalHeight":$stitchedH,"segments":$segmentCount,"fileSize":$fileSize,"scale":$scale}"""
+            """{"ok":true,"segmentCount":$totalSegments,"partial":$partial,"maxHeight":${maxHeight.coerceAtLeast(rawH)},"segments":[${segments.joinToString(",")}]}"""
         } catch (e: Exception) {
-            // Auto-fallback: try viewport screenshot
+            // 自动降级: 分段失败 → 视口截图兜底 (单段)
             return try {
-                val fallback = viewportFallback()
-                """{"ok":true,"fallback":true,"note":"Full-page failed (${e.message?.take(80)}), captured viewport instead","viewport":$fallback}"""
+                val fb = org.json.JSONObject(viewportFallback())
+                val path = fb.optString("path")
+                val w = fb.optInt("width")
+                val h = fb.optInt("height")
+                """{"ok":true,"segmentCount":1,"partial":true,"fallback":true,"note":"Segment capture failed (${e.message?.take(80)}), captured viewport instead","segments":[{"seg":1,"path":"$path","width":$w,"height":$h,"pageYStart":0,"scale":1.0}]}"""
             } catch (_: Exception) {
-                """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}","hint":"Try browser.screenshot for viewport capture"}"""
+                """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}","hint":"Try page.screenshot --view for viewport capture"}"""
             }
         }
     }
 
     /**
-     * Tap at absolute coordinates relative to the FULL page (not viewport).
-     * Uses [android.view.MotionEvent] dispatch for real touch simulation.
-     *
-     * Workflow: (1) browser.screenshot.full → { path, w, totalHeight }
-     *           (2) Agent/Vision sees the image, picks coordinates
-     *           (3) browser.coord.click x y → scrolls to y, taps at x
+     * 按段坐标点击（决策 #5）— 段号 + 段内截图坐标还原为页面坐标后派发触摸事件。
+     * 页面坐标 = (seg-1)*未缩放视口高 + 段内 y/缩放比；x 按缩放比还原。
      */
-    fun tap(x: Int, y: Int): String {
+    fun tapSegment(seg: Int, x: Int, y: Int): String {
         return try {
-            // P2 fix: 截图超限等比缩小后, Agent 坐标在缩放空间 — 按 lastScreenshotScale 还原为页面坐标
             val s = lastScreenshotScale.coerceAtLeast(0.1f)
+            val rawH = lastRawViewportH.coerceAtLeast(webView.height)
+            val segIndex = seg.coerceIn(1, lastSegmentCount.coerceAtLeast(1)) - 1
             val maxY = (webView.contentHeight - webView.height).coerceAtLeast(0)
-            val targetY = (y.toFloat() / s).toInt().coerceAtLeast(0).coerceAtMost(webView.contentHeight)
-            val vpX = (x.toFloat() / s).toInt().coerceAtLeast(0).coerceAtMost(webView.width)
+            val targetY = (segIndex * rawH + (y.toFloat() / s).toInt())
+                .coerceIn(0, webView.contentHeight)
+            val vpX = (x.toFloat() / s).toInt().coerceIn(0, webView.width)
 
-            // Scroll to position and wait for render
             val scrollLatch = CountDownLatch(1)
             webView.post {
                 webView.scrollTo(0, minOf(targetY, maxY))
@@ -175,28 +163,27 @@ internal class FullPageScreenshotter(
                 downEvent.recycle()
                 upEvent.recycle()
             }
-            """{"ok":true,"x":$vpX,"pageY":$targetY,"localY":$localY,"scrollY":${webView.scrollY}}"""
+            """{"ok":true,"seg":${segIndex + 1},"x":$vpX,"pageY":$targetY,"localY":$localY,"scrollY":${webView.scrollY}}"""
         } catch (e: Exception) {
-            """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}","hint":"Use browser.coord.scroll <y> to verify position first"}"""
+            """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}","hint":"Use page.screenshot --full first to refresh coordinates"}"""
         }
     }
 
-    /**
-     * Scroll to a specific y-coordinate in the full page.
-     * Useful for verifying position before clicking.
-     */
-    fun scrollToY(y: Int): String {
+    /** 按段坐标滚动（决策 #5）— 用于点击前核对位置。 */
+    fun scrollToSegmentY(seg: Int, y: Int): String {
         return try {
-            // P2 fix: 与 tap 一致 — 缩放坐标还原为页面坐标
             val s = lastScreenshotScale.coerceAtLeast(0.1f)
+            val rawH = lastRawViewportH.coerceAtLeast(webView.height)
+            val segIndex = seg.coerceIn(1, lastSegmentCount.coerceAtLeast(1)) - 1
             val maxY = (webView.contentHeight - webView.height).coerceAtLeast(0)
-            val targetY = (y.toFloat() / s).toInt().coerceIn(0, maxY)
+            val targetY = (segIndex * rawH + (y.toFloat() / s).toInt()).coerceIn(0, maxY)
             val latch = CountDownLatch(1)
             webView.post { webView.scrollTo(0, targetY); webView.post { latch.countDown() } }
             latch.await(200, TimeUnit.MILLISECONDS)
-            """{"ok":true,"scrollY":${webView.scrollY},"contentHeight":${webView.contentHeight},"maxScrollY":$maxY}"""
+            """{"ok":true,"seg":${segIndex + 1},"scrollY":${webView.scrollY},"contentHeight":${webView.contentHeight},"maxScrollY":$maxY}"""
         } catch (e: Exception) {
             """{"ok":false,"error":"${e.message?.replace("\"", "\\\"")}"}"""
         }
     }
+
 }
