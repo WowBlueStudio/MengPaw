@@ -722,6 +722,13 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 - **用户未提交工作与发布 commit**: `git add -A` 会混入用户的工作文件（如
   docs/INDEX.md、docs/browser-autopilot-plan.md）— 发布 commit 用显式文件列表 add，
   排除用户未提交项，避免混入发布历史。
+- **origin 双 pushurl (v0.36.0 发布)**: 本仓库 `remote.origin.pushurl` 配置了两个 URL
+  （Gitee SSH + GitHub HTTPS）— `git push origin` 会**依次推到两个远端**，一次 push
+  即完成双远端；核对配置用 `git config --get-regexp "^remote\."`，勿误判为单远端；
+  推送后用 `git ls-remote gitee master` 验证一致性。
+- **发布前崩溃巡检 (v0.36.0)**: 两台设备 dropbox 历史 crash 中
+  `WakeReceiver.onReceive` 后台 startService（Android 12+ 后台启动限制）多版本连续
+  出现 — 已立项排查，发布不阻塞但需跟踪；本版本未装机无新 crash。
 
 ### 19. 浏览器半自动武器 + 发布经验 (2026-08-11)
 
