@@ -82,9 +82,21 @@ class AppStrings {
 
     // Mode-specific placeholders
     var placeholderSwarm: String = ""
+    var placeholderFleet: String = ""
     var placeholderResearch: String = ""
     var placeholderTranslate: String = ""
     var placeholderSilent: String = ""
+
+    // Settings - Device guides (USB debugging / Root / Accessibility)
+    var guideSection: String = ""
+    var guideSectionDesc: String = ""
+    var guideUsb: String = ""
+    var guideUsbDesc: String = ""
+    var guideRoot: String = ""
+    var guideRootDesc: String = ""
+    var guideAccessibility: String = ""
+    var guideAccessibilityDesc: String = ""
+    var guideClose: String = ""
 
     // Settings - About
     var about: String = ""

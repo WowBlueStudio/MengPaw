@@ -125,6 +125,37 @@ internal class TaskExecutionPipeline(
                     return@launch
                 }
 
+                // /Translate: 直接翻译 — 兑现 modes.md「调用翻译中间件，直接完成翻译
+                // (不经过 ReAct 循环)」。优先 Google 翻译中间件 (任意语言对, auto 检测源语言);
+                // 失败/内容原样返回时回退单次 LLM 调用 (仍不走 ReAct 工具循环)。
+                if (executionMode == ExecutionMode.TRANSLATE) {
+                    val translateTask = task
+                    launch {
+                        try {
+                            val cjkChars = translateTask.count { it in '一'..'鿿' }
+                            val asciiChars = translateTask.count { it in 'a'..'z' || it in 'A'..'Z' }
+                            val fallbackLang = if (cjkChars > asciiChars) "en" else "zh-CN"
+                            val target = com.mengpaw.kernel.llm.TranslateMiddleware
+                                .targetLanguageFrom(translateTask, fallbackLang)
+                            val content = com.mengpaw.kernel.llm.TranslateMiddleware
+                                .textToTranslate(translateTask)
+                            var result = translator.translate(content, "auto", target)
+                            if (result.isBlank() || result == content) {
+                                result = session.provider.complete(
+                                    "请把以下内容翻译成目标语言（$target），只输出译文，不要附加任何解释：\n\n$translateTask"
+                                )
+                            }
+                            session.messages.value = session.messages.value +
+                                ChatMessageUi.Agent(result.take(2000), executionMode = "/Translate", agentRef = agentRef)
+                        } catch (e: Exception) {
+                            session.messages.value = session.messages.value +
+                                ChatMessageUi.Agent("翻译异常: ${e.message?.take(120) ?: "未知错误"}", executionMode = "/Translate", agentRef = agentRef)
+                        }
+                    }
+                    inputTagManager.loopMode = savedLoopMode
+                    return@launch
+                }
+
                 // ── 过程容器前置 (v0.34.3): 用户发送后立即看到思考容器, 4-13s 等待期有活动反馈 ──
                 writer.start()
                 KernelLog.d("MengPawLatency", "T1 bubble")

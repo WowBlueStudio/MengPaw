@@ -73,6 +73,7 @@ val ChineseStrings = AppStrings().apply {
 
     // v0.34.4: Swarm 是进化版的 Mission — 原 Mission 的拆解执行由 Swarm 承接
     placeholderSwarm = "输入需要火种模式并行拆解执行的任务（可混合不同模型）"
+    placeholderFleet = "描述任务，Agent 编队跨设备/多框架协作执行..."
     placeholderResearch = "输入需要深度调研的课题，将进行多轮搜索与交叉验证"
     placeholderTranslate = "输入需要翻译的内容"
     placeholderSilent = "输入后台静默执行的任务，完成后推送结果"
@@ -125,6 +126,17 @@ val ChineseStrings = AppStrings().apply {
     systemTokenStats = "Token 用量统计"
     systemTotalUsage = "总用量"
     systemWeekly = "每周"
+
+    // Settings - Device guides
+    guideSection = "使用指南"
+    guideSectionDesc = "USB 调试 / Root / 无障碍 快速上手"
+    guideUsb = "USB 调试"
+    guideUsbDesc = "开发者模式、ADB 连接与 APK 交付"
+    guideRoot = "Root 权限"
+    guideRootDesc = "root-plugin 使用、风险与审计"
+    guideAccessibility = "无障碍"
+    guideAccessibilityDesc = "屏幕级自动化能力说明与开启方式"
+    guideClose = "关闭"
 
     // Settings - Agent
     agentAddHumanTouch = "添加真人感"

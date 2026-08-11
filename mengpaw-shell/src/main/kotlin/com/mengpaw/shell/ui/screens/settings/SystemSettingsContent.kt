@@ -25,6 +25,7 @@ import com.mengpaw.design.tokens.ArcoSpacing
 import com.mengpaw.shell.ui.components.TokenBarChart
 import com.mengpaw.shell.ui.components.TokenStatsCollector
 import com.mengpaw.shell.ui.components.formatTokenCount
+import com.mengpaw.shell.ui.screens.settings.DeviceGuidesPanel
 import com.mengpaw.design.components.SectionHeader
 import kotlinx.coroutines.delay
 
@@ -243,6 +244,13 @@ fun SystemSettingsContent(
                 Icons.Outlined.AttachMoney, ArcoColors.Orange1, ArcoColors.Orange6)
         }
     }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
+    // v0.36: 使用指南 — 兑现系统提示词「教程在设置中 — USB调试/Root/无障碍指南」声明
+    DeviceGuidesPanel(state.strings, state.useChinese)
 
     Spacer(Modifier.height(ArcoSpacing.lg))
     HorizontalDivider(color = ThemeColors.border)

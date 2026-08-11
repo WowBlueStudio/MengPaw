@@ -73,6 +73,7 @@ val EnglishStrings = AppStrings().apply {
 
     // v0.34.4: Swarm is the evolved Mission — subtask decomposition is now handled by Swarm
     placeholderSwarm = "Describe a task for parallel swarm workers with mixed models..."
+    placeholderFleet = "Describe a task for Agent fleet collaboration across devices/frameworks..."
     placeholderResearch = "Enter a topic for deep research with source verification..."
     placeholderTranslate = "Enter text to translate..."
     placeholderSilent = "Describe a background task to run silently..."
@@ -125,6 +126,17 @@ val EnglishStrings = AppStrings().apply {
     systemTokenStats = "Token Usage Statistics"
     systemTotalUsage = "Total Usage"
     systemWeekly = "Weekly"
+
+    // Settings - Device guides
+    guideSection = "Guides"
+    guideSectionDesc = "Quick start: USB debugging / Root / Accessibility"
+    guideUsb = "USB Debugging"
+    guideUsbDesc = "Developer mode, ADB connection, APK delivery"
+    guideRoot = "Root Access"
+    guideRootDesc = "root-plugin usage, risks, and audit"
+    guideAccessibility = "Accessibility"
+    guideAccessibilityDesc = "Screen-level automation: concept and enabling"
+    guideClose = "Close"
 
     // Settings - Agent
     agentAddHumanTouch = "Add Human Touch"

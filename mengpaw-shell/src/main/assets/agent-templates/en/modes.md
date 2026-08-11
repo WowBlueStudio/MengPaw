@@ -31,7 +31,7 @@ Multi-round search (tavily/web)→cross-validate→source annotations→structur
 
 ## /Translate
 
-Uses translate middleware, direct completion (skips ReAct loop)
+Uses the translation middleware (source language auto-detected) and translates directly (no ReAct loop). You may specify the target language in the task (e.g. "translate to English"); when omitted, defaults to English for Chinese input or Chinese for English input. Falls back to a single LLM call when the middleware is unavailable. The result appears as an Agent message.
 
 ## /Silent
 
