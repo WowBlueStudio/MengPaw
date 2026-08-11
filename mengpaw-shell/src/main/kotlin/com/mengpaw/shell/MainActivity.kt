@@ -3,9 +3,13 @@
 
 package com.mengpaw.shell
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -27,6 +31,13 @@ class MainActivity : ComponentActivity() {
     // 与 Compose 内 viewModel() 同实例 (同一 ViewModelStore), 用于浏览器提炼任务触发
     private val agentViewModel by viewModels<AgentViewModel>()
 
+    // v0.36.2 P1: Android 13+ 通知运行时权限 — 前台服务通知 (通知栏常驻) 可见的前提。
+    // Manifest 早已声明 POST_NOTIFICATIONS 但从未请求 → API 33+ 默认拒绝, 通知不显示,
+    // 用户误以为"通知栏常驻失效" (服务实际仍在运行)。拒绝后不再弹窗骚扰 (launch 直接回调)。
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* 结果无需处理: 授权后通知自动出现; 拒绝则前台服务仍运行, 仅通知不可见 (系统行为) */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -43,6 +54,13 @@ class MainActivity : ComponentActivity() {
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             .isAppearanceLightStatusBars = false
+
+        // 通知栏常驻: Android 13+ 必须在运行时授权, 否则前台服务通知不显示
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
 
         setContent { AppRoot(settingsViewModel) }
         // 延迟初始化: 非关键路径在 UI 渲染后异步执行
