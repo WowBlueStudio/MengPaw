@@ -144,8 +144,8 @@ object EvolutionStore {
             "命令调用必须带全参数 (Action Input): agent.memory.keep <内容> 的内容不可省略; 拿不准用法先 agent.cli"),
         SeedPattern(5, listOf("agent.memory"), "把 JSON 对象直接当 Action Input 粘贴",
             "Action Input 是位置参数 (如 <路径> <内容>), 不是 JSON 对象; 结构化数据先 agent.write 写成文件再引用"),
-        SeedPattern(6, listOf("ls", "dir", "cat"), "用 shell 原生命令 dir/ls/cat 操作工作区文件",
-            "工作区文件操作用 agent.read/agent.ls/agent.write (带沙箱校验), 不要用 shell 原生命令; shell 只用于系统级任务"),
+        SeedPattern(6, listOf("cat"), "cat 大文件把内容全量灌进上下文",
+            "读文件优先 grep/head/tail/sed 定向取片段 (grep -n 定位 / head 取头 / tail 取尾 / sed -n 取行段), 避免 cat 全量; 需要完整内容才 cat; ls/dir 等 shell 命令已受支持, 失败先检查路径"),
         SeedPattern(7, listOf("agent.rm"), "删除文件前没有确认目标",
             "agent.rm 不可逆; 删除前先 agent.ls 确认路径与目标确实是该文件, 再执行")
     )

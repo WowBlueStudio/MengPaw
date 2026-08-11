@@ -74,7 +74,12 @@ object SessionShellPool {
         concurrency.acquire()  // 并发上限（WIP 闸）— MAX_CONCURRENT 内排队
         var attempt = 0
         while (true) {
-            val session = borrow()
+            val session = try {
+                borrow()
+            } catch (e: Exception) {
+                concurrency.release()
+                return ExecutionResult.fail("Shell process unavailable: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+            }
             val result = try {
                 withTimeout(commandTimeoutMs) {
                     runInSession(session, commandLine, ctx)
@@ -117,7 +122,11 @@ object SessionShellPool {
         totalCreated++
         val pb = ProcessBuilder("sh").redirectErrorStream(true)
         // 初始目录用数据基目录（Android 上为应用私有目录）；每次调用前会 cd 重置
-        try { pb.directory(File(com.mengpaw.kernel.DataPaths.BASE)) } catch (_: Exception) {}
+        // 目录不存在时回退进程默认 cwd — 避免 CreateProcess error=267 (目录名无效)
+        try {
+            val base = File(com.mengpaw.kernel.DataPaths.BASE)
+            if (base.exists()) pb.directory(base)
+        } catch (_: Exception) {}
         val proc = pb.start()
         return ShellSession(proc)
     }

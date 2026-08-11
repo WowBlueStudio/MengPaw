@@ -4,12 +4,11 @@
 package com.mengpaw.kernel
 
 import com.mengpaw.kernel.cli.CommandSearch
-import com.mengpaw.kernel.cli.DefaultCommandExecutor
 import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.LinuxCommandExecutor
 import com.mengpaw.kernel.llm.*
-import com.mengpaw.kernel.security.SecurityPolicy
 import com.mengpaw.kernel.session.*
 
 /**
@@ -140,14 +139,8 @@ internal class AgentRuntime(private val engine: AgentEngine) {
         val unknownCommand = result.errorCode == ErrorCodes.ERR_NOT_FOUND &&
             result.error?.startsWith("Unknown command") == true
         if (result.success || !unknownCommand) return result
-        // Fallback: bare shell commands through the sandbox (blacklist + metacharacter checks)
-        if (!SecurityPolicy().isAllowed(commandLine)) {
-            return ExecutionResult.fail(
-                "Command '${commandLine.substringBefore(' ')}' is blocked by security policy",
-                errorCode = ErrorCodes.ERR_PERMISSION_DENIED
-            )
-        }
-        return DefaultCommandExecutor().execute(commandLine, ctx)
+        // Linux 命令通道: 与 ReAct 循环同一套监控 (CommandMonitor → SecurityPolicy → 会话池)
+        return LinuxCommandExecutor.execute(commandLine, ctx, allowUserConfirm = true)
     }
 
     /** Work directory for bang commands — agent workspace, created if missing (prevents ProcessBuilder ERR_IO). */

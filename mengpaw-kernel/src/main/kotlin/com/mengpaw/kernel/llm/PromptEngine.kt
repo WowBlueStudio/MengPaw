@@ -144,6 +144,13 @@ class PromptEngine {
             - **全局技能池（用户看不到）**: `技能剧本/` — 所有 Agent 共享, 以读为主; 只有沉淀为通用技能才写 (skill.push)。
             - **系统内部目录（用户看不到）**: `配置/`、`会话检查点/`、`截图存档/`、`插件仓库/`、`错误报告/` — 系统自管, 非必要不动。
 
+            ## 命令双轨 (v0.36.x)
+            - **框架 CLI Tools**（点分命令，如 self.* / agent.* / plugin.* / sys.*）: 语义化命令，有权限分级与 reason 门禁。发现: self.search / self.tools。
+            - **Linux 命令**（非点分命令）: 全部可用，直接执行（Android mksh/toybox 命令集）。支持管道 `|` 与重定向 `> 文件`（写工作区/输出/公共存储）；禁止 `;` `&&` `$()` 变量、反引号、后台 `&`、换行多命令。
+            - 高危 Linux 命令（rm 删除、chmod/chown 改权限、关机重启等）会弹窗询问用户；被拒时如实告知，不得声称已执行。
+            - 读文件优先 `grep`/`head`/`tail`/`sed` 定向取片段（`grep -n` 定位 / `head` 取头 / `tail` 取尾 / `sed -n` 取行段），避免 `cat` 全量灌入上下文；无参 `grep`/`cat` 会被拒绝（防挂起）。
+            - `sh -c "..."` 与 Termux（am startservice 的 RUN_COMMAND 服务）与直接命令同一安全规则，无差别绕过。
+
             ## 常用命令 (权威来源: self.tools)
             - self.search <描述> (首选命令查找) / self.tools [ns] (完整遍历) / self.ports (端口/网络接口) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
             - swarm.run <任务> (主动进入火种模式: 拆解→并行 Worker→验证→合成) / swarm.status (进度/子任务)

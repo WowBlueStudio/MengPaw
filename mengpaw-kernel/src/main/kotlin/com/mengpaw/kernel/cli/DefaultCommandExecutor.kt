@@ -20,85 +20,101 @@ import kotlinx.coroutines.withTimeout
  *   （通过检查后才进池 — 池不改变安全面）
  * - Timeout: 30 seconds per command (enforced by the pool)
  * - Output capped at 100 KB (pool)
+ *
+ * v0.36.x: 拆出 [sandboxCheck] 供 [com.mengpaw.kernel.security.CommandMonitor]
+ * 对再解释 payload (sh -c / Termux) 复用; 元字符检查升级为结构化 —
+ * 放行管道 `|` 与受控重定向 (`>`/`<`/`2>&1`), 拦截多命令串接 (`;` `&&` `||`)、
+ * 后台 (`&`)、变量/命令替换 (`$` 反引号) 与换行内嵌多命令。
  */
 class DefaultCommandExecutor : CommandExecutor {
 
-    /** Dangerous command prefixes blocked by string match (case-insensitive). */
-    private val blockedPrefixes = listOf(
-        "rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf .", "rm -rf *",
-        "mkfs", "dd ", "sudo ", "su ",
-        "chmod 777 /", "chmod -R 777", "chown -R",
-        ":(){ :|:& };:", // fork bomb
-        "> /dev/sda", "> /dev/null",
-        "wget ", "curl ", "nc ", "telnet ", "ncat ",
-        "python -c ", "python2 -c ", "python3 -c ", "perl -e ", "ruby -e ",
-        "eval ", "base64 -d", "base64 --decode",
-        "kill ", "pkill ", "poweroff", "reboot", "shutdown", "init 0", "init 6",
-        "mount ", "fdisk ", "dd if=", "halt", "mv / ", "cp / "
-    )
-
-    /** Shell metacharacters that allow multi-command injection. */
-    private val shellMetacharacters = setOf(';', '|', '`', '&', '$')
-
     override suspend fun execute(commandLine: String, ctx: ExecutionContext): ExecutionResult {
-        return kotlinx.coroutines.withTimeout(30_000L) {
-            executeBlocking(commandLine, ctx)
+        sandboxCheck(commandLine)?.let {
+            return ExecutionResult.fail(it, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
         }
+        return kotlinx.coroutines.withTimeout(30_000L) { SessionShellPool.execute(commandLine, ctx) }
     }
 
-    /**
-     * Execution via the session shell pool — 每次调用、汇报后自动初始化
-     * （常驻会话进程，替代每次新起 sh -c）。沙箱检查完成后委托池执行。
-     */
-    private suspend fun executeBlocking(commandLine: String, ctx: ExecutionContext): ExecutionResult {
-        // Sandbox: block dangerous patterns
-        val trimmed = commandLine.trim()
-        if (trimmed.isBlank()) {
-            return ExecutionResult.fail("Empty command", errorCode = ErrorCodes.ERR_INTERNAL)
-        }
+    companion object {
 
-        // Check shell metacharacters that indicate multi-command attempts
-        if (hasShellMetacharacters(trimmed)) {
-            KernelLog.w("DefaultCommandExecutor", "Blocked (shell metacharacters): $trimmed")
-            return ExecutionResult.fail(
-                "Blocked by security policy: shell metacharacters not allowed (;, |, `, &, \$)",
-                errorCode = ErrorCodes.ERR_PERMISSION_DENIED
-            )
-        }
+        /** Dangerous command prefixes blocked by string match (case-insensitive). */
+        private val blockedPrefixes = listOf(
+            "rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf .", "rm -rf *",
+            "mkfs", "dd ", "sudo ", "su ",
+            "chmod 777 /", "chmod -R 777", "chown -R",
+            ":(){ :|:& };:", // fork bomb
+            "> /dev/sda", "> /dev/null",
+            "wget ", "curl ", "nc ", "telnet ", "ncat ",
+            "python -c ", "python2 -c ", "python3 -c ", "perl -e ", "ruby -e ",
+            "eval ", "base64 -d", "base64 --decode",
+            "kill ", "pkill ", "poweroff", "reboot", "shutdown", "init 0", "init 6",
+            "mount ", "fdisk ", "dd if=", "halt", "mv / ", "cp / "
+        )
 
-        for (prefix in blockedPrefixes) {
-            if (trimmed.startsWith(prefix, ignoreCase = true) ||
-                (" " + trimmed).contains(" " + prefix, ignoreCase = true)
-            ) {
-                KernelLog.w("DefaultCommandExecutor", "Blocked: $trimmed")
-                return ExecutionResult.fail(
-                    "Blocked by security policy: $prefix. Use self.tools to see available commands.",
-                    errorCode = ErrorCodes.ERR_PERMISSION_DENIED
-                )
+        /**
+         * 沙箱检查 (纯函数, 无副作用) — 危险前缀黑名单 + 结构化元字符检查。
+         * 供 [execute] 与 [com.mengpaw.kernel.security.CommandMonitor] 复用;
+         * 返回拒绝原因 (应阻止执行) 或 null (通过)。
+         */
+        fun sandboxCheck(commandLine: String): String? {
+            val trimmed = commandLine.trim()
+            if (trimmed.isBlank()) {
+                return "Empty command"
             }
-        }
 
-        // 会话式进程池执行（每次调用自动初始化 cwd；超时/异常由池销毁会话）
-        return SessionShellPool.execute(trimmed, ctx)
-    }
+            checkMetaChars(trimmed)?.let { return it }
 
-    /**
-     * Check if the command contains shell metacharacters outside of safe contexts.
-     */
-    private fun hasShellMetacharacters(cmd: String): Boolean {
-        var inQuote: Char? = null
-        var escaped = false
-        for (c in cmd) {
-            if (escaped) { escaped = false; continue }
-            if (c == '\\') { escaped = true; continue }
-            if (inQuote != null) {
-                if (c == inQuote) inQuote = null
-                continue
+            for (prefix in blockedPrefixes) {
+                if (trimmed.startsWith(prefix, ignoreCase = true) ||
+                    (" " + trimmed).contains(" " + prefix, ignoreCase = true)
+                ) {
+                    return "Blocked by security policy: $prefix. Use self.tools to see available commands."
+                }
             }
-            if (c == '\'' || c == '"') { inQuote = c; continue }
-            if (c in shellMetacharacters) return true
+            return null
         }
-        return false
+
+        /**
+         * 结构化元字符检查:
+         * - 放行: 管道 `|`、重定向 `>` `>>` `<`、fd 重定向 `2>&1`/`1>&2`、通配符、引号
+         * - 拦截: `;` `&&` `||` (多命令串接)、`&` 后台、`$` (变量/命令替换)、反引号、换行
+         */
+        private fun checkMetaChars(cmd: String): String? {
+            var inQuote: Char? = null
+            var escape = false
+            var i = 0
+            while (i < cmd.length) {
+                val c = cmd[i]
+                if (escape) { escape = false; i++; continue }
+                if (c == '\\') { escape = true; i++; continue }
+                if (inQuote != null) {
+                    if (c == inQuote) inQuote = null
+                    i++; continue
+                }
+                if (c == '\'' || c == '"') { inQuote = c; i++; continue }
+                when (c) {
+                    ';' -> return "Blocked by security policy: ';' (multi-command chaining not allowed)"
+                    '`' -> return "Blocked by security policy: backtick (command substitution not allowed)"
+                    '$' -> return "Blocked by security policy: '\$' (variables/command substitution not allowed)"
+                    '\n', '\r' -> return "Blocked by security policy: newline (embedded multi-command not allowed)"
+                    '&' -> {
+                        val prev = if (i > 0) cmd[i - 1] else ' '
+                        val next = if (i + 1 < cmd.length) cmd[i + 1] else ' '
+                        if (prev.isDigit() || prev == '>') { i++; continue } // 2>&1 / >& — fd 重定向放行
+                        if (next == '&') return "Blocked by security policy: '&&' (multi-command chaining not allowed)"
+                        return "Blocked by security policy: '&' (background execution not allowed)"
+                    }
+                    '|' -> {
+                        if (i + 1 < cmd.length && cmd[i + 1] == '|') {
+                            return "Blocked by security policy: '||' (multi-command chaining not allowed)"
+                        }
+                        // 单 | 管道放行
+                    }
+                }
+                i++
+            }
+            return null
+        }
     }
 
 }

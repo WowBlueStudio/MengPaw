@@ -8,6 +8,7 @@ import com.mengpaw.kernel.agent.SwarmSubtask
 import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.LinuxCommandExecutor
 import com.mengpaw.kernel.llm.LlmProvider
 import com.mengpaw.kernel.security.Sanitizer
 import com.mengpaw.kernel.session.Message
@@ -122,7 +123,18 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                                                 if (source != null && com.mengpaw.kernel.security.SourceBlocklist.isBlocked(source)) {
                                                     ExecutionResult.fail("来源已在黑名单，工具结果已阻止。", errorCode = ErrorCodes.ERR_SOURCE_BLOCKED)
                                                 } else {
-                                                    withTimeout(60_000L) { engine.getPipelineManager().buildPipeline().execute(commandLine, context) }
+                                                    val pipelineResult = withTimeout(60_000L) {
+                                                        engine.getPipelineManager().buildPipeline().execute(commandLine, context)
+                                                    }
+                                                    // Linux 命令通道 (worker 无交互: 高危直接拒绝, 普通命令可用)
+                                                    if (!pipelineResult.success &&
+                                                        pipelineResult.errorCode == ErrorCodes.ERR_NOT_FOUND &&
+                                                        pipelineResult.error?.startsWith("Unknown command") == true
+                                                    ) {
+                                                        LinuxCommandExecutor.execute(commandLine, context, allowUserConfirm = false)
+                                                    } else {
+                                                        pipelineResult
+                                                    }
                                                 }
                                             }
                                         }

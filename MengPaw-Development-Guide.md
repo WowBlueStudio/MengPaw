@@ -1042,6 +1042,25 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 #### browser.mcp — 浏览器 MCP (3)（外置插件，mengpaw-connectors）
 `tools` | `status` | `invoke`
 
+### 5.2.1 Linux 命令通道（v0.36.x）
+
+**双轨架构**: 点分命令（`self.*`/`agent.*`/`sys.*` 等）是框架 CLI Tools（语义化 + BM25 检索 + 签名校验 + LOW/MID/HIGH 风险分级）；**注册表未命中的命令一律进入 Linux 命令通道**——全部 Linux 命令可用，不维护命令清单（LLM 训练语料天然覆盖），唯一卡点是执行前的统一安全监控。
+
+**执行顺序**: `CommandMonitor`（再解释 payload 递归 + 规则 BLOCK/CONFIRM + 元字符 + 无参保护）→ `SecurityPolicy`（restrictedPatterns 兜底）→ `DefaultCommandExecutor`（危险工具前缀黑名单 + 结构化元字符）→ `SessionShellPool`（30s 超时 / 100KB 输出截断 / 并发 4 / cwd 工作区）。ReAct 主循环、Swarm worker、bang（`!`）三条路径共用同一通道。
+
+**规则引擎（CommandMonitor）**: 内置默认规则 + `{BASE}/配置/command_monitor.json` 追加覆盖（同名 id 覆盖内置；损坏忽略）。BLOCK 直接拒绝（不进弹窗），CONFIRM 弹窗（`UserConfirmBus`，30s 超时默认拒绝，worker 直接拒绝）：
+
+| 级别 | 高危清单（用户定案，不增减） |
+|------|------------------------------|
+| BLOCK | `rm -rf /` 根目录级、`mkfs`/`dd` 到 `/dev`、下载并执行（`curl\|sh` 类）、覆盖写系统路径（`> /etc\|/dev\|/system\|/proc\|/sys`）、`su`/`sudo` 提权、再解释嵌套超 2 层 |
+| CONFIRM | `rm` 删除、`chmod`/`chown` 改权限、`shutdown`/`reboot`/`poweroff`/`halt` 关机重启 |
+
+**元字符策略（结构化中间档）**: 放行管道 `|`、重定向 `>`/`>>`（目标路径白名单：工作区/输出/公共存储）、`2>&1`/`1>&2`、`<`、通配符；拦截 `;` `&&` `||`、后台 `&`、`$(`/`${`/`$VAR` 变量与命令替换、反引号、换行内嵌多命令。
+
+**再解释形态一致性**: `sh -c "<payload>"`、Termux（`am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS '-c,<payload>'`）、`su -c` 与直接命令**同一套规则**——payload 提取后递归再入检查（嵌套 ≤2 层），无差别绕过。Termux 技能（`skill.run termux`）依赖的 `> 文件 2>&1` 输出收集可用。
+
+**发现性**: Linux 命令不注册、不进 BuiltinCommandIndex（`IndexCoverageTest` 无幽灵条目）；发现靠系统提示词「命令双轨」节 + LLM 训练语料。点分未注册命令（如 `agent.rea`）不落 shell，报错附 `self.search` 引导；无参 stdin 命令（`grep`/`cat`/`head`/`tail`/`sed` 等）预检拒绝，防 30s 挂起。
+
 ### 5.3 浏览器内置命令 (browser.*, 45)
 
 **标签页 (5)**: `tabs` | `tab <N>` | `tab.open <N> <url>` | `tab.close <N>` | `tab.all`

@@ -6,6 +6,7 @@ package com.mengpaw.kernel
 import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.cli.LinuxCommandExecutor
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.error.ErrorType
 import com.mengpaw.kernel.llm.*
@@ -600,6 +601,17 @@ internal class AgentReActLoop(
                 "来源已在黑名单，工具结果已阻止。security.blocklist 查看黑名单。",
                 errorCode = ErrorCodes.ERR_SOURCE_BLOCKED)
         }
-        return withTimeout(60_000L) { engine.getPipelineManager().buildPipeline().execute(gate.commandLine, context) }
+        val result = withTimeout(60_000L) {
+            engine.getPipelineManager().buildPipeline().execute(gate.commandLine, context)
+        }
+        // Linux 命令通道: 注册表未命中的命令回退到沙箱 shell (与 bang 同一套监控)。
+        // 严格限定"真命令不存在" (Unknown command) — 命令存在但参数错误 (ERR_NOT_FOUND)
+        // 不得落 shell 兜底, 否则掩盖真实错误 (错误码二义性修复)
+        if (!result.success && result.errorCode == ErrorCodes.ERR_NOT_FOUND &&
+            result.error?.startsWith("Unknown command") == true
+        ) {
+            return LinuxCommandExecutor.execute(gate.commandLine, context, allowUserConfirm = true)
+        }
+        return result
     }
 }

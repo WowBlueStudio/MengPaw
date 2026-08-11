@@ -56,7 +56,8 @@ class BangCommandExecutionTest {
 
     @Test
     fun `unknown command falls back to shell sandbox`() = runBlocking {
-        val r = engine().executeCommand("nosuchcmd.xyz")
+        // 无点命令 → Linux 通道; 点分未注册命令 (agent.rea) 不落 shell
+        val r = engine().executeCommand("nosuchcmd")
         assertFalse("未知命令应失败: ${r.output}", r.success)
         assertNotEquals("fallback 生效, 不应是 ERR_NOT_FOUND", ErrorCodes.ERR_NOT_FOUND, r.errorCode)
     }

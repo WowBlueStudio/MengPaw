@@ -54,10 +54,12 @@ uname -a"
 am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS '-c,bash /sdcard/tmp_script.sh'
 ```
 
-**方式 B：直接在命令中内联**
+**方式 B：直接在命令中内联**（多命令请分步执行；`&&`/`;`/变量/反引号会被安全监控拦截）
 ```
-am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS '-c,ls -la /sdcard/ && echo done'
+am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS '-c,ls -la /sdcard/'
 ```
+
+> 安全规则与直接 Linux 命令一致：命令内容会经 CommandMonitor 检查，高危操作（rm/chmod 等）会弹窗询问用户；`> 文件 2>&1` 重定向输出可用（写工作区/输出/公共存储），系统路径（/etc /dev /system 等）禁止覆盖。
 
 ## 常用场景
 
