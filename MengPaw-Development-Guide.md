@@ -533,29 +533,26 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 1224 测试，v0.36.0 实测快照：kernel 558 + core 90 + shell 148 + browser 34 + 插件 394，0 failures；v0.36 去重移除 fs 插件与 agent 文件命令测试，新增 CommandMonitor/Linux 通道 33 用例)
+### 3.7 测试 (14 本地模块 1232 测试，v0.36.1 实测快照：kernel 558 + core 90 + shell 148 + browser 42 + 插件 394，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 529 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** |
+| mengpaw-kernel | 558 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) |
 | mengpaw-core | 90 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex |
 | mengpaw-shell | 148 | ComplexityDetector 分档、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简 |
-| mengpaw-browser | 34 | smartNavigate 智能导航、AdBlocker 规则全矩阵 |
+| mengpaw-browser | 42 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵 |
 | plugin-hermes (tribe) | 68 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 |
 | plugin-memory-twin | 68 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
-| plugin-browser-search | 54 | SSRF 校验全矩阵、引擎检测 |
 | plugin-agent-tools | 44 | 工具集解析 |
 | plugin-skill | 46 | 路径消毒、frontmatter 解析、命令层落实、source 来源标记 |
 | plugin-net | 30 | SSRF 黑名单矩阵、validateUrl scheme 白名单、代理字符串逻辑 |
 | plugin-tavily | 30 | API Key 混淆往返/无明文窗口泄漏 |
 | plugin-framework | 56 | McpGateway 4MB 上限、指纹 hex、peer JSON 往返、FrameworkPairStore/FrameworkPairHandler、信任门禁 frameworkTrustGate、preferIpv4 |
-| plugin-update | 24 | 版本比较、sha256 向量、镜像 URL、自动检查 CAS 幂等 |
 | plugin-concise | 20 | 简洁模式 |
 | plugin-root | 20 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 |
-| plugin-fs | 18 | 路径消毒、cp/mv/stat 语义 |
 | plugin-dev | 12 | dev.plugin 审计/关键词链路 |
-| plugin-dev | 6 | 审计/示例/支持拆分后的行为保持 |
-| plugin-fs | 9 | 沙箱边界、symlink 检测 (P2 回归, Windows 探测式 skip) |
+
+> 外置插件 (mengpaw-connectors, MIT): browser-search 54 / update 24 等随连接器仓库独立测试。
 
 > 全部 JVM 本地单测（`testDebugUnitTest`，kernel 为 `:test`），毫秒级反馈，无需模拟器。
 > 测试补齐过程中修复 4 个生产缺陷：TwinAcpHandler TWIN_DELEGATE 信任门不可达

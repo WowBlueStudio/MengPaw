@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.36.1 (2026-08-11) — 浏览器半自动武器 + 地址栏修复
+
+### 新增
+- **浏览器半自动武器 (browser v0.8.0, 方案 docs/browser-autopilot-plan.md 拍板落地)**:
+  `page.*` Playwright 语义命令面 (22 条) — `page.load` 半自动合体 (导航 + 精确等待 +
+  全页分段截图 + 坐标系统) / `page.goto` / `page.screenshot` / `page.click <seg> <x> <y>` /
+  `page.fill` / `page.content --grep/--head/--tail` / `page.wait_selector` 等;
+  超长页截断分多段 + 按段坐标还原 (决策 #5); 截图落公共目录
+  `/storage/emulated/0/MengPaw/截图存档` (MANAGE_EXTERNAL_STORAGE 首启弹窗, 拒绝降级提示)
+- **am 桥 (Termux 式调用)**: 浏览器侧 `RunCommandService` (signature 权限 +
+  命令前缀白名单 + 输出路径公共目录限制); CommandMonitor 识别
+  `com.mengpaw.browser.RUN_COMMAND_ARGUMENTS` 形态, 白名单只放行 page.*/browser.*
+- **browser.\* 去重 (决策 #4)**: 45→23 条, 被 page.* 覆盖的命令删除, 四源同步 +
+  5 个浏览器技能文档 + 系统提示词中英节
+- **地址栏中文显示**: URL 百分号编码解码为中文 + 中文路径/带路径无协议 URL 输入识别
+  (smartNavigate host 段判定)
+
+### 修复
+- **地址栏显示完整 URL**: 编辑态 editUrl 同步 activeTab.url (宽屏/平板地址栏恒为编辑态,
+  remember(activeTabId) 不跟随页面 URL 变化, 残留用户输入的主域名); title 为空时仍渲染 URL 行
+- **MCP 桥参数映射**: mcpArgsToPositional 支持 page.* flag (--max-height/--grep/--head 等)
+  与 seg/dy 位置键 — browser.mcp.invoke page.content {"grep":...} 不再丢参数
+- **提示词幽灵引用**: agent.read (v0.36.0 已删) → cat, PromptGhostReferenceTest 拦截后修正
+
+### 发行
+- 浏览器 APK: `mengpaw-browser-v0.8.0-release.apk` (vc=13)
+- Shell APK: `mengpaw-shell-v0.36.1-release.apk`
+- 外置插件 browser-mcp/browser-search/browser-push 代码同步 (mengpaw-connectors @d5cd98c, 未发 tag)
+- 崩溃巡检: 2026-08-09 FileUriExposedException (v0.34.2) 已由 FileProvider 化修复闭环
+
 ## v0.36.0 (2026-08-11) — Linux 命令通道 + 命令去重 + 外置插件迁移
 
 ### 新增

@@ -723,4 +723,24 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   docs/INDEX.md、docs/browser-autopilot-plan.md）— 发布 commit 用显式文件列表 add，
   排除用户未提交项，避免混入发布历史。
 
-*最后更新: 2026-08-11 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档*
+### 19. 浏览器半自动武器 + 发布经验 (2026-08-11)
+
+- **提示词幽灵引用会拦住"合理"的新引用**: `PromptGhostReferenceTest` 从 PromptEngine.kt
+  提取 namespace.command 引用对照 kernel 注册键 — 写 `agent.read`（v0.36.0 已删命令）
+  直接被测试拦截。改提示词引用前先 `self.search` 确认命令活着；browser.*/page.* 的
+  ns 不在 KERNEL_NS（self/agent/plugin/evolution），提示词里引用不触发检查。
+- **CommandMonitor 浏览器形态不能递归 shell 检查**: page.goto 的 URL 含 `&`（query 参数），
+  递归 evaluateInternal 会被 sandboxCheck 当后台执行拦截 — 浏览器命令由浏览器进程解析，
+  白名单前缀校验（page./browser.）即终点，直接放行；Termux payload 才是真 shell 递归。
+- **rg 管道输出高亮污染**: PowerShell 里 `rg ... | Select-String` 时匹配文本被 ANSI
+  高亮码替换显示为 `n`，无法读实际内容 — 诊断时用 `rg --color never` 或 Select-String。
+- **Compose remember 状态不跟随异步更新**: 地址栏 `remember(activeTabId) { mutableStateOf(url) }`
+  只在 tab 切换时重置，同一 tab 导航后残留旧值 — 用 `LaunchedEffect(activeTab.url)` 同步，
+  且初始化值也走同一转换（中文解码）。
+- **Char 与 Int 比较**: Kotlin `c > 127` 编译错（Char vs Int）— 用 `c.code > 127`。
+- **地址栏中文**: URL 显示层百分号解码（URLDecoder 先 `+`→`%2B` 防空格语义）；smartNavigate
+  域名判定改 host 段（首个 `/ ? #` 前）+ URL 字符白名单（`!` 保留排除，沿用防误判约定）。
+- **MCP map→位置参数缺 flag 支持**: browser.mcp.invoke 传 `{"grep":...}` 时 mcpArgsToPositional
+  只收位置键，flag 静默丢失 — 加 FLAG_ARG_MAP（带值）与 BOOL_FLAG_MAP（布尔）展开。
+
+*最后更新: 2026-08-11 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器*
