@@ -273,6 +273,17 @@ internal class TaskExecutionPipeline(
                     else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta, attachments = attachments)
                 }
 
+                // ── 思考容器闭环兜底 (v0.36.2 P1): 引擎返回但流式从未检测到 "Final Answer:" 标记 ──
+                // 内核 PromptEngine.parse 规则 3/4 把无标记的纯文本自然回答 / Thought-only 也判为最终答案
+                // (闲聊/简单问答/非 ReAct 模型常见)。原实现只在 onDelta 里认 "Final Answer:" 前缀 →
+                // 这类回答思考容器永不折叠 (isRunning 永 true): UI 恒显"思考中…"、自动折叠失效,
+                // 手动折叠后滚动回收 (LazyColumn 重组, rememberSaveable 丢失) 又恢复展开。
+                // 引擎返回即兜底闭环: 折叠容器 + 创建 FinalAnswer 气泡, 后续 applyFinalResult 定型。
+                if (!finalAnswerStarted.get()) {
+                    finalAnswerStarted.set(true)
+                    writer.beginFinalAnswer()
+                }
+
                 // ── 尾段: run() 已返回 — 标记流结束, 等待播放器把剩余缓冲按节奏播完
                 // (打字机收尾, 最长 ~2.5s); join 防 Default 线程晚到 tick 覆盖最终消息
                 // (doTranslate 开启时跳过等待: 最终 replace 整段替换为中文,

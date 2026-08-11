@@ -43,8 +43,10 @@ fun ThinkingProcessBubble(message: ChatMessageUi.ThinkingProcess, agentName: Str
     // 自动折叠: 最终答案开始 (collapsed=true) 默认收起; 运行中强制展开 (思考可见)
     var expanded by rememberSaveable(message.stableId) { mutableStateOf(!message.collapsed) }
     LaunchedEffect(message.collapsed, message.isRunning) {
-        if (message.isRunning) expanded = true
-        else if (message.collapsed) expanded = false
+        // 防御 (v0.36.2): 异常状态组合 (collapsed=true 且 isRunning=true) 不强制展开 —
+        // 原逻辑 isRunning 优先, 一旦闭环信号与残留运行态并存, 用户手动折叠会被覆盖。
+        if (message.isRunning && !message.collapsed) expanded = true
+        else if (!message.isRunning && message.collapsed) expanded = false
     }
 
     Column(Modifier.fillMaxWidth()) {
