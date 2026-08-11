@@ -68,6 +68,47 @@ class SmartNavigateTest {
     }
 
     @Test
+    fun 中文路径URL识别为URL而非搜索() {
+        // v0.8.0 中文支持: 中文路径跟在域名后 → 补 https 原样保留中文
+        assertEquals(
+            "https://zh.wikipedia.org/wiki/中文",
+            smartNavigate("zh.wikipedia.org/wiki/中文", SearchEngine.BING)
+        )
+        assertEquals(
+            "https://www.example.com/路径?q=测试&page=1",
+            smartNavigate("www.example.com/路径?q=测试&page=1", SearchEngine.BING)
+        )
+    }
+
+    @Test
+    fun 带路径无协议URL识别为URL() {
+        // host 段判定: 首个 / 之前的末段含字母即域名, 路径原样保留
+        assertEquals("https://example.com/path?q=1", smartNavigate("example.com/path?q=1", SearchEngine.BING))
+    }
+
+    @Test
+    fun 纯中文关键词仍走搜索() {
+        // 无点 → 搜索 (与 中文关键词URL编码 一致, 不误判为 URL)
+        val r = smartNavigate("中文关键词", SearchEngine.BING)
+        assertTrue(r.startsWith("https://www.bing.com/search?q="))
+    }
+
+    @Test
+    fun 百分号编码URL解码为中文显示() {
+        // 维基百科中文词条 (百分号编码) → 解码为中文
+        assertEquals(
+            "https://zh.wikipedia.org/wiki/中文",
+            decodeUrlForDisplay("https://zh.wikipedia.org/wiki/%E4%B8%AD%E6%96%87")
+        )
+        // query 的 + 保留字面, 不做空格语义转换
+        assertEquals("https://x.com/q=a+b", decodeUrlForDisplay("https://x.com/q=a+b"))
+        // 无百分号原样返回
+        assertEquals("https://example.com/plain", decodeUrlForDisplay("https://example.com/plain"))
+        // 非法编码回退原串
+        assertEquals("https://x.com/%zz", decodeUrlForDisplay("https://x.com/%zz"))
+    }
+
+    @Test
     fun fromKey未知键回退BING() {
         assertEquals(SearchEngine.BING, SearchEngine.fromKey("no-such-engine"))
         assertEquals(SearchEngine.GOOGLE, SearchEngine.fromKey("google"))

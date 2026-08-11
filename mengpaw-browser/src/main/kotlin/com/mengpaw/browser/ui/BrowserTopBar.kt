@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.browser.data.TabState
+import com.mengpaw.browser.util.decodeUrlForDisplay
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoRadius
 
@@ -89,11 +90,11 @@ fun BrowserTopBar(
         TopAppBar(
             title = {
                 if (showUrlBar || isWide) {
-                    var editUrl by remember(activeTabId) { mutableStateOf(activeTab.url) }
+                    var editUrl by remember(activeTabId) { mutableStateOf(decodeUrlForDisplay(activeTab.url)) }
                     // P2 fix: 编辑态跟随页面 URL — remember(activeTabId) 只在 tab 切换时重置,
                     // 同一 tab 内导航/重定向后地址栏残留用户输入的旧文本 (主域名), 不显示真实完整地址。
-                    // LaunchedEffect(activeTab.url) 在页面 URL 变化时同步, 用户输入中不打断。
-                    LaunchedEffect(activeTab.url) { editUrl = activeTab.url }
+                    // LaunchedEffect(activeTab.url) 在页面 URL 变化时同步 (百分号编码解码为中文显示), 用户输入中不打断。
+                    LaunchedEffect(activeTab.url) { editUrl = decodeUrlForDisplay(activeTab.url) }
                     OutlinedTextField(
                         value = editUrl,
                         onValueChange = { editUrl = it },
@@ -146,7 +147,7 @@ fun BrowserTopBar(
                                 )
                             }
                             Text(
-                                activeTab.url.take(60),
+                                decodeUrlForDisplay(activeTab.url).take(60),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = ThemeColors.textSecondary,
                                 maxLines = 1,
