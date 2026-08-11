@@ -1,25 +1,23 @@
 ---
 name: browser-control
-description: 浏览器协作完整手册 — 唤醒打开 (sys.browser.open)、MCP 工具 (browser.mcp.*)、网页转档 (search.*)、插件开发 API。触发词：「浏览器怎么用」「浏览器手册」「唤醒浏览器」
+description: 浏览器协作完整手册 — 唤醒打开 (sys.browser.open)、半自动武器 page.* 命令面 (am 桥)、网页转档 (search.*)。触发词：「浏览器怎么用」「浏览器手册」「唤醒浏览器」「半自动」
 enabled: true
 category: browser
 source: core
 ---
-# 浏览器协作完整手册
+# 浏览器协作完整手册 (v0.8.0 半自动武器)
 
-> 浏览器 (MP Browser) 是独立 APK。Agent 通过三个通道协作, 不能直接执行浏览器内部命令。
+> 浏览器 (MP Browser) 是独立 APK。Agent 经 am 桥直接调用浏览器命令面
+> (page.* / browser.*, 白名单), 或经 9880 桥 (过渡) / 网页转档协作。
 
 ## 快速上手
 
 ```
 1. 唤醒并打开:  sys.browser.open https://example.com
-2. 检查桥在线:  browser.mcp.status
-3. 提取内容:    browser.mcp.invoke browser_extract {}
-4. 导航:        browser.mcp.invoke browser_navigate {"url":"https://www.baidu.com/s?wd=天气"}
-5. 点击/输入:   browser.mcp.invoke browser_click {"selector":"#btn"}
-               browser.mcp.invoke browser_type {"selector":"#q","text":"MengPaw"}
-6. 执行脚本:    browser.mcp.invoke browser_eval {"script":"document.title"}
-7. 转档保存:    search.md https://example.com/article --name article_1
+2. 半自动加载:  am startservice -n com.mengpaw.browser/.service.RunCommandService --es com.mengpaw.browser.RUN_COMMAND_ARGUMENTS "-c,page.load https://example.com"
+3. 看图操作:    page.click 1 <x> <y> / page.scroll_by <dy> (命令串同上, 换 page.click 等)
+4. 过滤提取:    am 桥 page.content --grep "关键词" --head 20
+5. 转档保存:    search.md https://example.com/article --name article_1
 ```
 
 ## 一、前台唤醒 (sys.browser.open)
@@ -32,30 +30,43 @@ source: core
 **说明**: 唤起浏览器后 MCP 桥自动启动 (浏览器 onCreate), 无需手动启用。
 浏览器未安装时 `sys.browser.open` 明确报错。
 
-## 二、MCP 工具 (browser.mcp.*)
+## 二、半自动武器命令面 (page.*, 推荐)
 
-设备内 HTTP 桥: `127.0.0.1:9880` (仅回环, 不暴露网络)。`browser.mcp.tools` 查看实时工具列表。
-
-### 6 个工具
-
-| 工具 | 参数 | 说明 |
-|------|------|------|
-| `browser_navigate` | `{"url": "..."}` | 导航到 URL (等待加载完成, 最坏 10s) |
-| `browser_screenshot` | `{}` | 当前页截图 |
-| `browser_click` | `{"selector": "css"}` | 点击匹配元素 |
-| `browser_type` | `{"selector": "css", "text": "..."}` | 向输入框输入文本 |
-| `browser_extract` | `{}` | 提取页面结构 (标题/链接/表单/文本) |
-| `browser_eval` | `{"script": "js"}` | 执行任意 JavaScript, 返回 JSON 结果 |
-
-### 调用方式
+命令名/参数对齐 Playwright (LLM 零学习成本)。调用通道 am 桥:
 
 ```
-browser.mcp.invoke browser_navigate {"url":"https://example.com"}
-browser.mcp.invoke browser_extract {}
-browser.mcp.invoke browser_eval {"script":"document.querySelector('h1').textContent"}
+am startservice -n com.mengpaw.browser/.service.RunCommandService \
+  --es com.mengpaw.browser.RUN_COMMAND_ARGUMENTS "-c,<page.*|browser.* 命令串>" \
+  [--es com.mengpaw.browser.RUN_COMMAND_OUTPUT <输出路径>]
 ```
 
-返回 JSON: `{"ok":true,...}` 或 `{"ok":false,"error":"..."}`。
+**半自动合体**: `page.load <url> [--max-height N]` — 导航 + 精确等待 + 全页分段截图 + 坐标系统
+(超长页按段返回, partial:true 标注截断; 截图落公共目录 `/storage/emulated/0/MengPaw/截图存档`,
+Agent 用 `agent.read` 看图)
+
+**导航/截图**: `page.goto <url> [--wait domcontentloaded|networkidle]` |
+`page.screenshot [--full] [--view]` | `page.screenshot.element <css>`
+
+**交互**: `page.click <seg> <x> <y>` (坐标, 单图段号默认 1) | `page.click <css>` (选择器) |
+`page.fill <css> <text>` | `page.select <css> <value>` | `page.submit <css>` |
+`page.check` | `page.uncheck` | `page.key <key>`
+
+**查询**: `page.content [--grep P] [--regex] [-i] [--head N] [--tail N]` |
+`page.text <css>` | `page.attr <css> <name>` | `page.wait_selector <css> [--timeout N]`
+
+**滚动/JS/信息**: `page.scroll <x> <y>` | `page.scroll_by <dy>` | `page.eval <js>` |
+`page.url` | `page.title` | `page.back` | `page.forward`
+
+**保留的 browser.\***: 标签页 (`tabs/tab/tab.open/tab.close/tab.all`)、
+效率 (`batch/q/inject/diff/preload`)、存储/Cookie (`storage/cookies 系`)、
+设置/查询 (`viewport/userAgent/version/visible/enabled`)、等待/对话框 (`wait/wait.nav/dialog.*`)。
+
+### 过渡通道: MCP 工具 (browser.mcp.*, 9880 桥, 退役前可用)
+
+设备内 HTTP 桥 `127.0.0.1:9880`。`browser.mcp.tools` 查看实时工具列表;
+`browser.mcp.invoke <工具> <JSON参数>` 调用 (`browser_navigate`/`browser_screenshot`/
+`browser_click`/`browser_type`/`browser_extract`/`browser_eval` 及保留的 browser.* 命令短名)。
+am 桥落地验证后随 9880 桥退役 (方案文档 §六)。
 
 ## 三、网页转档 (search.*)
 
@@ -70,15 +81,16 @@ browser.mcp.invoke browser_eval {"script":"document.querySelector('h1').textCont
 
 **浏览器提炼闭环**: 浏览器菜单「提炼网页要点」→ Agent 收到任务 → search.md 转换 → LLM 提炼要点 → 写回传文件 → Shell 自动回传浏览器预览。
 
-## 四、浏览器扩展 (2026-08-06 更新)
+## 四、浏览器扩展 (2026-08-11 半自动武器更新)
 
-> 浏览器进程内插件注册机制 (BrowserPlugin / BrowserPluginRegistry) 已删除 (P2 死代码清理:
-> register() 零调用、插件与浏览器跨进程不可达)。浏览器能力一律经 9880 MCP 桥暴露:
-> `browser.mcp.tools` 列出全部工具与内置 `browser.*` 命令 (44 条, BuiltinBrowserPlugin 合流)。
-> 需要新浏览器能力时, 在 shell/浏览器侧扩展 `BuiltinBrowserPlugin` 命令或 MCP 工具即可。
+> 浏览器进程内插件注册机制 (BrowserPlugin / BrowserPluginRegistry) 已删除 (P2 死代码清理)。
+> 浏览器能力 = 内置命令面 `page.*` (22 条) + `browser.*` (23 条, BuiltinBrowserPlugin 合流),
+> 经 am 桥 (signature 白名单) / 9880 桥 (过渡) 暴露。需要新浏览器能力时, 在浏览器侧扩展
+> `BuiltinBrowserPlugin` 命令或 `RunCommandService` 即可。
 
 ## 常见问题
 
-- **browser.mcp.status 离线** → 浏览器未运行, 先 `sys.browser.open`
-- **浏览器没反应** → 桥仅 127.0.0.1, 检查是否被杀 (重新唤起)
-- **页面提取为空** → 页面 JS 渲染, 先 browser_navigate 等加载完成再 extract
+- **am 桥报"浏览器未就绪"** → 浏览器未运行, 先 `sys.browser.open <url>` 再调
+- **page.load 提示存储权限** → 未授予「所有文件访问」, 浏览器首启弹窗引导或系统设置手动授权
+- **page.click 错位** → 确认用的是最近一次 page.screenshot --full / page.load 的段图坐标
+- **页面提取为空** → 页面 JS 渲染, 先 page.goto 等加载完成再 page.content

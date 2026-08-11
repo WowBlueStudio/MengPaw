@@ -10,21 +10,17 @@ import com.mengpaw.kernel.error.ErrorCollector
 
 /**
  * 页面控制命令组（自 BuiltinBrowserPlugin 拆出 — 400 行文件拆分批次 1）。
- * speed (inject/diff/preload) + basic (eval/click/type/scroll/content/screenshot/open/
- * back/forward/title/url) + wait 3 + cookies 3 + dialogs 2。
+ * 半自动武器 Phase 3 去重后保留: speed (inject/diff/preload) + wait 2 + cookies 3 + dialogs 2。
+ * 被 page.* 覆盖的命令 (eval/click/type/scroll/content/screenshot/open/back/forward/
+ * title/url/wait.selector) 已删除 (决策 #4)。
  */
 internal class BrowserPageCommands(private val ctx: BrowserCommandContext) {
 
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         // Speed-optimized
         "inject" to ::injectBridge, "diff" to ::diff, "preload" to ::preload,
-        // Basic
-        "eval" to ::eval, "click" to ::click, "type" to ::type,
-        "scroll" to ::scroll, "content" to ::content, "screenshot" to ::screenshot,
-        "open" to ::open, "back" to ::back, "forward" to ::forward,
-        "title" to ::title, "url" to ::url,
         // Page wait
-        "wait" to ::waitMs, "wait.selector" to ::waitSelector, "wait.nav" to ::waitNav,
+        "wait" to ::waitMs, "wait.nav" to ::waitNav,
         // Cookies
         "cookies" to ::cookiesGet, "cookies.set" to ::cookiesSet, "cookies.clear" to ::cookiesClear,
         // Dialogs
@@ -69,76 +65,6 @@ internal class BrowserPageCommands(private val ctx: BrowserCommandContext) {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // Basic commands
-    // ═══════════════════════════════════════════════════════════════════
-
-    private suspend fun eval(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.eval <javascript>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val b = ctx.bridge ?: return ctx.noBrowser()
-        return try { ExecutionResult.ok(b.eval(args.joinToString(" "))) }
-        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.eval"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
-    }
-    private suspend fun click(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.click <selector>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val b = ctx.bridge ?: return ctx.noBrowser()
-        return try { ExecutionResult.ok(b.click(args[0])) }
-        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.click"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
-    }
-    private suspend fun type(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        if (args.size < 2) return ExecutionResult.fail("Usage: browser.type <selector> <text>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val b = ctx.bridge ?: return ctx.noBrowser()
-        return try { ExecutionResult.ok(b.type(args[0], args.drop(1).joinToString(" "))) }
-        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.type"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
-    }
-    private suspend fun scroll(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        val x = args.getOrNull(0)?.toFloatOrNull() ?: 0f; val y = args.getOrNull(1)?.toFloatOrNull() ?: 500f
-        val b = ctx.bridge ?: return ctx.noBrowser()
-        return try { ExecutionResult.ok(b.scroll(x, y)) }
-        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.scroll"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
-    }
-    private suspend fun content(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        val b = ctx.bridge ?: return ctx.noBrowser()
-        return try { ExecutionResult.ok(b.content()) }
-        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.content"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
-    }
-    private suspend fun screenshot(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        val b = ctx.bridge ?: return ctx.noBrowser()
-        return try {
-            val result = b.screenshot()
-            ExecutionResult.ok("Screenshot saved: $result")
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "BuiltinBrowser.screenshot")
-            ExecutionResult.fail("Screenshot failed: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
-        }
-    }
-    private suspend fun open(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.open <url>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val b = ctx.bridge ?: return ctx.noBrowser()
-        return try { b.eval("location.href = '${args[0]}'"); ExecutionResult.ok("Navigating to: ${args[0]}") }
-        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.open"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
-    }
-    private suspend fun back(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        val wv = ctx.webViewProvider() ?: return ctx.noBrowser()
-        return try { if (wv.canGoBack()) { wv.goBack(); ExecutionResult.ok("Back") } else ExecutionResult.ok("Cannot go back") }
-        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.back"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
-    }
-    private suspend fun forward(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        val wv = ctx.webViewProvider() ?: return ctx.noBrowser()
-        return try { if (wv.canGoForward()) { wv.goForward(); ExecutionResult.ok("Forward") } else ExecutionResult.ok("Cannot go forward") }
-        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.forward"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
-    }
-    private suspend fun title(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        val wv = ctx.webViewProvider() ?: return ctx.noBrowser()
-        return try { ExecutionResult.ok(wv.title ?: "(no title)") }
-        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.title"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
-    }
-    private suspend fun url(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        val wv = ctx.webViewProvider() ?: return ctx.noBrowser()
-        return try { ExecutionResult.ok(wv.url ?: "(no url)") }
-        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.url"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
     // Page wait commands
     // ═══════════════════════════════════════════════════════════════════
 
@@ -148,14 +74,6 @@ internal class BrowserPageCommands(private val ctx: BrowserCommandContext) {
         if (ms > 30000) return ExecutionResult.fail("Max wait: 30000ms (30s)", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         kotlinx.coroutines.delay(ms)
         return ExecutionResult.ok("Waited ${ms}ms")
-    }
-
-    private suspend fun waitSelector(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail("Usage: browser.wait.selector <css> [timeoutMs]", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val b = ctx.bridge ?: return ctx.noBrowser()
-        val timeout = args.getOrNull(1)?.toIntOrNull() ?: 5000
-        return try { ExecutionResult.ok(b.waitForSelector(args[0], timeout)) }
-        catch (e: Exception) { ErrorCollector.report(e, "BuiltinBrowser.waitSelector"); ExecutionResult.fail("${e.message}", errorCode = ErrorCodes.ERR_INTERNAL) }
     }
 
     private suspend fun waitNav(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {

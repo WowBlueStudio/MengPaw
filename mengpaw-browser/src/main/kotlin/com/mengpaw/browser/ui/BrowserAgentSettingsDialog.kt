@@ -73,7 +73,7 @@ fun BrowserAgentSettingsDialog(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("快速点击", fontWeight = FontWeight.Medium)
-                            Text("browser.screenshot.full + coord.click", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+                            Text("page.load / page.screenshot --full + page.click", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
                         }
                         Switch(checked = quickClickEnabled, onCheckedChange = onQuickClickToggled)
                     }
@@ -127,7 +127,7 @@ fun BrowserAgentSettingsDialog(
                         Text("使用流程", fontWeight = FontWeight.Medium)
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text("1. browser.screenshot.full → 得到全页长图\n2. Vision 模型识别目标坐标\n3. browser.coord.click <x> <y>\n4. browser.coord.scroll <y> 验证位置",
+                    Text("1. page.screenshot --full → 得到全页分段图\n2. Vision 模型识别目标坐标\n3. page.click <seg> <x> <y>\n4. page.scroll_by <dy> 验证位置",
                         style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, lineHeight = 18.sp)
                 }
             }

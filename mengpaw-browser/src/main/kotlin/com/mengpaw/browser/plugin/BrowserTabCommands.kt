@@ -11,14 +11,15 @@ import com.mengpaw.kernel.error.ErrorCollector
 
 /**
  * 标签页管理 + 效率命令组（自 BuiltinBrowserPlugin 拆出 — 400 行文件拆分批次 1）。
- * tabs/tab/tab.open/tab.close/tab.all + nav/batch/q。
+ * tabs/tab/tab.open/tab.close/tab.all + batch/q。
+ * 半自动武器 Phase 3 去重: nav → page.goto 覆盖已删除 (决策 #4)。
  */
 internal class BrowserTabCommands(private val ctx: BrowserCommandContext) {
 
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         "tabs" to ::tabs, "tab" to ::tab, "tab.open" to ::tabOpen,
         "tab.close" to ::tabClose, "tab.all" to ::tabAll,
-        "nav" to ::nav, "batch" to ::batch, "q" to ::quick
+        "batch" to ::batch, "q" to ::quick
     )
 
     // ═══════════════════════════════════════════════════════════════════
@@ -96,27 +97,6 @@ internal class BrowserTabCommands(private val ctx: BrowserCommandContext) {
     // ═══════════════════════════════════════════════════════════════════
     // Efficiency commands
     // ═══════════════════════════════════════════════════════════════════
-
-    /**
-     * Navigate to URL and auto-extract content in one step.
-     * Saves Agent 2 round-trips (open + content).
-     */
-    private suspend fun nav(args: List<String>, exeCtx: ExecutionContext): ExecutionResult {
-        if (args.isEmpty()) return ExecutionResult.fail(
-            "Usage: browser.nav <url>  — 打开URL并自动提取内容", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        val url = args[0]
-        val b = ctx.bridge ?: return ctx.noBrowser()
-        return try {
-            b.eval("location.href = '$url'")
-            // Brief wait for page start
-            kotlinx.coroutines.delay(1500)
-            val content = b.content()
-            ExecutionResult.ok("## 已导航并提取内容\nURL: $url\n\n$content")
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "BuiltinBrowser.nav")
-            ExecutionResult.fail("Nav error: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
-        }
-    }
 
     /**
      * Batch execute multiple commands in one round-trip.

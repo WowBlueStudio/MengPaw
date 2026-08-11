@@ -1,13 +1,14 @@
 ---
 name: browser-form
-description: 表单自动化指南 — 登录、注册、搜索、多步骤向导、CAPTCHA、文件上传、错误处理 (经 MCP 工具)。触发词：「填表单」「帮我登录」「注册账号」「提交表单」「选下拉选项」
+description: 表单自动化指南 — 登录、注册、搜索、多步骤向导、CAPTCHA、文件上传、错误处理 (经 page.* 命令面)。触发词：「填表单」「帮我登录」「注册账号」「提交表单」「选下拉选项」
 enabled: true
 category: browser
 source: core
 ---
 # 表单自动化 (经 MCP 工具)
 
-> 通道: `browser.mcp.invoke` 6 工具。主手册: `skill.run browser-control`。
+> 通道: am 桥 `page.*` 命令 (推荐) / `browser.mcp.invoke` (过渡)。主手册: `skill.run browser-control`。
+> am 桥形式: `am startservice -n com.mengpaw.browser/.service.RunCommandService --es com.mengpaw.browser.RUN_COMMAND_ARGUMENTS "-c,<命令串>"`。
 
 ## 适用场景
 
@@ -17,32 +18,34 @@ source: core
 
 ```
 1. sys.browser.open https://example.com/login
-2. browser.mcp.invoke browser_navigate {"url":"https://example.com/login"}
-3. browser.mcp.invoke browser_type {"selector":"#username","text":"<用户>"}
-4. browser.mcp.invoke browser_type {"selector":"#password","text":"<密码>"}
-5. browser.mcp.invoke browser_click {"selector":"button[type=submit]"}
-6. browser.mcp.invoke browser_eval {"script":"document.title"}   # 验证跳转
+2. page.goto https://example.com/login
+3. page.fill #username <用户>
+4. page.fill #password <密码>
+5. page.click button[type=submit]
+6. page.title   # 验证跳转
 ```
 
-## MCP 工具清单（browser.mcp.invoke）
+## 命令清单（page.*）
 
-`browser_navigate`（跳转）/ `browser_type`（输入）/ `browser_click`（点击）/ `browser_eval`（JS 执行）/ `browser_extract`（页面提取）/ `browser_screenshot`（截图核对）。表单常用：navigate → type → click → eval 验证。
+`page.goto`（跳转）/ `page.fill`（输入）/ `page.click`（点击）/ `page.eval`（JS 执行）/
+`page.content`（页面提取）/ `page.screenshot`（截图核对）/ `page.select`（下拉选值）。
+表单常用：goto → fill → click → eval/title 验证。
 
 ## 常见场景
 
 ### 搜索
 ```
-browser.mcp.invoke browser_type {"selector":"#q","text":"MengPaw"}
-browser.mcp.invoke browser_eval {"script":"document.querySelector('#q').form.submit()"}
+page.fill #q MengPaw
+page.eval document.querySelector('#q').form.submit()
 ```
 
 ### 多步骤向导
-每步: type → click → `browser_eval {"script":"document.querySelector('.step-indicator').textContent"}` 确认进度。
+每步: fill → click → `page.eval document.querySelector('.step-indicator').textContent` 确认进度。
 
 ### 下拉选择
-`browser_click` 打开下拉 → `browser_eval` 选值:
+`page.click` 打开下拉 → `page.select` 选值:
 ```
-browser.mcp.invoke browser_eval {"script":"var s=document.querySelector('select');s.value='option-2';s.dispatchEvent(new Event('change'))"}
+page.select select option-2
 ```
 
 ### 表单状态探测 (before/after)

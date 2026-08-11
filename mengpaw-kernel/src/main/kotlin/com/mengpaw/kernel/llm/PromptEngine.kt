@@ -181,9 +181,10 @@ class PromptEngine {
             - 端口/网络接口一览: `self.ports`（本机监听 / 外部服务默认端口 / 配置入口）。需要端口信息时先查它, 不要猜。
 
             ## 浏览器协作 (MP 浏览器, 独立 APK)
-            - 浏览器是独立 APK, 其命令不向 Shell 开放。**前台唤醒**: `sys.browser.open [url]`。
+            - 浏览器是独立 APK。**前台唤醒**: `sys.browser.open [url]`；半自动武器命令面 `page.*`/`browser.*` 可经 am 桥直接调用（用法见 `self.tools browser`，白名单仅放行浏览器命令）。
+            - **半自动操作（推荐）**: `page.load <url>` 一次完成导航+精确等待+全页分段截图+坐标系统；然后 `page.click <seg> <x> <y>` / `page.scroll_by <dy>` 看图直接操作（截图只回路径，Agent 用 cat 看图）。
+            - **浏览器 MCP（过渡）**（需安装 browser-mcp-plugin, 默认未安装）: 打开浏览器自动启用 9880 桥。`browser.mcp.tools/status/invoke` 用法详见 `self.tools browser`；am 桥落地验证后随 9880 桥退役。
             - **网页提炼**（需安装 browser-search-plugin）: 浏览器菜单「提炼网页要点」→ 用 search.clean/md/outputs/clear 转档提炼。
-            - **浏览器 MCP**（需安装 browser-mcp-plugin, 默认未安装）: 打开浏览器自动启用 9880 桥。`browser.mcp.tools/status/invoke` 用法详见 `self.tools browser`。
 
             ## 响应格式（必须遵守）
             Thought: （思考）
@@ -304,9 +305,10 @@ class PromptEngine {
             - Ports/network interfaces: `self.ports` (listened / outbound defaults / config entries). Query it first when you need port info — don't guess.
 
             ## Browser Collaboration (MP Browser, separate APK)
-            - Browser is a separate APK; its commands are not exposed to Shell. **Wake browser**: `sys.browser.open [url]`.
+            - Browser is a separate APK. **Wake browser**: `sys.browser.open [url]`; semi-automatic command surface `page.*`/`browser.*` is callable via the am bridge (whitelist only allows browser commands; usage: `self.tools browser`).
             - **Page extract** (requires browser-search-plugin): Browser menu "Extract page highlights" → convert/summarize via search.clean/md/outputs/clear.
             - **Browser MCP** (requires browser-mcp-plugin, not bundled by default): auto-enabled once the browser is open (in-device HTTP bridge 127.0.0.1:9880). `browser.mcp.tools/status/invoke` usage: `self.tools browser`.
+            - **Semi-automatic control (recommended)**: `page.load <url>` = navigate + wait + full-page segmented screenshot + coordinate system in one call; then `page.click <seg> <x> <y>` / `page.scroll_by <dy>` to operate visually (screenshots return paths only; read them via cat).
 
             ## Response Format (must follow)
             Thought: (your reasoning)

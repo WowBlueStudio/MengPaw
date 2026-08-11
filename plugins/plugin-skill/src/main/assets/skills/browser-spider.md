@@ -1,13 +1,14 @@
 ---
 name: browser-spider
-description: 网页抓取工作流 — 唤醒、导航、提取、转档、分页、去重、持久化 (经 MCP + search.*)。触发词：「抓取这个网页」「采集这个列表」「把这页转成文档」「爬这个网站」
+description: 网页抓取工作流 — 唤醒、半自动 page.* 提取、转档、分页、去重、持久化 (经 am 桥 + search.*)。触发词：「抓取这个网页」「采集这个列表」「把这页转成文档」「爬这个网站」
 enabled: true
 category: browser
 source: core
 ---
 # 网页抓取工作流
 
-> 通道: `sys.browser.open` 唤醒 / `browser.mcp.invoke <工具>` 提取 / `search.md` 转档。主手册: `skill.run browser-control`。
+> 通道: `sys.browser.open` 唤醒 / am 桥 `page.*` 提取 (推荐) / `browser.mcp.invoke` (过渡) / `search.md` 转档。主手册: `skill.run browser-control`。
+> am 桥形式: `am startservice -n com.mengpaw.browser/.service.RunCommandService --es com.mengpaw.browser.RUN_COMMAND_ARGUMENTS "-c,<命令串>"`。
 
 ## 适用场景
 
@@ -20,17 +21,17 @@ source: core
 sys.browser.open https://example.com/list
 
 # 2. 提取页面结构
-browser.mcp.invoke browser_extract {}
+page.content --head 50
 
 # 3. 转档保存 (供后续阅读/提炼)
 search.md https://example.com/list --name list_1
 
 # 4. 列表页提取链接 → 逐条转档
-browser.mcp.invoke browser_eval {"script":"JSON.stringify(Array.from(document.querySelectorAll('a')).map(a=>a.href).filter(h=>h.includes('/article/')))"}
+page.eval JSON.stringify(Array.from(document.querySelectorAll('a')).map(a=>a.href).filter(h=>h.includes('/article/')))
 → 对每个 URL: search.md <url> --name article_N
 
 # 5. 分页
-browser.mcp.invoke browser_eval {"script":"var n=document.querySelector('.next');if(n){n.click();'next'}"}
+page.eval var n=document.querySelector('.next');if(n){n.click();'next'}
 ```
 
 ## 抓取策略选择
@@ -41,9 +42,10 @@ browser.mcp.invoke browser_eval {"script":"var n=document.querySelector('.next')
 | 静态页面/批量抓取 | `search.md` / `net.curl` | 快, 不占浏览器, 可并发 |
 | 高质量搜索 | `tavily.search` | 结构化结果, 免解析 |
 
-## MCP 工具清单（browser.mcp.invoke）
+## 命令清单（page.*）
 
-`browser_navigate` / `browser_extract` / `browser_eval` / `browser_click` / `browser_type` / `browser_screenshot`（6 个，`browser.mcp.tools` 查看详情）。抓取常用：navigate → extract → eval。
+`page.goto` / `page.content` / `page.eval` / `page.click` / `page.fill` / `page.screenshot`。
+抓取常用：goto → content/eval → search.md。
 
 ## 去重与持久化
 
