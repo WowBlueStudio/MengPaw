@@ -135,23 +135,23 @@ internal class PromptSystemBuilder {
     }
 
     /**
-     * 文档注入瘦身 — 超长文档只注入前段 + agent.read 外链（AgentToolsSummary 模式）。
+     * 文档注入瘦身 — 超长文档只注入前段 + cat 外链（AgentToolsSummary 模式）。
      * ≤12K 字符全量注入（现状）；>12K 注入前 6K，避免大文档拖慢每轮 LLM 输入。
      */
     private fun compactDoc(doc: String, path: String): String {
         if (doc.length <= DOC_FULL_INJECT_CHARS) return doc
         return doc.take(DOC_SNIPPET_CHARS) +
-            "\n\n…[文档过长 (${doc.length} 字符)，完整内容: agent.read $path]"
+            "\n\n…[文档过长 (${doc.length} 字符)，完整内容: cat $path]"
     }
 
     /** 文档 brief (P1-4 方案A) — 优先 frontmatter summary; 无则取首个非空非标题行前 300 字符;
-     *  全文经 agent.read 按需取, 不再全文常驻。长期记忆 (memory.md) 除外 — 保持全文注入。 */
+     *  全文经 cat 按需取, 不再全文常驻。长期记忆 (memory.md) 除外 — 保持全文注入。 */
     private fun docBrief(doc: String, path: String): String = buildString {
         val summary = com.mengpaw.kernel.agent.AgentDocs.frontmatterSummary(doc)
             ?: doc.trim().lineSequence().firstOrNull { it.isNotBlank() && !it.trimStart().startsWith("#") }
                 ?.trim()?.take(DOC_BRIEF_FALLBACK_CHARS)
         append(summary ?: "(空文档)")
-        append("\n\n完整内容: agent.read $path")
+        append("\n\n完整内容: cat $path")
     }
 
     /**
@@ -256,7 +256,7 @@ internal class PromptSystemBuilder {
 """
 ## ⚠️ 身份未就绪 — 你还没有名字
 
-你的身份档案（profile.md）中名字未设置。请用 `agent.read profile.md` 查看、`agent.write profile.md` 填写名字（第一行 `名字: xxx` 格式）。
+你的身份档案（profile.md）中名字未设置。请用 `cat profile.md` 查看、`echo 名字 > profile.md` 填写名字（第一行 `名字: xxx` 格式）。
 
 设置完成后本提醒自动消失。
 
@@ -265,7 +265,7 @@ internal class PromptSystemBuilder {
 """
 ## ⚠️ Identity not ready — you don't have a name yet
 
-Your identity file (profile.md) has no name set. Use `agent.read profile.md` to view it and `agent.write profile.md` to fill in your name (first line `Name: xxx`).
+Your identity file (profile.md) has no name set. Use `cat profile.md` to view it and `echo Name > profile.md` to fill in your name (first line `Name: xxx`).
 
 This reminder disappears automatically once the name is set.
 

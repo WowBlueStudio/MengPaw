@@ -26,7 +26,7 @@ class PluginExecutor(
     /** Plugins compiled into the APK — may not be uninstalled at runtime. */
     private val UNINSTALLABLE = setOf(
         "skill-plugin", "framework-plugin", "dev-plugin",
-        "fs-plugin", "net-plugin", "clipboard-plugin",
+        "net-plugin", "clipboard-plugin",
         "memory-twin-plugin", "dream-plugin", "evolution-plugin"
     )
 

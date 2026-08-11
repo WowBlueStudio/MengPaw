@@ -80,7 +80,7 @@ object EvolutionProviderRegistry {
  * 进化系统默认实现 — 处置命令 + 失败记录 + 省察引导 (行为零变化)。
  *
  * 省察引导只负责"提问与处置指引", 处置动作本身由 Agent 通过既有通道执行
- * (agent.memory.keep / agent.write / self.search)。这里的命令是处置侧的动作端点:
+ * (agent.memory.keep / echo 写文件 / self.search)。这里的命令是处置侧的动作端点:
  * - audit        绩效报告(失败分布/复现率/教训列表)
  * - report       框架反馈 — Agent 发现框架缺陷时写给开发者
  * - feedback     框架反馈状态机 — ls 查看 / mark 标记 (new/ack/scheduled/fixed)
@@ -368,7 +368,7 @@ object EvolutionEngine : EvolutionProvider {
             appendLine("    按错误类型处置:")
             appendLine("    - 指令集错误(命令/参数用错): evolution.learn.command 丰富指令集, 或 self.search 检索正确命令")
             appendLine("    - 常识性错误: agent.memory.keep <教训> 写入长期记忆 (下次自动注入)")
-            appendLine("    - 行为错误(风格/边界/习惯): agent.write 调整 soul.md 行为准则")
+            appendLine("    - 行为错误(风格/边界/习惯): echo 编辑 soul.md 行为准则")
             appendLine("    - 框架缺陷(命令本身坏了): evolution.report <描述> 写给开发者")
             appendLine()
             appendLine("沉淀完成后用 evolution.mark-corrected ${failure.id} 标记已修正。")

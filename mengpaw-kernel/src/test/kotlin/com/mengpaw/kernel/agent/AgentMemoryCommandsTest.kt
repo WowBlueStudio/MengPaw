@@ -86,23 +86,4 @@ class AgentMemoryCommandsTest {
         assertTrue(r.output.contains("长期记忆: 2 条"))
     }
 
-    @Test
-    fun `read resolves workspace relative path and tolerates leading slash`() = runTest {
-        // FIX(自检报告 P0-2): 相对路径以工作区为基准 + 前导 / 宽容解析
-        val ws = File(com.mengpaw.kernel.DataPaths.AGENTS, "mem-test")
-        ws.mkdirs()
-        File(ws, "profile.md").writeText("# 测试档案")
-        // 相对路径
-        val r1 = run("read", "profile.md")
-        assertTrue("相对路径应命中工作区文件: ${r1.output}", r1.success)
-        assertTrue(r1.output.contains("测试档案"))
-        // 前导 / 宽容 (Unix 习惯写法, Android 会被当根目录绝对路径)
-        val r2 = run("read", "/profile.md")
-        assertTrue("前导 / 应回退工作区解析: ${r2.output}", r2.success)
-        assertTrue(r2.output.contains("测试档案"))
-        // 错误信息输出解析后的真实路径
-        val r3 = run("read", "不存在.md")
-        assertFalse(r3.success)
-        assertTrue("错误应输出解析后的真实路径: ${r3.error}", r3.error?.contains("解析为") == true)
-    }
 }

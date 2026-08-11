@@ -44,15 +44,10 @@ class AntiAmbiguityTest {
 
     @Test
     fun `路径拼接型命令必须接入污染提示`() {
-        val text = src("com/mengpaw/kernel/agent/AgentFileCommands.kt")
-        listOf(
-            "pollutedHint(args, \"agent.read\")",
-            "pollutedHint(args, \"agent.ls\")",
-            "pollutedHint(pathArgs, \"agent.rm\")",
-            "pollutedHint(args, \"agent.mkdir\")"
-        ).forEach { guard ->
-            assertTrue("AgentFileCommands 必须保留 $guard (路径污染防护): $text", text.contains(guard))
-        }
+        // v0.36.x 去重: agent.read/ls/rm/mkdir 已移除 (Linux 命令等价), 路径污染防护仅剩记忆时间戳拼接
+        val text = src("com/mengpaw/kernel/agent/AgentMemoryMutateCommands.kt")
+        assertTrue("mid.rm 时间戳拼接须有污染防护", text.contains("pollutedHint(args.drop(1), \"agent.memory.mid.rm\")"))
+        assertTrue("project.rm 时间戳拼接须有污染防护", text.contains("pollutedHint(args.drop(1), \"agent.memory.project.rm\")"))
     }
 
     @Test
@@ -64,11 +59,7 @@ class AntiAmbiguityTest {
 
     @Test
     fun `单 token 位置参数命令必须接入多余参数提示`() {
-        // 插件在项目根 plugins/ 下 — 工作目录 = kernel 模块根, 上跳一级
-        val fs = pluginSrc("plugin-fs/src/main/kotlin/com/mengpaw/plugin/fs/FsPlugin.kt")
-        assertTrue("fs.cp 须有多余参数提示", fs.contains("extraArgsHint(args, 2, \"fs.cp\")"))
-        assertTrue("fs.mv 须有多余参数提示", fs.contains("extraArgsHint(args, 2, \"fs.mv\")"))
-        assertTrue("fs.stat 须有多余参数提示", fs.contains("extraArgsHint(args, 1, \"fs.stat\")"))
+        // v0.36.x 去重: fs.* 已随 Linux 命令通道移除 (cp/mv/stat 有 Android 等价)
         val net = pluginSrc("plugin-net/src/main/kotlin/com/mengpaw/plugin/net/NetPlugin.kt")
         assertTrue("net.curl 须有多余参数提示", net.contains("extraArgsHint(args, 1, \"net.curl\")"))
     }

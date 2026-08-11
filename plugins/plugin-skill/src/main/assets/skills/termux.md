@@ -45,10 +45,7 @@ am startservice --user 0 -n com.termux/com.termux.app.RunCommandService \
 
 **方式 A：每次重写脚本文件**
 ```
-agent.write /sdcard/tmp_script.sh "#!/bin/bash
-echo 'Hello from MengPaw'
-date
-uname -a"
+printf '#!/bin/bash\necho Hello from MengPaw\ndate\nuname -a\n' > /sdcard/tmp_script.sh
 
 # 然后执行
 am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS '-c,bash /sdcard/tmp_script.sh'
@@ -69,10 +66,10 @@ am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS '-c,ls -la /sdcard/'
 -c,ping -c 3 8.8.8.8 > /sdcard/ping_result.txt 2>&1
 
 # 2. 稍后读取
-agent.read /sdcard/ping_result.txt
+cat /sdcard/ping_result.txt
 
 # 3. 清理
-agent.rm /sdcard/ping_result.txt --force
+rm /sdcard/ping_result.txt
 ```
 
 ### Python 脚本
@@ -83,20 +80,13 @@ agent.rm /sdcard/ping_result.txt --force
 ### 数据分析（写脚本→执行→读结果）
 ```
 # 1. 写脚本
-agent.write /sdcard/analyze.py "
-import os
-total = 0
-for f in os.listdir('/sdcard/Download'):
-    print(f)
-    total += 1
-print(f'Total: {total} files')
-"
+printf 'import os\ntotal = 0\nfor f in os.listdir("/sdcard/Download"):\n    print(f)\n    total += 1\nprint(f"Total: {total} files")\n' > /sdcard/analyze.py
 
 # 2. 执行
 -c,python3 /sdcard/analyze.py > /sdcard/result.txt 2>&1
 
 # 3. 读结果
-agent.read /sdcard/result.txt
+cat /sdcard/result.txt
 ```
 
 ## 获取执行结果
@@ -112,17 +102,17 @@ am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS \
 # （Termux 后台执行需要时间）
 
 # 3. 读取结果
-agent.read /sdcard/termux_out.txt
+cat /sdcard/termux_out.txt
 
 # 4. 清理
-agent.rm /sdcard/termux_out.txt --force
+rm /sdcard/termux_out.txt
 ```
 
 ## 限制
 
 - 命令总长度 < 128KB（Android Intent 限制）
 - 后台执行无终端 UI，用 > 文件重定向获取结果
-- 复杂脚本写文件 → 执行 → `agent.read` 读结果 → 清理
+- 复杂脚本写文件 → 执行 → `cat` 读结果 → 清理
 - 脚本放 `/sdcard/` 可能被其他应用修改，敏感操作优先每次重写
 - 首次执行时系统可能弹窗要求确认
 - Termux 需要在后台保持运行（关闭电池优化）

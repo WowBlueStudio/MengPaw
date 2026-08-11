@@ -143,41 +143,41 @@ class IntegrityGuardTest {
     @Test
     fun 写命令到受保护路径被拦截() {
         val dest = "${coreDir.absolutePath}${File.separator}Vault.kt"
-        assertNotNull(guard.validateCommand("fs.write", listOf(dest)))
-        assertNotNull(guard.validateCommand("fs.cp", listOf("/tmp/src.txt", dest)))
-        assertNotNull(guard.validateCommand("fs.mkdir", listOf(dest)))
+        assertNotNull(guard.validateCommand("echo", listOf(dest)))
+        assertNotNull(guard.validateCommand("cp", listOf("/tmp/src.txt", dest)))
+        assertNotNull(guard.validateCommand("mkdir", listOf(dest)))
     }
 
     @Test
     fun 删除命令到受保护路径被拦截() {
         val target = "${coreDir.absolutePath}${File.separator}Vault.kt"
-        assertNotNull(guard.validateCommand("fs.rm", listOf(target)))
+        assertNotNull(guard.validateCommand("rm", listOf(target)))
     }
 
     @Test
     fun 移动命令目标为受保护路径被拦截() {
         val dest = "${agentsDir.absolutePath}${File.separator}x.txt"
-        assertNotNull(guard.validateCommand("fs.mv", listOf("/tmp/src.txt", dest)))
-        // fs.cp 同时属于写命令与移动命令 — 目标受保护同样拦截
-        assertNotNull(guard.validateCommand("fs.cp", listOf("/tmp/src.txt", dest)))
+        assertNotNull(guard.validateCommand("mv", listOf("/tmp/src.txt", dest)))
+        // cp 同时属于写命令与移动命令 — 目标受保护同样拦截
+        assertNotNull(guard.validateCommand("cp", listOf("/tmp/src.txt", dest)))
     }
 
     @Test
     fun 写命令到目录外路径放行() {
         val dest = "${outsideDir.absolutePath}${File.separator}ok.txt"
-        assertNull(guard.validateCommand("fs.write", listOf(dest)))
-        assertNull(guard.validateCommand("fs.rm", listOf("${outsideDir.absolutePath}${File.separator}x.txt")))
+        assertNull(guard.validateCommand("echo", listOf(dest)))
+        assertNull(guard.validateCommand("rm", listOf("${outsideDir.absolutePath}${File.separator}x.txt")))
     }
 
     @Test
     fun 命令大小写不敏感() {
         val dest = "${coreDir.absolutePath}${File.separator}Vault.kt"
-        assertNotNull("大写命令同样拦截", guard.validateCommand("FS.WRITE", listOf(dest)))
+        assertNotNull("大写命令同样拦截", guard.validateCommand("ECHO", listOf(dest)))
     }
 
     @Test
     fun 非文件命令不受保护检查() {
         assertNull(guard.validateCommand("llm.chat", listOf("你好")))
-        assertNull(guard.validateCommand("fs.write", emptyList()))
+        assertNull(guard.validateCommand("echo", emptyList()))
     }
 }

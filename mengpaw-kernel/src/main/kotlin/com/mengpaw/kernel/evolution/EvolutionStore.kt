@@ -134,20 +134,19 @@ object EvolutionStore {
      * 失败记录 message 自动附"命中内置种子模式 #N"教训提示, stats/audit 列表展示。
      */
     val SEED_PATTERNS: List<SeedPattern> = listOf(
-        SeedPattern(1, listOf("agent.read"), "把自然语言描述当文件路径写进 agent.read",
-            "agent.read 的参数是工作区内真实文件路径 (如 agents/xxx.md); 不确定路径先 agent.ls 列出, 不要传自然语言描述"),
-        SeedPattern(2, listOf("agent.ls"), "把自然语言描述当目录路径写进 agent.ls",
-            "agent.ls 参数是目录路径; 不带参数即列出工作区根目录, 先列目录确认结构再定位文件"),
-        SeedPattern(3, listOf("agent.write"), "写操作后没有读回验证",
-            "agent.write 后必须用 agent.read 读回验证内容落盘正确, 再继续依赖该文件的后续步骤"),
-        SeedPattern(4, listOf("agent.memory.keep"), "调用命令没带 Action Input (缺必需参数)",
+        // v0.36.x 去重: agent.read/ls/write/rm/mkdir 已移除 (Linux 命令等价), 种子同步改为 Linux 语义
+        SeedPattern(1, listOf("cat"), "cat 大文件把内容全量灌进上下文",
+            "读文件优先 grep/head/tail/sed 定向取片段 (grep -n 定位 / head 取头 / tail 取尾 / sed -n 取行段), 避免 cat 全量; 需要完整内容才 cat"),
+        SeedPattern(2, listOf("echo", "tee", "printf"), "写文件后没有读回验证",
+            "echo/tee 写文件后必须立即 cat 读回验证内容落盘正确, 再继续依赖该文件的后续步骤"),
+        SeedPattern(3, listOf("agent.memory.keep"), "调用命令没带 Action Input (缺必需参数)",
             "命令调用必须带全参数 (Action Input): agent.memory.keep <内容> 的内容不可省略; 拿不准用法先 agent.cli"),
-        SeedPattern(5, listOf("agent.memory"), "把 JSON 对象直接当 Action Input 粘贴",
-            "Action Input 是位置参数 (如 <路径> <内容>), 不是 JSON 对象; 结构化数据先 agent.write 写成文件再引用"),
-        SeedPattern(6, listOf("cat"), "cat 大文件把内容全量灌进上下文",
-            "读文件优先 grep/head/tail/sed 定向取片段 (grep -n 定位 / head 取头 / tail 取尾 / sed -n 取行段), 避免 cat 全量; 需要完整内容才 cat; ls/dir 等 shell 命令已受支持, 失败先检查路径"),
-        SeedPattern(7, listOf("agent.rm"), "删除文件前没有确认目标",
-            "agent.rm 不可逆; 删除前先 agent.ls 确认路径与目标确实是该文件, 再执行")
+        SeedPattern(4, listOf("agent.memory"), "把 JSON 对象直接当 Action Input 粘贴",
+            "Action Input 是位置参数, 不是 JSON 对象; 结构化数据先写文件 (echo/printf) 再引用"),
+        SeedPattern(5, listOf("rm"), "删除文件前没有确认目标",
+            "rm 不可逆 (高危会弹窗确认); 删除前先 ls 确认路径与目标确实是该文件, 再执行"),
+        SeedPattern(6, listOf("ls", "dir"), "路径不存在时盲目重试",
+            "ls/cat 报路径不存在时先 ls 父目录确认结构, 不要盲目重试相同路径")
     )
 
     /** 已自动升级为框架缺陷的 key (agent|prefix|errorCode) — 每进程只写一次, 防刷屏。 */

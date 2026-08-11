@@ -906,7 +906,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 > **进化产物 v2 (2026-08-09, 可读·可追溯·可采纳)**: 修复三个实测问题 — ① **去重**: failures.jsonl 改为每模式一行 (同命令+错误码 upsert, repeatCount 累计, firstSeen/lastSeen 记录时间线), 不再每失败追加重复行; ② **可追溯**: EvolutionFailure 新增 task/sessionId/contextSnippet 字段 (失败时在做什么/哪个会话/上下文片段), evolution.audit 的"失败模式 (可追溯)"列表逐条展示 id/时间/任务/上下文, 并可展示 learn.command 登记的指令集; ③ **可采纳**: failures.jsonl 懒加载 (重启后 repeatedPatterns/stats/复现提醒/已修正状态全部恢复 — 此前 buffer 只随进程累积, 重启即丢, 是"教训不被采纳"的根因); learn.command 登记持久化到 `{BASE}/进化档案/commands.json`, 启动时恢复进 CommandSearch (self.search/失败引导跨进程可检索)。长期记忆 (memory.md) 本就走 PromptSystemBuilder 注入提示词, memory.keep 教训自动被后续会话采纳。
 
 
-#### agent — 文档 + 内存 + 工作区 (27+)
+#### agent — 文档 + 内存 + 工作区 (21+)
 **文档 (3)**：`docs` | `cli` | `profile` | `soul` | `boost` | `boost.delete`
 > `agent.docs` 展示 frontmatter 元数据 (v0.32.1+, 自检报告 P2-8): 逐文档读文件头 2KB 内 `---` 块提取模板同款 `summary`/`read_when`（缩进列表），输出 `name — summary [read_when]`；无 frontmatter 退化为纯文件名。
 
@@ -918,8 +918,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **会话 (4)**：`sessions [keyword] [limit]` | `session.delete <id>` | `session.archive <id>` | `session.current`
 
-**工作区文件 (6)**：`read <path>` | `write <path> <content>` | `ls [path]` | `rm <path>` | `mkdir <path>` | `output`
-> `agent.write --from <源文件>` (v0.32.1+, 自检报告 P2-11): 从本地文件导入内容 (resolvePath 解析/存在性校验/拒目录/5MB 防 OOM 上限/UTF-8)。参数不足错误信息补充引用规则: 内容含空格用引号包裹, 多行用 `--from 从文件导入`。
+**工作区文件 (1, v0.36.x 去重)**: `output` — read/write/ls/rm/mkdir 已移除 (Android 有等价命令 cat/echo/ls/rm/mkdir, 见 §5.2.1 Linux 命令通道); 写后读回验证由 Linux 通道重定向写提示 + 提示词「结果纪律」承接。
 
 
 #### plugin — 插件管理 (12 + 5)
@@ -983,11 +982,6 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 | `DOWNLOAD_FAILED` | 插件下载 HTTP 失败（404/5xx，`MarketplaceDownloadException`） |
 | `NETWORK_OFFLINE` | 网络不可达（`MarketplaceNetworkException`，双源 + ghproxy 全失败） |
 | `ERR_TIMEOUT` / `ERR_IO` / `ERR_INTERNAL` | 超时 / IO 错误 / 未归类内部错误 |
-
-#### fs — 文件系统 (5)
-`cp <src> <dst>` | `mv <src> <dst>` | `stat <path>` | `grep <pattern> [path] [--regex] [-i] [--context N]` | `glob <pattern> [path]`
-> 读/写/列/删/建目录用内核 `agent.read/write/ls/rm/mkdir`(工作区文件命令, 与 fs 沙箱同界)
-
 
 #### net — 网络 (4)
 `curl <url>` | `get <url>`（curl 别名）| `post <url> <body>` | `proxy`（大陆访问 GitHub 失败时获取代理 URL）
@@ -1060,6 +1054,8 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 **再解释形态一致性**: `sh -c "<payload>"`、Termux（`am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS '-c,<payload>'`）、`su -c` 与直接命令**同一套规则**——payload 提取后递归再入检查（嵌套 ≤2 层），无差别绕过。Termux 技能（`skill.run termux`）依赖的 `> 文件 2>&1` 输出收集可用。
 
 **发现性**: Linux 命令不注册、不进 BuiltinCommandIndex（`IndexCoverageTest` 无幽灵条目）；发现靠系统提示词「命令双轨」节 + LLM 训练语料。点分未注册命令（如 `agent.rea`）不落 shell，报错附 `self.search` 引导；无参 stdin 命令（`grep`/`cat`/`head`/`tail`/`sed` 等）预检拒绝，防 30s 挂起。
+
+**命令去重 (v0.36.x)**: `agent.read/write/ls/rm/mkdir` 与 `fs.*`（plugin-fs 已整体移除）有 Android 等价命令（cat/echo/ls/rm/mkdir/cp/mv/stat/grep/find），不再重复定义——Agent 直接用 Linux 命令。原框架特有保障的承接: ① `agent.write` 自动读回验证 → Linux 通道对重定向写（`> 文件`）成功后自动附「请 cat 读回验证」提示 + 提示词「结果纪律」要求引用真实文本; ② `agent.rm` 系统路径保护 → CommandMonitor CONFIRM 弹窗 + overwrite-system/写保护路径 BLOCK 规则; ③ `agent.write` 路径沙箱 → 工作区/输出目录为 Linux 通道默认 cwd 与允许写区, 插件仓库/配置目录写保护 BLOCK。**注意**: Linux 命令不经 Pipeline IntegrityGuard, 插件仓库/配置等核心目录的写保护由 CommandMonitor 写保护路径检查承接。
 
 ### 5.3 浏览器内置命令 (browser.*, 45)
 

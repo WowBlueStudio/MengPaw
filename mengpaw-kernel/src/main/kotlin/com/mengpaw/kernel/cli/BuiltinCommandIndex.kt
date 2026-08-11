@@ -223,25 +223,10 @@ object BuiltinCommandIndex {
             listOf("输出", "导出", "文件", "目录", "生成", "保存"),
             listOf("output", "export", "file", "directory", "generate", "save"))
 
-        // ── 工作区文件操作 ──
-        idx("agent.read", "在工作区中读取文件内容 (只读)", "agent.read <路径>",
-            listOf("读取", "读文件", "查看", "打开", "Read", "Cat"),
-            listOf("read", "open", "view", "cat", "file", "content"))
-        idx("agent.write", "在工作区中写入文件 (原子操作 tmp→rename; 多行内容用 --from <源文件> 导入)", "agent.write <路径> <内容> | agent.write <路径> --from <源文件>",
-            listOf("写入", "写文件", "创建", "保存", "Write", "生成文件"),
-            listOf("write", "create", "save", "file", "generate", "output"))
+        // ── 工作区文件操作 (v0.36.x 去重: 已并入 Linux 命令通道, 用 cat/echo/ls/rm/mkdir) ──
         idx("agent.policy", "per-agent 命令前缀级授权 — 多 Agent 场景按 agent 放开受限命令 (blockList 恒优先)", "agent.policy [allow|deny <前缀> [--to <agent>]]",
             listOf("权限", "授权", "策略", "命令权限", "放行", "限制", "多Agent"),
             listOf("permission", "policy", "grant", "allow", "deny", "access"))
-        idx("agent.ls", "列出工作区中的文件和目录", "agent.ls [路径]",
-            listOf("列表", "目录", "列出", "文件", "浏览", "Ls", "Dir"),
-            listOf("list", "ls", "dir", "files", "directory", "browse"))
-        idx("agent.rm", "删除工作区中的文件", "agent.rm <路径>",
-            listOf("删除", "移除", "清理", "Rm", "文件"),
-            listOf("remove", "delete", "rm", "erase", "clean"))
-        idx("agent.mkdir", "在工作区中创建目录", "agent.mkdir <路径>",
-            listOf("目录", "创建", "新建", "文件夹", "Mkdir"),
-            listOf("mkdir", "directory", "create", "folder", "new"))
 
         // ── plugin: 插件管理 ──
         idx("plugin.marketplace", "浏览插件市场 (自动路由 GitHub/Gitee, 含描述)", "plugin.marketplace [--refresh]",

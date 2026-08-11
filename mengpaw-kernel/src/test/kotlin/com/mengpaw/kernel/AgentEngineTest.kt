@@ -176,11 +176,11 @@ class AgentEngineTest {
             override fun close() {}
             fun respond(): String = when (turn++) {
                 0 -> """
-                    Thought: 查状态并列出文件。
+                    Thought: 查状态并查版本。
                     Action: self.status
                     Action Input: {}
-                    Action: agent.ls
-                    Action Input: {"path": "."}
+                    Action: self.version
+                    Action Input: {}
                 """.trimIndent()
                 else -> "Final Answer: 完成"
             }
@@ -265,12 +265,11 @@ class AgentEngineTest {
     @Test
     fun `high-risk command with reason passes gate and executes`() = runBlocking {
         // JSON 豁免通道: 高危命令带 reason → 模板展开执行, reason 不进入命令文本
-        // v0.34.3: agent.rm 为 MID — 测试前置 TRUSTED 权限避免分级拦截干扰 reason 门禁断言
+        // v0.36.x 去重: agent.rm 已移除, 改用同属 MID 的 agent.memory.rm 验证 reason 门禁
         val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_gate_pass_" + System.nanoTime()
         com.mengpaw.kernel.DataPaths.initialize(tmp)
         val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
         agentDir.mkdirs()
-        java.io.File(agentDir, "test.md").writeText("x")  // agent.rm 需要真实文件才能执行成功
         com.mengpaw.kernel.security.AgentPermissionStore.resetForTest(java.io.File(tmp, "perm.json"))
         com.mengpaw.kernel.security.AgentPermissionStore.setLevel("MengPaw", com.mengpaw.kernel.security.AgentPermissionLevel.TRUSTED)
         var turn = 0
@@ -283,22 +282,22 @@ class AgentEngineTest {
             override fun close() {}
             fun respond(): String = when (turn++) {
                 0 -> """
-                    Thought: 清理临时文件。
-                    Action: agent.rm
-                    Action Input: {"path": "test.md", "force": "true", "reason": "清理临时文件"}
+                    Thought: 清理一条临时记忆。
+                    Action: agent.memory.rm
+                    Action Input: {"timestamp": "20260801_000000", "reason": "清理临时记忆"}
                 """.trimIndent()
-                else -> "Final Answer: 完成"
+                else -> "Final Answer: 记忆删除未完成，目标条目不存在。"
             }
         }
         val sm2 = SessionManager()
         val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
         val result = engine2.run("门禁放行测试", maxSteps = 3)
-        assertEquals("完成", result)
+        assertEquals("记忆删除未完成，目标条目不存在。", result)
         val obs = sm2.getHistory(engine2.currentConversationId()!!).joinToString("\n") { it.content }
         // reason 只应出现在模型原始输出 (Action Input, 传参必经之路), 绝不进入执行命令文本
-        val commandLines = Regex("Command: agent\\.rm[^\n]*").findAll(obs).map { it.value }.toList()
-        assertTrue("命令应模板展开执行: $commandLines", commandLines.any { it == "Command: agent.rm test.md --force" })
-        assertFalse("reason 不得进入命令文本: $commandLines", commandLines.any { it.contains("清理临时文件") })
+        val commandLines = Regex("Command: agent\\.memory\\.rm[^\n]*").findAll(obs).map { it.value }.toList()
+        assertTrue("命令应模板展开执行: $commandLines", commandLines.any { it == "Command: agent.memory.rm 20260801_000000" })
+        assertFalse("reason 不得进入命令文本: $commandLines", commandLines.any { it.contains("清理临时记忆") })
         assertFalse("带 reason 不得拒绝: $obs", obs.contains("REASON_REQUIRED"))
     }
 
@@ -315,9 +314,9 @@ class AgentEngineTest {
             override fun close() {}
             fun respond(): String = when (turn++) {
                 0 -> """
-                    Thought: 删除临时文件。
-                    Action: agent.rm
-                    Action Input: test.md
+                    Thought: 删除一条临时记忆。
+                    Action: agent.memory.rm
+                    Action Input: 20260801_000000
                 """.trimIndent()
                 else -> "Final Answer: 删除未成功, 缺少 reason 参数。"
             }
@@ -382,7 +381,7 @@ class AgentEngineTest {
                     fun respond(): String = when (turn++) {
                         0 -> """
                             Thought: 读取文件。
-                            Action: agent.read
+                            Action: cat
                             Action Input: attack.md
                         """.trimIndent()
                         else -> "Final Answer: 完成"
@@ -433,7 +432,7 @@ class AgentEngineTest {
                 fun respond(): String = when (turn++) {
                     0 -> """
                         Thought: 读取文件。
-                        Action: agent.read
+                        Action: cat
                         Action Input: attack.md
                     """.trimIndent()
                     else -> "Final Answer: 读取未成功, 该来源已在黑名单。"
@@ -552,8 +551,8 @@ class AgentEngineTest {
             fun respond(): String = when (turn++) {
                 0 -> """
                     Thought: 读取文件。
-                    Action: agent.read
-                    Action Input: {"path": "missing.md"}
+                    Action: cat
+                    Action Input: missing.md
                 """.trimIndent()
                 1 -> "Final Answer: 文件已成功读取, 内容完整。"
                 else -> "Final Answer: 无法读取 missing.md, 文件不存在。"
@@ -644,8 +643,8 @@ class AgentEngineTest {
             fun respond(): String = when (turn++) {
                 0 -> """
                     Thought: 读取文件。
-                    Action: agent.read
-                    Action Input: {"path": "missing.md"}
+                    Action: cat
+                    Action Input: missing.md
                 """.trimIndent()
                 // 此后永远声称成功 — 门禁必须拒绝到底, 不得超限放行
                 else -> "Final Answer: 文件已成功读取, 内容完整。"
@@ -684,8 +683,8 @@ class AgentEngineTest {
                 // 前 3 轮同一命令同一错误反复失败 (空转)
                 0, 1, 2 -> """
                     Thought: 读取文件。
-                    Action: agent.read
-                    Action Input: {"path": "missing.md"}
+                    Action: cat
+                    Action Input: missing.md
                 """.trimIndent()
                 // 收到停指令后转向: 不再重试, 如实汇报
                 else -> "Final Answer: 无法读取 missing.md, 文件不存在, 任务无法完成。"

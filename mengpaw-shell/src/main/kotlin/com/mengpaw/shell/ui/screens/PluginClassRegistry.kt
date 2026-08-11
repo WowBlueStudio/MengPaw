@@ -26,7 +26,6 @@ internal object PluginClassRegistry {
 
     /** Mapping from plugin ID to known builtin class name. */
     private val BUILTIN_CLASSES = mapOf(
-        "fs-plugin" to "com.mengpaw.plugin.fs.FsPlugin",
         "net-plugin" to "com.mengpaw.plugin.net.NetPlugin",
         "framework-plugin" to "com.mengpaw.plugin.framework.FrameworkPlugin",
         "skill-plugin" to "com.mengpaw.plugin.skill.SkillPlugin",

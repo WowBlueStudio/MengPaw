@@ -271,11 +271,11 @@ class IntegrityGuard(
         var globalInstance: IntegrityGuard = IntegrityGuard()
             private set
 
-        /** CLI commands that write/create files. */
-        private val WRITE_COMMANDS = setOf("fs.write", "fs.cp", "fs.mkdir")
+        /** CLI commands that write/create files. v0.36.x 去重: fs.* 已移除 — Linux 写命令的路径保护由 CommandMonitor 承接. */
+        private val WRITE_COMMANDS = setOf("echo", "tee", "printf", "cp", "mv", "rm", "mkdir", "touch")
         /** CLI commands that delete files. */
-        private val DELETE_COMMANDS = setOf("fs.rm")
+        private val DELETE_COMMANDS = setOf("rm")
         /** CLI commands that move/rename files. */
-        private val MOVE_COMMANDS = setOf("fs.mv", "fs.cp")
+        private val MOVE_COMMANDS = setOf("mv", "cp")
     }
 }

@@ -65,8 +65,7 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS bidirectional bridge)
 │   └── plugin/                 # In-browser plugins (22 commands)
 │
-└── plugins/                    # 14 built-in plugins (siblings, all depend only on kernel, bundled in APK)
-    ├── plugin-fs/              # File system (5 commands)
+└── plugins/                    # 13 built-in plugins (siblings, all depend only on kernel, bundled in APK)
     ├── plugin-net/             # HTTP network (4 commands)
     ├── plugin-skill/           # Two-tier skill system (10 commands) ⭐💎
     ├── plugin-clipboard/       # Clipboard (3 commands)

@@ -22,7 +22,7 @@ class TelemetryTest {
 
     @Test
     fun `command and llm events roundtrip with temp file`() {
-        Telemetry.recordCommand("agent.read profile.md", true, 12, "MengPaw")
+        Telemetry.recordCommand("cat profile.md", true, 12, "MengPaw")
         Telemetry.recordCommand("proc.exec ls", false, 3, "MengPaw")  // 失败事件也记录
         Telemetry.recordLlm(100, 50, 200)
 
@@ -31,7 +31,7 @@ class TelemetryTest {
 
         // JSON lines 形态: 时间戳/类型/字段
         assertTrue("命令事件", lines[0].contains("\"type\":\"cmd\""))
-        assertTrue("命令名入事件", lines[0].contains("agent.read profile.md"))
+        assertTrue("命令名入事件", lines[0].contains("cat profile.md"))
         assertTrue("agent 维度", lines[0].contains("\"agent\":\"MengPaw\""))
         assertTrue("失败命令入事件", lines[1].contains("\"ok\":false"))
         assertTrue("LLM 事件", lines[2].contains("\"type\":\"llm\""))

@@ -63,10 +63,6 @@ class PipelineManager(
         )
 
         private val AGENT_SIGNATURES = mapOf(
-            "read" to com.mengpaw.kernel.cli.CommandSignature("agent.read <路径>", 1),
-            "write" to com.mengpaw.kernel.cli.CommandSignature("agent.write <路径> <内容>", 2),
-            "rm" to com.mengpaw.kernel.cli.CommandSignature("agent.rm <路径> [--force]", 1),
-            "mkdir" to com.mengpaw.kernel.cli.CommandSignature("agent.mkdir <路径>", 1),
             "session.delete" to com.mengpaw.kernel.cli.CommandSignature("agent.session.delete <id>", 1),
             "session.archive" to com.mengpaw.kernel.cli.CommandSignature("agent.session.archive <id> [--unarchive]", 1),
             "memory.record" to com.mengpaw.kernel.cli.CommandSignature("agent.memory.record <内容>", 1),

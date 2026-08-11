@@ -122,7 +122,6 @@ dependencies {
     implementation(project(":plugin-framework"))
     implementation(project(":plugin-skill"))
     implementation(project(":plugin-dev"))
-    implementation(project(":plugin-fs"))
     implementation(project(":plugin-net"))
     implementation(project(":plugin-clipboard"))
     implementation(project(":plugin-memory-twin"))

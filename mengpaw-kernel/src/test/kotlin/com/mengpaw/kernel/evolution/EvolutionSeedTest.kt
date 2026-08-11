@@ -39,9 +39,9 @@ class EvolutionSeedTest {
 
     @Test
     fun `seed hint attaches to failure message when command prefix matches`() {
-        val f = EvolutionStore.recordFailure("seed-test-1", "agent.read", "ERR_INVALID_INPUT", "路径不存在", "Pipeline")
+        val f = EvolutionStore.recordFailure("seed-test-1", "cat", "ERR_NOT_FOUND", "路径不存在", "Pipeline")
         assertTrue("命中种子应附教训提示: ${f.message}", f.message.contains("命中内置种子模式 #1"))
-        assertTrue("教训应含正确做法 (agent.ls)", f.message.contains("agent.ls"))
+        assertTrue("教训应含定向读取引导 (grep/head/tail)", f.message.contains("grep"))
     }
 
     @Test
@@ -52,12 +52,12 @@ class EvolutionSeedTest {
 
     @Test
     fun `stats lists built-in seed checklist`() {
-        EvolutionStore.recordFailure("seed-test-3", "agent.write", "ERR_IO", "写盘失败", "Pipeline")
+        EvolutionStore.recordFailure("seed-test-3", "echo", "ERR_IO", "写盘失败", "Pipeline")
         val stats = EvolutionStore.stats("seed-test-3")
         assertTrue("audit 应列常见错误预防清单", stats.contains("常见错误预防清单"))
         assertTrue("应标注内置预防种子", stats.contains("内置预防种子"))
         assertTrue("应含种子教训", stats.contains("读回验证"))
-        assertTrue("应列出种子命令前缀", stats.contains("agent.write"))
+        assertTrue("应列出种子命令前缀", stats.contains("echo"))
     }
 
     @Test

@@ -150,11 +150,38 @@ object CommandMonitor {
         // 2. 危险工具前缀黑名单 + 结构化元字符 (管道放行; 多命令串接/变量/命令替换拦截)
         DefaultCommandExecutor.sandboxCheck(cmd)?.let { return it }
 
-        // 3. 无参 stdin 命令预检 (防挂起)
+        // 3. 写保护路径检查 — Linux 重定向写绕过 Pipeline IntegrityGuard, 此处按路径拦截
+        checkProtectedWrite(cmd)?.let { return it }
+
+        // 4. 无参 stdin 命令预检 (防挂起)
         checkStdin(cmd)?.let { return it }
 
-        // 4. 规则匹配: BLOCK 优先, CONFIRM 弹窗
+        // 5. 规则匹配: BLOCK 优先, CONFIRM 弹窗
         return matchRules(cmd, allowUserConfirm)
+    }
+
+    /** 提取重定向写目标 (`>`/`>>` 后的路径; 跳过 `2>`/`>&` fd 重定向与 /dev 设备)。 */
+    internal fun extractRedirectTarget(cmd: String): String? {
+        val m = Regex("""(?:^|[^0-9&])(?:>>|>)\s*([^\s|<>;]+)""").find(cmd) ?: return null
+        val raw = m.groupValues[1].trim().trim('"').trim('\'')
+        if (raw.startsWith("/dev/") || raw == "/dev/null") return null
+        return raw.ifBlank { null }
+    }
+
+    /**
+     * 写保护路径检查 — Linux 命令不经 Pipeline IntegrityGuard, 重定向目标命中
+     * 核心目录 (插件仓库/配置) 直接 BLOCK (工作区/输出/录音/截图允许写)。
+     */
+    private fun checkProtectedWrite(cmd: String): String? {
+        val target = extractRedirectTarget(cmd) ?: return null
+        val protected = listOf(
+            com.mengpaw.kernel.DataPaths.PLUGIN_CACHE,
+            com.mengpaw.kernel.DataPaths.CONFIG
+        )
+        protected.firstOrNull { p -> target.startsWith(p) }?.let { p ->
+            return "安全策略: 禁止重定向写入核心目录 ($p): $cmd"
+        }
+        return null
     }
 
     // ── 再解释形态检测 ───────────────────────────────────────────

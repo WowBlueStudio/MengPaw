@@ -37,16 +37,14 @@ class RiskGateTest {
 
     @Test
     fun `普通写文件命令为 LOW`() {
-        assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("agent.write /a/x.md 内容"))
-        assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("agent.mkdir /a/b"))
+        assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("agent.output"))
+        assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("agent.memory.record 记住"))
         assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("agent.memory.keep 记住"))
         assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("self.notify.message hi"))
     }
 
     @Test
     fun `删除修改类命令为 MID`() {
-        assertEquals(RiskLevel.MID, CommandRiskLevels.levelOf("agent.rm a.md --force"))
-        assertEquals(RiskLevel.MID, CommandRiskLevels.levelOf("fs.mv a b"))
         assertEquals(RiskLevel.MID, CommandRiskLevels.levelOf("agent.memory.rm 2026-08-09 10:00"))
         assertEquals(RiskLevel.MID, CommandRiskLevels.levelOf("sys.screenshot"))
         assertEquals(RiskLevel.MID, CommandRiskLevels.levelOf("clipboard.copy hello"))
@@ -66,8 +64,9 @@ class RiskGateTest {
 
     @Test
     fun `未登记命令默认 LOW`() {
-        assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("agent.read profile.md"))
-        assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("fs.stat x"))
+        // Linux 命令未登记风险表 → 默认 LOW, 实际安全由 CommandMonitor 规则承载
+        assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("cat profile.md"))
+        assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("stat x"))
     }
 
     // ── AgentPermissionStore ──
@@ -132,38 +131,14 @@ class RiskGateTest {
 
     @Test
     fun `LOW 命令放行`() = runBlocking {
-        val gate = HighRiskCommandGate.evaluate(ToolCall("agent.write", mapOf("path" to "a.md", "content" to "x")))
+        val gate = HighRiskCommandGate.evaluate(ToolCall("agent.memory.record", mapOf("content" to "x")))
         assertNull(RiskGate.evaluate(gate, "agent-x", allowUserConfirm = true))
-    }
-
-    @Test
-    fun `写路径超出允许区降级中危`() {
-        runBlocking {
-            // P0-2 ④: agent.write 写工作区/输出目录外 (如 /sdcard) → 默认拒绝, TRUSTED 放行
-            val gate = HighRiskCommandGate.evaluate(
-                ToolCall("agent.write", mapOf("path" to "/sdcard/evil.sh", "content" to "x"))
-            )
-            assertNotNull("标准权限应拒绝工作区外写入", RiskGate.evaluate(gate, "agent-x", allowUserConfirm = true))
-            AgentPermissionStore.setLevel("agent-x", AgentPermissionLevel.TRUSTED)
-            assertNull("信任权限应放行工作区外写入", RiskGate.evaluate(gate, "agent-x", allowUserConfirm = true))
-            AgentPermissionStore.setLevel("agent-x", AgentPermissionLevel.STANDARD)
-        }
-    }
-
-    @Test
-    fun `写工作区绝对路径与相对路径放行`() = runBlocking {
-        val rel = HighRiskCommandGate.evaluate(ToolCall("agent.write", mapOf("path" to "a.md", "content" to "x")))
-        assertNull(RiskGate.evaluate(rel, "agent-x", allowUserConfirm = true))
-        val abs = HighRiskCommandGate.evaluate(
-            ToolCall("agent.write", mapOf("path" to "${com.mengpaw.kernel.DataPaths.AGENTS}/MengPaw/a.md", "content" to "x"))
-        )
-        assertNull("工作区绝对路径应放行", RiskGate.evaluate(abs, "agent-x", allowUserConfirm = true))
     }
 
     @Test
     fun `MID 命令标准权限拒绝信任权限放行`() = runBlocking {
         val gate = HighRiskCommandGate.evaluate(
-            ToolCall("agent.rm", mapOf("path" to "a.md", "force" to "true", "reason" to "清理"))
+            ToolCall("agent.memory.rm", mapOf("timestamp" to "2026-08-09", "reason" to "清理"))
         )
         assertNotNull("标准权限应拒绝中危", RiskGate.evaluate(gate, "agent-x", allowUserConfirm = true))
         AgentPermissionStore.setLevel("agent-x", AgentPermissionLevel.TRUSTED)

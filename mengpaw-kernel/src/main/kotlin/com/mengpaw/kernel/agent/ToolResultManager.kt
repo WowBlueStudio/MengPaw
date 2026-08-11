@@ -43,7 +43,7 @@ class ToolResultManager(private val agentName: String) {
         return try {
             file.writeText(rawOutput)
             val snippet = rawOutput.take(threshold / 2)
-            "$snippet\n... [完整输出 (${rawOutput.length} 字节): tool_results/$fileUuid.txt — 用 agent.read 查阅]"
+            "$snippet\n... [完整输出 (${rawOutput.length} 字节): tool_results/$fileUuid.txt — 用 cat 查阅]"
         } catch (_: Exception) {
             rawOutput.take(threshold)
         }

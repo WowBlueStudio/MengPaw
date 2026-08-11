@@ -49,14 +49,14 @@ class PromptEngineTest {
 
     @Test
     fun `oversized agents doc is compacted with read link`() {
-        // 写超长 agents.md → docsBlock 注入应只取 brief + agent.read 外链 (P1-4 方案A)
+        // 写超长 agents.md → docsBlock 注入应只取 brief + cat 外链 (P1-4 方案A)
         val dir = File(DataPaths.AGENTS, "MengPaw")
         dir.mkdirs()
         val doc = File(dir, "agents.md")
         doc.writeText("长文档内容".repeat(4000))  // ~20K 字符 > 12K 阈值
         try {
             val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
-            assertTrue("超长文档应走 brief 外链", prompt.contains("完整内容: agent.read"))
+            assertTrue("超长文档应走 brief 外链", prompt.contains("完整内容: cat"))
             assertFalse("超长文档全文不得注入", prompt.contains("长文档内容".repeat(100)))
         } finally {
             doc.delete()
@@ -77,7 +77,7 @@ class PromptEngineTest {
         val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = agent)
         assertTrue("应注入 frontmatter summary", prompt.contains("Agent 身份与用户资料"))
         assertFalse("模板占位符全文不得注入", prompt.contains("挑个你喜欢的"))
-        assertTrue("应附 agent.read 外链", prompt.contains("agent.read"))
+        assertTrue("应附 cat 外链", prompt.contains("完整内容: cat"))
         assertTrue("外链应指向 profile.md", prompt.contains("profile.md"))
     }
 
@@ -327,7 +327,7 @@ class PromptEngineTest {
         val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
         assertTrue("中文提示词应含 markdown 图片格式", zh.contains("![描述](绝对路径)"))
         assertTrue("中文提示词应含已保存到独立行", zh.contains("已保存到 <绝对路径>"))
-        assertTrue("中文提示词应要求路径真实存在", zh.contains("agent.ls 验证"))
+        assertTrue("中文提示词应要求路径真实存在", zh.contains("cat 读回验证"))
         val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
         assertTrue("英文提示词应含 markdown 图片格式", en.contains("![description](absolute path)"))
         assertTrue("英文提示词应含 Saved to 独立行", en.contains("Saved to <absolute path>"))
@@ -583,7 +583,7 @@ Action Input: {}
             val zh = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
             assertTrue("名字未填时应注入中文提醒", zh.contains("身份未就绪"))
             assertTrue("中文提醒应给出填写指引", zh.contains("名字: xxx"))
-            assertTrue("中文提醒应指明填写工具", zh.contains("agent.write profile.md"))
+            assertTrue("中文提醒应指明填写工具", zh.contains("echo 名字 > profile.md"))
             val en = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH, agentName = "MengPaw")
             assertTrue("名字未填时应注入英文提醒", en.contains("Identity not ready"))
             assertTrue("英文提醒应给出填写指引", en.contains("Name: xxx"))

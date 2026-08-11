@@ -35,7 +35,9 @@ object PromptFirewall {
 
     /** Commands BLOCKED for GUEST peers. */
     private val GUEST_BLOCKED = setOf(
-        "fs.mv", "fs.cp",
+        // v0.36.x 去重: fs.* 已移除, Linux 写/危险命令对 GUEST 显式拒绝 (默认拒绝兜底)
+        "echo", "tee", "printf", "rm", "mv", "cp", "mkdir", "touch",
+        "curl", "wget", "nc", "ncat", "telnet", "python", "perl", "sh", "bash", "su", "sudo",
         "proc.exec", "proc.kill",
         "plugin.install", "plugin.uninstall", "plugin.enable", "plugin.disable",
         "ui.click", "ui.swipe", "ui.input", "ui.screenshot", "ui.back", "ui.home",
@@ -53,7 +55,8 @@ object PromptFirewall {
         "agent.audit",               // 查看审计
         "hermes.memo",               // 团队共享记忆
         "render.generate",           // API生图 (不写本地)
-        "agent.read", "agent.ls", "fs.stat",// 只读文件 (fs.cat/ls 已并入 agent.*)
+        // Linux 只读命令 (v0.36.x 去重: agent.read/ls、fs.stat 已移除)
+        "cat", "head", "tail", "grep", "sed", "find", "stat", "ls", "less", "more", "wc", "du", "df", "file",
         "self.status", "self.stats", "self.version", "sys.*",  // 只读系统信息
         "agent.memory", "agent.memory.read", "agent.memory.search", "agent.memory.stats",
         "agent.memory.mid", "agent.memory.project",  // 只读记忆

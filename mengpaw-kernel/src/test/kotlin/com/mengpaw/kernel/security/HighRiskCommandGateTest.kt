@@ -26,11 +26,11 @@ class HighRiskCommandGateTest {
     @Test
     fun 高危纯文本参数被拒() {
         // 纯文本形态 = raw 兜底 (ReActParser: mapOf("raw" to 文本))
-        val result = HighRiskCommandGate.evaluate(ToolCall("agent.rm", mapOf("raw" to "test.md")))
+        val result = HighRiskCommandGate.evaluate(ToolCall("agent.memory.rm", mapOf("raw" to "20260801_000000")))
         assertEquals(ErrorCodes.REASON_REQUIRED, result.errorCode)
         assertNotNull("错误文本应含引导信息", result.error)
         assertTrue("错误文本应含 JSON 示例", result.error!!.contains("reason"))
-        assertTrue("错误文本应含命令名", result.error!!.contains("agent.rm"))
+        assertTrue("错误文本应含命令名", result.error!!.contains("agent.memory.rm"))
     }
 
     @Test
@@ -44,7 +44,7 @@ class HighRiskCommandGateTest {
     @Test
     fun 单键JSON无reason被拒_补缝() {
         // 关键补缝: 单键 JSON (size==1, 无 raw) 原 paramFormatError 放行 — 高危命令必须 reason
-        val result = HighRiskCommandGate.evaluate(ToolCall("agent.rm", mapOf("path" to "x")))
+        val result = HighRiskCommandGate.evaluate(ToolCall("agent.memory.rm", mapOf("timestamp" to "x")))
         assertEquals(ErrorCodes.REASON_REQUIRED, result.errorCode)
     }
 
@@ -68,15 +68,6 @@ class HighRiskCommandGateTest {
         assertEquals(ErrorCodes.PARAM_FORMAT_ERROR, result.errorCode)
         assertTrue("错误文本应列出缺失键", result.error!!.contains("content"))
         assertTrue("错误文本应含示例", result.error!!.contains("reason"))
-    }
-
-    @Test
-    fun flag参数展开() {
-        val result = HighRiskCommandGate.evaluate(
-            ToolCall("agent.rm", mapOf("path" to "x", "force" to "true", "reason" to "清理临时文件"))
-        )
-        assertNull(result.error)
-        assertEquals("agent.rm x --force", result.commandLine)
     }
 
     // ── P4 修复 (2026-08-08 自检): 多行 content 换行保留 ──
@@ -120,14 +111,6 @@ class HighRiskCommandGateTest {
             ToolCall("agent.memory.edit", mapOf("timestamp" to "2026-08-09 10:00", "content" to "hello", "reason" to "备份"))
         )
         assertEquals("agent.memory.edit \"2026-08-09 10:00\" hello", result.commandLine)
-    }
-
-    @Test
-    fun flag值非true不拼接() {
-        val result = HighRiskCommandGate.evaluate(
-            ToolCall("agent.rm", mapOf("path" to "x", "force" to "false", "reason" to "预览"))
-        )
-        assertEquals("agent.rm x", result.commandLine)
     }
 
     @Test
@@ -178,12 +161,12 @@ class HighRiskCommandGateTest {
         // v0.34.3 分级化: HIGH_RISK 表 = 中危/高危命令 (reason 门禁);
         // 普通 (LOW) 命令移出, 由 CommandRiskLevels 分级承载
         listOf(
-            "agent.rm", "fs.mv",
+            "agent.memory.rm", "agent.memory.edit",
             "proc.exec", "proc.system", "plugin.install", "plugin.uninstall",
             "plugin.enable", "plugin.disable",
             "clipboard.copy", "clipboard.paste", "clipboard.clear",
             "skill.enable", "skill.disable",
-            "agent.memory.rm", "agent.memory.edit", "agent.memory.mid.delete", "agent.memory.mid.rm",
+            "agent.memory.mid.delete", "agent.memory.mid.rm",
             "agent.memory.mid.edit",
             "agent.memory.project.delete", "agent.memory.project.rm", "agent.memory.project.edit",
             "root.exec", "root.shell", "root.fs.write", "root.system.setprop",
@@ -194,7 +177,7 @@ class HighRiskCommandGateTest {
         }
         // LOW 命令 (v0.34.3 分级: 新建/写入/普通表达) 移出 reason 表
         listOf(
-            "agent.write", "agent.mkdir", "fs.cp",
+            "agent.output",
             "self.notify.message", "self.notify.banner",
             "agent.memory.keep", "agent.memory.write", "agent.memory.record", "agent.memory.project.save"
         ).forEach { name ->

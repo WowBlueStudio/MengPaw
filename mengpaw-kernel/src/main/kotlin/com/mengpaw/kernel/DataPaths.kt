@@ -156,7 +156,6 @@ object DataPaths {
 
     /** Human-readable folder name from plugin ID. */
     fun pluginFolderName(pluginId: String): String = when (pluginId) {
-        "fs-plugin" -> "文件系统插件-fs"
         "net-plugin" -> "网络插件-net"
         "skill-plugin" -> "技能系统插件-skill"
         "ui-plugin" -> "界面操控插件-ui"

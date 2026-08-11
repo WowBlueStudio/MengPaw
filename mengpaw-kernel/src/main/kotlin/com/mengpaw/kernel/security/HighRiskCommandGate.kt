@@ -32,9 +32,7 @@ object HighRiskCommandGate {
     /** 中危/高危命令 → 参数模板 (v0.34.3: LOW 命令移出 — 普通写操作不再强制 reason)。
      *  集合按真实注册表校准 (fs.write 已并入 agent.*, 不在此列)。 */
     val HIGH_RISK: Map<String, List<Param>> = mapOf(
-        // ── 文件 (中危) ──
-        "agent.rm" to listOf(Param("path"), Param("force", Kind.FLAG)),
-        "fs.mv" to listOf(Param("source"), Param("dest")),
+        // ── 文件 (中危; agent.rm/fs.mv 已随 Linux 通道移除, Linux rm/mv 走 CommandMonitor CONFIRM) ──
         // ── 进程 ──
         "proc.exec" to listOf(Param("command")),
         "proc.system" to listOf(Param("command")),

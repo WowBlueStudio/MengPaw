@@ -27,7 +27,6 @@ include(":mengpaw-browser")
 
 // ── Plugins (active) ────────────────────────────────────
 include(":plugin-framework")
-include(":plugin-fs")
 include(":plugin-net")
 include(":plugin-skill")
 include(":plugin-clipboard")
@@ -47,7 +46,6 @@ include(":plugin-concise")
 
 // Map plugin modules to their directory under plugins/
 project(":plugin-framework").projectDir = File(rootDir, "plugins/plugin-framework")
-project(":plugin-fs").projectDir = File(rootDir, "plugins/plugin-fs")
 project(":plugin-net").projectDir = File(rootDir, "plugins/plugin-net")
 project(":plugin-skill").projectDir = File(rootDir, "plugins/plugin-skill")
 project(":plugin-clipboard").projectDir = File(rootDir, "plugins/plugin-clipboard")

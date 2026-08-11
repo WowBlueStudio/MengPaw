@@ -7,7 +7,6 @@ import com.mengpaw.kernel.plugin.Plugin
 import com.mengpaw.plugin.clipboard.ClipboardPlugin
 import com.mengpaw.plugin.dev.DevPlugin
 import com.mengpaw.plugin.framework.FrameworkPlugin
-import com.mengpaw.plugin.fs.FsPlugin
 import com.mengpaw.plugin.memorytwin.MemoryTwinPlugin
 import com.mengpaw.plugin.net.NetPlugin
 import com.mengpaw.plugin.skill.SkillPlugin
@@ -26,14 +25,14 @@ object PluginRegistrar {
     /**
      * Plugin IDs compiled into the shell APK (显示为"内置"分类).
      * 必须与 mengpaw-shell/build.gradle.kts 中 implementation(project(":plugin-*")) 对齐:
-     * framework / skill / dev / fs / net / clipboard /
+     * framework / skill / dev / net / clipboard /
      * memory-twin / root / hermes(Tribe) / tavily. (memory 已融入内核 agent.memory.*)
      * 注意: root-plugin 与 tribe-plugin 随 APK 编译但不在 bundledPlugins() 自动激活名单 —
      * 默认未激活, 需用户在插件市场安装/启用 (系统提示词「插件」节同步此语义)。
      */
     val BUILTIN_PLUGIN_IDS = setOf(
         "framework-plugin", "skill-plugin", "dev-plugin",
-        "fs-plugin", "net-plugin", "clipboard-plugin",
+        "net-plugin", "clipboard-plugin",
         "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin",
         "dream-plugin", "evolution-plugin", "concise-plugin",
         "tavily-plugin"
@@ -62,7 +61,6 @@ object PluginRegistrar {
         "dream-plugin" to "Dream",
         "evolution-plugin" to "Agent Evolution",
         "framework-plugin" to "Framework Discovery",
-        "fs-plugin" to "File System",
         "net-plugin" to "Network",
         "memory-twin-plugin" to "Memory Twin",
         "skill-plugin" to "Skills",
@@ -94,7 +92,6 @@ object PluginRegistrar {
         "framework-plugin" to ("框架发现" to "局域网 MengPaw 框架发现 — mDNS 注册与扫描、指纹记录、信任管理 (LAN MengPaw framework discovery — mDNS register/scan, fingerprint, trust management)"),
         "skill-plugin" to ("技能系统" to "可复用的 Agent 剧本系统（YAML+Markdown），含默认 Skill (Reusable Agent skill system (YAML+Markdown) with default skills)"),
         "dev-plugin" to ("插件开发" to "插件开发工具链 — create/audit/share/examples (Plugin dev toolchain — create/audit/share/examples)"),
-        "fs-plugin" to ("文件系统" to "文件系统增量操作：cp, mv, stat, grep, glob (读写用内核 agent.read/write/ls/rm/mkdir) (File system ops: cp, mv, stat, grep, glob (read/write via agent.read/write/ls/rm/mkdir))"),
         "net-plugin" to ("网络请求" to "HTTP 请求：GET/POST，支持自定义 Header 和超时 (HTTP requests: GET/POST with custom headers and timeouts)"),
         "clipboard-plugin" to ("剪贴板" to "剪贴板操作：copy, paste, clear (Clipboard ops: copy, paste, clear)"),
         "memory-twin-plugin" to ("记忆孪生" to "跨设备工作区同步 — ACP P2P 文件同步 + 心跳保活 + QoS自适应 + 手动IP发现 (Cross-device workspace sync — ACP P2P file sync + heartbeat + adaptive QoS + manual IP discovery)"),
@@ -122,7 +119,6 @@ object PluginRegistrar {
 
     /** PluginViewModel 类注册 — 使内置插件类可被反射实例化 (install 时用类名加载). */
     fun registerPluginClasses() {
-        PluginViewModel.registerPluginClass("fs-plugin", "com.mengpaw.plugin.fs.FsPlugin")
         PluginViewModel.registerPluginClass("net-plugin", "com.mengpaw.plugin.net.NetPlugin")
         PluginViewModel.registerPluginClass("framework-plugin", "com.mengpaw.plugin.framework.FrameworkPlugin")
         PluginViewModel.registerPluginClass("skill-plugin", "com.mengpaw.plugin.skill.SkillPlugin")
@@ -143,7 +139,6 @@ object PluginRegistrar {
         "framework-plugin" to FrameworkPlugin(),
         "skill-plugin" to SkillPlugin(),
         "dev-plugin" to DevPlugin(),
-        "fs-plugin" to FsPlugin(),
         "net-plugin" to NetPlugin(),
         "clipboard-plugin" to ClipboardPlugin(),
         "memory-twin-plugin" to MemoryTwinPlugin(),

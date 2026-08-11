@@ -45,7 +45,7 @@ data class ErrorEntry(
     val id: String,
     val timestamp: Long,
     val type: ErrorType,
-    /** Human-readable source: "AgentEngine", "FsPlugin.cat", "Pipeline" */
+    /** Human-readable source: "AgentEngine", "FsPlugin.cat" (v0.36.x 已移除, 示例保留), "Pipeline" */
     val source: String,
     val message: String,
     val stackTrace: String = "",
@@ -69,7 +69,7 @@ data class ErrorEntry(
  *
  * ## Usage
  * ```kotlin
- * ErrorCollector.report(ErrorType.IO_ERROR, "FsPlugin.cat", "File not readable", exception)
+ * ErrorCollector.report(ErrorType.IO_ERROR, "FsPlugin.cat" (v0.36.x 已移除, 示例保留), "File not readable", exception)
  * ErrorCollector.report(ErrorType.TOOL_CALL_FAILED, "AgentEngine", "fs.cat failed",
  *     sessionId = "sess-123", agentName = "MengPaw")
  * // Agent queries:

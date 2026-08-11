@@ -13,17 +13,17 @@ class CliInterpreterTest {
 
     @Test
     fun `parse simple command`() {
-        val result = interpreter.parse("fs.cat /path/to/file")
-        assertEquals("fs.cat", result.command)
-        assertEquals(listOf("/path/to/file"), result.args)
+        val result = interpreter.parse("net.curl https://example.com")
+        assertEquals("net.curl", result.command)
+        assertEquals(listOf("https://example.com"), result.args)
         assertTrue(result.flags.isEmpty())
     }
 
     @Test
     fun `parse command with flags`() {
-        val result = interpreter.parse("fs.write /path/to/file --mode 644")
-        assertEquals("fs.write", result.command)
-        assertEquals(listOf("/path/to/file"), result.args)
+        val result = interpreter.parse("net.curl https://example.com --mode 644")
+        assertEquals("net.curl", result.command)
+        assertEquals(listOf("https://example.com"), result.args)
         assertEquals(mapOf("mode" to "644"), result.flags)
     }
 
@@ -51,24 +51,24 @@ class CliInterpreterTest {
 
     @Test
     fun `parse multiple args`() {
-        val result = interpreter.parse("fs.cp source.txt dest.txt --force")
-        assertEquals("fs.cp", result.command)
-        assertEquals(listOf("source.txt", "dest.txt"), result.args)
-        assertEquals(mapOf("force" to "true"), result.flags)
+        val result = interpreter.parse("net.curl https://example.com --timeout 10")
+        assertEquals("net.curl", result.command)
+        assertEquals(listOf("https://example.com"), result.args)
+        assertEquals(mapOf("timeout" to "10"), result.flags)
     }
 
     @Test
     fun `parse command with special characters`() {
-        val result = interpreter.parse("fs.write /tmp/file --content \"hello@world!#test\"")
-        assertEquals("fs.write", result.command)
+        val result = interpreter.parse("net.post https://example.com --content \"hello@world!#test\"")
+        assertEquals("net.post", result.command)
         assertTrue(result.args.isNotEmpty())
     }
 
     @Test
     fun `parse long input`() {
         val longArg = "x".repeat(1000)
-        val result = interpreter.parse("fs.cat $longArg")
-        assertEquals("fs.cat", result.command)
+        val result = interpreter.parse("net.curl $longArg")
+        assertEquals("net.curl", result.command)
         assertEquals(1, result.args.size)
         assertEquals(longArg, result.args[0])
     }
@@ -81,15 +81,15 @@ class CliInterpreterTest {
 
     @Test
     fun `parse backslash escaped quotes`() {
-        val result = interpreter.parse("fs.write path \\\"escaped\\\"")
-        assertEquals("fs.write", result.command)
+        val result = interpreter.parse("net.curl path \\\"escaped\\\"")
+        assertEquals("net.curl", result.command)
         assertTrue(result.args.isNotEmpty())
     }
 
     @Test
     fun `parse command with many args`() {
-        val result = interpreter.parse("fs.write a b c d e f g h i j")
-        assertEquals("fs.write", result.command)
+        val result = interpreter.parse("net.curl a b c d e f g h i j")
+        assertEquals("net.curl", result.command)
         assertEquals(10, result.args.size)
     }
 }

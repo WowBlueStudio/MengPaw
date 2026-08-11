@@ -74,6 +74,15 @@ object LinuxCommandExecutor {
         }
 
         // 3. DefaultCommandExecutor — 前缀黑名单 + 结构化元字符 + 会话池执行
-        return DefaultCommandExecutor().execute(trimmed, ctx)
+        val result = DefaultCommandExecutor().execute(trimmed, ctx)
+        // 验证功能拉回 (v0.36.x): 重定向写操作成功后附读回验证引导 —
+        // 替代已移除 agent.write 的框架自动读回验证 (裁判从框架降为提示引导)
+        if (result.success) {
+            CommandMonitor.extractRedirectTarget(trimmed)?.let { target ->
+                val hint = "\n\n⚠️ 写操作完成，请立即 cat $target 读回验证内容一致，再继续后续步骤。"
+                return ExecutionResult.ok(if (result.output.isBlank()) hint else result.output + hint)
+            }
+        }
+        return result
     }
 }

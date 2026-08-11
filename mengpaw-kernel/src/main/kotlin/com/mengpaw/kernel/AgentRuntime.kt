@@ -134,7 +134,7 @@ internal class AgentRuntime(private val engine: AgentEngine) {
         // 命令执行完毕 → 通知监听器 (UI 实时刷新 Tools/Skills/Plugins 列表)
         notifyCommandExecuted()
         // Fallback 仅限真"命令不存在"（Pipeline 的 Unknown command 错误）— 命令存在但参数
-        // 错误（如 agent.read 缺失文件也返回 ERR_NOT_FOUND）不得落 shell 兜底, 否则
+        // 错误（如 agent.session.delete 目标不存在也返回 ERR_NOT_FOUND）不得落 shell 兜底, 否则
         // 显示 "command not found" 掩盖真实错误（错误码二义性修复）
         val unknownCommand = result.errorCode == ErrorCodes.ERR_NOT_FOUND &&
             result.error?.startsWith("Unknown command") == true

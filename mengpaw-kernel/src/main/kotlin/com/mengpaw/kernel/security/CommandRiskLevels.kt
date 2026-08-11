@@ -24,10 +24,7 @@ enum class RiskLevel(val label: String) {
 object CommandRiskLevels {
 
     val LEVELS: Map<String, RiskLevel> = mapOf(
-        // ── 普通: 新建/写入/普通表达 (默认放行) ──
-        "agent.write" to RiskLevel.LOW,
-        "agent.mkdir" to RiskLevel.LOW,
-        "fs.cp" to RiskLevel.LOW,
+        // ── 普通: 新建/写入/普通表达 (默认放行; agent.write/mkdir/fs.cp 已随 Linux 通道移除) ──
         "agent.memory.keep" to RiskLevel.LOW,
         "agent.memory.write" to RiskLevel.LOW,
         "agent.memory.record" to RiskLevel.LOW,
@@ -45,8 +42,7 @@ object CommandRiskLevels {
         "sys.browser.open" to RiskLevel.LOW,
         "sys.calendar.add" to RiskLevel.LOW,
         // ── 中危: 删除/修改/隐私读取 (默认拒绝, TRUSTED 放行) ──
-        "agent.rm" to RiskLevel.MID,
-        "fs.mv" to RiskLevel.MID,
+        // agent.rm/fs.mv 已随 Linux 通道移除 — Linux rm/mv 由 CommandMonitor CONFIRM 弹窗承接
         "agent.memory.rm" to RiskLevel.MID,
         "agent.memory.edit" to RiskLevel.MID,
         "agent.memory.mid.rm" to RiskLevel.MID,

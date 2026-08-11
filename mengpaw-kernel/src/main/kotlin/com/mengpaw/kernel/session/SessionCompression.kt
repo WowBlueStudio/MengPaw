@@ -95,7 +95,7 @@ internal class SessionCompressor(
             content = buildString {
                 append("[📋 对话摘要]\n")
                 append(summary)
-                append("\n[完整历史: $dialogRef — 需要时用 agent.read 查阅]")
+                append("\n[完整历史: $dialogRef — 需要时用 cat 查阅]")
             }
         )
 

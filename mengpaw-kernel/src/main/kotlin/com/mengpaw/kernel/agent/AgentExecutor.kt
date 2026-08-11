@@ -13,9 +13,9 @@ import com.mengpaw.kernel.cli.Pipeline
  *
  * memory.* 18 条命令已拆至 [AgentMemoryExecutor] (2026-08-01, ≥50KB 文件拆分),
  * 经 `+ memoryExecutor.commands` 合并注册, 命令名与命名空间不变。
- * 文件命令 (read/write/ls/rm/mkdir/output) 拆至 [AgentFileCommands],
  * 存储/清理/梦境拆至 [AgentStorageCommands], 会话索引拆至 [AgentSessionCommands]
- * (400 行文件拆分)。
+ * (400 行文件拆分)。v0.36.x 去重: read/write/ls/rm/mkdir 已移除 (Linux 命令等价),
+ * output 由 [AgentOutputCommands] 提供。
  */
 class AgentExecutor(private val docManager: AgentDocManager) {
 
@@ -25,8 +25,8 @@ class AgentExecutor(private val docManager: AgentDocManager) {
     /** 记忆三轨执行器 (memory.* 命令, 拆自本类)。 */
     private val memoryExecutor = AgentMemoryExecutor()
 
-    /** 文件命令执行器 (read/write/ls/rm/mkdir/output)。 */
-    private val fileCommands = AgentFileCommands()
+    /** 输出目录命令执行器 (agent.output — 去重后唯一保留的文件命令)。 */
+    private val outputCommands = AgentOutputCommands()
 
     /** 存储/清理/梦境/浏览器工具命令执行器。 */
     private val storageCommands = AgentStorageCommands()
@@ -53,12 +53,7 @@ class AgentExecutor(private val docManager: AgentDocManager) {
         "session.delete" to sessionCommands::sessionDelete,
         "session.archive" to sessionCommands::sessionArchive,
         "session.current" to sessionCommands::sessionCurrent,
-        "read" to fileCommands::readFile,
-        "write" to fileCommands::writeFile,
-        "ls" to fileCommands::listFiles,
-        "rm" to fileCommands::deleteFile,
-        "mkdir" to fileCommands::makeDir,
-        "output" to fileCommands::output,
+        "output" to outputCommands::output,
         "policy" to ::policy
     ) + memoryExecutor.commands
 

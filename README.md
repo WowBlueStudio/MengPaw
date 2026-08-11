@@ -67,8 +67,7 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS 双向桥)
 │   └── plugin/                 # 浏览器内置插件 (22 命令)
 │
-└── plugins/                    # 14 个内置插件 (同级，均只依赖 kernel，随 APK 捆绑)
-    ├── plugin-fs/              # 文件系统 (5 命令)
+└── plugins/                    # 13 个内置插件 (同级，均只依赖 kernel，随 APK 捆绑)
     ├── plugin-net/             # HTTP 网络 (4 命令)
     ├── plugin-skill/           # 双层技能系统 (10 命令) ⭐💎
     ├── plugin-clipboard/       # 剪贴板 (3 命令)

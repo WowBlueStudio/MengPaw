@@ -52,7 +52,7 @@ class Pipeline(
 
             // P2-11/P1-7 前置修复: CliInterpreter 把 --flag 归入 flags, 但 handler 只收 args —
             // 历史上 --force/--dry-run/--level/--top/--confirm 等 flag 全被吞掉 (框架级 bug,
-            // sys.camera.photo --confirm / agent.rm --force / self.search --top 全部失效)。
+            // sys.camera.photo --confirm / agent.rm --force (v0.36.x 已移除) / self.search --top 全部失效)。
             // 现将 flags 按原顺序平铺回 args (--key [value]), 签名预校验与 handler 均按合并后参数。
             val mergedArgs = parsed.args + parsed.flags.flatMap { (k, v) ->
                 if (v == "true") listOf("--$k") else listOf("--$k", v)
@@ -108,7 +108,7 @@ class Pipeline(
             }
 
             val result = executor(mergedArgs, context)
-            // 非白名单命令（含写命令 agent.write/fs.write 等）成功 → 清空缓存,
+            // 非白名单命令（含写命令）成功 → 清空缓存,
             // 防"写入→立即读"命中写前旧快照（P1 修复: 写后读陈旧）
             // 注: resultCache 可能为 null（未启用缓存的 Pipeline）— 双重判空
             if (resultCache != null && !cacheable && result.success) {

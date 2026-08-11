@@ -23,10 +23,11 @@ object ProactiveBehaviorDetector {
 
     /** 写类/外联类命令前缀 (含数据外泄通道 net./tavily./render./comfy.)。 */
     private val WRITE_PREFIXES = listOf(
-        "agent.write", "agent.mkdir", "agent.rm",
+        // v0.36.x 去重: agent.* 文件命令已移除 — 连续写/外联检测改为 Linux 写命令
+        "echo", "tee", "printf", "cp", "mv", "rm", "mkdir", "curl", "wget",
         "agent.memory.keep", "agent.memory.record", "agent.memory.write",
         "agent.memory.project.save", "agent.memory.rm", "agent.memory.edit",
-        "fs.", "plugin.install", "plugin.uninstall", "plugin.enable", "plugin.disable", "plugin.update",
+        "plugin.install", "plugin.uninstall", "plugin.enable", "plugin.disable", "plugin.update",
         "clipboard.", "skill.enable", "skill.disable",
         "sys.clipboard.set", "sys.notification.send", "sys.app.uninstall", "sys.overlay.",
         "sys.screenrecord.start", "sys.calendar.delete",
