@@ -794,4 +794,22 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 - **MCP map→位置参数缺 flag 支持**: browser.mcp.invoke 传 `{"grep":...}` 时 mcpArgsToPositional
   只收位置键，flag 静默丢失 — 加 FLAG_ARG_MAP（带值）与 BOOL_FLAG_MAP（布尔）展开。
 
-*最后更新: 2026-08-11 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器*
+### 20. 插件增量发布 + 发布网络重试 (2026-08-11)
+
+- **没修改的插件不重复打包 (用户要求)**: 外置插件发布前先
+  `git log <旧plugins tag>..HEAD -- <模块路径>` 确认改动范围 — 本次只改了
+  browser-mcp/search/push，仅重新打包上传这 3 个 (tag plugins-v0.5.0)，其余 10 个保持
+  plugins-v0.4.0 的 URL/checksum 不动；plugins.json 也只更新改动的条目
+  (downloadUrl/mirrorUrl → 新 tag + 新 checksum/size)。增量发布避免无效产物与噪音。
+- **gitee-release.ps1 数组参数坑**: `powershell -File script.ps1 -Assets a,b,c` 会把数组
+  当单字符串 (带逗号)，引号包裹则残留 `"D` 前缀 (DriveNotFound) — 必须用
+  `powershell -Command "& 'script.ps1' -Assets @('a','b','c')"` 内联调用才能正确绑定数组。
+- **GitHub 连接不稳定 (国内网络)**: 本次发布多次 `Failed to connect to github.com:443` /
+  `Connection was reset` — push/gh release 失败后**单独重试对应 ref** (tag 与 branch 分开推)，
+  超时的 push 可能实际已成功 (响应超时被杀)，先 `git ls-remote` 确认再重推；Gitee 通常可达，
+  可先做 Gitee 侧再补 GitHub，两源解耦不阻塞。
+- **plugins.json 更新用唯一锚点**: checksum/size/URL 行各自唯一 (含文件名/哈希值)，
+  apply_patch 单行替换稳；changelog 长行 (JSON 转义 \n) 匹配易失败 — 非必须字段可跳过或
+  用脚本处理，不要卡在长行 patch 上。
+
+*最后更新: 2026-08-11 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布*
