@@ -18,8 +18,8 @@ class CommandMonitorTest {
         CommandMonitor.resetForTest()
     }
 
-    private fun eval(cmd: String, confirm: Boolean = false): String? =
-        runBlocking { CommandMonitor.evaluate(cmd, confirm) }
+    private fun eval(cmd: String, confirm: Boolean = false, workDir: String? = null): String? =
+        runBlocking { CommandMonitor.evaluate(cmd, confirm, workDir) }
 
     // ── BLOCK: 直接拒绝 ─────────────────────────────────────────
 
@@ -51,6 +51,19 @@ class CommandMonitorTest {
     fun `su sudo blocked`() {
         assertNotNull(eval("su -c whoami"))
         assertNotNull(eval("sudo whoami"))
+    }
+
+    @Test
+    fun `su sudo as search argument not blocked`() {
+        // su-sudo 已限定命令位置 — grep/检索含 su 字样不误伤
+        assertNull(eval("grep su file"))
+        assertNull(eval("cat /var/log/auth.log"))
+    }
+
+    @Test
+    fun `su after pipe blocked`() {
+        assertNotNull(eval("echo x | su -c whoami"))
+        assertNotNull(eval("echo x | sudo whoami"))
     }
 
     // ── CONFIRM: 弹窗确认 ───────────────────────────────────────
@@ -120,6 +133,20 @@ class CommandMonitorTest {
     }
 
     @Test
+    fun `double quote command substitution still blocked`() {
+        // 双引号内反引号/$ 由 shell 解释 — 必须继续检查
+        assertNotNull(eval("echo \"`whoami`\""))
+        assertNotNull(eval("echo \"\$HOME\""))
+    }
+
+    @Test
+    fun `single quote and escaped dollar are literal and allowed`() {
+        // 单引号内全部字面; 双引号内 \$ 是转义字面 — 均不执行, 放行
+        assertNull(eval("echo '`whoami`'"))
+        assertNull(eval("echo \"a\\\$b\""))
+    }
+
+    @Test
     fun `background blocked`() {
         assertNotNull(eval("sleep 10 &"))
     }
@@ -145,9 +172,18 @@ class CommandMonitorTest {
     }
 
     @Test
+    fun `flag-only stdin command blocked`() {
+        // cat -n / grep -i 无文件参数仍从 stdin 读, 会挂起
+        assertNotNull(eval("cat -n"))
+        assertNotNull(eval("grep -i"))
+    }
+
+    @Test
     fun `stdin command with args allowed`() {
         assertNull(eval("grep -n error app.log"))
         assertNull(eval("cat app.log"))
+        assertNull(eval("grep -i pattern file"))
+        assertNull(eval("cat -n app.log"))
     }
 
     // ── 再解释形态: payload 递归 ────────────────────────────────
@@ -184,6 +220,54 @@ class CommandMonitorTest {
     @Test
     fun `su -c payload blocked directly`() {
         assertNotNull(eval("sh -c \"su -c whoami\""))
+    }
+
+    // ── 脚本文件内容扫描 ─────────────────────────────────────────
+
+    @Test
+    fun `sh script with block content rejected`() {
+        val dir = kotlin.io.path.createTempDirectory("cmdmon_script").toFile()
+        val script = File(dir, "bad.sh")
+        script.writeText("#!/system/bin/sh\necho start\nrm -rf /\n")
+        try {
+            val err = runBlocking { CommandMonitor.evaluate("sh bad.sh", false, dir.absolutePath) }
+            assertNotNull("脚本含 rm -rf / 应 BLOCK: $err", err)
+        } finally {
+            script.delete()
+            dir.delete()
+        }
+    }
+
+    @Test
+    fun `sh script with confirm content needs consent`() {
+        val dir = kotlin.io.path.createTempDirectory("cmdmon_script").toFile()
+        val script = File(dir, "confirm.sh")
+        script.writeText("#!/system/bin/sh\nrm old.log\n")
+        try {
+            val err = runBlocking { CommandMonitor.evaluate("sh confirm.sh", false, dir.absolutePath) }
+            assertNotNull("脚本含 rm 应 CONFIRM (worker 拒绝): $err", err)
+        } finally {
+            script.delete()
+            dir.delete()
+        }
+    }
+
+    @Test
+    fun `sh script clean content allowed`() {
+        val dir = kotlin.io.path.createTempDirectory("cmdmon_script").toFile()
+        val script = File(dir, "ok.sh")
+        script.writeText("#!/system/bin/sh\necho hello\ndate\n")
+        try {
+            assertNull(runBlocking { CommandMonitor.evaluate("sh ok.sh", false, dir.absolutePath) })
+        } finally {
+            script.delete()
+            dir.delete()
+        }
+    }
+
+    @Test
+    fun `sh script missing file allowed`() {
+        assertNull(eval("sh /nonexistent/script.sh"))
     }
 
     // ── 规则文件 ─────────────────────────────────────────────────

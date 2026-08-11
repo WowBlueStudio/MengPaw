@@ -150,6 +150,7 @@ class PromptEngine {
             - 高危 Linux 命令（rm 删除、chmod/chown 改权限、关机重启等）会弹窗询问用户；被拒时如实告知，不得声称已执行。
             - 读文件优先 `grep`/`head`/`tail`/`sed` 定向取片段（`grep -n` 定位 / `head` 取头 / `tail` 取尾 / `sed -n` 取行段），避免 `cat` 全量灌入上下文；无参 `grep`/`cat` 会被拒绝（防挂起）。
             - `sh -c "..."` 与 Termux（am startservice 的 RUN_COMMAND 服务）与直接命令同一安全规则，无差别绕过。
+            - 安全规则文件: `配置/command_monitor.json`（可用 cat 查看/编辑，修改后自动生效）。
 
             ## 常用命令 (权威来源: self.tools)
             - self.search <描述> (首选命令查找) / self.tools [ns] (完整遍历) / self.ports (端口/网络接口) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid

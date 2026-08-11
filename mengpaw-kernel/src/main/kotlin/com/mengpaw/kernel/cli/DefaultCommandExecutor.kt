@@ -40,7 +40,7 @@ class DefaultCommandExecutor : CommandExecutor {
         /** Dangerous command prefixes blocked by string match (case-insensitive). */
         private val blockedPrefixes = listOf(
             "rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf .", "rm -rf *",
-            "mkfs", "dd ", "sudo ", "su ",
+            "mkfs", "dd ",
             "chmod 777 /", "chmod -R 777", "chown -R",
             ":(){ :|:& };:", // fork bomb
             "> /dev/sda", "> /dev/null",
@@ -50,6 +50,8 @@ class DefaultCommandExecutor : CommandExecutor {
             "kill ", "pkill ", "poweroff", "reboot", "shutdown", "init 0", "init 6",
             "mount ", "fdisk ", "dd if=", "halt", "mv / ", "cp / "
         )
+        // 注: su/sudo 不在前缀黑名单 (任意位置匹配会误伤 grep su file) —
+        // 由 CommandMonitor 的 su-sudo 规则按命令位置 (行首/管道后) 拦截
 
         /**
          * 沙箱检查 (纯函数, 无副作用) — 危险前缀黑名单 + 结构化元字符检查。
@@ -59,7 +61,7 @@ class DefaultCommandExecutor : CommandExecutor {
         fun sandboxCheck(commandLine: String): String? {
             val trimmed = commandLine.trim()
             if (trimmed.isBlank()) {
-                return "Empty command"
+                return "空命令"
             }
 
             checkMetaChars(trimmed)?.let { return it }
@@ -68,7 +70,7 @@ class DefaultCommandExecutor : CommandExecutor {
                 if (trimmed.startsWith(prefix, ignoreCase = true) ||
                     (" " + trimmed).contains(" " + prefix, ignoreCase = true)
                 ) {
-                    return "Blocked by security policy: $prefix. Use self.tools to see available commands."
+                    return "安全策略禁止: $prefix (可用 self.tools 查看可用命令)"
                 }
             }
             return null
@@ -88,25 +90,33 @@ class DefaultCommandExecutor : CommandExecutor {
                 if (escape) { escape = false; i++; continue }
                 if (c == '\\') { escape = true; i++; continue }
                 if (inQuote != null) {
-                    if (c == inQuote) inQuote = null
+                    if (c == inQuote) { inQuote = null; i++; continue }
+                    // 双引号内: $ 与反引号仍由 shell 解释 (变量展开/命令替换), 必须继续检查;
+                    // 单引号内全部字面, 安全跳过
+                    if (inQuote == '"') {
+                        when (c) {
+                            '$' -> return "安全策略: 不允许使用 '\$' (变量/命令替换)"
+                            '`' -> return "安全策略: 不允许使用反引号 (命令替换)"
+                        }
+                    }
                     i++; continue
                 }
                 if (c == '\'' || c == '"') { inQuote = c; i++; continue }
                 when (c) {
-                    ';' -> return "Blocked by security policy: ';' (multi-command chaining not allowed)"
-                    '`' -> return "Blocked by security policy: backtick (command substitution not allowed)"
-                    '$' -> return "Blocked by security policy: '\$' (variables/command substitution not allowed)"
-                    '\n', '\r' -> return "Blocked by security policy: newline (embedded multi-command not allowed)"
+                    ';' -> return "安全策略: 不允许使用 ';' (多命令串接)"
+                    '`' -> return "安全策略: 不允许使用反引号 (命令替换)"
+                    '$' -> return "安全策略: 不允许使用 '\$' (变量/命令替换)"
+                    '\n', '\r' -> return "安全策略: 不允许换行 (内嵌多命令)"
                     '&' -> {
                         val prev = if (i > 0) cmd[i - 1] else ' '
                         val next = if (i + 1 < cmd.length) cmd[i + 1] else ' '
                         if (prev.isDigit() || prev == '>') { i++; continue } // 2>&1 / >& — fd 重定向放行
-                        if (next == '&') return "Blocked by security policy: '&&' (multi-command chaining not allowed)"
-                        return "Blocked by security policy: '&' (background execution not allowed)"
+                        if (next == '&') return "安全策略: 不允许使用 '&&' (多命令串接)"
+                        return "安全策略: 不允许使用 '&' (后台执行)"
                     }
                     '|' -> {
                         if (i + 1 < cmd.length && cmd[i + 1] == '|') {
-                            return "Blocked by security policy: '||' (multi-command chaining not allowed)"
+                            return "安全策略: 不允许使用 '||' (多命令串接)"
                         }
                         // 单 | 管道放行
                     }

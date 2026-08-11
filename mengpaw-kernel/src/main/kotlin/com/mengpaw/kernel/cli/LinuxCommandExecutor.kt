@@ -19,15 +19,24 @@ import java.io.File
  */
 object LinuxCommandExecutor {
 
+    /** 框架命令点分形态: 小写字母/数字/连字符 + 点 (agent.rea / fs.cp / a.b.c)。含 / 的路径不在此列。 */
+    private val DOTTED_CMD = Regex("^[a-z0-9][a-z0-9-]*(\\.[a-z0-9][a-z0-9-]*)+$")
+
     @Volatile
     private var monitorLoaded = false
+    @Volatile
+    private var monitorLastModified = 0L
 
     private fun ensureMonitorLoaded() {
-        if (monitorLoaded) return
+        val file = File(DataPaths.CONFIG, "command_monitor.json")
+        val mtime = try { if (file.exists()) file.lastModified() else 0L } catch (_: Exception) { 0L }
+        if (monitorLoaded && mtime == monitorLastModified) return
         synchronized(this) {
-            if (monitorLoaded) return
-            CommandMonitor.loadUserRules(File(DataPaths.CONFIG, "command_monitor.json"))
+            val m2 = try { if (file.exists()) file.lastModified() else 0L } catch (_: Exception) { 0L }
+            if (monitorLoaded && m2 == monitorLastModified) return
+            CommandMonitor.loadUserRules(file)
             monitorLoaded = true
+            monitorLastModified = m2
         }
     }
 
@@ -42,8 +51,9 @@ object LinuxCommandExecutor {
             "空命令", errorCode = ErrorCodes.ERR_INVALID_INPUT
         )
 
-        // 点分未注册命令 (agent.rea 等) 不落 shell — 框架命令域, 报错附检索引导
-        if (cmdName.contains('.') && !cmdName.startsWith("./")) {
+        // 点分未注册命令 (agent.rea 等) 不落 shell — 框架命令域, 报错附检索引导;
+        // 含 / 的路径 (data/foo.sh) 是脚本/文件, 走 Linux 通道
+        if (DOTTED_CMD.matches(cmdName)) {
             return ExecutionResult.fail(
                 "命令未注册: $cmdName。框架命令用 self.search/self.tools 查找; Linux 命令应为无点命令名。",
                 errorCode = ErrorCodes.ERR_NOT_FOUND
@@ -51,7 +61,7 @@ object LinuxCommandExecutor {
         }
 
         // 1. CommandMonitor — 统一安全监控 (规则 + 弹窗 + 元字符 + 无参保护 + 再解释递归)
-        CommandMonitor.evaluate(trimmed, allowUserConfirm)?.let {
+        CommandMonitor.evaluate(trimmed, allowUserConfirm, workDir = ctx.workDir)?.let {
             return ExecutionResult.fail(it, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
         }
 

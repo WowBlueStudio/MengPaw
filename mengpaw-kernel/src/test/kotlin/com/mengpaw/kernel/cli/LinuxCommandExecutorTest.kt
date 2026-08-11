@@ -11,6 +11,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.File
 
 /** Linux 命令通道 — 回退判断、点分保护、无参保护、BLOCK/CONFIRM、真实 shell 兜底。 */
 class LinuxCommandExecutorTest {
@@ -36,6 +37,13 @@ class LinuxCommandExecutorTest {
         val r = exec("agent.rea")
         assertEquals(ErrorCodes.ERR_NOT_FOUND, r.errorCode)
         assertTrue("应附检索引导: ${r.error}", r.error?.contains("self.search") == true)
+    }
+
+    @Test
+    fun `relative path script goes to shell not dotted guard`() {
+        // data/foo.sh 含 / 不是框架命令形态 → 走 Linux 通道 (sh 报 not found 而非 ERR_NOT_FOUND)
+        val r = exec("data/foo.sh")
+        assertNotEquals(ErrorCodes.ERR_NOT_FOUND, r.errorCode)
     }
 
     @Test
@@ -71,5 +79,22 @@ class LinuxCommandExecutorTest {
     fun `sh -c payload goes through same monitor`() {
         val r = exec("sh -c \"rm -rf /\"")
         assertEquals(ErrorCodes.ERR_PERMISSION_DENIED, r.errorCode)
+    }
+
+    @Test
+    fun `rule file hot reload takes effect`() {
+        val rulesFile = File(DataPaths.CONFIG, "command_monitor.json")
+        rulesFile.parentFile?.mkdirs()
+        rulesFile.writeText("""{"rules":[{"id":"custom-block","pattern":"\\bdiff\\b","level":"BLOCK"}]}""")
+        try {
+            // 首次执行加载规则 → diff 被 BLOCK
+            assertEquals(ErrorCodes.ERR_PERMISSION_DENIED, exec("diff a.txt b.txt").errorCode)
+            // 修改规则文件 → 热加载 → diff 放行 (不再被安全策略拒)
+            rulesFile.writeText("""{"rules":[]}""")
+            val r2 = exec("diff a.txt b.txt")
+            assertNotEquals(ErrorCodes.ERR_PERMISSION_DENIED, r2.errorCode)
+        } finally {
+            rulesFile.delete()
+        }
     }
 }
