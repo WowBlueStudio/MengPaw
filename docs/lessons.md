@@ -701,4 +701,26 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 缺令牌先补再动手；Gitee release 用 `scripts/gitee-release.ps1`
 （mengpaw-connectors 分支是 main，须传 `-TargetBranch main`）。
 
+### 18. Linux 命令通道 + 命令去重发布经验 (2026-08-11)
+
+- **apply_patch 长行/特殊字符匹配失败**: 含全角标点、`\|`、超长行的上下文补丁常报
+  "Failed to find expected lines" — 对策: 用单行锚点（只匹配目标行本身，不连带相邻行），
+  或拆成小步补丁；批量行替换优先小步应用。
+- **插件模块整体删除的 gradle 连锁**: 删 `plugins/xxx` 目录必须同步
+  `settings.gradle.kts`（include + projectDir）与 `mengpaw-shell/build.gradle.kts`
+  （implementation），否则 Gradle 配置报错；还有 PluginRegistrar（import/IDs/EN 名/
+  INFO/registerPluginClass/bundledPlugins 共 5 处）、PluginClassRegistry、
+  PluginExecutor UNINSTALLABLE、DataPaths 显示名、AntiAmbiguityTest 等测试。
+- **测试命令名替换的连锁**: 删除命令后依赖它的测试必须逐个改 — ReAct 用例
+  `agent.read` → `cat`（注意 ReAct 循环 workDir 已是 Agent 工作区根，相对路径兼容）、
+  `agent.rm` → `agent.memory.rm`（模板/参数不同，Command 断言要同步）；
+  HighRiskCommandGateTest 的 FLAG 形态用例随 `agent.rm --force` 一并删除（表内已无
+  FLAG 模板命令可测）；种子测试断言（命中 #N / 教训文本）同步改。
+- **Linux 通道绕过 IntegrityGuard**: Pipeline 外执行不经 `validateCommand` — 在
+  CommandMonitor 补写保护路径检查（插件仓库/配置目录重定向写 BLOCK），IntegrityGuard
+  命令集同步适配 Linux 写命令名；工作区/输出目录仍允许写。
+- **用户未提交工作与发布 commit**: `git add -A` 会混入用户的工作文件（如
+  docs/INDEX.md、docs/browser-autopilot-plan.md）— 发布 commit 用显式文件列表 add，
+  排除用户未提交项，避免混入发布历史。
+
 *最后更新: 2026-08-11 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档*

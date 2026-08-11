@@ -1,8 +1,22 @@
 # Changelog
 
-## Unreleased (2026-08-11) — 外置插件整体迁移 mengpaw-connectors
+## v0.36.0 (2026-08-11) — Linux 命令通道 + 命令去重 + 外置插件迁移
 
 ### 新增
+- **Linux 命令通道 (双轨命令, 用户拍板)**: 注册表未命中的命令直接执行 (Android
+  mksh/toybox 命令集, 不维护命令清单 — LLM 训练语料天然覆盖); 支持管道 `|` 与受控
+  重定向 (`> 文件` / `2>&1`); 统一安全监控 CommandMonitor — 内置规则 +
+  `{BASE}/配置/command_monitor.json` 可配置热加载, BLOCK 直接拒绝 / CONFIRM 弹窗
+  (UserConfirmBus, 30s 超时默认拒绝, worker 直接拒绝); **sh -c / Termux
+  (am startservice) / 直接命令三形态 payload 提取递归, 同一套规则**; 结构化元字符
+  (拦 `;` `&&` `$()` 反引号 换行, 放行 `|` 与 fd 重定向); `sh <脚本>` 内容逐行扫描;
+  无参 stdin 命令预检防挂起; ReAct 主循环 / Swarm worker / bang 三路径共用
+- **命令去重 (用户拍板)**: `agent.read/write/ls/rm/mkdir` 与 plugin-fs 整体移除
+  (Android 有等价命令 cat/echo/ls/rm/mkdir/cp/mv/stat/grep/find) — Agent 直接用
+  Linux 命令; **验证功能拉回**: Linux 通道重定向写成功后自动附「请 cat 读回验证」提示,
+  提示词「结果纪律」要求声称写入成功必须引用 cat 真实文本; 四源同步
+  (种子 7→6 条改 Linux 语义 / 提示词中英「命令双轨」/ 风险表与 reason 门禁 /
+  BuiltinCommandIndex / 开发指南 §5.2.1 / README / termux.md)
 - **设置「使用指南」教程 (v0.36 声明兑现)**: 系统提示词「教程在设置中 — USB调试/Root/无障碍」
   从无入口变为真实功能 — 系统设置新增「使用指南」分区, 三个指南 (USB 调试 / Root / 无障碍)
   中英双语 (assets/guides/{zh|en}/*.md), 点击 Dialog 内 Markdown 渲染
@@ -39,7 +53,9 @@
   13 外置插件 (mengpaw-connectors)」
 
 ### 发行
-- 测试: kernel 全量 + shell 单测 + TranslateMiddlewareTest 6 用例, 0 failures
+- APK: mengpaw-shell-v0.36.0-release.apk
+- 测试: 全量 test 实测 1224 用例 0 failures（kernel 558 + core 90 + shell 148 + browser 34 + 插件 394）
+- plugins.json: v9 沿用（无新变更）
 
 ## v0.35.6 (2026-08-10) — 远程插件假安装根治 + 插件版本号规则统一 + dex JAR 发布
 

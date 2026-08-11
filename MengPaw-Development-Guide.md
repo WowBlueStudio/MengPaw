@@ -533,7 +533,7 @@ twin.lost <peer> / twin.recover <peer>
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 模块 1291 测试，v0.35.6 实测快照：kernel 529 + core 90 + shell 148 + browser 34 + 插件 490，0 failures)
+### 3.7 测试 (16 模块 1224 测试，v0.36.0 实测快照：kernel 558 + core 90 + shell 148 + browser 34 + 插件 394，0 failures；v0.36 去重移除 fs 插件与 agent 文件命令测试，新增 CommandMonitor/Linux 通道 33 用例)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
