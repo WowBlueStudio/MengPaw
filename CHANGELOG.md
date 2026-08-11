@@ -2,7 +2,29 @@
 
 ## Unreleased (2026-08-11) — 外置插件整体迁移 mengpaw-connectors
 
+### 新增
+- **设置「使用指南」教程 (v0.36 声明兑现)**: 系统提示词「教程在设置中 — USB调试/Root/无障碍」
+  从无入口变为真实功能 — 系统设置新增「使用指南」分区, 三个指南 (USB 调试 / Root / 无障碍)
+  中英双语 (assets/guides/{zh|en}/*.md), 点击 Dialog 内 Markdown 渲染
+- **/Translate 模式真正调用翻译中间件**: TranslateMiddleware 新增通用 `translate(text, from, to)`
+  + 纯函数 `targetLanguageFrom`/`textToTranslate` (目标语言提取/指令前缀剥离); /Translate 改走
+  中间件直翻 (auto 检测源语言, 不经过 ReAct 循环), 失败回退单次 LLM 调用; 新增
+  TranslateMiddlewareTest 6 用例 (kernel)
+
 ### 变更
+- **plugins.json v8 → v9**: 命令清单与实际代码对齐 — framework 6→15, net 3→4
+  (curl/get/post/proxy, 移除不存在的 net.status), skill 4→10, tribe 22→28
+  (补 hermes.* 兼容 6); **移除 agent-mission/agent-loop embedded 条目** (Mission 并入 Swarm
+  v0.34.4 后 mission.*/loop.* 命令已不存在)
+- **声明面同步现状**: 开发文档 §2.3/§2.4/§3.5/§3.6/§5.1/§5.2 + README 中英 — sys 40→51 命令
+  补全 (悬浮窗/日历/媒体采集等), fs/skill/net/tribe 命令数, cdp/inspector 段落删除,
+  外置插件标注, 权限表 17→22 项; 系统提示词 root/tribe "未捆绑"→"内置但默认未激活";
+  /Fleet 输入框 placeholder 走 strings 国际化 (原硬编码中文)
+- **过期内容清理**: AcpTransport NSD 注释改为现状说明 (mDNS 由 plugin-framework 实现);
+  History v1→v2 迁移占位改为清晰模板说明; Manifest/开发文档 RECORD_AUDIO/VIBRATE
+  "未来扩展"→实际用途 (语音输入/sys.vibrate); validate-plugins.ps1 空 commands 对
+  provider-only 插件降为警告 (dream/evolution)
+
 - **8 个普通外置插件源码迁入独立仓库 mengpaw-connectors (MIT)**: update / translate /
   error-report / render / comfy / browser-push / browser-search / browser-mcp 不再随主仓库
   构建, 主仓库仅保留 14 个内置插件模块 (全部捆绑 Shell APK)
@@ -14,6 +36,9 @@
   checksum/size 按新产物回写, version 不动
 - **口径统一**: 开发指南 §3.5 / README / PROTOCOL 更新为「主仓库 14 模块 (内置) +
   13 外置插件 (mengpaw-connectors)」
+
+### 发行
+- 测试: kernel 全量 + shell 单测 + TranslateMiddlewareTest 6 用例, 0 failures
 
 ## v0.35.6 (2026-08-10) — 远程插件假安装根治 + 插件版本号规则统一 + dex JAR 发布
 

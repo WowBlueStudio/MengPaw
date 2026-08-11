@@ -1,6 +1,6 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
-  "version": 8,
+  "version": 9,
   "updated": "2026-08-11",
   "plugins": [
     {
@@ -76,11 +76,20 @@
       "minCoreVersion": "0.9.1",
       "commands": [
         "framework.discover",
+        "framework.add",
         "framework.peers",
         "framework.trust",
         "framework.untrust",
         "framework.info",
-        "framework.ping"
+        "framework.ping",
+        "framework.connect",
+        "framework.call",
+        "framework.disconnect",
+        "framework.adapters",
+        "framework.pair.ls",
+        "framework.pair.accept",
+        "framework.pair.decline",
+        "framework.delegate"
       ],
       "checksum": "sha256:378b5e4d598cb40be53a2e8a914f704cc2728094da21bc4da891c9ad7d985f79",
       "size": 42745,
@@ -112,13 +121,14 @@
       "version": "",
       "type": "native",
       "author": "MengPaw",
-      "description": "HTTP 请求：GET/POST，支持自定义 Header 和超时",
+      "description": "HTTP 请求：curl, get, post，支持自定义 Header 和超时；中国大陆访问 GitHub 失败时用 net.proxy 获取代理 URL",
       "status": "builtin",
       "minCoreVersion": "0.2.0",
       "commands": [
+        "net.curl",
         "net.get",
         "net.post",
-        "net.status"
+        "net.proxy"
       ],
       "checksum": "sha256:db85170462c2d6c6a9dc64b4b1b6a19f87cdc3b5670f21ff0c8ac97772f50486",
       "size": 17741,
@@ -167,6 +177,12 @@
       "commands": [
         "skill.ls",
         "skill.run",
+        "skill.info",
+        "skill.search",
+        "skill.create",
+        "skill.rm",
+        "skill.pull",
+        "skill.push",
         "skill.enable",
         "skill.disable"
       ],
@@ -339,7 +355,13 @@
         "tribe.task.done",
         "tribe.peers",
         "tribe.ping",
-        "tribe.cleanup"
+        "tribe.cleanup",
+        "hermes.team",
+        "hermes.discover",
+        "hermes.delegate",
+        "hermes.ask",
+        "hermes.memo",
+        "hermes.role"
       ],
       "checksum": "sha256:1a9edab8e0ba2eeb8bcf88cd6e02591aee5f02cec3937bdbe1e6caf065271c77",
       "size": 263914,
@@ -434,37 +456,6 @@
       "checksum": "sha256:b443340f3f6b6bde7ca653031b09fe3e00211f42eb59d273a6a08357f135f7d7",
       "size": 11160,
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）\n### 发行\n- **全部外置插件迁移至独立仓库 mengpaw-connectors (MIT)**: 源码随仓库发布, 重新打包上传, 下载指向 plugins-v0.4.0。"
-    },
-    {
-      "id": "agent-mission-plugin",
-      "name": "Mission",
-      "version": "",
-      "type": "native",
-      "author": "MengPaw",
-      "description": "Mission 模式已嵌入 AgentEngine.runWithMission()，内置功能",
-      "status": "embedded",
-      "minCoreVersion": "0.2.3",
-      "commands": [
-        "mission.start",
-        "mission.status",
-        "mission.stop"
-      ]
-    },
-    {
-      "id": "agent-loop-plugin",
-      "name": "Agent Loop",
-      "version": "",
-      "type": "native",
-      "author": "MengPaw",
-      "description": "Goal 模式已嵌入 AgentEngine.run()，内置功能",
-      "status": "embedded",
-      "minCoreVersion": "0.2.3",
-      "commands": [
-        "loop.start",
-        "loop.status",
-        "loop.stop",
-        "loop.config"
-      ]
     },
     {
       "id": "root-plugin",

@@ -88,7 +88,8 @@ foreach ($p in $plugins) {
     }
     if ($p.status -and $validStatus -notcontains $p.status) { Add-Error "[$($p.id)] invalid status: $($p.status)" }
     if ($p.type -and $validType -notcontains ($p.type -as [string]).ToLower()) { Add-Error "[$($p.id)] invalid type: $($p.type)" }
-    if (-not $p.commands -or @($p.commands).Count -eq 0) { Add-Error "[$($p.id)] 'commands' is empty" }
+    # provider-only 插件 (如 dream/evolution 只注册 SPI 提供者, 无命令) 空 commands 合法 — 降为警告
+    if (-not $p.commands -or @($p.commands).Count -eq 0) { Add-Warning "[$($p.id)] 'commands' is empty (provider-only 插件合法)" }
 }
 
 # ── 4. SemVer ─────────────────────────────────────────────────────

@@ -28,6 +28,8 @@ object PluginRegistrar {
      * 必须与 mengpaw-shell/build.gradle.kts 中 implementation(project(":plugin-*")) 对齐:
      * framework / skill / dev / fs / net / clipboard /
      * memory-twin / root / hermes(Tribe) / tavily. (memory 已融入内核 agent.memory.*)
+     * 注意: root-plugin 与 tribe-plugin 随 APK 编译但不在 bundledPlugins() 自动激活名单 —
+     * 默认未激活, 需用户在插件市场安装/启用 (系统提示词「插件」节同步此语义)。
      */
     val BUILTIN_PLUGIN_IDS = setOf(
         "framework-plugin", "skill-plugin", "dev-plugin",

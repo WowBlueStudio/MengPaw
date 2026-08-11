@@ -69,13 +69,13 @@ mengpaw/
 │
 └── plugins/                    # 14 个内置插件 (同级，均只依赖 kernel，随 APK 捆绑)
     ├── plugin-fs/              # 文件系统 (5 命令)
-    ├── plugin-net/             # HTTP 网络 (3 命令)
-    ├── plugin-skill/           # 双层技能系统 (4 命令) ⭐💎
+    ├── plugin-net/             # HTTP 网络 (4 命令)
+    ├── plugin-skill/           # 双层技能系统 (10 命令) ⭐💎
     ├── plugin-clipboard/       # 剪贴板 (3 命令)
-    ├── plugin-framework/       # 框架通信协议 (11 命令) ⭐💎
+    ├── plugin-framework/       # 框架通信协议 (15 命令) ⭐💎
     ├── plugin-memory-twin/     # 记忆孪生 (16 命令) ⭐💎
     ├── plugin-agent-tools/     # Agent 命令集 (4 命令) ⭐💎
-    ├── plugin-root/            # Root 权限 (17 命令)
+    ├── plugin-root/            # Root 权限 (19 命令)
     ├── plugin-hermes/          # 部落协作 Tribe 💎
     ├── plugin-dream/           # 梦境模式 (内置不可移除, SPI 可替换) ⭐
     ├── plugin-dev/             # 插件开发工具链 ⭐💎
@@ -99,7 +99,7 @@ mengpaw/
 │  mengpaw-kernel (124 文件)     │  ← 微内核 (纯 Kotlin/JVM)
 │  零 Android 依赖 · 可 JVM 测试  │
 ├────────────────────────────────┤
-│  22 插件 (同级 · 只依赖 kernel)  │  ← 插件层
+│  14 内置插件 (同级 · 只依赖 kernel) │  ← 插件层
 └────────────────────────────────┘
 ```
 
@@ -115,10 +115,10 @@ Agent 通过 CLI 命令操控设备：
 
 | 命名空间 | 示例命令 | 职责 |
 |---------|---------|------|
-| `fs` | `cat`, `ls`, `write`, `grep` | 文件系统 |
-| `net` | `curl`, `get`, `post` | HTTP 网络 |
-| `sys` | `battery`, `cpu`, `display`, `wifi` | Android 系统 (39 命令) |
-| `skill` | `ls`, `run`, `enable` | 技能系统 |
+| `fs` | `cp`, `mv`, `stat`, `grep`, `glob` | 文件系统 |
+| `net` | `curl`, `get`, `post`, `proxy` | HTTP 网络 |
+| `sys` | `battery`, `cpu`, `display`, `wifi` | Android 系统 (51 命令) |
+| `skill` | `ls`, `run`, `create`, `pull`, `push` | 技能系统 |
 | `self` | `status`, `tools`, `search`, `time` | Agent 自我管理 |
 | `evolution` | `audit`, `report`, `learn.command`, `mark-corrected` | 智能体进化 (失败学习) |
 | `plugin` | `marketplace`, `install`, `search` | 插件管理 |
@@ -131,7 +131,12 @@ Agent 通过 CLI 命令操控设备：
 | **ReAct** | Thought → Action → Observation 标准循环 |
 | **Plan-Execute** | LLM 分解任务为 3-7 步，逐步执行 |
 | **Goal** | 单目标驱动 + LLM 自动评估完成度 |
-| **Fleet** | LLM 拆解子任务 → Worker 执行 → Verifier 验证 |
+| **Swarm** | 任务 → LLM 拆解 → 并行 Worker（角色可混合模型）→ Verifier 验证 → 合成 |
+| **Fleet** | 多 Agent 编队协同，跨设备分布式执行（步坦协同模式） |
+| **Plan** | LLM 分解 3-7 步计划 → 逐步执行 → 汇总 |
+| **Research** | 多轮搜索 + 交叉验证 + 来源标注的结构化调研 |
+| **Translate** | 调用翻译中间件直接完成翻译（不经过 ReAct） |
+| **Silent** | 后台静默执行，完成后推送结果 |
 
 ## WowBlue 原创插件
 

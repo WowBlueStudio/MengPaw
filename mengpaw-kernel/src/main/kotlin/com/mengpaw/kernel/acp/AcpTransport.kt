@@ -271,9 +271,9 @@ internal fun readFully(reader: java.io.BufferedReader, length: Int): String {
     }
     return String(body, 0, read)
 }
-// NSD peer discovery is a future feature.
-// When needed, implement with android.net.nsd.NsdManager.
-// See: https://developer.android.com/training/connect-devices-wirelessly/nsd
+// 局域网节点发现 (mDNS/NSD) 由 plugin-framework 的 NsdManager 实现 (framework.discover),
+// ACP 传输层只负责已寻址 peer 的收发, 不重复实现 NSD。
+// 参考: https://developer.android.com/training/connect-devices-wirelessly/nsd
 
 /** ACP 类型中需要 peer 身份可验证的消息 (工作区同步/会话/解绑/MCP — 均触及敏感数据或命令执行)。
  * 与 AcpServer.processMessage 中的 isTrusted 分支一一对应, 此处补 IP 绑定校验。 */

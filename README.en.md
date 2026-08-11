@@ -67,13 +67,13 @@ mengpaw/
 │
 └── plugins/                    # 14 built-in plugins (siblings, all depend only on kernel, bundled in APK)
     ├── plugin-fs/              # File system (5 commands)
-    ├── plugin-net/             # HTTP network (3 commands)
-    ├── plugin-skill/           # Two-tier skill system (4 commands) ⭐💎
+    ├── plugin-net/             # HTTP network (4 commands)
+    ├── plugin-skill/           # Two-tier skill system (10 commands) ⭐💎
     ├── plugin-clipboard/       # Clipboard (3 commands)
-    ├── plugin-framework/       # Framework communication protocol (11 commands) ⭐💎
+    ├── plugin-framework/       # Framework communication protocol (15 commands) ⭐💎
     ├── plugin-memory-twin/     # Memory Twin (16 commands) ⭐💎
     ├── plugin-agent-tools/     # Agent toolset import (4 commands) ⭐💎
-    ├── plugin-root/            # Root access (17 commands)
+    ├── plugin-root/            # Root access (19 commands)
     ├── plugin-hermes/          # Tribe collaboration 💎
     ├── plugin-dream/           # Dream mode (built-in, SPI-replaceable) ⭐
     ├── plugin-dev/             # Plugin dev toolchain ⭐💎
@@ -99,7 +99,7 @@ mengpaw/
 │  mengpaw-kernel (124 files)    │  ← Microkernel (pure Kotlin/JVM)
 │  zero Android deps · JVM-tested │
 ├────────────────────────────────┤
-│  22 plugins (siblings · kernel only) │  ← Plugin layer
+│  14 built-in plugins (siblings · kernel only) │  ← Plugin layer
 └────────────────────────────────┘
 ```
 
@@ -115,10 +115,10 @@ The Agent controls the device through CLI commands:
 
 | Namespace | Example commands | Responsibility |
 |-----------|-----------------|----------------|
-| `fs` | `cat`, `ls`, `write`, `grep` | File system |
-| `net` | `curl`, `get`, `post` | HTTP network |
-| `sys` | `battery`, `cpu`, `display`, `wifi` | Android system (39 commands) |
-| `skill` | `ls`, `run`, `enable` | Skill system |
+| `fs` | `cp`, `mv`, `stat`, `grep`, `glob` | File system |
+| `net` | `curl`, `get`, `post`, `proxy` | HTTP network |
+| `sys` | `battery`, `cpu`, `display`, `wifi` | Android system (51 commands) |
+| `skill` | `ls`, `run`, `create`, `pull`, `push` | Skill system |
 | `self` | `status`, `tools`, `search`, `time` | Agent self-management |
 | `evolution` | `audit`, `report`, `learn.command`, `mark-corrected` | Agent evolution (learning from failure) |
 | `plugin` | `marketplace`, `install`, `search` | Plugin management |
@@ -131,7 +131,12 @@ The Agent controls the device through CLI commands:
 | **ReAct** | Standard Thought → Action → Observation loop |
 | **Plan-Execute** | LLM decomposes the task into 3-7 steps, executes step by step |
 | **Goal** | Single-goal driven with LLM completion evaluation |
-| **Fleet** | LLM decomposes subtasks → Workers execute → Verifier validates |
+| **Swarm** | Decompose → parallel Workers (role-mixed models) → Verifier → synthesize |
+| **Fleet** | Multi-Agent fleet collaboration across devices (combined-arms mode) |
+| **Plan** | Decompose into 3-7 steps → execute → summarize |
+| **Research** | Multi-round search + cross-validation + sourced structured report |
+| **Translate** | Translation middleware, direct completion (no ReAct loop) |
+| **Silent** | Background silent execution, result pushed on completion |
 
 ## WowBlue Original Plugins
 

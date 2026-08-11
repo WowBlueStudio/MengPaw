@@ -248,18 +248,16 @@ class SessionManager {
     /**
      * Migrate a session from its current schema version to [targetVersion].
      *
-     * Each version step is implemented as a separate function:
-     *   v1 → v2: (placeholder)
+     * 当前最新 schemaVersion = 1 (无历史版本), 迁移框架为预留模板 —
+     * 后续新增序列化字段时: 递增 [Session.schemaVersion] 默认值, 在此补
+     * 对应版本迁移步骤 (while 循环按版本逐个升级), 旧会话下次加载自动迁移。
      *
-     * When adding a new field to [Session] or [Message] that changes serialization,
-     * add a new migration step here and increment [Session.schemaVersion]'s default.
-     * Old persisted sessions will be migrated on next load.
      */
     internal fun migrateSession(session: Session, targetVersion: Int = 1): Session {
         var s = session
         while (s.schemaVersion < targetVersion) {
             s = when (s.schemaVersion) {
-                1 -> s  // v1 → v2 placeholder: add migration logic here
+                1 -> s  // 当前最新版本 — 无迁移动作 (后续版本在此补步骤)
                 else -> { s }  // unknown version — stop
             }.also { migrated ->
                 // Preserve existing messages and metadata through migration

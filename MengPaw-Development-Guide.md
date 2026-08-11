@@ -80,10 +80,10 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | `self` | SelfExecutor.kt | 16 | Agent 自我管理 (status/config/stats/version/avatar/theme/mcp/trigger/acp/tools/ports/search/search.stats/time/notify.message/notify.banner) |
 | `agent` | AgentExecutor.kt | 39 | 文档(6) + 记忆三轨(18) + 其他(5) + 会话(4) + 工作区文件(6) |
 | `plugin` | PluginExecutor + DevPlugin | 12 + 6 | 插件管理 (marketplace/search/install/uninstall/list/info/enable/disable/update/upgrade/auto/verify + create/audit/share/examples/keywords/guide) |
-| `framework` | FrameworkPlugin | 14 | 框架通信 (discover/add/peers/trust/untrust/info/ping/connect/call/disconnect/adapters + v0.35.2 pair.ls/accept/decline — 配对请求 Agent 侧操作入口) [↔ 同捆插件 plugin-framework] |
+| `framework` | FrameworkPlugin | 15 | 框架通信 (discover/add/peers/trust/untrust/info/ping/connect/call/disconnect/adapters + v0.35.2 pair.ls/accept/decline — 配对请求 Agent 侧操作入口 + v0.35.5 delegate 指挥舰委派) [↔ 同捆插件 plugin-framework] |
 | `evolution` | EvolutionExecutor.kt | 5 | 智能体进化 (audit/report/learn.command/reactions/mark-corrected) [↔ 同捆插件 plugin-evolution 提供默认实现] |
 
-> `sys` 命名空间 (40 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。`evolution` 命名空间在内核注册 (PipelineManager)，默认实现由同捆插件 plugin-evolution 注册为 EvolutionProvider SPI。
+> `sys` 命名空间 (51 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。`evolution` 命名空间在内核注册 (PipelineManager)，默认实现由同捆插件 plugin-evolution 注册为 EvolutionProvider SPI。
 
 **插件命名空间权威推导 (v0.31.0 起, `pluginNamespaceFor` 全内核唯一来源)**: 插件 id 去 `-plugin`/`-ext` 后缀；`memory-*` 前缀插件取剩余部分 (memory-twin→`twin`)；特例 — `browser-mcp-plugin` 命令键自带 `mcp.` 前缀 → ns=`browser` (拼出 `browser.mcp.*`)，`browser-search-plugin` 命令键为短名 → ns=`search`。注册 (PluginManager/PipelineManager)、搜索索引、CLI.md 插件表、MCP 桥工具解析 (McpServer) 全部经此推导，严禁在别处再写 `removeSuffix` 特例。配套 `scripts/validate-plugins.ps1` 6c 交叉校验同规则。
 
@@ -104,8 +104,8 @@ mengpaw-shell
   ├── mengpaw-kernel (微内核)
   ├── mengpaw-core (Android 适配)
   ├── mengpaw-design-system (主题)
-  └── 12 捆绑插件: skill / framework / dev / fs / net / clipboard /
-      memory-twin / root / hermes(tribe) / agent-tools / dream / evolution
+  └── 14 捆绑插件: skill / framework / dev / fs / net / clipboard /
+      memory-twin / root / hermes(tribe) / agent-tools / dream / evolution / concise / tavily
       (self 与 memory 已融入内核, 非插件)
 
 mengpaw-browser
@@ -281,7 +281,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ### 3.5 插件模块（21 个，plugins/ 目录，按 settings.gradle.kts 为准）
 
-> 插件数统一口径（v0.35.6 迁移后）：**主仓库 14 模块**（settings.gradle.kts，全部内置捆绑 Shell APK）| **14 内置**（BUILTIN_PLUGIN_IDS，含 v0.29.0 内置的 tavily）| **plugins.json 29 条目**（14 builtin + 13 remote + 2 embedded）| **13 外置插件**（独立仓库 mengpaw-connectors：8 普通 + 5 连接器，MIT，见下）
+> 插件数统一口径（v0.35.6 迁移后）：**主仓库 14 模块**（settings.gradle.kts，全部内置捆绑 Shell APK）| **14 内置**（BUILTIN_PLUGIN_IDS，含 v0.29.0 内置的 tavily）| **plugins.json 27 条目**（14 builtin + 13 remote；embedded 条目已于 v0.36 移除——Mission 并入 Swarm、Loop 模式入内核，mission.*/loop.* 命令不再存在）| **13 外置插件**（独立仓库 mengpaw-connectors：8 普通 + 5 连接器，MIT，见下）
 
 > **内置插件无版本号原则（设计定案）**：内置插件随 shell APK 一起发布，版本跟随 shell，不会陈旧、不会单独更新——因此内置插件**不维护、不展示、不对照版本号**（PluginMetadata.version 对内置插件无语义；巡检/审查若报「内置插件版本不一致」为伪问题）。版本号仅对远程插件（plugins.json 条目 + tag `plugins-v*`）有意义，见连接器一致性铁律。
 >
@@ -292,10 +292,10 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | 模块 | 命名空间 | 命令 | 捆绑 |
 |------|---------|------|:--:|
 | plugin-fs | fs | cp, mv, stat, grep, glob (5) | ⭐ |
-| plugin-net | net | curl, get, post (3) | ⭐ |
-| plugin-skill | skill | ls, run, enable, disable (4) | ⭐ |
+| plugin-net | net | curl, get, post, proxy (4) | ⭐ |
+| plugin-skill | skill | ls, run, info, search, create, rm, pull, push, enable, disable (10) | ⭐ |
 | plugin-clipboard | clipboard | copy, paste, clear (3) | ⭐ |
-| plugin-framework | framework | discover, peers, trust, untrust, info, ping, connect, call, disconnect, adapters, pair.ls, pair.accept, pair.decline, delegate (14) | ⭐ |
+| plugin-framework | framework | discover, add, peers, trust, untrust, info, ping, connect, call, disconnect, adapters, pair.ls, pair.accept, pair.decline, delegate (15) | ⭐ |
 | plugin-agent-tools | tools | import, ls, remove, search (4) | ⭐ |
 
 #### AI / 搜索 (4)
@@ -313,7 +313,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 | 模块 | 命名空间 | 命令 |
 |------|---------|------|
-| plugin-hermes | hermes | team, discover, delegate, ask, memo, role (6) |
+| plugin-hermes (tribe-plugin) | tribe | start, stop, status, team, discover, delegate, ask, memo, role, template, route, fleet, chat, discuss, task.list, task.show, task.cancel, task.retry, task.done, peers, ping, cleanup (22) + hermes.team/discover/delegate/ask/memo/role (6 向后兼容) = 28 |
 
 #### Agent 运行模式 (内置)
 
@@ -350,7 +350,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 | 模块 | 命名空间 | 命令 | 捆绑 |
 |------|---------|------|:--:|
-| plugin-root | root | status, exec, apps.*, fs.*, backup.* | ⭐ |
+| plugin-root | root | status, exec, shell, apps.list, apps.freeze, apps.unfreeze, apps.uninstall, apps.data, fs.ls, fs.cat, fs.write, fs.stat, system.props, system.setprop, system.hosts, backup.list, backup.save, backup.restore, audit (19) | ⭐ |
 
 #### 记忆孪生 (1)
 
@@ -520,14 +520,16 @@ twin.lost <peer> / twin.recover <peer>
 | versionCode | 1130 | 8 | — | — |
 | R8 | Release 启用 | Release 启用 | 关闭(库模块) | — |
 
-**Shell 权限** (17 项):
+**Shell 权限** (22 项):
 - 网络: INTERNET, ACCESS_NETWORK_STATE
-- 保活: FOREGROUND_SERVICE, POST_NOTIFICATIONS, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, WAKE_LOCK
+- 保活: FOREGROUND_SERVICE, FOREGROUND_SERVICE_DATA_SYNC, FOREGROUND_SERVICE_SPECIAL_USE, POST_NOTIFICATIONS, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, WAKE_LOCK, SCHEDULE_EXACT_ALARM
 - 悬浮窗: SYSTEM_ALERT_WINDOW
 - 内置工具: ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION, CAMERA, QUERY_ALL_PACKAGES
 - 插件: REQUEST_INSTALL_PACKAGES
-- 文件/媒体: READ_MEDIA_IMAGES, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE
-- 未来扩展: RECORD_AUDIO, VIBRATE
+- 文件/媒体: READ_MEDIA_IMAGES, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE（公共输出目录，未授权回退私有目录）
+- 日历: READ_CALENDAR, WRITE_CALENDAR
+- 框架发现: CHANGE_WIFI_MULTICAST_STATE（mDNS 多播）
+- 语音/震动: RECORD_AUDIO（语音输入 VoiceInputButton），VIBRATE（sys.vibrate）
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
@@ -926,11 +928,11 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 **dev 插件扩展 (6)**：`create --type script|native --name <name> [--author <作者>] [--desc <描述>]` | `audit --target <id>` | `share --plugin <id> --to <target>` | `examples` | `keywords --target <id>` | `guide`
 > dev 插件的命令实际注册为 `dev.plugin.create` / `dev.plugin.audit` / `dev.plugin.share` / `dev.plugin.examples` / `dev.plugin.keywords` / `dev.plugin.guide`，因为 PluginManager 根据插件 ID (`dev-plugin`) 自动派生命名空间 `dev`。`plugin.create` 在 CLI 文档中出现时均指 `dev.plugin.create`。`dev.plugin.guide` 输出能力边界文档并落盘 `插件文档/plugin-dev-guide.md` 供用户阅读。
 
-#### sys — Android 系统 (40 命令，通过 Android 适配层注入)
+#### sys — Android 系统 (51 命令，通过 Android 适配层注入)
 
 **设备信息 (1)**: `device` (型号/厂商/SDK/架构)
 
-**电源 (4)**: `battery` | `power` | `power.save` | `screen.on`
+**电源 (3)**: `battery` | `power` | `power.save`
 
 **网络 (4)**: `network` | `wifi` | `wifi.enable` | `bluetooth`
 
@@ -938,15 +940,21 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **硬件 (4)**: `cpu` | `memory` | `storage` | `sensors`
 
-**屏幕 (3)**: `display` | `screen.brightness <0-255>` | `screen.off`
+**屏幕 (4)**: `display` | `screen.on` | `screen.off` | `screen.brightness <0-255>`
 
-**音量 (2)**: `volume` | `volume.set <type> <level>`
+**音量/震动/铃声 (4)**: `volume` | `volume.set <type> <level>` | `vibrate [ms]` | `ringtone.play`
 
-**相机 (1)**: `camera` (需权限)
+**相机 (2)**: `camera` (需权限) | `camera.photo [--confirm] [--front]` (需权限, 隐私确认)
 
 **应用 (5)**: `apps` (需权限) | `app.launch <pkg>` | `app.uninstall <pkg>` | `app.info <pkg>` | `browser.open [url]` (前台唤醒 MP 浏览器, 带 url 同时打开)
 
 **剪贴板 (2)**: `clipboard` | `clipboard.set <text>`
+
+**悬浮窗 (3)**: `overlay.show` | `overlay.hide` | `overlay.update`
+
+**日历 (4)**: `calendar.add <标题> <时间>` | `calendar.list [--days N]` | `calendar.delete <id>` | `calendar.calendars`
+
+**媒体采集 (3)**: `screenshot [path]` | `screenrecord.start` | `screenrecord.stop`
 
 **Intent (3)**: `intent.open <url\|pkg>` | `intent.share <text>` | `intent.view <file>`
 
@@ -954,7 +962,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **权限 (3)**: `permission.list` | `permission.request <name>` | `permission.check <name>`
 
-**其他 (4)**: `telephony` | `vibrate [ms]` | `ringtone.play` | `alarm.set <seconds> <msg>`
+**其他 (2)**: `telephony` | `alarm.set <seconds> <msg>`
 
 ### 5.2 插件命名空间
 
@@ -981,11 +989,11 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 > 读/写/列/删/建目录用内核 `agent.read/write/ls/rm/mkdir`(工作区文件命令, 与 fs 沙箱同界)
 
 
-#### net — 网络 (3)
-`curl <url>` | `get <url>` | `post <url> <body>`
+#### net — 网络 (4)
+`curl <url>` | `get <url>`（curl 别名）| `post <url> <body>` | `proxy`（大陆访问 GitHub 失败时获取代理 URL）
 
-#### skill — 技能 (7)
-`ls` | `run <name>` | `enable <name>` | `disable <name>` | `info <name>` | `search <query>` | `create <name> <content>`
+#### skill — 技能 (10)
+`ls` | `run <name>` | `info <name>` | `search <query>` | `create <name>` | `rm <name>` | `pull <name>`（全局→本地）| `push <name>`（本地→全局）| `enable <name>` | `disable <name>`
 
 #### tools — 命令集注册 (4) (Agent Tools)
 `import <名称> <url|json>` | `ls` | `remove <名称>` | `search <关键词>`
@@ -1006,39 +1014,33 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 > v0.28.7 起内置：随 APK 自动安装激活，Agent 原生即有搜索能力（FewShot 示例 2 演示直接使用）
 > **key 脱敏 (v0.32.1+, 自检报告 P2-9)**: `setup` 三种 key 来源 — `--from-file <路径>`（读首行 trim，推荐）/ `--from-clipboard`（插件层无系统剪贴板能力，明确报错引导 --from-file）/ 内联 `<key>`（兼容保留）。所有成功/状态消息只回显 `key 长度 N`，key 原文仅进混淆存储。已知边界: 内联命令原文仍会进 kernel 审计 (Sanitizer 不覆盖 `tvly-` 前缀, 内核冻结期未加规则 — 根治需 kernel Sanitizer 增 `tvly-` 规则)。
 
-#### hermes — 多智能体 (6)
-`team` | `discover` | `delegate <agent> <task>` | `ask <agent> <question>` | `memo <content>` | `role <agent> <role>`
+#### tribe — 多智能体 (28, 内置; 对应模块 plugin-hermes, 命令键 tribe.* + hermes.* 向后兼容)
+`start` | `stop` | `status` | `team` | `discover` | `delegate <agent> <task>` | `ask <agent> <question>` | `memo <content>` | `role <agent> <role>` | `template` | `route` | `fleet` | `chat` | `discuss` | `task.list` | `task.show` | `task.cancel` | `task.retry` | `task.done` | `peers` | `ping` | `cleanup`
+> 兼容键 `hermes.team/discover/delegate/ask/memo/role` 保留（TribeBackwardCompat）。
 
-#### render — 图像生成 (4)
+#### render — 图像生成 (4)（外置插件，mengpaw-connectors）
 `models` | `generate <prompt>` | `status <job-id>` | `preview <job-id>`
 
-#### comfy — ComfyUI (5)
+#### comfy — ComfyUI (5)（外置插件，mengpaw-connectors）
 `nodes` | `workflow <json>` | `run` | `preview` | `export`
 
-#### translate — 翻译 (4)
+#### translate — 翻译 (4)（外置插件，mengpaw-connectors）
 `text <content>` | `auto <content>` | `langs` | `setup`
 
-#### error — 错误上报 (6)
+#### error — 错误上报 (6)（外置插件，mengpaw-connectors）
 `list` | `show <id>` | `clear` | `export` | `status` | `upload`
 
-#### update — 自动更新 (4)
+#### update — 自动更新 (4)（外置插件，mengpaw-connectors）
 `check` | `download` | `install` | `auto`
 
-#### browser.push — 跨设备推送 (4)
+#### browser.push — 跨设备推送 (4)（外置插件，mengpaw-connectors）
 `push <url>` | `pending` | `accept <id>` | `reject <id>`
 
-#### search — 搜索分析 (3)
+#### search — 搜索分析 (3)（外置插件，mengpaw-connectors）
 `extract <url>` | `summary <url>` | `engines`
 
-#### browser.mcp — 浏览器 MCP (2)
-`tools` | `status`
-
-#### cdp — Chrome DevTools (2)
-`enable` | `status`
-
-#### inspector — 元素检查器 (6)
-`start` | `stop` | `select <selector>` | `annotate <selector> <text>` | `list` | `export`
-> `inspect` 命令 (旧文档) 已重命名为 `annotate`。
+#### browser.mcp — 浏览器 MCP (3)（外置插件，mengpaw-connectors）
+`tools` | `status` | `invoke`
 
 ### 5.3 浏览器内置命令 (browser.*, 45)
 

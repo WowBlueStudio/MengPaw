@@ -48,7 +48,7 @@
     <!-- 框架协议：mDNS 多播发现 -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
-    <!-- 未来扩展 -->
+    <!-- 语音输入 (VoiceInputButton/VoiceRecorder, v0.33.0+) 与系统震动 (sys.vibrate) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
