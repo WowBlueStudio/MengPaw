@@ -90,6 +90,10 @@ fun BrowserTopBar(
             title = {
                 if (showUrlBar || isWide) {
                     var editUrl by remember(activeTabId) { mutableStateOf(activeTab.url) }
+                    // P2 fix: 编辑态跟随页面 URL — remember(activeTabId) 只在 tab 切换时重置,
+                    // 同一 tab 内导航/重定向后地址栏残留用户输入的旧文本 (主域名), 不显示真实完整地址。
+                    // LaunchedEffect(activeTab.url) 在页面 URL 变化时同步, 用户输入中不打断。
+                    LaunchedEffect(activeTab.url) { editUrl = activeTab.url }
                     OutlinedTextField(
                         value = editUrl,
                         onValueChange = { editUrl = it },
@@ -131,13 +135,16 @@ fun BrowserTopBar(
                         Modifier.fillMaxWidth().clickable { onShowUrlBarChange(true) },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (activeTab.title.isNotBlank()) Column(Modifier.weight(1f)) {
-                            Text(
-                                activeTab.title,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                        Column(Modifier.weight(1f)) {
+                            // P2 fix: title 为空时也渲染 URL 行 — 此前 title 空则整列不显示, 地址栏空白
+                            if (activeTab.title.isNotBlank()) {
+                                Text(
+                                    activeTab.title,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                             Text(
                                 activeTab.url.take(60),
                                 style = MaterialTheme.typography.labelSmall,
