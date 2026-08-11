@@ -812,4 +812,21 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   apply_patch 单行替换稳；changelog 长行 (JSON 转义 \n) 匹配易失败 — 非必须字段可跳过或
   用脚本处理，不要卡在长行 patch 上。
 
-*最后更新: 2026-08-11 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布*
+### 20. 思考容器闭环 + 通知权限 (2026-08-11, v0.36.2)
+
+- **流式 UI 的状态闭环不能只依赖模型输出标记**: 内核 `PromptEngine.parse` 规则 3/4 对
+  无 `Final Answer:` 标记的纯文本自然回答/Thought-only 也判为最终答案 (闲聊/简单问答/
+  非 ReAct 模型)，但 Shell 流式检测只认 `Final Answer:` 前缀 → 思考容器 `isRunning`
+  永 true、永不折叠；`rememberSaveable` 在 LazyColumn 滚动回收后丢失，`expanded`
+  恢复初始展开值 → "手动折叠后又自动展开"。**修复模式**: 引擎 `run()` 返回后兜底
+  `beginFinalAnswer()` 强制闭环，不依赖流式标记命中。
+- **Manifest 声明权限 ≠ 运行时授权**: `POST_NOTIFICATIONS` 声明了但从未请求 →
+  Android 13+ 默认拒绝，前台服务通知不显示，用户误判"通知栏常驻失效" (服务仍在运行)。
+  Android 13+ 权限清单声明后必须检查对应 `registerForActivityResult(RequestPermission())`
+  请求路径是否存在。
+- **UI 折叠状态防御**: `LaunchedEffect` 的强制展开逻辑要写完整条件组合
+  (`isRunning && !collapsed`)，`isRunning` 单条件优先会覆盖异常组合下用户的手动折叠。
+- **测试快照虚高教训**: 开发指南 §3.7 的 shell 148 与 XML 实测 78 长期不符
+  (历史统计口径漂移未修正) — 修正快照时以 `build/test-results` XML 的 tests 数为准。
+
+*最后更新: 2026-08-11 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限*

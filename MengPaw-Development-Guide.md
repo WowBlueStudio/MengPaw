@@ -531,15 +531,20 @@ twin.lost <peer> / twin.recover <peer>
 - 框架发现: CHANGE_WIFI_MULTICAST_STATE（mDNS 多播）
 - 语音/震动: RECORD_AUDIO（语音输入 VoiceInputButton），VIBRATE（sys.vibrate）
 
+**POST_NOTIFICATIONS 运行时请求 (v0.36.2 P1)**: Android 13+ (API 33+) 通知权限默认拒绝 —
+Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏常驻失效" (服务实际仍在运行,
+仅通知不可见)。`MainActivity.onCreate` 启动时经 `registerForActivityResult(RequestPermission())`
+请求一次; 永久拒绝后 `launch` 直接回调不再弹窗。
+
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (14 本地模块 1232 测试，v0.36.1 实测快照：kernel 558 + core 90 + shell 148 + browser 42 + 插件 394，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
+### 3.7 测试 (14 本地模块 1162 测试，v0.36.2 实测快照：kernel 558 + core 90 + shell 78 + browser 42 + 插件 394，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 修正 shell 快照 (XML 实测 78, 含 ThinkingProcessWriterTest 新增 4, 原 148 虚高) ；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
 | mengpaw-kernel | 558 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) |
 | mengpaw-core | 90 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex |
-| mengpaw-shell | 148 | ComplexityDetector 分档、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简 |
+| mengpaw-shell | 78 | ComplexityDetector 分档、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) |
 | mengpaw-browser | 42 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵 |
 | plugin-hermes (tribe) | 68 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 |
 | plugin-memory-twin | 68 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
@@ -580,7 +585,7 @@ twin.lost <peer> / twin.recover <peer>
 
 **链路**: `AdaptiveLlmProvider.consumeSseStream`(`bodyAsChannel()` + `readUTF8Line` 增量读, OpenAI/Anthropic 双格式解析)→ 引擎透传 onDelta → `AgentViewModel` UI 播放器 → 气泡渐进显示。
 
-**气泡 UI 重构 (v0.34.3)**: 时间轴主导 — 一次任务 = **思考过程容器** (`ChatMessageUi.ThinkingProcess`, 单一可折叠, 跨所有轮次) + **最终答案气泡** (`ChatMessageUi.FinalAnswer`, 独立)。执行中: 思考流式写入容器 → 完整 `Action:` 行出现即插入折叠工具行 (只显示命令名, 失败红字, 点击展开参数+观察全文) → 工具完成挂观察 → 检测到 `Final Answer:` (onDelta 原始增量累积检测) 时**过程容器自动折叠** (折叠态显示 "N 轮思考 · M 次调用" 摘要, 展开可回看全部思考) + 答案气泡流式。写入器 `ThinkingProcessWriter` 替代旧 `StepBubbleWriter` (每轮一卡的模型废除); 历史会话经 `reflowLegacyMessages` 渲染层统一重排 (旧 agent_step/agent_trace 序列合并为过程容器+答案, 持久化格式兼容, 新增 thinking_process/final_answer 类型)。
+**气泡 UI 重构 (v0.34.3)**: 时间轴主导 — 一次任务 = **思考过程容器** (`ChatMessageUi.ThinkingProcess`, 单一可折叠, 跨所有轮次) + **最终答案气泡** (`ChatMessageUi.FinalAnswer`, 独立)。执行中: 思考流式写入容器 → 完整 `Action:` 行出现即插入折叠工具行 (只显示命令名, 失败红字, 点击展开参数+观察全文) → 工具完成挂观察 → 检测到 `Final Answer:` (onDelta 原始增量累积检测) 时**过程容器自动折叠** (折叠态显示 "N 轮思考 · M 次调用" 摘要, 展开可回看全部思考) + 答案气泡流式。写入器 `ThinkingProcessWriter` 替代旧 `StepBubbleWriter` (每轮一卡的模型废除); 历史会话经 `reflowLegacyMessages` 渲染层统一重排 (旧 agent_step/agent_trace 序列合并为过程容器+答案, 持久化格式兼容, 新增 thinking_process/final_answer 类型)。**闭环兜底 (v0.36.2)**: `PromptEngine.parse` 规则 3/4 对无 `Final Answer:` 标记的纯文本自然回答/Thought-only 也判为最终答案 — 此类输出流式检测永不命中, 引擎 `run()` 返回后 Shell 兜底 `beginFinalAnswer()` 强制闭环 (折叠容器 + 创建答案气泡), 防止思考容器 `isRunning` 永 true (自动折叠失效/滚动回收后手动折叠被覆盖)。
 
 **网关行为(实测铁证)**: LLM 网关(如 DeepSeek)**不是逐 token 流** — 按 ~1s 批次批量 flush(~120 chunks/批); 相同 prompt 二次请求命中服务端 prompt cache 后整段回放(TTFB 8s+ 然后 ~200ms 全到)。突发到达是常态, 客户端改不了, 打字机观感必须由 UI 播放器兜底。
 

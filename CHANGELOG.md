@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.36.2 (2026-08-11) — 思考容器闭环兜底 + 通知栏常驻权限修复
+
+### 修复
+- **思考过程容器不闭环 (P1)**: 内核 `PromptEngine.parse` 规则 3/4 把无 `Final Answer:`
+  标记的纯文本自然回答 / Thought-only 也判为最终答案 (闲聊/简单问答/非 ReAct 模型),
+  但 Shell 流式检测只认 `Final Answer:` 前缀 → 这类回答思考容器永不折叠 (`isRunning`
+  永 true), UI 恒显"思考中…"、自动折叠失效、手动折叠后滚动回收 (LazyColumn 重组,
+  rememberSaveable 丢失) 又恢复展开。修复: 引擎 `run()` 返回后若流式从未检测到
+  Final Answer 标记, 兜底 `beginFinalAnswer()` 折叠容器 + 创建最终答案气泡再定型。
+- **通知栏常驻失效 (P1)**: Manifest 声明了 `POST_NOTIFICATIONS` 但从未请求运行时权限
+  → Android 13+ 默认拒绝, 前台服务通知不显示 (服务仍在运行, 用户误以为失效)。
+  修复: `MainActivity` 启动时请求通知权限 (API 33+, 拒绝后不再弹窗骚扰)。
+- **折叠交互防御**: `ThinkingProcessBubble` 折叠状态异常组合 (`collapsed=true` 且
+  `isRunning=true`) 不再强制展开, 避免覆盖用户手动折叠。
+
+### 测试
+- 新增 `ThinkingProcessWriterTest` 4 用例: 未闭环复现 / 闭环折叠+创建答案气泡 /
+  finalize 定型 / 闭环后不残留运行态容器。
+
 ## v0.36.1 (2026-08-11) — 浏览器半自动武器 + 地址栏修复
 
 ### 新增
