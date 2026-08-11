@@ -732,6 +732,50 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 - **CommandMonitor 浏览器形态不能递归 shell 检查**: page.goto 的 URL 含 `&`（query 参数），
   递归 evaluateInternal 会被 sandboxCheck 当后台执行拦截 — 浏览器命令由浏览器进程解析，
   白名单前缀校验（page./browser.）即终点，直接放行；Termux payload 才是真 shell 递归。
+
+### 20. 功能闭环审计 + 声明面同步 + /Translate 移除 (2026-08-11, v0.36 前夜)
+
+#### 新坑
+
+- **Kotlin 块注释内 `/*.md` 触发 Unclosed comment**: `/** ... assets/guides/{zh|en}/*.md ... */`
+  中 `*.md` 的 `/*` 被 Kotlin 当作新注释开始，编译报 "Unclosed comment" 且报错位置指向
+  文件末尾 (117:1) 而非真实位置，极难定位。处置: 注释里写路径通配符时禁止 `/*` 序列
+  （改写为 `/ *.md` 或改用文字描述）；排查 `/*` 与 `*/` 计数不等即可确认。
+- **settings/ 目录 ≠ 包**: `SystemSettingsContent.kt` 物理位于 `ui/screens/settings/`
+  但 package 是 `com.mengpaw.shell.ui.screens`；新增的同目录 internal 组件
+  （DeviceGuidesPanel 在 settings 包）不会自动可见 → "Unresolved reference"，
+  必须显式 import。目录只是组织习惯，编译可见性只认 package。
+- **plugins.json 命令清单与代码脱节无校验**: validate-plugins.ps1 只查结构/前缀/URL/
+  checksum，**不校验命令数与源码 `commands = listOf(...)` 一致** — 本次对齐出
+  framework 6→15、net 3→4（还含已不存在的 net.status）、skill 4→10、tribe 22→28；
+  agent-mission/agent-loop embedded 条目在 v0.34.4 Mission 并入 Swarm 后残留数月。
+  内置插件命令清单唯一事实源是源码，plugins.json 只是镜像，手工同步易漏。
+- **移除斜杠命令必须同步 modes.md 迁移检测**: 模板删章节后，已部署设备上的旧 modes.md
+  不会自动更新（bootstrap 只补缺失不覆盖）— 必须在
+  `AgentDocsBootstrap.migrateLegacyModesTemplate` 加检测条件（`## /Mission` →
+  追加 `## /Translate`），否则设备残留已删除命令说明；配套 AgentDocsTest 加迁移用例。
+- **validate-plugins.ps1 对 provider-only 插件误报**: dream/evolution 的 commands 为空
+  是合法设计（只注册 SPI 提供者），脚本原判 ERROR → 降为 Warning。
+
+#### 流程教训
+
+- **审计"未真正实现"先区分「设计如此」与「声明-实现缺口」**: 设置页 LoopMode 区块
+  纯展示是用户确认的设计定案，不是缺陷；真缺口是"声明了但无入口/路径不符"——
+  系统提示词宣称的 USB/Root/无障碍教程设置入口不存在、/Translate 声称"调用翻译中间件
+  不经过 ReAct"实际走提示词包装 + ReAct。判据: 声明面（系统提示词/文档/UI/命令注册）
+  四处交叉比对，缺一处即缺口。
+- **复杂方案前先确认价值**: /Translate 第一版做"中间件优先 + LLM 回退"（语言提取正则
+  + 指令剥离 + 6 用例），用户一句"没什么用，可以让LLM直接翻译"全盘否决，最后彻底移除。
+  教训: 功能补全先给最简可行方案（单次 LLM 调用），中间件/降级链等增强等用户要再上，
+  避免返工与死代码。
+- **四源同步锁已覆盖命令发现，但覆盖不了"声明面 vs 实现面"**: IndexCoverageTest/
+  PromptGhostReferenceTest 锁命令注册，不锁功能入口（教程 UI）与模式语义（modes.md）。
+  这类缺口靠人工审计，无自动锁 — 审计时以系统提示词为 Agent 认知基线逐条核 UI 与执行器。
+
+#### 工作规则
+
+- 同步声明面时保持单一事实源: 命令数改源码先、plugins.json/README/开发文档后；
+  系统提示词改"现状描述"（root/tribe 内置未激活）而非"宣传"，避免再次漂移。
 - **rg 管道输出高亮污染**: PowerShell 里 `rg ... | Select-String` 时匹配文本被 ANSI
   高亮码替换显示为 `n`，无法读实际内容 — 诊断时用 `rg --color never` 或 Select-String。
 - **Compose remember 状态不跟随异步更新**: 地址栏 `remember(activeTabId) { mutableStateOf(url) }`
