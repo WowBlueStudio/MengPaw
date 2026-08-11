@@ -75,7 +75,6 @@ class AppStrings {
 
     // Execution mode tags
     var tagModeResearch: String = ""
-    var tagModeTranslate: String = ""
     var tagModeSilent: String = ""
     var tagDismiss: String = ""
     var mentionHint: String = ""
@@ -84,7 +83,6 @@ class AppStrings {
     var placeholderSwarm: String = ""
     var placeholderFleet: String = ""
     var placeholderResearch: String = ""
-    var placeholderTranslate: String = ""
     var placeholderSilent: String = ""
 
     // Settings - Device guides (USB debugging / Root / Accessibility)

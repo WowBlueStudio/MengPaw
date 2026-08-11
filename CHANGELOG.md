@@ -6,10 +6,11 @@
 - **设置「使用指南」教程 (v0.36 声明兑现)**: 系统提示词「教程在设置中 — USB调试/Root/无障碍」
   从无入口变为真实功能 — 系统设置新增「使用指南」分区, 三个指南 (USB 调试 / Root / 无障碍)
   中英双语 (assets/guides/{zh|en}/*.md), 点击 Dialog 内 Markdown 渲染
-- **/Translate 模式真正调用翻译中间件**: TranslateMiddleware 新增通用 `translate(text, from, to)`
-  + 纯函数 `targetLanguageFrom`/`textToTranslate` (目标语言提取/指令前缀剥离); /Translate 改走
-  中间件直翻 (auto 检测源语言, 不经过 ReAct 循环), 失败回退单次 LLM 调用; 新增
-  TranslateMiddlewareTest 6 用例 (kernel)
+- **/Translate 斜杠命令彻底移除 (用户拍板)**: 翻译需求回归普通对话/ReAct, 由 LLM 直接
+  处理 — ExecutionMode.TRANSLATE / 输入框 + 号入口 / placeholderTranslate / tagModeTranslate
+  全链路删除, modes.md/README/系统提示词/agent.modes 同步 7→6 种模式,
+  PanelOrderStore 默认列表去 translate + 旧持久化迁移过滤; TranslateMiddleware 保持
+  auto-translate 职责不变
 
 ### 变更
 - **plugins.json v8 → v9**: 命令清单与实际代码对齐 — framework 6→15, net 3→4

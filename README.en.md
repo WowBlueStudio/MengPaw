@@ -135,7 +135,6 @@ The Agent controls the device through CLI commands:
 | **Fleet** | Multi-Agent fleet collaboration across devices (combined-arms mode) |
 | **Plan** | Decompose into 3-7 steps → execute → summarize |
 | **Research** | Multi-round search + cross-validation + sourced structured report |
-| **Translate** | Translation middleware, direct completion (no ReAct loop) |
 | **Silent** | Background silent execution, result pushed on completion |
 
 ## WowBlue Original Plugins

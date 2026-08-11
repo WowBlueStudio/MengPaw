@@ -148,4 +148,16 @@ class AgentDocsTest {
             custom,
             File(File(DataPaths.AGENTS, "TestAgent"), "modes.md").readText())
     }
+
+    @Test
+    fun `bootstrap migrates legacy modes template with Translate`() {
+        // v0.36 /Translate 移除: 旧 7 种 modes.md 含 /Translate 章节 → 覆盖为模板新版 (6 种)
+        writeTemplate("modes.md", "zh", "# 模式菜单\n\n## /Swarm\nSwarm 是进化版的 Mission")
+        writeWorkspace("TestAgent", "modes.md",
+            "# 模式菜单\n\n## /Swarm\n旧说明\n\n## /Translate\n由 LLM 直接翻译")
+        AgentDocs.bootstrap("TestAgent")
+        val migrated = File(File(DataPaths.AGENTS, "TestAgent"), "modes.md").readText()
+        assertFalse("旧 /Translate 章节应被迁移掉", migrated.contains("/Translate"))
+        assertTrue("新模板内容应生效", migrated.contains("Swarm 是进化版的 Mission"))
+    }
 }

@@ -1,5 +1,5 @@
 ---
-summary: "Slash command mode menu — full description of all 7 execution modes"
+summary: "Slash command mode menu — full description of all 6 execution modes"
 read_when:
   - User asks "what modes"
   - User picks a slash command
@@ -29,10 +29,6 @@ LLM plans 3-7 steps first→execute each as mini ReAct→mark done→synthesize
 
 Multi-round search (tavily/web)→cross-validate→source annotations→structured report
 
-## /Translate
-
-Uses the translation middleware (source language auto-detected) and translates directly (no ReAct loop). You may specify the target language in the task (e.g. "translate to English"); when omitted, defaults to English for Chinese input or Chinese for English input. Falls back to a single LLM call when the middleware is unavailable. The result appears as an Agent message.
-
 ## /Silent
 
 Background silent execution, push result when done
@@ -42,5 +38,5 @@ Background silent execution, push result when done
 ## Key Points
 
 - Tagged messages auto-switch your execution strategy — don't ask extra questions
-- When asked "what modes": read this file with `agent.modes`, list all 7, and explain the + button in the input box
+- When asked "what modes": read this file with `agent.modes`, list all 6, and explain the + button in the input box
 - If mode descriptions change, update this file (don't touch the system prompt)

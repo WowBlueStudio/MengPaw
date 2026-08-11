@@ -47,7 +47,6 @@ fun ModeItem(mode: ExecutionMode, isActive: Boolean, onClick: () -> Unit) {
         ExecutionMode.GOAL -> Icons.Outlined.FlagCircle
         ExecutionMode.PLAN -> Icons.Outlined.Checklist
         ExecutionMode.RESEARCH -> Icons.Outlined.TravelExplore
-        ExecutionMode.TRANSLATE -> Icons.Outlined.Translate
         ExecutionMode.SILENT -> Icons.Outlined.NotificationsOff
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {

@@ -14,8 +14,8 @@ object PanelOrderStore {
 
     private val file: File get() = File(DataPaths.CONFIG, FILE_NAME)
 
-    // v0.34.4: Mission 并入 Swarm — 默认面板不再含 mission
-    private val DEFAULT_MODES = listOf("goal", "swarm", "fleet", "plan", "research", "translate", "silent")
+    // v0.34.4: Mission 并入 Swarm — 默认面板不再含 mission; v0.36: /Translate 移除
+    private val DEFAULT_MODES = listOf("goal", "swarm", "fleet", "plan", "research", "silent")
 
     data class PanelOrder(
         // v0.34.3: 补 fleet; v0.34.4: 去 mission (并入 Swarm)
@@ -32,8 +32,9 @@ object PanelOrderStore {
             val storedModes = obj.optJSONArray("modes")?.let { arr ->
                     (0 until arr.length()).map { i -> arr.getString(i) }
                 } ?: DEFAULT_MODES
-            // 迁移: 旧列表可能含 mission → 过滤 (并入 Swarm); 缺 fleet → 插入 (防老用户看不到 Fleet)
-            val cleaned = storedModes.filter { it != "mission" }
+            // 迁移: 旧列表可能含 mission/translate → 过滤 (Mission 并入 Swarm, /Translate v0.36 移除);
+            // 缺 fleet → 插入 (防老用户看不到 Fleet)
+            val cleaned = storedModes.filter { it != "mission" && it != "translate" }
             val modes = if ("fleet" in cleaned) cleaned
                 else listOf("goal", "swarm", "fleet") + cleaned.filter { it != "swarm" }
             PanelOrder(

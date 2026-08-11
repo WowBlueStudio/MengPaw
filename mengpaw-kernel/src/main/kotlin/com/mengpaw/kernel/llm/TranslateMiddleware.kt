@@ -61,15 +61,6 @@ class TranslateMiddleware {
         return translate(text, "en", "zh-CN")
     }
 
-    /**
-     * 通用翻译 — 任意语言对 (Google 免费接口, [from] 默认 auto 自动检测源语言)。
-     * 失败时回退返回原文 (调用方据此判断是否走 LLM 回退)。
-     */
-    suspend fun translate(text: String, from: String = "auto", to: String): String {
-        if (text.isBlank()) return text
-        return translateInternal(text, from, to)
-    }
-
     // ── Internal ────────────────────────────────────────────────────────
 
     private fun needsTranslation(text: String, fromLang: String): Boolean {
@@ -87,7 +78,7 @@ class TranslateMiddleware {
      * Translate text using Google's free public Translate API.
      * No API key required. Rate-limited to ~100 req/min.
      */
-    private suspend fun translateInternal(text: String, from: String, to: String): String =
+    private suspend fun translate(text: String, from: String, to: String): String =
         withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(text.take(1500), "UTF-8")
@@ -121,85 +112,5 @@ class TranslateMiddleware {
             }
         } catch (_: Exception) { }
         return sb.toString().ifBlank { json.take(200) }
-    }
-
-    companion object {
-        /**
-         * 从 /Translate 任务文本提取目标语言代码 (ISO 639-1 / zh-CN)。
-         * 支持中文指令 ("翻译成英文/日语/法语…") 与英文指令 ("translate to Japanese")。
-         * 未识别显式目标语言时返回 [fallback] (调用方按 UI 语言决定默认值)。
-         */
-        fun targetLanguageFrom(task: String, fallback: String = "en"): String {
-            val zh = Regex(
-                """(?:翻译|译|翻)(?:成|为|到)?\s*([\u4e00-\u9fa5]{1,6}?)(?:语言)?(?:[\s:：,，。、]|$)"""
-            ).find(task)
-            zh?.let { m ->
-                val name = m.groupValues[1]
-                return when {
-                    name.contains("英") -> "en"
-                    name.contains("日") -> "ja"
-                    name.contains("韩") || name.contains("朝鲜") -> "ko"
-                    name.contains("法") -> "fr"
-                    name.contains("德") -> "de"
-                    name.contains("西") || name.contains("班牙") -> "es"
-                    name.contains("俄") -> "ru"
-                    name.contains("意") -> "it"
-                    name.contains("葡") -> "pt"
-                    name.contains("阿拉伯") -> "ar"
-                    name.contains("泰") -> "th"
-                    name.contains("越") -> "vi"
-                    name.contains("印尼") -> "id"
-                    name.contains("中") || name.contains("汉") -> "zh-CN"
-                    else -> name.take(2).lowercase()
-                }
-            }
-            val en = Regex(
-                """(?:translate|render|convert)(?:\s+this\s+(?:text|sentence|paragraph|passage))?(?:\s+to)?\s+([a-zA-Z-]+)""",
-                setOf(RegexOption.IGNORE_CASE)
-            ).find(task)
-            en?.let { m ->
-                val name = m.groupValues[1].trim().lowercase()
-                return when {
-                    name.startsWith("japan") -> "ja"
-                    name.startsWith("korea") -> "ko"
-                    name.startsWith("french") || name == "fr" -> "fr"
-                    name.startsWith("german") -> "de"
-                    name.startsWith("spanish") -> "es"
-                    name.startsWith("russian") -> "ru"
-                    name.startsWith("italian") -> "it"
-                    name.startsWith("portuguese") -> "pt"
-                    name.startsWith("arabic") -> "ar"
-                    name.startsWith("thai") -> "th"
-                    name.startsWith("vietnamese") -> "vi"
-                    name.startsWith("indonesian") -> "id"
-                    name.startsWith("chinese") || name.startsWith("mandarin") || name.startsWith("zh") -> "zh-CN"
-                    name.startsWith("english") || name == "en" -> "en"
-                    else -> name
-                }
-            }
-            return fallback
-        }
-
-        /**
-         * 剥离 /Translate 任务中的翻译指令前缀, 取待译文本。
-         * 例: "翻译成英文: hello" → "hello"; "翻译：你好" → "你好"; 无指令前缀 → 返回整段。
-         */
-        fun textToTranslate(task: String): String {
-            val stripped = task.replaceFirst(
-                Regex(
-                    """^(?:请\s*)?(?:把|将|给\s*)?(?:这(?:段|句|个)|以下|上面|上述|下面)?\s*(?:文本|内容|文字|话|句子|一段话)?\s*(?:翻译|译|翻)(?:(?:成|为|到)?\s*(?:[\u4e00-\u9fa5]{1,6}?|[\w-]{1,16}?)(?:语言)?)?[\s:：,，。、]+"""
-                ),
-                ""
-            ).trim()
-            // 英文指令分支: "translate to English: hello"
-            val strippedEn = stripped.replaceFirst(
-                Regex(
-                    """^(?:please\s+)?(?:translate|render|convert)(?:\s+this\s+(?:text|sentence|paragraph|passage))?(?:\s+to)?\s+[\w-]+\s*:?\s*""",
-                    setOf(RegexOption.IGNORE_CASE)
-                ),
-                ""
-            ).trim()
-            return strippedEn.ifBlank { task }
-        }
     }
 }

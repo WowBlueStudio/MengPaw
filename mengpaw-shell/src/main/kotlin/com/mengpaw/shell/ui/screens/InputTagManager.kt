@@ -30,7 +30,7 @@ class InputTagManager {
                 when (tag.mode) {
                     ExecutionMode.GOAL -> loopMode = LoopMode.GOAL
                     ExecutionMode.PLAN -> {} // Plan uses explicit dispatch, doesn't change loopMode
-                    else -> {} // RESEARCH/TRANSLATE/SILENT 不改变 loopMode
+                    else -> {} // RESEARCH/SILENT 不改变 loopMode
                 }
             }
             is InputTag.AgentRef -> {

@@ -66,7 +66,6 @@ val ChineseStrings = AppStrings().apply {
     dragHint = "长按拖拽排序"
 
     tagModeResearch = "/Research"
-    tagModeTranslate = "/Translate"
     tagModeSilent = "/Silent"
     tagDismiss = "移除"
     mentionHint = "@智能体名称..."
@@ -75,7 +74,6 @@ val ChineseStrings = AppStrings().apply {
     placeholderSwarm = "输入需要火种模式并行拆解执行的任务（可混合不同模型）"
     placeholderFleet = "描述任务，Agent 编队跨设备/多框架协作执行..."
     placeholderResearch = "输入需要深度调研的课题，将进行多轮搜索与交叉验证"
-    placeholderTranslate = "输入需要翻译的内容"
     placeholderSilent = "输入后台静默执行的任务，完成后推送结果"
 
     about = "关于"

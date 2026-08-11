@@ -240,7 +240,6 @@ internal fun MainScreenInputBar(
                                 ExecutionMode.GOAL -> "描述目标，Agent 自动评估完成度..."
                                 ExecutionMode.PLAN -> "描述任务，Agent 先分解计划再逐步执行..."
                                 ExecutionMode.RESEARCH -> strings.placeholderResearch
-                                ExecutionMode.TRANSLATE -> strings.placeholderTranslate
                                 ExecutionMode.SILENT -> strings.placeholderSilent
                                 else -> strings.inputPlaceholder
                             }

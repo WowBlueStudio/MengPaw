@@ -66,7 +66,6 @@ val EnglishStrings = AppStrings().apply {
     dragHint = "Long-press to reorder"
 
     tagModeResearch = "/Research"
-    tagModeTranslate = "/Translate"
     tagModeSilent = "/Silent"
     tagDismiss = "Remove"
     mentionHint = "@mention an agent..."
@@ -75,7 +74,6 @@ val EnglishStrings = AppStrings().apply {
     placeholderSwarm = "Describe a task for parallel swarm workers with mixed models..."
     placeholderFleet = "Describe a task for Agent fleet collaboration across devices/frameworks..."
     placeholderResearch = "Enter a topic for deep research with source verification..."
-    placeholderTranslate = "Enter text to translate..."
     placeholderSilent = "Describe a background task to run silently..."
 
     about = "About"

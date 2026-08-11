@@ -82,14 +82,16 @@ internal class AgentDocsBootstrap {
         }
     }
 
-    /** 旧模板迁移 — modes.md 含 `## /Mission` 章节 (旧 8 种版) → 覆盖为模板新版 (7 种)。 */
+    /** 旧模板迁移 — modes.md 含已删除章节 (`## /Mission` 旧 8 种版 / `## /Translate` v0.36 移除)
+     *  → 覆盖为模板新版 (当前 6 种)。幂等: 迁移后无残留章节, 自然跳过。 */
     private fun migrateLegacyModesTemplate(agentName: String, language: String) {
         try {
             val file = File(File(DataPaths.AGENTS, agentName), "modes.md")
             if (!file.exists()) return
-            if (file.readText().contains("## /Mission")) {
+            val text = file.readText()
+            if (text.contains("## /Mission") || text.contains("## /Translate")) {
                 if (resetDoc(agentName, "modes.md", language)) {
-                    KernelLog.i("AgentDocs", "migrate: legacy modes.md (Mission) → template ($agentName)")
+                    KernelLog.i("AgentDocs", "migrate: legacy modes.md (Mission/Translate) → template ($agentName)")
                 }
             }
         } catch (e: Exception) {
