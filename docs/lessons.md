@@ -671,4 +671,34 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 - **迁移后产物字节必然变化**（构建元数据/时间戳），即使代码零改动 checksum 也会变——
   必须重新发布 tag 并回写 plugins.json，否则客户端 SHA256 校验失败。
 
-*最后更新: 2026-08-11 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移*
+## 17. 会话收尾归档与长驻进程环境坑（2026-08-11，外置插件迁移发布会话）
+
+### 17.1 会话收尾归档约定（用户定案）
+
+- 用户说"任务结束/本次会话结束"时，必须把本会话经验（新坑 + 流程教训 + 工作规则）
+  总结写入 `docs/lessons.md` 并 commit，经验不得只留在会话里；
+- 该规则已同步进 `AGENTS.md` 四、工作方式，保证未来每会话执行；
+- 配套工作规则（同日定案）：**没有更改过的文件不要重新做编译测试**，只验证实际变更的
+  文件及其直接依赖链，一次性验证不复跑。
+
+### 17.2 User 级环境变量 vs 长驻进程继承（Gitee release 发布教训）
+
+- **现象**：用户已用 User 级设置 `GITEE_TOKEN`，但 `[Environment]::GetEnvironmentVariable('GITEE_TOKEN')`
+  （默认 Process 级）返回空，误判"令牌缺失"，差点让用户重复设置；
+- **根因**：Codex 等桌面应用是长驻进程，子 shell 继承的是**应用启动时**的环境块；
+  应用启动后才设置的 User 级变量不会自动出现；
+- **处置**：`[Environment]::GetEnvironmentVariable($name,'User')` 分作用域检查，存在则当前
+  会话注入 `$env:GITEE_TOKEN = ...` 后直接复用，无需用户重设；
+- **教训**：① 查环境变量必须分 Process/User/Machine 三作用域，不能只看默认；
+  ② 向用户报告"未设置"前先查 User 级，避免误报；③ 密钥仍只从环境读，不落盘不打印（红线 4）。
+
+### 17.3 外置插件发布闭环核对清单（本次会话验证过的顺序）
+
+迁移源码 → 构建 + 测试 → 打包 dex jar → 对比新旧 checksum（字节必变）→
+更新 plugins.json（URL + checksum + size，version 不动）→ 双仓库提交 →
+tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个 URL 全 200 →
+推送主仓库让 plugins.json 上线。发布前查 `gh auth status` + `GITEE_TOKEN` 三作用域，
+缺令牌先补再动手；Gitee release 用 `scripts/gitee-release.ps1`
+（mengpaw-connectors 分支是 main，须传 `-TargetBranch main`）。
+
+*最后更新: 2026-08-11 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档*

@@ -35,6 +35,8 @@
 ## 四、工作方式
 
 - **修改即确认**:改动完成并通过验证(测试+编译)后立即 commit,不等用户说"提交";按功能粒度拆 commit,message 用 `feat:`/`fix:`/`chore:`/`release:` 前缀
+- **会话收尾必归档**:用户发出"任务结束/本次会话结束"类指令时,把本会话经验(新坑 + 流程教训 + 工作规则)总结写入 `docs/lessons.md` 并 commit,经验不得只留在会话里
+- **未变更不重编译**:没有更改过的文件不要重新做编译测试,只验证实际变更的文件及其直接依赖链;一次性验证不复跑
 - **上下文精简**:塞任何东西进提示词/文档前问"真值得消耗注意力吗";不回溯历史、不双重注入、中期记忆不注入提示词
 - **双许可**:主仓库 `AGPL-3.0-or-later OR LicenseRef-Commercial`;外置连接器仓库 `mengpaw-connectors` 用 MIT,其 JitPack 内核坐标是 `com.github.WowBlueStudio.MengPaw:mengpaw-kernel:<tag>`(点连接,非冒号)
 - **PR 政策**:主仓库开放 PR(2026-08-03 起),插件/文档类优先,提交即版权让渡;评审走 `mengpaw-pr-review` skill,合并由用户拍板
@@ -57,4 +59,3 @@
 - 新增命令必须四源同步:BuiltinCommandIndex / CLI.md / 系统提示词常用命令 / 开发指南 §5.1(有 IndexCoverageTest / PromptGhostReferenceTest 锁死)
 - 发布前全量跑一次测试拿真实数字,更新开发指南 §3.7 快照
 - 遇到新坑:记入 `docs/lessons.md`(项目惯例),发布类坑同步更新 `mengpaw-release` skill
-
