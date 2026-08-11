@@ -826,7 +826,9 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   请求路径是否存在。
 - **UI 折叠状态防御**: `LaunchedEffect` 的强制展开逻辑要写完整条件组合
   (`isRunning && !collapsed`)，`isRunning` 单条件优先会覆盖异常组合下用户的手动折叠。
-- **测试快照虚高教训**: 开发指南 §3.7 的 shell 148 与 XML 实测 78 长期不符
-  (历史统计口径漂移未修正) — 修正快照时以 `build/test-results` XML 的 tests 数为准。
+- **测试快照口径教训**: 开发指南 §3.7 快照是 `./gradlew test` 全量 (debug+release
+  双套 unit test 合并计数) — shell 148 = 74×2, core 90 = 45×2, browser 42 = 21×2。
+  只跑 `testDebugUnitTest` 得到的是单套数 (78), 与快照对不上不代表快照错;
+  核对快照必须用全量口径, 新增测试按 ×2 计入 (本次 +4 → +8)。
 
 *最后更新: 2026-08-11 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限*

@@ -19,6 +19,14 @@
 - 新增 `ThinkingProcessWriterTest` 4 用例: 未闭环复现 / 闭环折叠+创建答案气泡 /
   finalize 定型 / 闭环后不残留运行态容器。
 
+### 发行
+- Shell APK: `mengpaw-shell-v0.36.2-release.apk`
+- 仅 Shell 变更 (browser 无变更不构建); plugins.json 无变更
+- 崩溃巡检: vivo 真机 dropbox 巡检 — 记录截止 2026-08-10, 均为 v0.35.3 及更早;
+  NSD listener 竞态 (v0.34.1 修复) 与 dataSync 前台服务超时 (v0.35.4 修复)
+  两类历史崩溃全部闭环, v0.35.4 之后零新崩溃
+- 测试: 发布前全量实测数字见开发指南 §3.7
+
 ## v0.36.1 (2026-08-11) — 浏览器半自动武器 + 地址栏修复
 
 ### 新增

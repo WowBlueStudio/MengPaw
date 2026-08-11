@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.35.5 | **更新**: 2026-08-11 | **架构**: 微内核(123文件) + AgentRuntime + 14插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.7.3
+> **版本**: 0.36.2 | **更新**: 2026-08-12 | **架构**: 微内核(123文件) + AgentRuntime + 14插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.8.0
 
 ---
 
@@ -538,13 +538,13 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (14 本地模块 1162 测试，v0.36.2 实测快照：kernel 558 + core 90 + shell 78 + browser 42 + 插件 394，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 修正 shell 快照 (XML 实测 78, 含 ThinkingProcessWriterTest 新增 4, 原 148 虚高) ；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
+### 3.7 测试 (14 本地模块 1240 测试，v0.36.2 实测快照：kernel 558 + core 90 + shell 156 + browser 42 + 插件 394，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 新增 ThinkingProcessWriterTest 4 用例 (全量双套 +8)，shell 148 → 156；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
 | mengpaw-kernel | 558 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) |
 | mengpaw-core | 90 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex |
-| mengpaw-shell | 78 | ComplexityDetector 分档、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) |
+| mengpaw-shell | 156 | ComplexityDetector 分档、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4；全量口径 debug+release 双套合并) |
 | mengpaw-browser | 42 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵 |
 | plugin-hermes (tribe) | 68 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 |
 | plugin-memory-twin | 68 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
