@@ -23,7 +23,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | 插件同级 | 内置功能 (`sys`) 与外挂插件同等地位，均实现 `Plugin` 接口，均只依赖 kernel |
 | 零 Python | 纯 Kotlin，无 Python 运行时 |
 | 多通道 | AIDL（系统集成）/ Unix Socket（Termux）/ HTTP（调试） |
-| 独立浏览器 | `mengpaw-browser` v0.7.3，Intent 互通，45 条浏览器操控命令 |
+| 独立浏览器 | `mengpaw-browser` v0.8.0，Intent 互通 + am 桥，45 条浏览器操控命令 (page.* + browser.*) |
 | 多模型 | 12 LLM Provider — OpenAI / DeepSeek / Kimi / GLM / Qwen / Grok / 火山引擎 / OpenModel / Self-Hosted / 自定义 |
 | 插件市场 | raw 直读 `plugins.json`（GitHub raw / Gitee raw 双源），ETag 缓存，SHA256 校验，磁盘快照离线降级（v0.34.0） |
 | 记忆孪生 | v0.15.0 — 跨设备 Agent 记忆同步 + 哈希链账本 + 短码配对 + 心跳保活 + QoS 自适应 + 手动 IP 发现 (plugin-memory-twin v0.2) |
@@ -71,7 +71,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | mengpaw-core | Android Library | 20 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 8 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
 | mengpaw-shell | APK | 118 | 0.34.1 (vc=34001) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
-| mengpaw-browser | APK | 42 | 0.7.3 (vc=12) | 5标签预渲染 + 会话持久化 + 收藏夹 + App横幅屏蔽 + 平板标签栏白色主题 + 手机标签对话框 + 暗色模式 + file:// + WebView版本 + 42文件架构 |
+| mengpaw-browser | APK | 45 | 0.8.0 (vc=13) | 半自动武器: page.* Playwright 命令面 (22) + am 桥 RunCommandService + 超长页分段截图坐标 + 公共目录落盘 (MANAGE_EXTERNAL_STORAGE) + 5标签预渲染 + 会话持久化 + 收藏夹 + 暗色模式 + file:// |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
 
@@ -251,21 +251,21 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 **UI emoji 约定 (v0.31.0 清理)**: UI 文本 (系统气泡/菜单/徽标/按钮) 禁用装饰性 emoji — 纯装饰的移除, 承载语义的 (状态/图标) 换 `Icons.Outlined` 线性图标 (会话/模型/系统/搜索/发送/截图/浏览器/云/复制/箭头/失败/成功/导出/时钟/恢复/分享/刷新/语音/挂起/检查/暂停/删除/保存/编辑/目录/书签/链接/用户/设置/锁/播放)。规则: 有语义用图标, 无语义直接删除, 不保留裸 emoji; Agent 生成的文本 (模型输出) 不受限。列表变更时同步本段落。
 
-### 3.4 mengpaw-browser（独立浏览器，42 文件）
+### 3.4 mengpaw-browser（独立浏览器，45 文件，v0.8.0 半自动武器）
 
 | 目录/文件 | 职责 |
 |-----------|------|
 | `BrowserActivity.kt` | 薄 Activity — 生命周期、MCP、返回键、onTrimMemory (v0.33.0: 主 UI 拆出 BrowserApp + BrowserAppDialogs + BrowserContentArea + BrowserMcpTools) |
 | `data/` (3 文件) | BrowserTypes, BrowserPrefs (含书签+会话持久化), HistoryStore |
-| `service/GoogleTranslate.kt` | 免费翻译客户端 |
+| `service/` (2 文件) | GoogleTranslate (免费翻译客户端) + RunCommandService (am 桥执行服务, Phase 2) |
 | `web/WebViewFactory.kt` | WebView 工厂 + App横幅CSS屏蔽 + onReceivedError |
-| `util/` (3 文件) | AdBlocker, SmartNavigate, DownloadUtil |
+| `util/` (4 文件) | AdBlocker, SmartNavigate, DownloadUtil, BrowserStorage (公共截图目录 + MANAGE_EXTERNAL_STORAGE 判定) |
 | `BrowserDarkMode.kt` | 暗色模式 |
 | `ui/` (15 文件) | 13 弹窗/条 (AgentSettings/Bookmark/FindBar/History/Icons/ImagePicker/MarkdownViewer/Password/ReaderMode/Settings/Tab/TopBar/Translate) + DesktopTabBar + NewTabPage |
 | `ui/components/` (2 文件) | TabChip (标签样式), SearchEngineLogo (SVG) |
 | `ui/theme/BrowserThemeConfig.kt` | Agent 主题配置 |
-| `bridge/` (3 文件) | BrowserBridge (Java↔JS 双向桥, @JavascriptInterface 方法保留注册对象) + BrowserScripts (JS 脚本常量) + FullPageScreenshotter (全页缝合截图/坐标交互) |
-| `plugin/` (5 文件) | BuiltinBrowserPlugin (壳, 44 条 browser.* 命令, 经 9880 桥合流) + BrowserCommandContext + BrowserTabCommands/BrowserPageCommands/BrowserQueryCommands (命令按域拆分) |
+| `bridge/` (3 文件) | BrowserBridge (Java↔JS 双向桥 + goto 精确等待 + 分段截图/段坐标/元素截图) + BrowserScripts (JS 脚本常量) + FullPageScreenshotter (超长页分段截图/按段坐标交互, 决策 #5) |
+| `plugin/` (6 文件) | BuiltinBrowserPlugin (壳, page.* 22 + browser.* 23 = 45 命令) + BrowserCommandContext + BrowserTabCommands/BrowserPageCommands/BrowserQueryCommands (browser.* 按域拆分) + BrowserPlaywrightCommands (page.* Playwright 语义组) |
 | `mcp/McpHttpServer.kt` | MCP HTTP 服务 |
 
 **Markdown 文档打开 (v0.31.0+)**: 浏览器注册 `ACTION_VIEW` intent-filter 双轨——`file://` (文件管理器) 与 `content://` (FileProvider/SAF 选择) × `text/markdown` / `text/plain`+`*.md`。`BrowserActivity.checkMdFile` 冷启动与 `onNewIntent` 双路径取 md 内容 (≤500KB), 弹 `BrowserMarkdownViewerDialog`。Shell 提炼回传走独立私有 action `com.mengpaw.action.OPEN_MD` (extra `md`/`mdUri`, 见 BrowserReturnWatcher)。
@@ -1057,15 +1057,31 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **命令去重 (v0.36.x)**: `agent.read/write/ls/rm/mkdir` 与 `fs.*`（plugin-fs 已整体移除）有 Android 等价命令（cat/echo/ls/rm/mkdir/cp/mv/stat/grep/find），不再重复定义——Agent 直接用 Linux 命令。原框架特有保障的承接: ① `agent.write` 自动读回验证 → Linux 通道对重定向写（`> 文件`）成功后自动附「请 cat 读回验证」提示 + 提示词「结果纪律」要求引用真实文本; ② `agent.rm` 系统路径保护 → CommandMonitor CONFIRM 弹窗 + overwrite-system/写保护路径 BLOCK 规则; ③ `agent.write` 路径沙箱 → 工作区/输出目录为 Linux 通道默认 cwd 与允许写区, 插件仓库/配置目录写保护 BLOCK。**注意**: Linux 命令不经 Pipeline IntegrityGuard, 插件仓库/配置等核心目录的写保护由 CommandMonitor 写保护路径检查承接。
 
-### 5.3 浏览器内置命令 (browser.*, 45)
+### 5.3 浏览器内置命令 (page.* + browser.*, 45) — 半自动武器 (v0.8.0)
 
-**标签页 (5)**: `tabs` | `tab <N>` | `tab.open <N> <url>` | `tab.close <N>` | `tab.all`
+> 2026-08-11 用户拍板方案 (docs/browser-autopilot-plan.md)：Playwright 语义命令面 + am 桥 + 去重。
+> `page.*` 能完成的指令，`browser.*` 冗余已删；截图只回路径（公共目录，Agent 可读）；
+> 超长页截断分多段、坐标按段拆分；调用通道 = am 桥（shell 子进程，signature 白名单）+
+> 9880 桥（过渡，Phase 2 验证后退役）。
 
-**效率 (6)**: `nav <url>` | `batch <cmd1;;cmd2>` | `q <shorthand>` | `inject` | `diff` | `preload`
+**半自动合体 (1)**: `page.load <url> [--max-height N]` — 导航 + 精确等待 + 全页分段截图 + 坐标系统
 
-**页面操控 (6)**: `eval <js>` | `click <sel>` | `type <sel> <text>` | `scroll <x> <y>` | `content` | `screenshot`
+**导航与等待 (2)**: `page.goto <url> [--wait domcontentloaded|networkidle]` | `page.wait_selector <css> [--timeout N]`
 
-**导航 (5)**: `open <url>` | `back` | `forward` | `title` | `url`
+**截图 (2)**: `page.screenshot [--full] [--view]` | `page.screenshot.element <css>`
+
+**交互 (7)**: `page.click <seg> <x> <y>` | `page.click <css>` | `page.fill <css> <text>` | `page.select <css> <value>` | `page.submit <css>` | `page.check` | `page.uncheck` | `page.key <key>`
+
+**查询 (3)**: `page.content [--grep P] [--regex] [-i] [--head N] [--tail N]` | `page.text <css>` | `page.attr <css> <name>`
+
+**滚动/JS/信息 (7)**: `page.scroll <x> <y>` | `page.scroll_by <dy>` | `page.eval <js>` | `page.url` | `page.title` | `page.back` | `page.forward`
+
+**保留的 browser.\* (23, page.\* 不覆盖)**:
+- 标签页 (5): `tabs` | `tab <N>` | `tab.open <N> <url>` | `tab.close <N>` | `tab.all`
+- 效率 (5): `batch <cmd1;;cmd2>` | `q <shorthand>` | `inject` | `diff` | `preload`
+- 等待/对话框 (4): `wait` | `wait.nav` | `dialog.accept` | `dialog.dismiss`
+- 存储/Cookie (4): `storage` | `cookies` | `cookies.set` | `cookies.clear`
+- 设置/查询 (5): `viewport` | `userAgent` | `version` | `visible` | `enabled`
 
 ---
 
@@ -1248,7 +1264,7 @@ Shell ↔ 浏览器进程的 127.0.0.1:9880 HTTP 桥 (`McpHttpServer`/`BrowserMc
 
 ### 6.9 P1 加固 (v0.32.1+, 九维审查)
 
-**内置浏览器命令合流 (BuiltinBrowserPlugin 复活)**: 44 条 `browser.*` 命令此前零实例化全部不可达 (Agent 只有 6 个 MCP 工具)。现 `BrowserActivity` 经 `BrowserStateBridge` (Compose tab 状态桥) 实例化插件, 9880 桥 `runMcpTool` 双路径分流: 内置命令后台线程 runBlocking 执行 (顺带修复原 runOnUiThread 主线程 latch 死锁 — evalJs 的 post 永远排不上 → 每次 2s 超时), 原生 6 工具保持主线程 (View.draw 需主线程)。`BrowserMcpPlugin.getTools()` 追加 9 条工具 (tabs/tab/nav/content/screenshot.full/coord.click/wait.selector/cookies/storage)。命令键直接作 MCP 工具名, `browser.mcp.invoke <命令>` 调用。
+**内置浏览器命令合流 (BuiltinBrowserPlugin 复活)**: 44 条 `browser.*` 命令此前零实例化全部不可达 (Agent 只有 6 个 MCP 工具)。现 `BrowserActivity` 经 `BrowserStateBridge` (Compose tab 状态桥) 实例化插件, 9880 桥 `runMcpTool` 双路径分流: 内置命令后台线程 runBlocking 执行 (顺带修复原 runOnUiThread 主线程 latch 死锁 — evalJs 的 post 永远排不上 → 每次 2s 超时), 原生 6 工具保持主线程 (View.draw 需主线程)。命令键直接作 MCP 工具名, `browser.mcp.invoke <命令>` 调用。**v0.8.0 半自动武器**: 新增 `page.*` Playwright 语义命令组 (22 条) + `RunCommandService` am 桥 (signature 权限, CommandMonitor 白名单只放行 page.*/browser.*) + 截图落公共目录 (MANAGE_EXTERNAL_STORAGE 首启弹窗) + 超长页分段坐标; `browser.*` 被覆盖命令 (nav/open/content/screenshot 系/coord.*/eval/type/click/scroll/text/attr/wait.selector/表单系/key) 去重删除, 保留 23 条。
 
 **取消传播契约扩展**: AdaptiveLlmProvider/RemoteApi/PlanModeExecutor/Pipeline 全部 catch 前置 `CancellationException rethrow` — stop() 不再报"已重试 6 次"假错误; RemoteApi 非流式补 HTTP 状态检查 (401/500 错误体不再进对话)。
 

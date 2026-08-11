@@ -1,6 +1,7 @@
 # MP 浏览器「半自动武器」升级方案（Playwright 语义 + Termux 式调用）
 
-> 状态：方案定稿 + 取舍定案（2026-08-11 两轮用户拍板）｜未实施
+> 状态：方案定稿 + 取舍定案（2026-08-11 两轮用户拍板）｜**已实施 Phase 1-3 + Phase 4 机器验证（2026-08-11 当日）**
+> 待办：真机自测（APK 已构建 mengpaw-browser-v0.8.0-debug.apk）→ 9880 桥退役（决策 #7）
 > 关联：mengpaw-browser（浏览器进程）、mengpaw-shell（Shell 进程）、mengpaw-kernel（CommandMonitor/Linux 命令通道）、mengpaw-connectors（退役 browser-mcp-plugin）
 
 ## 一、背景与痛点
@@ -162,6 +163,13 @@ Agent 循环：**看图（段图）→ `page.click <seg> x y` → `page.scroll_b
 2. **Phase 2 · am 桥**（mengpaw-browser + kernel）：新增 `RunCommandService` + signature 权限；`CommandMonitor` 识别浏览器 RUN_COMMAND 形态 + payload 白名单。**端到端验证后退役 9880 桥 + browser-mcp-plugin（决策 #7）**。
 3. **Phase 3 · 去重**：按 §八 删除被覆盖的 `browser.*` 命令，四源同步 + 测试清理。**本次会话完成（决策 #4）**。
 4. **Phase 4 · 验证**：`:mengpaw-kernel:test` 全量 + `browser` 模块编译 + 真机自测（半自动截图、分段坐标、am 桥端到端）。
+
+**执行状态 (2026-08-11)**：
+- ✅ Phase 1：`BrowserPlaywrightCommands`（page.* 22 条）+ `FullPageScreenshotter.captureSegments/tapSegment/scrollToSegmentY` + `BrowserStorage` 公共目录 + 首启权限弹窗（`BrowserActivity.ensureStoragePermission`）
+- ✅ Phase 2：`RunCommandService`（signature 权限 + 命令前缀白名单 + 输出路径公共目录限制）+ `CommandMonitor.detectReinterpret` 浏览器形态（`Reinterpret.BrowserCommand` 白名单放行 / `BlockedBrowserCommand` 拒绝）
+- ✅ Phase 3：browser.* 45→23 条（被 page.* 覆盖的 22 条删除），四源同步（BuiltinBrowserPlugin / PromptEngine 中英提示词节 / 开发指南 §3.4+§5.3 / AgentCliDocTables + 5 个浏览器技能文档），幽灵引用清理
+- ✅ Phase 4（机器部分）：`:mengpaw-kernel:test` 558 用例全绿；`:mengpaw-browser:compileDebugKotlin` + `assembleDebug` 通过（v0.8.0-debug.apk）
+- ⏳ 真机自测（用户）：page.load 半自动截图 / page.click 分段坐标 / am 桥端到端 / 存储权限弹窗 → 通过后执行 9880 桥 + browser-mcp-plugin 退役
 
 ## 十、待定与风险
 
