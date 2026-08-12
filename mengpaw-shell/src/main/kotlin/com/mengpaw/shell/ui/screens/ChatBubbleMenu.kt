@@ -216,7 +216,8 @@ private fun BubbleActionBar(
     }
 }
 
-/** 用户气泡下方操作图标行 (v0.35.1) — 复制/大爆炸/撤回/分享。 */
+/** 用户气泡下方操作图标行 (v0.35.1) — 复制/大爆炸/撤回/分享。
+ *  v0.36.3: 右对齐 — 用户气泡本体靠右, 底部操作行与之一致。 */
 @Composable
 private fun UserActionBar(
     strings: AppStrings,
@@ -227,8 +228,8 @@ private fun UserActionBar(
     onShare: () -> Unit
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(start = 4.dp, top = 2.dp, bottom = 2.dp),
-        horizontalArrangement = Arrangement.Start,
+        Modifier.fillMaxWidth().padding(end = 4.dp, top = 2.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically
     ) {
         ActionIcon(Icons.Outlined.ContentCopy, strings.bubbleCopy, onCopy)
