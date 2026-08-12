@@ -921,4 +921,28 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 - **SimpleDateFormat.parse 平台类型返回 Date?**: 赋值给 Calendar.time 触发
   Java type mismatch 警告, 必须空检查 (红线禁 !!), 三个序列方法同一坑。
 
-*最后更新: 2026-08-12 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1*
+### 26. v0.37.1 发布 + GitHub 断网 + 自绘 UI 自动化 (2026-08-12, v0.37.1)
+
+- **发布前崩溃巡检要问"触发场景"**: 荣耀 dropbox 只有一条使用指南弹窗崩溃,
+  光看栈 (Compose 无限高度约束) 定位不到页面 — 用户一句"点 USB 测试时触发"
+  直接命中 DeviceGuidesPanel; 同类 AlertDialog text 槽 + verticalScroll 模式
+  还存在于 SettingsDialogs (CRON/伪人模式), 一并 heightIn 修复。排查 UI 崩溃
+  先让用户描述操作路径。
+- **GitHub 断连诊断顺序**: `github.com:443` 不通但 `api.github.com` 通时,
+  git push / gh release (依赖 tag 已推) 都阻塞; `ssh.github.com:443` 通但
+  本机无 SSH key 也用不了。恢复手段: VPN (西柚加速器, 启动后手动点按钮) 或
+  http 代理 (先 `Test-NetConnection 127.0.0.1:<port>` 验证监听, 代理没起时
+  配置 git proxy 只会更快失败, 推完记得 `git config --unset http.proxy`)。
+- **自绘窗口 (游戏加速器类) 自动化点击无可靠入口**: UI Automation 控件树为空、
+  PrintWindow 黑屏 (DirectComposition 合成)、CopyFromScreen 抓不到内容、
+  WM_LBUTTONDOWN 消息不响应、窗口位置被程序锁定 (SetWindowPos 无效)、
+  Program Files 下配置写入需管理员权限。结论: 此类 UI 只能用户手动操作,
+  不要把自动化当作可交付方案。
+- **像素分析定位 GUI 元素可作盲试替代**: 用户截图 800x500 与窗口 1:1 时,
+  网格平均色 + 暗像素密度热图能定位按钮中心 (相对窗口坐标); 但窗口移动后
+  必须重算 (按钮相对窗口固定, 屏幕坐标 = 窗口左上 + 相对偏移)。
+- **ADB 无线连接掉线处理**: 荣耀平板主连接掉线但 mdns 副本 `(2)` 仍在线,
+  直接对副本实例 install; 安装被 "User rejected permissions" 拒绝时提示
+  用户点设备端确认框再重试, 不要盲目连发。
+
+*最后更新: 2026-08-12 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1*
