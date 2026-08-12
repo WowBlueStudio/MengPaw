@@ -868,4 +868,23 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   ④ am 瞬时失败 (后台启动窗口竞争) 重试一次, 幂等脚本重复启动无害。
   纯逻辑 (脚本生成/参数构造) 拆独立文件防超 400 行红线。
 
-*最后更新: 2026-08-12 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接*
+### 23. sys.* 审查修复 (2026-08-12, v0.36.3)
+
+- **screencap/screenrecord 是 shell/root 二进制, 普通 App 进程必失败**: sys.screenshot/
+  screenrecord 原实现必然不可用 (错误消息只提示)。唯一免 root 路径是 MediaProjection;
+  **Android 14+ 强制在 mediaProjection 类型前台服务上下文创建 VirtualDisplay**, 否则
+  SecurityException — 需 FOREGROUND_SERVICE_MEDIA_PROJECTION 权限 + 服务声明 +
+  前台服务令牌 (通知权限缺失时 start 失败但捕获仍可试)。
+- **MediaProjection 授权是异步用户交互**: 命令协程经 suspendCancellableCoroutine/
+  CompletableDeferred 挂起等待; launcher 必须 MainActivity onCreate 注册并注入 core
+  (core 无 Activity); 结果经回调转发; 并发授权请求要互斥。
+- **权限提示文案不得引用清单未声明的权限**: sys.screen.brightness/power.save 提示
+  "sys.permission.request WRITE_SETTINGS" 但 Manifest 无 WRITE_SETTINGS — 权限清单以
+  Manifest 为唯一基准 (PermissionExecutor 注释), 提示必须同步, 否则 Agent 走死路。
+- **core 不能依赖 shell 类名**: sys.alarm.set 原 Class.forName("...WakeReceiver") —
+  ProGuard 混淆即崩; 改显式 action + setPackage (Manifest receiver intent-filter),
+  跨模块路由用 action 而非类名。
+- **Manifest 声明的组件 R8 自动 keep**: WakeReceiver/MediaProjectionService 等由 AGP
+  自动生成 manifest keep 规则, 无需手写 proguard 规则 (手写反而重复)。
+
+*最后更新: 2026-08-12 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复*
