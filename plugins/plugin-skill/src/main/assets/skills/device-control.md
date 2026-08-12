@@ -50,5 +50,8 @@ sys.intent.view <file>                # 用关联应用打开文件
 
 ## 脚本执行
 ```
-skill.run termux   # Termux 桥接指南
+termux.status                  # 逐层探测 Termux→ubuntu→miniconda→python
+termux.python [--env <环境>] <代码>  # conda 环境内执行 Python (直接回传输出)
+termux.ubuntu <命令>           # 登录 ubuntu (conda 环境内) 执行命令
+skill.run termux               # Termux 桥接指南
 ```

@@ -128,6 +128,7 @@ dependencies {
     implementation(project(":plugin-root"))
     implementation(project(":plugin-hermes"))
     implementation(project(":plugin-agent-tools"))
+    implementation(project(":plugin-termux"))
     implementation(project(":plugin-dream"))
     implementation(project(":plugin-evolution"))
     implementation(project(":plugin-concise"))

@@ -1,118 +1,72 @@
 ---
 name: termux
-description: Termux 脚本执行桥接。通过 am startservice 在 Termux 环境中执行命令和脚本。。触发词：「跑脚本」「termux」「脚本执行」
+description: Termux 桥 — 通过 termux.* 命令在 Termux→ubuntu→miniconda 环境执行命令与 Python。触发词：「跑脚本」「termux」「脚本执行」「ubuntu」「conda」「python 环境」
 enabled: true
 category: system
 source: core
 ---
 
-# Termux 脚本执行桥接
+# Termux 桥 (Termux → ubuntu → miniconda → Python)
 
-你可以在 Android 设备上通过 Termux 执行 shell 命令和脚本——无需 root。
+通过 `termux.*` 插件命令在 Android 设备上执行 shell 命令和 Python 代码——无需 root。
+插件自动封装"登录 ubuntu + conda 环境 + 输出回传", 一次命令完成 写→执行→读回→清理。
 
-## 前置条件
+## 前置条件 (先运行 termux.status)
 
-1. 确认 Termux 已安装：
-   ```
-   sys.app.launch com.termux
-   ```
-   如果未安装，引导用户从 F-Droid 或 GitHub 安装 Termux。
+1. Termux 已安装, 且 `~/.termux/termux.properties` 含 `allow-external-apps=true`
+   (写入后**完全重启 Termux**)
+2. Termux 执行 `termux-setup-storage` 授予存储权限 (交换目录 /sdcard/MengPaw/termux)
+3. Termux 安装 proot-distro 并装好 ubuntu:
+   `pkg install proot-distro && proot-distro install ubuntu`
+4. ubuntu 内安装 miniconda (可选但推荐, Python 环境所在层)
+5. MengPaw 已授予「所有文件访问」权限 (设置→应用→MengPaw)
 
-2. Termux 需配置允许外部调用。让用户在 Termux 中执行：
-   ```
-   echo "allow-external-apps=true" >> ~/.termux/termux.properties
-   ```
-   然后重启 Termux。
+`termux.status` 会逐层探测并给出每层的安装提示。
 
-3. Android 10+ 需要授予 Termux "在其他应用上层显示"权限（设置 → 应用 → Termux → 高级）。
+## 命令
 
-## 执行命令
+### termux.status [--refresh]
 
-使用 `am startservice` 调用 Termux 的 RUN_COMMAND 服务：
+逐层探测 Termux → ubuntu → miniconda → python 的状态与可用 conda 环境。
+环境发生变化后加 `--refresh` 强制重测 (默认 30s 缓存)。
 
-```bash
-am startservice --user 0 -n com.termux/com.termux.app.RunCommandService \
-  -a com.termux.RUN_COMMAND \
-  --es com.termux.RUN_COMMAND_PATH '/data/data/com.termux/files/usr/bin/bash' \
-  --esa com.termux.RUN_COMMAND_ARGUMENTS '-c,你的命令' \
-  --es com.termux.RUN_COMMAND_WORKDIR '/data/data/com.termux/files/home' \
-  --ez com.termux.RUN_COMMAND_BACKGROUND true
+### termux.python [--env <环境名>] <Python 代码>
+
+在 conda 环境内执行 Python 并**直接回传输出**。默认用第一个可用环境, 可用
+`--env` 指定 (先 termux.status 查看)。
+
+示例:
+```
+termux.python "import sys; print(sys.version)"
+termux.python --env py310 "import numpy; print(numpy.__version__)"
+termux.python "import pandas as pd; print(pd.__version__)"
 ```
 
-注意：`--esa` 参数用逗号分隔多个参数值，不能用空格（空格会被解析为新参数）。
+单行代码用 `;` 串联; 复杂逻辑建议先 `termux.ubuntu` 把代码写入文件再执行。
 
-## 执行脚本
+### termux.ubuntu [--env <环境名>] <命令>
 
-**方式 A：每次重写脚本文件**
+登录 ubuntu (conda 环境内) 执行 shell 命令并直接回传输出。
+
+示例:
 ```
-printf '#!/bin/bash\necho Hello from MengPaw\ndate\nuname -a\n' > /sdcard/tmp_script.sh
-
-# 然后执行
-am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS '-c,bash /sdcard/tmp_script.sh'
-```
-
-**方式 B：直接在命令中内联**（多命令请分步执行；`&&`/`;`/变量/反引号会被安全监控拦截）
-```
-am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS '-c,ls -la /sdcard/'
+termux.ubuntu "pip list"
+termux.ubuntu --env py310 "python -m pip --version"
+termux.ubuntu "ls /root/miniconda3/envs"
 ```
 
-> 安全规则与直接 Linux 命令一致：命令内容会经 CommandMonitor 检查，高危操作（rm/chmod 等）会弹窗询问用户；`> 文件 2>&1` 重定向输出可用（写工作区/输出/公共存储），系统路径（/etc /dev /system 等）禁止覆盖。
+## 安全说明
 
-## 常用场景
+- 代码/命令会经过**高危规则审查**: rm 删除、chmod/chown、su/sudo 提权、覆盖系统路径、
+  格式化分区等会被拦截或弹窗确认 (worker 等无交互环境直接拒绝)
+- **完整 shell 语法可用** (`;` `&&` `$` 变量、反引号): 内容由 ubuntu 直接执行,
+  没有本地 shell 拼接注入面 — 与直接 Linux 命令通道不同
+- 输出上限 100KB; 超时默认 120s (`--timeout <秒>` 可调 5-300s)
 
-### 网络诊断（含结果）
-```
-# 1. 执行并保存输出
--c,ping -c 3 8.8.8.8 > /sdcard/ping_result.txt 2>&1
+## 注意
 
-# 2. 稍后读取
-cat /sdcard/ping_result.txt
-
-# 3. 清理
-rm /sdcard/ping_result.txt
-```
-
-### Python 脚本
-```
--c,python3 -c "print('Hello from Python')"
-```
-
-### 数据分析（写脚本→执行→读结果）
-```
-# 1. 写脚本
-printf 'import os\ntotal = 0\nfor f in os.listdir("/sdcard/Download"):\n    print(f)\n    total += 1\nprint(f"Total: {total} files")\n' > /sdcard/analyze.py
-
-# 2. 执行
--c,python3 /sdcard/analyze.py > /sdcard/result.txt 2>&1
-
-# 3. 读结果
-cat /sdcard/result.txt
-```
-
-## 获取执行结果
-
-Termux 后台执行默认无结果回传。用文件重定向获取输出：
-
-```
-# 1. 执行命令，输出写入文件
-am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS \
-  '-c,ls -la /sdcard/ > /sdcard/termux_out.txt 2>&1'
-
-# 2. 等待 1-2 秒
-# （Termux 后台执行需要时间）
-
-# 3. 读取结果
-cat /sdcard/termux_out.txt
-
-# 4. 清理
-rm /sdcard/termux_out.txt
-```
-
-## 限制
-
-- 命令总长度 < 128KB（Android Intent 限制）
-- 后台执行无终端 UI，用 > 文件重定向获取结果
-- 复杂脚本写文件 → 执行 → `cat` 读结果 → 清理
-- 脚本放 `/sdcard/` 可能被其他应用修改，敏感操作优先每次重写
-- 首次执行时系统可能弹窗要求确认
-- Termux 需要在后台保持运行（关闭电池优化）
+- 不要用 `am startservice … com.termux.RUN_COMMAND_ARGUMENTS` 手拼 Termux 命令:
+  Linux 通道的元字符/前缀沙箱会拦截 (如 `python3 -c`、`$`、`&&`), 且 `am --esa`
+  按逗号切分参数数组, 代码里的逗号会把命令切碎
+- 执行环境是多层嵌套: MengPaw → Termux → ubuntu (proot-distro) → miniconda → Python,
+  首次调用可能较慢 (proot 启动 + conda 环境加载), 属正常现象

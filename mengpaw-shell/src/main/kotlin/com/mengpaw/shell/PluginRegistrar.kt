@@ -34,7 +34,7 @@ object PluginRegistrar {
         "framework-plugin", "skill-plugin", "dev-plugin",
         "net-plugin", "clipboard-plugin",
         "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin",
-        "dream-plugin", "evolution-plugin", "concise-plugin",
+        "dream-plugin", "evolution-plugin", "concise-plugin", "termux-plugin",
         "tavily-plugin"
     )
 
@@ -69,6 +69,7 @@ object PluginRegistrar {
         "root-plugin" to "Root Access",
         "tools-plugin" to "Agent Tools",
         "tribe-plugin" to "Tribe",
+        "termux-plugin" to "Termux Bridge",
         "tavily-plugin" to "AI Search",
         // remote
         "update-plugin" to "Auto Update",
@@ -101,6 +102,7 @@ object PluginRegistrar {
         "dream-plugin" to ("梦境模式" to "梦境模式内置默认实现 (不可移除) — 记忆整理管道; 第三方可实现 DreamProvider 覆盖 (Dream mode built-in (non-removable) — memory consolidation; third-party DreamProvider can override)"),
         "evolution-plugin" to ("智能体进化" to "智能体进化内置默认实现 (不可移除) — 失败模式库/省察引导/框架反馈; 第三方可实现 EvolutionProvider 覆盖 (Agent Evolution built-in (non-removable) — failure library/reflection guides/framework feedback; third-party EvolutionProvider can override)"),
         "concise-plugin" to ("言简意赅" to "去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），让模型回答更简洁 (Removes structural-output noise from the system prompt (forced Thought/Action boilerplate, Markdown decoration) for cleaner answers)"),
+        "termux-plugin" to ("Termux 桥" to "通过 Termux 登录 ubuntu 执行命令与 conda 环境 Python — 逐层探测/脚本执行/输出回传 (Termux bridge — run commands/Python inside Termux+ubuntu+miniconda, with layer detection and output retrieval)"),
         "tavily-plugin" to ("AI 搜索" to "Tavily AI 优化搜索引擎 — 结构化搜索结果 + 网页正文提取，Agent 原生搜索能力 (Tavily AI-optimized search — structured results + web content extraction, Agent's native search)")
     )
 
@@ -126,6 +128,7 @@ object PluginRegistrar {
         PluginViewModel.registerPluginClass("dev-plugin", "com.mengpaw.plugin.dev.DevPlugin")
         PluginViewModel.registerPluginClass("memory-twin-plugin", "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin")
         PluginViewModel.registerPluginClass("root-plugin", "com.mengpaw.plugin.root.RootPlugin")
+        PluginViewModel.registerPluginClass("termux-plugin", "com.mengpaw.plugin.termux.TermuxPlugin")
         PluginViewModel.registerPluginClass("tribe-plugin", "com.mengpaw.plugin.hermes.TribePlugin")
         PluginViewModel.registerPluginClass("tools-plugin", "com.mengpaw.plugin.agenttools.AgentToolsPlugin")
         PluginViewModel.registerPluginClass("dream-plugin", "com.mengpaw.plugin.dream.DreamPlugin")
@@ -146,6 +149,7 @@ object PluginRegistrar {
         "dream-plugin" to com.mengpaw.plugin.dream.DreamPlugin(),
         "evolution-plugin" to com.mengpaw.plugin.evolution.EvolutionPlugin(),
         "concise-plugin" to com.mengpaw.plugin.concise.ConcisePlugin(),
+        "termux-plugin" to com.mengpaw.plugin.termux.TermuxPlugin(),
         "tavily-plugin" to TavilyPlugin(),
     )
 
