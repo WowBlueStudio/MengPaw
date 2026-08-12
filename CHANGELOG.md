@@ -33,7 +33,8 @@
 
 ### 发行
 - Shell APK: `mengpaw-shell-v0.37.0-release.apk` (versionCode 37000)
-- 仅 Shell 变更 (browser 无变更不构建); plugins.json 无变更
+- 仅 Shell 变更 (browser 无变更不构建); plugins.json 随 v0.37.0 同步回写
+  (14 内置插件 checksum/size/changelog), 插件 AAR 上传 plugins-v0.37.0 Release
 - 测试: 全量双套 1280 用例 0 failures (kernel 562 + core 90 + shell 170 +
   browser 42 + 插件 416)
 - 崩溃巡检 (发布前, 双设备 dropbox): vivo 侧 0.31~0.35.3 历史崩溃均闭环
