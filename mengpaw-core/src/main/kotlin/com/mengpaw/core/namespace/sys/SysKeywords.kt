@@ -85,6 +85,7 @@ internal val SYS_KEYWORDS_ZH: Map<String, List<String>> = mapOf(
     "calllog.list" to listOf("通话记录", "通话历史", "呼叫记录"),
     "phone.call" to listOf("拨打电话", "拨号", "打电话"),
     "download" to listOf("下载", "下载文件", "下载任务"),
+    "download.status" to listOf("下载状态", "下载进度", "查询下载"),
     "wallpaper.set" to listOf("壁纸", "设置壁纸", "换壁纸"),
     "toast" to listOf("提示", "气泡提示", "toast"),
     "wakelock.acquire" to listOf("唤醒锁", "保持唤醒", "不熄屏"),

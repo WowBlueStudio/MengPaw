@@ -53,6 +53,55 @@ internal object DownloadWallpaperExecutor {
         }
     }
 
+    /** 查询下载任务状态 (P1 修复: 下载中断/失败 Agent 可验证, 对齐 DownloadManager.Query)。 */
+    suspend fun downloadStatus(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        val app = SysExecutor.appContext
+            ?: return ExecutionResult.fail("SysExecutor not initialized", errorCode = ErrorCodes.ERR_INTERNAL)
+        val id = args.firstOrNull()?.toLongOrNull()
+            ?: return ExecutionResult.fail(
+                "Usage: sys.download.status <下载ID> (ID 来自 sys.download 返回值)",
+                errorCode = ErrorCodes.ERR_INVALID_INPUT
+            )
+        val dm = app.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
+            ?: return ExecutionResult.fail("DownloadManager 不可用", errorCode = ErrorCodes.ERR_INTERNAL)
+        return try {
+            val cursor = dm.query(DownloadManager.Query().setFilterById(id))
+            cursor.use {
+                if (!it.moveToFirst()) {
+                    return ExecutionResult.fail("未找到下载任务 id=$id (可能已被系统清理)", errorCode = ErrorCodes.ERR_NOT_FOUND)
+                }
+                fun colInt(name: String): Int? {
+                    val idx = it.getColumnIndex(name)
+                    return if (idx >= 0) it.getInt(idx) else null
+                }
+                fun colString(name: String): String? {
+                    val idx = it.getColumnIndex(name)
+                    return if (idx >= 0) it.getString(idx) else null
+                }
+                val status = colInt(DownloadManager.COLUMN_STATUS)
+                val statusText = when (status) {
+                    DownloadManager.STATUS_PENDING -> "排队中"
+                    DownloadManager.STATUS_RUNNING -> "下载中"
+                    DownloadManager.STATUS_PAUSED -> "已暂停"
+                    DownloadManager.STATUS_SUCCESSFUL -> "已完成"
+                    DownloadManager.STATUS_FAILED -> "失败"
+                    else -> "未知 (${status ?: -1})"
+                }
+                val reason = colInt(DownloadManager.COLUMN_REASON)
+                val reasonText = if (status == DownloadManager.STATUS_FAILED) " (原因码 ${reason ?: -1})" else ""
+                val title = colString(DownloadManager.COLUMN_TITLE) ?: id.toString()
+                val total = colInt(DownloadManager.COLUMN_TOTAL_SIZE_BYTES) ?: 0
+                val received = colInt(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR) ?: 0
+                val url = colString(DownloadManager.COLUMN_URI) ?: ""
+                ExecutionResult.ok(
+                    "id=$id | $title | $statusText$reasonText | ${received}/${total} bytes | $url"
+                )
+            }
+        } catch (e: Exception) {
+            ExecutionResult.fail("查询下载状态失败: ${e.message}", errorCode = ErrorCodes.ERR_IO)
+        }
+    }
+
     suspend fun wallpaperSet(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val app = SysExecutor.appContext
             ?: return ExecutionResult.fail("SysExecutor not initialized", errorCode = ErrorCodes.ERR_INTERNAL)

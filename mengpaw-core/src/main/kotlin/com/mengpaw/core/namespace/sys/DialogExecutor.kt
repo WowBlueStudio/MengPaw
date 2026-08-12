@@ -3,6 +3,7 @@
 
 package com.mengpaw.core.namespace.sys
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.DatePickerDialog
@@ -12,11 +13,13 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.NumberPicker
 import com.mengpaw.core.namespace.SysExecutor
+import com.mengpaw.core.namespace.checkSelf
 import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import java.util.Calendar
 import java.util.Locale
 
@@ -25,25 +28,31 @@ import java.util.Locale
  *
  * 全部命令为挂起式: 弹窗后等待用户确认/取消/超时 (默认 120s), 期间阻塞 Agent。
  * 并发互斥: 同一时间只允许一个对话框 (dialogLock), 重复调用直接失败。
- * 输出格式: "key: value" 纯文本, 取消/超时返回 ERR_TIMEOUT。
+ * 输出格式: "key: value" 纯文本; 失败按原因区分 (取消/超时/无 Activity/在途)。
  */
 internal object DialogExecutor {
 
     private const val DIALOG_TIMEOUT_MS = 120_000L
 
+    /** 对话框结局 — 供命令区分失败原因 (P2 修复: 原统一 ERR_TIMEOUT, Agent 无法区分)。 */
+    private enum class DialogOutcome { SUCCESS, CANCELED, TIMEOUT, NO_ACTIVITY, BUSY }
+
+    private data class DialogResult(val outcome: DialogOutcome, val text: String? = null)
+
     private val dialogLock = Any()
     private var pending: CompletableDeferred<String?>? = null
     private var currentDialog: Dialog? = null
 
-    /** 在 Activity 上弹对话框并挂起等待结果; null = 取消/超时/无前台 Activity/已有对话框在途。 */
+    /** 在 Activity 上弹对话框并挂起等待结果, 返回带结局的 [DialogResult]。 */
     private suspend fun awaitUserInput(
         timeoutMs: Long,
         show: (Activity, (String?) -> Unit) -> Dialog?
-    ): String? {
-        val activity = SysExecutor.currentActivity?.get() ?: return null
+    ): DialogResult {
+        val activity = SysExecutor.currentActivity?.get()
+            ?: return DialogResult(DialogOutcome.NO_ACTIVITY)
         val deferred = CompletableDeferred<String?>()
         synchronized(dialogLock) {
-            if (pending != null) return null
+            if (pending != null) return DialogResult(DialogOutcome.BUSY)
             pending = deferred
         }
         try {
@@ -58,16 +67,37 @@ internal object DialogExecutor {
                     deferred.complete("error: ${e.message}")
                 }
             }
-            val result = withTimeoutOrNull(timeoutMs) { deferred.await() }
-            if (result == null) {
+            val result = try {
+                withTimeout(timeoutMs) { deferred.await() }
+            } catch (e: TimeoutCancellationException) {
                 activity.runOnUiThread {
                     synchronized(dialogLock) { currentDialog?.dismiss() }
                 }
+                return DialogResult(DialogOutcome.TIMEOUT)
             }
-            return result
+            return if (result == null) DialogResult(DialogOutcome.CANCELED)
+            else DialogResult(DialogOutcome.SUCCESS, result)
         } finally {
             synchronized(dialogLock) { pending = null }
         }
+    }
+
+    /** 统一把对话框结局翻译为 ExecutionResult (文本区分取消/超时/无 Activity/在途)。 */
+    private fun outcomeResult(result: DialogResult): ExecutionResult = when (result.outcome) {
+        DialogOutcome.SUCCESS -> ExecutionResult.ok(result.text.orEmpty())
+        DialogOutcome.CANCELED -> ExecutionResult.fail("用户取消了对话框")
+        DialogOutcome.TIMEOUT -> ExecutionResult.fail(
+            "对话框等待超时 (${DIALOG_TIMEOUT_MS / 1000}s)",
+            errorCode = ErrorCodes.ERR_TIMEOUT
+        )
+        DialogOutcome.NO_ACTIVITY -> ExecutionResult.fail(
+            "当前无前台 Activity, 无法弹出对话框 (请先回到 MengPaw 界面)",
+            errorCode = ErrorCodes.ERR_PERMISSION_DENIED
+        )
+        DialogOutcome.BUSY -> ExecutionResult.fail(
+            "已有对话框在途, 请等待当前对话框结束后再试",
+            errorCode = ErrorCodes.ERR_INTERNAL
+        )
     }
 
     /** 解析逗号分隔选项列表 (LLM 友好, 支持 "a, b" 或 "a,b,c")。 */
@@ -85,7 +115,7 @@ internal object DialogExecutor {
                 .setOnCancelListener { done(null) }
                 .show()
         }
-        return result?.let { ExecutionResult.ok(it) } ?: failCanceled()
+        return outcomeResult(result)
     }
 
     suspend fun text(args: List<String>, ec: ExecutionContext): ExecutionResult {
@@ -111,7 +141,7 @@ internal object DialogExecutor {
                 .setOnCancelListener { done(null) }
                 .show()
         }
-        return result?.let { ExecutionResult.ok(it) } ?: failCanceled()
+        return outcomeResult(result)
     }
 
     suspend fun radio(args: List<String>, ec: ExecutionContext): ExecutionResult {
@@ -135,7 +165,7 @@ internal object DialogExecutor {
                 .setOnCancelListener { done(null) }
                 .show()
         }
-        return result?.let { ExecutionResult.ok(it) } ?: failCanceled()
+        return outcomeResult(result)
     }
 
     suspend fun checkbox(args: List<String>, ec: ExecutionContext): ExecutionResult {
@@ -162,7 +192,7 @@ internal object DialogExecutor {
                 .setOnCancelListener { done(null) }
                 .show()
         }
-        return result?.let { ExecutionResult.ok(it) } ?: failCanceled()
+        return outcomeResult(result)
     }
 
     suspend fun spinner(args: List<String>, ec: ExecutionContext): ExecutionResult {
@@ -184,7 +214,7 @@ internal object DialogExecutor {
                 .setOnCancelListener { done(null) }
                 .show()
         }
-        return result?.let { ExecutionResult.ok(it) } ?: failCanceled()
+        return outcomeResult(result)
     }
 
     suspend fun sheet(args: List<String>, ec: ExecutionContext): ExecutionResult {
@@ -203,7 +233,7 @@ internal object DialogExecutor {
                 .setOnCancelListener { done(null) }
                 .show()
         }
-        return result?.let { ExecutionResult.ok(it) } ?: failCanceled()
+        return outcomeResult(result)
     }
 
     suspend fun date(args: List<String>, ec: ExecutionContext): ExecutionResult {
@@ -221,7 +251,7 @@ internal object DialogExecutor {
             dialog.show()
             dialog
         }
-        return result?.let { ExecutionResult.ok(it) } ?: failCanceled()
+        return outcomeResult(result)
     }
 
     suspend fun time(args: List<String>, ec: ExecutionContext): ExecutionResult {
@@ -239,7 +269,7 @@ internal object DialogExecutor {
             dialog.show()
             dialog
         }
-        return result?.let { ExecutionResult.ok(it) } ?: failCanceled()
+        return outcomeResult(result)
     }
 
     suspend fun counter(args: List<String>, ec: ExecutionContext): ExecutionResult {
@@ -268,7 +298,7 @@ internal object DialogExecutor {
                 .setOnCancelListener { done(null) }
                 .show()
         }
-        return result?.let { ExecutionResult.ok(it) } ?: failCanceled()
+        return outcomeResult(result)
     }
 
     /** 预设色板 (Termux dialog color 为自由取色, MengPaw 简化为常用色)。 */
@@ -288,13 +318,22 @@ internal object DialogExecutor {
                 .setOnCancelListener { done(null) }
                 .show()
         }
-        return result?.let { ExecutionResult.ok(it) } ?: failCanceled()
+        return outcomeResult(result)
     }
 
     /** 语音输入对话框 — 复用 SpeechExecutor 的 RecognizerIntent 桥。 */
     suspend fun speech(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val activity = SysExecutor.currentActivity?.get()
             ?: return ExecutionResult.fail("当前无前台 Activity, 无法发起语音识别", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        val app = SysExecutor.appContext
+            ?: return ExecutionResult.fail("SysExecutor not initialized", errorCode = ErrorCodes.ERR_INTERNAL)
+        // P1 修复: 缺 RECORD_AUDIO 时前置引导, 不再误报"取消/超时" (与 stt.listen 对齐)。
+        if (!app.checkSelf(Manifest.permission.RECORD_AUDIO)) {
+            return ExecutionResult.fail(
+                "需要 RECORD_AUDIO 权限。请先执行 sys.permission.request RECORD_AUDIO",
+                errorCode = ErrorCodes.ERR_PERMISSION_DENIED
+            )
+        }
         val prompt = args.firstOrNull() ?: "请说出内容"
         val text = SpeechExecutor.speechToText(activity, prompt, DIALOG_TIMEOUT_MS)
         return if (text == null) {
@@ -303,7 +342,4 @@ internal object DialogExecutor {
             ExecutionResult.ok("text: $text")
         }
     }
-
-    private fun failCanceled(): ExecutionResult =
-        ExecutionResult.fail("对话框已取消、超时或无前台 Activity", errorCode = ErrorCodes.ERR_TIMEOUT)
 }

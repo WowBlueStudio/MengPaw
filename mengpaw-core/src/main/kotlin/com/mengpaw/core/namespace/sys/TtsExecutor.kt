@@ -79,12 +79,16 @@ internal object TtsExecutor {
     suspend fun ttsEngines(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val app = SysExecutor.appContext
             ?: return ExecutionResult.fail("SysExecutor not initialized", errorCode = ErrorCodes.ERR_INTERNAL)
+        // P2 修复: 实例用完必须 shutdown, 否则 TextToSpeech 引擎资源泄漏。
+        val tts = TextToSpeech(app, null)
         return try {
-            val engines = TextToSpeech(app, null).engines
+            val engines = tts.engines
             val lines = engines.map { "${it.name} | ${it.label}" }
             ExecutionResult.ok(if (lines.isEmpty()) "(无 TTS 引擎)" else lines.joinToString("\n"))
         } catch (e: Exception) {
             ExecutionResult.fail("获取 TTS 引擎失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        } finally {
+            try { tts.shutdown() } catch (_: Exception) {}
         }
     }
 }

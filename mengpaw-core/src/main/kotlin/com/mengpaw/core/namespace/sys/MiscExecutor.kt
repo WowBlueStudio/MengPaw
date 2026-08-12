@@ -170,7 +170,16 @@ internal object MiscExecutor {
             try { app.unregisterReceiver(receiver) } catch (_: Exception) {}
             return ExecutionResult.fail("USB 授权请求失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
         }
-        val granted = withTimeoutOrNull(30_000L) { deferred.await() } ?: false
+        // P2 修复: 超时后立即注销 receiver 并清理在途标记, 避免接收器悬挂到用户下次响应。
+        val granted = withTimeoutOrNull(30_000L) { deferred.await() }
+        if (granted == null) {
+            synchronized(usbLock) {
+                usbPending?.complete(false)
+                usbPending = null
+            }
+            try { app.unregisterReceiver(receiver) } catch (_: Exception) {}
+            return ExecutionResult.fail("USB 授权等待超时 (30s)", errorCode = ErrorCodes.ERR_TIMEOUT)
+        }
         if (granted) {
             return ExecutionResult.ok("已获得 USB 设备访问权限: $name")
         }

@@ -36,7 +36,7 @@ import com.mengpaw.core.namespace.sys.TtsExecutor
 /**
  * Android system executor — exposes real device capabilities to Agent.
  *
- * ## Command groups (84 commands)
+ * ## Command groups (85 commands)
  * Delegates to domain executors in [com.mengpaw.core.namespace.sys].
  *
  * ```
@@ -85,6 +85,7 @@ import com.mengpaw.core.namespace.sys.TtsExecutor
  * sys.calllog.list   通话记录
  * sys.phone.call     拨打电话
  * sys.download       下载文件
+ * sys.download.status  查询下载任务状态
  * sys.wallpaper.set  设置壁纸
  * sys.toast          气泡提示
  * sys.wakelock.acquire  获取唤醒锁
@@ -307,6 +308,7 @@ object SysExecutor {
         // ── Misc device (通知列表/下载/壁纸/toast/wakelock/红外/USB/WiFi 扫描) ──
         "notification.list" to NotificationExecutor::notificationList,
         "download" to DownloadWallpaperExecutor::download,
+        "download.status" to DownloadWallpaperExecutor::downloadStatus,
         "wallpaper.set" to DownloadWallpaperExecutor::wallpaperSet,
         "toast" to MiscExecutor::toast,
         "wakelock.acquire" to MiscExecutor::wakelockAcquire,
