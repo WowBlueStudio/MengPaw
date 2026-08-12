@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.37.0 | **更新**: 2026-08-12 | **开发**: Codex | **架构**: 微内核(123文件) + AgentRuntime + 14插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.8.0
+> **版本**: 0.37.1 | **更新**: 2026-08-12 | **开发**: Codex | **架构**: 微内核(123文件) + AgentRuntime + 14插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.*) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 浏览器 v0.8.0
 
 ---
 
@@ -538,7 +538,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 本地模块 1280 测试，v0.37.0 实测快照：kernel 562 + core 90 + shell 170 + browser 42 + 插件 416，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 新增 ThinkingProcessWriterTest 4 用例 (全量双套 +8)，shell 148 → 156；v0.36.3 新增 StreamPlaybackBufferTest 5 用例 + ThinkingProcessWriterTest 2 用例 (全量双套 +14)，shell 156 → 170；v0.36.3 新增 plugin-termux (11 用例) + CommandMonitor evaluateRulesOnly 4 用例，插件 394 → 405；v0.37.0 无新增用例 (sys.* 补全仅改断言 51→85/14→19)，插件 405 → 416 系口径修正 (plugin-termux 双套 22)；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
+### 3.7 测试 (16 本地模块 1292 测试，v0.37.1 实测快照：kernel 562 + core 90 + shell 182 + browser 42 + 插件 416，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 新增 ThinkingProcessWriterTest 4 用例 (全量双套 +8)，shell 148 → 156；v0.36.3 新增 StreamPlaybackBufferTest 5 用例 + ThinkingProcessWriterTest 2 用例 (全量双套 +14)，shell 156 → 170；v0.36.3 新增 plugin-termux (11 用例) + CommandMonitor evaluateRulesOnly 4 用例，插件 394 → 405；v0.37.0 无新增用例 (sys.* 补全仅改断言 51→85/14→19)，插件 405 → 416 系口径修正 (plugin-termux 双套 22)；v0.37.1 新增 TokenStatsCollectorTest 6 用例 (全量双套 +12)，shell 170 → 182；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
