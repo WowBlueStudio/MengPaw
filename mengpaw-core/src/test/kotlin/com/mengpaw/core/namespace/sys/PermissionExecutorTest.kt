@@ -68,7 +68,7 @@ class PermissionExecutorTest {
 
     @Test
     fun 清单条目数符合Manifest对齐规模() {
-        // 14 项 = Manifest <uses-permission> 中全部可展示权限 (维护规则: 与 Manifest 一一对应)
-        assertEquals(14, labels.size)
+        // 19 项 = 原 14 + sys.* 敏感命令组 5 项 (SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE)
+        assertEquals(19, labels.size)
     }
 }

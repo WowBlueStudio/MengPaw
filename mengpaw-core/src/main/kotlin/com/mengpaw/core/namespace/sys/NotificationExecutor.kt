@@ -98,6 +98,22 @@ internal object NotificationExecutor {
         return ExecutionResult.ok("Notification #$id cancelled")
     }
 
+    /** 读取系统可见通知 — 数据来自 MengPawNotificationListener (需用户开启『通知使用权』)。 */
+    suspend fun notificationList(args: List<String>, ec: ExecutionContext): ExecutionResult {
+        val app = SysExecutor.appContext ?: return ExecutionResult.fail("SysExecutor not initialized")
+        if (!MengPawNotificationListener.isAuthorized(app)) {
+            return ExecutionResult.fail(
+                "需要『通知使用权』(非运行时权限, 无法自动申请)。请引导用户: 设置 → 通知使用权 → 开启 MengPaw。" +
+                    "开启后 Agent 可读取系统通知。",
+                errorCode = ErrorCodes.ERR_PERMISSION_DENIED
+            )
+        }
+        val list = MengPawNotificationListener.snapshot()
+        return ExecutionResult.ok(
+            if (list.isEmpty()) "(当前无可见通知)" else list.joinToString("\n\n")
+        )
+    }
+
     suspend fun alarmSet(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val app = SysExecutor.appContext ?: return ExecutionResult.fail("SysExecutor not initialized")
         if (args.size < 2) return ExecutionResult.fail("Usage: sys.alarm.set <seconds> <message>")

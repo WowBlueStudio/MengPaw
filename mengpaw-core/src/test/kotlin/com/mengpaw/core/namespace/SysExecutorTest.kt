@@ -13,7 +13,7 @@ import java.util.regex.Pattern
  * SysExecutor 命令表测试 — object 初始化不触达 Android API (命令映射为方法引用,
  * init 块仅向纯 JVM 的 CommandSearch 内存索引注册), 可直接读取 commands 表。
  *
- * 覆盖: 命令数量与文档一致 (51)、键唯一且命名规范、PERMISSION_MAP 引用的命令真实存在、
+ * 覆盖: 命令数量与文档一致 (84)、键唯一且命名规范、PERMISSION_MAP 引用的命令真实存在、
  * 中文同义词表非空无空词 (搜索索引质量冒烟)。
  */
 class SysExecutorTest {
@@ -23,7 +23,7 @@ class SysExecutorTest {
 
     @Test
     fun 命令表非空且数量与文档一致() {
-        assertEquals("命令数量与 SysExecutor 头注 51 条一致", 51, commands.size)
+        assertEquals("命令数量与 SysExecutor 头注 84 条一致", 84, commands.size)
     }
 
     @Test
@@ -67,20 +67,16 @@ class SysExecutorTest {
     fun 中文同义词表覆盖所有命令且无空词() {
         val keywords = zhKeywords
         commands.keys.forEach { name ->
-            val entry = keywords[name]
-            assertTrue("命令 '$name' 缺少同义词条目 (搜索索引漂移)", entry != null && entry.isNotEmpty())
-            entry!!.forEach { kw -> assertTrue("同义词不得为空: $name", kw.isNotBlank()) }
+            assertTrue("命令 '$name' 缺少同义词条目 (搜索索引漂移)", keywords[name]?.isNotEmpty() == true)
+            keywords[name]?.forEach { kw -> assertTrue("同义词不得为空: $name", kw.isNotBlank()) }
         }
     }
 
     companion object {
         private val COMMAND_NAME_PATTERN = Pattern.compile("[a-z0-9]+(\\.[a-z0-9]+)*")
 
-        @Suppress("UNCHECKED_CAST")
-        private val zhKeywords: Map<String, List<String>> by lazy {
-            val field = SysExecutor::class.java.getDeclaredField("SYS_KEYWORDS_ZH")
-            field.isAccessible = true
-            field.get(SysExecutor) as Map<String, List<String>>
-        }
+        /** 同义词表自 v0.36.x 拆至独立文件 (守 400 行红线), 直接引用避免反射耦合。 */
+        private val zhKeywords: Map<String, List<String>> =
+            com.mengpaw.core.namespace.sys.SYS_KEYWORDS_ZH
     }
 }

@@ -41,6 +41,12 @@ internal object PermissionExecutor {
         Manifest.permission.READ_MEDIA_IMAGES,
         Manifest.permission.READ_CALENDAR,
         Manifest.permission.WRITE_CALENDAR,
+        // v0.36.x sys.* 敏感命令组 (风险等级 MID, TRUSTED 放行)
+        Manifest.permission.SEND_SMS,
+        Manifest.permission.READ_SMS,
+        Manifest.permission.READ_CONTACTS,
+        Manifest.permission.READ_CALL_LOG,
+        Manifest.permission.CALL_PHONE,
     )
 
     private val SETTINGS_PERMISSIONS = setOf(
@@ -64,6 +70,11 @@ internal object PermissionExecutor {
         Manifest.permission.REQUEST_INSTALL_PACKAGES to "安装应用",
         Manifest.permission.READ_CALENDAR to "读取日历",
         Manifest.permission.WRITE_CALENDAR to "写入日历",
+        Manifest.permission.SEND_SMS to "发送短信",
+        Manifest.permission.READ_SMS to "读取短信",
+        Manifest.permission.READ_CONTACTS to "读取联系人",
+        Manifest.permission.READ_CALL_LOG to "读取通话记录",
+        Manifest.permission.CALL_PHONE to "拨打电话",
     )
 
     private val PERMISSION_GUIDE = mapOf(
@@ -72,6 +83,11 @@ internal object PermissionExecutor {
         Manifest.permission.CAMERA to "相机权限。使用 sys.permission.request CAMERA 申请。",
         Manifest.permission.ACCESS_FINE_LOCATION to "GPS 精确定位。使用 sys.permission.request ACCESS_FINE_LOCATION 申请。",
         Manifest.permission.RECORD_AUDIO to "录音权限。使用 sys.permission.request RECORD_AUDIO 申请。",
+        Manifest.permission.SEND_SMS to "发送短信权限 (sys.sms.send)。使用 sys.permission.request SEND_SMS 申请。",
+        Manifest.permission.READ_SMS to "读取短信权限 (sys.sms.list)。使用 sys.permission.request READ_SMS 申请。",
+        Manifest.permission.READ_CONTACTS to "读取联系人权限 (sys.contacts.list)。使用 sys.permission.request READ_CONTACTS 申请。",
+        Manifest.permission.READ_CALL_LOG to "读取通话记录权限 (sys.calllog.list)。使用 sys.permission.request READ_CALL_LOG 申请。",
+        Manifest.permission.CALL_PHONE to "拨打电话权限 (sys.phone.call)。使用 sys.permission.request CALL_PHONE 申请。",
     )
 
     private fun requireApp(): Context? = SysExecutor.appContext

@@ -3,7 +3,6 @@
 
 package com.mengpaw.core.namespace
 
-import android.Manifest
 import android.app.Activity
 import android.content.Context
 import androidx.core.content.FileProvider
@@ -16,18 +15,28 @@ import com.mengpaw.core.namespace.sys.BatteryPowerExecutor
 import com.mengpaw.core.namespace.sys.CalendarExecutor
 import com.mengpaw.core.namespace.sys.ClipboardIntentExecutor
 import com.mengpaw.core.namespace.sys.DeviceExecutor
+import com.mengpaw.core.namespace.sys.DialogExecutor
+import com.mengpaw.core.namespace.sys.DownloadWallpaperExecutor
+import com.mengpaw.core.namespace.sys.ContactsSmsExecutor
 import com.mengpaw.core.namespace.sys.MediaExecutor
+import com.mengpaw.core.namespace.sys.MicExecutor
+import com.mengpaw.core.namespace.sys.MiscExecutor
 import com.mengpaw.core.namespace.sys.NetworkExecutor
 import com.mengpaw.core.namespace.sys.NotificationExecutor
 import com.mengpaw.core.namespace.sys.OverlayExecutor
 import com.mengpaw.core.namespace.sys.PermissionExecutor
 import com.mengpaw.core.namespace.sys.ScreenCaptureExecutor
 import com.mengpaw.core.namespace.sys.SensorLocationExecutor
+import com.mengpaw.core.namespace.sys.SpeechExecutor
+import com.mengpaw.core.namespace.sys.SYS_KEYWORDS_ZH
+import com.mengpaw.core.namespace.sys.SYS_PERMISSION_MAP
+import com.mengpaw.core.namespace.sys.TorchExecutor
+import com.mengpaw.core.namespace.sys.TtsExecutor
 
 /**
  * Android system executor — exposes real device capabilities to Agent.
  *
- * ## Command groups (51 commands)
+ * ## Command groups (84 commands)
  * Delegates to domain executors in [com.mengpaw.core.namespace.sys].
  *
  * ```
@@ -51,6 +60,39 @@ import com.mengpaw.core.namespace.sys.SensorLocationExecutor
  * sys.screenrecord.start  开始录屏
  * sys.screenrecord.stop   停止录屏
  * sys.camera.photo   拍照
+ * sys.dialog.confirm 确认对话框
+ * sys.dialog.text    文本输入对话框
+ * sys.dialog.radio   单选对话框
+ * sys.dialog.checkbox 多选对话框
+ * sys.dialog.spinner 下拉选择对话框
+ * sys.dialog.sheet   底部选项列表
+ * sys.dialog.date    日期选择
+ * sys.dialog.time    时间选择
+ * sys.dialog.counter 数值选择
+ * sys.dialog.color   颜色选择
+ * sys.dialog.speech  语音输入对话框
+ * sys.tts.speak      文字转语音朗读
+ * sys.tts.engines    列出 TTS 引擎
+ * sys.stt.listen     语音转文字
+ * sys.mic.record     麦克风录音
+ * sys.mic.stop       停止录音
+ * sys.torch.on       打开手电筒
+ * sys.torch.off      关闭手电筒
+ * sys.notification.list 读取系统通知
+ * sys.contacts.list  联系人列表
+ * sys.sms.send       发送短信
+ * sys.sms.list       短信收件箱
+ * sys.calllog.list   通话记录
+ * sys.phone.call     拨打电话
+ * sys.download       下载文件
+ * sys.wallpaper.set  设置壁纸
+ * sys.toast          气泡提示
+ * sys.wakelock.acquire  获取唤醒锁
+ * sys.wakelock.release  释放唤醒锁
+ * sys.ir.transmit    红外发射
+ * sys.usb.list       USB 设备列表
+ * sys.usb.request    USB 访问授权
+ * sys.wifi.scan      WiFi 热点扫描
  * sys.volume         音量
  * sys.volume.set     设置音量
  * sys.apps           已安装应用
@@ -95,62 +137,6 @@ object SysExecutor {
         appContext = context.applicationContext
     }
 
-    /** sys.* 命令中文同义词表 — 补 BM25 搜索索引用 (kernel 静态种子无 sys, 反射 Android API)。
-     *  缺失项回退命令名分词。 */
-    private val SYS_KEYWORDS_ZH = mapOf(
-        "device" to listOf("设备", "型号", "厂商", "系统", "安卓"),
-        "battery" to listOf("电量", "电池", "充电", "温度", "续航"),
-        "power" to listOf("电源", "省电", "功耗", "充电"),
-        "power.save" to listOf("省电", "省电模式", "功耗", "节能"),
-        "network" to listOf("网络", "信号", "数据", "蜂窝"),
-        "wifi" to listOf("WIFI", "无线", "热点"),
-        "wifi.enable" to listOf("开WIFI", "关WIFI", "切换无线"),
-        "bluetooth" to listOf("蓝牙", "配对"),
-        "location" to listOf("定位", "位置", "GPS", "坐标"),
-        "cpu" to listOf("CPU", "处理器", "占用", "性能"),
-        "memory" to listOf("内存", "RAM", "占用"),
-        "storage" to listOf("存储", "空间", "磁盘"),
-        "camera" to listOf("相机", "摄像头", "拍照"),
-        "sensors" to listOf("传感器", "陀螺仪", "加速计"),
-        "display" to listOf("屏幕", "分辨率", "亮度", "显示"),
-        "telephony" to listOf("电话", "运营商", "SIM", "信号"),
-        "screen.on" to listOf("亮屏", "唤醒屏幕", "开屏"),
-        "screen.off" to listOf("熄屏", "关屏", "锁屏"),
-        "screen.brightness" to listOf("亮度", "调亮度", "屏幕亮度"),
-        "volume" to listOf("音量", "声音", "媒体音量"),
-        "volume.set" to listOf("调音量", "设置音量", "静音"),
-        "vibrate" to listOf("震动", "振动", "马达"),
-        "ringtone.play" to listOf("铃声", "播放铃声", "响铃"),
-        "apps" to listOf("应用", "应用列表", "已安装", "APP"),
-        "app.launch" to listOf("打开应用", "启动", "启动应用", "运行"),
-        "app.uninstall" to listOf("卸载应用", "卸载"),
-        "app.info" to listOf("应用详情", "应用信息"),
-        "browser.open" to listOf("打开浏览器", "浏览器", "网页", "唤起"),
-        "clipboard" to listOf("剪贴板", "复制", "粘贴", "内容"),
-        "clipboard.set" to listOf("写剪贴板", "复制内容"),
-        "intent.open" to listOf("打开链接", "intent", "跳转", "协议"),
-        "intent.share" to listOf("分享", "分享文本", "转发"),
-        "intent.view" to listOf("查看", "打开文件"),
-        "notification.id" to listOf("通知ID", "通知标识"),
-        "notification.send" to listOf("发通知", "通知", "推送消息"),
-        "notification.cancel" to listOf("取消通知", "清除通知"),
-        "alarm.set" to listOf("闹钟", "定时提醒", "设置闹钟"),
-        "permission.list" to listOf("权限列表", "权限", "已授权"),
-        "permission.check" to listOf("检查权限", "权限状态"),
-        "permission.request" to listOf("申请权限", "请求权限", "授权"),
-        "overlay.show" to listOf("悬浮窗", "显示悬浮窗", "弹窗"),
-        "overlay.hide" to listOf("隐藏悬浮窗", "关闭悬浮窗"),
-        "overlay.update" to listOf("更新悬浮窗", "刷新悬浮窗"),
-        "calendar.add" to listOf("日历", "添加事件", "日程", "提醒"),
-        "calendar.list" to listOf("日历列表", "日程", "查看事件"),
-        "calendar.delete" to listOf("删除事件", "删除日程"),
-        "calendar.calendars" to listOf("日历账户", "日历列表"),
-        "screenshot" to listOf("截图", "截屏", "屏幕快照"),
-        "screenrecord.start" to listOf("录屏", "屏幕录制", "录视频", "开始录屏"),
-        "screenrecord.stop" to listOf("停止录屏", "结束录屏", "保存视频"),
-        "camera.photo" to listOf("拍照", "拍摄", "照片", "相机拍照")
-    )
-
     /** Set the current Activity reference for runtime permission dialogs. Uses WeakReference to prevent leaks. */
     fun setActivity(activity: Activity?) {
         currentActivity = activity?.let { WeakReference(it) }
@@ -188,6 +174,42 @@ object SysExecutor {
         synchronized(projectionLock) {
             if (projectionRequest != null) return null // 已有授权请求在途, 拒绝并发
             projectionRequest = deferred
+        }
+        launcher(intent)
+        return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { deferred.await() }
+    }
+
+    // ── 语音识别授权桥 (sys.stt.listen / sys.dialog.speech) ──
+    // 与 projection 桥同模式: MainActivity 注册 ActivityResultLauncher 并经
+    // [setSpeechLauncher] 注入; 命令协程经 [requestSpeech] 挂起等待识别结果。
+    @Volatile
+    private var speechLauncher: ((android.content.Intent) -> Unit)? = null
+
+    private var speechRequest: kotlinx.coroutines.CompletableDeferred<Pair<Int, android.content.Intent?>>? = null
+    private val speechLock = Any()
+
+    /** MainActivity 注入语音识别 launcher (ActivityResultLauncher 必须在 Activity 启动前注册). */
+    fun setSpeechLauncher(launcher: (android.content.Intent) -> Unit) {
+        speechLauncher = launcher
+    }
+
+    /** MainActivity launcher 回调转发 — 完成等待中的识别请求. */
+    fun onSpeechResult(resultCode: Int, data: android.content.Intent?) {
+        synchronized(speechLock) {
+            speechRequest?.complete(resultCode to data)
+            speechRequest = null
+        }
+    }
+
+    /** 发起系统语音识别并等待用户结果. @return (resultCode, data) 或 null (超时/无 launcher/已在途). */
+    internal suspend fun requestSpeech(
+        intent: android.content.Intent, timeoutMs: Long
+    ): Pair<Int, android.content.Intent?>? {
+        val launcher = speechLauncher ?: return null
+        val deferred = kotlinx.coroutines.CompletableDeferred<Pair<Int, android.content.Intent?>>()
+        synchronized(speechLock) {
+            if (speechRequest != null) return null // 已有识别请求在途, 拒绝并发
+            speechRequest = deferred
         }
         launcher(intent)
         return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { deferred.await() }
@@ -256,6 +278,43 @@ object SysExecutor {
         "screenrecord.start" to ScreenCaptureExecutor::screenRecordStart,
         "screenrecord.stop" to ScreenCaptureExecutor::screenRecordStop,
         "camera.photo" to ScreenCaptureExecutor::cameraPhoto,
+        // ── Dialog (user interaction) ──
+        "dialog.confirm" to DialogExecutor::confirm,
+        "dialog.text" to DialogExecutor::text,
+        "dialog.radio" to DialogExecutor::radio,
+        "dialog.checkbox" to DialogExecutor::checkbox,
+        "dialog.spinner" to DialogExecutor::spinner,
+        "dialog.sheet" to DialogExecutor::sheet,
+        "dialog.date" to DialogExecutor::date,
+        "dialog.time" to DialogExecutor::time,
+        "dialog.counter" to DialogExecutor::counter,
+        "dialog.color" to DialogExecutor::color,
+        "dialog.speech" to DialogExecutor::speech,
+        // ── Speech / TTS / Mic / Torch ──
+        "stt.listen" to SpeechExecutor::sttListen,
+        "tts.speak" to TtsExecutor::ttsSpeak,
+        "tts.engines" to TtsExecutor::ttsEngines,
+        "mic.record" to MicExecutor::record,
+        "mic.stop" to MicExecutor::stop,
+        "torch.on" to TorchExecutor::torchOn,
+        "torch.off" to TorchExecutor::torchOff,
+        // ── Sensitive data (短信/联系人/通话/拨号) ──
+        "contacts.list" to ContactsSmsExecutor::contactsList,
+        "sms.send" to ContactsSmsExecutor::smsSend,
+        "sms.list" to ContactsSmsExecutor::smsList,
+        "calllog.list" to ContactsSmsExecutor::callLogList,
+        "phone.call" to ContactsSmsExecutor::phoneCall,
+        // ── Misc device (通知列表/下载/壁纸/toast/wakelock/红外/USB/WiFi 扫描) ──
+        "notification.list" to NotificationExecutor::notificationList,
+        "download" to DownloadWallpaperExecutor::download,
+        "wallpaper.set" to DownloadWallpaperExecutor::wallpaperSet,
+        "toast" to MiscExecutor::toast,
+        "wakelock.acquire" to MiscExecutor::wakelockAcquire,
+        "wakelock.release" to MiscExecutor::wakelockRelease,
+        "ir.transmit" to MiscExecutor::irTransmit,
+        "usb.list" to MiscExecutor::usbList,
+        "usb.request" to MiscExecutor::usbRequest,
+        "wifi.scan" to NetworkExecutor::wifiScan,
     )
 
     init {
@@ -279,18 +338,5 @@ object SysExecutor {
     }
 
     /** Permission map for sys commands (used by UI / settings). */
-    val PERMISSION_MAP = mapOf(
-        "sys.location" to Manifest.permission.ACCESS_FINE_LOCATION,
-        "sys.camera" to Manifest.permission.CAMERA,
-        "sys.apps" to Manifest.permission.QUERY_ALL_PACKAGES,
-        "sys.camera.photo" to Manifest.permission.CAMERA,
-        "sys.telephony" to Manifest.permission.READ_PHONE_STATE,
-        "sys.notification.send" to Manifest.permission.POST_NOTIFICATIONS,
-        "sys.notification.id" to Manifest.permission.POST_NOTIFICATIONS,
-        "sys.overlay.show" to Manifest.permission.SYSTEM_ALERT_WINDOW,
-        "sys.calendar.add" to Manifest.permission.WRITE_CALENDAR,
-        "sys.calendar.delete" to Manifest.permission.WRITE_CALENDAR,
-        "sys.calendar.list" to Manifest.permission.READ_CALENDAR,
-        "sys.calendar.calendars" to Manifest.permission.READ_CALENDAR,
-    )
+    val PERMISSION_MAP: Map<String, String> = SYS_PERMISSION_MAP
 }

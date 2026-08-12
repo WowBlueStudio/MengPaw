@@ -46,6 +46,13 @@ class MainActivity : ComponentActivity() {
         com.mengpaw.core.namespace.SysExecutor.onProjectionResult(result.resultCode, result.data)
     }
 
+    // sys.stt.listen / sys.dialog.speech 语音识别桥 (与 projection 桥同模式)。
+    private val speechLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        com.mengpaw.core.namespace.SysExecutor.onSpeechResult(result.resultCode, result.data)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -56,6 +63,7 @@ class MainActivity : ComponentActivity() {
         try { com.mengpaw.kernel.evolution.EvolutionStore.migrateLegacyDefaultDir() } catch (_: Exception) {}
         com.mengpaw.core.namespace.SysExecutor.setActivity(this)
         com.mengpaw.core.namespace.SysExecutor.setProjectionLauncher { intent -> projectionLauncher.launch(intent) }
+        com.mengpaw.core.namespace.SysExecutor.setSpeechLauncher { intent -> speechLauncher.launch(intent) }
         enableEdgeToEdge()
 
         // 启动阶段：深蓝背景 → 白色状态栏图标
