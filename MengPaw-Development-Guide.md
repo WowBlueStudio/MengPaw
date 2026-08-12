@@ -52,7 +52,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 │  AgentEngine · Goal/Fleet/Swarm · MCP · ACP     │
 │  NotifyBus · Error · Trigger · Namespace          │
 ├──────────────────────────────────────────────────┤
-│  plugins/ (14 模块, 同级, 均只依赖 kernel)         │  ← 插件层 (内置)
+│  plugins/ (15 模块, 同级, 均只依赖 kernel)         │  ← 插件层 (内置)
 └──────────────────────────────────────────────────┘
 ```
 
@@ -113,7 +113,7 @@ mengpaw-browser
   ├── mengpaw-core
   └── mengpaw-design-system
 
-plugins/ (14 模块, 全部内置捆绑; 13 个外置插件见独立仓库 mengpaw-connectors)
+plugins/ (15 模块, 全部内置捆绑; 13 个外置插件见独立仓库 mengpaw-connectors)
   └── mengpaw-kernel  ← 所有插件只依赖微内核（同级）
 ```
 
@@ -281,7 +281,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ### 3.5 插件模块（21 个，plugins/ 目录，按 settings.gradle.kts 为准）
 
-> 插件数统一口径（v0.35.6 迁移后）：**主仓库 14 模块**（settings.gradle.kts，全部内置捆绑 Shell APK）| **14 内置**（BUILTIN_PLUGIN_IDS，含 v0.29.0 内置的 tavily）| **plugins.json 27 条目**（14 builtin + 13 remote；embedded 条目已于 v0.36 移除——Mission 并入 Swarm、Loop 模式入内核，mission.*/loop.* 命令不再存在）| **13 外置插件**（独立仓库 mengpaw-connectors：8 普通 + 5 连接器，MIT，见下）
+> 插件数统一口径（v0.35.6 迁移后；v0.36.3 增 termux）：**主仓库 15 模块**（settings.gradle.kts，全部内置捆绑 Shell APK）| **15 内置**（BUILTIN_PLUGIN_IDS，含 v0.29.0 内置的 tavily 与 v0.36.3 新增的 termux）| **plugins.json 28 条目**（15 builtin + 13 remote；embedded 条目已于 v0.36 移除——Mission 并入 Swarm、Loop 模式入内核，mission.*/loop.* 命令不再存在）| **13 外置插件**（独立仓库 mengpaw-connectors：8 普通 + 5 连接器，MIT，见下）
 
 > **内置插件无版本号原则（设计定案）**：内置插件随 shell APK 一起发布，版本跟随 shell，不会陈旧、不会单独更新——因此内置插件**不维护、不展示、不对照版本号**（PluginMetadata.version 对内置插件无语义；巡检/审查若报「内置插件版本不一致」为伪问题）。版本号仅对远程插件（plugins.json 条目 + tag `plugins-v*`）有意义，见连接器一致性铁律。
 >
@@ -538,11 +538,11 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (14 本地模块 1254 测试，v0.36.3 实测快照：kernel 558 + core 90 + shell 170 + browser 42 + 插件 394，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 新增 ThinkingProcessWriterTest 4 用例 (全量双套 +8)，shell 148 → 156；v0.36.3 新增 StreamPlaybackBufferTest 5 用例 + ThinkingProcessWriterTest 2 用例 (全量双套 +14)，shell 156 → 170；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
+### 3.7 测试 (15 本地模块 1268 测试，v0.36.3 实测快照：kernel 562 + core 90 + shell 170 + browser 42 + 插件 404，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 新增 ThinkingProcessWriterTest 4 用例 (全量双套 +8)，shell 148 → 156；v0.36.3 新增 StreamPlaybackBufferTest 5 用例 + ThinkingProcessWriterTest 2 用例 (全量双套 +14)，shell 156 → 170；v0.36.3 新增 plugin-termux (10 用例) + CommandMonitor evaluateRulesOnly 4 用例，插件 394 → 404；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 558 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) |
+| mengpaw-kernel | 562 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) |
 | mengpaw-core | 90 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex |
 | mengpaw-shell | 170 | ComplexityDetector 分档、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 轮次队列流式播放回归 (v0.36.3 新增 7；全量口径 debug+release 双套合并) |
 | mengpaw-browser | 42 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵 |
@@ -555,6 +555,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 | plugin-framework | 56 | McpGateway 4MB 上限、指纹 hex、peer JSON 往返、FrameworkPairStore/FrameworkPairHandler、信任门禁 frameworkTrustGate、preferIpv4 |
 | plugin-concise | 20 | 简洁模式 |
 | plugin-root | 20 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 |
+| plugin-termux | 10 | am 参数构造 (payload 无逗号)、脚本生成、高危规则审查、结果标记解析、错误提示 |
 | plugin-dev | 12 | dev.plugin 审计/关键词链路 |
 
 > 外置插件 (mengpaw-connectors, MIT): browser-search 54 / update 24 等随连接器仓库独立测试。
@@ -1057,6 +1058,8 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **再解释形态一致性**: `sh -c "<payload>"`、Termux（`am startservice ... --esa com.termux.RUN_COMMAND_ARGUMENTS '-c,<payload>'`）、`su -c` 与直接命令**同一套规则**——payload 提取后递归再入检查（嵌套 ≤2 层），无差别绕过。Termux 技能（`skill.run termux`）依赖的 `> 文件 2>&1` 输出收集可用。
 
+**Termux 桥插件 (v0.36.3, `plugin-termux`)**: 多层嵌套环境（MengPaw→Termux→ubuntu (proot-distro)→miniconda→Python）下, LLM 直拼 `am startservice` 有**结构性障碍**——① `am --esa` 按逗号切分参数数组, Python 代码里的逗号会把命令切碎; ② 多层引号嵌套 LLM 必拼错; ③ 通用元字符/前缀黑名单会误伤合法内容（如 `python3 -c`、`$`、`&&`）。修复模式: **插件桥替代字符串通道**——插件把代码/命令写入公共交换目录 `/sdcard/MengPaw/termux/` 的脚本文件, `am` 只传"登录 ubuntu 执行脚本 + 输出重定向"这条无逗号 payload, 轮询输出回传并清理; 一次命令完成 写→执行→读回→清理。命令面 `termux.status`（逐层探测, 30s 缓存, `--refresh` 强制）/ `termux.python [--env <环境>] <代码>`（直接调用 conda 环境内 python 二进制, 免 activate）/ `termux.ubuntu [--env <环境>] <命令>`。**安全边界**: 内容先过 `CommandMonitor.evaluateRulesOnly`（仅高危规则 BLOCK/CONFIRM, 跳过元字符/前缀黑名单）——内容由 ubuntu 直接执行, 无本地 shell 拼接注入面, 元字符策略不再适用, 但 rm/su/写系统路径等高危规则仍生效; 依赖权限: Termux `allow-external-apps=true` + `termux-setup-storage` + MengPaw『所有文件访问』。
+
 **发现性**: Linux 命令不注册、不进 BuiltinCommandIndex（`IndexCoverageTest` 无幽灵条目）；发现靠系统提示词「命令双轨」节 + LLM 训练语料。点分未注册命令（如 `agent.rea`）不落 shell，报错附 `self.search` 引导；无参 stdin 命令（`grep`/`cat`/`head`/`tail`/`sed` 等）预检拒绝，防 30s 挂起。
 
 **命令去重 (v0.36.x)**: `agent.read/write/ls/rm/mkdir` 与 `fs.*`（plugin-fs 已整体移除）有 Android 等价命令（cat/echo/ls/rm/mkdir/cp/mv/stat/grep/find），不再重复定义——Agent 直接用 Linux 命令。原框架特有保障的承接: ① `agent.write` 自动读回验证 → Linux 通道对重定向写（`> 文件`）成功后自动附「请 cat 读回验证」提示 + 提示词「结果纪律」要求引用真实文本; ② `agent.rm` 系统路径保护 → CommandMonitor CONFIRM 弹窗 + overwrite-system/写保护路径 BLOCK 规则; ③ `agent.write` 路径沙箱 → 工作区/输出目录为 Linux 通道默认 cwd 与允许写区, 插件仓库/配置目录写保护 BLOCK。**注意**: Linux 命令不经 Pipeline IntegrityGuard, 插件仓库/配置等核心目录的写保护由 CommandMonitor 写保护路径检查承接。
@@ -1337,7 +1340,7 @@ interface Plugin {
 信任链：官方 → 信任框架 (SHA256 + 确认) → 公网 (SHA256 + 确认 + 来源标记) → 未验证 (拒绝)
 
 仓库工具链（见 [PLUGIN_DEV_GUIDE.md](PLUGIN_DEV_GUIDE.md) §5.3）：
-- `scripts/build-plugins.ps1` — 批量构建主仓库内置插件 AAR（14 模块），自动回写 plugins.json 的 checksum/size/changelog（remote 条目不动）
+- `scripts/build-plugins.ps1` — 批量构建主仓库内置插件 AAR（15 模块），自动回写 plugins.json 的 checksum/size/changelog（remote 条目不动）
 - `scripts/validate-plugins.ps1` — 校验 plugins.json（字段/命名空间/checksum 与 AAR 一致性）
 - 插件 AAR 发布用独立 tag `plugins-vX.Y.Z`；`.claude/skills/plugin-dev.md` 为插件开发/发布 skill
 
@@ -1370,7 +1373,7 @@ library AAR（内含 `classes.jar` JVM 字节码）**无法在真机激活**，�
 
 ### 9.2 插件构建工具链
 
-- `scripts/build-plugins.ps1` — 模块列表动态派生自 settings.gradle.kts（14 内置模块），逐模块 assembleRelease，产物复制到 `releases/plugins/plugin-<name>-<version>-release.aar`，自动回写 plugins.json 的 checksum/size/changelog（remote 条目不动）
+- `scripts/build-plugins.ps1` — 模块列表动态派生自 settings.gradle.kts（15 内置模块），逐模块 assembleRelease，产物复制到 `releases/plugins/plugin-<name>-<version>-release.aar`，自动回写 plugins.json 的 checksum/size/changelog（remote 条目不动）
 - `scripts/update-plugins-json.py` — JSON 写回（规避 PowerShell 5.1 的 ConvertTo-Json 中文转义缺陷）
 - `scripts/update-plugins-json.py` 只回写 checksum/size/changelog，**不回写 version**（非内置版本由源码统一定义，内置随壳保持空）
 - `scripts/validate-plugins.ps1` — 只读校验：结构/id 唯一/字段完整/SemVer/URL 与 checksum 一致性/与代码交叉校验（namespaceFor 派生规则、shell 捆绑 vs plugins.json builtin 对应）

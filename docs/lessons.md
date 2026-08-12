@@ -846,4 +846,20 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   并发, "播放器推完"与"onStep 封口"没有先后保证 — 任何"清空/封口即丢"的设计
   都必须容忍播放器晚到 (轮次队列天然容忍), 不能在回调侧做破坏性清理。
 
-*最后更新: 2026-08-12 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断*
+### 22. Termux 多层环境桥接 (2026-08-12, v0.36.3)
+
+- **`am --esa` 按逗号切分参数数组是硬伤**: `--esa com.termux.RUN_COMMAND_ARGUMENTS
+  "-c,<payload>"` 的值按逗号 split, Python 代码里的逗号 (print 参数/dict/tuple)
+  会把命令切碎 — 内联代码经 am 字符串通道必挂, 与沙箱无关。
+- **通用 shell 沙箱与"外部完整 shell"能力冲突**: Linux 通道的元字符策略/前缀黑名单
+  (python3 -c / $ / &&) 是为本地 sh 防注入设计的, Termux 的 bash 本来就是完整 shell —
+  同一通道不可调和; 实测 `python3 --version` 放行但 `python3 -c "..."` 被拦。
+- **修复模式 = 插件桥替代字符串通道**: 插件把内容写公共交换目录脚本文件, am 只传
+  "登录 ubuntu 执行脚本 + 重定向"无逗号 payload, 轮询输出回传; 内容审查用
+  `CommandMonitor.evaluateRulesOnly` (仅高危规则, 跳过元字符) — 内容由目标环境直接
+  执行, 无本地 shell 拼接注入面。
+- **无 Context 的插件拿 Android 能力用 ProcessBuilder**: PluginContext 不暴露 Context,
+  `am` 桥 (browser RunCommandService 先例) 与 su 桥 (plugin-root) 都是子进程模式;
+  Termux 路径检测不能靠 File 检查 (跨应用数据隔离), 必须端到端 am 探测。
+
+*最后更新: 2026-08-12 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接*
