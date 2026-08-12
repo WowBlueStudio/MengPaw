@@ -538,7 +538,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (15 本地模块 1268 测试，v0.36.3 实测快照：kernel 562 + core 90 + shell 170 + browser 42 + 插件 404，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 新增 ThinkingProcessWriterTest 4 用例 (全量双套 +8)，shell 148 → 156；v0.36.3 新增 StreamPlaybackBufferTest 5 用例 + ThinkingProcessWriterTest 2 用例 (全量双套 +14)，shell 156 → 170；v0.36.3 新增 plugin-termux (10 用例) + CommandMonitor evaluateRulesOnly 4 用例，插件 394 → 404；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
+### 3.7 测试 (15 本地模块 1269 测试，v0.36.3 实测快照：kernel 562 + core 90 + shell 170 + browser 42 + 插件 405，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 新增 ThinkingProcessWriterTest 4 用例 (全量双套 +8)，shell 148 → 156；v0.36.3 新增 StreamPlaybackBufferTest 5 用例 + ThinkingProcessWriterTest 2 用例 (全量双套 +14)，shell 156 → 170；v0.36.3 新增 plugin-termux (11 用例) + CommandMonitor evaluateRulesOnly 4 用例，插件 394 → 405；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
@@ -555,7 +555,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 | plugin-framework | 56 | McpGateway 4MB 上限、指纹 hex、peer JSON 往返、FrameworkPairStore/FrameworkPairHandler、信任门禁 frameworkTrustGate、preferIpv4 |
 | plugin-concise | 20 | 简洁模式 |
 | plugin-root | 20 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 |
-| plugin-termux | 10 | am 参数构造 (payload 无逗号)、脚本生成、高危规则审查、结果标记解析、错误提示 |
+| plugin-termux | 11 | am 参数构造 (payload 无逗号/timeout 包裹)、脚本生成、环境名白名单 (注入/穿越拒绝)、高危规则审查、结果标记解析、错误提示 |
 | plugin-dev | 12 | dev.plugin 审计/关键词链路 |
 
 > 外置插件 (mengpaw-connectors, MIT): browser-search 54 / update 24 等随连接器仓库独立测试。

@@ -861,5 +861,11 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 - **无 Context 的插件拿 Android 能力用 ProcessBuilder**: PluginContext 不暴露 Context,
   `am` 桥 (browser RunCommandService 先例) 与 su 桥 (plugin-root) 都是子进程模式;
   Termux 路径检测不能靠 File 检查 (跨应用数据隔离), 必须端到端 am 探测。
+- **外部 shell 桥的四个审计坑 (12q+9d 审查修复)**: ① 环境名参数必须白名单
+  (^[A-Za-z0-9_.-]+$) — 直接拼进 conda activate/路径, 可注入/路径穿越;
+  ② 输出文件必须设读取上限 (死循环输出无限增长 → 全量 readText OOM);
+  ③ 脚本执行必须 timeout 包裹 (插件超时放弃后 ubuntu 内进程仍在跑 = 泄漏);
+  ④ am 瞬时失败 (后台启动窗口竞争) 重试一次, 幂等脚本重复启动无害。
+  纯逻辑 (脚本生成/参数构造) 拆独立文件防超 400 行红线。
 
 *最后更新: 2026-08-12 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接*

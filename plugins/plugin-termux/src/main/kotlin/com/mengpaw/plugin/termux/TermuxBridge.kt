@@ -21,23 +21,20 @@ import kotlinx.coroutines.withContext
  * 参数数组, Python 代码里的逗号会把命令切碎; ② 多层引号嵌套 LLM 必拼错;
  * ③ 通用 Linux 通道的元字符/前缀黑名单会误伤合法内容。本引擎改为:
  *   1. 插件把代码/命令写入公共交换目录 (/sdcard/MengPaw/termux/) 的脚本文件;
- *   2. am 只传"登录 ubuntu 执行该脚本 + 输出重定向"这一条无逗号 payload;
+ *   2. am 只传"timeout 包住的登录 ubuntu 执行脚本 + 输出重定向"无逗号 payload;
  *   3. 轮询输出文件直到完成标记, 读回并清理 — 一次命令完成全流程。
  * 安全: 内容先过 [CommandMonitor.evaluateRulesOnly] (高危规则 BLOCK/CONFIRM),
- * 元字符策略不再适用 (内容由 ubuntu 直接执行, 无本地 shell 拼接注入面)。
+ * 元字符策略不再适用 (内容由 ubuntu 直接执行, 无本地 shell 拼接注入面);
+ * 环境名经 [TermuxScripts.validateEnvName] 白名单校验 (防注入/路径穿越)。
  *
  * 效率: 状态探测结果缓存 30s (--refresh 强制); 探测/执行共用同一脚本通道;
- * 命令串行化 (Termux 服务单飞), 轮询间隔 300ms。
+ * 命令串行化 (Termux 服务单飞), 轮询间隔 300ms; am 瞬时失败自动重试一次。
+ * 纯逻辑 (脚本生成/参数构造/结果解析) 在 [TermuxScripts] — 本文件只留 IO 引擎。
  */
 object TermuxBridge {
 
     /** 公共交换目录 — 应用与 Termux/proot 双侧可读写 (需两边权限). */
     const val EXCHANGE_DIR = "/sdcard/MengPaw/termux"
-
-    private const val TERMUX_COMPONENT = "com.termux/com.termux.app.RunCommandService"
-    private const val TERMUX_BASH = "/data/data/com.termux/files/usr/bin/bash"
-    private const val TERMUX_HOME = "/data/data/com.termux/files/home"
-    private const val DISTRO = "ubuntu"
 
     private const val AM_TIMEOUT_MS = 10_000L
     private const val POLL_INTERVAL_MS = 300L
@@ -54,81 +51,6 @@ object TermuxBridge {
     @Volatile private var condaDirCache: String? = null
     @Volatile private var envsCache: List<String> = emptyList()
     @Volatile private var envProbedAt = 0L
-
-    // ═══════════════════════════════════════════════════════════════
-    // 纯逻辑 (JVM 可单测)
-    // ═══════════════════════════════════════════════════════════════
-
-    /** conda 根目录 (rootfs 内绝对路径) + 环境名 → python 可执行文件路径. */
-    internal fun pythonForEnv(condaDir: String, env: String?): String =
-        if (env.isNullOrBlank()) "$condaDir/bin/python"
-        else "$condaDir/envs/$env/bin/python"
-
-    /** am --esa 的 payload — 只含脚本路径与重定向, 无逗号/引号嵌套. */
-    internal fun buildAmPayload(scriptPath: String, outPath: String): String =
-        "proot-distro login $DISTRO -- bash $scriptPath > $outPath 2>&1"
-
-    /** am startservice 参数数组 — 逐项直传, 不经 shell. */
-    internal fun buildAmArgs(payload: String): List<String> = listOf(
-        "am", "startservice", "--user", "0",
-        "-n", TERMUX_COMPONENT,
-        "-a", "com.termux.RUN_COMMAND",
-        "--es", "com.termux.RUN_COMMAND_PATH", TERMUX_BASH,
-        "--esa", "com.termux.RUN_COMMAND_ARGUMENTS", "-c,$payload",
-        "--es", "com.termux.RUN_COMMAND_WORKDIR", TERMUX_HOME,
-        "--ez", "com.termux.RUN_COMMAND_BACKGROUND", "true"
-    )
-
-    /** ubuntu 内探测脚本 — 输出 WHOAMI/PWD/CONDA/ENVS/PYTHON 各一行. */
-    internal fun buildProbeScript(): String = buildString {
-        appendLine("echo \"WHOAMI=${'$'}(id -un)\"")
-        appendLine("echo \"PWD=${'$'}(pwd)\"")
-        appendLine("CONDA=\"\"")
-        appendLine("for c in /root/miniconda3 /root/anaconda3 /root/miniconda /root/anaconda /home/*/miniconda3 /home/*/anaconda3 /opt/conda; do")
-        appendLine("  if [ -z \"${'$'}CONDA\" ] && [ -f \"${'$'}c/etc/profile.d/conda.sh\" ]; then CONDA=\"${'$'}c\"; echo \"CONDA=${'$'}c\"; fi")
-        appendLine("done")
-        appendLine("echo \"ENVS=${'$'}(ls \"${'$'}CONDA/envs\" 2>/dev/null | tr '\\n' ' ')\"")
-        appendLine("echo \"PYTHON=${'$'}(command -v python3)\"")
-    }
-
-    /** conda 环境 Python 执行脚本 — 直接调用环境内 python 二进制, 免 conda activate. */
-    internal fun buildPythonScript(pyFile: String, marker: String): String = buildString {
-        appendLine("<PYTHON> $pyFile")
-        appendLine("rc=${'$'}?")
-        appendLine("echo \"__MENGPAW_RC__${'$'}rc\"")
-        appendLine("echo \"$marker\"")
-    }
-
-    /** ubuntu 通用命令脚本 — 先 source conda 并 activate, 再执行命令. */
-    internal fun buildUbuntuScript(condaDir: String?, env: String?, command: String, marker: String): String = buildString {
-        appendLine("#!/bin/bash")
-        if (!condaDir.isNullOrBlank()) {
-            appendLine("CONDA=\"$condaDir\"")
-            appendLine("[ -f \"\$CONDA/etc/profile.d/conda.sh\" ] && source \"\$CONDA/etc/profile.d/conda.sh\"")
-            if (!env.isNullOrBlank()) {
-                appendLine("conda activate $env 2>/dev/null || true")
-            }
-        }
-        appendLine(command)
-        appendLine("rc=\$?")
-        appendLine("echo \"__MENGPAW_RC__\$rc\"")
-        appendLine("echo \"$marker\"")
-    }
-
-    /** 执行结果解析 — 从输出中提取 rc 与正文 (剥离标记行). */
-    internal fun extractRunResult(output: String, marker: String): Pair<Int, String> {
-        val rc = output.lineSequence()
-            .firstOrNull { it.startsWith("__MENGPAW_RC__") }
-            ?.removePrefix("__MENGPAW_RC__")?.trim()?.toIntOrNull() ?: 0
-        val body = output.lines()
-            .filterNot { it.startsWith("__MENGPAW_RC__") || it.startsWith(marker) }
-            .joinToString("\n").trim()
-        return rc to body
-    }
-
-    /** 内容安全扫描 — 复用内核高危规则 (BLOCK 拒绝 / CONFIRM 弹窗, 30s 超时默认拒). */
-    internal suspend fun checkContent(content: String): String? =
-        CommandMonitor.evaluateRulesOnly(content, allowUserConfirm = true)
 
     // ═══════════════════════════════════════════════════════════════
     // 命令入口
@@ -156,28 +78,31 @@ object TermuxBridge {
                 errorCode = ErrorCodes.ERR_INVALID_INPUT
             )
         }
+        TermuxScripts.validateEnvName(env)?.let {
+            return ExecutionResult.fail(it, errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        }
+        val targetEnv = env?.trim()?.takeIf { it.isNotEmpty() }
         checkContent(code)?.let {
             return ExecutionResult.fail("Python 代码命中安全规则, 已阻止: $it", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
         }
         val (conda, envs) = ensureEnvInfo()
         if (conda.isNullOrBlank()) {
             return ExecutionResult.fail(
-                    "未检测到 ubuntu 内的 conda/miniconda。请先运行 termux.status 查看安装状态, " +
+                "未检测到 ubuntu 内的 conda/miniconda。请先运行 termux.status 查看安装状态, " +
                     "并在 ubuntu 中安装 miniconda: proot-distro login ubuntu -- bash -c \"curl -fsSL https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-latest-Linux-x86_64.sh -o /tmp/mc.sh && bash /tmp/mc.sh -b\"",
                 errorCode = ErrorCodes.ERR_INVALID_INPUT
             )
         }
-        val targetEnv = env?.takeIf { it.isNotBlank() }
-        if (targetEnv != null && envs.none { it == targetEnv }) {
+        if (targetEnv != null && targetEnv != "base" && envs.none { it == targetEnv }) {
             return ExecutionResult.fail(
                 "conda 环境不存在: $targetEnv。可用环境: ${(listOf("base") + envs).joinToString(", ")}",
                 errorCode = ErrorCodes.ERR_INVALID_INPUT
             )
         }
-        val py = pythonForEnv(conda, targetEnv)
+        val py = TermuxScripts.pythonForEnv(conda, targetEnv)
         val runId = newRunId()
         val pyName = "run_$runId.py"
-        val script = buildPythonScript("/sdcard/MengPaw/termux/$pyName", "__MENGPAW_DONE_$runId")
+        val script = TermuxScripts.buildPythonScript("/sdcard/MengPaw/termux/$pyName", "__MENGPAW_DONE_$runId")
             .replace("<PYTHON>", py)
         return runScript(script, listOf(pyName to code), timeoutMs) { out, rc ->
             if (rc == 0) ExecutionResult.ok(out.ifBlank { "(empty)" })
@@ -196,13 +121,23 @@ object TermuxBridge {
                 errorCode = ErrorCodes.ERR_INVALID_INPUT
             )
         }
+        TermuxScripts.validateEnvName(env)?.let {
+            return ExecutionResult.fail(it, errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        }
+        val targetEnv = env?.trim()?.takeIf { it.isNotEmpty() }
         checkContent(command)?.let {
             return ExecutionResult.fail("命令命中安全规则, 已阻止: $it", errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
         }
-        val (conda, _) = ensureEnvInfo()
+        val (conda, envs) = ensureEnvInfo()
+        if (targetEnv != null && targetEnv != "base" && envs.none { it == targetEnv }) {
+            return ExecutionResult.fail(
+                "conda 环境不存在: $targetEnv。可用环境: ${(listOf("base") + envs).joinToString(", ")}",
+                errorCode = ErrorCodes.ERR_INVALID_INPUT
+            )
+        }
         val runId = newRunId()
         val marker = "__MENGPAW_DONE_$runId"
-        val script = buildUbuntuScript(conda, env?.takeIf { it.isNotBlank() }, command, marker)
+        val script = TermuxScripts.buildUbuntuScript(conda, targetEnv, command, marker)
         return runScript(script, emptyList(), timeoutMs) { out, rc ->
             if (rc == 0) ExecutionResult.ok(out.ifBlank { "(empty)" })
             else ExecutionResult.fail(
@@ -232,7 +167,7 @@ object TermuxBridge {
     private suspend fun probeUbuntu(timeoutMs: Long): String {
         val runId = newRunId()
         val marker = "__MENGPAW_DONE_$runId"
-        val script = buildProbeScript() + "\nrc=\$?\necho \"__MENGPAW_RC__\$rc\"\necho \"$marker\""
+        val script = TermuxScripts.buildProbeScript() + "\nrc=\$?\necho \"__MENGPAW_RC__\$rc\"\necho \"$marker\""
         val result = runScript(script, emptyList(), timeoutMs) { out, rc ->
             if (rc == 0) ExecutionResult.ok(out) else ExecutionResult.fail(out.ifBlank { "(无输出)" }, errorCode = ErrorCodes.ERR_INTERNAL)
         }
@@ -271,6 +206,10 @@ object TermuxBridge {
         return condaDirCache to envsCache
     }
 
+    /** 内容安全扫描 — 复用内核高危规则 (BLOCK 拒绝 / CONFIRM 弹窗, 30s 超时默认拒). */
+    internal suspend fun checkContent(content: String): String? =
+        CommandMonitor.evaluateRulesOnly(content, allowUserConfirm = true)
+
     /** 通用脚本执行引擎: 写文件 → am 启动 → 轮询输出 → 解析 → 清理. */
     private suspend fun runScript(
         scriptBody: String,
@@ -291,11 +230,18 @@ object TermuxBridge {
         try {
             extraFiles.forEach { (name, content) -> File(dir, name).writeText(content) }
             script.writeText("#!/bin/bash\n$scriptBody")
-            val payload = buildAmPayload("/sdcard/MengPaw/termux/run_$runId.sh", "/sdcard/MengPaw/termux/run_$runId.out")
-            val am = launchAm(buildAmArgs(payload))
+            // payload 内 timeout 比插件轮询截止早 1s 结束 — 保证 Termux 侧进程
+            // 先被杀, 插件随后按自身 deadline 收尾 (部分输出 + 超时错误)
+            val payloadTimeoutSec = ((timeoutMs / 1000) - 1).toInt().coerceAtLeast(1)
+            val payload = TermuxScripts.buildAmPayload(
+                "/sdcard/MengPaw/termux/run_$runId.sh",
+                "/sdcard/MengPaw/termux/run_$runId.out",
+                payloadTimeoutSec
+            )
+            val am = launchAmWithRetry(TermuxScripts.buildAmArgs(payload))
             if (!am.ok) {
                 return@withLock ExecutionResult.fail(
-                    "Termux 启动失败: ${am.output.take(300).trim()}\n${hintForAmError(am.output)}",
+                    "Termux 启动失败: ${am.output.take(300).trim()}\n${TermuxScripts.hintForAmError(am.output)}",
                     errorCode = ErrorCodes.ERR_PERMISSION_DENIED
                 )
             }
@@ -304,7 +250,7 @@ object TermuxBridge {
             while (System.currentTimeMillis() < deadline) {
                 val text = readOut(out)
                 if (text != null && text.contains(marker)) {
-                    val (rc, body) = extractRunResult(text, marker)
+                    val (rc, body) = TermuxScripts.extractRunResult(text, marker)
                     return@withLock build(body.take(OUTPUT_CAP), rc)
                 }
                 delay(POLL_INTERVAL_MS)
@@ -340,15 +286,33 @@ object TermuxBridge {
         }
     }
 
+    /** 读输出文件 — 超限时只读尾部 (完成标记在末尾), 防大文件全量读 OOM/卡顿. */
     private fun readOut(out: File): String? = try {
-        if (!out.exists() || out.length() == 0L) null else out.readText()
+        if (!out.exists() || out.length() == 0L) null
+        else {
+            val len = out.length()
+            val cap = OUTPUT_CAP.toLong() * 2
+            if (len <= cap) out.readText()
+            else out.inputStream().use { s ->
+                s.skip(len - cap)
+                s.readBytes().toString(Charsets.UTF_8)
+            }
+        }
     } catch (_: Exception) {
         null
     }
 
     private data class AmResult(val ok: Boolean, val output: String)
 
-    private suspend fun launchAm(args: List<String>): AmResult = withContext(Dispatchers.IO) {
+    /** am 启动 — 瞬时失败 (后台启动窗口竞争) 自动重试一次; 脚本幂等, 重复启动无害. */
+    private suspend fun launchAmWithRetry(args: List<String>): AmResult {
+        val first = launchAmOnce(args)
+        if (first.ok) return first
+        delay(500)
+        return launchAmOnce(args)
+    }
+
+    private suspend fun launchAmOnce(args: List<String>): AmResult = withContext(Dispatchers.IO) {
         val proc = try {
             ProcessBuilder(args).redirectErrorStream(true).start()
         } catch (e: Exception) {
@@ -375,17 +339,5 @@ object TermuxBridge {
             try { proc.destroyForcibly() } catch (_: Exception) {}
             AmResult(false, "am 执行异常: ${e.message}")
         }
-    }
-
-    /** am 失败原因 → 可操作提示. */
-    internal fun hintForAmError(amOutput: String): String = when {
-        amOutput.contains("not found", ignoreCase = true) || amOutput.contains("unable to resolve", ignoreCase = true) ->
-            "Termux 未安装或 RunCommandService 不存在 — 请从 F-Droid/GitHub 安装 Termux 并重试。"
-        amOutput.contains("SecurityException", ignoreCase = true) ||
-            amOutput.contains("not allowed to start service", ignoreCase = true) ->
-            "Termux 未允许外部应用调用 — 在 Termux 中执行: echo \"allow-external-apps=true\" >> ~/.termux/termux.properties, 然后完全重启 Termux。"
-        amOutput.contains("background", ignoreCase = true) || amOutput.contains("foreground service", ignoreCase = true) ->
-            "Android 后台启动限制 — 请保持 MengPaw 在前台时执行。"
-        else -> "请确认 Termux 已安装且 allow-external-apps 已开启。"
     }
 }

@@ -27,16 +27,18 @@ class TermuxBridgeTest {
 
     @Test
     fun `am payload contains no comma`() {
-        val payload = TermuxBridge.buildAmPayload("/sdcard/MengPaw/termux/run_1.sh", "/sdcard/MengPaw/termux/run_1.out")
+        val payload = TermuxScripts.buildAmPayload("/sdcard/MengPaw/termux/run_1.sh", "/sdcard/MengPaw/termux/run_1.out", timeoutSec = 119)
         assertTrue("payload 不得含逗号: $payload", !payload.contains(','))
+        assertTrue("payload 必须用 timeout 包住 proot 防进程泄漏: $payload",
+            payload.startsWith("timeout -k 10s 119s proot-distro"))
         assertTrue(payload.contains("proot-distro login ubuntu -- bash /sdcard/MengPaw/termux/run_1.sh"))
         assertTrue(payload.contains("> /sdcard/MengPaw/termux/run_1.out 2>&1"))
     }
 
     @Test
     fun `am args target termux RunCommandService with esa payload`() {
-        val payload = TermuxBridge.buildAmPayload("/sdcard/MengPaw/termux/run_1.sh", "/sdcard/MengPaw/termux/run_1.out")
-        val args = TermuxBridge.buildAmArgs(payload)
+        val payload = TermuxScripts.buildAmPayload("/sdcard/MengPaw/termux/run_1.sh", "/sdcard/MengPaw/termux/run_1.out", timeoutSec = 60)
+        val args = TermuxScripts.buildAmArgs(payload)
         assertTrue(args.contains("com.termux/com.termux.app.RunCommandService"))
         val esaIdx = args.indexOf("--esa")
         assertTrue(esaIdx >= 0)
@@ -46,15 +48,27 @@ class TermuxBridgeTest {
     }
 
     @Test
+    fun `env name validation rejects injection and path traversal`() {
+        assertNull("未指定环境合法", TermuxScripts.validateEnvName(null))
+        assertNull("空白环境合法", TermuxScripts.validateEnvName("  "))
+        assertNull("合法环境名", TermuxScripts.validateEnvName("py310"))
+        assertNull("base 合法", TermuxScripts.validateEnvName("base"))
+        assertNotNull("路径穿越必须拒绝", TermuxScripts.validateEnvName("../../bin/sh"))
+        assertNotNull("命令注入必须拒绝", TermuxScripts.validateEnvName("x; rm -rf /"))
+        assertNotNull("空白分隔必须拒绝", TermuxScripts.validateEnvName("a b"))
+        assertNotNull("斜杠必须拒绝", TermuxScripts.validateEnvName("a/b"))
+    }
+
+    @Test
     fun `python path for env and base`() {
-        assertEquals("/root/miniconda3/bin/python", TermuxBridge.pythonForEnv("/root/miniconda3", null))
-        assertEquals("/root/miniconda3/bin/python", TermuxBridge.pythonForEnv("/root/miniconda3", ""))
-        assertEquals("/root/miniconda3/envs/py310/bin/python", TermuxBridge.pythonForEnv("/root/miniconda3", "py310"))
+        assertEquals("/root/miniconda3/bin/python", TermuxScripts.pythonForEnv("/root/miniconda3", null))
+        assertEquals("/root/miniconda3/bin/python", TermuxScripts.pythonForEnv("/root/miniconda3", ""))
+        assertEquals("/root/miniconda3/envs/py310/bin/python", TermuxScripts.pythonForEnv("/root/miniconda3", "py310"))
     }
 
     @Test
     fun `probe script reports conda envs python`() {
-        val script = TermuxBridge.buildProbeScript()
+        val script = TermuxScripts.buildProbeScript()
         assertTrue(script.contains("WHOAMI="))
         assertTrue(script.contains("CONDA="))
         assertTrue(script.contains("ENVS="))
@@ -65,7 +79,7 @@ class TermuxBridgeTest {
 
     @Test
     fun `python script invokes python file and emits rc plus marker`() {
-        val script = TermuxBridge.buildPythonScript("/sdcard/MengPaw/termux/run_1.py", "__MENGPAW_DONE_t1")
+        val script = TermuxScripts.buildPythonScript("/sdcard/MengPaw/termux/run_1.py", "__MENGPAW_DONE_t1")
         assertTrue(script.contains("<PYTHON> /sdcard/MengPaw/termux/run_1.py"))
         assertTrue("脚本必须捕获退出码: " + script, script.contains("rc=\$?"))
         assertTrue(script.contains("__MENGPAW_RC__\$rc"))
@@ -74,7 +88,7 @@ class TermuxBridgeTest {
 
     @Test
     fun `ubuntu script sources conda and activates env before command`() {
-        val script = TermuxBridge.buildUbuntuScript(
+        val script = TermuxScripts.buildUbuntuScript(
             condaDir = "/root/miniconda3", env = "py310",
             command = "pip list", marker = "__MENGPAW_DONE_t2"
         )
@@ -88,11 +102,11 @@ class TermuxBridgeTest {
     @Test
     fun `run result parses rc and strips markers`() {
         val out = "hello\nworld\n__MENGPAW_RC__3\n__MENGPAW_DONE_t1\n"
-        val (rc, body) = TermuxBridge.extractRunResult(out, "__MENGPAW_DONE_t1")
+        val (rc, body) = TermuxScripts.extractRunResult(out, "__MENGPAW_DONE_t1")
         assertEquals(3, rc)
         assertEquals("hello\nworld", body)
 
-        val (rc0, body0) = TermuxBridge.extractRunResult("ok\n__MENGPAW_DONE_t2", "__MENGPAW_DONE_t2")
+        val (rc0, body0) = TermuxScripts.extractRunResult("ok\n__MENGPAW_DONE_t2", "__MENGPAW_DONE_t2")
         assertEquals(0, rc0)
         assertEquals("ok", body0)
     }
@@ -121,8 +135,8 @@ class TermuxBridgeTest {
 
     @Test
     fun `am error hints actionable`() {
-        assertTrue(TermuxBridge.hintForAmError("Error: Not found; no service started").contains("未安装"))
-        assertTrue(TermuxBridge.hintForAmError("SecurityException: Not allowed to start service").contains("allow-external-apps"))
-        assertTrue(TermuxBridge.hintForAmError("Background service start not allowed").contains("后台启动限制"))
+        assertTrue(TermuxScripts.hintForAmError("Error: Not found; no service started").contains("未安装"))
+        assertTrue(TermuxScripts.hintForAmError("SecurityException: Not allowed to start service").contains("allow-external-apps"))
+        assertTrue(TermuxScripts.hintForAmError("Background service start not allowed").contains("后台启动限制"))
     }
 }
