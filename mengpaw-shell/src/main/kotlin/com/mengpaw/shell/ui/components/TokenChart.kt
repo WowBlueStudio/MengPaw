@@ -142,6 +142,15 @@ fun TokenBarChart(
                                     cornerRadius = CornerRadius(3f, 3f)
                                 )
                                 acc += barH
+                            } else {
+                                // v0.37.1 重构 (用户定案): 0 值条形必须可见 — 该区间无用量
+                                // 也是信息, 画 2f 高浅灰占位条, 不跳空不产生"底部空位"错觉。
+                                drawRoundRect(
+                                    ArcoColors.Gray4,
+                                    topLeft = Offset(x, padTop + chartH - 2f),
+                                    size = Size(barWidthPx, 2f),
+                                    cornerRadius = CornerRadius(1f, 1f)
+                                )
                             }
                         }
                         // 日期标签 (间隔显示, 最后一天必显示)

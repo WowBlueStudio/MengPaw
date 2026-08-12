@@ -184,6 +184,12 @@ fun SystemSettingsContent(
     Spacer(Modifier.height(ArcoSpacing.lg))
 
     SectionHeader(state.strings.systemTokenStats)
+
+    val collector = TokenStatsCollector
+    val models = collector.allModels()
+    // v0.37.1 重构 (用户定案): 日/周/月是统计口径, 保留切换; 每档查询范围改
+    // "全量历史" — 连续序列补 0 值占位 (中间没用量的区间条形必须可见, 不跳空),
+    // 图表横向滑动查询。records 90 天上限约束跨度: 日 ≤90 天 / 周 ≤13 周 / 月 ≤4 月。
     var statRange by remember { mutableIntStateOf(0) }
 
     Row(Modifier.fillMaxWidth().padding(bottom = ArcoSpacing.sm), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
@@ -197,43 +203,38 @@ fun SystemSettingsContent(
         }
     }
 
-    val collector = TokenStatsCollector
-    val models = collector.allModels()
-    val chartData = remember(statRange) {
+    val (seriesData, cacheData) = remember(statRange) {
         when (statRange) {
-            0 -> collector.dailyRecords().map { it.date.substring(5) to it }
-            1 -> collector.weeklyRecords().map { it.weekLabel to it }
-            2 -> collector.monthlyRecords().map { it.weekLabel to it }
-            else -> emptyList()
+            0 -> collector.dailySeries().let { s ->
+                s.map { it.date.substring(5) to it.modelTokens } to
+                    s.map { it.date.substring(5) to it.cacheHitTokens }
+            }
+            1 -> collector.weeklySeries().let { s ->
+                s.map { it.weekLabel to it.modelTokens } to
+                    s.map { it.weekLabel to it.cacheHitTokens }
+            }
+            2 -> collector.monthlySeries().let { s ->
+                s.map { it.weekLabel to it.modelTokens } to
+                    s.map { it.weekLabel to it.cacheHitTokens }
+            }
+            else -> emptyList<Pair<String, Map<String, Long>>>() to emptyList<Pair<String, Long>>()
         }
     }
 
-    if (chartData.isNotEmpty()) {
-        @Suppress("UNCHECKED_CAST")
+    if (seriesData.isNotEmpty()) {
         val modelSeries = models.map { model ->
-            model to chartData.map { (label, record) ->
-                val tokens = when (statRange) {
-                    0 -> (record as TokenStatsCollector.DayRecord).modelTokens[model] ?: 0L
-                    else -> (record as TokenStatsCollector.WeeklySummary).modelTokens[model] ?: 0L
-                }
-                label to tokens
-            }
+            model to seriesData.map { (label, tokens) -> label to (tokens[model] ?: 0L) }
         }
-        val cacheSeries = chartData.map { (label, record) ->
-            val cache = when (statRange) {
-                0 -> (record as TokenStatsCollector.DayRecord).cacheHitTokens
-                else -> (record as TokenStatsCollector.WeeklySummary).cacheHitTokens
-            }
-            label to cache
-        }
-        TokenBarChart(series = modelSeries, cacheSeries = cacheSeries,
+        TokenBarChart(series = modelSeries, cacheSeries = cacheData,
             emptyLabel = state.strings.systemNoTokenData)
     } else {
         Text(state.strings.systemNoTokenData,
             style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(vertical = ArcoSpacing.lg))
     }
 
-    val totalTokens = collector.dailyRecords().sumOf { it.totalTokens }
+    // v0.37.1 重构: 统计卡与图表同口径 — 全部历史总量 (原最近 14 天口径导致
+    // "图表有数据但统计卡消失" 的容器底部空位)。
+    val totalTokens = collector.totalTokens()
     val cacheSaved = collector.totalCacheSaved()
     if (totalTokens > 0) {
         Spacer(Modifier.height(ArcoSpacing.md))
