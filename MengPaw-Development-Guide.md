@@ -538,13 +538,13 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (14 本地模块 1240 测试，v0.36.2 实测快照：kernel 558 + core 90 + shell 156 + browser 42 + 插件 394，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 新增 ThinkingProcessWriterTest 4 用例 (全量双套 +8)，shell 148 → 156；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
+### 3.7 测试 (14 本地模块 1254 测试，v0.36.3 实测快照：kernel 558 + core 90 + shell 170 + browser 42 + 插件 394，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 新增 ThinkingProcessWriterTest 4 用例 (全量双套 +8)，shell 148 → 156；v0.36.3 新增 StreamPlaybackBufferTest 5 用例 + ThinkingProcessWriterTest 2 用例 (全量双套 +14)，shell 156 → 170；外置插件 browser-search 54 在 mengpaw-connectors 仓库)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
 | mengpaw-kernel | 558 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) |
 | mengpaw-core | 90 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex |
-| mengpaw-shell | 156 | ComplexityDetector 分档、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4；全量口径 debug+release 双套合并) |
+| mengpaw-shell | 170 | ComplexityDetector 分档、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 轮次队列流式播放回归 (v0.36.3 新增 7；全量口径 debug+release 双套合并) |
 | mengpaw-browser | 42 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵 |
 | plugin-hermes (tribe) | 68 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 |
 | plugin-memory-twin | 68 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
@@ -586,6 +586,8 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 **链路**: `AdaptiveLlmProvider.consumeSseStream`(`bodyAsChannel()` + `readUTF8Line` 增量读, OpenAI/Anthropic 双格式解析)→ 引擎透传 onDelta → `AgentViewModel` UI 播放器 → 气泡渐进显示。
 
 **气泡 UI 重构 (v0.34.3)**: 时间轴主导 — 一次任务 = **思考过程容器** (`ChatMessageUi.ThinkingProcess`, 单一可折叠, 跨所有轮次) + **最终答案气泡** (`ChatMessageUi.FinalAnswer`, 独立)。执行中: 思考流式写入容器 → 完整 `Action:` 行出现即插入折叠工具行 (只显示命令名, 失败红字, 点击展开参数+观察全文) → 工具完成挂观察 → 检测到 `Final Answer:` (onDelta 原始增量累积检测) 时**过程容器自动折叠** (折叠态显示 "N 轮思考 · M 次调用" 摘要, 展开可回看全部思考) + 答案气泡流式。写入器 `ThinkingProcessWriter` 替代旧 `StepBubbleWriter` (每轮一卡的模型废除); 历史会话经 `reflowLegacyMessages` 渲染层统一重排 (旧 agent_step/agent_trace 序列合并为过程容器+答案, 持久化格式兼容, 新增 thinking_process/final_answer 类型)。**闭环兜底 (v0.36.2)**: `PromptEngine.parse` 规则 3/4 对无 `Final Answer:` 标记的纯文本自然回答/Thought-only 也判为最终答案 — 此类输出流式检测永不命中, 引擎 `run()` 返回后 Shell 兜底 `beginFinalAnswer()` 强制闭环 (折叠容器 + 创建答案气泡), 防止思考容器 `isRunning` 永 true (自动折叠失效/滚动回收后手动折叠被覆盖)。
+
+**轮次队列流式播放 (v0.36.3)**: 修复"前几轮 ReAct 思考流式动画只显示 1~3 字"——两个叠加根因: ① 原 `onStep → resetRound` 立即清空缓冲, 工具毫秒级完成 (前几轮常见) 时 50ms 节拍播放协程未播完整轮思考即被清空丢文本; ② `pushThought` 用 `last.tools` 非空判轮界, 当前轮 `addTool` 插入工具行后同轮后续思考增量全被误判为"上一轮已固化"而另起 step。改造: `StreamPlaybackBuffer` 改为**轮次队列** (每轮独立 `Round(id/raw/played/finished)`, 单调递增 roundId) — `onStep → sealRound()` 只封口不清空, 未播文本按序播完再进下一轮 ("动画序列"), 封口后新增量自动开新轮 (Action 标记不跨轮残留, 保留 v0.28.3 根因1 防线); `ThinkingProcessWriter.pushThought/addTool` 按 roundId 路由到对应 step (同轮增量覆盖同一步, 跨轮才另起), `ProcessStep` 增瞬态 `roundId` 字段 (默认 0, 持久化零迁移)。播放回调升级为 `(roundId, text)`。
 
 **网关行为(实测铁证)**: LLM 网关(如 DeepSeek)**不是逐 token 流** — 按 ~1s 批次批量 flush(~120 chunks/批); 相同 prompt 二次请求命中服务端 prompt cache 后整段回放(TTFB 8s+ 然后 ~200ms 全到)。突发到达是常态, 客户端改不了, 打字机观感必须由 UI 播放器兜底。
 
