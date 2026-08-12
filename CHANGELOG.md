@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.37.0 (2026-08-12) — 打通 Termux 与 sys. 命令支持
+
+### 新增
+- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种
+  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、
+  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、
+  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;
+  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增
+  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE
+- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —
+  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /
+  `termux.ubuntu` 通用命令; 脚本文件交换通道规避 am 逗号切分与多层引号陷阱
+- **CommandMonitor.evaluateRulesOnly**: 仅高危规则审查, 供外部 shell 桥复用
+- **ReAct 思考流式轮次队列化**: 前几轮思考不再截断成 1~3 字
+- **UI**: 用户气泡底部操作行右对齐; 生成期间聊天列表持续贴底, 用户上滑查看
+  历史时停止跟随
+
+### 修复
+- **sys.* 12q 闭环六项**: dialog.speech 缺录音权限前置引导 (原误报超时) /
+  新增 sys.download.status 下载状态验证 / 通知监听服务 exported=true (部分 ROM
+  绑定失败) / 对话框失败语义区分 (取消/超时/无 Activity/在途) / TTS 引擎实例
+  泄漏收口 / USB 授权超时接收器悬挂
+- **sys.* 9d**: sys.screenshot/screenrecord 改 MediaProjection 免 root 截图录屏
+  (Android 14+ 前台服务令牌); 权限清单双源漂移清除; alarm 反射耦合改显式 action
+- **plugin-termux 9d**: env 名白名单防注入、输出上限防死循环、进程超时防泄漏、
+  am 瞬时失败重试
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.37.0-release.apk` (versionCode 37000)
+- 仅 Shell 变更 (browser 无变更不构建); plugins.json 无变更
+- 测试: 全量双套 1280 用例 0 failures (kernel 562 + core 90 + shell 170 +
+  browser 42 + 插件 416)
+
 ## v0.36.2 (2026-08-11) — 思考容器闭环兜底 + 通知栏常驻权限修复
 
 ### 修复

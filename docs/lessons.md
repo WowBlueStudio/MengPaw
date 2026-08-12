@@ -887,4 +887,24 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 - **Manifest 声明的组件 R8 自动 keep**: WakeReceiver/MediaProjectionService 等由 AGP
   自动生成 manifest keep 规则, 无需手写 proguard 规则 (手写反而重复)。
 
-*最后更新: 2026-08-12 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复*
+### 24. sys.* 补满 + 12q 修复 + v0.37.0 发布 (2026-08-12, v0.37.0)
+
+- **ConsumerIrManager 在 `android.hardware` 包, 不是 `android.hardware.consumerir`**:
+  Unresolved reference 查 SDK android.jar 里实际类路径再写 import。
+- **`ifEmpty { "字符串" }` 类型断裂**: `list.ifEmpty { "默认文本" }.joinToString()`
+  — lambda 返回 String 与 List 不符, 类型推断失败导致 joinToString "Unresolved"。
+  先 join 再判空, 不要链式 ifEmpty + joinToString。
+- **`withTimeoutOrNull` 无法区分"超时"与"协程正常返回 null"**: 用户取消对话框
+  (complete(null)) 与超时都得到 null; 取消分支永远不可达且编译器只警告不报错。
+  需要区分时用 `withTimeout` + catch `TimeoutCancellationException`。
+- **NotificationListenerService 声明 `exported=false` 在部分 ROM 系统无法绑定**:
+  通知列表永不工作; 改 `exported=true` 由 BIND_NOTIFICATION_LISTENER_SERVICE
+  系统专属权限保护, 无安全面扩大。
+- **命令面数量/权限清单数量是硬编码断言**: SysExecutorTest (51→84→85) 与
+  PermissionExecutorTest (14→19) 硬编码数量, 大功能扩展后必须同步, 否则测试红。
+- **新增命令四步闭环**: executor 实现 → SysExecutor.commands 注册 → SysKeywords
+  同义词 → 文档 (开发指南 §5.1 + android.md); 测试断言数量与命令表覆盖。
+- **发布时插件双套口径**: 12 个插件模块 debug+release 双套 416 (含 plugin-termux
+  22); 历史快照 405 系单/双套混算, 以本次实测为准。
+
+*最后更新: 2026-08-12 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0*
