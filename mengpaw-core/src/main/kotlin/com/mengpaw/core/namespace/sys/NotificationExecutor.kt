@@ -22,6 +22,13 @@ internal object NotificationExecutor {
     /** 通知 ID 单一事实源 — 查询/发送/取消共用，避免错位（此前查询返回 1001 而实际发送 1002）。 */
     private const val NOTIFICATION_ID = 1002
 
+    /**
+     * 闹钟广播 action — 与 shell 模块 WakeReceiver 的 intent-filter 配对
+     * (9d 审查 P2 修复: 原 Class.forName 反射字符串耦合, ProGuard 混淆/类改名即崩;
+     * 改 action + setPackage 显式路由, core 不再依赖 shell 类名)。
+     */
+    const val ALARM_ACTION = "com.mengpaw.action.ALARM"
+
     suspend fun notificationId(args: List<String>, ec: ExecutionContext): ExecutionResult {
         val channel = args.firstOrNull() ?: "mengpaw_agent"
         return ExecutionResult.ok("Notification channel: $channel (id: $NOTIFICATION_ID)")
@@ -98,7 +105,7 @@ internal object NotificationExecutor {
         val msg = args.drop(1).joinToString(" ")
         return try {
             val am = app.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
-            val intent = android.content.Intent(app, Class.forName("com.mengpaw.shell.service.WakeReceiver"))
+            val intent = android.content.Intent(ALARM_ACTION).setPackage(app.packageName)
             intent.putExtra("wake_reason", "alarm")
             intent.putExtra("message", msg)
             val pi = android.app.PendingIntent.getBroadcast(
@@ -112,4 +119,3 @@ internal object NotificationExecutor {
         }
     }
 }
-

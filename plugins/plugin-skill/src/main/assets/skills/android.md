@@ -58,7 +58,7 @@ net.curl "https://android-docs.cn/about/versions/14/behavior-changes-14"
 
 ## 权限系统
 
-MengPaw 已声明的 17 项 Android 权限:
+MengPaw 已声明的主要 Android 权限 (完整清单以 AndroidManifest.xml 为唯一基准):
 
 | 权限 | 用途 | 运行时 |
 |------|------|:--:|
@@ -77,6 +77,10 @@ MengPaw 已声明的 17 项 Android 权限:
 | QUERY_ALL_PACKAGES | 查询已安装应用 | ❌ |
 | REQUEST_INSTALL_PACKAGES | 安装 APK | ✅ |
 | READ_MEDIA_IMAGES | 读取图片 (Android 13+) | ✅ |
+| RECORD_AUDIO | 录音 | ✅ |
+| VIBRATE | 震动 | ❌ |
+| SCHEDULE_EXACT_ALARM | 精确闹钟 | ❌ |
+| MANAGE_EXTERNAL_STORAGE | 所有文件访问 | ✅ |
 | READ_EXTERNAL_STORAGE | 读取存储 (≤12) | ✅ |
 | WRITE_EXTERNAL_STORAGE | 写入存储 (≤12) | ✅ |
 

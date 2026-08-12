@@ -78,7 +78,7 @@ internal object BatteryPowerExecutor {
                 appendLine("省电模式当前状态: ${if (current) "开启" else "关闭"}")
                 appendLine("目标: ${if (enable) "开启" else "关闭"} — Android 无公共 API 直接切换，需 WRITE_SETTINGS 权限")
                 appendLine("已打开系统省电设置页，请手动${if (enable) "开启" else "关闭"}。")
-                appendLine("申请权限: sys.permission.request WRITE_SETTINGS")
+                appendLine("手动授权: 设置 → 应用 → MengPaw → 修改系统设置 → 开启 (清单未声明 WRITE_SETTINGS，无法自动申请)")
             })
         }
 

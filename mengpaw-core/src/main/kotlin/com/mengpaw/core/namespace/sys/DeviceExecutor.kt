@@ -75,7 +75,12 @@ internal object DeviceExecutor {
         val level = args.firstOrNull()?.toIntOrNull()
         if (level == null || level !in 0..255) return ExecutionResult.fail("Usage: sys.screen.brightness <0-255>")
         if (!Settings.System.canWrite(app)) {
-            return ExecutionResult.fail("需要 WRITE_SETTINGS 权限。使用 sys.permission.request WRITE_SETTINGS 申请。", errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_PERMISSION_DENIED)
+            // 清单未声明 WRITE_SETTINGS (PermissionExecutor 权限清单以 Manifest 为唯一基准),
+            // sys.permission.request 无法申请 — 只能打开应用设置页引导手动开启
+            return ExecutionResult.fail(
+                "需要 WRITE_SETTINGS 权限（系统设置类，无法自动申请）。请引导用户: 设置 → 应用 → MengPaw → 修改系统设置 → 开启。",
+                errorCode = com.mengpaw.kernel.cli.ErrorCodes.ERR_PERMISSION_DENIED
+            )
         }
         Settings.System.putInt(app.contentResolver, Settings.System.SCREEN_BRIGHTNESS, level)
         return ExecutionResult.ok("Brightness set to $level/255")

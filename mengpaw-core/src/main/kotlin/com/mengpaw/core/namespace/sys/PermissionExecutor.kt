@@ -74,11 +74,10 @@ internal object PermissionExecutor {
         Manifest.permission.RECORD_AUDIO to "录音权限。使用 sys.permission.request RECORD_AUDIO 申请。",
     )
 
-    private inline fun requireApp(): Context = SysExecutor.appContext
-        ?: throw IllegalStateException("SysExecutor not initialized")
+    private fun requireApp(): Context? = SysExecutor.appContext
 
     suspend fun permissionList(args: List<String>, ec: ExecutionContext): ExecutionResult {
-        val app = requireApp()
+        val app = requireApp() ?: return ExecutionResult.fail("SysExecutor not initialized")
         // P2 修复 (双源漂移): 原内联 perms 列表是 PERMISSION_LABELS 的手写子集,
         // 缺 ACCESS_COARSE_LOCATION/READ_MEDIA_IMAGES/READ_CALENDAR/WRITE_CALENDAR/
         // REQUEST_INSTALL_PACKAGES 共 6 项 — 两处各改各的必漂移。
@@ -105,7 +104,7 @@ internal object PermissionExecutor {
     }
 
     suspend fun permissionCheck(args: List<String>, ec: ExecutionContext): ExecutionResult {
-        val app = requireApp()
+        val app = requireApp() ?: return ExecutionResult.fail("SysExecutor not initialized")
         val perm = args.firstOrNull() ?: return ExecutionResult.fail(
             "Usage: sys.permission.check <permission_name>\n示例: sys.permission.check POST_NOTIFICATIONS",
             errorCode = ErrorCodes.ERR_INVALID_INPUT)
@@ -128,7 +127,7 @@ internal object PermissionExecutor {
     }
 
     suspend fun permissionRequest(args: List<String>, ec: ExecutionContext): ExecutionResult {
-        val app = requireApp()
+        val app = requireApp() ?: return ExecutionResult.fail("SysExecutor not initialized")
         val perm = args.firstOrNull() ?: return ExecutionResult.fail(
             "Usage: sys.permission.request <permission_name>\n" +
             "常用权限: POST_NOTIFICATIONS (通知), CAMERA (相机), ACCESS_FINE_LOCATION (定位)",

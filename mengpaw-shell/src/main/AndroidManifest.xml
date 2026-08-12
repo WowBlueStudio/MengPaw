@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Android 14+: specialUse 前台服务类型需要显式声明此权限 (targetSDK=35 强制要求) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Android 14+: mediaProjection 前台服务类型 (sys.screenshot/screenrecord 屏幕捕获) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- Android 13+: 通知运行时权限 (否则 startForeground 静默失败) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Android 13+: 忽略电池优化 (OEM 白名单前提) -->
@@ -98,9 +100,20 @@
                 android:value="agent_keepalive_for_user_commands_and_trigger_response" />
         </service>
 
+        <!-- sys.screenshot / sys.screenrecord MediaProjection 前台服务令牌 (Android 14+ 强制) -->
+        <service
+            android:name="com.mengpaw.core.namespace.sys.MediaProjectionService"
+            android:foregroundServiceType="mediaProjection"
+            android:exported="false" />
+
         <receiver
             android:name=".service.WakeReceiver"
-            android:exported="false" />
+            android:exported="false">
+            <!-- sys.alarm.set (core NotificationExecutor) 经显式 action 路由, 消除反射类名耦合 -->
+            <intent-filter>
+                <action android:name="com.mengpaw.action.ALARM" />
+            </intent-filter>
+        </receiver>
 
         <!-- FileProvider — 相机拍照 / 文件选择器 URI 授权 -->
         <!-- P2 修复 (死声明清理): EventReceiver 原在 Manifest 声明但无 intent-filter,

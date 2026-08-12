@@ -38,6 +38,14 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { /* 结果无需处理: 授权后通知自动出现; 拒绝则前台服务仍运行, 仅通知不可见 (系统行为) */ }
 
+    // P1 修复 (9d 审查): sys.screenshot/screenrecord 的 MediaProjection 授权 —
+    // 命令协程经 SysExecutor.requestProjection 挂起等待, 结果转发给等待方。
+    private val projectionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        com.mengpaw.core.namespace.SysExecutor.onProjectionResult(result.resultCode, result.data)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -47,6 +55,7 @@ class MainActivity : ComponentActivity() {
         //    进化档案/ 顶层。必须在任何 Agent 发现/列表扫描之前执行 (幂等, 无旧数据零开销)。 ──
         try { com.mengpaw.kernel.evolution.EvolutionStore.migrateLegacyDefaultDir() } catch (_: Exception) {}
         com.mengpaw.core.namespace.SysExecutor.setActivity(this)
+        com.mengpaw.core.namespace.SysExecutor.setProjectionLauncher { intent -> projectionLauncher.launch(intent) }
         enableEdgeToEdge()
 
         // 启动阶段：深蓝背景 → 白色状态栏图标

@@ -156,6 +156,43 @@ object SysExecutor {
         currentActivity = activity?.let { WeakReference(it) }
     }
 
+    // ── MediaProjection 授权桥 (P1 修复, 9d 审查) ──
+    // sys.screenshot/screenrecord 走 MediaProjection (免 root): MainActivity 在
+    // onCreate 注册 ActivityResultLauncher 并经 [setProjectionLauncher] 注入;
+    // 命令协程经 [requestProjection] 挂起等待用户授权结果, 超时默认拒绝。
+    @Volatile
+    private var projectionLauncher: ((android.content.Intent) -> Unit)? = null
+
+    private var projectionRequest: kotlinx.coroutines.CompletableDeferred<Pair<Int, android.content.Intent?>>? = null
+    private val projectionLock = Any()
+
+    /** MainActivity 注入投影授权 launcher (ActivityResultLauncher 必须在 Activity 启动前注册). */
+    fun setProjectionLauncher(launcher: (android.content.Intent) -> Unit) {
+        projectionLauncher = launcher
+    }
+
+    /** MainActivity launcher 回调转发 — 完成等待中的授权请求. */
+    fun onProjectionResult(resultCode: Int, data: android.content.Intent?) {
+        synchronized(projectionLock) {
+            projectionRequest?.complete(resultCode to data)
+            projectionRequest = null
+        }
+    }
+
+    /** 发起屏幕捕获授权并等待用户结果. @return (resultCode, data) 或 null (超时/无 launcher/已在途). */
+    internal suspend fun requestProjection(
+        intent: android.content.Intent, timeoutMs: Long
+    ): Pair<Int, android.content.Intent?>? {
+        val launcher = projectionLauncher ?: return null
+        val deferred = kotlinx.coroutines.CompletableDeferred<Pair<Int, android.content.Intent?>>()
+        synchronized(projectionLock) {
+            if (projectionRequest != null) return null // 已有授权请求在途, 拒绝并发
+            projectionRequest = deferred
+        }
+        launcher(intent)
+        return kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { deferred.await() }
+    }
+
     val commands: Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult> = mapOf(
         // ── Device & system info ──
         "device" to DeviceExecutor::device,
