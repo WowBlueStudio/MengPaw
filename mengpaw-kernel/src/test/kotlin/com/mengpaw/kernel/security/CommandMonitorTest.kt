@@ -212,6 +212,48 @@ class CommandMonitorTest {
         assertNotNull(eval("$termux '-c,cat' --ez com.termux.RUN_COMMAND_BACKGROUND true"))
     }
 
+    // ── evaluateRulesOnly (Termux 桥内容审查 — 仅规则, 跳过元字符/前缀黑名单) ──
+
+    private fun rulesOnly(cmd: String, confirm: Boolean = false): String? =
+        runBlocking { CommandMonitor.evaluateRulesOnly(cmd, confirm) }
+
+    @Test
+    fun `rulesOnly blocks high risk content`() {
+        assertNotNull("rm -rf / 必须 BLOCK", rulesOnly("rm -rf /"))
+        assertNotNull("su 必须 BLOCK", rulesOnly("echo x | sudo whoami"))
+        assertNotNull("覆盖系统路径必须 BLOCK", rulesOnly("echo x > /etc/hosts"))
+        assertNotNull("mkfs 必须 BLOCK", rulesOnly("mkfs.ext4 /dev/block/sda"))
+    }
+
+    @Test
+    fun `rulesOnly allows full shell syntax and benign content`() {
+        // 元字符 (; && $ 反引号) 在外部 shell 内容中合法 — 规则审查不得拦截
+        assertNull(rulesOnly("import sys; print(sys.version_info)"))
+        assertNull(rulesOnly("conda activate py && python3 -c \"print(1)\""))
+        assertNull(rulesOnly("echo \$PATH"))
+        assertNull(rulesOnly("print('`backtick`')"))
+        assertNull(rulesOnly("pip list"))
+    }
+
+    @Test
+    fun `rulesOnly confirm rule rejected without user consent`() {
+        assertNotNull("无用户同意时 CONFIRM 规则必须拒绝", rulesOnly("rm /sdcard/tmp.txt", confirm = false))
+    }
+
+    @Test
+    fun `rulesOnly confirm rule allowed with user consent`() {
+        val listener = UserConfirmBus.Listener { req ->
+            UserConfirmBus.respond(req.id, true)
+            true
+        }
+        UserConfirmBus.registerListener(listener)
+        try {
+            assertNull("用户同意后 CONFIRM 规则放行", rulesOnly("rm /sdcard/tmp.txt", confirm = true))
+        } finally {
+            UserConfirmBus.unregisterListener(listener)
+        }
+    }
+
     @Test
     fun `nested reinterpret depth limit`() {
         assertNotNull(eval("sh -c \"sh -c 'sh -c \\\"echo x\\\"'\""))

@@ -121,6 +121,19 @@ object CommandMonitor {
     suspend fun evaluate(commandLine: String, allowUserConfirm: Boolean, workDir: String? = null): String? =
         evaluateInternal(commandLine.trim(), allowUserConfirm, workDir, 0)
 
+    /**
+     * 仅高危规则审查 (BLOCK/CONFIRM) — 跳过再解释递归、元字符、前缀黑名单与
+     * stdin 保护。供 Termux 桥等"外部 shell 内容审查"复用同一套高危规则:
+     * 内容由目标环境 (Termux/ubuntu/conda) 直接执行, 无本地 shell 拼接注入面,
+     * 元字符策略不再适用, 但 rm/su/写系统路径等高危规则仍生效。
+     * @return 拒绝原因 (应阻止执行) 或 null (通过)。
+     */
+    suspend fun evaluateRulesOnly(content: String, allowUserConfirm: Boolean): String? {
+        val trimmed = content.trim()
+        if (trimmed.isBlank()) return null
+        return matchRules(trimmed, allowUserConfirm)
+    }
+
     private suspend fun evaluateInternal(
         cmd: String, allowUserConfirm: Boolean, workDir: String?, depth: Int
     ): String? {
