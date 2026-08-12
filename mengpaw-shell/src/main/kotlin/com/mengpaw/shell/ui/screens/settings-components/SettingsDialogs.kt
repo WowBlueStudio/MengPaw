@@ -38,7 +38,9 @@ fun CronTriggerDialog(
         onDismissRequest = onDismiss,
         title = { Text(strings.cronTitle, fontWeight = FontWeight.Bold) },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
+            // FIX(闪退): AlertDialog text 槽可能给无限高度约束 (DeviceGuidesPanel 真机复现) —
+            // 滚动容器必须 heightIn 有界, 否则垂直滚动组件收到 ∞ 即 IllegalStateException。
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
                 OutlinedTextField(
                     value = cronExpr, onValueChange = { cronExpr = it },
                     label = { Text(strings.cronExpression) },
@@ -83,7 +85,7 @@ fun LifetimeTriggerDialog(
         onDismissRequest = onDismiss,
         title = { Text(strings.scheduleTitle, fontWeight = FontWeight.Bold) },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
                 OutlinedTextField(
                     value = config, onValueChange = { config = it },
                     label = { Text(strings.scheduleParams) },

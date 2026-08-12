@@ -18,6 +18,10 @@
   历史时停止跟随
 
 ### 修复
+- **设置弹窗闪退 (荣耀真机复现: 使用指南 → USB 测试)**: AlertDialog text 槽位给
+  垂直滚动容器无限高度约束 → IllegalStateException。修复: 使用指南三个弹窗改自定义
+  Dialog + Surface heightIn(屏高×0.85) 有界高度 (对齐 AttachmentPreviewDialogs 模式);
+  同款风险的 CRON/伪人模式触发器弹窗补 heightIn(440dp) 上限
 - **sys.* 12q 闭环六项**: dialog.speech 缺录音权限前置引导 (原误报超时) /
   新增 sys.download.status 下载状态验证 / 通知监听服务 exported=true (部分 ROM
   绑定失败) / 对话框失败语义区分 (取消/超时/无 Activity/在途) / TTS 引擎实例
@@ -32,6 +36,9 @@
 - 仅 Shell 变更 (browser 无变更不构建); plugins.json 无变更
 - 测试: 全量双套 1280 用例 0 failures (kernel 562 + core 90 + shell 170 +
   browser 42 + 插件 416)
+- 崩溃巡检 (发布前, 双设备 dropbox): vivo 侧 0.31~0.35.3 历史崩溃均闭环
+  (最新 08-10 dataSync 前台服务超时, 0.35.4 已修复); 荣耀平板 08-12 16:36
+  使用指南弹窗无限高度崩溃 — 根因定位并随本版修复, 安装后回访验证
 
 ## v0.36.2 (2026-08-11) — 思考容器闭环兜底 + 通知栏常驻权限修复
 
