@@ -18,6 +18,9 @@ object TokenStatsCollector {
     private val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private val today: String get() = fmt.format(Date())
 
+    /** 历史保留上限 (v0.37.1 用户定案): 月口径 24 月 ≈ 730 天, 支撑日 90 天/周 50 周/月 24 月。 */
+    private const val RETENTION_MONTHS = 24
+
     data class DayRecord(
         val date: String,
         val modelTokens: Map<String, Long>,     // model → token count
@@ -35,6 +38,13 @@ object TokenStatsCollector {
     private var records = mutableListOf<DayRecord>()
     private val csvFile: File
         get() = java.io.File(com.mengpaw.kernel.DataPaths.BASE, "token_stats.csv")
+
+    /** 保留截止日期 — 早于此日期的记录滚动淘汰。 */
+    private fun retentionCutoff(): String {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.MONTH, -RETENTION_MONTHS)
+        return fmt.format(cal.time)
+    }
 
     /** Load persisted records on startup. */
     fun load() {
@@ -63,6 +73,7 @@ object TokenStatsCollector {
                     }
                 }
             }
+            records.removeAll { it.date < retentionCutoff() }
         } catch (_: Exception) { }
     }
 
@@ -97,7 +108,9 @@ object TokenStatsCollector {
                 cacheHitTokens = if (cacheHit) cacheHitTokens.toLong() else 0,
                 totalTokens = tokens.toLong()))
         }
-        if (records.size > 90) records.removeAt(0)
+        // v0.37.1: 保留上限 90 天 → 24 月 (用户定案: 日 90 天/周 50 周/月 24 月),
+        // 按日期清理而非固定 removeAt(0) (防 CSV 乱序误删)。
+        records.removeAll { it.date < retentionCutoff() }
         save()
     }
 
@@ -106,26 +119,19 @@ object TokenStatsCollector {
         records.takeLast(days)
 
     /**
-     * 连续日序列 (v0.37.1 重构) — 从最早记录日到今天逐日生成, 无记录的天补 0 值
-     * 占位 (信息完整性: 中间没用量的区间条形也必须可见, 不跳空)。
-     * records 有 90 天上限, 因此跨度最多 90 天; 无记录返回空列表。
+     * 连续日序列 (v0.37.1 重构) — 最近 [days] 天 (默认 90) 逐日生成, 无记录的天补
+     * 0 值占位 (信息完整性: 中间没用量的区间条形也必须可见, 不跳空)。
+     * 无记录返回空列表。
      */
-    fun dailySeries(): List<DayRecord> {
+    fun dailySeries(days: Int = 90): List<DayRecord> {
         if (records.isEmpty()) return emptyList()
-        val earliest = records.minOfOrNull { it.date } ?: return emptyList()
         val byDate = records.associateBy { it.date }
         val cal = Calendar.getInstance()
-        try {
-            val parsed = fmt.parse(earliest)
-            if (parsed == null) return records.sortedBy { it.date }
-            cal.time = parsed
-        } catch (_: Exception) {
-            return records.sortedBy { it.date }
-        }
+        cal.add(Calendar.DAY_OF_YEAR, -(days - 1))
         val todayStr = today
         val result = mutableListOf<DayRecord>()
         var guard = 0
-        while (guard <= 100) {
+        while (guard < days) {
             val date = fmt.format(cal.time)
             result.add(byDate[date] ?: DayRecord(date, emptyMap(), 0, 0))
             if (date == todayStr) break
@@ -164,26 +170,18 @@ object TokenStatsCollector {
     }
 
     /**
-     * 连续周序列 (v0.37.1 重构) — 最早记录所在周起至本周, 逐周生成, 空周补 0 值
-     * 占位 (不跳空; 用户定案: 中间没用量的区间条形必须可见)。records 90 天上限
-     * 约束跨度 ≤13 周。无记录返回空列表。
+     * 连续周序列 (v0.37.1 重构) — 最近 [weeks] 周 (默认 50) 逐周生成, 空周补 0 值
+     * 占位 (不跳空; 用户定案: 中间没用量的区间条形必须可见)。无记录返回空列表。
      */
-    fun weeklySeries(): List<WeeklySummary> {
+    fun weeklySeries(weeks: Int = 50): List<WeeklySummary> {
         if (records.isEmpty()) return emptyList()
-        val earliest = records.minOfOrNull { it.date } ?: return emptyList()
         val cal = Calendar.getInstance()
-        try {
-            val parsed = fmt.parse(earliest)
-            if (parsed == null) return weeklyRecords(13)
-            cal.time = parsed
-        } catch (_: Exception) {
-            return weeklyRecords(13)
-        }
         cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
+        cal.add(Calendar.DAY_OF_YEAR, -(weeks - 1) * 7)
         val todayStr = today
         val result = mutableListOf<WeeklySummary>()
         var guard = 0
-        while (guard <= 14) {
+        while (guard < weeks) {
             val start = fmt.format(cal.time)
             val endCal = cal.clone() as Calendar
             endCal.add(Calendar.DAY_OF_YEAR, 6)
@@ -229,26 +227,18 @@ object TokenStatsCollector {
     }
 
     /**
-     * 连续月序列 (v0.37.1 重构) — 最早记录所在月起至本月, 逐月生成, 空月补 0 值
-     * 占位 (不跳空; 用户定案: 中间没用量的月份条形必须可见)。records 90 天上限
-     * 约束跨度 ≤4 个月。无记录返回空列表。
+     * 连续月序列 (v0.37.1 重构) — 最近 [months] 个月 (默认 24) 逐月生成, 空月补 0 值
+     * 占位 (不跳空; 用户定案: 中间没用量的月份条形必须可见)。无记录返回空列表。
      */
-    fun monthlySeries(): List<WeeklySummary> {
+    fun monthlySeries(months: Int = 24): List<WeeklySummary> {
         if (records.isEmpty()) return emptyList()
-        val earliest = records.minOfOrNull { it.date } ?: return emptyList()
         val cal = Calendar.getInstance()
-        try {
-            val parsed = fmt.parse(earliest)
-            if (parsed == null) return monthlyRecords(6)
-            cal.time = parsed
-        } catch (_: Exception) {
-            return monthlyRecords(6)
-        }
         cal.set(Calendar.DAY_OF_MONTH, 1)
+        cal.add(Calendar.MONTH, -(months - 1))
         val todayStr = today.substring(0, 7)
         val result = mutableListOf<WeeklySummary>()
         var guard = 0
-        while (guard <= 6) {
+        while (guard < months) {
             val monthLabel = "${cal.get(Calendar.YEAR)}-${(cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')}"
             val monthRecords = records.filter { it.date.startsWith(monthLabel) }
             val mergedModels = mutableMapOf<String, Long>()

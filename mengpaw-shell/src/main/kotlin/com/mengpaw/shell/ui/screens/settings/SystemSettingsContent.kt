@@ -189,7 +189,7 @@ fun SystemSettingsContent(
     val models = collector.allModels()
     // v0.37.1 重构 (用户定案): 日/周/月是统计口径, 保留切换; 每档查询范围改
     // "全量历史" — 连续序列补 0 值占位 (中间没用量的区间条形必须可见, 不跳空),
-    // 图表横向滑动查询。records 90 天上限约束跨度: 日 ≤90 天 / 周 ≤13 周 / 月 ≤4 月。
+    // 图表横向滑动查询。历史保留上限 (用户定案): 日 90 天 / 周 50 周 / 月 24 月。
     var statRange by remember { mutableIntStateOf(0) }
 
     Row(Modifier.fillMaxWidth().padding(bottom = ArcoSpacing.sm), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {

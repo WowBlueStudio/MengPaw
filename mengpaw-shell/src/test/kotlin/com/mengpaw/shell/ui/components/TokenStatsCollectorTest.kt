@@ -60,12 +60,11 @@ class TokenStatsCollectorTest {
             record(dateOffset(0), "gpt-4o", 200)
         ))
         val series = TokenStatsCollector.dailySeries()
-        assertEquals("跨度应覆盖前天到今天共 3 天", 3, series.size)
-        assertEquals("首日应为前天", dateOffset(2), series[0].date)
-        assertEquals(100L, series[0].totalTokens)
-        assertEquals("中间无记录的天必须补 0 占位", 0L, series[1].totalTokens)
-        assertEquals("末日应为今天", dateOffset(0), series[2].date)
-        assertEquals(200L, series[2].totalTokens)
+        assertEquals("日口径固定回溯 90 天", 90, series.size)
+        assertTrue("中间无记录的天必须补 0 占位", series.any { it.totalTokens == 0L })
+        assertEquals("末日应为今天", dateOffset(0), series.last().date)
+        assertEquals("今天数据应为 200", 200L, series.last().totalTokens)
+        assertEquals("前天数据应为 100", 100L, series.firstOrNull { it.date == dateOffset(2) }?.totalTokens)
     }
 
     @Test
@@ -75,12 +74,13 @@ class TokenStatsCollectorTest {
     }
 
     @Test
-    fun 当天首条记录序列仅一天() {
+    fun 当天首条记录日序列仍为90天() {
         setRecords(listOf(record(dateOffset(0), "gpt-4o", 50)))
         val series = TokenStatsCollector.dailySeries()
-        assertEquals(1, series.size)
-        assertEquals(dateOffset(0), series[0].date)
-        assertEquals(50L, series[0].totalTokens)
+        assertEquals("日口径固定回溯 90 天", 90, series.size)
+        assertEquals("末日应为今天", dateOffset(0), series.last().date)
+        assertEquals(50L, series.last().totalTokens)
+        assertTrue("其余天补 0 占位", series.dropLast(1).all { it.totalTokens == 0L })
     }
 
     @Test
@@ -100,7 +100,7 @@ class TokenStatsCollectorTest {
             record(dateOffset(0), "gpt-4o", 800)
         ))
         val series = TokenStatsCollector.weeklySeries()
-        assertTrue("两周数据跨度应至少 3 周", series.size >= 3)
+        assertEquals("周口径固定回溯 50 周", 50, series.size)
         assertTrue("中间空周必须补 0 占位", series.any { it.totalTokens == 0L })
         assertEquals("末周应含本周数据", 800L, series.last().totalTokens)
     }
@@ -112,9 +112,9 @@ class TokenStatsCollectorTest {
             record(dateInMonth(0), "gpt-4o", 900)
         ))
         val series = TokenStatsCollector.monthlySeries()
-        assertEquals("上上月到本月应恰 3 个月", 3, series.size)
-        assertEquals("中间空月必须补 0 占位", 0L, series[1].totalTokens)
-        assertEquals("首月应为上上月", 700L, series[0].totalTokens)
-        assertEquals("末月应为本月", 900L, series[2].totalTokens)
+        assertEquals("月口径固定回溯 24 个月", 24, series.size)
+        assertTrue("中间空月必须补 0 占位", series.any { it.totalTokens == 0L })
+        assertEquals("末月应为本月且含今日数据", 900L, series.last().totalTokens)
+        assertEquals("上上月数据应为 700", 700L, series.firstOrNull { it.totalTokens > 0 && it.totalTokens != 900L }?.totalTokens)
     }
 }
