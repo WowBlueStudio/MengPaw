@@ -169,12 +169,12 @@ Agent 通过 CLI 命令操控设备：
 
 ## 开发工具
 
-本项目由 AI 辅助开发，不同阶段使用的工具链：
+本项目由 AI 辅助开发，自 2026-08-07 起由 Codex 接管维护：
 
 | 阶段 | 时间 | 编排工具 | 主力模型 |
 |------|------|---------|---------|
 | 早期 | 2026-07-12 ~ 07-15 | Reasonix | DeepSeek Flash |
-| 中期 | 2026-07-16 ~ 至今 | Claude Code | DeepSeek Pro |
+| 当前 | 2026-08-07 ~ 至今 | Codex | DeepSeek Pro |
 
 > 模型推理通过 DeepSeek API (`api.deepseek.com`)，配置见 `reasonix.toml`。
 

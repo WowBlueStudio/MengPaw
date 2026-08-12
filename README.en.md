@@ -169,12 +169,12 @@ Original features leading similar Agent frameworks (shown with a pink WowBlue ba
 
 ## Dev Tools
 
-This project is developed with AI assistance:
+This project is developed with AI assistance. Since 2026-08-07 it is maintained by Codex:
 
 | Phase | Period | Orchestrator | Main model |
 |-------|--------|--------------|-----------|
 | Early | 2026-07-12 ~ 07-15 | Reasonix | DeepSeek Flash |
-| Current | 2026-07-16 ~ now | Claude Code | DeepSeek Pro |
+| Current | 2026-08-07 ~ now | Codex | DeepSeek Pro |
 
 > Model inference goes through the DeepSeek API (`api.deepseek.com`); see `reasonix.toml`.
 

@@ -38,4 +38,4 @@ the respective providers. Most plugins work fully offline with zero configuratio
 
 <b>Open Source</b>
 Licensed under AGPL-3.0. Developed by WowBlue Studio (ShenZhen, China).
-Built with AI assistance using Claude Code + DeepSeek Pro.
+Built with AI assistance using Codex + DeepSeek Pro.
