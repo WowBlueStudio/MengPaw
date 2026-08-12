@@ -35,14 +35,19 @@ internal class ThinkingProcessWriter(
         session.messages.value = session.messages.value + msg
     }
 
-    /** 流式思考更新 — 播放器每次推完整显示文本, 覆盖当前轮 thought。
-     *  若当前最后一步已有工具 (上一轮已固化), 新思考开新 step。 */
-    fun pushThought(text: String) {
+    /**
+     * 流式思考更新 — 播放器每次推完整显示文本, 覆盖当前轮 thought。
+     * 按 roundId 路由: 同一轮 (roundId 相同) 增量覆盖同一步, 跨轮 (roundId
+     * 递增) 才另起新 step — 修复 v0.36.3 回归: 原实现用 last.tools 非空判轮界,
+     * 当前轮 addTool 插入工具行后, 同轮后续思考增量全被误判为"上一轮已固化"
+     * 而另起 step, 导致前几轮思考只显示 1~3 字并产生重复 step。
+     */
+    fun pushThought(text: String, roundId: Long) {
         updateProcess { steps ->
             val newSteps = steps.toMutableList()
             val last = newSteps.lastOrNull()
-            if (last == null || last.tools.isNotEmpty()) {
-                newSteps.add(ChatMessageUi.ProcessStep(thought = text))
+            if (last == null || last.roundId != roundId) {
+                newSteps.add(ChatMessageUi.ProcessStep(roundId = roundId, thought = text))
             } else {
                 newSteps[newSteps.lastIndex] = last.copy(thought = text)
             }
@@ -50,14 +55,19 @@ internal class ThinkingProcessWriter(
         }
     }
 
-    /** 工具提前通知: 流式检测到完整 "Action: <tool>" 行 → 插入折叠工具行。 */
-    fun addTool(command: String) {
+    /** 工具提前通知: 流式检测到完整 "Action: <tool>" 行 → 插入折叠工具行。
+     *  按 roundId 挂到对应 step — 思考增量未到 (突发流) 时先建 step, 后续
+     *  pushThought 同轮更新, 不再拆成两个 step。 */
+    fun addTool(command: String, roundId: Long) {
         updateProcess { steps ->
             val newSteps = steps.toMutableList()
             val tool = ChatMessageUi.ProcessTool(command = command, actionInput = "", observation = "")
             val last = newSteps.lastOrNull()
-            if (last == null) newSteps.add(ChatMessageUi.ProcessStep(tools = listOf(tool)))
-            else newSteps[newSteps.lastIndex] = last.copy(tools = last.tools + tool)
+            if (last == null || last.roundId != roundId) {
+                newSteps.add(ChatMessageUi.ProcessStep(roundId = roundId, tools = listOf(tool)))
+            } else {
+                newSteps[newSteps.lastIndex] = last.copy(tools = last.tools + tool)
+            }
             newSteps
         }
     }

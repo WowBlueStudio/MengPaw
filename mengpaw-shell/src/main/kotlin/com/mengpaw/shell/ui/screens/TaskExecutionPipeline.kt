@@ -195,9 +195,10 @@ internal class TaskExecutionPipeline(
                         observation = trace.observation ?: "",
                         isError = trace.observation?.startsWith("Error [") == true
                     )
-                    // 工具轮结束 → 清空流式缓冲与播放进度, 下一轮从头累积
-                    // (旧实现 buffer 跨轮永不清空, "Action:" 一旦出现即永久过滤后续纯文本增量)
-                    streamBuffer.resetRound()
+                    // 工具轮结束 → 封口当前流式轮次 (不再接收该轮增量), 未播文本
+                    // 保留给播放协程按序播完 — 原 resetRound 立即清空会把快工具轮的
+                    // 未播思考直接丢掉 (前几轮只显示 1~3 字), v0.36.3 改为轮次队列
+                    streamBuffer.sealRound()
                 }
 
                 // onDelta (engine 线程回调): 只累积, 不推送 — 节奏由播放协程控制
@@ -213,7 +214,8 @@ internal class TaskExecutionPipeline(
                     // 因为要求冒号紧跟 Action。流式到达时行尾 \n 落地即命中。
                     val newTool = streamBuffer.append(delta)
                     // v0.34.3: 完整 "Action: <tool>" 行 → 折叠工具行即时插入
-                    newTool?.let { writer.addTool(it) }
+                    // v0.36.3: 带 roundId 挂到当前轮 step — 同轮后续思考增量不再另起 step
+                    newTool?.let { writer.addTool(it.tool, it.roundId) }
                     // 检测 Final Answer 开始 → 过程容器自动折叠 + 答案气泡流式
                     if (!finalAnswerStarted.get() && accumulatedRaw.contains("Final Answer:", ignoreCase = true)) {
                         finalAnswerStarted.set(true)
@@ -225,8 +227,8 @@ internal class TaskExecutionPipeline(
                 // v0.28.5: 必须用 Dispatchers.Default — SSE 突发到达时(如服务端缓存回放)
                 // readUTF8Line 从不挂起, 主线程被读取循环占死, Main 调度的播放协程会被饿死
                 // (实测 846 chunks/166ms 突发 → UI-PUSH 零输出)
-                playbackJob = streamBuffer.launchPlayback(scope) { text ->
-                    if (finalAnswerStarted.get()) writer.pushFinal(text) else writer.pushThought(text)
+                playbackJob = streamBuffer.launchPlayback(scope) { roundId, text ->
+                    if (finalAnswerStarted.get()) writer.pushFinal(text) else writer.pushThought(text, roundId)
                 }
 
                 // Reset stale state from previous runs before starting
@@ -295,7 +297,8 @@ internal class TaskExecutionPipeline(
                     // 兜底 flush: 播放器异常退出时推完剩余; 正常播完时此处无操作
                     val flushText = streamBuffer.flushText()
                     if (flushText != null) {
-                        if (finalAnswerStarted.get()) writer.pushFinal(flushText) else writer.pushThought(flushText)
+                        if (finalAnswerStarted.get()) writer.pushFinal(flushText.tool)
+                        else writer.pushThought(flushText.tool, flushText.roundId)
                     }
                 }
 

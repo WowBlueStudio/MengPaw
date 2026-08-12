@@ -62,7 +62,7 @@ class ThinkingProcessWriterTest {
         val writer = ThinkingProcessWriter(session, modePrefix = null, agentRef = null)
 
         writer.start()
-        writer.pushThought("第一轮思考")
+        writer.pushThought("第一轮思考", roundId = 0)
 
         val tp = sessionMessages(session).first() as ChatMessageUi.ThinkingProcess
         assertEquals("思考容器初始应为展开", false, tp.collapsed)
@@ -77,7 +77,7 @@ class ThinkingProcessWriterTest {
         val writer = ThinkingProcessWriter(session, modePrefix = "/test", agentRef = "agent")
 
         writer.start()
-        writer.pushThought("思考")
+        writer.pushThought("思考", roundId = 0)
         writer.beginFinalAnswer()
 
         val messages = sessionMessages(session)
@@ -114,7 +114,7 @@ class ThinkingProcessWriterTest {
         val writer = ThinkingProcessWriter(session, modePrefix = null, agentRef = null)
 
         writer.start()
-        writer.pushThought("思考")
+        writer.pushThought("思考", roundId = 0)
         writer.beginFinalAnswer()
         writer.finalize("答案")
 
@@ -123,5 +123,45 @@ class ThinkingProcessWriterTest {
             .count { it.isRunning }
         assertEquals("闭环后不得残留运行中的思考容器", 0, runningProcesses)
         assertNotNull("最终答案气泡应存在", sessionMessages(session).lastOrNull { it is ChatMessageUi.FinalAnswer })
+    }
+
+    @Test
+    fun `addTool与pushThought同轮不另起step`() {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, modePrefix = null, agentRef = null)
+
+        writer.start()
+        // 突发流场景: 完整 Action 行先于思考增量被检测 → 先插工具行
+        writer.addTool("search", roundId = 1)
+        writer.pushThought("需要查找天气", roundId = 1)
+        writer.pushThought("需要查找北京天气", roundId = 1)
+
+        val tp = sessionMessages(session).first() as ChatMessageUi.ThinkingProcess
+        assertEquals("同轮思考/工具必须合并为一步", 1, tp.steps.size)
+        assertEquals("需要查找北京天气", tp.steps[0].thought)
+        assertEquals(1, tp.steps[0].tools.size)
+        assertEquals("search", tp.steps[0].tools[0].command)
+    }
+
+    @Test
+    fun `跨轮pushThought另起新step`() {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, modePrefix = null, agentRef = null)
+
+        writer.start()
+        writer.pushThought("第一轮思考", roundId = 1)
+        writer.addTool("search", roundId = 1)
+        writer.completeTool("search q=天气", "晴天", isError = false)
+        writer.pushThought("第二轮思考", roundId = 2)
+        writer.addTool("agent.write", roundId = 2)
+
+        val tp = sessionMessages(session).first() as ChatMessageUi.ThinkingProcess
+        assertEquals("两轮必须拆成两步", 2, tp.steps.size)
+        assertEquals("第一轮思考", tp.steps[0].thought)
+        assertEquals(1, tp.steps[0].tools.size)
+        assertEquals("晴天", tp.steps[0].tools[0].observation)
+        assertEquals("第二轮思考", tp.steps[1].thought)
+        assertEquals(1, tp.steps[1].tools.size)
+        assertEquals("agent.write", tp.steps[1].tools[0].command)
     }
 }

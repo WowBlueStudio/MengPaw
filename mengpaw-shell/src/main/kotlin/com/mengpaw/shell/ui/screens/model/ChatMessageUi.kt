@@ -75,6 +75,10 @@ sealed class ChatMessageUi {
 
     /** 一轮 ReAct 交互 — 思考 + 该轮工具调用列表 (多 Action 并行)。 */
     data class ProcessStep(
+        // v0.36.3: roundId 是流式播放缓冲的轮次 id — 运行中把同一轮思考/工具
+        // 增量路由到同一步 (播放协程与 addTool 并发, 不能再靠 tools 空否判断轮界);
+        // 仅运行期瞬态, 持久化不落盘 (历史恢复默认 0, 静态渲染不依赖)。
+        val roundId: Long = 0,
         val thought: String = "",
         val tools: List<ProcessTool> = emptyList()
     )
