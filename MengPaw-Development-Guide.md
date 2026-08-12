@@ -932,7 +932,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 **dev 插件扩展 (6)**：`create --type script|native --name <name> [--author <作者>] [--desc <描述>]` | `audit --target <id>` | `share --plugin <id> --to <target>` | `examples` | `keywords --target <id>` | `guide`
 > dev 插件的命令实际注册为 `dev.plugin.create` / `dev.plugin.audit` / `dev.plugin.share` / `dev.plugin.examples` / `dev.plugin.keywords` / `dev.plugin.guide`，因为 PluginManager 根据插件 ID (`dev-plugin`) 自动派生命名空间 `dev`。`plugin.create` 在 CLI 文档中出现时均指 `dev.plugin.create`。`dev.plugin.guide` 输出能力边界文档并落盘 `插件文档/plugin-dev-guide.md` 供用户阅读。
 
-#### sys — Android 系统 (84 命令，通过 Android 适配层注入)
+#### sys — Android 系统 (85 命令，通过 Android 适配层注入)
 
 **设备信息 (1)**: `device` (型号/厂商/SDK/架构)
 
@@ -970,7 +970,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **敏感数据 (5, 全部 MID)**: `contacts.list [条数]` (需 READ_CONTACTS) | `sms.send <号码> <内容>` (需 SEND_SMS) | `sms.list [条数]` (需 READ_SMS) | `calllog.list [条数]` (需 READ_CALL_LOG) | `phone.call <号码>` (需 CALL_PHONE)
 
-**其他设备能力 (8)**: `download <url> [文件名]` | `wallpaper.set <路径|content://>` | `toast <文本>` | `wakelock.acquire` / `wakelock.release` | `ir.transmit <频率> <时长...>` (需红外硬件) | `usb.list` | `usb.request <设备名>` (MID)
+**其他设备能力 (9)**: `download <url> [文件名]` | `download.status <id>` | `wallpaper.set <路径|content://>` | `toast <文本>` | `wakelock.acquire` / `wakelock.release` | `ir.transmit <频率> <时长...>` (需红外硬件) | `usb.list` | `usb.request <设备名>` (MID)
 
 **权限 (3)**: `permission.list` | `permission.request <name>` | `permission.check <name>`
 

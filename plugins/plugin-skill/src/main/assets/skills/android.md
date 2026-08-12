@@ -247,6 +247,7 @@ sys.phone.call <号码>             # 直接拨号 (CALL_PHONE)
 ```
 sys.notification.list               # 系统通知列表 (需开启『通知使用权』)
 sys.download <url> [文件名]         # 下载到公共 Downloads (系统 DownloadManager)
+sys.download.status <id>            # 查询下载状态/进度/失败原因
 sys.wallpaper.set <路径|content://> # 设置壁纸
 sys.toast <文本>                    # 气泡提示
 sys.wakelock.acquire / release      # 唤醒锁 (30 分钟自动释放)
