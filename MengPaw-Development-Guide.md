@@ -83,11 +83,11 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | `framework` | FrameworkPlugin | 15 | 框架通信 (discover/add/peers/trust/untrust/info/ping/connect/call/disconnect/adapters + v0.35.2 pair.ls/accept/decline — 配对请求 Agent 侧操作入口 + v0.35.5 delegate 指挥舰委派) [↔ 同捆插件 plugin-framework] |
 | `evolution` | EvolutionExecutor.kt | 5 | 智能体进化 (audit/report/learn.command/reactions/mark-corrected) [↔ 同捆插件 plugin-evolution 提供默认实现] |
 
-> `sys` 命名空间 (51 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。`evolution` 命名空间在内核注册 (PipelineManager)，默认实现由同捆插件 plugin-evolution 注册为 EvolutionProvider SPI。
+> `sys` 命名空间 (84 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。`evolution` 命名空间在内核注册 (PipelineManager)，默认实现由同捆插件 plugin-evolution 注册为 EvolutionProvider SPI。
 
 **插件命名空间权威推导 (v0.31.0 起, `pluginNamespaceFor` 全内核唯一来源)**: 插件 id 去 `-plugin`/`-ext` 后缀；`memory-*` 前缀插件取剩余部分 (memory-twin→`twin`)；特例 — `browser-mcp-plugin` 命令键自带 `mcp.` 前缀 → ns=`browser` (拼出 `browser.mcp.*`)，`browser-search-plugin` 命令键为短名 → ns=`search`。注册 (PluginManager/PipelineManager)、搜索索引、CLI.md 插件表、MCP 桥工具解析 (McpServer) 全部经此推导，严禁在别处再写 `removeSuffix` 特例。配套 `scripts/validate-plugins.ps1` 6c 交叉校验同规则。
 
-**命令搜索索引 (BM25) 机制 (v0.31.0 修复脱节)**: `CommandSearch` 索引 = `BuiltinCommandIndex` 静态种子 (~150 条精编中英同义词) + `PluginManager.registerSearchIndex` 动态条目 (插件激活) + `SysExecutor` 初始化补种 (50 条 sys.* 命令带中文同义词表, kernel 种子无法覆盖 Android 反射实现)。**可用性由 self.search 按真实注册表 (CommandRegistry.has) 过滤** — 种子命中但执行器不存在的命令 (插件未安装/停用) 不外泄, 过滤后不足时从候选中补足; 插件激活即恢复可搜, 无需动索引本身 (避免 removeByNamespace 破坏精编种子)。**中文整词组查询** (v0.31.0): 中文无空格分词, 自然语言词组 ("批量验证"/"添加日历事件") 整词作 token 此前 score=0 完全漏配 (自检报告 "日历/屏幕/录音" 搜不到 sys.* 的深层根因), 现对 3+ 字 CJK token 追加字符级双字滑动窗口 ("校验插件"→校验/验插/插件) — 词内任意双字独立命中, 英文与 2 字词不动 (原评分格局不变)。
+**命令搜索索引 (BM25) 机制 (v0.31.0 修复脱节)**: `CommandSearch` 索引 = `BuiltinCommandIndex` 静态种子 (~150 条精编中英同义词) + `PluginManager.registerSearchIndex` 动态条目 (插件激活) + `SysExecutor` 初始化补种 (84 条 sys.* 命令带中文同义词表, kernel 种子无法覆盖 Android 反射实现)。**可用性由 self.search 按真实注册表 (CommandRegistry.has) 过滤** — 种子命中但执行器不存在的命令 (插件未安装/停用) 不外泄, 过滤后不足时从候选中补足; 插件激活即恢复可搜, 无需动索引本身 (避免 removeByNamespace 破坏精编种子)。**中文整词组查询** (v0.31.0): 中文无空格分词, 自然语言词组 ("批量验证"/"添加日历事件") 整词作 token 此前 score=0 完全漏配 (自检报告 "日历/屏幕/录音" 搜不到 sys.* 的深层根因), 现对 3+ 字 CJK token 追加字符级双字滑动窗口 ("校验插件"→校验/验插/插件) — 词内任意双字独立命中, 英文与 2 字词不动 (原评分格局不变)。
 
 **框架特性发现性铁律 (v0.31.0, plugin.verify 教训; v0.34.3 修订)**: 代码存在 ≠ Agent 可触达。Agent 对框架能力的认知来源: `BuiltinCommandIndex` (self.search, 含 usage/描述) / `self.tools` (运行时枚举) / 系统提示词「常用命令」/ 本 Guide §5.1。**任何特性必须同时出现在全部触达源, 缺一处即"代码存在但 Agent 无法直接触达"→ 盲试 → 自检必然误报**。新增命令或旗标时 (尤其 plugin.* 管理命令) 三源同步: ① BuiltinCommandIndex 条目 (usage 含全部旗标形态) ② 系统提示词常用命令行 ③ 本 Guide §5.1; `self.tools` 为运行时枚举无需同步。**v0.34.3: CLI.md 工作区文档整体移除** — 22KB 全表不再每轮负担, `agent.cli` 改为轻量指引 (self.tools/self.search 入口 + 参数纯净规则 + 安全分级), 命令发现完全走 `self.tools`/`self.search` (见「CLI.md 移除」节)。
 
@@ -225,7 +225,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 |------|------|
 | `security/Vault.kt` | API Key 加密存储 (EncryptedSharedPreferences + Android Keystore) |
 | `security/IntegrityGuard.kt` | APK 签名校验，实现 `IntegrityProvider` 接口 |
-| `namespace/SysExecutor.kt` | 系统信息命令 (39 个，反射 Android API) |
+| `namespace/SysExecutor.kt` | 系统设备命令 (84 个，反射 Android API；实现按域拆分到 namespace/sys/) |
 | `DataPathsInitializer.kt` | 桥接：`DataPaths.initialize(context.filesDir)`；输出目录优先公共 `/storage/emulated/0/MengPaw/` (v0.34.3, 用户可见；需 MANAGE_EXTERNAL_STORAGE，未授权回退旧私有目录并迁移旧文件) |
 | `AndroidLogger.kt` | 桥接：`KernelLog.setLogger(AndroidLogger())` |
 
@@ -932,13 +932,13 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 **dev 插件扩展 (6)**：`create --type script|native --name <name> [--author <作者>] [--desc <描述>]` | `audit --target <id>` | `share --plugin <id> --to <target>` | `examples` | `keywords --target <id>` | `guide`
 > dev 插件的命令实际注册为 `dev.plugin.create` / `dev.plugin.audit` / `dev.plugin.share` / `dev.plugin.examples` / `dev.plugin.keywords` / `dev.plugin.guide`，因为 PluginManager 根据插件 ID (`dev-plugin`) 自动派生命名空间 `dev`。`plugin.create` 在 CLI 文档中出现时均指 `dev.plugin.create`。`dev.plugin.guide` 输出能力边界文档并落盘 `插件文档/plugin-dev-guide.md` 供用户阅读。
 
-#### sys — Android 系统 (51 命令，通过 Android 适配层注入)
+#### sys — Android 系统 (84 命令，通过 Android 适配层注入)
 
 **设备信息 (1)**: `device` (型号/厂商/SDK/架构)
 
 **电源 (3)**: `battery` | `power` | `power.save`
 
-**网络 (4)**: `network` | `wifi` | `wifi.enable` | `bluetooth`
+**网络 (5)**: `network` | `wifi` | `wifi.enable` | `wifi.scan` (需定位权限+定位开关, MID) | `bluetooth`
 
 **定位 (1)**: `location` (需权限)
 
@@ -960,9 +960,17 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **媒体采集 (3)**: `screenshot [path]` | `screenrecord.start` | `screenrecord.stop`
 
+**用户交互对话框 (11, 全部 MID)**: `dialog.confirm <标题>` | `dialog.text <提示> [默认]` | `dialog.radio <标题> <选项...>` | `dialog.checkbox <标题> <选项...>` | `dialog.spinner <标题> <选项...>` | `dialog.sheet <标题> <选项...>` | `dialog.date [标题]` | `dialog.time [标题]` | `dialog.counter [标题] [min] [max] [默认]` | `dialog.color [标题]` | `dialog.speech [提示]` (需 RECORD_AUDIO)
+
+**语音/朗读/录音 (6)**: `stt.listen [提示]` (需 RECORD_AUDIO, MID) | `tts.speak <文本> [lang:xx-XX]` | `tts.engines` | `mic.record [秒数]` (需 RECORD_AUDIO, MID) | `mic.stop` (MID) | `torch.on` / `torch.off` (需 CAMERA)
+
 **Intent (3)**: `intent.open <url\|pkg>` | `intent.share <text>` | `intent.view <file>`
 
-**通知 (3)**: `notification.id` | `notification.send <title> <text>` | `notification.cancel <id>`
+**通知 (4)**: `notification.id` | `notification.send <title> <text>` | `notification.cancel <id>` | `notification.list` (需『通知使用权』, MID)
+
+**敏感数据 (5, 全部 MID)**: `contacts.list [条数]` (需 READ_CONTACTS) | `sms.send <号码> <内容>` (需 SEND_SMS) | `sms.list [条数]` (需 READ_SMS) | `calllog.list [条数]` (需 READ_CALL_LOG) | `phone.call <号码>` (需 CALL_PHONE)
+
+**其他设备能力 (8)**: `download <url> [文件名]` | `wallpaper.set <路径|content://>` | `toast <文本>` | `wakelock.acquire` / `wakelock.release` | `ir.transmit <频率> <时长...>` (需红外硬件) | `usb.list` | `usb.request <设备名>` (MID)
 
 **权限 (3)**: `permission.list` | `permission.request <name>` | `permission.check <name>`
 
