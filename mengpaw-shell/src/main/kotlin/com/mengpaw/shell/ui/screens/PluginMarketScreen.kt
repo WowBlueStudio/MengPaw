@@ -161,13 +161,8 @@ private fun PluginCard(
 
             // Info
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.displayName, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.width(ArcoSpacing.sm))
-                    Text(if (item.version.isNotBlank()) "v${item.version}" else strings.builtinBadge,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = com.mengpaw.design.theme.ThemeColors.textSecondary)
-                }
+                // 版本号不放在标题行 — 中英长标题换行时会把版本号挤成竖排 (v0.37.2 手机端排版修复)
+                Text(item.displayName, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
                 Text(item.description, style = MaterialTheme.typography.bodySmall,
                     color = com.mengpaw.design.theme.ThemeColors.textSecondary, maxLines = 1)
                 Row {
@@ -206,62 +201,64 @@ private fun PluginCard(
             }
 
             // Action
-            when (val state = item.installState) {
-                is InstallState.Idle -> {
-                    if (isBuiltin || item.availability == PluginAvailability.EMBEDDED) {
-                        // 已内置 / 已嵌入：无操作按钮
-                    } else if (item.isInstalled) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(
-                                checked = item.isActive,
-                                onCheckedChange = { onToggle() },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = com.mengpaw.design.theme.ThemeColors.brand)
-                            )
-                            IconButton(onClick = onUninstall, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.Delete, strings.uninstall,
-                                    tint = com.mengpaw.design.theme.ThemeColors.error,
-                                    modifier = Modifier.size(18.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                when (val state = item.installState) {
+                    is InstallState.Idle -> {
+                        if (isBuiltin || item.availability == PluginAvailability.EMBEDDED) {
+                            // 已内置 / 已嵌入：无操作按钮
+                        } else if (item.isInstalled) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = item.isActive,
+                                    onCheckedChange = { onToggle() },
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = com.mengpaw.design.theme.ThemeColors.brand)
+                                )
+                                IconButton(onClick = onUninstall, modifier = Modifier.size(32.dp)) {
+                                    Icon(Icons.Default.Delete, strings.uninstall,
+                                        tint = com.mengpaw.design.theme.ThemeColors.error,
+                                        modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        } else if (item.availability == PluginAvailability.DOWNLOADABLE) {
+                            IconButton(onClick = onInstall, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Download, strings.install,
+                                    tint = com.mengpaw.design.theme.ThemeColors.brand,
+                                    modifier = Modifier.size(20.dp))
                             }
                         }
-                    } else if (item.availability == PluginAvailability.DOWNLOADABLE) {
-                        IconButton(onClick = onInstall, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Download, strings.install,
-                                tint = com.mengpaw.design.theme.ThemeColors.brand,
-                                modifier = Modifier.size(20.dp))
-                        }
                     }
-                }
-                is InstallState.Downloading -> {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    is InstallState.Downloading -> {
                         CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp,
                             color = com.mengpaw.design.theme.ThemeColors.brand)
                         Text("${(state.progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall)
                     }
-                }
-                is InstallState.Verifying -> Text(strings.verifying, style = MaterialTheme.typography.labelSmall,
-                    color = com.mengpaw.design.theme.ThemeColors.textSecondary)
-                is InstallState.Installing -> {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    is InstallState.Verifying -> Text(strings.verifying, style = MaterialTheme.typography.labelSmall,
+                        color = com.mengpaw.design.theme.ThemeColors.textSecondary)
+                    is InstallState.Installing -> {
                         LinearProgressIndicator(Modifier.width(48.dp),
                             color = com.mengpaw.design.theme.ThemeColors.brand)
                         Text(state.step.take(12), style = MaterialTheme.typography.labelSmall)
                     }
-                }
-                is InstallState.Done -> {
-                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green1) {
-                        Text(strings.installedBadge, Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6)
+                    is InstallState.Done -> {
+                        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green1) {
+                            Text(strings.installedBadge, Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6)
+                        }
                     }
-                }
-                is InstallState.Failed -> {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    is InstallState.Failed -> {
                         Text(strings.failedBadge, style = MaterialTheme.typography.labelSmall,
                             color = com.mengpaw.design.theme.ThemeColors.error)
                         TextButton(onClick = onInstall) {
                             Text(strings.retry, color = com.mengpaw.design.theme.ThemeColors.brand)
                         }
                     }
+                }
+                // 版本号统一放操作按钮下方, 避免长标题挤压 (内置/嵌入无版本号, 不显示)
+                if (item.version.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text("v${item.version}", style = MaterialTheme.typography.labelSmall,
+                        color = com.mengpaw.design.theme.ThemeColors.textSecondary, maxLines = 1)
                 }
             }
         }
