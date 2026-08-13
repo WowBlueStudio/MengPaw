@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material3.*
@@ -66,6 +67,7 @@ internal fun MainScreenInputBar(
     onClearAttachments: () -> Unit,
     strings: AppStrings,
     maxSteps: Int,
+    isRunning: Boolean,
     viewModel: AgentViewModel,
     pluginViewModel: PluginViewModel,
     onExpandSheet: () -> Unit
@@ -268,42 +270,52 @@ internal fun MainScreenInputBar(
                         )
                     }
                     // Send button — circular 44dp, animated ↑ icon
+                    // v0.37.3: 生成中且输入框无内容 → 变为停止按钮 (点击停止模型输出)
+                    val isStopping = isRunning && inputText.isEmpty() && pendingAttachments.isEmpty()
                     val scope = rememberCoroutineScope()
                     val arrowOffsetY = remember { Animatable(0f) }
                     val arrowAlpha = remember { Animatable(1f) }
                     Box(
                         modifier = Modifier
                             .size(44.dp)
-                            .background(ThemeColors.brand, CircleShape)
+                            .background(if (isStopping) ThemeColors.error else ThemeColors.brand, CircleShape)
                             .clickable {
-                                val text = inputText
-                                if (text.isNotBlank() || pendingAttachments.isNotEmpty()) {
-                                    onInputTextChange("")
-                                    val atts = pendingAttachments; onClearAttachments()
-                                    inputFocus.requestFocus()
-                                    scope.launch {
-                                        // ↑ flies upward and out
-                                        launch { arrowOffsetY.animateTo(-60f, tween(280)) }
-                                        launch { arrowAlpha.animateTo(0f, tween(280)) }
-                                        // snap below, then submit (P2 修复: 走统一 performSend)
-                                        arrowOffsetY.snapTo(60f)
-                                        performSend(text, atts)
-                                        // ↑ flies in from below
-                                        launch { arrowOffsetY.animateTo(0f, tween(280)) }
-                                        launch { arrowAlpha.animateTo(1f, tween(280)) }
+                                if (isStopping) {
+                                    viewModel.stopAgent()
+                                } else {
+                                    val text = inputText
+                                    if (text.isNotBlank() || pendingAttachments.isNotEmpty()) {
+                                        onInputTextChange("")
+                                        val atts = pendingAttachments; onClearAttachments()
+                                        inputFocus.requestFocus()
+                                        scope.launch {
+                                            // ↑ flies upward and out
+                                            launch { arrowOffsetY.animateTo(-60f, tween(280)) }
+                                            launch { arrowAlpha.animateTo(0f, tween(280)) }
+                                            // snap below, then submit (P2 修复: 走统一 performSend)
+                                            arrowOffsetY.snapTo(60f)
+                                            performSend(text, atts)
+                                            // ↑ flies in from above
+                                            launch { arrowOffsetY.animateTo(0f, tween(280)) }
+                                            launch { arrowAlpha.animateTo(1f, tween(280)) }
+                                        }
                                     }
                                 }
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            if (inputText.isEmpty()) Icons.Outlined.ArrowUpward else Icons.Filled.ArrowUpward,
-                            "发送",
-                            tint = Color.White,
-                            modifier = Modifier
-                                .offset(y = arrowOffsetY.value.dp)
-                                .alpha(arrowAlpha.value)
-                        )
+                        if (isStopping) {
+                            Icon(Icons.Filled.Stop, "停止", tint = Color.White, modifier = Modifier.size(20.dp))
+                        } else {
+                            Icon(
+                                if (inputText.isEmpty()) Icons.Outlined.ArrowUpward else Icons.Filled.ArrowUpward,
+                                "发送",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .offset(y = arrowOffsetY.value.dp)
+                                    .alpha(arrowAlpha.value)
+                            )
+                        }
                     }
                 } // close Row (input field row)
             } // close Column (input bar container)

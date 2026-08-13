@@ -371,6 +371,7 @@ fun MainScreen(
                 onClearAttachments = { pendingAttachments = emptyList() },
                 strings = strings,
                 maxSteps = settingsState?.value?.maxSteps ?: 50,
+                isRunning = isRunning,
                 viewModel = viewModel,
                 pluginViewModel = pluginViewModel,
                 onExpandSheet = { showExpandSheet = true }
