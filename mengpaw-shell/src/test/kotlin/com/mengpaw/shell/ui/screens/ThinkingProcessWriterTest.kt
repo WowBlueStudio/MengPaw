@@ -186,4 +186,24 @@ class ThinkingProcessWriterTest {
         assertEquals("第二轮思考", tp.steps[1].thought)
         assertEquals("b", tp.steps[1].tools[0].command)
     }
+
+    @Test
+    fun `最终答案创建后思考回填_不得影响finalize定型`() {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, modePrefix = null, agentRef = null)
+
+        writer.start()
+        // v0.37.3 回归: 最终答案轮已创建 (tracker.ref=FinalAnswer) 后, 播放协程
+        // 仍在回填前一思考轮 (updateProcess 会把 tracker.ref 改写为 ThinkingProcess) —
+        // 修复前 pushFinal/finalize 依赖 ref 定位失败, FinalAnswer 残留 isRunning=true
+        writer.beginFinalAnswer()
+        writer.pushThought("残余思考", roundId = 5)
+        writer.pushFinal("答案内容")
+        writer.finalize("最终答案")
+
+        val fa = sessionMessages(session).filterIsInstance<ChatMessageUi.FinalAnswer>().firstOrNull()
+        assertTrue("FinalAnswer 必须存在", fa != null)
+        assertEquals("最终答案", fa!!.content)
+        assertFalse("定型后 isRunning 必须为 false (不再显示思考中计时)", fa.isRunning)
+    }
 }

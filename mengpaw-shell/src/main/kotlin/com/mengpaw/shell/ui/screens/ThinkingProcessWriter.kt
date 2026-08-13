@@ -113,8 +113,8 @@ internal class ThinkingProcessWriter(
     fun pushFinal(text: String) {
         session.messages.update { current ->
             val mutable = current.toMutableList()
-            val idx = resolveRunningIndex(mutable, tracker.index, tracker.ref)
-            if (idx >= 0 && mutable[idx] is ChatMessageUi.FinalAnswer) {
+            val idx = resolveFinalAnswerIndex(mutable)
+            if (idx >= 0) {
                 val updated = (mutable[idx] as ChatMessageUi.FinalAnswer).copy(content = text)
                 tracker.ref = updated
                 tracker.index = idx
@@ -128,8 +128,8 @@ internal class ThinkingProcessWriter(
     fun finalize(answer: String) {
         session.messages.update { current ->
             val mutable = current.toMutableList()
-            val idx = resolveRunningIndex(mutable, tracker.index, tracker.ref)
-            if (idx >= 0 && mutable[idx] is ChatMessageUi.FinalAnswer) {
+            val idx = resolveFinalAnswerIndex(mutable)
+            if (idx >= 0) {
                 val updated = (mutable[idx] as ChatMessageUi.FinalAnswer)
                     .copy(content = answer, isRunning = false)
                 tracker.ref = updated
@@ -147,8 +147,8 @@ internal class ThinkingProcessWriter(
     fun fail(errorMsg: String) {
         session.messages.update { current ->
             val mutable = current.toMutableList()
-            val idx = resolveRunningIndex(mutable, tracker.index, tracker.ref)
-            if (idx >= 0 && mutable[idx] is ChatMessageUi.FinalAnswer) {
+            val idx = resolveFinalAnswerIndex(mutable)
+            if (idx >= 0) {
                 val updated = (mutable[idx] as ChatMessageUi.FinalAnswer)
                     .copy(content = errorMsg, isRunning = false)
                 tracker.ref = updated
@@ -169,11 +169,9 @@ internal class ThinkingProcessWriter(
     private fun updateProcess(transform: (List<ChatMessageUi.ProcessStep>) -> List<ChatMessageUi.ProcessStep>) {
         session.messages.update { current ->
             val mutable = current.toMutableList()
-            val idx = resolveRunningIndex(mutable, tracker.index, tracker.ref)
             // beginFinalAnswer 后 tracker.ref 指向 FinalAnswer — 播放协程的思考回填
             // 需按类型定位过程容器 (折叠后 isRunning=false, 不能依赖运行态扫描)
-            val tpIdx = if (idx >= 0 && mutable[idx] is ChatMessageUi.ThinkingProcess) idx
-            else mutable.indexOfLast { it is ChatMessageUi.ThinkingProcess }
+            val tpIdx = resolveProcessIndex(mutable)
             if (tpIdx >= 0) {
                 val prev = mutable[tpIdx] as ChatMessageUi.ThinkingProcess
                 val updated = prev.copy(steps = transform(prev.steps))
@@ -183,5 +181,24 @@ internal class ThinkingProcessWriter(
             }
             mutable
         }
+    }
+
+    /** 按类型定位过程容器 (优先 tracker 快路径, 退化为类型扫描)。 */
+    private fun resolveProcessIndex(mutable: List<ChatMessageUi>): Int {
+        val idx = resolveRunningIndex(mutable, tracker.index, tracker.ref)
+        return if (idx >= 0 && mutable[idx] is ChatMessageUi.ThinkingProcess) idx
+        else mutable.indexOfLast { it is ChatMessageUi.ThinkingProcess }
+    }
+
+    /**
+     * 按类型定位最终答案气泡 — v0.37.3 修复: updateProcess (思考回填) 会把
+     * tracker.ref 改写为 ThinkingProcess, 若 pushFinal/finalize 仍依赖 ref 定位,
+     * 会定位失败 → FinalAnswer 残留 isRunning=true + content 空, UI 恒显
+     * "思考中..." 计时气泡。
+     */
+    private fun resolveFinalAnswerIndex(mutable: List<ChatMessageUi>): Int {
+        val idx = resolveRunningIndex(mutable, tracker.index, tracker.ref)
+        return if (idx >= 0 && mutable[idx] is ChatMessageUi.FinalAnswer) idx
+        else mutable.indexOfLast { it is ChatMessageUi.FinalAnswer }
     }
 }
