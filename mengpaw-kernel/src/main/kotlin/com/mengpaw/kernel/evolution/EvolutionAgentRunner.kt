@@ -31,7 +31,11 @@ class EvolutionAgentRunner(private val llmProvider: LlmProvider) {
         if (pending.isEmpty()) return null
         val reportMd = try {
             llmProvider.complete(buildPrompt(agentName, pending))
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            com.mengpaw.kernel.KernelLog.w(
+                "EvolutionAgent",
+                "分析失败 (${pending.size} 条待分析): ${e.message?.take(120) ?: "未知错误"}"
+            )
             return null
         }
         val path = EvolutionStore.saveReport(agentName, reportMd, pending.size)

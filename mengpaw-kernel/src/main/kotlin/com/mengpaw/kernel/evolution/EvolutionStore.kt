@@ -856,7 +856,7 @@ object EvolutionStore {
         val agent = agentFileOf(agentName)
         val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
         val file = File(reportsDir(agent), "${ts}_${covered}.md")
-        file.writeText(buildString {
+        val content = buildString {
             appendLine("---")
             appendLine("status: $REPORT_STATUS_PENDING")
             appendLine("generated_at: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}")
@@ -865,7 +865,15 @@ object EvolutionStore {
             appendLine("---")
             appendLine()
             append(content)
-        })
+        }
+        // 原子写: tmp + rename, 防报告半写 (v0.37.3 审查项)
+        val tmp = File(file.parentFile, "${file.name}.tmp")
+        tmp.writeText(content)
+        if (!tmp.renameTo(file)) {
+            file.delete()
+            tmp.renameTo(file)
+        }
+        if (tmp.exists()) { try { tmp.delete() } catch (_: Exception) {} }
         file.absolutePath
     } catch (_: Exception) { null }
 

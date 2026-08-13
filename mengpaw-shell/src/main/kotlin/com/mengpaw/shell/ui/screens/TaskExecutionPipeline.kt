@@ -5,6 +5,7 @@ package com.mengpaw.shell.ui.screens
 
 import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.session.AttachmentData
+import com.mengpaw.shell.ui.screens.model.AgentSession
 import com.mengpaw.shell.ui.screens.model.ChatMessageUi
 import com.mengpaw.shell.ui.screens.model.ExecutionMode
 import com.mengpaw.shell.ui.screens.model.InputTag
@@ -283,18 +284,7 @@ internal class TaskExecutionPipeline(
                 // 会话结束兜底: Evolution Agent 分析触发 (v0.37.3) — 新失败累计达
                 // 批次阈值时生成进化报告, 子 Agent 产出放用户气泡侧 (User 消息),
                 // 主 Agent 参考 evolution 技能审阅采纳
-                try {
-                    val evolutionReport = session.engine.maybeTriggerEvolution()
-                    if (evolutionReport != null) {
-                        session.messages.value = session.messages.value +
-                            ChatMessageUi.User(
-                                "🧬 Evolution Agent 进化报告已生成\n\n报告: $evolutionReport\n\n" +
-                                    "请按 evolution 技能审阅采纳 (金字塔追问 + 增量沉淀)。"
-                            )
-                    }
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (_: Exception) {}
+                maybeDeliverEvolutionReport(session)
                 inputTagManager.loopMode = savedLoopMode
                 processNextPending()
 
@@ -315,8 +305,26 @@ internal class TaskExecutionPipeline(
                 // Prevents process crash — degrades gracefully to error message
                 applyError(e, session, writer, savedLoopMode, playbackJob, modePrefix, agentRef,
                     chat, inputTagManager, sessionPersistence) { processNextPending() }
+                // 异常结束同样兜底触发进化分析 (失败也是进化原料)
+                maybeDeliverEvolutionReport(session)
             }
         }
+    }
+
+    /** 会话结束兜底: Evolution Agent 分析触发 + 报告投递 (成功/异常路径共用, v0.37.3)。 */
+    private suspend fun maybeDeliverEvolutionReport(session: AgentSession) {
+        try {
+            val evolutionReport = session.engine.maybeTriggerEvolution()
+            if (evolutionReport != null) {
+                session.messages.value = session.messages.value +
+                    ChatMessageUi.User(
+                        "🧬 Evolution Agent 进化报告已生成\n\n报告: $evolutionReport\n\n" +
+                            "请按 evolution 技能审阅采纳 (金字塔追问 + 增量沉淀)。"
+                    )
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {}
     }
 
     fun removePendingTask(index: Int) {
