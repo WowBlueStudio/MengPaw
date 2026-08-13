@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Automatic update plugin for MengPaw Shell and Browser.
  *
  * ## Features
- * - Checks GitHub Releases for new versions
+ * - Checks GitHub / Gitee Releases for new versions (fallback: GitHub → Gitee → ghproxy)
  * - WiFi-only scanning (optional, configurable)
  * - Auto-download option
  * - Installs APK via system package installer
@@ -45,7 +45,7 @@ class UpdatePlugin : Plugin {
     override val metadata = PluginMetadata(
         id = "update-plugin", name = "自动更新", version = "",  // 内置插件: 无版本号 (随 Shell APK 更新)
         type = PluginType.NATIVE, author = "MengPaw",
-        description = "WiFi 环境自动检测更新，可选自动下载安装。检查 GitHub Releases。",
+        description = "WiFi 环境自动检测更新，可选自动下载安装。检查 GitHub/Gitee Releases(双源回退)。",
         permissions = listOf("INTERNET", "ACCESS_NETWORK_STATE", "REQUEST_INSTALL_PACKAGES"),
         minCoreVersion = "0.2.3",
         commands = listOf("update.check", "update.download", "update.install", "update.auto")
