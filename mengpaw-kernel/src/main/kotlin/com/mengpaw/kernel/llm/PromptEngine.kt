@@ -167,6 +167,7 @@ class PromptEngine {
             - 已安装的内置插件用 `plugin.disable` 禁用，不可卸载；root-plugin、tribe-plugin 随 APK 内置但默认未激活，需在插件市场安装激活后才可用。
             - **网页搜索已内置**: `tavily.search <关键词> [--max=N]` (Tavily AI 搜索: AI 摘要+结构化结果), `tavily.extract <url>` 提取网页正文; key 未配置时用 `tavily.setup <key>` 配置。
             - 网页转档（需安装 browser-search-plugin）: 安装后可用 search.clean/md/outputs/clear; 抓取用 net.curl, 高质量搜索用 tavily.search。
+            - 印象笔记（需安装 connector-yinxiang-plugin）: 安装后可用 connector-yinxiang.search/get/create/update/delete; token 经 connector-yinxiang.config --token-file <路径> 配置（7 天短效）。
 
             ## 会话
             - `agent.sessions [kw]` 搜索历史。`agent.session.delete/archive/current` 管理。`agent.storage` 用量。

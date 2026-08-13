@@ -649,8 +649,8 @@
         "connector-yinxiang.notebooks",
         "connector-yinxiang.tags"
       ],
-      "checksum": "sha256:ea2573743da6d6b565c15a7782e4595c9a239def8ccdeeb2881bd57430c7da47",
-      "size": 433520,
+      "checksum": "sha256:6f2fe870f4355d5cc294f34b158453e8e142db40f4ebb1642c56bd7dbae10158",
+      "size": 434696,
       "changelog": "### 新增\n- **印象笔记连接器 v0.1.0**: EDAM 云 API 直连 (evernote-api 1.25.1, 内置 YINXIANG 端点), 全量 CRUD。\n- 命令: config/info/search/get/create/update/delete/notebooks/tags; 附件下载到工作区; token 7 天短效。\n- 内容 v1 为纯文本互转 (NoteContentConverter 预留 Markdown 扩展点)。\n- 上游: Evernote 官方 Java SDK (Apache/Evernote SDK License), 仅互操作调用。\n### 发行\n- 打包产物 plugin-connector-yinxiang-plugin.jar (fat dex, 含 evernote-api + jsoup)。"
     }
   ]
