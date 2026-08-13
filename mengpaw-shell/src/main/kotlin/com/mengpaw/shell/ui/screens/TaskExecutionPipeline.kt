@@ -280,6 +280,17 @@ internal class TaskExecutionPipeline(
                 val displayResult = if (doTranslate) translator.toChinese(result) else result
 
                 applyFinalResult(session, writer, coordinator.streamBuffer, displayResult, result, modePrefix, agentRef, pluginViewModel)
+                // 会话结束兜底: Evolution Agent 分析触发 (v0.37.3) — 新失败累计达
+                // 批次阈值时生成进化报告, 当前会话通知一行 (主 Agent 参考 evolution 技能审阅)
+                try {
+                    val evolutionReport = session.engine.maybeTriggerEvolution()
+                    if (evolutionReport != null) {
+                        session.messages.value = session.messages.value +
+                            ChatMessageUi.System("🧬 进化报告已生成: $evolutionReport — 审阅采纳见 evolution 技能")
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {}
                 inputTagManager.loopMode = savedLoopMode
                 processNextPending()
 

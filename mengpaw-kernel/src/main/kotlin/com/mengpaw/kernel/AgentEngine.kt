@@ -299,6 +299,22 @@ class AgentEngine(
     ): String = goalModeExecutor.runWithGoal(task, maxTurns, maxTokensBudget, onStep, onDelta)
 
     /**
+     * 会话结束兜底触发 Evolution Agent (v0.37.3) — 新失败累计达批次阈值时
+     * 执行一次独立分析, 返回生成报告路径 (无触发/失败返回 null)。
+     * 由会话收尾方 (TaskExecutionPipeline) 调用。
+     */
+    suspend fun maybeTriggerEvolution(): String? {
+        return try {
+            val runner = com.mengpaw.kernel.evolution.EvolutionAgentRunner(llmProvider)
+            if (runner.shouldTrigger(agentName)) runner.runAnalysis(agentName) else null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
      * Internal ReAct loop with optional context prefix.
      * Shared by run() and runWithGoal() to avoid session-creation overhead.
      */
