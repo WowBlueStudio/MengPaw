@@ -134,6 +134,10 @@ fun SystemSettingsContent(
         }
     }
 
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
     // ── 输出目录 (v0.35.1 独立区块): 点击整块 → 系统文件管理器打开目录;
     //    未授权 (不可写) → 点击跳『所有文件访问』授权页 ──
     SectionHeader(state.strings.outputDirTitle)
