@@ -65,9 +65,16 @@ fun ThinkingProcessBubble(message: ChatMessageUi.ThinkingProcess, agentName: Str
                 if (message.isRunning) "思考中…" else "思考过程",
                 style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand
             )
-            Spacer(Modifier.width(8.dp))
-            Text("${message.steps.size} 轮思考 · ${message.toolCount} 次调用",
-                style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+            // 思考次数/调用次数为 0 时对应摘要隐藏 (v0.37.2 UI 调整)
+            val summary = buildList {
+                if (message.steps.isNotEmpty()) add("${message.steps.size} 轮思考")
+                if (message.toolCount > 0) add("${message.toolCount} 次调用")
+            }.joinToString(" · ")
+            if (summary.isNotEmpty()) {
+                Spacer(Modifier.width(8.dp))
+                Text(summary,
+                    style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+            }
             if (message.isRunning) {
                 Spacer(Modifier.width(8.dp))
                 CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp,
