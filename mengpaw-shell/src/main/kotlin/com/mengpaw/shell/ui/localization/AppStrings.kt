@@ -145,6 +145,9 @@ class AppStrings {
     var systemTokenStats: String = ""
     var systemTotalUsage: String = ""
     var systemWeekly: String = ""
+    var autoUpdateTitle: String = ""
+    var autoUpdateClickHint: String = ""
+    var autoUpdateChecking: String = ""
 
     // Settings - Agent
     var agentAddHumanTouch: String = ""

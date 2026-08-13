@@ -124,6 +124,9 @@ val EnglishStrings = AppStrings().apply {
     systemTokenStats = "Token Usage Statistics"
     systemTotalUsage = "Total Usage"
     systemWeekly = "Weekly"
+    autoUpdateTitle = "Auto Update"
+    autoUpdateClickHint = "Tap to check for updates (GitHub/Gitee Releases)"
+    autoUpdateChecking = "Checking..."
 
     // Settings - Device guides
     guideSection = "Guides"

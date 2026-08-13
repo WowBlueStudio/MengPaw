@@ -133,6 +133,7 @@ dependencies {
     implementation(project(":plugin-evolution"))
     implementation(project(":plugin-concise"))
     implementation(project(":plugin-tavily"))
+    implementation(project(":plugin-update"))
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))

@@ -124,6 +124,9 @@ val ChineseStrings = AppStrings().apply {
     systemTokenStats = "Token 用量统计"
     systemTotalUsage = "总用量"
     systemWeekly = "每周"
+    autoUpdateTitle = "自动更新"
+    autoUpdateClickHint = "点击检查更新 (GitHub/Gitee Releases)"
+    autoUpdateChecking = "检查中..."
 
     // Settings - Device guides
     guideSection = "使用指南"

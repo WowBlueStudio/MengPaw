@@ -11,6 +11,7 @@ import com.mengpaw.plugin.memorytwin.MemoryTwinPlugin
 import com.mengpaw.plugin.net.NetPlugin
 import com.mengpaw.plugin.skill.SkillPlugin
 import com.mengpaw.plugin.tavily.TavilyPlugin
+import com.mengpaw.plugin.update.UpdatePlugin
 import com.mengpaw.shell.ui.screens.PluginViewModel
 
 /**
@@ -35,7 +36,7 @@ object PluginRegistrar {
         "net-plugin", "clipboard-plugin",
         "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin",
         "dream-plugin", "evolution-plugin", "concise-plugin", "termux-plugin",
-        "tavily-plugin"
+        "tavily-plugin", "update-plugin"
     )
 
     /**
@@ -71,6 +72,7 @@ object PluginRegistrar {
         "tribe-plugin" to "Tribe",
         "termux-plugin" to "Termux Bridge",
         "tavily-plugin" to "AI Search",
+        "update-plugin" to "Auto Update",
         // remote
         "update-plugin" to "Auto Update",
         "translate-plugin" to "Translation Engine",
@@ -103,13 +105,13 @@ object PluginRegistrar {
         "evolution-plugin" to ("智能体进化" to "智能体进化内置默认实现 (不可移除) — 失败模式库/省察引导/框架反馈; 第三方可实现 EvolutionProvider 覆盖 (Agent Evolution built-in (non-removable) — failure library/reflection guides/framework feedback; third-party EvolutionProvider can override)"),
         "concise-plugin" to ("言简意赅" to "去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），让模型回答更简洁 (Removes structural-output noise from the system prompt (forced Thought/Action boilerplate, Markdown decoration) for cleaner answers)"),
         "termux-plugin" to ("Termux 桥" to "通过 Termux 登录 ubuntu 执行命令与 conda 环境 Python — 逐层探测/脚本执行/输出回传 (Termux bridge — run commands/Python inside Termux+ubuntu+miniconda, with layer detection and output retrieval)"),
-        "tavily-plugin" to ("AI 搜索" to "Tavily AI 优化搜索引擎 — 结构化搜索结果 + 网页正文提取，Agent 原生搜索能力 (Tavily AI-optimized search — structured results + web content extraction, Agent's native search)")
+        "tavily-plugin" to ("AI 搜索" to "Tavily AI 优化搜索引擎 — 结构化搜索结果 + 网页正文提取，Agent 原生搜索能力 (Tavily AI-optimized search — structured results + web content extraction, Agent's native search)"),
+        "update-plugin" to ("自动更新" to "WiFi 环境自动检测更新，可选自动下载安装 — 检查 GitHub/Gitee Releases，安装 APK (Auto update: check/download/install/auto)")
     )
 
     /** 远程/按需安装插件候选描述 (v0.34.3 P0-1) — CLI.md 远程插件表数据源,
      *  与 PluginClassRegistry.BUILTIN_CLASSES 中非内置条目对齐 (新增远程插件在此登记)。 */
     val REMOTE_PLUGIN_BRIEFS = mapOf(
-        "update-plugin" to "自动更新",
         "translate-plugin" to "翻译",
         "error-report-plugin" to "错误上报",
         "render-plugin" to "API 生图 (需 API Key)",
@@ -135,6 +137,7 @@ object PluginRegistrar {
         PluginViewModel.registerPluginClass("evolution-plugin", "com.mengpaw.plugin.evolution.EvolutionPlugin")
         PluginViewModel.registerPluginClass("concise-plugin", "com.mengpaw.plugin.concise.ConcisePlugin")
         PluginViewModel.registerPluginClass("tavily-plugin", "com.mengpaw.plugin.tavily.TavilyPlugin")
+        PluginViewModel.registerPluginClass("update-plugin", "com.mengpaw.plugin.update.UpdatePlugin")
     }
 
     /** 捆绑插件实例清单 — 随 APK 编译进壳, 首次启动自动 install + activate. */
@@ -151,6 +154,7 @@ object PluginRegistrar {
         "concise-plugin" to com.mengpaw.plugin.concise.ConcisePlugin(),
         "termux-plugin" to com.mengpaw.plugin.termux.TermuxPlugin(),
         "tavily-plugin" to TavilyPlugin(),
+        "update-plugin" to UpdatePlugin(),
     )
 
     /** 捆绑插件自动安装 — 已安装跳过, 逐个容错 (单插件失败不影响其余). */

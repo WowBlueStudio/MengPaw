@@ -40,6 +40,7 @@ include(":plugin-termux")
 include(":plugin-dream")
 include(":plugin-evolution")
 include(":plugin-concise")
+include(":plugin-update")
 
 // plugin-agent-loop and plugin-agent-mission removed — modes now built into AgentEngine
 // Remote plugins (update/translate/error-report/render/comfy/browser-push/browser-search/browser-mcp)
@@ -60,5 +61,6 @@ project(":plugin-termux").projectDir = File(rootDir, "plugins/plugin-termux")
 project(":plugin-dream").projectDir = File(rootDir, "plugins/plugin-dream")
 project(":plugin-evolution").projectDir = File(rootDir, "plugins/plugin-evolution")
 project(":plugin-concise").projectDir = File(rootDir, "plugins/plugin-concise")
+project(":plugin-update").projectDir = File(rootDir, "plugins/plugin-update")
 // plugin-agent-loop / plugin-agent-mission dir mappings removed — modes built into AgentEngine
 // plugin-connector-* and remote plugin dir mappings removed — moved to standalone repo mengpaw-connectors

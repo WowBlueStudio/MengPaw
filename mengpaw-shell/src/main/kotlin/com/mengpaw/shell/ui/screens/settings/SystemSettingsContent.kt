@@ -26,6 +26,7 @@ import com.mengpaw.shell.ui.components.TokenBarChart
 import com.mengpaw.shell.ui.components.TokenStatsCollector
 import com.mengpaw.shell.ui.components.formatTokenCount
 import com.mengpaw.shell.ui.screens.settings.DeviceGuidesPanel
+import kotlinx.coroutines.launch
 import com.mengpaw.design.components.SectionHeader
 import kotlinx.coroutines.delay
 
@@ -183,6 +184,37 @@ fun SystemSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
+    // ── 自动更新 (v0.37.3 内置, 入口: 输出目录与 Token 用量统计之间) ──
+    SectionHeader(state.strings.autoUpdateTitle)
+    var updateStatus by remember { mutableStateOf<String?>(null) }
+    val updateScope = rememberCoroutineScope()
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable {
+            updateScope.launch {
+                updateStatus = state.strings.autoUpdateChecking
+                updateStatus = runUpdateCheck()
+            }
+        },
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ThemeColors.bgCardHigh
+    ) {
+        Row(Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.SystemUpdate, null, Modifier.size(24.dp), tint = ArcoColors.Green6)
+            Spacer(Modifier.width(ArcoSpacing.md))
+            Column(Modifier.weight(1f)) {
+                Text(state.strings.autoUpdateTitle,
+                    fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                Text(updateStatus ?: state.strings.autoUpdateClickHint,
+                    style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 3)
+            }
+            Icon(Icons.Outlined.ChevronRight, null, tint = ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
     SectionHeader(state.strings.systemTokenStats)
 
     val collector = TokenStatsCollector
@@ -308,6 +340,22 @@ fun SystemSettingsContent(
  * primary:<相对路径> 文档 URI, 私有路径 (旧 Android/data 回退) 用 file:// 初值。
  * 不可用 (部分设备 DocumentsUI 无定位) 时兜底打开外部存储根。
  */
+/** 执行 update.check --force 并返回摘要 (自动更新设置入口, v0.37.3)。 */
+private suspend fun runUpdateCheck(): String {
+    return try {
+        val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+        val plugin = pm.get("update-plugin") as? com.mengpaw.plugin.update.UpdatePlugin
+            ?: return "自动更新插件未就绪"
+        val result = plugin.commands["check"]?.invoke(
+            listOf("--force"),
+            com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
+        ) ?: return "检查命令不可用"
+        result.output.ifBlank { result.error ?: "检查完成" }
+    } catch (e: Exception) {
+        "检查失败: ${e.message?.take(80) ?: "未知错误"}"
+    }
+}
+
 private fun openOutputDir(context: android.content.Context, dir: java.io.File) {
     try {
         val uri = try {
