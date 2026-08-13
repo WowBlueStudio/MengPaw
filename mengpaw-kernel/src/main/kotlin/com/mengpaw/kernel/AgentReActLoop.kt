@@ -194,6 +194,14 @@ internal class AgentReActLoop(
 
                 if (parsed.isFinal) {
                     var answer = parsed.thought
+                    // v0.37.3: 退化输出拦截 — 模型卡在重复 XML 标签/同一 token 流时
+                    // 不当最终答案 (否则用户看到一长串 <Action> 垃圾), 直接中止并提示重试
+                    if (com.mengpaw.kernel.llm.ReActParser().isDegenerateOutput(answer)) {
+                        val msg = "模型输出异常: 检测到重复标记 (格式退化), 请重试该任务。"
+                        engine.getSessionManager().addMessage(session.id, Message("assistant", msg))
+                        engine._state.value = AgentState.Finished(msg)
+                        return msg
+                    }
                     // ── 提示词遵从探针 (v0.34.3 P0-2 ③): Final Answer 应带 <!--mok--> 标记 ──
                     // 服务端篡改/剥离系统提示词 (铲子) 会让模型系统性丢失探针; 剥离标记避免污染 UI。
                     val probeOk = answer.contains("<!--mok-->")

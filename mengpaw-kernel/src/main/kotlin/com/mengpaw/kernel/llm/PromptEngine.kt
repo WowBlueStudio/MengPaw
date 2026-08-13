@@ -193,6 +193,7 @@ class PromptEngine {
             Action Input: （参数 — CLI 纯文本风格，多个参数用空格分隔；禁止 JSON；**含空格/换行的内容用双引号包裹**，如 `agent.memory.record "第一行\n第二行"`，引号内换行会保留）
             ...或...
             Final Answer: （最终答案）
+            - **禁止 XML 标签**：不要输出 `<Action>`、`<invoke>` 等尖括号标签，一律使用 `Action: 命令` 文本格式。
 
             需要多个独立工具时，可一次输出多个 Action（每个都带 Action Input），框架会并行执行。
             - **路径参数纯净（必须遵守）**：Linux 路径命令（cat/ls/grep/sed/head/tail/rm 等）的参数只能包含路径本身，**禁止把"等待结果/看看/输出/谢谢"等描述文本拼在路径参数后**（会被并入路径导致解析失败）；路径含空格时用引号包裹整个路径。若上一次调用因参数带多余文本而失败，重试时必须去掉多余文本，**不要原样复制失败参数**。
@@ -317,6 +318,7 @@ class PromptEngine {
             Action Input: (parameters — CLI plain text, space-separated; JSON is NOT accepted)
             ...or...
             Final Answer: (your final response)
+            - **No XML tags**: Never output `<Action>`, `<invoke>` or other angle-bracket tags. Always use the plain `Action: command` text format.
 
             When multiple independent tools are needed, you may output multiple Action blocks at once (each with its own Action Input); the framework will execute them in parallel.
             - **Path parameters must be clean (mandatory)**: for Linux path commands (cat/ls/grep/sed/head/tail/rm etc.), Action Input must contain ONLY the path itself — never append descriptive text like "waiting"/"please"/"thanks" after the path (it gets merged into the path and fails parsing); wrap the whole path in quotes if it contains spaces. When a previous call failed because extra text polluted the parameter, strip the extra text on retry — NEVER copy the polluted parameter verbatim.

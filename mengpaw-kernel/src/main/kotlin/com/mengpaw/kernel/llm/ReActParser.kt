@@ -120,7 +120,8 @@ internal class ReActParser {
      * 无参数 invoke → 空参数 (对齐省略 Action Input 语义)。
      */
     private fun parseXmlToolCalls(text: String): List<ToolCall> {
-        val invokeRe = Regex("(?is)<(?:\\w+:)?invoke\\s+name\\s*=\\s*([\"'])(.*?)\\1\\s*>(.*?)</(?:\\w+:)?invoke>")
+        // v0.37.3: 兼容 `<action name="X">` — 模型可能把 ReAct 提示词误解为 XML 标签
+        val invokeRe = Regex("(?is)<(?:\\w+:)?(?:invoke|action)\\s+name\\s*=\\s*([\"'])(.*?)\\1\\s*>(.*?)</(?:\\w+:)?(?:invoke|action)>")
         val paramRe = Regex("(?is)<(?:\\w+:)?parameter\\s+name\\s*=\\s*([\"'])(.*?)\\1\\s*>(.*?)</(?:\\w+:)?parameter>")
         return invokeRe.findAll(text).mapNotNull { m ->
             val name = m.groupValues[2].trim()
@@ -130,6 +131,24 @@ internal class ReActParser {
             }
             ToolCall(name, params)
         }.toList()
+    }
+
+    /**
+     * 退化输出检测 (v0.37.3) — 模型卡在重复生成同一标记/标签 (如 `<Action><Action>…`)
+     * 或极低多样性 token 流时返回 true, 上层不应把这类垃圾当最终答案。
+     * internal 为测试可见性。
+     */
+    internal fun isDegenerateOutput(text: String): Boolean {
+        val t = text.trim()
+        if (t.length < 40) return false
+        // 连续重复同一 XML 标签 ≥ 3 次
+        if (Regex("""(?is)(<[a-zA-Z_][a-zA-Z0-9_]*>){3,}""").containsMatchIn(t)) return true
+        // 整段几乎只有一种/少数几种字符 (重复同一 token 流)
+        if (t.toSet().size <= 4) return true
+        // 同一行刷屏重复 ≥ 3 行
+        val lines = t.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        if (lines.size >= 3 && lines.distinct().size == 1) return true
+        return false
     }
 
     /** Extract Thought content from ReAct-format text, or return truncated beginning. */

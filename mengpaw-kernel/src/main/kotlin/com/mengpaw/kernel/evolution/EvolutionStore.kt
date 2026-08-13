@@ -667,11 +667,11 @@ object EvolutionStore {
                             f.repeatCount >= 2 -> " ⚠️未修正"
                             else -> ""
                         }
-                        appendLine("- ${f.command} [${f.errorCode}] ×${f.repeatCount}$flag")
+                        appendLine("- ${sanitizeXml(f.command)} [${f.errorCode}] ×${f.repeatCount}$flag")
                         appendLine("    id=${f.id} · 首次 ${fmtTime(f.firstSeen)} · 最近 ${fmtTime(f.lastSeen)}")
-                        if (f.task.isNotBlank()) appendLine("    任务: ${f.task.take(120)}")
+                        if (f.task.isNotBlank()) appendLine("    任务: ${sanitizeXml(f.task).take(120)}")
                         if (f.contextSnippet.isNotBlank()) {
-                            appendLine("    上下文: ${f.contextSnippet.replace("\n", " ").take(120)}")
+                            appendLine("    上下文: ${sanitizeXml(f.contextSnippet).replace("\n", " ").take(120)}")
                         }
                     }
                 }
@@ -762,7 +762,17 @@ object EvolutionStore {
     /** 命令字段清洗 (v3, 2026-08-09 真实数据): LLM 参数污染会把整段 Thought/Observation 塞进命令,
      *  存储与展示前剥离换行单行化; 命令名与参数同屏可读。 */
     private fun cleanCommand(raw: String): String =
-        raw.replace(Regex("\\r\\n|\\r|\\n"), " ").trim().take(120)
+        sanitizeXml(raw).replace(Regex("\\r\\n|\\r|\\n"), " ").trim().take(120)
+
+    /**
+     * 剥离 XML/尖括号标签 (v0.37.3) — 模型退化输出 (`<Action><Action>…`) 若被记入
+     * 失败记录或上下文, 会在 evolution.audit 原样展示并被模型模仿输出。存储与展示
+     * 前统一剥离 `<tag>` / `</tag>`, 防污染进化文档与提示上下文。
+     */
+    private fun sanitizeXml(raw: String): String =
+        raw.replace(Regex("""(?s)<[a-zA-Z_][a-zA-Z0-9_]*\s*[^>]*>"""), "")
+            .replace(Regex("""(?s)</[a-zA-Z_][a-zA-Z0-9_]*>"""), "")
+            .trim()
 
     /** 命令名 (清洗后第一 token) — 失败模式去重/复现检测的模式键基础:
      *  同命令不同参数视为同一模式 (termux.run a / termux.run b 都是"命令不可用"一类)。 */
