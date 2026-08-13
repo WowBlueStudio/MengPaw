@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mengpaw.shell.ui.components.BigBangPopup
 import com.mengpaw.shell.ui.localization.AppStrings
+import com.mengpaw.kernel.namespace.NotifyBus
 
 /**
  * 换行规范化 (v0.35.1) — 统一 \r\n/\r → \n, 保证复制/分享/大爆炸都保留分行。
@@ -128,6 +129,7 @@ fun BubbleWrapper(
                 onCopy = {
                     (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
                         ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", normalizeNewlines(bubbleText)))
+                    NotifyBus.banner("已复制", NotifyBus.NotifyLevel.SUCCESS)
                 },
                 onBigBang = { showBigBang = true },
                 onQuote = { onQuote(viewModel.formatQuote(message)) },
@@ -162,6 +164,7 @@ fun BubbleWrapper(
                 onCopy = {
                     (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
                         ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", normalizeNewlines(bubbleText)))
+                    NotifyBus.banner("已复制", NotifyBus.NotifyLevel.SUCCESS)
                 },
                 onBigBang = { showBigBang = true },
                 onRetract = { viewModel.retractLastUserMessage()?.let { onRetract(it) } },
@@ -183,6 +186,7 @@ fun BubbleWrapper(
                 (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)
                     ?.setPrimaryClip(android.content.ClipData.newPlainText("MengPaw", sel))
                 showBigBang = false
+                NotifyBus.banner("已复制", NotifyBus.NotifyLevel.SUCCESS)
             }
         )
     }
