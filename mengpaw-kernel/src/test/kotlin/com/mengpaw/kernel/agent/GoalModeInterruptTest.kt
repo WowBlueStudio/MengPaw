@@ -61,4 +61,12 @@ class GoalModeInterruptTest {
     fun `中断原因返回匹配短语`() {
         assertEquals("无法完成任务", executor.detectImpossible("无法完成任务，请停止"))
     }
+
+    @Test
+    fun `评估结果三态分类`() {
+        assertEquals(GoalModeExecutor.GoalEval.SATISFIED, executor.classifyEval("YES 目标已完成"))
+        assertEquals(GoalModeExecutor.GoalEval.OFFTRACK, executor.classifyEval("OFFTRACK 执行了无关操作"))
+        assertEquals(GoalModeExecutor.GoalEval.OFFTRACK, executor.classifyEval("已偏离目标, 请回到原任务"))
+        assertEquals(GoalModeExecutor.GoalEval.NEEDS_REVISION, executor.classifyEval("NO 还差一步"))
+    }
 }

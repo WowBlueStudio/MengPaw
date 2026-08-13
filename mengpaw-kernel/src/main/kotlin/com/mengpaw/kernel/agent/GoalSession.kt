@@ -32,18 +32,19 @@ class RubricEvaluator(private val evaluatorPrompt: String = DEFAULT_RUBRIC_PROMP
 
     companion object {
         val DEFAULT_RUBRIC_PROMPT = """
-判断以下目标的完成状态。
+判断以下目标的完成状态, 并检查是否偏离目标。
 
 目标: {goal}
 
 Agent 执行结果:
 {output}
 
-目标是否完成？
-- 已完成 → YES
-- 未完成或部分完成 → NO
+回答 (三选一, 可加一句简短说明):
+- YES — 目标已完成
+- NO — 未完成或部分完成, 但仍在目标范围内, 继续执行
+- OFFTRACK — 已偏离原目标 (执行了与目标无关的操作, 或擅自改变/扩展任务范围)
 
-只回答 YES 或 NO，可加一句简短说明。
+只回答 YES / NO / OFFTRACK。
 """.trimIndent()
     }
 }

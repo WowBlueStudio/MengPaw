@@ -39,6 +39,7 @@ class GoalModeExecutor(
         )
         val evaluator = RubricEvaluator()
         val turnResults = mutableListOf<String>()
+        var offTrackCount = 0
 
         for (turn in 0 until maxTurns) {
             if (!session.active) break
@@ -49,10 +50,13 @@ class GoalModeExecutor(
             val goalPrompt = if (turn == 0) {
                 "## 目标\n${session.goal}\n\n使用 Thought → Action → Final Answer 格式。" +
                     "自然对话，不要主动汇报进度或回溯历史——除非用户询问。" +
-                    "如果任务无法完成（如缺少必要权限/信息/资源），请在 Final Answer 中明确说明无法完成并停止，不要空转。"
+                    "如果任务无法完成（如缺少必要权限/信息/资源），请在 Final Answer 中明确说明无法完成并停止，不要空转。" +
+                    "【目标一致性】你的每一步行动必须服务于原目标，禁止擅自扩展或偏离任务范围；" +
+                    "若某操作与目标无关，立即停止并说明原因。"
             } else {
                 "## 目标 (第 ${turn + 1}/$maxTurns 轮)\n${session.goal}\n\n反馈: ${session.lastFeedback.ifEmpty { "无" }}" +
-                    "如果任务无法完成，明确说明并停止，不要空转。"
+                    "如果任务无法完成，明确说明并停止，不要空转。" +
+                    "【目标一致性】不得偏离原目标；回到目标继续。"
             }
 
             // Run ReAct loop — no prior context injection; RubricGate feedback is sufficient
@@ -85,13 +89,26 @@ class GoalModeExecutor(
             val evalPrompt = evaluator.buildPrompt(session.goal, result)
             try {
                 val evalResult = llmProvider.complete(evalPrompt)
-                val satisfied = evalResult.trim().uppercase().startsWith("YES")
-                if (satisfied) {
-                    session.lastVerdict = "SATISFIED"
-                    session.active = false
-                } else {
-                    session.lastVerdict = "NEEDS_REVISION"
-                    session.lastFeedback = evalResult.take(200)
+                when (classifyEval(evalResult)) {
+                    GoalEval.SATISFIED -> {
+                        session.lastVerdict = "SATISFIED"
+                        session.active = false
+                    }
+                    GoalEval.OFFTRACK -> {
+                        // v0.37.3 目标一致性: 偏离目标时反馈纠正, 连续 2 轮仍偏离 → 中断
+                        offTrackCount++
+                        session.lastVerdict = "OFFTRACK"
+                        session.lastFeedback = "⚠️ 你偏离了原目标，请回到目标并继续: ${session.goal}"
+                        if (offTrackCount >= 2) {
+                            session.active = false
+                            session.lastVerdict = "OFFTRACK_ABORT"
+                            break
+                        }
+                    }
+                    GoalEval.NEEDS_REVISION -> {
+                        session.lastVerdict = "NEEDS_REVISION"
+                        session.lastFeedback = evalResult.take(200)
+                    }
                 }
             } catch (_: Exception) {
                 // LLM eval failed — fall back to heuristic
@@ -106,6 +123,9 @@ class GoalModeExecutor(
             "目标已完成: ${session.goal}\n\n" + turnResults.lastOrNull().orEmpty()
         } else if (!session.active && session.lastVerdict == "INTERRUPTED") {
             "任务中断: LLM 判断无法完成 — ${session.goal}\n\n最后结果:\n" +
+                turnResults.lastOrNull().orEmpty()
+        } else if (!session.active && session.lastVerdict == "OFFTRACK_ABORT") {
+            "任务中断: 连续偏离原目标 — ${session.goal}\n\n最后结果:\n" +
                 turnResults.lastOrNull().orEmpty()
         } else {
             "目标未完成 (${session.iteration}/${maxTurns} 轮): ${session.goal}\n\n最后结果:\n" +
@@ -126,5 +146,18 @@ class GoalModeExecutor(
             "impossible to complete", "abort the task", "cannot be completed"
         )
         return patterns.firstOrNull { lower.contains(it) }
+    }
+
+    /** 评估结果三态分类 (v0.37.3) — YES=完成 / OFFTRACK=偏离目标 / 其他=继续。 */
+    internal enum class GoalEval { SATISFIED, OFFTRACK, NEEDS_REVISION }
+
+    internal fun classifyEval(result: String): GoalEval {
+        val upper = result.trim().uppercase()
+        return when {
+            upper.startsWith("YES") -> GoalEval.SATISFIED
+            upper.startsWith("OFFTRACK") || upper.startsWith("OFF-TRACK") ||
+                result.contains("偏离", ignoreCase = true) -> GoalEval.OFFTRACK
+            else -> GoalEval.NEEDS_REVISION
+        }
     }
 }
