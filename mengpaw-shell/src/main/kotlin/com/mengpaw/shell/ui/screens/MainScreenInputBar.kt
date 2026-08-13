@@ -278,7 +278,7 @@ internal fun MainScreenInputBar(
                     Box(
                         modifier = Modifier
                             .size(44.dp)
-                            .background(if (isStopping) ThemeColors.error else ThemeColors.brand, CircleShape)
+                            .background(ThemeColors.brand, CircleShape)
                             .clickable {
                                 if (isStopping) {
                                     viewModel.stopAgent()

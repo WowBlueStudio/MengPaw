@@ -47,9 +47,12 @@ class GoalModeExecutor(
             // Build goal-aware prompt — RubricGate feedback is the only signal needed between turns.
             // Prior turn results are NOT replayed; replaying biases the agent toward repeating old work.
             val goalPrompt = if (turn == 0) {
-                "## 目标\n${session.goal}\n\n使用 Thought → Action → Final Answer 格式。自然对话，不要主动汇报进度或回溯历史——除非用户询问。"
+                "## 目标\n${session.goal}\n\n使用 Thought → Action → Final Answer 格式。" +
+                    "自然对话，不要主动汇报进度或回溯历史——除非用户询问。" +
+                    "如果任务无法完成（如缺少必要权限/信息/资源），请在 Final Answer 中明确说明无法完成并停止，不要空转。"
             } else {
-                "## 目标 (第 ${turn + 1}/$maxTurns 轮)\n${session.goal}\n\n反馈: ${session.lastFeedback.ifEmpty { "无" }}"
+                "## 目标 (第 ${turn + 1}/$maxTurns 轮)\n${session.goal}\n\n反馈: ${session.lastFeedback.ifEmpty { "无" }}" +
+                    "如果任务无法完成，明确说明并停止，不要空转。"
             }
 
             // Run ReAct loop — no prior context injection; RubricGate feedback is sufficient
@@ -60,6 +63,15 @@ class GoalModeExecutor(
                 onDelta = onDelta
             )
             turnResults.add(result)
+
+            // v0.37.3: LLM 明确表达任务不可完成 → 提前中断, 不空转到 maxTurns 耗尽
+            val interruptReason = detectImpossible(result)
+            if (interruptReason != null) {
+                session.active = false
+                session.lastVerdict = "INTERRUPTED"
+                session.lastFeedback = interruptReason
+                break
+            }
 
             // Budget gate: estimate tokens from result length
             session.tokensUsed += result.length / 4  // rough char->token estimate
@@ -92,9 +104,27 @@ class GoalModeExecutor(
 
         return if (!session.active && session.lastVerdict.startsWith("SATISFIED")) {
             "目标已完成: ${session.goal}\n\n" + turnResults.lastOrNull().orEmpty()
+        } else if (!session.active && session.lastVerdict == "INTERRUPTED") {
+            "任务中断: LLM 判断无法完成 — ${session.goal}\n\n最后结果:\n" +
+                turnResults.lastOrNull().orEmpty()
         } else {
             "目标未完成 (${session.iteration}/${maxTurns} 轮): ${session.goal}\n\n最后结果:\n" +
                 turnResults.lastOrNull().orEmpty()
         }
+    }
+
+    /**
+     * 不可完成信号检测 — LLM 明确表达任务无法完成/请求中断时返回原因, 否则 null。
+     * internal 为测试可见性; 保守匹配 (避免把"无法完成某步骤但整体继续"误判为中断)。
+     */
+    internal fun detectImpossible(text: String): String? {
+        val lower = text.lowercase()
+        val patterns = listOf(
+            "无法完成任务", "无法完成该任务", "任务无法完成", "此任务无法完成", "任务不可完成",
+            "无法继续执行该任务", "无法执行该任务", "请求中断",
+            "i cannot complete", "cannot complete this task", "task is impossible",
+            "impossible to complete", "abort the task", "cannot be completed"
+        )
+        return patterns.firstOrNull { lower.contains(it) }
     }
 }

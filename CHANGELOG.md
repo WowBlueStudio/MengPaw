@@ -35,6 +35,9 @@
 - **高危操作确认改通知栏横幅**: 取代应用内 AlertDialog — 后台任务/其他页面触发
   高危命令时, 通知栏高优先级横幅带「允许/拒绝」按钮直接确认, 不再 30s 静默拒绝
   用户无感知; 30s 超时自动取消通知 (HighRiskNotification + confirmQueue 移除)
+- **Goal 模式支持 LLM 主动中断**: LLM 明确表达任务无法完成 (中英文信号) 时提前
+  终止, 不再空转到 maxTurns 耗尽; goal prompt 提示可中断, 返回「任务中断」摘要
+- **停止按钮保持品牌深蓝底色**: 生成中停止按钮不再变红, 维持深蓝圆形
 
 ### 发行
 - Shell APK: `mengpaw-shell-v0.37.3-release.apk` (versionCode 37003)
