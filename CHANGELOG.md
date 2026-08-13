@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.37.2 (2026-08-13) — 印象笔记连接器登记 + 系统提示词插件指引
+
+### 新增
+- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —
+  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /
+  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置
+  (dev.yinxiang.com 申请, 7 天短效)
+- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令
+- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)
+- 仅 Shell 构建 (browser 无变更不构建); plugins.json 有变更 → 内置插件
+  plugins-v0.37.2 同步
+- 外置插件: `plugin-connector-yinxiang-plugin.jar` (0.1.0, plugins-v0.6.0)
+- 测试: 全量双套 1292 用例 0 failures (kernel 562 + core 90 + shell 182 +
+  browser 42 + 插件 416; 本轮主仓库无新增用例, 印象笔记连接器 31 用例在
+  mengpaw-connectors 独立仓库)
+
 ## v0.37.1 (2026-08-12) — Token 用量统计图表重构 + 历史保留上限
 
 ### 新增

@@ -945,4 +945,28 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   直接对副本实例 install; 安装被 "User rejected permissions" 拒绝时提示
   用户点设备端确认框再重试, 不要盲目连发。
 
-*最后更新: 2026-08-12 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1*
+### 27. 印象笔记连接器 + v0.37.2 发布 (2026-08-13, v0.37.2)
+
+- **外置插件发布走 mengpaw-connectors 独立 tag**: 印象笔记连接器是 remote
+  外置插件 (不随 APK 编译), 发布 = connectors 仓库打 `plugins-v0.6.0` tag +
+  上传 dex JAR, plugins.json remote 条目 downloadUrl 指向该 tag assets;
+  与主仓库内置插件 tag (`plugins-v0.37.2` + AAR) 各自独立, 不同仓库不冲突。
+- **apply_patch 改写 .ps1 丢 UTF-8 BOM → PowerShell 5.1 中文乱码**: 原脚本带
+  BOM, 重写后无 BOM, Windows PowerShell 按 ANSI 读 UTF-8 中文导致引号解析错乱
+  (ParserError)。修复: `[IO.File]::ReadAllText(p, UTF8)` +
+  `WriteAllText(p, content, UTF8Encoding($true))` 补回 BOM。
+- **shell_command 工具 PowerShell Location ≠ 进程 CurrentDirectory**:
+  `Get-Location` 显示目标目录但 `[Environment]::CurrentDirectory` 仍是默认
+  目录, gradlew.bat 等批处理继承进程 CWD 而跑到错误仓库。规避: 命令内显式
+  `Push-Location <绝对路径>` 再执行, 判断目录用 `[Environment]::CurrentDirectory`。
+- **evernote-api (thrift) boolean 字段 Kotlin 属性访问报 private**:
+  `NotesMetadataResultSpec.includeTitle = true` 编译报 "Cannot access field",
+  须显式调 Java setter `setIncludeTitle(true)`; String/List 字段属性语法正常。
+- **lambda 隐式 label return 被编译器拒绝**: `val cmd: CommandHandler = { ... return@cmd }`
+  报 "'return' is prohibited here"; 改为显式 `private suspend fun xxxHandler(...)`
+  函数 + `val cmd: CommandHandler = ::xxxHandler` 引用。
+- **EDAM 大附件全量进内存 OOM 风险**: getNote(withResourcesData=true) 会把全部
+  资源 body 拉进内存; 改为 getNoteContent/元数据 + getResourceData 逐个下载 +
+  单资源 25MB 上限。
+
+*最后更新: 2026-08-13 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2*

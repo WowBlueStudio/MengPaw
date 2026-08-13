@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "dream-plugin",
@@ -31,7 +31,7 @@
       "commands": [],
       "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
       "size": 3129,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "tavily-plugin",
@@ -63,7 +63,7 @@
       ],
       "checksum": "sha256:547a7665041e90b2f5a9ae36fea44fa892b5954b0c30100740b8c286ad2da2f0",
       "size": 19074,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "framework-plugin",
@@ -93,7 +93,7 @@
       ],
       "checksum": "sha256:b3e9be0bd5587f2c8a755b82ab68c0d04ca00f72458785c31cd04abf5817e958",
       "size": 110868,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "fs-plugin",
@@ -132,7 +132,7 @@
       ],
       "checksum": "sha256:a78b37dc205343cb0c08f18ff77566c3b6edca5d62e6006814d656fefe5ba213",
       "size": 17951,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "memory-twin-plugin",
@@ -163,7 +163,7 @@
       ],
       "checksum": "sha256:50b874379adcb91aa5100cd4c2bc96252226a511d6bf44614fa4baf6d40c5927",
       "size": 243330,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "skill-plugin",
@@ -188,7 +188,7 @@
       ],
       "checksum": "sha256:2704ffa5c5ed75c156a28295679017a2be062eb89f7378a581b2c457db02ab1a",
       "size": 71075,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "clipboard-plugin",
@@ -206,7 +206,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "dev-plugin",
@@ -227,7 +227,7 @@
       ],
       "checksum": "sha256:66f20d2156a2b49e3995b4f5eed056562a8666c2c3c747df4df017ac58e111d5",
       "size": 35337,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "update-plugin",
@@ -365,7 +365,7 @@
       ],
       "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
       "size": 282877,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "comfy-plugin",
@@ -490,7 +490,7 @@
       ],
       "checksum": "sha256:32c402304b4190083c209773186368460ab813a757bc4a356d61ba03d5fdf21b",
       "size": 46842,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "termux-plugin",
@@ -509,7 +509,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "tools-plugin",
@@ -528,7 +528,7 @@
       ],
       "checksum": "sha256:fd6cf25efe806029cda88f3c47e40eec4b31cfee1128df50b28af5fe77ea0da2",
       "size": 36752,
-      "changelog": "### 新增\n- **sys.* 命令面 51 → 85 (Termux:API 全功能面对齐)**: 用户交互对话框 11 种\n  (confirm/text/radio/checkbox/spinner/sheet/date/time/counter/color/speech)、\n  语音转文字/文字转语音/麦克风录音/手电筒、短信/联系人/通话记录/拨号、\n  通知列表、下载+状态查询、壁纸、toast、唤醒锁、红外、USB 授权、WiFi 扫描;\n  敏感 22 项命令归入中危 (默认拒绝, 信任等级放行), Manifest 新增\n  SEND_SMS/READ_SMS/READ_CONTACTS/READ_CALL_LOG/CALL_PHONE/SET_WALLPAPER/CHANGE_WIFI_STATE\n- **plugin-termux**: Termux→ubuntu (proot)→miniconda→Python 多层环境桥 —\n  `termux.status` 逐层探测 / `termux.python` 直接调用 conda 环境内 Python /\n  "
+      "changelog": "### 新增\n- **印象笔记连接器 (connector-yinxiang 0.1.0, 外置插件)**: EDAM 云 API 直连全量 CRUD —\n  search / get (正文纯文本 + 附件下载) / create / update / delete (废纸篓) /\n  notebooks / tags; token 经 `connector-yinxiang.config --token-file <路径>` 配置\n  (dev.yinxiang.com 申请, 7 天短效)\n- **系统提示词插件节新增印象笔记指引**: Agent 可直接发现 connector-yinxiang.* 命令\n- plugins.json 新增 connector-yinxiang-plugin remote 条目 (downloadUrl → plugins-v0.6.0)\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.37.2-release.apk` (versionCode 37002)\n- 仅 Shell 构建 (browser 无变更不构"
     },
     {
       "id": "connector-openclaw-plugin",
