@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
+import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.kernel.namespace.NotifyBus
 import com.mengpaw.kernel.namespace.NotifyBus.NotifyLevel
 import kotlinx.coroutines.launch
@@ -73,11 +74,12 @@ fun NotifyBannerHost(
         modifier = modifier
     ) {
         currentBanner?.let { banner ->
-            val (bg, fg, icon) = when (banner.level) {
-                NotifyLevel.INFO -> Triple(ArcoColors.Blue1, ArcoColors.Blue6, Icons.Outlined.Info)
-                NotifyLevel.SUCCESS -> Triple(ArcoColors.Green1, ArcoColors.Green6, Icons.Outlined.CheckCircle)
-                NotifyLevel.WARN -> Triple(ArcoColors.Orange1, ArcoColors.Orange6, Icons.Outlined.Warning)
-                NotifyLevel.ERROR -> Triple(ArcoColors.Red1, ArcoColors.Red6, Icons.Outlined.Error)
+            // v0.37.3: 白色半透明毛玻璃外观 — 图标/强调色按级别, 文字深色, 无关闭按钮
+            val (accent, icon) = when (banner.level) {
+                NotifyLevel.INFO -> ArcoColors.Blue6 to Icons.Outlined.Info
+                NotifyLevel.SUCCESS -> ArcoColors.Green6 to Icons.Outlined.CheckCircle
+                NotifyLevel.WARN -> ArcoColors.Orange6 to Icons.Outlined.Warning
+                NotifyLevel.ERROR -> ArcoColors.Red6 to Icons.Outlined.Error
             }
             Surface(
                 modifier = Modifier
@@ -88,28 +90,22 @@ fun NotifyBannerHost(
                         bannerVisible = false
                     },
                 shape = RoundedCornerShape(ArcoRadius.lg),
-                color = bg,
-                shadowElevation = 4.dp
+                color = Color.White.copy(alpha = 0.85f),
+                shadowElevation = 8.dp
             ) {
                 Row(
                     Modifier.padding(ArcoSpacing.md),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(icon, null, Modifier.size(20.dp), tint = fg)
+                    Icon(icon, null, Modifier.size(20.dp), tint = accent)
                     Spacer(Modifier.width(ArcoSpacing.sm))
                     Text(
                         banner.text,
                         Modifier.weight(1f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
-                        color = fg,
+                        color = ThemeColors.textPrimary,
                         maxLines = 3
-                    )
-                    Text(
-                        "✕",
-                        fontSize = 12.sp,
-                        color = fg.copy(alpha = 0.5f),
-                        modifier = Modifier.clickable { bannerVisible = false }
                     )
                 }
             }
