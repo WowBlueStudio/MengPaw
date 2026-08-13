@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.37.3 (2026-08-13) — 手机端 UI 系列修复 + 思考气泡卡住修复
+
+### 修复
+- **插件市场排版**: 版本号移出标题行 (长中英标题不再挤压竖排); 主标题拆两行
+  (一行中文名 + 一行英文名, 列表页与详情页同步); 副标题 description 自动换行不截断
+- **插件下载后自动激活兜底**: 远程插件安装成功后 status 非 ACTIVE 时补 activate
+- **思考过程摘要按需显示**: 思考/调用次数为 0 时隐藏对应文案
+- **气泡复制成功横幅**: 输出/用户气泡及大爆炸选中复制后 NotifyBus 横幅提示「已复制」
+- **思考气泡轮次路由修复 (根因)**: ThinkingProcessWriter.pushThought/addTool 改为
+  按 roundId 在 steps 中定位 — 引擎先为多轮插入工具行后, 播放协程回填思考不再
+  因"只与最后一个 step 比较"而另起空思考 step (第一轮思考消失/折叠区只剩三五字/
+  气泡混工具行/步骤重复的根因); 新增交错场景回归测试
+- **Final Answer 检测行首锚定**: 只有独立成行的 "Final Answer:" 才判为最终答案轮,
+  思考行中段出现字样不误判 (0.37.2 全量累积 contains 误判的根治)
+- **思考文本剥离 Action 工具行**: 工具调用由 ProcessTool 行承载, 不再重复出现在
+  思考文本里 ("工具调用怎么在气泡里"的视觉错乱)
+- **编排逻辑拆分**: 流式气泡编排收敛到独立 BubbleStreamCoordinator (finalAnswerStarted/
+  轮次封口/播放路由三处共享状态), 行为由 4 个用例锁死
+- StreamPlaybackBuffer.finish 封口全部轮次 (引擎截断路径下播放器不再卡 NothingNew)
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.37.3-release.apk` (versionCode 37003)
+- 仅 Shell 构建 (browser 无变更不构建); 本地验证推送, 未打 tag 未发布
+- 测试: 全量双套 1304 用例 0 failures (shell +12 = BubbleStreamCoordinator 4×2
+  + ThinkingProcessWriter 交错回归 1×2)
+
 ## v0.37.2 (2026-08-13) — 印象笔记连接器登记 + 系统提示词插件指引
 
 ### 新增
