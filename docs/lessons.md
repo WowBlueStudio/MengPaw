@@ -969,4 +969,37 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   资源 body 拉进内存; 改为 getNoteContent/元数据 + getResourceData 逐个下载 +
   单资源 25MB 上限。
 
-*最后更新: 2026-08-13 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2*
+### 28. 思考气泡四连坑 + Evolution Agent + 0.38.0 (2026-08-13, v0.38.0)
+
+- **思考气泡反复卡住有四个叠加根因 (必须成套检查)**: ① pushThought/addTool
+  只与最后一个 step 比较 roundId — 引擎先为多轮插入工具行后, 思考回填会另起
+  空 step (第一轮消失/步骤重复); ② Final Answer 检测曾用全量累积 contains —
+  思考里出现 "Final Answer:" 字样即永久误判; ③ beginFinalAnswer 后 tracker.ref
+  被 updateProcess 改写为 ThinkingProcess — pushFinal/finalize 定位失败,
+  FinalAnswer 残留 isRunning=true (UI 恒显"思考中…计时"); ④ ACTION_LINE_REGEX
+  的 `$` 在多行模式也匹配字符串末尾 — 模型逐字流式输出 "Action: agent" 未写完
+  即宣布, 每字符误报一次 (工具行逐字展开, 调用次数 47 vs 12)。修复原则:
+  **按 roundId/按类型定位, 不依赖 tracker.ref; 行尾必须显式 `\n`**。
+- **gh release 未指定 --repo 时用当前目录仓库**: 在 D:\MengPaw 下执行
+  `gh release create plugins-v0.6.0 ...` 会把 connectors 的插件 release 误建到
+  主仓库。多仓库项目必须 `--repo <owner>/<repo>` 或 cd 到目标仓库, 建错后
+  需删除误建 release + 远端 tag (`push origin :refs/tags/x`) 再重建。
+- **进化系统"光收集不进化"的断点**: 收集层 (failures.jsonl) 完善, 但教训
+  沉淀/应用依赖 Agent 手动 audit + keep — 系统提示词只注入"引导"不注入内容。
+  定案: 独立 Evolution Agent (子 Agent, 独立"进化分析师"提示词, 金字塔追问 +
+  5-Why + 增量教训), 事件驱动按需出现 (累计 5 条失败触发, 会话结束兜底),
+  产出 md 报告 (reports/, status: pending → adopted, 15 天清理), 报告以
+  子 Agent 产出投递用户气泡侧; 主 Agent 按 evolution 技能审阅采纳。
+- **R8 文件占用 (classes2.dex 被锁)**: `minifyReleaseWithR8` 失败
+  "文件正由另一进程使用" — 杀软/文件锁导致, 重试无效时 `:mengpaw-shell:clean`
+  后重建可解 (不要手删 build)。
+- **apply_patch 删代码要数括号**: 删"多余 }"时若该括号实为函数/ lambda 闭合,
+  会让后续成员被吞进作用域, 编译器报整段 Unresolved reference — 删除前先
+  确认括号层级 (install 函数曾被误删闭合, 导致 commands map 全部解析失败)。
+- **Goal 模式增强**: LLM 主动中断 (detectImpossible 中英文信号) + 目标一致性
+  (RubricGate 三态 YES/NO/OFFTRACK, 连续偏离自动中断) — 不再空转到 maxTurns。
+- **模型退化输出拦截**: `<Action>` 重复等垃圾输出被判 isFinal 返回 —
+  ReActParser.isDegenerateOutput (重复 XML 标签/单一 token 流/同句刷屏) 拦截;
+  Rule 2b 兼容 `<action name>` 合理 XML; 进化记录 sanitizeXml 防污染。
+
+*最后更新: 2026-08-13 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0*
