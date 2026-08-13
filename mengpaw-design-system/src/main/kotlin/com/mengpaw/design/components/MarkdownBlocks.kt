@@ -9,6 +9,7 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.mengpaw.design.theme.ThemeColors
+import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import java.io.File
@@ -141,10 +143,21 @@ private fun openLinkSafely(context: Context, url: String) {
 
 /** 表格渲染 — 共享列宽（全表测量取列内最宽单元格）+ 网格边框。表头最多 2 行，数据行完整显示。 */
 @Composable
-internal fun TableTextView(block: MdBlock.Table, baseStyle: TextStyle, background: Color) {
+internal fun TableTextView(
+    block: MdBlock.Table,
+    baseStyle: TextStyle,
+    background: Color,
+    tableTextColor: Color? = null,
+    tableBorderColor: Color? = null
+) {
     if (block.header.isEmpty() && block.rows.isEmpty()) return
 
-    val borderColor = ThemeColors.border
+    // v0.37.3 表格样式: 线条比气泡略深 (主题自适应), 格底全透明, 表头 90% 白底深字, 4dp 圆角
+    val isLight = !isSystemInDarkTheme()
+    val borderColor = tableBorderColor
+        ?: if (isLight) ArcoColors.Gray5 else Color.White.copy(alpha = 0.30f)
+    val cellTextColor = tableTextColor ?: ThemeColors.textPrimary
+    val corner = 4.dp
     val maxCellWidth = 360.dp
     val headerStyle = baseStyle.copy(fontWeight = FontWeight.Bold,
         fontSize = (baseStyle.fontSize.value * 0.95f).sp)
@@ -171,36 +184,34 @@ internal fun TableTextView(block: MdBlock.Table, baseStyle: TextStyle, backgroun
     val cellMod = { col: Int -> Modifier.width(colWidths[col]).padding(horizontal = 8.dp, vertical = 4.dp) }
 
     Surface(
-        shape = RoundedCornerShape(ArcoRadius.sm),
+        shape = RoundedCornerShape(corner),
         color = Color.Transparent,
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
     ) {
         Column {
-            // Header row
+            // Header row — 90% 白底 + 深色文字 (日间/夜间一致, 白底上保证可读)
             Row(
-                Modifier.background(ThemeColors.brandContainer)
-                    .border(0.5.dp, borderColor, RoundedCornerShape(topStart = ArcoRadius.sm, topEnd = ArcoRadius.sm))
+                Modifier.background(Color.White.copy(alpha = 0.9f))
+                    .border(0.5.dp, borderColor, RoundedCornerShape(topStart = corner, topEnd = corner))
             ) {
                 block.header.forEachIndexed { i, cell ->
                     Text(cell, modifier = cellMod(i), style = headerStyle,
-                        color = ThemeColors.textPrimary, maxLines = 2)
+                        color = Color(0xFF1D2129), maxLines = 2)
                 }
             }
-            // Data rows
+            // Data rows — 透明底 (去 zebra), 文字色主题自适应/用户气泡白
             block.rows.forEachIndexed { rowIdx, row ->
                 val isLast = rowIdx == block.rows.lastIndex
                 Row(
-                    Modifier.background(
-                        if (rowIdx % 2 == 0) ThemeColors.bgCard else Color.Transparent
-                    ).border(
+                    Modifier.background(Color.Transparent).border(
                         width = 0.5.dp, color = borderColor,
-                        shape = if (isLast) RoundedCornerShape(bottomStart = ArcoRadius.sm, bottomEnd = ArcoRadius.sm)
+                        shape = if (isLast) RoundedCornerShape(bottomStart = corner, bottomEnd = corner)
                         else RoundedCornerShape(0.dp)
                     )
                 ) {
                     row.forEachIndexed { i, cell ->
                         Text(cell, modifier = cellMod(i), style = cellStyle,
-                            color = ThemeColors.textPrimary) // 无 maxLines — 长单元格完整显示，行高自适应
+                            color = cellTextColor) // 无 maxLines — 长单元格完整显示，行高自适应
                     }
                 }
             }

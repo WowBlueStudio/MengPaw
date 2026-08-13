@@ -51,7 +51,11 @@ fun MarkdownText(
     codeBackgroundColor: Color = ThemeColors.bgCardHigh,
     inlineCodeColor: Color = ThemeColors.brand,
     linkColor: Color = ThemeColors.brand,
-    nestedScroll: Boolean = false  // true = 外部已有 scroll，内部不重复加
+    nestedScroll: Boolean = false,  // true = 外部已有 scroll，内部不重复加
+    /** 表格文字色 — null = 主题自适应 (日间深色/夜间浅色); 用户气泡传 Color.White。 */
+    tableTextColor: Color? = null,
+    /** 表格边框色 — null = 主题自适应 (比气泡略深); 用户气泡传白色半透明。 */
+    tableBorderColor: Color? = null
 ) {
     if (content.isBlank()) return
 
@@ -63,20 +67,26 @@ fun MarkdownText(
         verticalArrangement = Arrangement.spacedBy(ArcoSpacing.xs)
     ) {
         blocks.forEach { block ->
-            RenderBlock(block, textStyle, inlineCodeColor, linkColor, codeBackgroundColor)
+            RenderBlock(block, textStyle, inlineCodeColor, linkColor, codeBackgroundColor, tableTextColor, tableBorderColor)
         }
     }
 }
 
 @Composable
 private fun RenderBlock(
-    block: MdBlock, baseStyle: TextStyle, inlineCodeColor: Color, linkColor: Color, codeBg: Color
+    block: MdBlock,
+    baseStyle: TextStyle,
+    inlineCodeColor: Color,
+    linkColor: Color,
+    codeBg: Color,
+    tableTextColor: Color?,
+    tableBorderColor: Color?
 ) {
     when (block) {
                 is MdBlock.Heading -> HeadingView(block, baseStyle)
                 is MdBlock.Paragraph -> ParagraphBlock(block, baseStyle, inlineCodeColor, linkColor)
                 is MdBlock.CodeBlock -> CodeBlockView(block, baseStyle, codeBg)
-                is MdBlock.Table -> TableTextView(block, baseStyle, codeBg)
+                is MdBlock.Table -> TableTextView(block, baseStyle, codeBg, tableTextColor, tableBorderColor)
                 is MdBlock.BulletList -> BulletListView(block, baseStyle, inlineCodeColor, linkColor)
                 is MdBlock.BlockQuote -> BlockQuoteView(block, baseStyle)
                 is MdBlock.HorizontalRule -> HorizontalDivider(color = ThemeColors.border, thickness = 0.5.dp)

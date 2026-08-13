@@ -72,7 +72,10 @@ fun UserBubble(message: ChatMessageUi.User) {
                             textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
                             inlineCodeColor = Color.White.copy(alpha = 0.9f),
                             linkColor = Color.White,
-                            nestedScroll = true
+                            nestedScroll = true,
+                            // 用户气泡: 表格文字/边框用白色系 (深蓝底可读, v0.37.3)
+                            tableTextColor = Color.White,
+                            tableBorderColor = Color.White.copy(alpha = 0.5f)
                         )
                     }
                 }
