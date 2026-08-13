@@ -117,6 +117,12 @@ object EvolutionStore {
     const val DEFAULT_AGENT = "default"
     /** 回合内重试循环判定阈值 (2026-08-08): 同命令同错误码失败满 3 次即注入停指令。 */
     const val RETRY_LOOP_THRESHOLD = 3
+    /** Evolution Agent 分析批次: 累计新失败达此数触发一次分析 (v0.37.3)。 */
+    const val ANALYSIS_BATCH = 5
+    /** 进化报告保留天数: 按最后变更时间超过即自动删除 (v0.37.3)。 */
+    const val REPORT_TTL_DAYS = 15L
+    const val REPORT_STATUS_PENDING = "pending"
+    const val REPORT_STATUS_ADOPTED = "adopted"
 
     private val json = Json { prettyPrint = false; encodeDefaults = true }
     private val buffer = ConcurrentLinkedQueue<EvolutionFailure>()
@@ -803,6 +809,76 @@ object EvolutionStore {
             atomicWrite(file, lines.joinToString("\n") { json.encodeToString(it) } + if (lines.isEmpty()) "" else "\n")
         } catch (_: Exception) { }
     }
+
+    // ── Evolution Agent 分析批次 (v0.37.3) ────────────────────────────
+
+    private fun reportsDir(agent: String): File = File(DataPaths.evolutionDir(agent), "reports").also { it.mkdirs() }
+    private fun analysisProgressFile(agent: String): File = File(reportsDir(agent), "analysis_progress")
+
+    /** 未分析失败条数 (failures.jsonl 总行数 - 已分析进度)。 */
+    fun pendingFailureCount(agentName: String?): Int = try {
+        val agent = agentFileOf(agentName)
+        val file = failuresFile(agent)
+        if (!file.exists()) 0
+        else file.readLines().count { it.isNotBlank() } - readAnalysisProgress(agent)
+    } catch (_: Exception) { 0 }
+
+    /** 未分析失败记录 (按行序, 最多 limit 条) — Evolution Agent 的有限上下文输入。 */
+    fun pendingFailures(agentName: String?, limit: Int = ANALYSIS_BATCH): List<EvolutionFailure> = try {
+        val agent = agentFileOf(agentName)
+        val file = failuresFile(agent)
+        if (!file.exists()) emptyList()
+        else {
+            val progress = readAnalysisProgress(agent)
+            file.readLines().mapNotNull { line ->
+                if (line.isBlank()) null
+                else try { json.decodeFromString<EvolutionFailure>(line) } catch (_: Exception) { null }
+            }.drop(progress).take(limit)
+        }
+    } catch (_: Exception) { emptyList() }
+
+    /** 标记已分析 (进度前移 count 条)。 */
+    fun markAnalyzed(agentName: String?, count: Int) {
+        try {
+            val agent = agentFileOf(agentName)
+            val f = analysisProgressFile(agent)
+            f.parentFile?.mkdirs()
+            atomicWrite(f, (readAnalysisProgress(agent) + count).toString())
+        } catch (_: Exception) {}
+    }
+
+    private fun readAnalysisProgress(agent: String): Int = try {
+        analysisProgressFile(agent).readText().trim().toIntOrNull() ?: 0
+    } catch (_: Exception) { 0 }
+
+    /** 保存进化报告 (frontmatter status: pending), 返回绝对路径。 */
+    fun saveReport(agentName: String?, content: String, covered: Int): String? = try {
+        val agent = agentFileOf(agentName)
+        val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+        val file = File(reportsDir(agent), "${ts}_${covered}.md")
+        file.writeText(buildString {
+            appendLine("---")
+            appendLine("status: $REPORT_STATUS_PENDING")
+            appendLine("generated_at: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}")
+            appendLine("agent: $agent")
+            appendLine("covered: $covered")
+            appendLine("---")
+            appendLine()
+            append(content)
+        })
+        file.absolutePath
+    } catch (_: Exception) { null }
+
+    /** 清理过期报告 (最后变更时间 > 15 天), 返回删除数。 */
+    fun cleanupExpiredReports(agentName: String?): Int = try {
+        val agent = agentFileOf(agentName)
+        val dir = reportsDir(agent)
+        val cutoff = System.currentTimeMillis() - REPORT_TTL_DAYS * 24 * 3600 * 1000L
+        dir.listFiles { f -> f.isFile && f.name.endsWith(".md") }
+            ?.filter { it.lastModified() < cutoff }
+            ?.map { runCatching { it.delete() }.getOrDefault(false) }
+            ?.count { it } ?: 0
+    } catch (_: Exception) { 0 }
 
     // ── 学习登记的指令集持久化 (v2, 2026-08-09) ─────────────────────
     // 此前 learn.command 只写 CommandSearch 内存索引, 进程重启即丢 —
