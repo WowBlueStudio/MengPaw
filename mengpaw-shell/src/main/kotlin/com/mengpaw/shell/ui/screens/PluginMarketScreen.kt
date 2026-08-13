@@ -245,12 +245,13 @@ private fun PluginCard(
                             color = com.mengpaw.design.theme.ThemeColors.brand)
                         Text(state.step.take(12), style = MaterialTheme.typography.labelSmall)
                     }
-                    is InstallState.Done -> {
-                        Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green1) {
-                            Text(strings.installedBadge, Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6)
-                        }
+                is InstallState.Done -> {
+                    Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Green1) {
+                        // 安装即激活 (v0.37.3 免激活): Done = 已部署可用
+                        Text(strings.activatedBadge, Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall, color = ArcoColors.Green6)
                     }
+                }
                     is InstallState.Failed -> {
                         Text(strings.failedBadge, style = MaterialTheme.typography.labelSmall,
                             color = com.mengpaw.design.theme.ThemeColors.error)

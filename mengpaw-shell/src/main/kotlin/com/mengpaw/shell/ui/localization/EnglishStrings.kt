@@ -241,6 +241,7 @@ val EnglishStrings = AppStrings().apply {
     install = "Install"
     verifying = "Verifying..."
     installedBadge = "Installed"
+    activatedBadge = "Activated"
     failedBadge = "Failed"
     retry = "Retry"
     pluginNotFound = "Plugin not found: "

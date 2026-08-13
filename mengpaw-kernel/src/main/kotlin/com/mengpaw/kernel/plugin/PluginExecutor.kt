@@ -162,29 +162,37 @@ class PluginExecutor(
         // 语义: success=激活成功 / failure=明确激活失败 (报错, 不假安装) / null=环境不支持 (desktop 回退占位)
         val loadResult = PluginRuntimeLoader.load(pluginManager, downloaded, entry)
         return if (loadResult == null) {
-            // File downloaded but DexClassLoader can't activate — register metadata anyway
-            try {
-                val dummyPlugin = object : com.mengpaw.kernel.plugin.Plugin {
-                    override val metadata = com.mengpaw.kernel.plugin.PluginMetadata(
-                        id = entry.id, name = entry.name, version = entry.version,
-                        type = entry.type, author = entry.author, description = entry.description,
-                        permissions = entry.permissions, dependencies = entry.dependencies,
-                        commands = entry.commands
-                    )
-                    override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = emptyMap()
-                }
-                pluginManager.install(dummyPlugin).getOrThrow()
-                ExecutionResult.ok(
-                    "✅ ${entry.name} v${entry.version} 下载完成\n" +
-                    "⚠️ 运行时激活暂不支持，重启 APP 后生效。\n" +
-                    "💡 plugin.info ${entry.id} 查看详情"
-                )
-            } catch (metaErr: Exception) {
+            // v0.37.3 免激活体验: Android (dalvik 可用) 上 load==null = 真实激活失败 —
+            // 明确报错可重试, 不再"下载完成但重启后生效"的假成功; 仅 JVM (无 dalvik,
+            // desktop/测试) 保留注册元数据占位。
+            if (dalvikAvailable()) {
                 ExecutionResult.fail(
-                    "Downloaded ${entry.id} v${entry.version} but activation failed.\n" +
-                    "This plugin requires a DEX-packaged release or pre-compilation.",
+                    "安装失败: ${entry.name} v${entry.version} 无法激活 — " +
+                    "插件产物依赖缺失或格式不正确, 请重试安装 (plugin.install ${entry.id})",
                     errorCode = ErrorCodes.ERR_INTERNAL
                 )
+            } else {
+                try {
+                    val dummyPlugin = object : com.mengpaw.kernel.plugin.Plugin {
+                        override val metadata = com.mengpaw.kernel.plugin.PluginMetadata(
+                            id = entry.id, name = entry.name, version = entry.version,
+                            type = entry.type, author = entry.author, description = entry.description,
+                            permissions = entry.permissions, dependencies = entry.dependencies,
+                            commands = entry.commands
+                        )
+                        override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = emptyMap()
+                    }
+                    pluginManager.install(dummyPlugin).getOrThrow()
+                    ExecutionResult.ok(
+                        "✅ ${entry.name} v${entry.version} 下载完成 (桌面环境, 运行时加载暂不支持)"
+                    )
+                } catch (metaErr: Exception) {
+                    ExecutionResult.fail(
+                        "Downloaded ${entry.id} v${entry.version} but activation failed.\n" +
+                        "This plugin requires a DEX-packaged release or pre-compilation.",
+                        errorCode = ErrorCodes.ERR_INTERNAL
+                    )
+                }
             }
         } else {
             loadResult.fold(
@@ -408,5 +416,13 @@ class PluginExecutor(
         PluginStatus.DISABLED -> "⛔"
         PluginStatus.DOWNLOADED -> "⬇️"
         PluginStatus.ERROR -> "❌"
+    }
+
+    /** Android 运行时是否可用 dalvik DexClassLoader (JVM/desktop 为 false)。 */
+    private fun dalvikAvailable(): Boolean = try {
+        Class.forName("dalvik.system.DexClassLoader")
+        true
+    } catch (_: ClassNotFoundException) {
+        false
     }
 }

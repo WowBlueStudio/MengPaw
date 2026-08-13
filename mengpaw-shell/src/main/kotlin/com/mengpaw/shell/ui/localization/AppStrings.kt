@@ -253,6 +253,7 @@ class AppStrings {
     var install: String = ""
     var verifying: String = ""
     var installedBadge: String = ""
+    var activatedBadge: String = ""
     var failedBadge: String = ""
     var retry: String = ""
     var pluginNotFound: String = ""

@@ -241,6 +241,7 @@ val ChineseStrings = AppStrings().apply {
     install = "安装"
     verifying = "校验中..."
     installedBadge = "已安装"
+    activatedBadge = "已激活"
     failedBadge = "失败"
     retry = "重试"
     pluginNotFound = "插件未找到: "
