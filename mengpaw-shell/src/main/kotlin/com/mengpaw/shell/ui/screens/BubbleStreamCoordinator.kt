@@ -25,9 +25,23 @@ internal class BubbleStreamCoordinator(
     val streamBuffer: StreamPlaybackBuffer = StreamPlaybackBuffer()
 ) {
     private val finalAnswerStarted = AtomicBoolean(false)
+    /** 触发最终答案时的轮次 — 该轮及之后路由到 FinalAnswer, 之前的思考轮按序播完。 */
+    @Volatile
+    private var finalAnswerRoundId = Long.MAX_VALUE
     /** 行首锚定: 只有独立成行的 "Final Answer:" 才算最终答案轮 —
      *  思考里 "我需要给出 Final Answer: xxx"(行中字样)不误判 (v0.37.3)。 */
     private val finalAnswerLine = Regex("""(?m)^\s*Final Answer:""")
+    /** 待显示工具行: roundId → 工具列表。工具行等该轮思考播完才挂入 step (顺序化显示)。 */
+    private val pendingTools = mutableMapOf<Long, MutableList<PendingTool>>()
+    /** 最近宣布工具行的轮次 — onStep 的观察挂载目标。 */
+    private var lastToolRound = -1L
+
+    /** 一轮内待显示的工具: 先有命令名 (announce), 工具完成后挂完整命令行与观察。 */
+    internal class PendingTool(val command: String) {
+        var actionLine: String? = null
+        var observation: String? = null
+        var isError: Boolean = false
+    }
 
     val isFinalAnswerStarted: Boolean get() = finalAnswerStarted.get()
 
@@ -40,12 +54,17 @@ internal class BubbleStreamCoordinator(
      */
     fun onDelta(delta: String): StreamPlaybackBuffer.ToolAnnounce? {
         val newTool = streamBuffer.append(delta)
-        newTool?.let { writer.addTool(it.tool, it.roundId) }
+        // 工具行不立即显示 — 存 pending, 该轮思考播完时 flush (顺序化显示)
+        newTool?.let {
+            lastToolRound = it.roundId
+            pendingTools.getOrPut(it.roundId) { mutableListOf() }.add(PendingTool(it.tool))
+        }
         if (!finalAnswerStarted.get() &&
             finalAnswerLine.containsMatchIn(delta) &&
             !streamBuffer.currentRoundHasTool()
         ) {
             finalAnswerStarted.set(true)
+            finalAnswerRoundId = streamBuffer.currentRoundId()
             writer.beginFinalAnswer()
         }
         return newTool
@@ -56,14 +75,29 @@ internal class BubbleStreamCoordinator(
      * 封口语义: 不再接收该轮增量, 但未播文本保留给播放协程按序播完。
      */
     fun onStep(action: String?, observation: String?, isError: Boolean) {
-        writer.completeTool(action.orEmpty(), observation.orEmpty(), isError)
+        // 观察挂到最近宣布工具轮的 pending 工具 (工具行尚未入 step)
+        if (lastToolRound >= 0) {
+            pendingTools[lastToolRound]?.lastOrNull()?.apply {
+                actionLine = action
+                this.observation = observation
+                this.isError = isError
+            }
+        }
         streamBuffer.sealRound()
     }
 
     /** 播放协程 — 按轮次把增量路由到思考步骤或最终答案气泡。 */
     fun launchPlayback(scope: CoroutineScope): Job =
         streamBuffer.launchPlayback(scope) { roundId, text ->
-            if (finalAnswerStarted.get()) writer.pushFinal(text) else writer.pushThought(text, roundId)
+            // 顺序化显示: 最终答案轮之前的思考轮按序播完 (含工具行), 只有
+            // 最终答案轮及之后才进 FinalAnswer 气泡 — 不再"思考未播完就乱序"
+            if (finalAnswerStarted.get() && roundId >= finalAnswerRoundId) {
+                writer.pushFinal(text)
+            } else {
+                writer.pushThought(text, roundId)
+                // 该轮思考播完 → 挂上该轮工具行 (含观察), 与实际执行顺序一致
+                if (streamBuffer.isRoundFullyPlayed(roundId)) flushRound(roundId)
+            }
         }
 
     /** run() 已返回 — 标记流结束 + 封口全部轮次 (截断路径也能播完)。 */
@@ -71,15 +105,30 @@ internal class BubbleStreamCoordinator(
 
     /** 播放器异常退出兜底 — 推完剩余缓冲。 */
     fun flushRemaining() {
+        // 播放器异常退出兜底: 未播完轮次的工具行也要落地 (否则工具调用丢失)
+        pendingTools.keys.toList().forEach { flushRound(it) }
         val flushText = streamBuffer.flushText() ?: return
-        if (finalAnswerStarted.get()) writer.pushFinal(flushText.tool)
+        if (finalAnswerStarted.get() && flushText.roundId >= finalAnswerRoundId) writer.pushFinal(flushText.tool)
         else writer.pushThought(flushText.tool, flushText.roundId)
     }
 
     /** 引擎返回兜底闭环 — 流式未检测到 Final Answer 时强制折叠容器并建答案气泡。 */
     fun ensureFinalAnswer() {
         if (finalAnswerStarted.compareAndSet(false, true)) {
+            // 引擎返回兜底: 无最终答案轮标记 — 剩余全部按思考轮播完
+            finalAnswerRoundId = Long.MAX_VALUE
             writer.beginFinalAnswer()
+        }
+    }
+
+    /** 该轮思考播完 — 把 pending 工具行 (含观察) 挂入对应 step。 */
+    private fun flushRound(roundId: Long) {
+        val tools = pendingTools.remove(roundId) ?: return
+        tools.forEach { t ->
+            writer.addTool(t.command, roundId)
+            t.actionLine?.let { line ->
+                writer.completeTool(line, t.observation.orEmpty(), t.isError)
+            }
         }
     }
 }

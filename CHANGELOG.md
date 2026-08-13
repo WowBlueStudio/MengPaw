@@ -19,6 +19,13 @@
 - **编排逻辑拆分**: 流式气泡编排收敛到独立 BubbleStreamCoordinator (finalAnswerStarted/
   轮次封口/播放路由三处共享状态), 行为由 4 个用例锁死
 - StreamPlaybackBuffer.finish 封口全部轮次 (引擎截断路径下播放器不再卡 NothingNew)
+- **思考支持 Markdown**: 思考气泡 (ThinkingProcessBubble/AgentStepBubble) 思考全文
+  改为 MarkdownText 渲染, 不再纯文本
+- **按实际执行顺序显示**: 工具行延迟到该轮思考播完才挂入 (pending 机制), 最终答案
+  轮之前的思考轮按序播完才进 FinalAnswer — 修复"第一轮思考还在流式输出, 后面
+  几轮工具调用已跑出来"的乱序; 根因: beginFinalAnswer 后 tracker.ref 指向
+  FinalAnswer, 播放协程的思考回填被误路由 (updateProcess 改为按类型定位过程容器,
+  协调器记录 finalAnswerRoundId 区分思考轮/最终答案轮)
 
 ### 发行
 - Shell APK: `mengpaw-shell-v0.37.3-release.apk` (versionCode 37003)

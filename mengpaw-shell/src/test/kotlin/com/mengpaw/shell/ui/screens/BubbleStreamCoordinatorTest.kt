@@ -77,9 +77,24 @@ class BubbleStreamCoordinatorTest {
         coordinator.finish()
         job.join()
 
+        val msgDump = session.messages.value.joinToString(" | ") { m ->
+            when (m) {
+                is ChatMessageUi.ThinkingProcess -> "TP(steps=${m.steps.size},running=${m.isRunning})"
+                is ChatMessageUi.FinalAnswer -> "FA(len=${m.content.length})"
+                else -> m::class.simpleName.orEmpty()
+            }
+        }
+        assertTrue("播放必须产生消息, 实际=[$msgDump]", session.messages.value.size > 1)
         val proc = process(session)
-        assertEquals("两轮思考必须分为两个 step (不再卡在第 1 轮)", 2, proc.steps.size)
+        val dump = proc.steps.joinToString(" | ") { "r${it.roundId}:t=[${it.thought.take(12)}]tools=${it.tools.size}" }
+        assertEquals("两轮思考必须分为两个 step, steps=[$dump]", 2, proc.steps.size)
         assertTrue("步骤含第二轮 roundId=1", proc.steps.any { it.roundId == 1L })
+        // 顺序化显示: 每轮思考播完后工具行才落地, 且挂上观察
+        proc.steps.forEach { step ->
+            assertTrue("round${step.roundId} 思考必须完整", step.thought.isNotBlank())
+            assertEquals("round${step.roundId} 工具行必须随轮次落地", 1, step.tools.size)
+            assertTrue("round${step.roundId} 观察必须挂载", step.tools[0].observation.isNotBlank())
+        }
     }
 
     @Test

@@ -170,12 +170,16 @@ internal class ThinkingProcessWriter(
         session.messages.update { current ->
             val mutable = current.toMutableList()
             val idx = resolveRunningIndex(mutable, tracker.index, tracker.ref)
-            if (idx >= 0 && mutable[idx] is ChatMessageUi.ThinkingProcess) {
-                val prev = mutable[idx] as ChatMessageUi.ThinkingProcess
+            // beginFinalAnswer 后 tracker.ref 指向 FinalAnswer — 播放协程的思考回填
+            // 需按类型定位过程容器 (折叠后 isRunning=false, 不能依赖运行态扫描)
+            val tpIdx = if (idx >= 0 && mutable[idx] is ChatMessageUi.ThinkingProcess) idx
+            else mutable.indexOfLast { it is ChatMessageUi.ThinkingProcess }
+            if (tpIdx >= 0) {
+                val prev = mutable[tpIdx] as ChatMessageUi.ThinkingProcess
                 val updated = prev.copy(steps = transform(prev.steps))
                 tracker.ref = updated
-                tracker.index = idx
-                mutable[idx] = updated
+                tracker.index = tpIdx
+                mutable[tpIdx] = updated
             }
             mutable
         }

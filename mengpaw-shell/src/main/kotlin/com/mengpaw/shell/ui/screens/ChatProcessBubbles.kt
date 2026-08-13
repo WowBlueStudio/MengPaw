@@ -90,8 +90,12 @@ fun ThinkingProcessBubble(message: ChatMessageUi.ThinkingProcess, agentName: Str
                         Text(if (message.steps.size > 1) "第 ${i + 1} 轮思考" else "思考",
                             style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
                         Spacer(Modifier.height(2.dp))
-                        Text(step.thought, style = MaterialTheme.typography.bodySmall,
-                            color = ThemeColors.textSecondary)
+                        // 思考支持 Markdown (v0.37.3) — nestedScroll: 外层 LazyColumn 已有滚动
+                        com.mengpaw.design.components.MarkdownText(
+                            content = step.thought,
+                            textStyle = MaterialTheme.typography.bodySmall.copy(color = ThemeColors.textSecondary),
+                            nestedScroll = true
+                        )
                         Spacer(Modifier.height(6.dp))
                     }
                     step.tools.forEach { tool -> ProcessToolRow(tool) }
@@ -197,9 +201,12 @@ fun AgentStepBubble(message: ChatMessageUi.AgentStep, agentName: String = "MengP
                 }
                 AnimatedVisibility(visible = thinkingExpanded) {
                     Column(Modifier.padding(start = ArcoSpacing.sm, end = ArcoSpacing.sm, bottom = ArcoSpacing.sm)) {
-                        // 完整思考全文 — 全程可见, 不截断
-                        Text(message.thought, style = MaterialTheme.typography.bodySmall,
-                            color = ThemeColors.textSecondary)
+                        // 完整思考全文 — 全程可见, 不截断; 支持 Markdown (v0.37.3)
+                        com.mengpaw.design.components.MarkdownText(
+                            content = message.thought,
+                            textStyle = MaterialTheme.typography.bodySmall.copy(color = ThemeColors.textSecondary),
+                            nestedScroll = true
+                        )
                         // 工具调用行 (终端风格)
                         if (message.action != null) {
                             Spacer(Modifier.height(4.dp))

@@ -132,6 +132,12 @@ internal class StreamPlaybackBuffer {
         rounds.lastOrNull()?.let { it.announcedTools > 0 } ?: false
     }
 
+    /** 指定轮次是否已播完 (played ≥ raw.length, 或已被弹出) —
+     *  协调器据此在"该轮思考播完"后才挂工具行, 保证 UI 按实际执行顺序呈现。 */
+    fun isRoundFullyPlayed(roundId: Long): Boolean = synchronized(this) {
+        rounds.firstOrNull { it.id == roundId }?.let { it.played >= it.raw.length } ?: true
+    }
+
     /** 播放协程单 tick 消费 — 原播放循环同步段, 逻辑不变. */
     fun tick(): Tick = synchronized(this) {
         // 弹出队头已播完且已封口的轮次 — 未播完的轮次保留, 后续 tick 继续播
