@@ -34,12 +34,16 @@ import java.io.File
  */
 class AgentViewModel : ViewModel() {
 
-    // ── 高危操作确认队列 (v0.34.3 分级系统) — kernel UserConfirmBus 请求 → UI 弹窗 ──
+    // ── 高危操作确认 (v0.37.3 改横幅通知) — kernel UserConfirmBus 请求 → 通知栏横幅 ──
     private val confirmListener = com.mengpaw.kernel.security.UserConfirmBus.Listener { request ->
-        confirmQueue.update { it.apply { addLast(request) } }
+        com.mengpaw.shell.service.HighRiskNotification.show(request)
+        // UserConfirmBus 30s 超时后请求已按拒绝收尾 — 超时同步取消通知, 防残留
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(30_000L)
+            com.mengpaw.shell.service.HighRiskNotification.cancel(request.id)
+        }
         true
     }
-    val confirmQueue = MutableStateFlow<ArrayDeque<com.mengpaw.kernel.security.UserConfirmBus.ConfirmRequest>>(ArrayDeque())
 
     init {
         com.mengpaw.kernel.security.UserConfirmBus.registerListener(confirmListener)
@@ -55,13 +59,6 @@ class AgentViewModel : ViewModel() {
         sessions.values.forEach { session ->
             try { (session.provider as? java.io.Closeable)?.close() } catch (_: Exception) {}
         }
-    }
-
-    /** 高危确认弹窗结果回传 (MainScreen 调用) — 允许/拒绝当前队首请求。 */
-    fun respondConfirm(allowed: Boolean) {
-        val req = confirmQueue.value.firstOrNull() ?: return
-        com.mengpaw.kernel.security.UserConfirmBus.respond(req.id, allowed)
-        confirmQueue.update { it.apply { removeFirst() } }
     }
 
     // ── Multi-session store ──

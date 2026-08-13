@@ -138,35 +138,8 @@ fun MainScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val isRunning by viewModel.isRunning.collectAsState()
-    // ── 高危操作确认弹窗 (v0.34.3 分级系统) ──
-    val confirmQueue by viewModel.confirmQueue.collectAsState()
-    confirmQueue.firstOrNull()?.let { req ->
-        AlertDialog(
-            onDismissRequest = { viewModel.respondConfirm(false) },
-            title = { Text("⚠️ 高危操作确认") },
-            text = {
-                Column {
-                    Text("Agent 请求执行高危操作:", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(6.dp))
-                    Text(req.command, fontFamily = FontFamily.Monospace, fontSize = 13.sp,
-                        color = ThemeColors.textPrimary)
-                    if (!req.reason.isNullOrBlank()) {
-                        Spacer(Modifier.height(6.dp))
-                        Text("原因: ${req.reason}", fontSize = 13.sp, color = ThemeColors.textSecondary)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text("高危操作涉及清空/卸载/修改系统级数据，允许后将立即执行。",
-                        fontSize = 12.sp, color = ArcoColors.Orange6)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.respondConfirm(true) }) { Text("允许") }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.respondConfirm(false) }) { Text("拒绝") }
-            }
-        )
-    }
+    // v0.37.3: 高危操作确认改通知栏横幅 (HighRiskNotification), 应用内不再弹 AlertDialog —
+    // 后台/其他页面触发时用户也能从通知栏看到并确认 (原弹窗不可见 + 30s 静默拒绝)
     // P2 修复: rememberSaveable — 输入框草稿/展开状态跨配置变更与进程重建保留
     var inputText by rememberSaveable { mutableStateOf("") }
     val inputFocus = remember { androidx.compose.ui.focus.FocusRequester() }

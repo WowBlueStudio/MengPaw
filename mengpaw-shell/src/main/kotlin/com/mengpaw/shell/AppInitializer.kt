@@ -19,6 +19,9 @@ object AppInitializer {
 
     /** 必须在 UI 渲染前完成的初始化。 */
     fun initialize(context: Context) {
+        // ── 高危操作确认横幅通知 (v0.37.3): 渠道 + 接收器注册, 幂等 ──
+        try { com.mengpaw.shell.service.HighRiskNotification.init(context) } catch (_: Exception) {}
+
         // ── Global crash logger ──
         // Writes to both internal (for ADB on debug builds) and public Downloads
         // (for release builds, where /data/data is not ADB-readable on Android 10+)

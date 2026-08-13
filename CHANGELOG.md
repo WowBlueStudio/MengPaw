@@ -32,6 +32,9 @@
   安装成功徽标改为"已激活"
 - **工具调用流式逐字误报修复**: ACTION_LINE_REGEX 行尾必须换行落地, 不再逐字
   宣布 (agent→agent.m→… 展开与调用次数虚高 47 vs 12 的根因)
+- **高危操作确认改通知栏横幅**: 取代应用内 AlertDialog — 后台任务/其他页面触发
+  高危命令时, 通知栏高优先级横幅带「允许/拒绝」按钮直接确认, 不再 30s 静默拒绝
+  用户无感知; 30s 超时自动取消通知 (HighRiskNotification + confirmQueue 移除)
 
 ### 发行
 - Shell APK: `mengpaw-shell-v0.37.3-release.apk` (versionCode 37003)
