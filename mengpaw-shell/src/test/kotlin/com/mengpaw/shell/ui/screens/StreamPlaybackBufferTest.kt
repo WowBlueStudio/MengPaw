@@ -120,4 +120,19 @@ class StreamPlaybackBufferTest {
         assertEquals(0L, flush?.roundId)
         assertEquals(" 第一轮思考\nAction: a", flush?.tool)
     }
+
+    @Test
+    fun `finish封口全部轮次_未走onStep的轮也能播完`() {
+        val buffer = StreamPlaybackBuffer()
+
+        buffer.append("Thought: 第一轮\nAction: a\nAction Input: {}\n")
+        buffer.sealRound()
+        // 模拟引擎截断路径: 第二轮未走 onStep sealRound 就 run() 返回
+        buffer.append("Thought: 第二轮未封口\nFinal Answer: 答案")
+        buffer.finish()
+
+        val pushed = drain(buffer)
+        assertTrue("未 sealRound 的第二轮必须仍播出", pushed.any { it.first == 1L })
+        assertTrue("最终答案必须播出", pushed.last().second.contains("答案"))
+    }
 }

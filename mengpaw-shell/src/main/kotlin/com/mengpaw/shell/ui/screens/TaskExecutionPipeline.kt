@@ -217,7 +217,11 @@ internal class TaskExecutionPipeline(
                     // v0.36.3: 带 roundId 挂到当前轮 step — 同轮后续思考增量不再另起 step
                     newTool?.let { writer.addTool(it.tool, it.roundId) }
                     // 检测 Final Answer 开始 → 过程容器自动折叠 + 答案气泡流式
-                    if (!finalAnswerStarted.get() && accumulatedRaw.contains("Final Answer:", ignoreCase = true)) {
+                    // v0.37.2 修复: 原逻辑对全量累积文本 contains — 模型思考内容里出现
+                    // "Final Answer:" 字样即永久误判, 后续所有 delta 改道 FinalAnswer,
+                    // 思考容器永远停在当前步 ("卡在第 1 轮思考")。改为仅检测当前增量,
+                    // 把误判窗口从"整段历史"缩小到"单次增量"; 引擎返回时仍有兜底闭环。
+                    if (!finalAnswerStarted.get() && delta.contains("Final Answer:", ignoreCase = true)) {
                         finalAnswerStarted.set(true)
                         writer.beginFinalAnswer()
                     }

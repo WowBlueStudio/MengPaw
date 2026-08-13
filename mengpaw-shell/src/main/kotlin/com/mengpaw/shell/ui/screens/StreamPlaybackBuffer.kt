@@ -156,10 +156,12 @@ internal class StreamPlaybackBuffer {
         rounds.lastOrNull()?.finished = true
     }
 
-    /** run() 已返回 — 标记流结束 + 封口当前轮, 播放器播完剩余缓冲即退. */
+    /** run() 已返回 — 标记流结束 + 封口全部轮次, 播放器播完剩余缓冲即退.
+     *  v0.37.2 修复: 原实现只封口队尾 — 若存在未走 onStep 封口的中间轮
+     *  (引擎异常/截断路径), 播放协程播完队头后永远 NothingNew, 后续轮次卡死。 */
     fun finish() = synchronized(this) {
         finished = true
-        rounds.lastOrNull()?.finished = true
+        rounds.forEach { it.finished = true }
     }
 
     /** 兜底 flush: 播放器异常退出时推完剩余; 正常播完时返回 null (逻辑不变). */
