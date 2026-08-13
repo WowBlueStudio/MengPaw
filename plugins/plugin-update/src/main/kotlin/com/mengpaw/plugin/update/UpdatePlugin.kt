@@ -69,6 +69,14 @@ class UpdatePlugin : Plugin {
     internal val autoCheckStarted = AtomicBoolean(false)
     private var latestRelease: ReleaseInfo? = null
 
+    /** 是否有可用更新 — update.check 之后有效 (v0.38.2, 供系统设置入口显示下载按钮)。 */
+    val hasUpdate: Boolean
+        get() {
+            val current = getCurrentVersion() ?: return false
+            val release = latestRelease ?: return false
+            return compareVersions(release.tag.removePrefix("v"), current) > 0
+        }
+
     /** 下载/安装委托 — 依赖经构造参数注入 (批次3 拆分)。 */
     private val downloader = UpdateDownloader(
         releaseProvider = { latestRelease },

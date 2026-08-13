@@ -191,12 +191,24 @@ fun SystemSettingsContent(
     // ── 自动更新 (v0.37.3 内置, 入口: 输出目录与 Token 用量统计之间) ──
     SectionHeader(state.strings.autoUpdateTitle)
     var updateStatus by remember { mutableStateOf<String?>(null) }
+    var updateHasNew by remember { mutableStateOf(false) }
+    var updateBusy by remember { mutableStateOf(false) }
     val updateScope = rememberCoroutineScope()
+
+    // v0.38.2: 打开设置自动检查更新 (无需手动点击)
+    LaunchedEffect(Unit) {
+        updateStatus = state.strings.autoUpdateChecking
+        val r = runUpdateCheckUi()
+        updateStatus = r.summary
+        updateHasNew = r.hasUpdate
+    }
     Surface(
         modifier = Modifier.fillMaxWidth().clickable {
             updateScope.launch {
                 updateStatus = state.strings.autoUpdateChecking
-                updateStatus = runUpdateCheck()
+                val r = runUpdateCheckUi()
+                updateStatus = r.summary
+                updateHasNew = r.hasUpdate
             }
         },
         shape = RoundedCornerShape(ArcoRadius.md),
@@ -211,7 +223,23 @@ fun SystemSettingsContent(
                 Text(updateStatus ?: state.strings.autoUpdateClickHint,
                     style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 3)
             }
-            Icon(Icons.Outlined.ChevronRight, null, tint = ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
+            if (updateHasNew && !updateBusy) {
+                // v0.38.2: 发现新版本 → 下载 APK 入口 (下载成功后自动拉起安装)
+                TextButton(onClick = {
+                    updateScope.launch {
+                        updateBusy = true
+                        updateStatus = state.strings.autoUpdateDownloading
+                        updateStatus = runUpdateDownloadAndInstall()
+                        updateHasNew = false
+                        updateBusy = false
+                    }
+                }, contentPadding = PaddingValues(horizontal = ArcoSpacing.sm)) {
+                    Text(state.strings.autoUpdateDownload, style = MaterialTheme.typography.labelSmall,
+                        color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
+                }
+            } else {
+                Icon(Icons.Outlined.ChevronRight, null, tint = ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
+            }
         }
     }
 
@@ -344,19 +372,41 @@ fun SystemSettingsContent(
  * primary:<相对路径> 文档 URI, 私有路径 (旧 Android/data 回退) 用 file:// 初值。
  * 不可用 (部分设备 DocumentsUI 无定位) 时兜底打开外部存储根。
  */
-/** 执行 update.check --force 并返回摘要 (自动更新设置入口, v0.37.3)。 */
-private suspend fun runUpdateCheck(): String {
+/** 自动更新检查结果 — 摘要文本 + 是否有新版本 (v0.38.2, 供设置页显示下载按钮)。 */
+private data class UpdateCheckUiState(val summary: String, val hasUpdate: Boolean)
+
+/** 执行 update.check --force 并返回摘要与是否有新版本 (自动更新设置入口, v0.37.3+/v0.38.2)。 */
+private suspend fun runUpdateCheckUi(): UpdateCheckUiState {
+    return try {
+        val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+        val plugin = pm.get("update-plugin") as? com.mengpaw.plugin.update.UpdatePlugin
+            ?: return UpdateCheckUiState("自动更新插件未就绪", false)
+        val result = plugin.commands["check"]?.invoke(
+            listOf("--force"),
+            com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
+        ) ?: return UpdateCheckUiState("检查命令不可用", false)
+        UpdateCheckUiState(result.output.ifBlank { result.error ?: "检查完成" }, plugin.hasUpdate)
+    } catch (e: Exception) {
+        UpdateCheckUiState("检查失败: ${e.message?.take(80) ?: "未知错误"}", false)
+    }
+}
+
+/** 执行 update.download shell + update.install shell (v0.38.2 设置页下载 APK 入口)。 */
+private suspend fun runUpdateDownloadAndInstall(): String {
     return try {
         val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
         val plugin = pm.get("update-plugin") as? com.mengpaw.plugin.update.UpdatePlugin
             ?: return "自动更新插件未就绪"
-        val result = plugin.commands["check"]?.invoke(
-            listOf("--force"),
-            com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
-        ) ?: return "检查命令不可用"
-        result.output.ifBlank { result.error ?: "检查完成" }
+        val ctx = com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
+        val dl = plugin.commands["download"]?.invoke(listOf("shell"), ctx)
+            ?: return "下载命令不可用"
+        if (!dl.success) return dl.error ?: "下载失败"
+        val inst = plugin.commands["install"]?.invoke(listOf("shell"), ctx)
+            ?: return dl.output.ifBlank { "下载完成" }
+        (dl.output.ifBlank { "下载完成" } +
+            if (inst.output.isNotBlank()) "\n${inst.output}" else "").trim()
     } catch (e: Exception) {
-        "检查失败: ${e.message?.take(80) ?: "未知错误"}"
+        "下载失败: ${e.message?.take(80) ?: "未知错误"}"
     }
 }
 

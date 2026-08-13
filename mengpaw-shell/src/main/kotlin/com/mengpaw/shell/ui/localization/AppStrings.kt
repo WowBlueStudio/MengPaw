@@ -148,6 +148,8 @@ class AppStrings {
     var autoUpdateTitle: String = ""
     var autoUpdateClickHint: String = ""
     var autoUpdateChecking: String = ""
+    var autoUpdateDownload: String = ""
+    var autoUpdateDownloading: String = ""
 
     // Settings - Agent
     var agentAddHumanTouch: String = ""

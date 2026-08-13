@@ -125,8 +125,10 @@ val ChineseStrings = AppStrings().apply {
     systemTotalUsage = "总用量"
     systemWeekly = "每周"
     autoUpdateTitle = "自动更新"
-    autoUpdateClickHint = "点击检查更新 (GitHub/Gitee Releases)"
+    autoUpdateClickHint = "打开设置自动检查更新 (GitHub/Gitee Releases)"
     autoUpdateChecking = "检查中..."
+    autoUpdateDownload = "下载 APK"
+    autoUpdateDownloading = "正在下载 APK..."
 
     // Settings - Device guides
     guideSection = "使用指南"

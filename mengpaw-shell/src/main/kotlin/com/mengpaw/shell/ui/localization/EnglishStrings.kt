@@ -125,8 +125,10 @@ val EnglishStrings = AppStrings().apply {
     systemTotalUsage = "Total Usage"
     systemWeekly = "Weekly"
     autoUpdateTitle = "Auto Update"
-    autoUpdateClickHint = "Tap to check for updates (GitHub/Gitee Releases)"
+    autoUpdateClickHint = "Checks automatically when settings open (GitHub/Gitee Releases)"
     autoUpdateChecking = "Checking..."
+    autoUpdateDownload = "Download APK"
+    autoUpdateDownloading = "Downloading APK..."
 
     // Settings - Device guides
     guideSection = "Guides"
