@@ -281,12 +281,16 @@ internal class TaskExecutionPipeline(
 
                 applyFinalResult(session, writer, coordinator.streamBuffer, displayResult, result, modePrefix, agentRef, pluginViewModel)
                 // 会话结束兜底: Evolution Agent 分析触发 (v0.37.3) — 新失败累计达
-                // 批次阈值时生成进化报告, 当前会话通知一行 (主 Agent 参考 evolution 技能审阅)
+                // 批次阈值时生成进化报告, 子 Agent 产出放用户气泡侧 (User 消息),
+                // 主 Agent 参考 evolution 技能审阅采纳
                 try {
                     val evolutionReport = session.engine.maybeTriggerEvolution()
                     if (evolutionReport != null) {
                         session.messages.value = session.messages.value +
-                            ChatMessageUi.System("🧬 进化报告已生成: $evolutionReport — 审阅采纳见 evolution 技能")
+                            ChatMessageUi.User(
+                                "🧬 Evolution Agent 进化报告已生成\n\n报告: $evolutionReport\n\n" +
+                                    "请按 evolution 技能审阅采纳 (金字塔追问 + 增量沉淀)。"
+                            )
                     }
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
