@@ -211,7 +211,16 @@ class PluginViewModel : ViewModel() {
             updateInstallState(id, InstallState.Verifying)
             val result = executor.commands["install"]?.invoke(listOf(id), ctx)
             if (result != null && result.success) {
-                updateInstallState(id, InstallState.Done(id))
+                // 下载安装后自动激活 — PluginExecutor 通常已 activate, 这里兜底确认状态
+                val status = pluginManager.status(id)
+                if (status == com.mengpaw.kernel.plugin.PluginStatus.ACTIVE) {
+                    updateInstallState(id, InstallState.Done(id))
+                } else {
+                    pluginManager.activate(id).fold(
+                        onSuccess = { updateInstallState(id, InstallState.Done(id)) },
+                        onFailure = { e -> updateInstallState(id, InstallState.Failed("激活失败: ${e.message}")) }
+                    )
+                }
             } else {
                 updateInstallState(id, InstallState.Failed(result?.error ?: "Install failed: ${entry.id}"))
             }

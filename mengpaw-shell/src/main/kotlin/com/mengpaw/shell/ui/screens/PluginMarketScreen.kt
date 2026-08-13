@@ -161,10 +161,15 @@ private fun PluginCard(
 
             // Info
             Column(Modifier.weight(1f)) {
-                // 版本号不放在标题行 — 中英长标题换行时会把版本号挤成竖排 (v0.37.2 手机端排版修复)
-                Text(item.displayName, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                // 主标题两行: 中文名 + 英文名; 版本号在右侧按钮下方 (v0.37.2 手机端排版)
+                Text(item.name, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                if (!item.enName.isNullOrBlank()) {
+                    Text(item.enName, style = MaterialTheme.typography.labelSmall,
+                        color = com.mengpaw.design.theme.ThemeColors.textSecondary)
+                }
+                // 副标题自动换行, 不截断
                 Text(item.description, style = MaterialTheme.typography.bodySmall,
-                    color = com.mengpaw.design.theme.ThemeColors.textSecondary, maxLines = 1)
+                    color = com.mengpaw.design.theme.ThemeColors.textSecondary)
                 Row {
                     if (isBuiltin) {
                         Surface(shape = RoundedCornerShape(ArcoRadius.sm), color = ArcoColors.Blue1) {

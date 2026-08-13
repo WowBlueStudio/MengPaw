@@ -70,8 +70,13 @@ fun PluginDetailScreen(
                             }
                             Spacer(Modifier.width(ArcoSpacing.md))
                             Column {
-                                Text(plugin.displayName, fontWeight = FontWeight.Bold,
+                                // 主标题两行: 中文名 + 英文名
+                                Text(plugin.name, fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.titleMedium)
+                                if (!plugin.enName.isNullOrBlank()) {
+                                    Text(plugin.enName, style = MaterialTheme.typography.bodySmall,
+                                        color = com.mengpaw.design.theme.ThemeColors.textSecondary)
+                                }
                                 Text("${if (plugin.version.isNotBlank()) "v${plugin.version} · " else ""}${plugin.author}",
                                     style = MaterialTheme.typography.bodySmall, color = com.mengpaw.design.theme.ThemeColors.textSecondary)
                             }
