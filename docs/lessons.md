@@ -1011,5 +1011,13 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   GitHub 不通时会拿到旧版 0.35.6 而非最新。修复: 发布后手动在 Gitee 网页上传 APK
   创建同版本 release (Gitee token 属安全禁区不自动化), 或确认用户网络可达
   GitHub/ghproxy。
+- **Gitee release 回填实操 (v0.38.1 已补齐)**: 主仓库 Gitee release 长期只有
+  v0.6.1/v0.35.6 — 发布流程 (skill) 只建 GitHub release, Gitee 的 tag push 不会
+  自动生成 release, 且 Gitee release 创建需 access_token (禁区) 故从未自动化。
+  回填 0.36.0-0.38.1 八版: Gitee API POST /releases 需带 target_commitish=master
+  (缺失报 "target_commitish is missing"); **Gitee 上传约 32KB/s, 10MB APK 需
+  ~5 分钟, Invoke-RestMethod 300s 超时必失败 — 用 curl -F 上传并给 600s+**;
+  token 从本地环境变量读, 禁止打印/入库。0.37.3 顺带核实: 无 git tag, 只有
+  CHANGELOG 条目, 从未正式发布。
 
-*最后更新: 2026-08-14 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 未同步*
+*最后更新: 2026-08-14 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操*
