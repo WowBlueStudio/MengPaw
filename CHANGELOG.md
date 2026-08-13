@@ -26,12 +26,18 @@
   几轮工具调用已跑出来"的乱序; 根因: beginFinalAnswer 后 tracker.ref 指向
   FinalAnswer, 播放协程的思考回填被误路由 (updateProcess 改为按类型定位过程容器,
   协调器记录 finalAnswerRoundId 区分思考轮/最终答案轮)
+- **自动更新插件内置**: update-plugin 由外置 remote 迁入 Shell APK (内置无版本号),
+  系统设置新增「自动更新」入口 (输出目录与 Token 用量统计之间, 点击执行 update.check)
+- **插件安装即激活**: Android 上加载失败不再降级为"重启后生效", 明确报错可重试;
+  安装成功徽标改为"已激活"
+- **工具调用流式逐字误报修复**: ACTION_LINE_REGEX 行尾必须换行落地, 不再逐字
+  宣布 (agent→agent.m→… 展开与调用次数虚高 47 vs 12 的根因)
 
 ### 发行
 - Shell APK: `mengpaw-shell-v0.37.3-release.apk` (versionCode 37003)
 - 仅 Shell 构建 (browser 无变更不构建); 本地验证推送, 未打 tag 未发布
-- 测试: 全量双套 1304 用例 0 failures (shell +12 = BubbleStreamCoordinator 4×2
-  + ThinkingProcessWriter 交错回归 1×2)
+- 测试: 全量双套 1330 用例 0 failures (shell +12 = BubbleStreamCoordinator 4×2
+  + ThinkingProcessWriter 交错回归 1×2; plugin-update 迁入 +12)
 
 ## v0.37.2 (2026-08-13) — 印象笔记连接器登记 + 系统提示词插件指引
 

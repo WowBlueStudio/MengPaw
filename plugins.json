@@ -232,28 +232,26 @@
     {
       "id": "update-plugin",
       "name": "自动更新",
-      "version": "0.3.0",
+      "version": "",
       "type": "native",
       "author": "MengPaw",
-      "description": "WiFi 环境自动检测更新，冷启动检查，去轮询CoroutineScope泄漏，GitHub→Gitee→ghproxy 三级回退",
-      "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.4.0/plugin-update-release.jar",
-      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.4.0/plugin-update-release.jar",
+      "description": "WiFi 环境自动检测更新，可选自动下载安装 — 检查 GitHub/Gitee Releases，安装 APK (v0.37.3 起内置)",
+      "status": "builtin",
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "REQUEST_INSTALL_PACKAGES"
       ],
-      "minCoreVersion": "0.8.0",
+      "minCoreVersion": "0.2.3",
       "commands": [
         "update.check",
         "update.download",
         "update.install",
         "update.auto"
       ],
-      "checksum": "sha256:98e3aa289ef0ec997864dd9b4cbfaa1b9a5f44a2d15accb7e6e286c3021139a8",
-      "size": 21040,
-      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）\n### 发行\n- **全部外置插件迁移至独立仓库 mengpaw-connectors (MIT)**: 源码随仓库发布, 重新打包上传, 下载指向 plugins-v0.4.0。"
+      "checksum": "",
+      "size": 0,
+      "changelog": "### 变更\n- **v0.37.3 起内置随 Shell APK**: 由外置 remote 迁入, 安装即激活; 系统设置新增「自动更新」入口 (输出目录与 Token 用量统计之间)。"
     },
     {
       "id": "translate-plugin",

@@ -84,7 +84,7 @@ mengpaw/
 
 > ⭐ = 捆绑在 Shell APK 中 · 💎 = WowBlue 原创（领先同类框架，见下节）
 >
-> 14 个外置插件（更新/翻译/上报/生图/ComfyUI/推送/转档/MCP/印象笔记 + 6 连接器）源码与分发均在独立仓库
+> 13 个外置插件（翻译/上报/生图/ComfyUI/推送/转档/MCP/印象笔记 + 6 连接器）源码与分发均在独立仓库
 > [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)（MIT），经插件市场 `plugin.install` 安装。
 
 ## 架构
@@ -98,7 +98,7 @@ mengpaw/
 │  mengpaw-kernel (124 文件)     │  ← 微内核 (纯 Kotlin/JVM)
 │  零 Android 依赖 · 可 JVM 测试  │
 ├────────────────────────────────┤
-│  15 内置插件 (同级 · 只依赖 kernel) │  ← 插件层
+│  16 内置插件 (同级 · 只依赖 kernel) │  ← 插件层
 └────────────────────────────────┘
 ```
 
