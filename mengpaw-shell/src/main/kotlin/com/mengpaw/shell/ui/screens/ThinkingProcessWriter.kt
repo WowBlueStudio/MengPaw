@@ -45,11 +45,11 @@ internal class ThinkingProcessWriter(
     fun pushThought(text: String, roundId: Long) {
         updateProcess { steps ->
             val newSteps = steps.toMutableList()
-            val last = newSteps.lastOrNull()
-            if (last == null || last.roundId != roundId) {
+            val idx = newSteps.indexOfLast { it.roundId == roundId }
+            if (idx < 0) {
                 newSteps.add(ChatMessageUi.ProcessStep(roundId = roundId, thought = text))
             } else {
-                newSteps[newSteps.lastIndex] = last.copy(thought = text)
+                newSteps[idx] = newSteps[idx].copy(thought = text)
             }
             newSteps
         }
@@ -62,11 +62,11 @@ internal class ThinkingProcessWriter(
         updateProcess { steps ->
             val newSteps = steps.toMutableList()
             val tool = ChatMessageUi.ProcessTool(command = command, actionInput = "", observation = "")
-            val last = newSteps.lastOrNull()
-            if (last == null || last.roundId != roundId) {
+            val idx = newSteps.indexOfLast { it.roundId == roundId }
+            if (idx < 0) {
                 newSteps.add(ChatMessageUi.ProcessStep(roundId = roundId, tools = listOf(tool)))
             } else {
-                newSteps[newSteps.lastIndex] = last.copy(tools = last.tools + tool)
+                newSteps[idx] = newSteps[idx].copy(tools = newSteps[idx].tools + tool)
             }
             newSteps
         }

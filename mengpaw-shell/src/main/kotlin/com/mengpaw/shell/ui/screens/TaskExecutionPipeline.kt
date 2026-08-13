@@ -91,7 +91,6 @@ internal class TaskExecutionPipeline(
             // P2 修复: 局部 var 被三线程共享 → @Volatile 追踪器 (见 RunningStepTracker)
             val writer = ThinkingProcessWriter(session, modePrefix, agentRef)
             var playbackJob: Job? = null // 流式播放协程句柄 (try 外声明, catch 路径可取消)
-            val finalAnswerStarted = java.util.concurrent.atomic.AtomicBoolean(false)
             try {
                 // /Goal /Fleet: 临时覆盖 loopMode
                 if (executionMode == ExecutionMode.GOAL) {
@@ -175,7 +174,9 @@ internal class TaskExecutionPipeline(
                 // 方案: buffer 累积原始增量; 播放协程每 50ms 消费未播放部分,
                 // 节奏自适应 (长文 ~2.5s 播完, 短文逐字), 模拟打字机观感。
                 // 缓冲每轮结束(onStep)清空, 避免 "Action:" 标记跨轮残留 (v0.28.3 根因1)
-                val streamBuffer = StreamPlaybackBuffer()
+                // v0.37.3: 流式气泡编排收敛到独立协调器 (finalAnswerStarted/轮次封口/
+                // 播放路由三处共享状态此前散落在本函数, 反复触发"卡在第 1 轮"缺陷)
+                val coordinator = BubbleStreamCoordinator(writer)
                 // 工具提前通知 (v0.29.2, Reasonix ③ 对标): 流式中完整 "Action: <tool>" 行
                 // 出现即推送 — 不等工具执行完成 (onStep), 消除工具轮流式空屏
 
@@ -190,50 +191,26 @@ internal class TaskExecutionPipeline(
                         )
                     }
                     // v0.34.3: 工具完成 → 挂观察全文 + 成败 (失败红字渲染)
-                    writer.completeTool(
-                        commandLine = trace.action ?: "",
-                        observation = trace.observation ?: "",
+                    coordinator.onStep(
+                        action = trace.action,
+                        observation = trace.observation,
                         isError = trace.observation?.startsWith("Error [") == true
                     )
-                    // 工具轮结束 → 封口当前流式轮次 (不再接收该轮增量), 未播文本
-                    // 保留给播放协程按序播完 — 原 resetRound 立即清空会把快工具轮的
-                    // 未播思考直接丢掉 (前几轮只显示 1~3 字), v0.36.3 改为轮次队列
-                    streamBuffer.sealRound()
                 }
 
                 // onDelta (engine 线程回调): 只累积, 不推送 — 节奏由播放协程控制
                 var firstDelta = true
-                var accumulatedRaw = ""  // 原始增量累积 — Final Answer 检测用 (displayText 会剥离标记)
                 val onDelta: (String) -> Unit = { delta ->
                     if (firstDelta) { firstDelta = false; KernelLog.d("MengPawLatency", "T3 first-delta") }
-                    accumulatedRaw += delta
-                    // 工具提前通知 (P2 修复: 原每 delta 对整段缓冲 findAll 重扫 → O(n²);
-                    // 现只扫描"上次水位后可能完整的新行" — 从上一条换行处起扫, 跨界行完整可见;
-                    // 新匹配必然在本次增量内结束(range.last ≥ 水位), 已宣布的旧行被过滤)。
-                    // 完整行才宣布 — 避免 "Action: l" 半截工具名误报; "Action Input:" 不匹配
-                    // 因为要求冒号紧跟 Action。流式到达时行尾 \n 落地即命中。
-                    val newTool = streamBuffer.append(delta)
-                    // v0.34.3: 完整 "Action: <tool>" 行 → 折叠工具行即时插入
-                    // v0.36.3: 带 roundId 挂到当前轮 step — 同轮后续思考增量不再另起 step
-                    newTool?.let { writer.addTool(it.tool, it.roundId) }
-                    // 检测 Final Answer 开始 → 过程容器自动折叠 + 答案气泡流式
-                    // v0.37.2 修复: 原逻辑对全量累积文本 contains — 模型思考内容里出现
-                    // "Final Answer:" 字样即永久误判, 后续所有 delta 改道 FinalAnswer,
-                    // 思考容器永远停在当前步 ("卡在第 1 轮思考")。改为仅检测当前增量,
-                    // 把误判窗口从"整段历史"缩小到"单次增量"; 引擎返回时仍有兜底闭环。
-                    if (!finalAnswerStarted.get() && delta.contains("Final Answer:", ignoreCase = true)) {
-                        finalAnswerStarted.set(true)
-                        writer.beginFinalAnswer()
-                    }
+                    // 工具提前通知 + Final Answer 检测收敛在协调器内 (v0.37.3)
+                    coordinator.onDelta(delta)
                 }
 
                 // 播放协程: 每 STREAM_PLAYBACK_INTERVAL_MS 把未播放增量推给 UI (打字机)
                 // v0.28.5: 必须用 Dispatchers.Default — SSE 突发到达时(如服务端缓存回放)
                 // readUTF8Line 从不挂起, 主线程被读取循环占死, Main 调度的播放协程会被饿死
                 // (实测 846 chunks/166ms 突发 → UI-PUSH 零输出)
-                playbackJob = streamBuffer.launchPlayback(scope) { roundId, text ->
-                    if (finalAnswerStarted.get()) writer.pushFinal(text) else writer.pushThought(text, roundId)
-                }
+                playbackJob = coordinator.launchPlayback(scope)
 
                 // Reset stale state from previous runs before starting
                 KernelLog.d("MengPawLatency", "T2 before-dispatch")
@@ -285,31 +262,24 @@ internal class TaskExecutionPipeline(
                 // 这类回答思考容器永不折叠 (isRunning 永 true): UI 恒显"思考中…"、自动折叠失效,
                 // 手动折叠后滚动回收 (LazyColumn 重组, rememberSaveable 丢失) 又恢复展开。
                 // 引擎返回即兜底闭环: 折叠容器 + 创建 FinalAnswer 气泡, 后续 applyFinalResult 定型。
-                if (!finalAnswerStarted.get()) {
-                    finalAnswerStarted.set(true)
-                    writer.beginFinalAnswer()
-                }
+                coordinator.ensureFinalAnswer()
 
                 // ── 尾段: run() 已返回 — 标记流结束, 等待播放器把剩余缓冲按节奏播完
                 // (打字机收尾, 最长 ~2.5s); join 防 Default 线程晚到 tick 覆盖最终消息
                 // (doTranslate 开启时跳过等待: 最终 replace 整段替换为中文,
                 //  英文逐字播放无意义, 旧实现同样跳过尾段)
-                streamBuffer.finish()
+                coordinator.finish()
                 if (!doTranslate) playbackJob?.join()
                 playbackJob?.cancel()
                 if (!doTranslate) {
                     // 兜底 flush: 播放器异常退出时推完剩余; 正常播完时此处无操作
-                    val flushText = streamBuffer.flushText()
-                    if (flushText != null) {
-                        if (finalAnswerStarted.get()) writer.pushFinal(flushText.tool)
-                        else writer.pushThought(flushText.tool, flushText.roundId)
-                    }
+                    coordinator.flushRemaining()
                 }
 
                 // Translate result back to Chinese for US models
                 val displayResult = if (doTranslate) translator.toChinese(result) else result
 
-                applyFinalResult(session, writer, streamBuffer, displayResult, result, modePrefix, agentRef, pluginViewModel)
+                applyFinalResult(session, writer, coordinator.streamBuffer, displayResult, result, modePrefix, agentRef, pluginViewModel)
                 inputTagManager.loopMode = savedLoopMode
                 processNextPending()
 

@@ -27,10 +27,15 @@ internal fun computeStreamDisplayText(text: String): String {
         hasFinal -> text.substringAfter("Final Answer:", text)
         hasAction -> {
             // 工具轮: Thought 后内容截断在 Action Input 前 — 思考过程 +
-            // Action 命令行流式可见, 参数 JSON 不刷屏 (流式中途 Input 未
-            // 到达时完整显示; 一旦出现即截断)
+            // Action 行流式可见, 参数 JSON 不刷屏 (流式中途 Input 未
+            // 到达时完整显示; 一旦出现即截断)。
+            // v0.37.3: thought 再剥离 Action 行本身 — 工具行已由 addTool 的
+            // ProcessTool 行承载, 思考文本里重复出现 "Action: xxx" 造成
+            // "工具调用怎么在气泡里"的视觉错乱。
             text.substringAfter("Thought:", text)
                 .substringBefore("\nAction Input:", text)
+                .substringBefore("\nAction:", text)
+                .trimEnd()
         }
         hasThought -> text.substringAfter("Thought:", text)
         else -> text           // 纯文本答案流
@@ -119,6 +124,12 @@ internal class StreamPlaybackBuffer {
     /** 当前累积轮次 id — 供 UI 侧把本轮增量路由到对应思考 step。 */
     fun currentRoundId(): Long = synchronized(this) {
         rounds.lastOrNull()?.id ?: 0L
+    }
+
+    /** 当前累积轮是否已宣布过完整工具行 — 协调器 Final Answer 误判防护用
+     *  (思考轮里出现 "Final Answer:" 字样但同轮有 Action, 不判为最终答案轮)。 */
+    fun currentRoundHasTool(): Boolean = synchronized(this) {
+        rounds.lastOrNull()?.let { it.announcedTools > 0 } ?: false
     }
 
     /** 播放协程单 tick 消费 — 原播放循环同步段, 逻辑不变. */

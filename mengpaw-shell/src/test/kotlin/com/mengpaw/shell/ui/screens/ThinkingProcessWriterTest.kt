@@ -164,4 +164,26 @@ class ThinkingProcessWriterTest {
         assertEquals(1, tp.steps[1].tools.size)
         assertEquals("agent.write", tp.steps[1].tools[0].command)
     }
+
+    @Test
+    fun `addTool先建多轮step后pushThought按roundId回填不另起step`() {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, modePrefix = null, agentRef = null)
+
+        writer.start()
+        // v0.37.3 回归: 引擎回调先为两轮都插入工具行 (steps=[r1+tools, r2+tools]),
+        // 播放协程随后按轮次回填思考 — 旧实现 pushThought 只与 last 比较 roundId,
+        // r1 思考到达时 last=r2 → 另起空思考 step, 产生 4 步重复 (用户可见乱象)。
+        writer.addTool("a", roundId = 1)
+        writer.addTool("b", roundId = 2)
+        writer.pushThought("第一轮思考", roundId = 1)
+        writer.pushThought("第二轮思考", roundId = 2)
+
+        val tp = sessionMessages(session).first() as ChatMessageUi.ThinkingProcess
+        assertEquals("两轮必须合并为两步 (不得产生空思考 step)", 2, tp.steps.size)
+        assertEquals("第一轮思考", tp.steps[0].thought)
+        assertEquals("a", tp.steps[0].tools[0].command)
+        assertEquals("第二轮思考", tp.steps[1].thought)
+        assertEquals("b", tp.steps[1].tools[0].command)
+    }
 }
