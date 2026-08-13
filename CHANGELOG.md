@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.38.0 (2026-08-13) — Evolution Agent 进化闭环 + 思考气泡重构 + 手机端 UI 系列
+
+### 新增
+- **Evolution Agent 进化闭环**: 独立子 Agent (进化分析师提示词: 金字塔追问 + 5-Why +
+  增量教训) 读取未分析失败批次 (累计 5 条触发, 会话结束兜底), 产出 md 报告落盘
+  reports/ (status: pending, 15 天自动清理); 报告以子 Agent 产出投递到用户气泡侧,
+  主 Agent 按 evolution 技能审阅采纳
+- **evolution 技能**: 主 Agent 审阅采纳方法论 (结论先行/根因验证/增量沉淀/采纳清单)
+- **Goal 模式**: LLM 主动中断 (不可完成信号) + 目标一致性约束 (RubricGate 三态
+  YES/NO/OFFTRACK, 连续偏离自动中断)
+- **模型退化输出拦截**: 重复 XML 标签/单一 token 流判定退化并提示重试; 兼容
+  `<action name>` 合理 XML; 进化记录清洗防污染
+- **自动更新插件内置**: update-plugin 迁入 Shell, 系统设置新增「自动更新」入口
+- **高危操作确认改通知栏横幅**: 允许/拒绝按钮, 后台可见, 不再静默拒绝
+- **手机端 UI**: 思考 Markdown 渲染、按实际执行顺序显示、工具行逐字误报修复、
+  生成中发送按钮变停止按钮 (深蓝)、插件市场排版/安装即激活、复制横幅毛玻璃、
+  Markdown 表格样式 (去格底/90% 白表头/主题自适应/4dp 圆角)
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.38.0-release.apk` (versionCode 38000)
+- 仅 Shell 构建 (browser 无变更不构建); plugins.json 有变更 → plugins-v0.38.0 同步
+- 测试: 全量双套 1346 用例 0 failures
+
 ## v0.37.3 (2026-08-13) — 手机端 UI 系列修复 + 思考气泡卡住修复
 
 ### 修复
