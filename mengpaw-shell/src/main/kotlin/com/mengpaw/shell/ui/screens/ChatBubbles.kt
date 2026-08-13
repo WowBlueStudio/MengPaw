@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.mengpaw.design.components.MarkdownTableBorderColor
 import com.mengpaw.design.components.MarkdownText
 import com.mengpaw.design.theme.ThemeColors
 import com.mengpaw.design.tokens.ArcoColors
@@ -73,9 +74,9 @@ fun UserBubble(message: ChatMessageUi.User) {
                             inlineCodeColor = Color.White.copy(alpha = 0.9f),
                             linkColor = Color.White,
                             nestedScroll = true,
-                            // 用户气泡: 表格文字/边框用白色系 (深蓝底可读, v0.37.3)
+                            // 用户气泡: 表格文字白色可读, 框线 50% 灰度灰线 (v0.37.4 统一)
                             tableTextColor = Color.White,
-                            tableBorderColor = Color.White.copy(alpha = 0.5f)
+                            tableBorderColor = MarkdownTableBorderColor
                         )
                     }
                 }

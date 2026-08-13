@@ -9,7 +9,6 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.mengpaw.design.theme.ThemeColors
-import com.mengpaw.design.tokens.ArcoColors
 import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 import java.io.File
@@ -141,7 +140,12 @@ private fun openLinkSafely(context: Context, url: String) {
     }
 }
 
-/** 表格渲染 — 共享列宽（全表测量取列内最宽单元格）+ 网格边框。表头最多 2 行，数据行完整显示。 */
+/** 表格框线色 — 50% 灰度灰线 (v0.37.4 用户定案, 气泡内表格统一使用)。 */
+val MarkdownTableBorderColor: Color = Color(0xFF808080)
+
+/** 表格渲染 — 共享列宽（全表测量取列内最宽单元格）+ 单条圆角外框 + 行间分隔线。
+ *  v0.37.4: 外框由整表 border+clip 一次绘制, 四角圆角不再依赖表头/末行边框拼角 (缺角问题),
+ *  框线统一 50% 灰度灰线。表头最多 2 行，数据行完整显示。 */
 @Composable
 internal fun TableTextView(
     block: MdBlock.Table,
@@ -152,10 +156,8 @@ internal fun TableTextView(
 ) {
     if (block.header.isEmpty() && block.rows.isEmpty()) return
 
-    // v0.37.3 表格样式: 线条比气泡略深 (主题自适应), 格底全透明, 表头 90% 白底深字, 4dp 圆角
-    val isLight = !isSystemInDarkTheme()
-    val borderColor = tableBorderColor
-        ?: if (isLight) ArcoColors.Gray5 else Color.White.copy(alpha = 0.30f)
+    // 框线: 50% 灰度灰线 (可被调用方覆盖); 文字色 null = 主题自适应 (日间深色/夜间浅色)
+    val borderColor = tableBorderColor ?: MarkdownTableBorderColor
     val cellTextColor = tableTextColor ?: ThemeColors.textPrimary
     val corner = 4.dp
     val maxCellWidth = 360.dp
@@ -183,32 +185,28 @@ internal fun TableTextView(
     }
     val cellMod = { col: Int -> Modifier.width(colWidths[col]).padding(horizontal = 8.dp, vertical = 4.dp) }
 
-    Surface(
-        shape = RoundedCornerShape(corner),
-        color = Color.Transparent,
+    Box(
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
     ) {
-        Column {
+        // 整表 border+clip: 四角圆角一次到位, 表头白底也被裁成圆角, 无缺角
+        Column(
+            Modifier
+                .border(0.5.dp, borderColor, RoundedCornerShape(corner))
+                .clip(RoundedCornerShape(corner))
+        ) {
             // Header row — 90% 白底 + 深色文字 (日间/夜间一致, 白底上保证可读)
-            Row(
-                Modifier.background(Color.White.copy(alpha = 0.9f))
-                    .border(0.5.dp, borderColor, RoundedCornerShape(topStart = corner, topEnd = corner))
-            ) {
+            Row(Modifier.background(Color.White.copy(alpha = 0.9f))) {
                 block.header.forEachIndexed { i, cell ->
                     Text(cell, modifier = cellMod(i), style = headerStyle,
                         color = Color(0xFF1D2129), maxLines = 2)
                 }
             }
-            // Data rows — 透明底 (去 zebra), 文字色主题自适应/用户气泡白
+            // Data rows — 透明底 (去 zebra), 行间 0.5dp 灰线分隔, 文字色主题自适应/用户气泡白
             block.rows.forEachIndexed { rowIdx, row ->
-                val isLast = rowIdx == block.rows.lastIndex
-                Row(
-                    Modifier.background(Color.Transparent).border(
-                        width = 0.5.dp, color = borderColor,
-                        shape = if (isLast) RoundedCornerShape(bottomStart = corner, bottomEnd = corner)
-                        else RoundedCornerShape(0.dp)
-                    )
-                ) {
+                if (block.header.isNotEmpty() || rowIdx > 0) {
+                    HorizontalDivider(color = borderColor, thickness = 0.5.dp)
+                }
+                Row(Modifier.background(Color.Transparent)) {
                     row.forEachIndexed { i, cell ->
                         Text(cell, modifier = cellMod(i), style = cellStyle,
                             color = cellTextColor) // 无 maxLines — 长单元格完整显示，行高自适应
