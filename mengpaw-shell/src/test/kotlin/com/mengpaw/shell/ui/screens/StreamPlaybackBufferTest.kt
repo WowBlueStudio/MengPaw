@@ -90,6 +90,22 @@ class StreamPlaybackBufferTest {
     }
 
     @Test
+    fun `半截Action行不宣布_流式逐字不误报`() {
+        val buffer = StreamPlaybackBuffer()
+
+        // v0.37.3 回归: 模型逐字流式输出工具名, 无换行落地前不得宣布
+        assertEquals(null, buffer.append("Thought: 查询\nAction: agent"))
+        assertEquals(null, buffer.append(".memory"))
+        assertEquals(null, buffer.append(".m"))
+        // 换行落地后只宣布一次完整工具名
+        val announce = buffer.append("id\nAction Input: {}\n")
+        assertNotNull(announce)
+        assertEquals("agent.memory.mid", announce?.tool)
+        // 继续增量不得重复宣布同一行
+        assertEquals(null, buffer.append("后续文本"))
+    }
+
+    @Test
     fun `finish后播完全部轮次返回Done`() {
         val buffer = StreamPlaybackBuffer()
 

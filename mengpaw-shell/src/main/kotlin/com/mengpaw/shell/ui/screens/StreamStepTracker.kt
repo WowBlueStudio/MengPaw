@@ -12,8 +12,11 @@ import com.mengpaw.shell.ui.screens.model.ChatMessageUi
  */
 internal const val EXECUTING_TOOL_PREFIX = "正在执行 "
 
-/** 流式文本中的完整工具调用行 (多行锚定, 行尾须完整) — 半截工具名不匹配, 避免误报. */
-internal val ACTION_LINE_REGEX = Regex("""(?m)^Action:\s*([\w.+\-]+)\s*$""")
+/** 流式文本中的完整工具调用行 (多行锚定, 行尾必须 \n 落地) — 半截工具名不匹配, 避免误报.
+ *  v0.37.3 修复: 原 `$` 在多行模式下也匹配"字符串末尾" — 模型逐字流式输出
+ *  "Action: agent" 未写完 (无换行) 就被判为完整行, 每来一个字符误报一次,
+ *  工具行逐字展开 (agent → agent.m → agent.memory…) 且调用次数虚高 (47 vs 12)。 */
+internal val ACTION_LINE_REGEX = Regex("""(?m)^Action:\s*([\w.+\-]+)\s*\n""")
 
 /**
  * 运行中步骤气泡的跨线程索引+身份守卫 (P2 修复: 原局部 var 被主协程 / 引擎回调线程
