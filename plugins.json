@@ -1,7 +1,7 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
   "version": 9,
-  "updated": "2026-08-12",
+  "updated": "2026-08-13",
   "plugins": [
     {
       "id": "concise-plugin",
@@ -623,6 +623,35 @@
       "checksum": "sha256:c9feba0e8c0f9c553620674f2794a67b5459b8a3aa8096c33fda5999b65d9a1f",
       "size": 593170,
       "changelog": "### 新增\n- **TREA IDE 通讯连接器**: SSH 执行 trae-cli (bytedance/trae-agent, MIT) — 工具 run/show-config。\n- 配置: connector-trae.config --user/--password/--key-path。\n- 上游: bytedance/trae-agent (MIT 许可)。\n### 发行\n- **全部外置插件迁移至独立仓库 mengpaw-connectors (MIT)**: 源码随仓库发布, 重新打包上传, 下载指向 plugins-v0.4.0。"
+    },
+    {
+      "id": "connector-yinxiang-plugin",
+      "name": "印象笔记",
+      "version": "0.1.0",
+      "type": "native",
+      "author": "MengPaw",
+      "description": "印象笔记连接器 — EDAM 云 API 直连 (app.yinxiang.com): 搜索/读写笔记/附件下载/笔记本与标签",
+      "status": "remote",
+      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.6.0/plugin-connector-yinxiang-plugin.jar",
+      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.6.0/plugin-connector-yinxiang-plugin.jar",
+      "permissions": [
+        "INTERNET"
+      ],
+      "minCoreVersion": "0.20.0",
+      "commands": [
+        "connector-yinxiang.config",
+        "connector-yinxiang.info",
+        "connector-yinxiang.search",
+        "connector-yinxiang.get",
+        "connector-yinxiang.create",
+        "connector-yinxiang.update",
+        "connector-yinxiang.delete",
+        "connector-yinxiang.notebooks",
+        "connector-yinxiang.tags"
+      ],
+      "checksum": "sha256:ea2573743da6d6b565c15a7782e4595c9a239def8ccdeeb2881bd57430c7da47",
+      "size": 433520,
+      "changelog": "### 新增\n- **印象笔记连接器 v0.1.0**: EDAM 云 API 直连 (evernote-api 1.25.1, 内置 YINXIANG 端点), 全量 CRUD。\n- 命令: config/info/search/get/create/update/delete/notebooks/tags; 附件下载到工作区; token 7 天短效。\n- 内容 v1 为纯文本互转 (NoteContentConverter 预留 Markdown 扩展点)。\n- 上游: Evernote 官方 Java SDK (Apache/Evernote SDK License), 仅互操作调用。\n### 发行\n- 打包产物 plugin-connector-yinxiang-plugin.jar (fat dex, 含 evernote-api + jsoup)。"
     }
   ]
 }
