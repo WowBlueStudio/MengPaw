@@ -12,7 +12,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -144,8 +143,9 @@ private fun openLinkSafely(context: Context, url: String) {
 val MarkdownTableBorderColor: Color = Color(0xFF808080)
 
 /** 表格渲染 — 共享列宽（全表测量取列内最宽单元格）+ 单条圆角外框 + 网格分隔线。
- *  v0.38.2: 表头白底自身 clip 顶部圆角 (右上角不再依赖外层整表 clip), 列间竖线
- *  0.5dp 同色与外框/行线线型一致; 外框整表 border 四角圆角。表头最多 2 行，数据行完整显示。 */
+ *  v0.38.3: 行间横线改用 Box+background (与竖线同一画法, 修复 HorizontalDivider
+ *  在 IntrinsicSize.Min 行间不渲染的问题); 表头白底自身 clip 顶部圆角; 外框整表
+ *  border 四角圆角。表头最多 2 行，数据行完整显示。 */
 @Composable
 internal fun TableTextView(
     block: MdBlock.Table,
@@ -210,10 +210,10 @@ internal fun TableTextView(
                         color = Color(0xFF1D2129), maxLines = 2)
                 }
             }
-            // Data rows — 透明底 (去 zebra), 行间 0.5dp 灰线 + 列间同色竖线, 文字色主题自适应/用户气泡白
+            // Data rows — 透明底 (去 zebra), 行间/列间 0.5dp 同色网格线 (与竖线同一 Box 画法), 文字色主题自适应/用户气泡白
             block.rows.forEachIndexed { rowIdx, row ->
                 if (block.header.isNotEmpty() || rowIdx > 0) {
-                    HorizontalDivider(color = borderColor, thickness = 0.5.dp)
+                    Box(Modifier.fillMaxWidth().height(0.5.dp).background(borderColor))
                 }
                 Row(Modifier.height(IntrinsicSize.Min).background(Color.Transparent)) {
                     row.forEachIndexed { i, cell ->
