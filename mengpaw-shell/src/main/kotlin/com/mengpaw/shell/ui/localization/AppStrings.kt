@@ -150,6 +150,7 @@ class AppStrings {
     var autoUpdateChecking: String = ""
     var autoUpdateDownload: String = ""
     var autoUpdateDownloading: String = ""
+    var autoUpdateInstall: String = ""
 
     // Settings - Agent
     var agentAddHumanTouch: String = ""

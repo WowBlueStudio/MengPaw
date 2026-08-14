@@ -129,6 +129,7 @@ val ChineseStrings = AppStrings().apply {
     autoUpdateChecking = "检查中..."
     autoUpdateDownload = "下载 APK"
     autoUpdateDownloading = "正在下载 APK..."
+    autoUpdateInstall = "安装"
 
     // Settings - Device guides
     guideSection = "使用指南"

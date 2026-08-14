@@ -30,6 +30,9 @@ internal class UpdateDownloader(
 ) {
     private var downloadedApk: File? = null
 
+    /** 是否已有下载好的 APK 待安装 — 供设置页显示"安装"入口 (v0.38.2)。 */
+    val hasDownloaded: Boolean get() = downloadedApk?.exists() == true
+
     /** APK 下载大小上限 (512MB) — 防异常响应撑爆存储, 流式写入时按字节计数。 */
     private val maxApkBytes = 512L * 1024 * 1024
 

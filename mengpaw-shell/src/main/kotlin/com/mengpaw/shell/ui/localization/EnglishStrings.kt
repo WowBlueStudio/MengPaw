@@ -129,6 +129,7 @@ val EnglishStrings = AppStrings().apply {
     autoUpdateChecking = "Checking..."
     autoUpdateDownload = "Download APK"
     autoUpdateDownloading = "Downloading APK..."
+    autoUpdateInstall = "Install"
 
     // Settings - Device guides
     guideSection = "Guides"
