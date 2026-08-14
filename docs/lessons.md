@@ -1019,5 +1019,11 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   ~5 分钟, Invoke-RestMethod 300s 超时必失败 — 用 curl -F 上传并给 600s+**;
   token 从本地环境变量读, 禁止打印/入库。0.37.3 顺带核实: 无 git tag, 只有
   CHANGELOG 条目, 从未正式发布。
+- **GitHub push 网络波动处理 (v0.38.3)**: github.com:443 被重置/超时而
+  api.github.com 正常 — git push 失败但 gh CLI 可用。处理: 先同步 Gitee
+  release + 建 Gitee tag (保证在线更新回退源就绪), 等网络恢复后补 push;
+  注意 gh release create --target <commit> 要求 commit 已存在于 GitHub,
+  push 未完成时 422 "target_commitish is invalid" — 必须先 push 再建 release,
+  不能跳过 push 用 --target 建 (commit 不在远端则无效)。
 
-*最后更新: 2026-08-14 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操*
+*最后更新: 2026-08-14 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理*
