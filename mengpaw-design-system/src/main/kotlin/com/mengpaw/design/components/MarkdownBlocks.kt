@@ -143,9 +143,9 @@ private fun openLinkSafely(context: Context, url: String) {
 /** 表格框线色 — 50% 灰度灰线 (v0.37.4 用户定案, 气泡内表格统一使用)。 */
 val MarkdownTableBorderColor: Color = Color(0xFF808080)
 
-/** 表格渲染 — 共享列宽（全表测量取列内最宽单元格）+ 单条圆角外框 + 行间分隔线。
- *  v0.37.4: 外框由整表 border+clip 一次绘制, 四角圆角不再依赖表头/末行边框拼角 (缺角问题),
- *  框线统一 50% 灰度灰线。表头最多 2 行，数据行完整显示。 */
+/** 表格渲染 — 共享列宽（全表测量取列内最宽单元格）+ 单条圆角外框 + 网格分隔线。
+ *  v0.38.2: 表头白底自身 clip 顶部圆角 (右上角不再依赖外层整表 clip), 列间竖线
+ *  0.5dp 同色与外框/行线线型一致; 外框整表 border 四角圆角。表头最多 2 行，数据行完整显示。 */
 @Composable
 internal fun TableTextView(
     block: MdBlock.Table,
@@ -194,20 +194,32 @@ internal fun TableTextView(
                 .border(0.5.dp, borderColor, RoundedCornerShape(corner))
                 .clip(RoundedCornerShape(corner))
         ) {
-            // Header row — 90% 白底 + 深色文字 (日间/夜间一致, 白底上保证可读)
-            Row(Modifier.background(Color.White.copy(alpha = 0.9f))) {
+            // Header row — 90% 白底 + 深色文字 (日间/夜间一致, 白底上保证可读);
+            // 白底自身 clip 顶部两角, 避免右上角依赖整表裁剪而缺圆角
+            Row(
+                Modifier
+                    .height(IntrinsicSize.Min)
+                    .clip(RoundedCornerShape(topStart = corner, topEnd = corner))
+                    .background(Color.White.copy(alpha = 0.9f))
+            ) {
                 block.header.forEachIndexed { i, cell ->
+                    if (i > 0) {
+                        Box(Modifier.width(0.5.dp).fillMaxHeight().background(borderColor))
+                    }
                     Text(cell, modifier = cellMod(i), style = headerStyle,
                         color = Color(0xFF1D2129), maxLines = 2)
                 }
             }
-            // Data rows — 透明底 (去 zebra), 行间 0.5dp 灰线分隔, 文字色主题自适应/用户气泡白
+            // Data rows — 透明底 (去 zebra), 行间 0.5dp 灰线 + 列间同色竖线, 文字色主题自适应/用户气泡白
             block.rows.forEachIndexed { rowIdx, row ->
                 if (block.header.isNotEmpty() || rowIdx > 0) {
                     HorizontalDivider(color = borderColor, thickness = 0.5.dp)
                 }
-                Row(Modifier.background(Color.Transparent)) {
+                Row(Modifier.height(IntrinsicSize.Min).background(Color.Transparent)) {
                     row.forEachIndexed { i, cell ->
+                        if (i > 0) {
+                            Box(Modifier.width(0.5.dp).fillMaxHeight().background(borderColor))
+                        }
                         Text(cell, modifier = cellMod(i), style = cellStyle,
                             color = cellTextColor) // 无 maxLines — 长单元格完整显示，行高自适应
                     }
