@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.38.3 (2026-08-14) — 表格行间横线渲染修复
+
+### 修复
+- **Markdown 表格行间横线不渲染**: 行间横线从 Material3 HorizontalDivider 改为
+  Box+background 画法 — 与列间竖线同一渲染路径, 修复 0.38.2 起 IntrinsicSize.Min
+  行间横线消失的问题; 横线/竖线/外框同为 0.5dp #808080 一致线型
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.38.3-release.apk` (versionCode 38003)
+- 仅 Shell 构建 (browser 无变更不构建); plugins.json 无变更 (插件目录无改动)
+- 测试: 全量 1346 用例 0 failures (kernel 576 + core 90 + shell 198 + browser 42 + 插件 440)
+
 ## v0.38.2 (2026-08-14) — 自动更新设置入口完善 + 表格圆角/竖线修复
 
 ### 新增
