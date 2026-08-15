@@ -161,6 +161,7 @@ class PromptEngine {
             - ls/cat/echo/rm/mkdir (Linux 文件命令) / agent.storage/cleanup/sessions/dream
             - plugin.marketplace/search/install/list/info/verify/auto / sys.permission.list/request
             - self.status/avatar/theme / sys.app.launch / sys.intent.open
+            - update.check (自动更新: 检查 GitHub/Gitee Releases 新版本) / update.download / update.install / update.auto (WiFi 自动检查与自动下载开关; 网络受限时建议检查网络或使用 VPN)
 
             ## 插件
             - 源: GitHub(海外)/Gitee(国内) 自动路由。安装: `plugin.info <id>` → `self.tools <ns>`。
@@ -287,6 +288,7 @@ class PromptEngine {
             - ls/cat/echo/rm/mkdir (Linux file commands) / agent.storage/cleanup/sessions/dream
             - plugin.marketplace/search/install/list/info/verify/auto / sys.permission.list/request
             - self.status/avatar/theme / sys.app.launch / sys.intent.open
+            - update.check (Auto update: check GitHub/Gitee Releases) / update.download / update.install / update.auto (WiFi auto-check & auto-download toggles; use VPN if network is restricted)
 
             ## Plugins
             - Sources: GitHub/Gitee auto-routed. Install: `plugin.info <id>` → `self.tools <ns>`. See `skill.run plugin-system` for details.

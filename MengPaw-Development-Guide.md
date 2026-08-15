@@ -338,7 +338,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 #### 工具链 (3)
 
-> error-report / update 为外置插件（remote 分发），源码在 mengpaw-connectors。
+> error-report 为外置插件（remote 分发），源码在 mengpaw-connectors；update 已内置（v0.37.3 迁回，见 plugins/plugin-update）。
 
 | 模块 | 命名空间 | 命令 | 捆绑 |
 |------|---------|------|:--:|
@@ -560,7 +560,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 | plugin-termux | 11 | am 参数构造 (payload 无逗号/timeout 包裹)、脚本生成、环境名白名单 (注入/穿越拒绝)、高危规则审查、结果标记解析、错误提示 |
 | plugin-dev | 12 | dev.plugin 审计/关键词链路 |
 
-> 外置插件 (mengpaw-connectors, MIT): browser-search 54 / update 24 等随连接器仓库独立测试。
+> 外置插件 (mengpaw-connectors, MIT): browser-search 54 等随连接器仓库独立测试。update 已迁回内置 (v0.37.3)，其 UpdateLogicTest 在 plugins/plugin-update（12 用例）。
 
 > 全部 JVM 本地单测（`testDebugUnitTest`，kernel 为 `:test`），毫秒级反馈，无需模拟器。
 > 测试补齐过程中修复 4 个生产缺陷：TwinAcpHandler TWIN_DELEGATE 信任门不可达
@@ -1039,8 +1039,9 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 #### error — 错误上报 (6)（外置插件，mengpaw-connectors）
 `list` | `show <id>` | `clear` | `export` | `status` | `upload`
 
-#### update — 自动更新 (4)（外置插件，mengpaw-connectors）
+#### update — 自动更新 (4)（内置插件，v0.37.3 迁入 plugins/plugin-update）
 `check` | `download` | `install` | `auto`
+> 双源回退 (GitHub → Gitee → ghproxy)；安装经系统安装器（签名校验 + FileProvider 授权）；Shell 与 Browser 必须同一签名证书。设置页「系统设置 → 自动更新」提供检查/下载/安装入口与 WiFi 自动检查、自动下载开关。
 
 #### browser.push — 跨设备推送 (4)（外置插件，mengpaw-connectors）
 `push <url>` | `pending` | `accept <id>` | `reject <id>`
