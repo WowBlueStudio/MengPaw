@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.39.0 (2026-08-15) — 自动更新安装链路闭环 + 系统提示词剧本化重构
+
+### 新增
+- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,
+  现设置页可直接切换 (状态随打开设置/点击卡片刷新)
+- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —
+  原一步下载+拉起安装, 文案与行为不符
+- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)
+- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较
+  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)
+- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;
+  当前版本追上或新版本出现时自动清除
+
+### 修复
+- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →
+  `fileprovider`) + `file_paths.xml` 未映射 `插件仓库/updates/` — 修复前
+  `update.install` / UI「安装」按钮必然失败
+- **安装按目标选文件**: 修复「下载了 browser 却点 UI 安装会装错包」隐患
+- **待安装状态重启丢失**: 按文件名约定扫描 updates 目录兜底; `lastCheckTime` 即时落盘
+- **下载并发锁 / 旧版本 APK 清理**: UI 与自动检查双路径不再抢写 `.part`, 新包下载后
+  自动清理同目标旧包
+
+### 重构
+- **系统提示词剧本化瘦身**: 会话/记忆孪生/Tribe/浏览器/插件/文件设备/常用命令/更新/
+  斜杠命令 9 处段落换 `skill.run` 指针 (剧本全部现成, 零新增);
+  网络端口独立节删除; 常用命令 22 行压到 3 行 — 中文模板 8,546→6,659 字符
+  (≈4,361→3,544 token, -19%)
+- **execution-modes 剧本补全**: /Swarm /Fleet /Goal /Plan /Research /Silent 六模式,
+  与工作区 modes.md 权威定义一致 (原剧本仅 3 模式)
+- **核心行为保留常驻**: 安全分级/信任边界/结果纪律/记忆三轨/工作区边界/探针不外置
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.39.0-release.apk` (versionCode 39000)
+- 仅 Shell 构建 (browser 无变更不构建)
+- 插件有变更: plugin-update (安装链路/通知) + plugin-skill (execution-modes 剧本) —
+  构建 AAR 回写 plugins.json, 打 `plugins-v0.39.0` tag, GitHub Release 附全部 AAR
+- 测试: 全量 1356 用例 0 failures (kernel 576 + core 90 + shell 198 + browser 42 + 插件 450)
+
 ## v0.38.3 (2026-08-14) — 表格行间横线渲染修复
 
 ### 修复

@@ -1038,5 +1038,21 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 - **发版 Gitee release 同步 (v0.38.2+)**: 每次发版后 Gitee 侧 release 同步建好
   (tag push 不自动建 release), 双源在线更新才不会回退到旧版; 已加入 release skill
   验证清单。
+- **自动更新安装链路 P0 (v0.39.0, FileProvider)**: ① `FileProvider.getUriForFile`
+  authority 必须与 Shell Manifest 注册的 `${applicationId}.fileprovider` 一致 —
+  用不存在的 `.update.provider` 时 getUriForFile 找不到 provider 直接抛异常,
+  update.install 必然失败; ② `file_paths.xml` 必须映射下载目录 — 下载目录
+  `{filesDir}/插件仓库/updates` 若无 `<files-path>` 映射, authority 修好仍抛
+  "Failed to find configured root"。教训: 安装链路 (FileProvider/Manifest/资源)
+  是纯 JVM 单测盲区, 必须静态核对 authority/路径三段一致 (代码→Manifest→xml)。
+- **系统提示词剧本化 (v0.39.0)**: ① 低频/场景化段落 (会话/孪生/Tribe/浏览器/插件/
+  设备/更新) 换 `skill.run` 指针前, 必须先核对剧本命令真实注册 (hermes.* 是
+  TribePlugin 双前缀别名, 不是过时); ② 行为约束类 (安全分级/信任边界/结果纪律)
+  不外置 — 剧本化依赖 Agent 主动读, 有"不主动读"风险; ③ 删提示词段落必须同步
+  PromptEngineTest 内容断言 (本轮 4 处), 否则测试锁死旧内容; ④ 剧本不完整
+  (execution-modes 仅 3 模式) 时先补全剧本再拆提示词。
+- **提示词中英模板同改 (v0.39.0)**: 精简/外置必须 CHINESE_PROMPT 与 ENGLISH_PROMPT
+  同步, TEMPLATE_HASH 自动失效无需手动 bump; 中文模板 8,546→6,659 字符
+  (≈4,361→3,544 token, -19%)。
 
-*最后更新: 2026-08-15 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步*
+*最后更新: 2026-08-15 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 (v0.39.0)*

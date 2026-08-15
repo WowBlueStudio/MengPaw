@@ -1,7 +1,7 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
   "version": 9,
-  "updated": "2026-08-14",
+  "updated": "2026-08-15",
   "plugins": [
     {
       "id": "concise-plugin",
@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "dream-plugin",
@@ -31,7 +31,7 @@
       "commands": [],
       "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
       "size": 3129,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "tavily-plugin",
@@ -63,7 +63,7 @@
       ],
       "checksum": "sha256:547a7665041e90b2f5a9ae36fea44fa892b5954b0c30100740b8c286ad2da2f0",
       "size": 19074,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "framework-plugin",
@@ -93,7 +93,7 @@
       ],
       "checksum": "sha256:b3e9be0bd5587f2c8a755b82ab68c0d04ca00f72458785c31cd04abf5817e958",
       "size": 110868,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "fs-plugin",
@@ -132,7 +132,7 @@
       ],
       "checksum": "sha256:a78b37dc205343cb0c08f18ff77566c3b6edca5d62e6006814d656fefe5ba213",
       "size": 17951,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "memory-twin-plugin",
@@ -163,7 +163,7 @@
       ],
       "checksum": "sha256:50b874379adcb91aa5100cd4c2bc96252226a511d6bf44614fa4baf6d40c5927",
       "size": 243330,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "skill-plugin",
@@ -186,9 +186,9 @@
         "skill.enable",
         "skill.disable"
       ],
-      "checksum": "sha256:3e77a64d9ba34628280aec74391c677ec00a83891f5a2d77dac16159202cf30e",
-      "size": 72438,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "checksum": "sha256:38fe2fe87c61cdc94a0830da33794824033abd738d7b1650a3cdf6bed938cc92",
+      "size": 73244,
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "clipboard-plugin",
@@ -206,7 +206,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "dev-plugin",
@@ -227,7 +227,7 @@
       ],
       "checksum": "sha256:66f20d2156a2b49e3995b4f5eed056562a8666c2c3c747df4df017ac58e111d5",
       "size": 35337,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "update-plugin",
@@ -249,9 +249,9 @@
         "update.install",
         "update.auto"
       ],
-      "checksum": "sha256:40cb3f8f533cacdcc758b0b3f63803d8bce5003f1dbe3748a500c05f4ab49bd8",
-      "size": 36455,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "checksum": "sha256:4596e48bb1d156f372479c258209ab2684c527bda1ce275736106f8941ae2801",
+      "size": 44160,
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "translate-plugin",
@@ -363,7 +363,7 @@
       ],
       "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
       "size": 282877,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "comfy-plugin",
@@ -488,7 +488,7 @@
       ],
       "checksum": "sha256:32c402304b4190083c209773186368460ab813a757bc4a356d61ba03d5fdf21b",
       "size": 46842,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "termux-plugin",
@@ -507,7 +507,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "tools-plugin",
@@ -526,7 +526,7 @@
       ],
       "checksum": "sha256:fd6cf25efe806029cda88f3c47e40eec4b31cfee1128df50b28af5fe77ea0da2",
       "size": 36752,
-      "changelog": "### 新增\n- **自动更新设置入口 (系统设置)**: 打开设置自动检查更新 (无需手动点击); 发现新版本\n  显示「下载 APK」按钮, 点击下载并自动拉起安装; 下载完成后保留「安装」入口 —\n  安装被取消/按错后可再次点击重新唤起\n- **UpdatePlugin 状态暴露**: `hasUpdate` / `readyToInstall` — 设置页结构化判断\n  是否可下载/可安装, 不再解析检查文本\n\n### 修复\n- **Markdown 表格右上角圆角**: 表头白底自身 clip 顶部圆角, 不再依赖外层整表裁剪\n  (蓝底用户气泡右上角缺角修复)\n- **表格列间竖线补齐**: 0.5dp 同色竖线与外框/行线线型一致, 形成完整网格\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.38.2-release.apk` (versionCode 38002)\n- 仅 Shell 构建 (browser 无变更不构建); 插件有变更 → plugins-v0.38.2 同步\n- 测试: 全量 1346 用例 0 failures ("
+      "changelog": "### 新增\n- **自动更新设置页开关**: WiFi 自动检查 / 自动下载 — 此前仅命令行 `update.auto` 可配置,\n  现设置页可直接切换 (状态随打开设置/点击卡片刷新)\n- **下载/安装拆两步**: 设置页「下载 APK」只下载, 成功转「安装」入口, 失败保留重试 —\n  原一步下载+拉起安装, 文案与行为不符\n- **自动下载完成通知**: `update.auto download=on` 后台下载完成发系统通知 (原用户无感知)\n- **启动版本更新通知**: 安装结果回传兜底 — 系统安装器异步无法感知结果, 启动时比较\n  上次记录版本与当前 versionName, 有变化即通知「已更新到 vX.Y.Z」(任何来源升级通用)\n- **安装中重复下载防护**: install 唤起后按「目标+版本」记录标记, 自动下载跳过该版本;\n  当前版本追上或新版本出现时自动清除\n\n### 修复\n- **安装链路 P0**: FileProvider authority 与 Shell Manifest 不一致 (`update.provider` →\n "
     },
     {
       "id": "connector-openclaw-plugin",
