@@ -474,8 +474,8 @@ Action Input: {}
     @Test
     fun `system prompt ports section is pointer not full table`() {
         // 分层注入 (自检报告 P0-1): 端口表不再常驻提示词, 改为 self.ports 按需取
+        // v0.38.3 剧本化: 独立「网络端口」节并入常用命令行, 指针语义不变
         val prompt = engine.buildSystemPrompt()
-        assertTrue("提示词应含网络端口章节", prompt.contains("## 网络端口"))
         assertTrue("提示词应指向 self.ports 按需取", prompt.contains("self.ports"))
         assertFalse("整张端口表不得常驻提示词", prompt.contains("### 本机监听"))
         assertFalse("外部服务默认端口表不得常驻", prompt.contains("### 外部服务默认端口"))
@@ -486,7 +486,6 @@ Action Input: {}
     @Test
     fun `english system prompt ports section is pointer`() {
         val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH)
-        assertTrue(prompt.contains("## Network Ports"))
         assertTrue(prompt.contains("self.ports"))
         assertFalse("英文端口表不得常驻提示词", prompt.contains("Locally listened"))
         assertFalse(prompt.contains("__PORTS_TABLE__"))
@@ -497,7 +496,8 @@ Action Input: {}
         val prompt = engine.buildSystemPrompt()
         assertTrue("提示词应教 Agent 处理 browser_extract_* 任务", prompt.contains("browser_extract_*.md"))
         assertTrue("提示词应说明 browser_return_* 是交换文件", prompt.contains("browser_return_*.md"))
-        assertTrue("提示词应列 search 管道命令", prompt.contains("search.clean"))
+        // v0.38.3 剧本化: search.clean/md 等管道命令外置到 browser-spider 剧本, 提示词保留发现指针
+        assertTrue("提示词应指向浏览器抓取剧本", prompt.contains("skill.run browser-spider"))
     }
 
     @Test
@@ -505,7 +505,8 @@ Action Input: {}
         val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.ENGLISH)
         assertTrue("英文提示词应教 Agent 处理 browser_extract_* 任务", prompt.contains("browser_extract_*.md"))
         assertTrue("英文提示词应说明 browser_return_* 是交换文件", prompt.contains("browser_return_*.md"))
-        assertTrue("英文提示词应列 search 管道命令", prompt.contains("search.clean"))
+        // v0.38.3 剧本化: search.clean/md 等管道命令外置到 browser-spider 剧本, 提示词保留发现指针
+        assertTrue("英文提示词应指向浏览器抓取剧本", prompt.contains("skill.run browser-spider"))
     }
 
     // ── 固定前缀拼接契约 (parity) 锁定 ─────────────────────────────

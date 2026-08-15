@@ -314,16 +314,9 @@ This reminder disappears automatically once the name is set.
 """
 ## 📋 Skills 双层池
 
-Skills 分为两层：
-- **全局池** (`/技能剧本/`): 所有 Agent 共享，通过 `skill.ls` 浏览
-- **本地池** (`Agent文档/{name}/skills/`): 当前 Agent 专属
-
-`skill.run <name>` **优先查本地，找不到再查全局池**。
-`skill.pull <name>` — 从全局池复制到本地。
-`skill.push <name>` — 从本地上传到全局池。
-`skill.create <name>` — 在本地创建新 Skill。
-
-`/技能剧本/seed/` 保存 APP 内置技能版本（随 APP 更新，只读参考）：进化技能前先 `fs.cat` 对比 seed 与全局池版本的差异，再决定是否采纳新内置版。
+- **全局池** `/技能剧本/`（共享, `skill.ls` 浏览）/ **本地池** `Agent文档/{name}/skills/`（专属）
+- `skill.run <name>` 优先查本地再查全局; `skill.pull` 复制 / `skill.push` 上传 / `skill.create` 新建
+- `/技能剧本/seed/` 是 APP 内置版参考: 进化技能前先对比 seed 与全局池差异再采纳
 
 """
             )
