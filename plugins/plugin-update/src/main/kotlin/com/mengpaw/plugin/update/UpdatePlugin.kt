@@ -6,7 +6,6 @@ package com.mengpaw.plugin.update
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.os.Build
 import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
@@ -137,6 +136,10 @@ class UpdatePlugin : Plugin {
                 latestRelease = result
                 lastCheckTime = System.currentTimeMillis()
                 saveConfig()  // P2 修复: 上次检查时间即时落盘, 重启后不丢失
+                // P2 修复: 当前版本已追上最新 → 安装已生效, 清除「安装中」标记
+                if (compareVersions(result.tag.removePrefix("v"), getCurrentVersion() ?: "") <= 0) {
+                    downloader.clearInstallPending()
+                }
                 return formatCheckResult(currentVersion, result)
             }
             lastError = if (i == urls.lastIndex) "所有更新源均不可达。💡 建议检查网络连接，或使用 VPN 访问 GitHub。" else null
@@ -250,7 +253,12 @@ class UpdatePlugin : Plugin {
                         if (autoDownloadEnabled && release != null) {
                             val current = getCurrentVersion()
                             if (current != null && compareVersions(release.tag.removePrefix("v"), current) > 0) {
-                                try { download(listOf("shell"), ExecutionContext("auto")) } catch (_: Exception) { }
+                                // P2 修复: 已唤起安装的该目标+版本不再自动重复下载 (用户可能仍在安装界面/已取消)
+                                if (!downloader.shouldSkipAutoDownload("shell", release.tag)) {
+                                    try { download(listOf("shell"), ExecutionContext("auto")) } catch (_: Exception) { }
+                                }
+                            } else {
+                                downloader.clearInstallPending()
                             }
                         }
                     }
@@ -273,14 +281,7 @@ class UpdatePlugin : Plugin {
 
     private fun getCurrentVersion(): String? {
         val ctx = appContext ?: return null
-        return try {
-            val pkgInfo = if (Build.VERSION.SDK_INT >= 33) {
-                ctx.packageManager.getPackageInfo(ctx.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0L))
-            } else {
-                ctx.packageManager.getPackageInfo(ctx.packageName, 0)
-            }
-            pkgInfo.versionName
-        } catch (_: Exception) { null }
+        return UpdateNotifier.currentVersion(ctx)
     }
 
     /** internal 为测试可见性 (版本号比较单测)。 */
@@ -340,5 +341,8 @@ class UpdatePlugin : Plugin {
          *  internal 为测试可见性 (镜像 URL 单测)。 */
         internal fun giteeDownload(githubUrl: String): String =
             githubUrl.replace("github.com", "gitee.com")
+
+        /** 启动版本检测 — MainActivity.deferInit 调用 (P2 修复: 安装结果回传兜底)。 */
+        fun notifyIfUpdated(context: Context) = UpdateNotifier.notifyIfUpdated(context)
     }
 }

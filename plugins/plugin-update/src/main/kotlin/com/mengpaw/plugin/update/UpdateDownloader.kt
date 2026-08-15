@@ -38,6 +38,9 @@ internal class UpdateDownloader(
     /** 下载并发锁 — UI 手动下载与 update.auto 自动下载互斥, 防止同写 .part 文件 (P2 修复)。 */
     private val downloading = AtomicBoolean(false)
 
+    /** 已唤起安装的 target+tag 组合键 (如 shell:v0.38.4) — 自动下载按目标跳过, 防安装中重复下载 (P2 修复 2026-08-15)。 */
+    private var installPendingKey: String? = null
+
     /** 是否已有下载好的 APK 待安装 — 供设置页显示"安装"入口 (v0.38.2)。
      *  重启后内存态丢失, 按文件名约定扫描 updates 目录兜底 (P2 修复)。 */
     val hasDownloaded: Boolean get() =
@@ -184,12 +187,28 @@ internal class UpdateDownloader(
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
+            installPendingKey = "$target:${tagFromApkName(apk.name)}"
             ExecutionResult.ok("正在安装 ${apk.name}...\n安装完成后请重启应用。")
         } catch (e: Exception) {
             ErrorCollector.report(e, "UpdatePlugin.install")
             ExecutionResult.fail("安装失败: ${e.message}\n可能需要允许\"未知来源\"安装。", errorCode = ErrorCodes.ERR_INTERNAL)
         }
     }
+
+    /** 自动下载是否应跳过该目标+版本 — install 唤起后至安装生效/被新版本取代前为 true (P2 修复)。 */
+    internal fun shouldSkipAutoDownload(target: String, tag: String): Boolean =
+        shouldSkipAutoDownload(installPendingKey, target, tag)
+
+    /** 静态版跳过判断 — internal 为测试可见性 (P2 修复)。 */
+    internal fun shouldSkipAutoDownload(pending: String?, target: String, tag: String): Boolean =
+        pending == "$target:$tag"
+
+    /** 清除「安装中」标记 — 当前版本已追上或版本被新版本取代时调用。 */
+    internal fun clearInstallPending() { installPendingKey = null }
+
+    /** 从 APK 文件名提取版本 tag (mengpaw-shell-v0.38.4.apk → v0.38.4) — internal 为测试可见性。 */
+    internal fun tagFromApkName(name: String): String =
+        name.removePrefix("mengpaw-shell-").removePrefix("mengpaw-browser-").removeSuffix(".apk")
 
     /**
      * Verify the downloaded APK is signed with the same certificate as the currently

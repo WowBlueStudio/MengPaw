@@ -173,4 +173,29 @@ class UpdateLogicTest {
         assertFalse("删除更旧 shell APK", File(dir, "mengpaw-shell-v0.31.9.apk").exists())
         assertTrue("不影响其他目标", File(dir, "mengpaw-browser-v0.32.0.apk").exists())
     }
+
+    // ── 安装中重复下载防护 (P2 修复) ─────────────────────────────────────
+
+    @Test
+    fun `tagFromApkName extracts version tag for shell and browser`() {
+        val d = newDownloader()
+        assertEquals("v0.38.4", d.tagFromApkName("mengpaw-shell-v0.38.4.apk"))
+        assertEquals("v0.38.4", d.tagFromApkName("mengpaw-browser-v0.38.4.apk"))
+    }
+
+    @Test
+    fun `shouldSkipAutoDownload only skips pending install target and version`() {
+        val d = newDownloader()
+        assertFalse("无待安装时不应跳过", d.shouldSkipAutoDownload(null, "shell", "v0.38.4"))
+        assertTrue("待安装目标+版本应跳过", d.shouldSkipAutoDownload("shell:v0.38.4", "shell", "v0.38.4"))
+        assertFalse("其他版本不跳过", d.shouldSkipAutoDownload("shell:v0.38.4", "shell", "v0.38.5"))
+        assertFalse("其他目标不跳过", d.shouldSkipAutoDownload("shell:v0.38.4", "browser", "v0.38.4"))
+    }
+
+    @Test
+    fun `clearInstallPending resets skip state`() {
+        val d = newDownloader()
+        d.clearInstallPending()
+        assertFalse("清除后不应跳过任何版本", d.shouldSkipAutoDownload("shell", "v0.38.4"))
+    }
 }

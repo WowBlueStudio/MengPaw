@@ -210,6 +210,8 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) {}
         // update-plugin 已内置 (v0.37.3) — 直接注入, 不再反射
         try { com.mengpaw.plugin.update.UpdatePlugin.appContext = this@MainActivity } catch (_: Exception) {}
+        // P2 修复 (安装结果回传兜底): 启动时检测版本号变化, 有更新则通知用户
+        try { com.mengpaw.plugin.update.UpdatePlugin.notifyIfUpdated(this@MainActivity) } catch (_: Exception) {}
 
         // ── 网络状况门卫 (v0.29.2): ConnectivityManager 回调 → 内核重试策略
         //    (断网快返 + 弱网放慢退避; 免危险权限, 仅 ACCESS_NETWORK_STATE) ──
