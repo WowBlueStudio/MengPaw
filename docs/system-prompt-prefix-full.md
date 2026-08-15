@@ -2,7 +2,7 @@
 
 > 生成时间: 2026-08-15（v0.38.3 剧本化已实施后快照）· 源码锚点: `mengpaw-kernel/src/main/kotlin/com/mengpaw/kernel/llm/PromptEngine.kt` 与 `PromptSystemBuilder.kt`
 > 本文档为审查底稿: 全文机械提取自源码; token 为粗估（中文 1 字≈1 token, ASCII 4 字符≈1 token）。
-> **v0.38.3 已实施 A 类剧本化**（会话/记忆孪生/Tribe/浏览器/插件/文件设备/常用命令/更新 → skill.run 指针; 网络端口节删除; Skills 段压缩）——中文模板 8,546→6,672 字符（≈4,361→3,556 token）。
+> **v0.38.3 已实施 A 类剧本化**（会话/记忆孪生/Tribe/浏览器/插件/文件设备/常用命令/更新/斜杠命令 → skill.run 指针; 网络端口节删除; Skills 段压缩）——中文模板 8,546→6,659 字符（≈4,361→3,544 token）。
 
 ## 0. 总览
 
@@ -11,7 +11,7 @@
 | 段 | 来源 | 动态性 | 规模（默认中文） |
 |---|------|--------|----------------|
 | ① 身份 | `PromptSystemBuilder.buildSystemPrompt` identity | 动态（agentName / framework / modelName） | 约 3 行 |
-| ② 基础模板 | `PromptEngine.CHINESE_PROMPT`（本文档 §2 全文） | 静态 | 6,672 字符 ≈ 3,556 token |
+| ② 基础模板 | `PromptEngine.CHINESE_PROMPT`（本文档 §2 全文） | 静态 | 6,659 字符 ≈ 3,544 token |
 | ③ 工作区注入 docsBlock | `PromptSystemBuilder` | 条件/数据依赖（见 §3） | 条件段约 0–1,400 字符 + 文档内容 |
 
 ### 0.2 静态模板分节统计（中文, 剧本化后）
@@ -32,9 +32,9 @@
 
 ### 0.3 精简/剧本化实施记录（v0.38.3）
 
-- **已实施**: 会话/记忆孪生/Tribe/浏览器/插件/文件设备/常用命令/更新 → `skill.run` 指针; 网络端口独立节删除（self.ports 并入常用命令）; docsBlock Skills 段压缩
+- **已实施**: 会话/记忆孪生/Tribe/浏览器/插件/文件设备/常用命令/更新/斜杠命令 → `skill.run` 指针; 网络端口独立节删除（self.ports 并入常用命令）; docsBlock Skills 段压缩; `execution-modes.md` 剧本补全 6 模式（/Swarm /Fleet /Goal /Plan /Research /Silent, 与 modes.md 权威定义一致）
 - **核对通过**: `hermes.*` 命令由 TribePlugin 双前缀注册（tribe.* + hermes.*）, 剧本引用安全; browser-control/debug/spider、plugin-system/index、filesystem、device-control、sessions、twin-guide、self-update 剧本均已存在
-- **未做（有意保留）**: 斜杠命令段（execution-modes 剧本仅覆盖 3 模式, 不完整）; 攻击来源黑名单（行为防御, 不外置）; 记忆三轨/安全分级/信任边界/结果纪律（C 类核心）
+- **未做（有意保留）**: 攻击来源黑名单（行为防御, 不外置）; 记忆三轨/安全分级/信任边界/结果纪律（C 类核心）
 - 验证: `:mengpaw-kernel:test` 576 用例全绿（PromptEngineTest 断言已同步新结构）
 
 ## 1. 拼装顺序
@@ -229,7 +229,6 @@ Final Answer: （最终答案）
 
 ### 4.2 未做但有剧本化价值（后续可选）
 
-- **斜杠命令/执行模式**（~250 字符引导）: 待 `execution-modes.md` 补全 6 模式后, 可改为 `skill.run execution-modes` 一行
 - **攻击来源黑名单**（~120 token, 响应格式节内）: 行为防御建议保留; 如坚持外置需新写 `security.md` 且接受 Agent 可能不主动读的风险
 - **响应格式 ReAct 教学**（~700 token）: LLM 训练语料覆盖度高, 可再压缩, 但属 C 类核心, 风险自担
 
