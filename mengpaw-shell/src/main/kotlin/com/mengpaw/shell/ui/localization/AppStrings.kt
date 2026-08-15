@@ -151,6 +151,10 @@ class AppStrings {
     var autoUpdateDownload: String = ""
     var autoUpdateDownloading: String = ""
     var autoUpdateInstall: String = ""
+    var autoUpdateWifiTitle: String = ""
+    var autoUpdateWifiDesc: String = ""
+    var autoUpdateDownloadTitle: String = ""
+    var autoUpdateDownloadDesc: String = ""
 
     // Settings - Agent
     var agentAddHumanTouch: String = ""

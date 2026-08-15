@@ -194,25 +194,28 @@ fun SystemSettingsContent(
     var updateHasNew by remember { mutableStateOf(false) }
     var updateReadyToInstall by remember { mutableStateOf(false) }
     var updateBusy by remember { mutableStateOf(false) }
+    var updateAutoCheck by remember { mutableStateOf(false) }
+    var updateAutoDownload by remember { mutableStateOf(false) }
     val updateScope = rememberCoroutineScope()
 
     // v0.38.2: 打开设置自动检查更新 (无需手动点击); 已下载待安装时保留安装入口
-    LaunchedEffect(Unit) {
+    // v0.38.3: 一并刷新 WiFi 自动检查/自动下载开关状态
+    suspend fun refreshUpdateUi() {
         updateStatus = state.strings.autoUpdateChecking
         val r = runUpdateCheckUi()
         updateStatus = r.summary
         updateHasNew = r.hasUpdate
         updateReadyToInstall = r.readyToInstall
+        updateAutoCheck = r.autoCheck
+        updateAutoDownload = r.autoDownload
+    }
+
+    LaunchedEffect(Unit) {
+        refreshUpdateUi()
     }
     Surface(
         modifier = Modifier.fillMaxWidth().clickable {
-            updateScope.launch {
-                updateStatus = state.strings.autoUpdateChecking
-                val r = runUpdateCheckUi()
-                updateStatus = r.summary
-                updateHasNew = r.hasUpdate
-                updateReadyToInstall = r.readyToInstall
-            }
+            updateScope.launch { refreshUpdateUi() }
         },
         shape = RoundedCornerShape(ArcoRadius.md),
         color = ThemeColors.bgCardHigh
@@ -242,14 +245,17 @@ fun SystemSettingsContent(
                     }
                 }
                 updateHasNew -> {
-                    // v0.38.2: 发现新版本 → 下载 APK 入口 (下载成功后保留安装入口)
+                    // v0.38.3: 发现新版本 → 仅下载 (两步拆分); 下载成功后转安装入口, 失败保留重试
                     TextButton(onClick = {
                         updateScope.launch {
                             updateBusy = true
                             updateStatus = state.strings.autoUpdateDownloading
-                            updateStatus = runUpdateDownloadAndInstall()
-                            updateHasNew = false
-                            updateReadyToInstall = true
+                            val (ok, msg) = runUpdateDownload()
+                            updateStatus = msg
+                            if (ok) {
+                                updateHasNew = false
+                                updateReadyToInstall = true
+                            }
                             updateBusy = false
                         }
                     }, contentPadding = PaddingValues(horizontal = ArcoSpacing.sm)) {
@@ -260,6 +266,40 @@ fun SystemSettingsContent(
                 else -> Icon(Icons.Outlined.ChevronRight, null, tint = ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
             }
         }
+    }
+
+    // v0.38.3: WiFi 自动检查 / 自动下载开关 (P1 修复 — 此前仅命令行 update.auto 可配置)
+    Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(state.strings.autoUpdateWifiTitle, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(state.strings.autoUpdateWifiDesc, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+        }
+        Switch(
+            checked = updateAutoCheck,
+            onCheckedChange = { on ->
+                updateScope.launch {
+                    val msg = runUpdateAutoUi(if (on) "on" else "off")
+                    if (msg.isNotBlank()) updateStatus = msg
+                    updateAutoCheck = on
+                }
+            }
+        )
+    }
+    Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(state.strings.autoUpdateDownloadTitle, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(state.strings.autoUpdateDownloadDesc, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+        }
+        Switch(
+            checked = updateAutoDownload,
+            onCheckedChange = { on ->
+                updateScope.launch {
+                    val msg = runUpdateAutoUi(if (on) "download=on" else "download=off")
+                    if (msg.isNotBlank()) updateStatus = msg
+                    updateAutoDownload = on
+                }
+            }
+        )
     }
 
     Spacer(Modifier.height(ArcoSpacing.lg))
@@ -391,45 +431,65 @@ fun SystemSettingsContent(
  * primary:<相对路径> 文档 URI, 私有路径 (旧 Android/data 回退) 用 file:// 初值。
  * 不可用 (部分设备 DocumentsUI 无定位) 时兜底打开外部存储根。
  */
-/** 自动更新检查结果 — 摘要文本 + 是否有新版本 + 是否已下载待安装 (v0.38.2, 供设置页显示按钮)。 */
+/** 自动更新检查结果 — 摘要文本 + 是否有新版本 + 是否已下载待安装 + 开关状态 (v0.38.2/v0.38.3)。 */
 private data class UpdateCheckUiState(
     val summary: String,
     val hasUpdate: Boolean,
-    val readyToInstall: Boolean
+    val readyToInstall: Boolean,
+    val autoCheck: Boolean,
+    val autoDownload: Boolean
 )
 
-/** 执行 update.check --force 并返回摘要/新版本/待安装状态 (自动更新设置入口, v0.37.3+/v0.38.2)。 */
+/** 执行 update.check --force 并返回摘要/新版本/待安装/开关状态 (自动更新设置入口, v0.37.3+/v0.38.2+)。 */
 private suspend fun runUpdateCheckUi(): UpdateCheckUiState {
     return try {
         val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
         val plugin = pm.get("update-plugin") as? com.mengpaw.plugin.update.UpdatePlugin
-            ?: return UpdateCheckUiState("自动更新插件未就绪", false, false)
+            ?: return UpdateCheckUiState("自动更新插件未就绪", false, false, false, false)
         val result = plugin.commands["check"]?.invoke(
             listOf("--force"),
             com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
-        ) ?: return UpdateCheckUiState("检查命令不可用", false, false)
-        UpdateCheckUiState(result.output.ifBlank { result.error ?: "检查完成" }, plugin.hasUpdate, plugin.readyToInstall)
+        ) ?: return UpdateCheckUiState("检查命令不可用", false, false, false, false)
+        UpdateCheckUiState(
+            result.output.ifBlank { result.error ?: "检查完成" },
+            plugin.hasUpdate, plugin.readyToInstall,
+            plugin.autoCheckEnabled, plugin.autoDownloadEnabled
+        )
     } catch (e: Exception) {
-        UpdateCheckUiState("检查失败: ${e.message?.take(80) ?: "未知错误"}", false, false)
+        UpdateCheckUiState("检查失败: ${e.message?.take(80) ?: "未知错误"}", false, false, false, false)
     }
 }
 
-/** 执行 update.download shell + update.install shell (v0.38.2 设置页下载 APK 入口)。 */
-private suspend fun runUpdateDownloadAndInstall(): String {
+/** 执行 update.download shell — 仅下载不安装, 成功后由「安装」按钮唤起 (v0.38.3 两步拆分)。
+ *  @return (是否成功, 用户可见消息) — 失败时保留下载重试入口。 */
+private suspend fun runUpdateDownload(): Pair<Boolean, String> {
+    return try {
+        val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
+        val plugin = pm.get("update-plugin") as? com.mengpaw.plugin.update.UpdatePlugin
+            ?: return false to "自动更新插件未就绪"
+        val ctx = com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
+        val dl = plugin.commands["download"]?.invoke(listOf("shell"), ctx)
+            ?: return false to "下载命令不可用"
+        if (!dl.success) false to (dl.error ?: "下载失败")
+        else true to (dl.output.ifBlank { "下载完成" })
+    } catch (e: Exception) {
+        false to "下载失败: ${e.message?.take(80) ?: "未知错误"}"
+    }
+}
+
+/** 执行 update.auto <arg> — 设置页 WiFi 自动检查/自动下载开关 (v0.38.3, P1 修复)。 */
+private suspend fun runUpdateAutoUi(arg: String): String {
     return try {
         val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
         val plugin = pm.get("update-plugin") as? com.mengpaw.plugin.update.UpdatePlugin
             ?: return "自动更新插件未就绪"
-        val ctx = com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
-        val dl = plugin.commands["download"]?.invoke(listOf("shell"), ctx)
-            ?: return "下载命令不可用"
-        if (!dl.success) return dl.error ?: "下载失败"
-        val inst = plugin.commands["install"]?.invoke(listOf("shell"), ctx)
-            ?: return dl.output.ifBlank { "下载完成" }
-        (dl.output.ifBlank { "下载完成" } +
-            if (inst.output.isNotBlank()) "\n${inst.output}" else "").trim()
+        val result = plugin.commands["auto"]?.invoke(
+            listOf(arg),
+            com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
+        ) ?: return "自动更新命令不可用"
+        result.output.ifBlank { result.error ?: "已更新配置" }
     } catch (e: Exception) {
-        "下载失败: ${e.message?.take(80) ?: "未知错误"}"
+        "配置失败: ${e.message?.take(80) ?: "未知错误"}"
     }
 }
 

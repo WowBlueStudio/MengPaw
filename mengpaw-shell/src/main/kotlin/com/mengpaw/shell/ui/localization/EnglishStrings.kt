@@ -130,6 +130,10 @@ val EnglishStrings = AppStrings().apply {
     autoUpdateDownload = "Download APK"
     autoUpdateDownloading = "Downloading APK..."
     autoUpdateInstall = "Install"
+    autoUpdateWifiTitle = "WiFi auto-check"
+    autoUpdateWifiDesc = "Check for updates hourly when on WiFi"
+    autoUpdateDownloadTitle = "Auto download"
+    autoUpdateDownloadDesc = "Download the APK automatically when a new version is found (requires auto-check)"
 
     // Settings - Device guides
     guideSection = "Guides"

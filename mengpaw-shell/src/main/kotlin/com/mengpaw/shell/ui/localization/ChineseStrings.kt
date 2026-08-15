@@ -130,6 +130,10 @@ val ChineseStrings = AppStrings().apply {
     autoUpdateDownload = "下载 APK"
     autoUpdateDownloading = "正在下载 APK..."
     autoUpdateInstall = "安装"
+    autoUpdateWifiTitle = "WiFi 自动检查"
+    autoUpdateWifiDesc = "连接 WiFi 时每小时自动检测更新"
+    autoUpdateDownloadTitle = "自动下载"
+    autoUpdateDownloadDesc = "检测到新版本后自动下载 APK（需开启自动检查）"
 
     // Settings - Device guides
     guideSection = "使用指南"
