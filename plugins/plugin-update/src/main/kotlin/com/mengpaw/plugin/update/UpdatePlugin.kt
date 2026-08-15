@@ -58,10 +58,16 @@ class UpdatePlugin : Plugin {
     private val client = HttpClient(OkHttp) {
         engine { config { connectTimeout(15, TimeUnit.SECONDS); readTimeout(30, TimeUnit.SECONDS) } }
     }
-    private var autoCheckEnabled = false
-    private var autoDownloadEnabled = false
     private var lastCheckTime = 0L
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /** WiFi 自动检查开关 — 只读暴露给设置页 UI 显示 (P1 修复, 写路径仅 update.auto)。 */
+    var autoCheckEnabled: Boolean = false
+        private set
+
+    /** 自动下载开关 — 只读暴露给设置页 UI 显示 (P1 修复, 写路径仅 update.auto)。 */
+    var autoDownloadEnabled: Boolean = false
+        private set
 
     // P2 修复 (幂等保护): scheduleAutoCheck 由 onInstall 与 update.auto on 双路径触发,
     // 无保护时每调一次就多跑一个 while 循环 (多份定时器同时扫更新)。
@@ -130,6 +136,7 @@ class UpdatePlugin : Plugin {
             if (result != null) {
                 latestRelease = result
                 lastCheckTime = System.currentTimeMillis()
+                saveConfig()  // P2 修复: 上次检查时间即时落盘, 重启后不丢失
                 return formatCheckResult(currentVersion, result)
             }
             lastError = if (i == urls.lastIndex) "所有更新源均不可达。💡 建议检查网络连接，或使用 VPN 访问 GitHub。" else null

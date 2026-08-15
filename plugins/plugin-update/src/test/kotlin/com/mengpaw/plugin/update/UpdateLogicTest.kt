@@ -5,7 +5,10 @@ package com.mengpaw.plugin.update
 
 import com.mengpaw.plugin.update.UpdatePlugin.ReleaseInfo
 import org.junit.Assert.*
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 
 /**
  * 更新插件纯逻辑单测: 版本号比较、结果格式化、SHA-256 hex (Locale.ROOT, P2 修复)、
@@ -15,6 +18,9 @@ import org.junit.Test
 class UpdateLogicTest {
 
     private val plugin = UpdatePlugin()
+
+    @get:Rule
+    val tmp = TemporaryFolder()
 
     // ── 版本号比较 ──────────────────────────────────────────────────────
 
@@ -124,5 +130,47 @@ class UpdateLogicTest {
         // 纯函数 — 两个实例结果一致 (防实例状态污染)
         val p2 = UpdatePlugin()
         assertEquals(plugin.compareVersions("0.33.0", "0.32.9"), p2.compareVersions("0.33.0", "0.32.9"))
+    }
+
+    // ── 待安装状态兜底 / 旧包清理 (P2 修复) ─────────────────────────────
+
+    private fun newDownloader() = UpdateDownloader(
+        releaseProvider = { null },
+        wifiGateEnabled = { false },
+        isWifiConnected = { true },
+        formatSize = { _ -> "1.0 MB" },
+        pluginVersion = "builtin"
+    )
+
+    @Test
+    fun `latestApkIn picks the newest matching apk`() {
+        val dir = tmp.newFolder("updates")
+        val old = File(dir, "mengpaw-shell-v0.32.0.apk").apply { writeText("old") }
+        old.setLastModified(1_000L)
+        val newer = File(dir, "mengpaw-shell-v0.32.1.apk").apply { writeText("newer") }
+        newer.setLastModified(2_000L)
+        // 非目标 / 非 APK 文件不参与
+        File(dir, "mengpaw-browser-v0.32.1.apk").writeText("browser")
+        File(dir, "readme.txt").writeText("readme")
+
+        val hit = newDownloader().latestApkIn(dir, "shell")
+        assertNotNull("应命中 shell APK", hit)
+        assertEquals("应取最新版本", newer, hit)
+    }
+
+    @Test
+    fun `cleanupOldApksIn keeps only the given file`() {
+        val dir = tmp.newFolder("updates2")
+        val keep = File(dir, "mengpaw-shell-v0.32.1.apk").apply { writeText("keep") }
+        File(dir, "mengpaw-shell-v0.32.0.apk").writeText("old")
+        File(dir, "mengpaw-shell-v0.31.9.apk").writeText("older")
+        File(dir, "mengpaw-browser-v0.32.0.apk").writeText("browser")
+
+        newDownloader().cleanupOldApksIn(dir, "shell", keep)
+
+        assertTrue("保留最新文件", keep.exists())
+        assertFalse("删除旧 shell APK", File(dir, "mengpaw-shell-v0.32.0.apk").exists())
+        assertFalse("删除更旧 shell APK", File(dir, "mengpaw-shell-v0.31.9.apk").exists())
+        assertTrue("不影响其他目标", File(dir, "mengpaw-browser-v0.32.0.apk").exists())
     }
 }
