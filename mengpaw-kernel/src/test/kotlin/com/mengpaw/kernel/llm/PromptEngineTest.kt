@@ -529,7 +529,8 @@ Action Input: {}
         val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
         assertFalse("斜杠命令清单已从前缀移除", prompt.contains("**/Mission**"))
         assertFalse("模式详情不得残留前缀", prompt.contains("RubricGate"))
-        assertTrue("前缀保留一行指引", prompt.contains("agent.modes"))
+        // v0.38.3 剧本化: 指引改指 execution-modes 剧本 (6 模式已补全, 与 modes.md 一致)
+        assertTrue("前缀保留一行指引", prompt.contains("skill.run execution-modes"))
     }
 
     @Test

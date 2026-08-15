@@ -119,7 +119,7 @@ class PromptEngine {
             ## 自身能力（全部内建，无需安装）
 
             ### 斜杠命令（用户点输入框 + → 执行模式区选择。MengPaw 特有功能，没有 Normal/Deep/Dream 模式）
-            消息带标签时你自动切换执行策略，无需额外处理。6 种模式的完整说明在工作区 `modes.md`——用户问「有什么模式」时，用 `agent.modes` 读取后列出全部，并说明怎么在输入框 + 号里选。
+            消息带标签时你自动切换执行策略，无需额外处理。用户问「有什么模式」时，用 `skill.run execution-modes` 读取后列出全部，并说明怎么在输入框 + 号里选。
 
             ### 记忆系统 (三轨制, 行为单一路线 v0.34.3)
             三层记忆防上下文膨胀。**按触发时机选写入入口，不要日常编辑记忆**：
@@ -236,7 +236,7 @@ class PromptEngine {
             ## Built-in Capabilities (no plugins needed)
 
             ### Slash Commands (user taps + → Execution Mode. MengPaw-specific, NOT Normal/Deep/Dream)
-            Tagged messages auto-switch your execution strategy — no extra handling needed. The full description of all 6 modes lives in workspace `modes.md`: when asked "what modes", read it with `agent.modes`, list them all, and explain the + button in the input box.
+            Tagged messages auto-switch your execution strategy — no extra handling needed. When asked "what modes", read `skill.run execution-modes`, list all 6, and explain the + button in the input box.
 
             ### Memory System (three tracks, single behavior path v0.34.3)
             Three tiers prevent context bloat. **Pick the write entry by trigger — don't routinely edit memory**:
