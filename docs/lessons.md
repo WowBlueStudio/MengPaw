@@ -1025,5 +1025,18 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   注意 gh release create --target <commit> 要求 commit 已存在于 GitHub,
   push 未完成时 422 "target_commitish is invalid" — 必须先 push 再建 release,
   不能跳过 push 用 --target 建 (commit 不在远端则无效)。
+- **表格渲染三连坑 (v0.38.x, Compose)**: ① 表格四角圆角不能靠表头/末行边框各自
+  拼角, 需整表 border+clip 一次绘制; ② 表头白底必须自身 clip 顶部圆角, 不能只依赖
+  外层整表 clip — 蓝底用户气泡右上角仍露直角 (外层 clip 按视口/内容宽度裁不到白底);
+  ③ HorizontalDivider 在 IntrinsicSize.Min 行间不渲染 (0.38.2 竖线在横线消失),
+  行间/列间分隔线统一用 Box(width/height 0.5dp + background) 同一画法最可靠。
+- **自动更新设置入口设计 (v0.38.2)**: ① 判断"是否有新版本/可安装"不能解析 check
+  输出文本, 插件暴露结构化状态 hasUpdate / readyToInstall (UpdateDownloader 持
+  downloadedApk); ② 下载完成后保留"安装"按钮 — 用户按错/取消后可再次点击重新唤起
+  install (ACTION_VIEW 异步无法感知结果, 待安装状态不清除); ③ 调插件命令判断成功
+  用 ExecutionResult.success 字段 (不是 ok)。
+- **发版 Gitee release 同步 (v0.38.2+)**: 每次发版后 Gitee 侧 release 同步建好
+  (tag push 不自动建 release), 双源在线更新才不会回退到旧版; 已加入 release skill
+  验证清单。
 
-*最后更新: 2026-08-14 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理*
+*最后更新: 2026-08-15 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步*
