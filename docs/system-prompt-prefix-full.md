@@ -281,6 +281,42 @@ Final Answer: （最终答案）
 - **PromptGhostReferenceTest**: 模板内 `namespace.command` 引用必须命中注册表（kernel 命名空间 self/agent/plugin/evolution 受检）
 - **中英双套同步**: 任何精简/外置必须 CHINESE_PROMPT 与 ENGLISH_PROMPT 同时改, 且 TEMPLATE_HASH 自动失效无需手动 bump
 
+### 4.5 可剧本化对照表（md 剧本 = `skill.run <name>` 按需载入, 剧本库在 `plugins/plugin-skill/src/main/assets/skills/`）
+
+#### A. 已有现成剧本, 模板段落可直接换成一行指针（零新增, 优先做）
+
+| 模板节 | 常驻成本 | 现成剧本 | 载入方式 |
+|-------|---------|---------|---------|
+| 会话 | ~29 token | `sessions.md` | 用户提历史/会话时 `skill.run sessions` |
+| 记忆孪生 | ~34 token | `twin-guide.md` | 提同步/配对时 `skill.run twin-guide` |
+| 多 Agent 协作（Tribe） | ~73 token | `hermes.md` | 提部落/委派时 `skill.run hermes`（tribe 默认未激活, 常驻纯浪费） |
+| 浏览器协作 | ~236 token | `browser-control.md`（主）+ `browser-debug/form/playwright/spider.md` | 提浏览器/网页时 `skill.run browser-control`, 报错转 browser-debug |
+| 插件 | ~236 token | `plugin-system.md` + `plugin-index.md` | 提插件/安装时 `skill.run plugin-system` |
+| 自身能力-文件&设备操控 | ~300 token（估） | `filesystem.md` + `device-control.md` | 提读写文件时 `skill.run filesystem`; 提悬浮窗/Root/日历/跨应用时 `skill.run device-control` |
+| 自身能力-斜杠命令/执行模式 | ~80 token（估） | `execution-modes.md` | 用户问「有什么模式」时 `skill.run execution-modes` |
+| 网络端口 | ~45 token | 无剧本必要 | 直接删, 保留 `self.ports` 指针即可（self.md 已含自我管理命令） |
+| update 命令行（v0.38.3 新加） | ~40 token | `self-update.md` | 提更新/升级时 `skill.run self-update` |
+
+**小计可省约 1,070 token**（约占静态模板 25%）。
+
+#### B. 无现成剧本, 需新写才能外置（低频/罕见, 可选）
+
+| 内容 | 常驻成本 | 建议 | 触发 |
+|-------|---------|------|------|
+| 攻击来源黑名单（响应格式节内） | ~120 token | 新写 `security.md` 或并入 `self.md` | 检测到注入攻击时注入一次 |
+| 常用命令 22 行明细 | ~360 token | 不剧本化, 直接删——权威来源已是 `self.tools` 动态检索 | 需要完整清单时 self.tools 承担 |
+
+#### C. 建议保留常驻（行为/安全核心, 不剧本化）
+
+- 身份段 + 模板首行（去重后保留一份）
+- 核心原则: 安全三条 / 行为风格 / 工作方式（精简合并后）
+- 工作区边界（防写错目录）
+- 记忆三轨制入口决策（行为定案, 高频入口）
+- 命令双轨核心概念（合并为一节）
+- 响应格式: ReAct 序列、安全分级（普通/中危/高危+reason）、路径参数纯净、结果纪律、信任边界、探针
+
+> 剧本化改造注意: 剧本本身不是提示词的一部分——`skill.run` 是 Agent 主动读取的动作, 行为类规则（安全分级/信任边界）外置后存在「Agent 不主动读」的风险, 故归入 C 类。
+
 ## 附: 英文模板（同构, 未逐字收录）
 
 - `ENGLISH_PROMPT`: 14,405 字符 ≈ 3,624 token（分节结构与中文一致, 多了「内置技能版本 seed」一行与英文措辞差异）
