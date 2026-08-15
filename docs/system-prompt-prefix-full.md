@@ -1,7 +1,8 @@
 # MengPaw 默认系统提示词前缀全文（精简 / 二级拆分审查用）
 
-> 生成时间: 2026-08-15 · 源码锚点: `mengpaw-kernel/src/main/kotlin/com/mengpaw/kernel/llm/PromptEngine.kt`（静态模板 CHINESE_PROMPT / ENGLISH_PROMPT）与 `PromptSystemBuilder.kt`（identity + docsBlock 动态注入）
-> 本文档为审查底稿: 全文机械提取自源码, 不手工增删字; token 为粗估（中文 1 字≈1 token, ASCII 4 字符≈1 token, 实际随模型 tokenizer 浮动）。
+> 生成时间: 2026-08-15（v0.38.3 剧本化已实施后快照）· 源码锚点: `mengpaw-kernel/src/main/kotlin/com/mengpaw/kernel/llm/PromptEngine.kt` 与 `PromptSystemBuilder.kt`
+> 本文档为审查底稿: 全文机械提取自源码; token 为粗估（中文 1 字≈1 token, ASCII 4 字符≈1 token）。
+> **v0.38.3 已实施 A 类剧本化**（会话/记忆孪生/Tribe/浏览器/插件/文件设备/常用命令/更新 → skill.run 指针; 网络端口节删除; Skills 段压缩）——中文模板 8,546→6,672 字符（≈4,361→3,556 token）。
 
 ## 0. 总览
 
@@ -10,44 +11,41 @@
 | 段 | 来源 | 动态性 | 规模（默认中文） |
 |---|------|--------|----------------|
 | ① 身份 | `PromptSystemBuilder.buildSystemPrompt` identity | 动态（agentName / framework / modelName） | 约 3 行 |
-| ② 基础模板 | `PromptEngine.CHINESE_PROMPT`（本文档 §2 全文） | 静态 | 8,546 字符 ≈ 4,361 token |
-| ③ 工作区注入 docsBlock | `PromptSystemBuilder` | 条件/数据依赖（见 §3） | 条件段约 0–1,600 字符 + 文档内容 |
+| ② 基础模板 | `PromptEngine.CHINESE_PROMPT`（本文档 §2 全文） | 静态 | 6,672 字符 ≈ 3,556 token |
+| ③ 工作区注入 docsBlock | `PromptSystemBuilder` | 条件/数据依赖（见 §3） | 条件段约 0–1,400 字符 + 文档内容 |
 
-### 0.2 静态模板分节统计（中文）
+### 0.2 静态模板分节统计（中文, 剧本化后）
 
-| 节 | 字符 | 约 token | 占模板比 | 初步观察 |
+| 节 | 字符 | 约 token | 占模板比 | 说明 |
 |---|-----|---------|---------|---------|
-| 核心原则 | 1348 | ~722 | 16% | 与「命令双轨」节/「插件」节存在事实重复(工作方式 vs 专门章节), 去重可省约 150-250 token |
-| 自身能力（全部内建，无需安装） | 1333 | ~600 | 13% | 记忆三轨制是行为定案需保留; 斜杠命令/文件设备可压缩; 知识库列表(skill.run)可外置 |
-| 工作区边界（哪里是你的，哪里是用户的） | 473 | ~255 | 5% | 定位清晰建议保留; 与「输出目录」说明微重 |
-| 命令双轨 (v0.36.x) | 592 | ~288 | 6% | 与「核心原则-工作方式」重复度高, 建议合并成单一权威节 |
-| 常用命令 (权威来源: self.tools) | 884 | ~360 | 8% | 自称权威来源是 self.tools 动态检索 — 静态清单即可压缩到 3-5 条高频项, 其余二级外置 |
-| 插件 | 580 | ~236 | 5% | tavily 内置 + 2 个 remote 插件说明; 可压缩或按需注入 |
-| 会话 | 93 | ~29 | 0% | 短, 可并入常用命令或外置 |
-| 多 Agent 协作 (部落 Tribe) | 162 | ~73 | 1% | tribe-plugin 默认未激活 — 典型按需注入候选, 启用时才注入 |
-| 记忆孪生 | 81 | ~34 | 0% | 未配对时无意义 — 典型按需注入候选 |
-| 网络端口 | 69 | ~45 | 1% | self.ports 已是指针, 本节可整段删除或并入常用命令 |
-| 浏览器协作 (MP 浏览器, 独立 APK) | 515 | ~236 | 5% | 使用浏览器时才需要 — 典型按需注入候选 |
-| 响应格式（必须遵守） | 2201 | ~1359 | 31% | 最大头(1359 tok)。ReAct 教学可大幅精简; 安全分级/路径纯净/信任边界保留; 攻击黑名单与交付纪律可外置 |
+| 核心原则 | 1348 | ~722 | 20% | 见 §4 观察 |
+| 自身能力（全部内建，无需安装） | 1110 | ~537 | 15% | 见 §4 观察 |
+| 工作区边界（哪里是你的，哪里是用户的） | 473 | ~255 | 7% | 见 §4 观察 |
+| 命令双轨 (v0.36.x) | 592 | ~288 | 8% | 见 §4 观察 |
+| 常用命令 (权威来源: self.tools) | 220 | ~78 | 2% | 见 §4 观察 |
+| 插件 | 210 | ~82 | 2% | 见 §4 观察 |
+| 会话 | 37 | ~15 | 0% | 见 §4 观察 |
+| 多 Agent 协作 (部落 Tribe) | 84 | ~36 | 1% | 见 §4 观察 |
+| 记忆孪生 | 57 | ~26 | 0% | 见 §4 观察 |
+| 浏览器协作 (MP 浏览器, 独立 APK) | 132 | ~42 | 1% | 见 §4 观察 |
+| 响应格式（必须遵守） | 2201 | ~1359 | 38% | 见 §4 观察 |
 
-### 0.3 已做过的精简先例（改造时可复用模式）
+### 0.3 精简/剧本化实施记录（v0.38.3）
 
-- 工作区文档 brief 化（P1-4）: profile/agents/soul 不再全文注入, 取 frontmatter summary + `完整内容: cat <路径>` 外链
-- 端口表不常驻: 整张静态端口表移除, 改 `self.ports` 指针
-- 条件注入: 进化引导 / CRON(heartbeat) / 伪人(trumanshow) / 身份提醒 均按数据指纹条件注入, 零数据零 token
-- 缓存失效铁律: 前插击穿前缀缓存 — 新注入段必须**末尾追加**（见 `docs/llm-multistage-dataflow.md`）
+- **已实施**: 会话/记忆孪生/Tribe/浏览器/插件/文件设备/常用命令/更新 → `skill.run` 指针; 网络端口独立节删除（self.ports 并入常用命令）; docsBlock Skills 段压缩
+- **核对通过**: `hermes.*` 命令由 TribePlugin 双前缀注册（tribe.* + hermes.*）, 剧本引用安全; browser-control/debug/spider、plugin-system/index、filesystem、device-control、sessions、twin-guide、self-update 剧本均已存在
+- **未做（有意保留）**: 斜杠命令段（execution-modes 剧本仅覆盖 3 模式, 不完整）; 攻击来源黑名单（行为防御, 不外置）; 记忆三轨/安全分级/信任边界/结果纪律（C 类核心）
+- 验证: `:mengpaw-kernel:test` 576 用例全绿（PromptEngineTest 断言已同步新结构）
 
 ## 1. 拼装顺序
 
 ```text
 identity（动态身份 3 行）
-  └ CHINESE_PROMPT 全文（§2, 静态 8.5KB）
+  └ CHINESE_PROMPT 全文（§2, 静态 6.7KB）
       └ docsBlock（§3, 条件注入: boost/身份提醒/CRON/伪人/Skills/进化/文档 brief/pinned）
 ```
 
-## 2. 静态模板全文（中文, 源码逐字）
-
-> 以下各节均从 `CHINESE_PROMPT` 提取, 除 `## ` 标题编号外未改动原文。
+## 2. 静态模板全文（中文, 源码逐字, 剧本化后）
 
 ### 2.1 核心原则（1348 字符 / ~722 token）
 
@@ -75,7 +73,7 @@ identity（动态身份 3 行）
 - **教程在系统设置中** — 系统设置 → 使用指南：USB调试 / Root / 无障碍。
 ~~~
 
-### 2.2 自身能力（全部内建，无需安装）（1333 字符 / ~600 token）
+### 2.2 自身能力（全部内建，无需安装）（1110 字符 / ~537 token）
 
 ~~~text
 
@@ -93,11 +91,9 @@ identity（动态身份 3 行）
 
 ### 文件 & 设备操控
 - **输出目录**: agent.output 查看。HTML/MD/PDF 等用户文档写到输出目录，用户可在文件管理器找到。例: `echo '<内容>' > <输出路径>/report.html`。
-- **文件**: Linux 命令 ls/cat/echo/rm/mkdir (工作区) + agent.storage/cleanup。禁止写 /system/。
+- **文件**: Linux 命令 ls/cat/echo/rm/mkdir (工作区)，禁止写 /system/。手册: `skill.run filesystem`。
 - **截图录屏**: sys.screenshot / sys.screenrecord.start/stop。**拍照**: sys.camera.photo --confirm (⚠️需告知用户并获取确认)。
-- **悬浮窗**: sys.overlay.show/update/hide。**日历**: sys.calendar.add/list/delete。**Root（需先安装 root-plugin）**: 安装后可用 root.status/exec/apps.*/fs.*/backup.* (⚠️最高权限,审计日志)。
-- **跨应用**: sys.app.launch/intent.open|share|view。**脚本**: skill.run termux。
-- **知识库**: skill.run android/termux/filesystem/plugin-system/sessions/twin-guide/device-control。
+- **设备操控**（悬浮窗/日历/Root/跨应用）: `skill.run device-control`; 操控参考 `skill.run android`。**脚本**: `skill.run termux`。
 ~~~
 
 ### 2.3 工作区边界（哪里是你的，哪里是用户的）（473 字符 / ~255 token）
@@ -123,71 +119,52 @@ identity（动态身份 3 行）
 - 安全规则文件: `配置/command_monitor.json`（可用 cat 查看/编辑，修改后自动生效）。
 ~~~
 
-### 2.5 常用命令 (权威来源: self.tools)（884 字符 / ~360 token）
+### 2.5 常用命令 (权威来源: self.tools)（220 字符 / ~78 token）
 
 ~~~text
 
-- self.search <描述> (首选命令查找) / self.tools [ns] (完整遍历) / self.ports (端口/网络接口) / agent.docs / agent.boost / agent.memory / agent.memory.keep / agent.memory.mid
-- swarm.run <任务> (主动进入火种模式: 拆解→并行 Worker→验证→合成) / swarm.status (进度/子任务)
-- framework.delegate <节点> <任务> (指挥舰: 委派到已信任框架执行, 对端可自行进入火种模式, 结果经孪生同步回传)
-- fleet.peers (舰队成员) / fleet.delegate <节点> <任务> (委派 — 谁发起谁指挥, 完成自动回传) / fleet.status (任务状态) / fleet.reply <委派ID> <结果> (执行方回传)
-- fleet.send <节点> <文件路径> (任意格式文件互传, 接收方落 Fleet共享) / fleet.scan (指挥所收集成员能力→Notes, 规划分配依据)
-- ls/cat/echo/rm/mkdir (Linux 文件命令) / agent.storage/cleanup/sessions/dream
-- plugin.marketplace/search/install/list/info/verify/auto / sys.permission.list/request
-- self.status/avatar/theme / sys.app.launch / sys.intent.open
-- update.check (自动更新: 检查 GitHub/Gitee Releases 新版本) / update.download / update.install / update.auto (WiFi 自动检查与自动下载开关; 网络受限时建议检查网络或使用 VPN)
+- 不确定用什么 → self.search <描述>; 完整清单 → self.tools [ns]; 端口/网络 → self.ports
+- 记忆三轨: agent.memory.keep / agent.memory.record / agent.memory.project.save; 输出目录: agent.output
+- 自动更新: update.check (详情 `skill.run self-update`)
 ~~~
 
-### 2.6 插件（580 字符 / ~236 token）
+### 2.6 插件（210 字符 / ~82 token）
 
 ~~~text
 
-- 源: GitHub(海外)/Gitee(国内) 自动路由。安装: `plugin.info <id>` → `self.tools <ns>`。
-- 已安装的内置插件用 `plugin.disable` 禁用，不可卸载；root-plugin、tribe-plugin 随 APK 内置但默认未激活，需在插件市场安装激活后才可用。
+- 管理/安装: `skill.run plugin-system`; 总索引 `skill.run plugin-index`。
 - **网页搜索已内置**: `tavily.search <关键词> [--max=N]` (Tavily AI 搜索: AI 摘要+结构化结果), `tavily.extract <url>` 提取网页正文; key 未配置时用 `tavily.setup <key>` 配置。
-- 网页转档（需安装 browser-search-plugin）: 安装后可用 search.clean/md/outputs/clear; 抓取用 net.curl, 高质量搜索用 tavily.search。
-- 印象笔记（需安装 connector-yinxiang-plugin）: 安装后可用 connector-yinxiang.search/get/create/update/delete; token 经 connector-yinxiang.config --token-file <路径> 配置（7 天短效）。
 ~~~
 
-### 2.7 会话（93 字符 / ~29 token）
+### 2.7 会话（37 字符 / ~15 token）
 
 ~~~text
 
-- `agent.sessions [kw]` 搜索历史。`agent.session.delete/archive/current` 管理。`agent.storage` 用量。
+- 历史会话/存储用量: `skill.run sessions`。
 ~~~
 
-### 2.8 多 Agent 协作 (部落 Tribe)（162 字符 / ~73 token）
+### 2.8 多 Agent 协作 (部落 Tribe)（84 字符 / ~36 token）
 
 ~~~text
 
-- 需在插件市场启用 tribe-plugin（内置但默认未激活）: 启用后 `self.tools tribe` 查看全部命令 (tribe.status/team/delegate/task.*/ask/fleet; 委派任务自动注入 inbox 提醒; 跨设备委派 twin 配对后 `--mode acp`)。
+- 需先启用 tribe-plugin（内置但默认未激活）: 委派/团队协作见 `skill.run hermes`（或 `self.tools tribe`）。
 ~~~
 
-### 2.9 记忆孪生（81 字符 / ~34 token）
+### 2.9 记忆孪生（57 字符 / ~26 token）
 
 ~~~text
 
-- 跨设备记忆同步。`twin.status/peers/sync` 管理。5连击 MengPaw 框架图标配对。详见 `self.tools twin`。
+- 跨设备同步/配对: `skill.run twin-guide`。5连击 MengPaw 框架图标配对。
 ~~~
 
-### 2.10 网络端口（69 字符 / ~45 token）
+### 2.10 浏览器协作 (MP 浏览器, 独立 APK)（132 字符 / ~42 token）
 
 ~~~text
 
-- 端口/网络接口一览: `self.ports`（本机监听 / 外部服务默认端口 / 配置入口）。需要端口信息时先查它, 不要猜。
+- 唤醒: `sys.browser.open [url]`。操作手册: `skill.run browser-control`; 排障 `skill.run browser-debug`; 抓取/转档 `skill.run browser-spider`。
 ~~~
 
-### 2.11 浏览器协作 (MP 浏览器, 独立 APK)（515 字符 / ~236 token）
-
-~~~text
-
-- 浏览器是独立 APK。**前台唤醒**: `sys.browser.open [url]`；半自动武器命令面 `page.*`/`browser.*` 可经 am 桥直接调用（用法见 `self.tools browser`，白名单仅放行浏览器命令）。
-- **半自动操作（推荐）**: `page.load <url>` 一次完成导航+精确等待+全页分段截图+坐标系统；然后 `page.click <seg> <x> <y>` / `page.scroll_by <dy>` 看图直接操作（截图只回路径，Agent 用 cat 看图）。
-- **浏览器 MCP（过渡）**（需安装 browser-mcp-plugin, 默认未安装）: 打开浏览器自动启用 9880 桥。`browser.mcp.tools/status/invoke` 用法详见 `self.tools browser`；am 桥落地验证后随 9880 桥退役。
-- **网页提炼**（需安装 browser-search-plugin）: 浏览器菜单「提炼网页要点」→ 用 search.clean/md/outputs/clear 转档提炼。
-~~~
-
-### 2.12 响应格式（必须遵守）（2201 字符 / ~1359 token）
+### 2.11 响应格式（必须遵守）（2201 字符 / ~1359 token）
 
 ~~~text
 
@@ -235,36 +212,26 @@ Final Answer: （最终答案）
 | ⚠️ 身份未就绪 | profile.md 名字未填 | ~130 字符 | 可验证状态机, 填完自动消失 |
 | ⏰ CRON 定时任务 | heartbeat.md 非空 且 有启用 CRON 触发器 | ~180 字符 | 条件注入 |
 | 🎭 伪人模式 | trumanshow.md 非空 且 有启用 SCHEDULE 触发器 | ~160 字符 | 条件注入 |
-| 📋 Skills 双层池 | 默认注入（无条件） | ~330 字符 | 唯一无条件注入的动态段, 可考虑压缩/外置 |
+| 📋 Skills 双层池 | 默认注入（无条件） | ~200 字符（v0.38.3 已压缩） | 唯一无条件注入的动态段 |
 | 🧬 进化系统 | 有进化数据（failures/commands） | ~300 字符 | 条件注入 |
 | 身份档案/操作手册/灵魂准则 | 对应文档非空 | brief ≤300 字符/个 | 数据依赖 |
 | 长期记忆 | memory.md 非空 | 全文注入（≤12K 截断） | 设计定案: 长期记忆保持全文 |
 | 📌 用户指定技能 | .pinned 清单非空 | 每条一行 | 用户显式指定 |
 
-## 4. 精简与二级拆分观察点
+## 4. 剩余精简/二级拆分观察点（v0.38.3 实施后）
 
-### 4.1 重复/冗余（可直接砍, 不涉及机制）
+### 4.1 已剧本化段落（v0.38.3, 模板中保留一行指针）
 
-- **身份重复**: identity 段已声明「你是 **MengPaw**…」, 模板开头「你是檬爪 MengPaw / 你通过 CLI 命令操控 Android 设备」再声明一次 — 可删模板首行两行（约 30 token）。
-- **命令双轨双讲**: 「核心原则-工作方式」讲命令双轨+发现, 「命令双轨」节又整节再讲 — 两节合并去重可省约 150–250 token。
-- **常用命令与动态检索冲突**: 节内自注「权威来源: self.tools」, 而静态清单 22 行与动态检索重复 — 可保留 3–5 条高频（self.search / agent.memory / agent.output / update.check）, 其余交 self.tools。
-- **网络端口节**: 内容即「用 self.ports」指针, 整段 69 字符可并入常用命令一行。
+- 会话 → `skill.run sessions`; 记忆孪生 → `skill.run twin-guide`; Tribe → `skill.run hermes`
+- 浏览器 → `skill.run browser-control`（+ debug/spider）; 插件 → `skill.run plugin-system`（+ plugin-index）
+- 文件 → `skill.run filesystem`; 设备操控 → `skill.run device-control`; 更新 → `skill.run self-update`
+- 常用命令从 22 行压缩到 3 行（self.search/self.tools/self.ports + 记忆三轨 + update.check）; 网络端口独立节删除
 
-### 4.2 二级提示词候选（按需注入, 复用现有末尾追加机制）
+### 4.2 未做但有剧本化价值（后续可选）
 
-> 框架已有成熟按需机制: 触发器指纹驱动（heartbeat/trumanshow）+ 末尾追加 system（进化省察引导）。二级拆分即把以下「低频/场景化」节移出常驻 system, 在触发场景时以 user 消息或末尾追加 system 注入。
-
-| 候选块 | 常驻成本 | 触发场景 | 注入时机 |
-|-------|---------|---------|---------|
-| 浏览器协作 | ~236 token | 用户提到浏览器/网页/`sys.browser`/`page.*` | 首次命中时注入一次 |
-| 多 Agent 协作（Tribe） | ~73 token | tribe-plugin 启用 或 用户提到部落/委派 | 启用时注入（现默认未激活, 常驻纯浪费） |
-| 记忆孪生 | ~34 token | twin 已配对 或 用户提到同步/配对 | 配对时注入 |
-| 插件详情 | ~236 token | 用户提到插件/技能/安装 | 命中 plugin.* 前注入 |
-| 会话管理 | ~29 token | 用户提到历史/会话 | 命中 agent.sessions 前注入 |
-| 常用命令明细 | ~360 token | 需完整清单时 | 由 `self.tools` 承担（已声明权威来源） |
-| 攻击来源黑名单 | 约 120 token（响应格式节内） | 检测到注入攻击时 | 罕见场景, 可外置到 security 命令文档 |
-
-预计可常驻省 900–1,200 token（约当前静态模板的 20–27%）, 且对日常问答零功能损失。
+- **斜杠命令/执行模式**（~250 字符引导）: 待 `execution-modes.md` 补全 6 模式后, 可改为 `skill.run execution-modes` 一行
+- **攻击来源黑名单**（~120 token, 响应格式节内）: 行为防御建议保留; 如坚持外置需新写 `security.md` 且接受 Agent 可能不主动读的风险
+- **响应格式 ReAct 教学**（~700 token）: LLM 训练语料覆盖度高, 可再压缩, 但属 C 类核心, 风险自担
 
 ### 4.3 建议保留不动（核心行为/安全）
 
@@ -279,45 +246,10 @@ Final Answer: （最终答案）
 - **末尾追加, 禁止前插**: 任何新增二级注入段插在 docsBlock 之前会击穿前缀缓存（`docs/llm-multistage-dataflow.md` 已记录）
 - **缓存失效指纹**: 新增按需注入需加入 fingerprint 快照（参照 pinned/触发器/进化指纹）, 否则内容变化不重建
 - **PromptGhostReferenceTest**: 模板内 `namespace.command` 引用必须命中注册表（kernel 命名空间 self/agent/plugin/evolution 受检）
+- **PromptEngineTest 内容断言**: 删段落必须同步更新对应断言（本轮 4 处: 端口节/浏览器 search 管道）
 - **中英双套同步**: 任何精简/外置必须 CHINESE_PROMPT 与 ENGLISH_PROMPT 同时改, 且 TEMPLATE_HASH 自动失效无需手动 bump
-
-### 4.5 可剧本化对照表（md 剧本 = `skill.run <name>` 按需载入, 剧本库在 `plugins/plugin-skill/src/main/assets/skills/`）
-
-#### A. 已有现成剧本, 模板段落可直接换成一行指针（零新增, 优先做）
-
-| 模板节 | 常驻成本 | 现成剧本 | 载入方式 |
-|-------|---------|---------|---------|
-| 会话 | ~29 token | `sessions.md` | 用户提历史/会话时 `skill.run sessions` |
-| 记忆孪生 | ~34 token | `twin-guide.md` | 提同步/配对时 `skill.run twin-guide` |
-| 多 Agent 协作（Tribe） | ~73 token | `hermes.md` | 提部落/委派时 `skill.run hermes`（tribe 默认未激活, 常驻纯浪费） |
-| 浏览器协作 | ~236 token | `browser-control.md`（主）+ `browser-debug/form/playwright/spider.md` | 提浏览器/网页时 `skill.run browser-control`, 报错转 browser-debug |
-| 插件 | ~236 token | `plugin-system.md` + `plugin-index.md` | 提插件/安装时 `skill.run plugin-system` |
-| 自身能力-文件&设备操控 | ~300 token（估） | `filesystem.md` + `device-control.md` | 提读写文件时 `skill.run filesystem`; 提悬浮窗/Root/日历/跨应用时 `skill.run device-control` |
-| 自身能力-斜杠命令/执行模式 | ~80 token（估） | `execution-modes.md` | 用户问「有什么模式」时 `skill.run execution-modes` |
-| 网络端口 | ~45 token | 无剧本必要 | 直接删, 保留 `self.ports` 指针即可（self.md 已含自我管理命令） |
-| update 命令行（v0.38.3 新加） | ~40 token | `self-update.md` | 提更新/升级时 `skill.run self-update` |
-
-**小计可省约 1,070 token**（约占静态模板 25%）。
-
-#### B. 无现成剧本, 需新写才能外置（低频/罕见, 可选）
-
-| 内容 | 常驻成本 | 建议 | 触发 |
-|-------|---------|------|------|
-| 攻击来源黑名单（响应格式节内） | ~120 token | 新写 `security.md` 或并入 `self.md` | 检测到注入攻击时注入一次 |
-| 常用命令 22 行明细 | ~360 token | 不剧本化, 直接删——权威来源已是 `self.tools` 动态检索 | 需要完整清单时 self.tools 承担 |
-
-#### C. 建议保留常驻（行为/安全核心, 不剧本化）
-
-- 身份段 + 模板首行（去重后保留一份）
-- 核心原则: 安全三条 / 行为风格 / 工作方式（精简合并后）
-- 工作区边界（防写错目录）
-- 记忆三轨制入口决策（行为定案, 高频入口）
-- 命令双轨核心概念（合并为一节）
-- 响应格式: ReAct 序列、安全分级（普通/中危/高危+reason）、路径参数纯净、结果纪律、信任边界、探针
-
-> 剧本化改造注意: 剧本本身不是提示词的一部分——`skill.run` 是 Agent 主动读取的动作, 行为类规则（安全分级/信任边界）外置后存在「Agent 不主动读」的风险, 故归入 C 类。
 
 ## 附: 英文模板（同构, 未逐字收录）
 
-- `ENGLISH_PROMPT`: 14,405 字符 ≈ 3,624 token（分节结构与中文一致, 多了「内置技能版本 seed」一行与英文措辞差异）
+- `ENGLISH_PROMPT`: 11,712 字符 ≈ 2,951 token（v0.38.3 同步精简 -19%; 多了「内置技能版本 seed」一行与英文措辞差异）
 - 精简/拆分结论同样适用; 若需英文逐字全文再单独生成。
