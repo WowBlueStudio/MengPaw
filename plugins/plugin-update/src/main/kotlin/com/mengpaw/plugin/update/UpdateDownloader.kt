@@ -3,9 +3,13 @@
 
 package com.mengpaw.plugin.update
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.cli.ErrorCodes
@@ -13,6 +17,7 @@ import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.error.ErrorCollector
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 更新下载/安装 — 从 UpdatePlugin 拆分 (update.download / update.install)。
@@ -30,8 +35,13 @@ internal class UpdateDownloader(
 ) {
     private var downloadedApk: File? = null
 
-    /** 是否已有下载好的 APK 待安装 — 供设置页显示"安装"入口 (v0.38.2)。 */
-    val hasDownloaded: Boolean get() = downloadedApk?.exists() == true
+    /** 下载并发锁 — UI 手动下载与 update.auto 自动下载互斥, 防止同写 .part 文件 (P2 修复)。 */
+    private val downloading = AtomicBoolean(false)
+
+    /** 是否已有下载好的 APK 待安装 — 供设置页显示"安装"入口 (v0.38.2)。
+     *  重启后内存态丢失, 按文件名约定扫描 updates 目录兜底 (P2 修复)。 */
+    val hasDownloaded: Boolean get() =
+        downloadedApk?.exists() == true || findDownloadedApk("shell") != null
 
     /** APK 下载大小上限 (512MB) — 防异常响应撑爆存储, 流式写入时按字节计数。 */
     private val maxApkBytes = 512L * 1024 * 1024
@@ -39,6 +49,18 @@ internal class UpdateDownloader(
     // ── update.download ─────────────────────────────────────────────────
 
     suspend fun download(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        // 并发互斥: 已有下载任务进行中则拒绝 (UI 与自动检查双路径可能同时触发)
+        if (!downloading.compareAndSet(false, true)) {
+            return ExecutionResult.fail("已有下载任务进行中, 请稍后再试", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+        return try {
+            doDownload(args, ctx)
+        } finally {
+            downloading.set(false)
+        }
+    }
+
+    private suspend fun doDownload(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val release = releaseProvider() ?: return ExecutionResult.fail("请先执行 update.check", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val target = args.firstOrNull()?.lowercase() ?: "shell"
 
@@ -109,6 +131,11 @@ internal class UpdateDownloader(
             }
 
             downloadedApk = apkFile
+            // 清理同目标旧版本 APK, 防 updates 目录无限累积 (P2 修复)
+            cleanupOldApks(target, apkFile)
+            // 自动下载完成通知 (update.auto download=on 后台下载, 用户无感知 — P1 修复);
+            // 手动下载由 UI 直接反馈, 不重复通知
+            if (ctx.sessionId == "auto") notifyDownloaded(target, release.tag)
 
             ExecutionResult.ok("""
 ## 下载完成: $label ${release.tag}
@@ -126,7 +153,11 @@ internal class UpdateDownloader(
     // ── update.install ──────────────────────────────────────────────────
 
     suspend fun install(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        val apk = downloadedApk ?: return ExecutionResult.fail("请先执行 update.download", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        val target = args.firstOrNull()?.lowercase() ?: "shell"
+        // 按目标选择 APK: 内存态优先 (须与目标匹配), 重启后按文件名约定扫描兜底 (P2 修复)
+        val apk = downloadedApk?.takeIf { it.name.startsWith("mengpaw-$target-") }
+            ?: findDownloadedApk(target)
+            ?: return ExecutionResult.fail("请先执行 update.download $target", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val context = UpdatePlugin.appContext ?: return ExecutionResult.fail("无法获取 Context", errorCode = ErrorCodes.ERR_INTERNAL)
 
         if (!apk.exists()) {
@@ -143,7 +174,10 @@ internal class UpdateDownloader(
         }
 
         return try {
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.update.provider", apk)
+            // P0 修复 (2026-08-15): authority 必须与 Shell AndroidManifest 注册的
+            // ${applicationId}.fileprovider 一致 — 此前误用不存在的 .update.provider,
+            // FileProvider.getUriForFile 找不到 provider 直接抛异常, update.install 必然失败。
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apk)
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -160,6 +194,7 @@ internal class UpdateDownloader(
     /**
      * Verify the downloaded APK is signed with the same certificate as the currently
      * running app. Prevents installation of malicious APKs from compromised sources.
+     * 注意: Shell 与 Browser 必须使用同一签名证书, 否则跨组件安装会被误拒 (设计前提, 见开发指南 §5.1)。
      * @return null if signature matches, or an error message.
      */
     private fun verifyApkSignature(context: Context, apk: File): String? {
@@ -215,5 +250,57 @@ internal class UpdateDownloader(
     private fun sha256(bytes: ByteArray): String {
         val digest = java.security.MessageDigest.getInstance("SHA-256")
         return digest.digest(bytes).joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
+    }
+
+    /** 按文件名约定扫描 updates 目录, 返回最新匹配的 APK — 重启后待安装状态兜底 (P2 修复)。 */
+    internal fun findDownloadedApk(target: String): File? {
+        return try {
+            val dir = File(DataPaths.PLUGIN_CACHE, "updates")
+            if (!dir.isDirectory) return null
+            latestApkIn(dir, target)
+        } catch (_: Exception) { null }
+    }
+
+    /** 目录内最新匹配的 APK — internal 为测试可见性 (P2 修复)。 */
+    internal fun latestApkIn(dir: File, target: String): File? {
+        return dir.listFiles { f -> f.isFile && f.name.startsWith("mengpaw-$target-") && f.name.endsWith(".apk") }
+            ?.maxByOrNull { it.lastModified() }
+    }
+
+    /** 下载成功后清理同目标旧版本 APK, 防 updates 目录无限累积 (P2 修复)。 */
+    private fun cleanupOldApks(target: String, keep: File) {
+        try {
+            cleanupOldApksIn(File(DataPaths.PLUGIN_CACHE, "updates"), target, keep)
+        } catch (_: Exception) {}
+    }
+
+    /** 清理同目标旧版本 APK (保留 keep) — internal 为测试可见性 (P2 修复)。 */
+    internal fun cleanupOldApksIn(dir: File, target: String, keep: File) {
+        dir.listFiles { f -> f.isFile && f.name.startsWith("mengpaw-$target-") && f.name.endsWith(".apk") && f != keep }
+            ?.forEach { it.delete() }
+    }
+
+    /** 自动下载完成通知 — 修复 update.auto 后台下载用户无感知问题 (P1 修复)。 */
+    private fun notifyDownloaded(target: String, tag: String) {
+        val context = UpdatePlugin.appContext ?: return
+        try {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                nm.createNotificationChannel(
+                    NotificationChannel("update_download", "自动更新", NotificationManager.IMPORTANCE_DEFAULT)
+                )
+            }
+            val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            val pi = launch?.let {
+                PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE)
+            }
+            val builder = NotificationCompat.Builder(context, "update_download")
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentTitle("MengPaw $target 更新已下载")
+                .setContentText("$tag 已就绪, 打开设置页可安装")
+                .setAutoCancel(true)
+            if (pi != null) builder.setContentIntent(pi)
+            nm.notify(1001, builder.build())
+        } catch (_: Exception) {}
     }
 }
