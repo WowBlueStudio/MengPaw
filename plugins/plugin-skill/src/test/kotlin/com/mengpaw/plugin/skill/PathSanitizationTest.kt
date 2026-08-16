@@ -108,7 +108,7 @@ class PathSanitizationTest {
 
     @Test
     fun `template contains frontmatter and category hints`() {
-        val t = plugin.buildSkillTemplate("mytool", "dev", "开发工具")
+        val t = SkillManageCommands.buildSkillTemplate("mytool", "dev", "开发工具")
         assertTrue(t.contains("name: mytool"))
         assertTrue(t.contains("description: 开发工具"))
         assertTrue(t.contains("enabled: true"))
@@ -118,7 +118,7 @@ class PathSanitizationTest {
 
     @Test
     fun `office template mentions placeholders`() {
-        val t = plugin.buildSkillTemplate("report", "office", "")
+        val t = SkillManageCommands.buildSkillTemplate("report", "office", "")
         assertTrue(t.contains("{{param}}"))
     }
 
