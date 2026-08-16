@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.39.1 (2026-08-16) — UI 动画丰富 + Token 图表 Chart.js 风格重构
+
+### 新增
+- **Token 用量图表 Chart.js 风格重构**: 渐变柱 (品牌色 → 白 lerp)、堆叠圆角细化
+  (仅边缘段圆角)、点击柱显示 tooltip (该日模型明细/缓存节省/总计)、选中柱白色描边高亮 —
+  全部使用 Arco 品牌色板, 无外部色
+- **Token 图表柱状生长动画**: 打开设置页时从 0 平滑生长 (FastOutSlowIn 650ms)
+- **消息列表平滑动画**: Compose 1.7 `animateItem` — 新消息淡入、移除/重排平滑过渡,
+  滚动回收不重放
+- **设置页主要卡片按压反馈**: 主题/输出目录/自动更新卡片按下 0.97 缩放回弹 (120ms)
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.39.1-release.apk` (versionCode 39001)
+- 仅 Shell 构建 (browser 无变更不构建); plugins.json 无变更 (插件目录无改动)
+- 测试: 全量 1356 用例 0 failures (kernel 576 + core 90 + shell 198 + browser 42 + 插件 450)
+
 ## v0.39.0 (2026-08-15) — 自动更新安装链路闭环 + 系统提示词剧本化重构
 
 ### 新增
