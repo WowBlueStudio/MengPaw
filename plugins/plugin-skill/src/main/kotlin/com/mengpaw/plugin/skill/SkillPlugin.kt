@@ -36,8 +36,7 @@ import java.io.File
  * skill.rm <name>                         删除 Agent 本地技能
  * skill.enable <name>                     启用技能
  * skill.disable <name>                    停用技能
- * skill.from.project <项目名>              从项目记忆派生可复用技能 (LLM 提炼)
- * skill.request <技能名> <来源Agent>       向其他 Agent 索取技能 (复制到本地)
+ * skill.from.project <项目名> / skill.request <技能名> <来源Agent> — 派生 / 索取 (见 SkillFlowCommands)
  * ```
  */
 class SkillPlugin : Plugin {
