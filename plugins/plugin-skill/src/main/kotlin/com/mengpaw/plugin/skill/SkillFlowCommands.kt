@@ -76,7 +76,10 @@ internal object SkillFlowCommands {
             llm.complete(buildFromProjectPrompt(projectName, memory, existing))
         } catch (e: Exception) {
             ErrorCollector.report(e, "SkillPlugin.from.project")
-            return ExecutionResult.fail("技能提炼失败 (LLM 调用异常): ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+            return ExecutionResult.fail(
+                "技能提炼失败 (LLM 调用异常): ${e.message}\n可稍后重试, 或手动 skill.create 后用 agent.write 完善。",
+                errorCode = ErrorCodes.ERR_INTERNAL
+            )
         }
         return materializeDraft(plugin, agent, projectName, raw)
     }
@@ -145,16 +148,14 @@ internal object SkillFlowCommands {
             }
         }
         val stamped = stampSource(src.rawText.trimEnd(), srcAgent)
-        return try {
-            target.writeText(stamped)
+        return if (writeAtomic(target, stamped)) {
             ExecutionResult.ok(
                 "✅ 技能 '$name' 已从 Agent '$srcAgent' 索取到本地。\n\n" +
                     "| 属性 | 值 |\n|------|-----|\n| 路径 | ${target.absolutePath} |\n\n" +
                     "使用 skill.run $name 执行。如不再需要可 skill.rm $name。"
             )
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "SkillPlugin.request")
-            ExecutionResult.fail("技能写入失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        } else {
+            ExecutionResult.fail("技能写入失败: $name", errorCode = ErrorCodes.ERR_INTERNAL)
         }
     }
 
@@ -176,16 +177,15 @@ internal object SkillFlowCommands {
             return ExecutionResult.fail("本地已存在同名技能: $name\n可先 skill.info $name 查看; 确需覆盖请用 agent.write 手动处理。", errorCode = ErrorCodes.ERR_INTERNAL)
         }
         val finalText = if (category == parsed.category) skillText else normalizeCategory(skillText, category)
-        return try {
-            target.writeText(finalText)
+        return if (writeAtomic(target, finalText) && verifyWritten(target)) {
             ExecutionResult.ok(
                 "✅ 技能已从项目记忆派生: $name\n\n" +
                     "| 属性 | 值 |\n|------|-----|\n| 路径 | ${target.absolutePath} |\n| 分类 | $category |\n\n" +
                     "使用 skill.run $name 自测。可编辑技能正文或 skill.push $name 共享到全局池。"
             )
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "SkillPlugin.from.project")
-            ExecutionResult.fail("技能写入失败: ${e.message}", errorCode = ErrorCodes.ERR_INTERNAL)
+        } else {
+            try { target.delete() } catch (_: Exception) {}
+            ExecutionResult.fail("技能写入校验失败: $name", errorCode = ErrorCodes.ERR_INTERNAL)
         }
     }
 
@@ -223,6 +223,30 @@ internal object SkillFlowCommands {
     /** 修正 category 后重写 frontmatter 的 category 行。 */
     private fun normalizeCategory(skillText: String, category: String): String =
         skillText.replace(Regex("(?m)^category:\\s*.*"), "category: $category")
+
+    /** 原子写: tmp + Files.move 覆盖 (对齐 AgentDocsMemory.saveProjectMemory 惯例, 防半截文件)。 */
+    private fun writeAtomic(target: File, content: String): Boolean = try {
+        val tmp = File(target.parentFile, "${target.name}.tmp")
+        tmp.writeText(content)
+        java.nio.file.Files.move(
+            tmp.toPath(), target.toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+        )
+        true
+    } catch (e: Exception) {
+        ErrorCollector.report(e, "SkillPlugin.atomicWrite")
+        try { File(target.parentFile, "${target.name}.tmp").delete() } catch (_: Exception) {}
+        false
+    }
+
+    /** 写后读回验证: 能重新解析且 name 非空才算落盘成功 (LLM 产物风险最高)。 */
+    private fun verifyWritten(file: File): Boolean = try {
+        val parsed = parseSkillText(file.readText())
+        parsed != null && parsed.name.isNotBlank()
+    } catch (e: Exception) {
+        ErrorCollector.report(e, "SkillPlugin.verifyWritten")
+        false
+    }
 
     /** 索取时在技能末尾补来源标记 (可追溯)。 */
     private fun stampSource(content: String, srcAgent: String): String {

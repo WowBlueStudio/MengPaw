@@ -36,7 +36,6 @@ import java.io.File
  * skill.rm <name>                         删除 Agent 本地技能
  * skill.enable <name>                     启用技能
  * skill.disable <name>                    停用技能
- * skill.from.project <项目名> / skill.request <技能名> <来源Agent> — 派生 / 索取 (见 SkillFlowCommands)
  * ```
  */
 class SkillPlugin : Plugin {
@@ -324,12 +323,14 @@ class SkillPlugin : Plugin {
 
     private suspend fun enable(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.enable <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        setEnabled(args[0], true); return ExecutionResult.ok("Enabled: ${args[0]}")
+        return if (setEnabled(args[0], true, ctx.agentName)) ExecutionResult.ok("Enabled: ${args[0]}")
+        else ExecutionResult.fail("未找到技能: ${args[0]}\n使用 skill.ls 或 skill.ls --local 查看。", errorCode = ErrorCodes.ERR_NOT_FOUND)
     }
 
     private suspend fun disable(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail("Usage: skill.disable <name>", errorCode = ErrorCodes.ERR_INVALID_INPUT)
-        setEnabled(args[0], false); return ExecutionResult.ok("Disabled: ${args[0]}")
+        return if (setEnabled(args[0], false, ctx.agentName)) ExecutionResult.ok("Disabled: ${args[0]}")
+        else ExecutionResult.fail("未找到技能: ${args[0]}\n使用 skill.ls 或 skill.ls --local 查看。", errorCode = ErrorCodes.ERR_NOT_FOUND)
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -341,15 +342,13 @@ class SkillPlugin : Plugin {
         return if (category != null) all.filter { it.category == category } else all
     }
 
-    fun setEnabled(name: String, enabled: Boolean): Boolean {
-        // P1 修复: 路径消毒 — 拒绝越过技能根目录的名称
-        val global = skillFile(globalDir, name) ?: return false
-        if (global.exists()) {
-            val text = try { global.readText() } catch (_: Exception) { return false }
-            val newContent = text.replace(Regex("(?m)^enabled:\\s*(true|false)"), "enabled: $enabled")
-            return try { global.writeText(newContent); true } catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.setEnabled"); false }
-        }
-        return false
+    fun setEnabled(name: String, enabled: Boolean, agentName: String? = null): Boolean {
+        // 与 skill.run 查找顺序一致: 先本地后全局; 路径消毒经 skillFile canonicalPath 前缀校验
+        val localFile = agentName?.let { skillFile(localDir(it), name) }
+        val file = localFile?.takeIf { it.exists() } ?: skillFile(globalDir, name)?.takeIf { it.exists() } ?: return false
+        val text = try { file.readText() } catch (_: Exception) { return false }
+        val newContent = text.replace(Regex("(?m)^enabled:\\s*(true|false)"), "enabled: $enabled")
+        return try { file.writeText(newContent); true } catch (e: Exception) { ErrorCollector.report(e, "SkillPlugin.setEnabled"); false }
     }
 
     /**

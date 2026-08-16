@@ -126,6 +126,26 @@ class SkillCommandsTest {
     }
 
     @Test
+    fun `enable disable toggles local skill file`() = runBlocking {
+        run("create", "toggle-me")
+        val f = File(DataPaths.agentSkillsDir("tester"), "toggle-me.md")
+        assertTrue("创建默认启用", f.readText().contains("enabled: true"))
+        val r1 = run("disable", "toggle-me")
+        assertTrue("本地技能应可停用: ${r1.error}", r1.success)
+        assertTrue("本地文件 enabled 应置 false", f.readText().contains("enabled: false"))
+        val r2 = run("enable", "toggle-me")
+        assertTrue("本地技能应可启用: ${r2.error}", r2.success)
+        assertTrue("本地文件 enabled 应置 true", f.readText().contains("enabled: true"))
+    }
+
+    @Test
+    fun `enable unknown skill fails`() = runBlocking {
+        val r = run("disable", "ghost-skill")
+        assertFalse("不存在技能应报错", r.success)
+        assertTrue((r.error ?: "").contains("未找到技能"))
+    }
+
+    @Test
     fun `info shows skill details and params`() = runBlocking {
         run("create", "showcase")
         val f = File(DataPaths.agentSkillsDir("tester"), "showcase.md")
