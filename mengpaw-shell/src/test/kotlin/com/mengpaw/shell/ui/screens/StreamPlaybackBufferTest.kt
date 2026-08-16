@@ -51,7 +51,7 @@ class StreamPlaybackBufferTest {
         assertTrue("封口后必须仍有文本播出", pushed.isNotEmpty())
         assertEquals("封口后全部增量仍属同一轮", setOf(0L), pushed.map { it.first }.toSet())
         assertEquals("完整思考必须最终播出 (工具行由 ProcessTool 承载, 不入 thought)",
-            " 需要查找北京天气", pushed.last().second)
+            "需要查找北京天气", pushed.last().second)
     }
 
     @Test
@@ -71,8 +71,8 @@ class StreamPlaybackBufferTest {
         val round2 = pushed.filter { it.first == 1L }
         assertTrue("第一轮必须至少推送一次", round1.isNotEmpty())
         assertTrue("第二轮必须至少推送一次", round2.isNotEmpty())
-        assertEquals("第一轮完整文本必须播出 (不含工具行)", " 第一轮思考", round1.last().second)
-        assertEquals("第二轮完整文本必须播出 (不含工具行)", " 第二轮思考", round2.last().second)
+        assertEquals("第一轮完整文本必须播出 (不含工具行)", "第一轮思考", round1.last().second)
+        assertEquals("第二轮完整文本必须播出 (不含工具行)", "第二轮思考", round2.last().second)
         assertTrue("动画序列: 第一轮全部播完才播第二轮",
             pushed.indexOfFirst { it.first == 1L } > pushed.indexOfLast { it.first == 0L })
     }
@@ -135,7 +135,7 @@ class StreamPlaybackBufferTest {
         val flush = buffer.flushText()
         assertNotNull("未播文本必须可 flush", flush)
         assertEquals(0L, flush?.roundId)
-        assertEquals(" 第一轮思考", flush?.tool)
+        assertEquals("第一轮思考", flush?.tool)
     }
 
     @Test

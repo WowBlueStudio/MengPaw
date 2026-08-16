@@ -18,12 +18,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * BubbleStreamCoordinator 行为测试 — 锁死"卡在第 1 轮"系列回归 (v0.37.3 拆分)。
+ * BubbleStreamCoordinator 行为测试 — 锁死"卡在第 1 轮"系列回归 (v0.37.3 拆分)
+ * + v0.40.1 简化显示流程 (思考一次性显示, 最终答案流式)。
  *
  * 历史缺陷 (反复出现 4 次): 编排状态散落 TaskExecutionPipeline, Final Answer 误判 /
  * 轮次封口缺失都会让思考容器停在当前步、后续 delta 不再进入思考气泡。
- * 本测试把每个历史坑固化为用例: 思考含字样不误判 / 真实最终答案触发 /
- * 截断轮次播完 / 兜底闭环。
+ * v0.40.1 用户定案: 思考阶段取消逐字流式 — 工具轮在完整 Action 行检测到时
+ * 一次性显示整轮思考 (思考先出现), 工具行在 onStep 挂观察; 最终答案轮仍
+ * 流式输出并折叠容器。本测试把每个历史坑 + 新行为固化为用例。
  */
 class BubbleStreamCoordinatorTest {
 
@@ -54,17 +56,51 @@ class BubbleStreamCoordinatorTest {
         session.messages.value.filterIsInstance<ChatMessageUi.ThinkingProcess>().first()
 
     @Test
-    fun `思考轮含Final Answer字样但同轮有工具_不误判且后续思考正常分步`() = runBlocking {
+    fun `工具轮_思考一次性显示且工具行onStep后挂观察`() = runBlocking {
         val session = newSession()
         val writer = ThinkingProcessWriter(session, null, null)
         writer.start()
         val coordinator = BubbleStreamCoordinator(writer)
         val job = coordinator.launchPlayback(this)
 
-        // 第 1 轮: 思考行中段出现 "Final Answer:" 字样 (行首锚定不应误判)
+        // 分片流式到达: 思考未完整前不显示 (取消逐字打字机)
+        coordinator.onDelta("Thought: 我需要查")
+        assertTrue("思考未完整 (无 Action 行) 前不得显示", process(session).steps.isEmpty())
+        // Action 行完整落地 → 一次性显示整轮思考; 工具行等 onStep (工具完成)
+        coordinator.onDelta("询北京天气\nAction: search\nAction Input: {\"q\":\"北京\"}\n")
+        val beforeStep = process(session)
+        assertEquals("思考必须一次性完整显示", "我需要查询北京天气", beforeStep.steps[0].thought.trim())
+        assertTrue("工具行在 onStep 前不得出现", beforeStep.steps[0].tools.isEmpty())
+
+        coordinator.onStep("search", "观察结果1", false)
+        val afterStep = process(session)
+        assertEquals("工具行必须在思考之后出现", 1, afterStep.steps[0].tools.size)
+        assertEquals("search", afterStep.steps[0].tools[0].command)
+        assertEquals("观察结果1", afterStep.steps[0].tools[0].observation)
+        assertFalse("思考轮不得误判为最终答案", coordinator.isFinalAnswerStarted)
+
+        coordinator.finish()
+        job.join()
+    }
+
+    @Test
+    fun `思考轮含Final Answer字样但同轮有工具_不误判且思考不截断`() = runBlocking {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, null, null)
+        writer.start()
+        val coordinator = BubbleStreamCoordinator(writer)
+        val job = coordinator.launchPlayback(this)
+
+        // 第 1 轮: 思考行中段出现 "Final Answer:" 字样 (行首锚定不应误判,
+        // v0.40.1 显示文本同样行首锚定 — 思考完整保留, 不截到字样后)
         coordinator.onDelta("Thought: 我先查资料, 最终我给出 Final Answer: 待定\nAction: search\nAction Input: {}\n")
         coordinator.onStep("search", "观察结果1", false)
         assertFalse("思考轮行中字样不得误判为最终答案", coordinator.isFinalAnswerStarted)
+        assertEquals(
+            "思考文本不得被行中 Final Answer 字样截断",
+            "我先查资料, 最终我给出 Final Answer: 待定",
+            process(session).steps[0].thought.trim()
+        )
 
         // 第 2 轮: 正常思考 + 工具
         coordinator.onDelta("Thought: 第二轮思考\nAction: search2\nAction Input: {}\n")
@@ -77,19 +113,8 @@ class BubbleStreamCoordinatorTest {
         coordinator.finish()
         job.join()
 
-        val msgDump = session.messages.value.joinToString(" | ") { m ->
-            when (m) {
-                is ChatMessageUi.ThinkingProcess -> "TP(steps=${m.steps.size},running=${m.isRunning})"
-                is ChatMessageUi.FinalAnswer -> "FA(len=${m.content.length})"
-                else -> m::class.simpleName.orEmpty()
-            }
-        }
-        assertTrue("播放必须产生消息, 实际=[$msgDump]", session.messages.value.size > 1)
         val proc = process(session)
-        val dump = proc.steps.joinToString(" | ") { "r${it.roundId}:t=[${it.thought.take(12)}]tools=${it.tools.size}" }
-        assertEquals("两轮思考必须分为两个 step, steps=[$dump]", 2, proc.steps.size)
-        assertTrue("步骤含第二轮 roundId=1", proc.steps.any { it.roundId == 1L })
-        // 顺序化显示: 每轮思考播完后工具行才落地, 且挂上观察
+        assertEquals("两轮思考必须分为两个 step", 2, proc.steps.size)
         proc.steps.forEach { step ->
             assertTrue("round${step.roundId} 思考必须完整", step.thought.isNotBlank())
             assertEquals("round${step.roundId} 工具行必须随轮次落地", 1, step.tools.size)
@@ -98,7 +123,7 @@ class BubbleStreamCoordinatorTest {
     }
 
     @Test
-    fun `真实最终答案到达_折叠容器并创建答案气泡_后续delta进答案`() = runBlocking {
+    fun `真实最终答案到达_折叠容器并创建答案气泡_答案流式输出`() = runBlocking {
         val session = newSession()
         val writer = ThinkingProcessWriter(session, null, null)
         writer.start()
@@ -108,18 +133,44 @@ class BubbleStreamCoordinatorTest {
         coordinator.onDelta("Thought: 分析完成\nAction: verify\nAction Input: {}\n")
         coordinator.onStep("verify", "ok", false)
         coordinator.onDelta("Final Answer: 最终结论")
+        assertTrue("最终答案必须触发", coordinator.isFinalAnswerStarted)
         coordinator.finish()
         job.join()
+        // 真实链路尾段: applyFinalResult 定型 (播放器已播完, 覆盖为完整答案)
+        applyFinalResult(
+            session, writer, coordinator.streamBuffer,
+            displayResult = "最终结论", result = "最终结论",
+            modePrefix = null, agentRef = null, pluginViewModel = null
+        )
 
-        assertTrue("最终答案必须触发", coordinator.isFinalAnswerStarted)
         val proc = process(session)
         assertFalse("容器必须折叠", proc.isRunning)
+        assertTrue("容器折叠态必须置位", proc.collapsed)
         val fa = session.messages.value.filterIsInstance<ChatMessageUi.FinalAnswer>().firstOrNull()
         assertTrue("必须存在 FinalAnswer 气泡", fa != null)
+        assertEquals("最终答案必须流式输出完整内容", "最终结论", fa!!.content.trim())
+        assertFalse("定型后答案气泡退出运行态", fa.isRunning)
     }
 
     @Test
-    fun `截断路径_未封口轮次也能播完`() = runBlocking {
+    fun `纯思考轮_onStep时一次性显示`() = runBlocking {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, null, null)
+        writer.start()
+        val coordinator = BubbleStreamCoordinator(writer)
+        val job = coordinator.launchPlayback(this)
+
+        coordinator.onDelta("Thought: 纯思考内容\n")
+        assertTrue("无 Action 行的纯思考轮不得提前显示", process(session).steps.isEmpty())
+        coordinator.onStep(null, null, false)
+        assertEquals("纯思考轮 onStep 后一次性显示", 1, process(session).steps.size)
+        assertEquals("纯思考内容", process(session).steps[0].thought.trim())
+        coordinator.finish()
+        job.join()
+    }
+
+    @Test
+    fun `截断路径_未封口轮次也能一次性显示思考与工具行`() = runBlocking {
         val session = newSession()
         val writer = ThinkingProcessWriter(session, null, null)
         writer.start()
@@ -134,13 +185,12 @@ class BubbleStreamCoordinatorTest {
         job.join()
 
         val proc = process(session)
-        val round1 = proc.steps.firstOrNull { it.roundId == 1L }
-        assertTrue("未封口的第二轮必须仍成 step", round1 != null)
-        val dump = proc.steps.joinToString(" | ") { "r${it.roundId}:thought=[${it.thought}]tools=${it.tools.size}" }
-        assertTrue(
-            "第二轮思考必须完整播出, steps=[$dump]",
-            round1!!.thought.contains("第二轮未封口")
-        )
+        assertEquals("两轮思考必须完整显示", 2, proc.steps.size)
+        val round2 = proc.steps.firstOrNull { it.roundId == 1L }
+        assertTrue("未封口的第二轮必须仍成 step", round2 != null)
+        assertEquals("第二轮思考必须完整一次性显示", "第二轮未封口", round2!!.thought.trim())
+        assertEquals("第二轮工具行必须兜底挂载", 1, round2.tools.size)
+        assertEquals("b", round2.tools[0].command)
     }
 
     @Test

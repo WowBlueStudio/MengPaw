@@ -18,26 +18,36 @@ import kotlinx.coroutines.launch
  *    "思考中..." 占位; 现让 Agent 的推理轨迹全程流式可见
  *  - 含 "Thought:" → 隐藏思考样板, 只显示其后内容 (thought-only 轮)
  *  - 无任何标记 → 流式显示全文 (parse Rule 3 纯文本答案, 必须流式显示)
+ *
+ * v0.40.1 标记全部行首锚定 (与协调器 Final Answer 检测同一口径): 思考/答案正文
+ * 里出现 "Final Answer:" / "Action:" / "Thought:" 字样 (如复述用户原话) 不再
+ * 误截断; 原全文 contains 会把思考轮思考文本含 "Final Answer:" 字样时截到字样后。
  */
 internal fun computeStreamDisplayText(text: String): String {
-    val hasFinal = text.contains("Final Answer:", ignoreCase = true)
-    val hasAction = text.contains("Action:", ignoreCase = true)
-    val hasThought = text.contains("Thought:", ignoreCase = true)
+    val finalRe = Regex("""(?m)^\s*Final Answer[:：]\s*""")
+    val actionRe = Regex("""(?m)^\s*Action[:：]""")
+    val thoughtRe = Regex("""(?m)^\s*Thought[:：]\s*""")
     return when {
-        hasFinal -> text.substringAfter("Final Answer:", text)
-        hasAction -> {
+        finalRe.containsMatchIn(text) -> {
+            val m = finalRe.find(text) ?: return text
+            text.substring(m.range.last + 1).trimStart()
+        }
+        actionRe.containsMatchIn(text) -> {
             // 工具轮: Thought 后内容截断在 Action Input 前 — 思考过程 +
             // Action 行流式可见, 参数 JSON 不刷屏 (流式中途 Input 未
             // 到达时完整显示; 一旦出现即截断)。
             // v0.37.3: thought 再剥离 Action 行本身 — 工具行已由 addTool 的
             // ProcessTool 行承载, 思考文本里重复出现 "Action: xxx" 造成
             // "工具调用怎么在气泡里"的视觉错乱。
-            text.substringAfter("Thought:", text)
+            (thoughtRe.find(text)?.let { text.substring(it.range.last + 1) } ?: text)
                 .substringBefore("\nAction Input:", text)
                 .substringBefore("\nAction:", text)
                 .trimEnd()
         }
-        hasThought -> text.substringAfter("Thought:", text)
+        thoughtRe.containsMatchIn(text) -> {
+            val m = thoughtRe.find(text) ?: return text
+            text.substring(m.range.last + 1)
+        }
         else -> text           // 纯文本答案流
     }
 }
@@ -132,10 +142,29 @@ internal class StreamPlaybackBuffer {
         rounds.lastOrNull()?.let { it.announcedTools > 0 } ?: false
     }
 
-    /** 指定轮次是否已播完 (played ≥ raw.length, 或已被弹出) —
-     *  协调器据此在"该轮思考播完"后才挂工具行, 保证 UI 按实际执行顺序呈现。 */
-    fun isRoundFullyPlayed(roundId: Long): Boolean = synchronized(this) {
-        rounds.firstOrNull { it.id == roundId }?.let { it.played >= it.raw.length } ?: true
+    /** 指定轮次完整原始文本 — 思考一次性显示用 (v0.40.1: 取消思考流式打字机,
+     *  协调器在工具轮 Action 行完整 / onStep 时取整轮文本一次性显示)。 */
+    fun roundRawText(roundId: Long): String? = synchronized(this) {
+        rounds.firstOrNull { it.id == roundId }?.raw?.toString()
+    }
+
+    /** 指定轮次全部完整 Action 行工具名 (按文本顺序) — 截断路径兜底: 引擎异常
+     *  未走 onStep 时, 协调器据此把已宣布的工具行补挂入 step。 */
+    fun roundToolNames(roundId: Long): List<String> = synchronized(this) {
+        rounds.firstOrNull { it.id == roundId }
+            ?.let { r -> ACTION_LINE_REGEX.findAll(r.raw).map { it.groupValues[1] }.toList() }
+            ?: emptyList()
+    }
+
+    /** 快进指定轮次到"已播完" — 思考轮不再逐字播放 (一次性显示), 播放协程
+     *  下一个 tick 即弹出该轮, 不拖慢最终答案轮流式输出。 */
+    fun skipRound(roundId: Long) = synchronized(this) {
+        rounds.firstOrNull { it.id == roundId }?.let { it.played = it.raw.length }
+    }
+
+    /** 全部未弹出轮次的 (roundId, 完整原始文本) 快照 — finish 兜底一次性显示用。 */
+    fun snapshotRounds(): List<Pair<Long, String>> = synchronized(this) {
+        rounds.map { it.id to it.raw.toString() }
     }
 
     /** 播放协程单 tick 消费 — 原播放循环同步段, 逻辑不变. */
