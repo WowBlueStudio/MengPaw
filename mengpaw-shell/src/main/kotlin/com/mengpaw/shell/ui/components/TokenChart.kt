@@ -6,24 +6,37 @@ package com.mengpaw.shell.ui.components
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,6 +56,39 @@ private val chartColors = listOf(
     ArcoColors.ChartPink,
 )
 private val cacheColor = ArcoColors.Gray6
+
+/** 品牌色渐变对 (深→浅) — Chart.js 渐变柱风格, 色相保持 Arco 品牌色, 浅端向白 lerp 55%。 */
+private fun gradientPair(color: Color): Pair<Color, Color> = color to lerp(color, Color.White, 0.55f)
+
+/** 堆叠柱圆角路径 — Chart.js borderRadius 语义: 仅边缘段圆角 (顶部段上角/底部段下角), 中间段直角。 */
+private fun barPath(
+    left: Float, top: Float, right: Float, bottom: Float,
+    radius: Float, roundTop: Boolean, roundBottom: Boolean
+): Path = Path().apply {
+    val r = radius.coerceAtMost((right - left) / 2f).coerceAtMost((bottom - top) / 2f)
+    if (!roundTop && !roundBottom) {
+        addRect(androidx.compose.ui.geometry.Rect(left, top, right, bottom))
+        return@apply
+    }
+    moveTo(left, bottom)
+    if (roundBottom) {
+        lineTo(left, bottom - r); quadraticBezierTo(left, bottom, left + r, bottom)
+    } else {
+        lineTo(left, top)
+    }
+    if (roundTop) {
+        lineTo(left, top + r); quadraticBezierTo(left, top, left + r, top)
+        lineTo(right - r, top); quadraticBezierTo(right, top, right, top + r)
+    } else {
+        lineTo(right, top)
+    }
+    if (roundBottom) {
+        lineTo(right, bottom - r); quadraticBezierTo(right, bottom, right - r, bottom)
+    } else {
+        lineTo(right, bottom)
+    }
+    close()
+}
 
 /**
  * Token 用量柱状图 (v0.35.1 用户定案) — 每日期一根堆叠柱 (模型分段着色),
@@ -75,8 +121,27 @@ fun TokenBarChart(
     LaunchedEffect(dataSize) { growStarted = true }
 
     val labels = series.first().second.map { it.first }
+    // v0.39.0 Chart.js 参考: 点击柱交互 — 选中某日显示 tooltip (模型明细/缓存/总计)
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
+    val density = LocalDensity.current
 
     Column(modifier) {
+        // Tooltip 浮层 — 选中柱时显示 (Chart.js tooltip 交互)
+        AnimatedVisibility(
+            visible = selectedIndex != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            selectedIndex?.let { i ->
+                TokenBarTooltip(
+                    label = labels[i],
+                    series = series,
+                    cache = cacheSeries.getOrNull(i)?.second,
+                    index = i
+                )
+            }
+        }
+
         // Legend — 模型色点 + 缓存节省 (静态)
         Row(
             Modifier.fillMaxWidth().padding(bottom = ArcoSpacing.sm),
@@ -107,6 +172,14 @@ fun TokenBarChart(
                     Modifier.width(contentWidth).height(220.dp)
                         .background(ThemeColors.bgCard, RoundedCornerShape(ArcoRadius.md))
                         .padding(horizontal = 8.dp, vertical = 12.dp)
+                        .pointerInput(dataSize) {
+                            detectTapGestures { offset ->
+                                val barW = with(density) { barWidth.toPx() }
+                                val barG = with(density) { barGap.toPx() }
+                                val idx = ((offset.x - 44f + barG / 2f) / (barW + barG)).toInt()
+                                selectedIndex = if (idx in 0 until dataSize) idx else null
+                            }
+                        }
                 ) {
                     val w = size.width
                     val h = size.height
@@ -143,18 +216,31 @@ fun TokenBarChart(
                     val barGapPx = barGap.toPx()
                     (0 until dataSize).forEach { i ->
                         val x = padLeft + i * (barWidthPx + barGapPx)
+                        val dayTotal = totals[i].toFloat() * growProgress
                         var acc = 0f
                         series.forEachIndexed { sIdx, (_, sData) ->
                             val v = sData.getOrNull(i)?.second ?: 0L
                             // 柱高乘生长进度 — 图表出现时逐段从 0 长高 (v0.39.0 动画增强)
                             val barH = v * yScale * growProgress
                             if (barH > 0.5f) {
-                                drawRoundRect(
-                                    chartColors[sIdx % chartColors.size],
-                                    topLeft = Offset(x, padTop + chartH - acc - barH),
-                                    size = Size(barWidthPx, barH),
-                                    cornerRadius = CornerRadius(3f, 3f)
+                                val topY = padTop + chartH - acc - barH
+                                val bottomY = topY + barH
+                                // Chart.js stacked borderRadius: 仅边缘段圆角 (顶部段上角/底部段下角)
+                                val roundTop = acc + barH >= dayTotal - 0.5f
+                                val roundBottom = acc <= 0.5f
+                                val (deep, light) = gradientPair(chartColors[sIdx % chartColors.size])
+                                val path = barPath(x, topY, x + barWidthPx, bottomY, 3f, roundTop, roundBottom)
+                                drawPath(
+                                    path,
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(deep, light),
+                                        startY = topY, endY = bottomY
+                                    )
                                 )
+                                // Chart.js hover 高亮: 选中柱描边
+                                if (selectedIndex == i) {
+                                    drawPath(path, Color.White.copy(alpha = 0.9f), style = Stroke(width = 1.5f))
+                                }
                                 acc += barH
                             } else {
                                 // v0.37.1 重构 (用户定案): 0 值条形必须可见 — 该区间无用量
@@ -200,4 +286,66 @@ fun formatTokenCount(n: Long): String = when {
     n >= 1_000_000 -> "${"%.1f".format(n / 1_000_000.0)}M"
     n >= 1_000 -> "${"%.1f".format(n / 1_000.0)}K"
     else -> n.toString()
+}
+
+/**
+ * Tooltip 浮层 (v0.39.0, Chart.js tooltip 参考) — 点击柱后显示该日用量明细。
+ * 品牌色: 模型色点沿用 chartColors (Arco 6 阶主色), 文字白/浅灰, 深色底 Gray10。
+ */
+@Composable
+private fun TokenBarTooltip(
+    label: String,
+    series: List<Pair<String, List<Pair<String, Long>>>>,
+    cache: Long?,
+    index: Int
+) {
+    val total = series.sumOf { it.second.getOrNull(index)?.second ?: 0L }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(ArcoRadius.md),
+        color = ArcoColors.Gray10.copy(alpha = 0.94f),
+        shadowElevation = 4.dp
+    ) {
+        Column(Modifier.padding(horizontal = ArcoSpacing.md, vertical = ArcoSpacing.sm)) {
+            Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+            Spacer(Modifier.height(4.dp))
+            series.forEachIndexed { sIdx, (name, data) ->
+                val v = data.getOrNull(index)?.second ?: 0L
+                if (v > 0) {
+                    TooltipRow(chartColors[sIdx % chartColors.size], name, v)
+                }
+            }
+            cache?.takeIf { it > 0 }?.let {
+                TooltipRow(cacheColor, "缓存节省", it)
+            }
+            HorizontalDivider(
+                Modifier.padding(vertical = 4.dp),
+                color = ArcoColors.Gray6.copy(alpha = 0.4f)
+            )
+            TooltipRow(Color.White, "总计", total, bold = true)
+        }
+    }
+}
+
+@Composable
+private fun TooltipRow(color: Color, name: String, value: Long, bold: Boolean = false) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+        Canvas(Modifier.size(8.dp)) {
+            drawCircle(color, 4f, Offset(4f, 4f))
+        }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            name,
+            modifier = Modifier.weight(1f),
+            color = if (bold) Color.White else Color.White.copy(alpha = 0.85f),
+            fontSize = 12.sp,
+            fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal
+        )
+        Text(
+            formatTokenCount(value),
+            color = if (bold) Color.White else Color.White.copy(alpha = 0.85f),
+            fontSize = 12.sp,
+            fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal
+        )
+    }
 }
