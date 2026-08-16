@@ -1,16 +1,5 @@
 # Changelog
 
-## Next (未发布) — 技能体系三闭环 (派生 / 索取 / 进化)
-
-### 新增
-- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)
-- **技能索取** `skill.request <技能名> <来源Agent>` + `skill.ls --agent <Agent名>`: Agent 间技能流转 (同设备), 冲突以简介为准不覆盖, 复制后补来源标记; 跨设备经 fleet/ACP 通道挂后续
-- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)
-- **工程**: 管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp+rename) + 派生读回验证; skill.enable/disable 先本地后全局
-
-### 安全
-- skill.from.project / skill.request 中危分级 (CommandRiskLevels) + reason 门禁表 (HighRiskCommandGate) 双源同配
-
 ## v0.39.2 (2026-08-16) — 自动更新下载链路修复 (源选择/主线程 ANR/进度条)
 
 ### 修复
