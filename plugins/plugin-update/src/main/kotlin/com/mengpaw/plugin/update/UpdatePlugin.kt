@@ -164,34 +164,52 @@ class UpdatePlugin : Plugin {
             if (response.status.value !in 200..299) return null
 
             val json = Json.parseToJsonElement(response.bodyAsText())
-            if (json !is JsonObject) return null
-            val tag = (json["tag_name"] as? JsonPrimitive)?.content ?: return null
-            val name = (json["name"] as? JsonPrimitive)?.content ?: tag
-            val body = (json["body"] as? JsonPrimitive)?.content?.take(500) ?: ""
             val source = when {
                 "gitee" in url -> "gitee"
                 "ghproxy" in url -> "ghproxy"
                 else -> "github"
             }
-
-            // Find shell + browser APK assets
-            val assets = (json["assets"] as? JsonArray) ?: JsonArray(emptyList())
-            var shellUrl = ""; var shellSize = 0L
-            var browserUrl = ""; var browserSize = 0L
-            assets.forEach { a ->
-                if (a !is JsonObject) return@forEach
-                val dUrl = (a["browser_download_url"] as? JsonPrimitive)?.content ?: ""
-                val dSize = (a["size"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L
-                when {
-                    dUrl.contains("mengpaw-shell") -> { shellUrl = dUrl; shellSize = dSize }
-                    dUrl.contains("mengpaw-browser") -> { browserUrl = dUrl; browserSize = dSize }
-                }
+            // GitHub 列表接口返回数组 (releases?per_page), latest 接口返回单对象 —
+            // 按序取第一个合法应用发布, 插件发布 (plugins-v*) 自动跳过
+            val candidates = when (json) {
+                is JsonArray -> json.filterIsInstance<JsonObject>()
+                is JsonObject -> listOf(json)
+                else -> return null
             }
-            ReleaseInfo(tag, name, body, shellUrl, shellSize, browserUrl, browserSize, source)
+            for (obj in candidates) {
+                parseRelease(obj, source)?.let { return it }
+            }
+            null
         } catch (e: Exception) {
             ErrorCollector.report(e, "UpdatePlugin.tryFetch")
             null
         }
+    }
+
+    /** 解析单个 release 对象; 非应用发布 (tag 非 vX.Y.Z / 缺 Shell APK) 返回 null —
+     *  internal 为测试可见性 (P2 修复 2026-08-16)。 */
+    internal fun parseRelease(json: JsonObject, source: String): ReleaseInfo? {
+        val tag = (json["tag_name"] as? JsonPrimitive)?.content ?: return null
+        if (!isAppReleaseTag(tag)) return null  // 排除 plugins-v* 等非应用发布
+        if ((json["prerelease"] as? JsonPrimitive)?.content == "true") return null
+        val name = (json["name"] as? JsonPrimitive)?.content ?: tag
+        val body = (json["body"] as? JsonPrimitive)?.content?.take(500) ?: ""
+
+        // Find shell + browser APK assets
+        val assets = (json["assets"] as? JsonArray) ?: JsonArray(emptyList())
+        var shellUrl = ""; var shellSize = 0L
+        var browserUrl = ""; var browserSize = 0L
+        assets.forEach { a ->
+            if (a !is JsonObject) return@forEach
+            val dUrl = (a["browser_download_url"] as? JsonPrimitive)?.content ?: ""
+            val dSize = (a["size"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L
+            when {
+                dUrl.contains("mengpaw-shell") -> { shellUrl = dUrl; shellSize = dSize }
+                dUrl.contains("mengpaw-browser") -> { browserUrl = dUrl; browserSize = dSize }
+            }
+        }
+        if (shellUrl.isEmpty()) return null  // 应用发布必带 Shell APK, 缺则不可更新
+        return ReleaseInfo(tag, name, body, shellUrl, shellSize, browserUrl, browserSize, source)
     }
 
     /** internal 为测试可见性 (版本新旧判定单测)。 */
@@ -342,9 +360,17 @@ class UpdatePlugin : Plugin {
         /** Android Context — 由 Shell MainActivity.deferInit 注入 (替代失效的 getAppContext 反射)。 */
         @Volatile var appContext: Context? = null
 
-        private const val GITHUB_API_URL = "https://api.github.com/repos/WowBlueStudio/MengPaw/releases/latest"
+        // P2 修复 (2026-08-16): /releases/latest 会被同刻创建的 plugins-v* 插件发布顶替
+        // (GitHub 按创建时间取 latest) — 改用列表接口, 取第一个合法应用发布 (vX.Y.Z + Shell APK)
+        private const val GITHUB_API_URL = "https://api.github.com/repos/WowBlueStudio/MengPaw/releases?per_page=10"
         private const val GITEE_API_URL = "https://gitee.com/api/v5/repos/WowBlueStudio/MengPaw/releases/latest"
         private const val GHPROXY_API_URL = "https://ghproxy.com/$GITHUB_API_URL"
+        /** 应用发布 tag 格式 vX.Y.Z — 排除 plugins-v* 插件发布 (P2 修复)。 */
+        private val APP_TAG_REGEX = Regex("""^v\d+\.\d+\.\d+$""")
+
+        /** 应用发布 tag 校验 — internal 为测试可见性 (P2 修复)。 */
+        internal fun isAppReleaseTag(tag: String): Boolean = APP_TAG_REGEX.matches(tag)
+
         /** Build a ghproxy URL for any GitHub-hosted download.
          *  internal 为测试可见性 (镜像 URL 单测)。 */
         internal fun ghproxyDownload(githubUrl: String): String = "https://ghproxy.com/$githubUrl"

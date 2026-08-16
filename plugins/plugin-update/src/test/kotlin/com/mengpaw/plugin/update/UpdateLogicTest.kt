@@ -4,6 +4,9 @@
 package com.mengpaw.plugin.update
 
 import com.mengpaw.plugin.update.UpdatePlugin.ReleaseInfo
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -68,6 +71,71 @@ class UpdateLogicTest {
         val r = plugin.formatCheckResult("0.32.0", release)
         assertTrue(r.output.contains("已是最新版本"))
         assertFalse(r.output.contains("update.download"))
+    }
+
+    // ── 发布解析过滤 (P2 修复: GitHub latest 被 plugins-v* 顶替) ─────────
+
+    @Test
+    fun `isAppReleaseTag accepts only app semver tags`() {
+        assertTrue("应用 tag 应接受", UpdatePlugin.isAppReleaseTag("v0.40.0"))
+        assertTrue("应用 tag 应接受", UpdatePlugin.isAppReleaseTag("v0.3.0"))
+        assertFalse("plugins-v* 插件发布应拒绝", UpdatePlugin.isAppReleaseTag("plugins-v0.40.0"))
+        assertFalse("缺 patch 段应拒绝", UpdatePlugin.isAppReleaseTag("v0.40"))
+        assertFalse("无 v 前缀应拒绝", UpdatePlugin.isAppReleaseTag("0.40.0"))
+    }
+
+    @Test
+    fun `parseRelease accepts app release with shell apk`() {
+        val json = buildJsonObject {
+            put("tag_name", JsonPrimitive("v0.40.0"))
+            put("name", JsonPrimitive("MengPaw v0.40.0"))
+            put("assets", buildJsonArray {
+                add(buildJsonObject {
+                    put(
+                        "browser_download_url",
+                        JsonPrimitive("https://github.com/WowBlueStudio/MengPaw/releases/download/v0.40.0/mengpaw-shell-v0.40.0-release.apk")
+                    )
+                    put("size", JsonPrimitive("10103050"))
+                })
+                add(buildJsonObject {
+                    put(
+                        "browser_download_url",
+                        JsonPrimitive("https://github.com/WowBlueStudio/MengPaw/releases/download/v0.40.0/plugin-update-0.40.0-release.aar")
+                    )
+                })
+            })
+        }
+        val r = plugin.parseRelease(json, "github")
+        assertNotNull("应用发布应被接受", r)
+        assertEquals("v0.40.0", r!!.tag)
+        assertTrue("应解析出 Shell APK URL", r.shellUrl.contains("mengpaw-shell"))
+        assertEquals("应带源标记", "github", r.source)
+    }
+
+    @Test
+    fun `parseRelease rejects plugins release without shell apk`() {
+        val json = buildJsonObject {
+            put("tag_name", JsonPrimitive("plugins-v0.40.0"))
+            put("name", JsonPrimitive("MengPaw Plugins v0.40.0"))
+            put("assets", buildJsonArray {
+                add(buildJsonObject {
+                    put(
+                        "browser_download_url",
+                        JsonPrimitive("https://github.com/WowBlueStudio/MengPaw/releases/download/plugins-v0.40.0/plugin-update-0.40.0-release.aar")
+                    )
+                })
+            })
+        }
+        assertNull("plugins 发布应被拒绝", plugin.parseRelease(json, "github"))
+    }
+
+    @Test
+    fun `parseRelease rejects app tag without shell apk`() {
+        val json = buildJsonObject {
+            put("tag_name", JsonPrimitive("v0.40.0"))
+            put("assets", buildJsonArray { })
+        }
+        assertNull("缺 Shell APK 应被拒绝", plugin.parseRelease(json, "github"))
     }
 
     // ── SHA-256 (P2: Locale.ROOT %02x 防畸形输出) ───────────────────────

@@ -1046,7 +1046,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 #### update — 自动更新 (4)（内置插件，v0.37.3 迁入 plugins/plugin-update）
 `check` | `download` | `install` | `auto`
-> 双源回退 (GitHub → Gitee → ghproxy)；安装经系统安装器（签名校验 + FileProvider 授权）；Shell 与 Browser 必须同一签名证书。设置页「系统设置 → 自动更新」提供检查/下载/安装入口与 WiFi 自动检查、自动下载开关。
+> 双源回退 (GitHub → Gitee → ghproxy)；安装经系统安装器（签名校验 + FileProvider 授权）；Shell 与 Browser 必须同一签名证书。设置页「系统设置 → 自动更新」提供检查/下载/安装入口与 WiFi 自动检查、自动下载开关。**检查源只认应用发布**（tag 为 `vX.Y.Z` 且含 Shell APK；GitHub 用 `releases?per_page=10` 列表接口，`/releases/latest` 会被同刻创建的 `plugins-v*` 插件发布顶替——v0.40.0 实测踩坑）。
 
 #### browser.push — 跨设备推送 (4)（外置插件，mengpaw-connectors）
 `push <url>` | `pending` | `accept <id>` | `reject <id>`
