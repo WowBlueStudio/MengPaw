@@ -3,7 +3,11 @@
 
 package com.mengpaw.shell.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -13,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,8 +44,11 @@ fun SystemSettingsContent(
     onNavigateToPluginMarket: () -> Unit
 ) {
     SectionHeader(state.strings.appearance)
+    val themeInteraction = remember { MutableInteractionSource() }
     Surface(
-        modifier = Modifier.fillMaxWidth().clickable { viewModel.cycleThemeMode() },
+        modifier = Modifier.fillMaxWidth()
+            .clickable(interactionSource = themeInteraction, indication = null, onClick = { viewModel.cycleThemeMode() })
+            .pressScale(themeInteraction),
         shape = RoundedCornerShape(ArcoRadius.md), color = ThemeColors.bgCardHigh
     ) {
         Row(Modifier.padding(horizontal = ArcoSpacing.lg, vertical = ArcoSpacing.md), verticalAlignment = Alignment.CenterVertically) {
@@ -150,11 +158,14 @@ fun SystemSettingsContent(
     }
     val outDir = java.io.File(outPath)
     val outWritable = outDir.canWrite()
+    val outputInteraction = remember { MutableInteractionSource() }
     Surface(
-        modifier = Modifier.fillMaxWidth().clickable {
-            if (outWritable) openOutputDir(ctx, outDir)
-            else startAllFilesAccess(ctx)
-        },
+        modifier = Modifier.fillMaxWidth()
+            .clickable(interactionSource = outputInteraction, indication = null, onClick = {
+                if (outWritable) openOutputDir(ctx, outDir)
+                else startAllFilesAccess(ctx)
+            })
+            .pressScale(outputInteraction),
         shape = RoundedCornerShape(ArcoRadius.md),
         color = ThemeColors.bgCardHigh
     ) {
@@ -197,6 +208,7 @@ fun SystemSettingsContent(
     var updateAutoCheck by remember { mutableStateOf(false) }
     var updateAutoDownload by remember { mutableStateOf(false) }
     val updateScope = rememberCoroutineScope()
+    val updateInteraction = remember { MutableInteractionSource() }
 
     // v0.38.2: 打开设置自动检查更新 (无需手动点击); 已下载待安装时保留安装入口
     // v0.38.3: 一并刷新 WiFi 自动检查/自动下载开关状态
@@ -214,9 +226,11 @@ fun SystemSettingsContent(
         refreshUpdateUi()
     }
     Surface(
-        modifier = Modifier.fillMaxWidth().clickable {
-            updateScope.launch { refreshUpdateUi() }
-        },
+        modifier = Modifier.fillMaxWidth()
+            .clickable(interactionSource = updateInteraction, indication = null, onClick = {
+                updateScope.launch { refreshUpdateUi() }
+            })
+            .pressScale(updateInteraction),
         shape = RoundedCornerShape(ArcoRadius.md),
         color = ThemeColors.bgCardHigh
     ) {
@@ -562,5 +576,20 @@ private fun startAllFilesAccess(context: android.content.Context) {
         }
     } catch (_: Exception) {
         KernelLog.w("SystemSettings", "start all-files-access settings failed")
+    }
+}
+
+/** v0.39.0 动画增强: 卡片按压反馈 — 按下轻微缩放 (0.97), 松开回弹, 提升交互手感。 */
+@Composable
+private fun Modifier.pressScale(interactionSource: MutableInteractionSource): Modifier {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "cardPressScale"
+    )
+    return this.graphicsLayer {
+        scaleX = scale
+        scaleY = scale
     }
 }

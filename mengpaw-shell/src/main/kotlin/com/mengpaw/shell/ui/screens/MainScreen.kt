@@ -246,6 +246,8 @@ fun MainScreen(
                                     contentPadding = PaddingValues(vertical = ArcoSpacing.md)
                                 ) {
                                 items(displayedMessages, key = { it.stableId }) { message ->
+                                    // v0.39.0 动画增强: 列表项平滑出现/移动/移除 (Compose 1.7 animateItem)
+                                    Box(Modifier.animateItem()) {
                                     BubbleWrapper(
                                         strings = strings,
                                         message = message,
@@ -269,6 +271,7 @@ fun MainScreen(
                                                 onViewDetail = onNavigateToPlugins)
                                             else -> {}
                                         }
+                                    }
                                     }
                                 }
                             }

@@ -3,6 +3,9 @@
 
 package com.mengpaw.shell.ui.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -60,6 +63,16 @@ fun TokenBarChart(
         }
         return
     }
+
+    // v0.39.0 动画增强: 柱状生长 — 首次进入/数据变化时从 0 生长到 1 (FastOutSlowIn 缓动)
+    // started 门控: animateFloatAsState 首次组合直接取目标值, 必须经状态翻转触发动画
+    var growStarted by remember { mutableStateOf(false) }
+    val growProgress by animateFloatAsState(
+        targetValue = if (growStarted) 1f else 0f,
+        animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+        label = "tokenBarGrow"
+    )
+    LaunchedEffect(dataSize) { growStarted = true }
 
     val labels = series.first().second.map { it.first }
 
@@ -133,7 +146,8 @@ fun TokenBarChart(
                         var acc = 0f
                         series.forEachIndexed { sIdx, (_, sData) ->
                             val v = sData.getOrNull(i)?.second ?: 0L
-                            val barH = v * yScale
+                            // 柱高乘生长进度 — 图表出现时逐段从 0 长高 (v0.39.0 动画增强)
+                            val barH = v * yScale * growProgress
                             if (barH > 0.5f) {
                                 drawRoundRect(
                                     chartColors[sIdx % chartColors.size],
@@ -145,10 +159,11 @@ fun TokenBarChart(
                             } else {
                                 // v0.37.1 重构 (用户定案): 0 值条形必须可见 — 该区间无用量
                                 // 也是信息, 画 2f 高浅灰占位条, 不跳空不产生"底部空位"错觉。
+                                val ph = 2f * growProgress
                                 drawRoundRect(
                                     ArcoColors.Gray4,
-                                    topLeft = Offset(x, padTop + chartH - 2f),
-                                    size = Size(barWidthPx, 2f),
+                                    topLeft = Offset(x, padTop + chartH - ph),
+                                    size = Size(barWidthPx, ph),
                                     cornerRadius = CornerRadius(1f, 1f)
                                 )
                             }
