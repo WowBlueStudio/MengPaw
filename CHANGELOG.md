@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.39.2 (2026-08-16) — 自动更新下载链路修复 (源选择/主线程 ANR/进度条)
+
+### 修复
+- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),
+  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,
+  不再首源白等 15s 连接超时
+- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s
+  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN
+- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要
+- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —
+  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,
+  慢网直接卡死 UI 报「无响应」
+- **下载进度可见**: UpdateDownloader.onProgress 回调 + 设置页绿色进度条
+  (有总量走百分比, 未知总量走不确定循环); 下载中禁卡片刷新防打断
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.39.2-release.apk` (versionCode 39002)
+- 仅 Shell 构建 (browser 无变更不构建)
+- 插件有变更: plugin-update (下载链路修复) — 构建 AAR 回写 plugins.json,
+  打 `plugins-v0.39.2` tag, GitHub Release 附全部 AAR
+- 设备交付走自动更新链路 (v0.39.1 起不再 ADB 推送, 用户定案)
+- 测试: 全量 1356 用例 0 failures (kernel 576 + core 90 + shell 198 + browser 42 + 插件 450)
+
 ## v0.39.1 (2026-08-16) — UI 动画丰富 + Token 图表 Chart.js 风格重构
 
 ### 新增
