@@ -293,7 +293,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 |------|---------|------|:--:|
 | plugin-fs | fs | cp, mv, stat, grep, glob (5) | ⭐ |
 | plugin-net | net | curl, get, post, proxy (4) | ⭐ |
-| plugin-skill | skill | ls, run, info, search, create, rm, pull, push, enable, disable (10) | ⭐ |
+| plugin-skill | skill | ls, run, info, search, create, rm, pull, push, enable, disable, from.project, request (12) | ⭐ |
 | plugin-clipboard | clipboard | copy, paste, clear (3) | ⭐ |
 | plugin-framework | framework | discover, add, peers, trust, untrust, info, ping, connect, call, disconnect, adapters, pair.ls, pair.accept, pair.decline, delegate (15) | ⭐ |
 | plugin-agent-tools | tools | import, ls, remove, search (4) | ⭐ |
@@ -727,6 +727,11 @@ Agent 通过内核命令按需加载文档：
 - 无 source — 用户技能（`skill.create` 模板不带 source），可在设置页删除
 
 预置技能不支持删除（设置页不渲染删除按钮）——SkillSeeds 会在启动时把被删的预置文件从 seed 复活，删除没有意义；预置清单由开发者谨慎增改。
+
+**技能闭环: 派生 / 索取 / 进化 (2026-08-16, 功能开发中)** — 对齐 make_skills 三要素线性进化定义, 三条链路:
+- **派生**: `skill.from.project <项目名>` — 读项目记忆 (`project_{name}_memory.md`) → LLM 提炼 (可流程化判定 + **description 语义查重**, 命中中止) → 写入 Agent 本地技能池。产物自带 `## 适用场景` / `## 执行步骤` / `## 验证规则` / `## 来源` / `## 进化目标` 三要素; 生成规范: 完善/中性/通用 (`{{占位符}}` 抽象)/无敏感 (不含 Key/令牌/真实路径/个人信息)。`agent.memory.project.save` 返回文本提示该命令 (提示词闭环, 不强制)。LLM 经 `SkillPlugin.llmProvider` 注入 (shell 会话创建/切换时赋值, 与 TribePlugin 同模式)。
+- **索取**: `skill.ls --agent <Agent名>` 浏览他人本地技能; `skill.request <技能名> <来源Agent>` 复制到本地并补 `## 来源` 标记。冲突以 **description 标准化相同**为准 (同名文件或简介相同均中止, 不覆盖)。先只做同设备, 跨设备复用 fleet/ACP 通道挂后续; 全局分享仍走显式 `skill.push`。
+- **进化**: 技能使用失败 → 系统提示词引导走 `skill.run make_skills` 进化升级循环 (对照 `## 进化目标` 收敛 → `agent.write` 修订 → `skill.push` → `evolution.mark-corrected` → `agent.memory.keep`)。新命令按 CommandRiskLevels 中危分级 (需 reason)。
 
 **@ 指定机制（PinnedSkills）**：设置页技能行 Pin 按钮写入 `{BASE}/技能剧本/.pinned`（行格式清单，每行一个技能名，原子写 tmp+rename，路径消毒）。指定后 PromptSystemBuilder 在文档块末尾追加「用户指定技能」指针段（只注入名称+描述一行，**不注入全文**——LLM 直接 `skill.run <name>` 按需读取，维持前缀缓存纪律）。缓存指纹含 `.pinned` mtime + 各指定技能文件 mtime（PromptEngineTest 覆盖：注入/移除/缺失技能优雅降级）。
 
