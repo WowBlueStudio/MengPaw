@@ -17,7 +17,10 @@ import java.util.Locale
  *
  * - `skill.from.project <项目名>` — 读项目记忆 → LLM 提炼 (可流程化判定 + description 查重) →
  *   写入当前 Agent 本地技能池。产物自带 `## 进化目标` 三要素, 对齐 make_skills 线性进化定义。
- * - `skill.request <技能名> <来源Agent>` — 同设备 Agent 间技能复制; 冲突以简介为准, 不覆盖。
+ * - `skill.request <技能名> <来源Agent>` — 同设备 Agent 间技能复制 (冲突以简介为准, 不覆盖);
+ *   本机无来源 Agent 时返回跨设备指引 (fleet.delegate 请对端发送)。
+ * - `skill.import <技能名> [来源Agent]` — 跨设备落位: 从 Fleet共享 导入技能到本地 (复用同一
+ *   冲突/校验/来源标记逻辑)。
  * - `skill.ls --agent <Agent名>` — 浏览指定 Agent 本地技能 (可发现性)。
  */
 internal object SkillFlowCommands {
@@ -125,6 +128,16 @@ internal object SkillFlowCommands {
         val srcDir = File(DataPaths.agentSkillsDir(srcAgent))
         val srcFile = plugin.skillFile(srcDir, name)
             ?: return ExecutionResult.fail("非法技能名: $name (不能包含路径分隔符或穿越段)", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        if (!srcDir.exists()) {
+            // 本机无此 Agent — 跨设备索取: 请对端发送技能到 Fleet共享, 再 skill.import 导入
+            return ExecutionResult.fail(
+                "Agent '$srcAgent' 不在本机 (跨设备索取流程):\n" +
+                    "1. 确认对端已信任: fleet.peers\n" +
+                    "2. 请对端发送技能到本机: fleet.delegate <节点名> \"把 Agent $srcAgent 的本地技能 $name 发给我 (fleet.send)\"\n" +
+                    "3. 文件到达 Fleet共享 后导入: skill.import $name $srcAgent",
+                errorCode = ErrorCodes.ERR_NOT_FOUND
+            )
+        }
         if (!srcFile.exists()) {
             return ExecutionResult.fail("Agent '$srcAgent' 本地未找到 Skill: $name\n先用 skill.ls --agent $srcAgent 查看该 Agent 可用技能。", errorCode = ErrorCodes.ERR_NOT_FOUND)
         }
@@ -156,6 +169,56 @@ internal object SkillFlowCommands {
             )
         } else {
             ExecutionResult.fail("技能写入失败: $name", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+    }
+
+    /** 跨设备索取落位: 从 Fleet共享 导入技能到本地 (对端经 fleet.send 发送后调用)。 */
+    suspend fun importSkill(plugin: SkillPlugin, args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        if (args.isEmpty()) {
+            return ExecutionResult.fail("Usage: skill.import <技能名> [来源Agent]", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        }
+        val name = args[0]
+        val srcAgent = args.getOrNull(1) ?: ""
+        val me = ctx.agentName ?: return ExecutionResult.fail("缺少 Agent 上下文。", errorCode = ErrorCodes.ERR_INTERNAL)
+        val shareDir = File(DataPaths.FLEET_SHARE)
+        val srcFile = plugin.skillFile(shareDir, name)
+            ?: return ExecutionResult.fail("非法技能名: $name (不能包含路径分隔符或穿越段)", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        if (!srcFile.exists()) {
+            return ExecutionResult.fail(
+                "Fleet共享 中未找到 Skill: $name\n目录: ${shareDir.absolutePath}\n" +
+                    "跨设备流程: 先请对端 fleet.send 技能文件到本机, 再执行 skill.import。",
+                errorCode = ErrorCodes.ERR_NOT_FOUND
+            )
+        }
+        val src = plugin.parseSkill(srcFile)
+            ?: return ExecutionResult.fail("技能解析失败: $name", errorCode = ErrorCodes.ERR_INTERNAL)
+        val targetDir = plugin.localDir(me)
+        val target = plugin.skillFile(targetDir, name)
+            ?: return ExecutionResult.fail("非法技能名: $name", errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        if (target.exists()) {
+            return ExecutionResult.fail("本地已存在同名技能: $name\n可先 skill.info $name 查看, 确认不同再导入。", errorCode = ErrorCodes.ERR_INTERNAL)
+        }
+        // 查重以 description 为准 (与 skill.request 同语义)
+        val norm = src.description.trim().lowercase()
+        if (norm.isNotEmpty()) {
+            val dup = plugin.listSkills(targetDir).firstOrNull { it.description.trim().lowercase() == norm }
+            if (dup != null) {
+                return ExecutionResult.fail(
+                    "本地已有简介相同的技能: ${dup.name}\n(查重以简介为准, 避免标题措辞分歧造成重复技能)",
+                    errorCode = ErrorCodes.ERR_INTERNAL
+                )
+            }
+        }
+        val stamped = stampSource(src.rawText.trimEnd(), if (srcAgent.isBlank()) "Fleet共享" else srcAgent)
+        return if (writeAtomic(target, stamped) && verifyWritten(target)) {
+            ExecutionResult.ok(
+                "✅ 技能 '$name' 已从 Fleet共享 导入本地。\n\n" +
+                    "| 属性 | 值 |\n|------|-----|\n| 路径 | ${target.absolutePath} |\n\n" +
+                    "使用 skill.run $name 执行。可 skill.push $name 共享到全局池。"
+            )
+        } else {
+            try { target.delete() } catch (_: Exception) {}
+            ExecutionResult.fail("技能导入校验失败: $name", errorCode = ErrorCodes.ERR_INTERNAL)
         }
     }
 

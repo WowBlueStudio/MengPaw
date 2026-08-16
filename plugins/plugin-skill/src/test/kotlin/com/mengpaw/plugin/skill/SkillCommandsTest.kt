@@ -322,6 +322,7 @@ class SkillCommandsTest {
 
     @Test
     fun `request missing skill not found`() = runBlocking {
+        File(DataPaths.agentSkillsDir("alice")).mkdirs() // 同设备 Agent 目录存在但无此技能
         val r = run("request", "ghost", "alice")
         assertFalse(r.success)
         assertTrue((r.error ?: "").contains("未找到"))
@@ -350,6 +351,74 @@ class SkillCommandsTest {
         assertTrue("应列出目标 Agent 技能", r.output.contains("bob-skill"))
         assertTrue("应带描述", r.output.contains("鲍勃技能"))
         assertTrue("应提示索取入口", r.output.contains("skill.request"))
+    }
+
+    // ── 跨设备索取: skill.request 跨设备分支 + skill.import ─────────────
+
+    @Test
+    fun `request cross device returns fleet guidance`() = runBlocking {
+        val r = run("request", "alice-skill", "alice")
+        assertFalse(r.success)
+        assertTrue("应提示跨设备流程", (r.error ?: "").contains("跨设备"))
+        assertTrue("应引导 fleet.delegate", (r.error ?: "").contains("fleet.delegate"))
+        assertTrue("应引导 skill.import", (r.error ?: "").contains("skill.import"))
+    }
+
+    @Test
+    fun `import copies skill from fleet share and stamps source`() = runBlocking {
+        val share = File(DataPaths.FLEET_SHARE); share.mkdirs()
+        File(share, "remote-trick.md").writeText(
+            "---\nname: remote-trick\ndescription: 远程技能\nenabled: true\ncategory: general\n---\n## 执行步骤\n1. 远程步骤"
+        )
+        val r = run("import", "remote-trick", "bob")
+        assertTrue("导入应成功: ${r.error}", r.success)
+        val mine = File(DataPaths.agentSkillsDir("tester"), "remote-trick.md")
+        assertTrue("技能应导入本地", mine.exists())
+        assertTrue("应补来源标记", mine.readText().contains("索取自 Agent `bob`"))
+    }
+
+    @Test
+    fun `import without source agent stamps fleet share`() = runBlocking {
+        val share = File(DataPaths.FLEET_SHARE); share.mkdirs()
+        File(share, "anon.md").writeText("---\nname: anon\ndescription: 匿名技能\nenabled: true\ncategory: general\n---\n正文")
+        val r = run("import", "anon")
+        assertTrue(r.success)
+        val mine = File(DataPaths.agentSkillsDir("tester"), "anon.md")
+        assertTrue("无来源 Agent 应标 Fleet共享", mine.readText().contains("Fleet共享"))
+    }
+
+    @Test
+    fun `import same name conflict aborts`() = runBlocking {
+        val share = File(DataPaths.FLEET_SHARE); share.mkdirs()
+        File(share, "trick.md").writeText("---\nname: trick\ndescription: 技巧\nenabled: true\ncategory: general\n---\n正文")
+        run("create", "trick")
+        val r = run("import", "trick")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("已存在同名技能"))
+    }
+
+    @Test
+    fun `import duplicate description aborts`() = runBlocking {
+        val share = File(DataPaths.FLEET_SHARE); share.mkdirs()
+        File(share, "remote-way.md").writeText("---\nname: remote-way\ndescription: 批量处理资料\nenabled: true\ncategory: general\n---\n正文")
+        run("create", "mine-way", "--description", "批量处理资料")
+        val r = run("import", "remote-way")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("简介相同"))
+    }
+
+    @Test
+    fun `import missing file not found`() = runBlocking {
+        val r = run("import", "ghost")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("Fleet共享 中未找到"))
+    }
+
+    @Test
+    fun `import rejects traversal name`() = runBlocking {
+        val r = run("import", "../secret")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("非法技能名"))
     }
 
     private fun writeProjectMemory(name: String, content: String) {

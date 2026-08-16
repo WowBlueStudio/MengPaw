@@ -52,7 +52,7 @@ class SkillPlugin : Plugin {
         commands = listOf(
             "skill.ls", "skill.run", "skill.info", "skill.search",
             "skill.create", "skill.rm", "skill.pull", "skill.push",
-            "skill.enable", "skill.disable", "skill.from.project", "skill.request"
+            "skill.enable", "skill.disable", "skill.from.project", "skill.request", "skill.import"
         ),
         commandKeywords = mapOf(
             "from.project" to com.mengpaw.kernel.plugin.CommandKeywords(
@@ -62,6 +62,10 @@ class SkillPlugin : Plugin {
             "request" to com.mengpaw.kernel.plugin.CommandKeywords(
                 zh = listOf("索取技能", "请求技能", "借用技能", "技能共享"),
                 en = listOf("request skill", "borrow skill", "fetch skill")
+            ),
+            "import" to com.mengpaw.kernel.plugin.CommandKeywords(
+                zh = listOf("导入技能", "跨设备技能", "Fleet共享技能"),
+                en = listOf("import skill", "import from fleet share")
             )
         )
     )
@@ -75,7 +79,8 @@ class SkillPlugin : Plugin {
         "enable" to { args, ctx -> SkillManageCommands.enable(this, args, ctx) },
         "disable" to { args, ctx -> SkillManageCommands.disable(this, args, ctx) },
         "from.project" to { args, ctx -> SkillFlowCommands.fromProject(this, args, ctx) },
-        "request" to { args, ctx -> SkillFlowCommands.request(this, args, ctx) }
+        "request" to { args, ctx -> SkillFlowCommands.request(this, args, ctx) },
+        "import" to { args, ctx -> SkillFlowCommands.importSkill(this, args, ctx) }
     )
 
     companion object {

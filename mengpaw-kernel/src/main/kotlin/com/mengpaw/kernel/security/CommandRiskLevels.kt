@@ -100,6 +100,7 @@ object CommandRiskLevels {
         "skill.disable" to RiskLevel.MID,
         "skill.from.project" to RiskLevel.MID,
         "skill.request" to RiskLevel.MID,
+        "skill.import" to RiskLevel.MID,
         // ── 高危: 清空/卸载/系统级/整片删除/拍照 (弹窗确认) ──
         "clipboard.clear" to RiskLevel.HIGH,
         "sys.app.uninstall" to RiskLevel.HIGH,

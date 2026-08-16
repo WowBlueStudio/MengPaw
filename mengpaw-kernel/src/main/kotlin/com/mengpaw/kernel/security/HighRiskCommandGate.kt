@@ -53,6 +53,7 @@ object HighRiskCommandGate {
         // ── 技能流转 (中危: 派生写技能文件 / 索取复制技能) ──
         "skill.from.project" to listOf(Param("name")),
         "skill.request" to listOf(Param("name"), Param("agent")),
+        "skill.import" to listOf(Param("name")),
         // ── 记忆改/删 (keep/write/record/project.save 为 LOW, 不入表) ──
         "agent.memory.rm" to listOf(Param("timestamp")),
         "agent.memory.edit" to listOf(Param("timestamp"), Param("content")),

@@ -319,6 +319,7 @@ This reminder disappears automatically once the name is set.
 - `/技能剧本/seed/` 是 APP 内置版参考: 进化技能前先对比 seed 与全局池差异再采纳
 - 任务里程碑沉淀: `agent.memory.project.save` 后可用 `skill.from.project <项目名>` 提炼可复用技能
 - 技能使用失败时走 `skill.run make_skills` 进化升级循环（对照 `## 进化目标` 收敛修订, `evolution.mark-corrected` 闭环）; 其他 Agent 的技能可 `skill.ls --agent <名>` 发现、`skill.request <技能名> <名>` 索取
+- 跨设备索取: 请对端 `fleet.send` 技能文件到本机 → `skill.import <技能名> [来源Agent]` 导入本地
 
 """
             )

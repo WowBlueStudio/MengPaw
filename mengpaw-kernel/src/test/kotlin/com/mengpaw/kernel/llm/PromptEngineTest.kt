@@ -524,6 +524,7 @@ Action Input: {}
         assertTrue("docsBlock 必须在主提示词之后", docsIdx > mainIdx)
         assertTrue("应引导项目记忆派生技能", prompt.contains("skill.from.project"))
         assertTrue("应引导技能进化循环", prompt.contains("make_skills"))
+        assertTrue("应引导跨设备索取导入", prompt.contains("skill.import"))
     }
 
     @Test
