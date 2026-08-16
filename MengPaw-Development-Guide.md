@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.40.0 | **更新**: 2026-08-16 | **开发**: Codex | **架构**: 微内核(123文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + Evolution Agent) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 浏览器 v0.8.0
+> **版本**: 0.40.1 | **更新**: 2026-08-16 | **开发**: Codex | **架构**: 微内核(123文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + Evolution Agent) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 浏览器 v0.8.0
 
 ---
 
@@ -540,27 +540,28 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 **Browser 权限**: INTERNET, ACCESS_NETWORK_STATE, POST_NOTIFICATIONS (Android 13+)
 
-### 3.7 测试 (16 本地模块 1407 测试，v0.40.0 发布实测快照：kernel 577 + core 90 + shell 198 + browser 42 + 插件 500，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 新增 ThinkingProcessWriterTest 4 用例 (全量双套 +8)，shell 148 → 156；v0.36.3 新增 StreamPlaybackBufferTest 5 用例 + ThinkingProcessWriterTest 2 用例 (全量双套 +14)，shell 156 → 170；v0.36.3 新增 plugin-termux (11 用例) + CommandMonitor evaluateRulesOnly 4 用例，插件 394 → 405；v0.37.0 无新增用例 (sys.* 补全仅改断言 51→85/14→19)，插件 405 → 416 系口径修正 (plugin-termux 双套 22)；v0.37.1 新增 TokenStatsCollectorTest 6 用例 (全量双套 +12)，shell 170 → 182；v0.37.2 无新增用例 (主仓库口径不变)，新增外置插件 plugin-connector-yinxiang 31 用例 (11 转换 + 20 命令) 在 mengpaw-connectors 仓库；v0.37.3 新增 BubbleStreamCoordinatorTest 4 用例 + ThinkingProcessWriterTest 交错回归 1 用例 (全量双套 +12)，shell 182 → 188，update-plugin 迁入内置 (插件 416 → 428, +12)；v0.38.0 新增 ReActParserTest 5 + GoalModeInterruptTest 1 + EvolutionAgentTest 3 用例 (kernel 562 → 574), ThinkingProcessWriterTest +1 (shell 188 → 190)；v0.38.1 实测口径修正 (0.38.0 快照细分笔误，总数 1346 不变)，新增 ThinkingProcessWriterTest 回归 1 用例，shell 190 → 198 系口径对齐；v0.38.2 无新增用例 (hasUpdate/readyToInstall 未加单测，总数 1346 不变)，SessionShellPoolTest 超大输出截断 1 次环境 flaky 重跑通过；v0.38.3 无新增用例 (总数 1346 不变)，PathSanitizationTest 临时目录 1 次并行环境 flaky 重跑通过；v0.39.0 新增 UpdateLogicTest 3 用例 (安装链路 tag 提取/目标+版本跳过/清除复位) + PromptEngineTest 4 处断言同步剧本化结构 (端口指针/浏览器抓取剧本/斜杠命令指针)，插件 440 → 450 系全量实测口径；v0.40.0 技能闭环 plugin-skill 双套 46 → 96 (新增 25 用例/套: 派生 8 + 同设备索取 6 + ls --agent 1 + 启停 2 + prompt 1 + 跨设备/import 7)，插件 450 → 500，kernel 576 → 577 系发布实测口径修正)
+### 3.7 测试 (16 本地模块 1419 测试，v0.40.1 发布实测快照：kernel 577 + core 90 + shell 202 + browser 42 + 插件 508，0 failures；v0.36 移除 fs 插件；v0.36.1 浏览器半自动武器后 browser +8；v0.36.2 新增 ThinkingProcessWriterTest 4 用例 (全量双套 +8)，shell 148 → 156；v0.36.3 新增 StreamPlaybackBufferTest 5 用例 + ThinkingProcessWriterTest 2 用例 (全量双套 +14)，shell 156 → 170；v0.36.3 新增 plugin-termux (11 用例) + CommandMonitor evaluateRulesOnly 4 用例，插件 394 → 405；v0.37.0 无新增用例 (sys.* 补全仅改断言 51→85/14→19)，插件 405 → 416 系口径修正 (plugin-termux 双套 22)；v0.37.1 新增 TokenStatsCollectorTest 6 用例 (全量双套 +12)，shell 170 → 182；v0.37.2 无新增用例 (主仓库口径不变)，新增外置插件 plugin-connector-yinxiang 31 用例 (11 转换 + 20 命令) 在 mengpaw-connectors 仓库；v0.37.3 新增 BubbleStreamCoordinatorTest 4 用例 + ThinkingProcessWriterTest 交错回归 1 用例 (全量双套 +12)，shell 182 → 188，update-plugin 迁入内置 (插件 416 → 428, +12)；v0.38.0 新增 ReActParserTest 5 + GoalModeInterruptTest 1 + EvolutionAgentTest 3 用例 (kernel 562 → 574), ThinkingProcessWriterTest +1 (shell 188 → 190)；v0.38.1 实测口径修正 (0.38.0 快照细分笔误，总数 1346 不变)，新增 ThinkingProcessWriterTest 回归 1 用例，shell 190 → 198 系口径对齐；v0.38.2 无新增用例 (hasUpdate/readyToInstall 未加单测，总数 1346 不变)，SessionShellPoolTest 超大输出截断 1 次环境 flaky 重跑通过；v0.38.3 无新增用例 (总数 1346 不变)，PathSanitizationTest 临时目录 1 次并行环境 flaky 重跑通过；v0.39.0 新增 UpdateLogicTest 3 用例 (安装链路 tag 提取/目标+版本跳过/清除复位) + PromptEngineTest 4 处断言同步剧本化结构 (端口指针/浏览器抓取剧本/斜杠命令指针)，插件 440 → 450 系全量实测口径；v0.40.0 技能闭环 plugin-skill 双套 46 → 96 (新增 25 用例/套: 派生 8 + 同设备索取 6 + ls --agent 1 + 启停 2 + prompt 1 + 跨设备/import 7)，插件 450 → 500，kernel 576 → 577 系发布实测口径修正；v0.40.1 气泡简化 BubbleStreamCoordinatorTest 4 → 6 用例 (全量双套 +4) + UpdateLogicTest 检查源 4 用例 (双套 +8)，shell 198 → 202，插件 500 → 508)
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 562 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) |
+| mengpaw-kernel | 577 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) |
 | mengpaw-core | 90 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex |
-| mengpaw-shell | 170 | ComplexityDetector 分档、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 轮次队列流式播放回归 (v0.36.3 新增 7；全量口径 debug+release 双套合并) |
+| mengpaw-shell | 202 | ComplexityDetector 分档、RunningStepTracker 并发冒烟、extractMedia 提取规则、会话 JSON 编解码、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 轮次队列流式播放回归 (v0.36.3 新增 7) + BubbleStreamCoordinator 简化显示回归 (v0.40.1, 4→6；全量口径 debug+release 双套合并) |
 | mengpaw-browser | 42 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵 |
 | plugin-hermes (tribe) | 68 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 |
 | plugin-memory-twin | 68 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
 | plugin-agent-tools | 44 | 工具集解析 |
-| plugin-skill | 46 | 路径消毒、frontmatter 解析、命令层落实、source 来源标记 |
+| plugin-skill | 96 | 路径消毒、frontmatter 解析、命令层落实、source 来源标记、技能闭环 (派生/索取/进化) |
 | plugin-net | 30 | SSRF 黑名单矩阵、validateUrl scheme 白名单、代理字符串逻辑 |
 | plugin-tavily | 30 | API Key 混淆往返/无明文窗口泄漏 |
 | plugin-framework | 56 | McpGateway 4MB 上限、指纹 hex、peer JSON 往返、FrameworkPairStore/FrameworkPairHandler、信任门禁 frameworkTrustGate、preferIpv4 |
 | plugin-concise | 20 | 简洁模式 |
 | plugin-root | 20 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 |
-| plugin-termux | 11 | am 参数构造 (payload 无逗号/timeout 包裹)、脚本生成、环境名白名单 (注入/穿越拒绝)、高危规则审查、结果标记解析、错误提示 |
+| plugin-termux | 22 | am 参数构造 (payload 无逗号/timeout 包裹)、脚本生成、环境名白名单 (注入/穿越拒绝)、高危规则审查、结果标记解析、错误提示 |
 | plugin-dev | 12 | dev.plugin 审计/关键词链路 |
+| plugin-update | 42 | UpdateLogicTest 版本比较/下载源排序/安装 tag 提取/自动下载跳过 + 发布解析过滤 (v0.40.1: tag 校验/Shell APK 判定, +4) |
 
-> 外置插件 (mengpaw-connectors, MIT): browser-search 54 等随连接器仓库独立测试。update 已迁回内置 (v0.37.3)，其 UpdateLogicTest 在 plugins/plugin-update（12 用例）。
+> 外置插件 (mengpaw-connectors, MIT): browser-search 54 等随连接器仓库独立测试。update 已迁回内置 (v0.37.3)，其 UpdateLogicTest 在 plugins/plugin-update（双套 42 用例）。
 
 > 全部 JVM 本地单测（`testDebugUnitTest`，kernel 为 `:test`），毫秒级反馈，无需模拟器。
 > 测试补齐过程中修复 4 个生产缺陷：TwinAcpHandler TWIN_DELEGATE 信任门不可达
@@ -1049,6 +1050,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 #### update — 自动更新 (4)（内置插件，v0.37.3 迁入 plugins/plugin-update）
 `check` | `download` | `install` | `auto`
 > 双源回退 (GitHub → Gitee → ghproxy)；安装经系统安装器（签名校验 + FileProvider 授权）；Shell 与 Browser 必须同一签名证书。设置页「系统设置 → 自动更新」提供检查/下载/安装入口与 WiFi 自动检查、自动下载开关。**检查源只认应用发布**（tag 为 `vX.Y.Z` 且含 Shell APK；GitHub 用 `releases?per_page=10` 列表接口，`/releases/latest` 会被同刻创建的 `plugins-v*` 插件发布顶替——v0.40.0 实测踩坑）。
+> **线程纪律 (v0.40.1)**: 设置页 check/download/install 三个入口与 `UpdateDownloader` 下载逻辑全部包 `withContext(Dispatchers.IO)` — check 内部 tryFetch 走 OkHttp 同步网络、install 内含 APK 签名校验 (读 10MB 文件)，任一在主线程执行即 Input dispatching timed out ANR（2026-08-16 设备实测，下载按钮 v0.39.2 已修、检查按钮本版补齐）。
 
 #### browser.push — 跨设备推送 (4)（外置插件，mengpaw-connectors）
 `push <url>` | `pending` | `accept <id>` | `reject <id>`

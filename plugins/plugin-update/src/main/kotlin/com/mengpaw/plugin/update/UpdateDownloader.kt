@@ -19,6 +19,8 @@ import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.error.ErrorCollector
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 更新下载/安装 — 从 UpdatePlugin 拆分 (update.download / update.install)。
@@ -68,7 +70,14 @@ internal class UpdateDownloader(
         }
     }
 
-    private suspend fun doDownload(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+    /** 下载入口 — 网络 + 文件 IO 全部移出调用方线程 (v0.40.1 修复: 原实现同步
+     *  阻塞调用线程, 设置页/命令路径主线程触发时 Input dispatching timed out ANR,
+     *  2026-08-16 设备实测; 与设置页 check/download 按钮 withContext(IO) 双保险)。 */
+    private suspend fun doDownload(args: List<String>, ctx: ExecutionContext): ExecutionResult =
+        withContext(Dispatchers.IO) { doDownloadIo(args, ctx) }
+
+    /** 实际下载逻辑 (网络 + 文件 IO) — 必须经 doDownload 在 IO 调度器运行。 */
+    private suspend fun doDownloadIo(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val release = releaseProvider() ?: return ExecutionResult.fail("请先执行 update.check", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val target = args.firstOrNull()?.lowercase() ?: "shell"
 

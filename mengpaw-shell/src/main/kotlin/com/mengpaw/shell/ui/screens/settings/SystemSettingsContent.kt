@@ -484,16 +484,19 @@ private data class UpdateCheckUiState(
     val autoDownload: Boolean
 )
 
-/** 执行 update.check --force 并返回摘要/新版本/待安装/开关状态 (自动更新设置入口, v0.37.3+/v0.38.2+)。 */
-private suspend fun runUpdateCheckUi(): UpdateCheckUiState {
-    return try {
+/** 执行 update.check --force 并返回摘要/新版本/待安装/开关状态 (自动更新设置入口, v0.37.3+/v0.38.2+)。
+ *  v0.40.1 修复: 包 withContext(IO) — check 内部 tryFetch 走 OkHttp 同步网络,
+ *  原实现主线程直调, GitHub 慢/被墙时主线程阻塞 → Input dispatching timed out ANR
+ *  (2026-08-16 设备实测, 设置页打开/点击检查即触发)。 */
+private suspend fun runUpdateCheckUi(): UpdateCheckUiState = withContext(Dispatchers.IO) {
+    try {
         val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
         val plugin = pm.get("update-plugin") as? com.mengpaw.plugin.update.UpdatePlugin
-            ?: return UpdateCheckUiState("自动更新插件未就绪", false, false, false, false)
+            ?: return@withContext UpdateCheckUiState("自动更新插件未就绪", false, false, false, false)
         val result = plugin.commands["check"]?.invoke(
             listOf("--force"),
             com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
-        ) ?: return UpdateCheckUiState("检查命令不可用", false, false, false, false)
+        ) ?: return@withContext UpdateCheckUiState("检查命令不可用", false, false, false, false)
         UpdateCheckUiState(
             result.output.ifBlank { result.error ?: "检查完成" },
             plugin.hasUpdate, plugin.readyToInstall,
@@ -543,16 +546,18 @@ private suspend fun runUpdateAutoUi(arg: String): String {
     }
 }
 
-/** 执行 update.install shell — 重新唤起安装 (v0.38.2, 已下载待安装时再次点击)。 */
-private suspend fun runUpdateInstall(): String {
-    return try {
+/** 执行 update.install shell — 重新唤起安装 (v0.38.2, 已下载待安装时再次点击)。
+ *  v0.40.1 修复: 包 withContext(IO) — install 内含 APK 签名校验 (读 10MB 文件),
+ *  与 check/download 同类主线程阻塞隐患, 一并移出主线程。 */
+private suspend fun runUpdateInstall(): String = withContext(Dispatchers.IO) {
+    try {
         val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
         val plugin = pm.get("update-plugin") as? com.mengpaw.plugin.update.UpdatePlugin
-            ?: return "自动更新插件未就绪"
+            ?: return@withContext "自动更新插件未就绪"
         val result = plugin.commands["install"]?.invoke(
             listOf("shell"),
             com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
-        ) ?: return "安装命令不可用"
+        ) ?: return@withContext "安装命令不可用"
         result.output.ifBlank { result.error ?: "已唤起安装" }
     } catch (e: Exception) {
         "安装失败: ${e.message?.take(80) ?: "未知错误"}"

@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.40.1 (2026-08-16) — 气泡显示简化 + 自动更新修复
+
+### 修复
+- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 "Final Answer:" / "Action:" 字样不再误截断、不再与折叠摘要内容混同
+- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*` / 预发布 / 缺 APK (UpdateLogicTest +4)
+- **自动更新 ANR (设备实测)**: 设置页「检查更新」主线程同步 OkHttp 网络请求 → Input dispatching timed out (MainActivity 无响应); 检查/安装按钮统一包 `withContext(Dispatchers.IO)`, `UpdateDownloader.doDownload` 网络+文件 IO 整体移出调用方线程 (双保险)
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.40.1-release.apk` (versionCode 40001)
+- browser 无变更不构建
+- 插件有变更: plugin-update (检查源 + 下载线程) — 构建 AAR 回写 plugins.json, 打 `plugins-v0.40.1` tag, GitHub Release 附全部 AAR
+- 测试: 全量 1419 用例 0 failures (kernel 577 + core 90 + shell 202 + browser 42 + 插件 508)
+- 崩溃巡检: 两台设备在线 — 设备1 残留 v0.35.3 旧 ForegroundService 崩溃 (留档); 设备2 今日 ANR 根因即本轮修复的 update.check 主线程阻塞, 已闭环
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.40.0 (2026-08-16) — 技能体系三闭环 (派生 / 索取 / 进化)
 
 ### 新增

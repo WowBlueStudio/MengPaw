@@ -1096,4 +1096,18 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   ForegroundServiceDidNotStopInTimeException 单条 (6 天前, 未连续复现), 不阻塞发布,
   但需留档待后续版本若再现则立项排查前台服务超时。
 
-*最后更新: 2026-08-16 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 + §31 下载链路三坑 (Gitee 时序/源选择/主线程 ANR) + 设备交付流程变更 (不再 ADB 推送, v0.39.1) + §32 技能闭环三连 (删注释教训/reason 门禁表独立源/审计追执行链) + 腾讯记忆系统评审不入致谢 + §33 v0.40.0 发布实操四则 (用例数口径/Gitee 上传慢/origin 双 push/崩溃旧记录) (2026-08-16)*
+- **v0.40.1 发布实操 (2026-08-16)**: ① **ANR 也要闭环, 不只 data_app_crash** —
+  发布前 dropbox 巡检设备2 抓到今天上午两条 data_app_anr: 设置页「检查更新」主线程
+  同步 OkHttp 读 GitHub 5s → Input dispatching timed out; 下载按钮 v0.39.2 已包
+  withContext(IO), 检查/安装按钮漏网 — 教训: UI 同类入口必须统一查线程 (check/
+  download/install/auto 四个按钮逐个过), 网络调用一律 IO 调度器, 插件层
+  UpdateDownloader 再兜底一层 (调用方线程不可信); ② **读 ANR 栈别被 grep 误导** —
+  直接 `dumpsys dropbox --print data_app_anr` 抓完整主线程栈, 之前 grep 到的
+  UpdatePlugin.download 帧实际是 Okio Watchdog 线程, 主线程真相是 socketRead0 +
+  混淆帧; ③ **另一会话 diff 先核对再合并** — 用户贴的"自动更新逻辑" diff 与本地
+  已提交的 03f34b85 完全一致, 逐文件核对 (rg 关键符号) 后确认无需重复提交, 真正
+  缺的是下载/检查线程修复; ④ **用例数口径延续** — v0.40.1 全量 1419 = kernel 577 +
+  core 90 + shell 202 (双套, 气泡测试 4→6) + browser 42 + 插件 508 (双套,
+  UpdateLogicTest +4/套); ⑤ **全量 `./gradlew test` 3m34s**, 配置缓存复用后增量更快。
+
+*最后更新: 2026-08-16 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 + §31 下载链路三坑 (Gitee 时序/源选择/主线程 ANR) + 设备交付流程变更 (不再 ADB 推送, v0.39.1) + §32 技能闭环三连 (删注释教训/reason 门禁表独立源/审计追执行链) + 腾讯记忆系统评审不入致谢 + §33 v0.40.0 发布实操四则 (用例数口径/Gitee 上传慢/origin 双 push/崩溃旧记录) + §34 v0.40.1 发布实操 (ANR 闭环/UI 入口统一线程纪律/读栈防误导/跨会话 diff 核对) (2026-08-16)*
