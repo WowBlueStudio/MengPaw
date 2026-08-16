@@ -31,7 +31,9 @@ import com.mengpaw.shell.ui.components.TokenBarChart
 import com.mengpaw.shell.ui.components.TokenStatsCollector
 import com.mengpaw.shell.ui.components.formatTokenCount
 import com.mengpaw.shell.ui.screens.settings.DeviceGuidesPanel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.mengpaw.design.components.SectionHeader
 import kotlinx.coroutines.delay
 
@@ -207,6 +209,7 @@ fun SystemSettingsContent(
     var updateBusy by remember { mutableStateOf(false) }
     var updateAutoCheck by remember { mutableStateOf(false) }
     var updateAutoDownload by remember { mutableStateOf(false) }
+    var updateProgress by remember { mutableStateOf<Float?>(null) }
     val updateScope = rememberCoroutineScope()
     val updateInteraction = remember { MutableInteractionSource() }
 
@@ -228,56 +231,83 @@ fun SystemSettingsContent(
     Surface(
         modifier = Modifier.fillMaxWidth()
             .clickable(interactionSource = updateInteraction, indication = null, onClick = {
-                updateScope.launch { refreshUpdateUi() }
+                if (!updateBusy) updateScope.launch { refreshUpdateUi() }  // 下载中禁刷新, 防打断进度显示
             })
             .pressScale(updateInteraction),
         shape = RoundedCornerShape(ArcoRadius.md),
         color = ThemeColors.bgCardHigh
     ) {
-        Row(Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.SystemUpdate, null, Modifier.size(24.dp), tint = ArcoColors.Green6)
-            Spacer(Modifier.width(ArcoSpacing.md))
-            Column(Modifier.weight(1f)) {
-                Text(state.strings.autoUpdateTitle,
-                    fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-                Text(updateStatus ?: state.strings.autoUpdateClickHint,
-                    style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 3)
-            }
-            when {
-                updateBusy -> Icon(Icons.Outlined.ChevronRight, null, tint = ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
-                updateReadyToInstall -> {
-                    // v0.38.2: 已下载 APK → 安装入口 (安装被取消/按错后可再次点击重新唤起)
-                    TextButton(onClick = {
-                        updateScope.launch {
-                            updateBusy = true
-                            updateStatus = runUpdateInstall()
-                            updateBusy = false
-                        }
-                    }, contentPadding = PaddingValues(horizontal = ArcoSpacing.sm)) {
-                        Text(state.strings.autoUpdateInstall, style = MaterialTheme.typography.labelSmall,
-                            color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
-                    }
+        Column {
+            Row(Modifier.padding(ArcoSpacing.lg), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.SystemUpdate, null, Modifier.size(24.dp), tint = ArcoColors.Green6)
+                Spacer(Modifier.width(ArcoSpacing.md))
+                Column(Modifier.weight(1f)) {
+                    Text(state.strings.autoUpdateTitle,
+                        fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+                    Text(updateStatus ?: state.strings.autoUpdateClickHint,
+                        style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary, maxLines = 3)
                 }
-                updateHasNew -> {
-                    // v0.38.3: 发现新版本 → 仅下载 (两步拆分); 下载成功后转安装入口, 失败保留重试
-                    TextButton(onClick = {
-                        updateScope.launch {
-                            updateBusy = true
-                            updateStatus = state.strings.autoUpdateDownloading
-                            val (ok, msg) = runUpdateDownload()
-                            updateStatus = msg
-                            if (ok) {
-                                updateHasNew = false
-                                updateReadyToInstall = true
+                when {
+                    updateBusy -> Icon(Icons.Outlined.ChevronRight, null, tint = ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
+                    updateReadyToInstall -> {
+                        // v0.38.2: 已下载 APK → 安装入口 (安装被取消/按错后可再次点击重新唤起)
+                        TextButton(onClick = {
+                            updateScope.launch {
+                                updateBusy = true
+                                updateStatus = runUpdateInstall()
+                                updateBusy = false
                             }
-                            updateBusy = false
+                        }, contentPadding = PaddingValues(horizontal = ArcoSpacing.sm)) {
+                            Text(state.strings.autoUpdateInstall, style = MaterialTheme.typography.labelSmall,
+                                color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
                         }
-                    }, contentPadding = PaddingValues(horizontal = ArcoSpacing.sm)) {
-                        Text(state.strings.autoUpdateDownload, style = MaterialTheme.typography.labelSmall,
-                            color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
                     }
+                    updateHasNew -> {
+                        // v0.38.3: 发现新版本 → 仅下载 (两步拆分); 下载成功后转安装入口, 失败保留重试
+                        // v0.39.2: 下载切 IO 线程 (修主线程 ANR) + 进度回调
+                        TextButton(onClick = {
+                            updateScope.launch {
+                                updateBusy = true
+                                updateStatus = state.strings.autoUpdateDownloading
+                                updateProgress = 0f
+                                val (ok, msg) = withContext(Dispatchers.IO) {
+                                    runUpdateDownload { d, t ->
+                                        updateProgress = if (t > 0) (d.toFloat() / t).coerceIn(0f, 1f) else null
+                                    }
+                                }
+                                updateProgress = null
+                                updateStatus = msg
+                                if (ok) {
+                                    updateHasNew = false
+                                    updateReadyToInstall = true
+                                }
+                                updateBusy = false
+                            }
+                        }, contentPadding = PaddingValues(horizontal = ArcoSpacing.sm)) {
+                            Text(state.strings.autoUpdateDownload, style = MaterialTheme.typography.labelSmall,
+                                color = ThemeColors.brand, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    else -> Icon(Icons.Outlined.ChevronRight, null, tint = ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
                 }
-                else -> Icon(Icons.Outlined.ChevronRight, null, tint = ThemeColors.textSecondary, modifier = Modifier.size(20.dp))
+            }
+            // v0.39.2: 下载进度条 — 有总量显示百分比, 未知总量走不确定循环
+            if (updateBusy) {
+                val p = updateProgress
+                if (p != null) {
+                    LinearProgressIndicator(
+                        progress = { p },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg).padding(bottom = ArcoSpacing.sm).height(3.dp),
+                        color = ArcoColors.Green6,
+                        trackColor = ArcoColors.Green6.copy(alpha = 0.2f)
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.lg).padding(bottom = ArcoSpacing.sm).height(3.dp),
+                        color = ArcoColors.Green6,
+                        trackColor = ArcoColors.Green6.copy(alpha = 0.2f)
+                    )
+                }
             }
         }
     }
@@ -476,16 +506,22 @@ private suspend fun runUpdateCheckUi(): UpdateCheckUiState {
 
 /** 执行 update.download shell — 仅下载不安装, 成功后由「安装」按钮唤起 (v0.38.3 两步拆分)。
  *  @return (是否成功, 用户可见消息) — 失败时保留下载重试入口。 */
-private suspend fun runUpdateDownload(): Pair<Boolean, String> {
+/** v0.39.2: 下载进度回调注入 + 完成后清除监听。 */
+private suspend fun runUpdateDownload(onProgress: (downloaded: Long, total: Long) -> Unit): Pair<Boolean, String> {
     return try {
         val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
         val plugin = pm.get("update-plugin") as? com.mengpaw.plugin.update.UpdatePlugin
             ?: return false to "自动更新插件未就绪"
-        val ctx = com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
-        val dl = plugin.commands["download"]?.invoke(listOf("shell"), ctx)
-            ?: return false to "下载命令不可用"
-        if (!dl.success) false to (dl.error ?: "下载失败")
-        else true to (dl.output.ifBlank { "下载完成" })
+        plugin.setDownloadProgressListener(onProgress)
+        try {
+            val ctx = com.mengpaw.kernel.cli.ExecutionContext(sessionId = "settings", userId = "settings")
+            val dl = plugin.commands["download"]?.invoke(listOf("shell"), ctx)
+                ?: return false to "下载命令不可用"
+            if (!dl.success) false to (dl.error ?: "下载失败")
+            else true to (dl.output.ifBlank { "下载完成" })
+        } finally {
+            plugin.setDownloadProgressListener(null)
+        }
     } catch (e: Exception) {
         false to "下载失败: ${e.message?.take(80) ?: "未知错误"}"
     }

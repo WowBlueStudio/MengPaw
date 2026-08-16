@@ -85,6 +85,11 @@ class UpdatePlugin : Plugin {
     /** 已下载 APK 待安装 — update.download 成功后有效 (v0.38.2, 供设置页显示安装入口)。 */
     val readyToInstall: Boolean get() = downloader.hasDownloaded
 
+    /** 下载进度监听 — 设置页下载时注入, 完成后清除 (v0.39.2 修复: 下载进度可见)。 */
+    fun setDownloadProgressListener(listener: ((downloaded: Long, total: Long) -> Unit)?) {
+        downloader.onProgress = listener
+    }
+
     /** 下载/安装委托 — 依赖经构造参数注入 (批次3 拆分)。 */
     private val downloader = UpdateDownloader(
         releaseProvider = { latestRelease },

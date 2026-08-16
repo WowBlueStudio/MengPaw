@@ -36,6 +36,10 @@ internal class UpdateDownloader(
 ) {
     private var downloadedApk: File? = null
 
+    /** 下载进度回调 (已下载字节, 总字节; total<0 表示未知) — UI 显示进度 (v0.39.2 修复)。
+     *  @Volatile: IO 线程写, UI 线程读。 */
+    @Volatile var onProgress: ((downloaded: Long, total: Long) -> Unit)? = null
+
     /** 下载并发锁 — UI 手动下载与 update.auto 自动下载互斥, 防止同写 .part 文件 (P2 修复)。 */
     private val downloading = AtomicBoolean(false)
 
@@ -124,6 +128,7 @@ internal class UpdateDownloader(
                                         throw IllegalStateException("APK 超过 ${maxApkBytes / 1024 / 1024}MB 上限")
                                     }
                                     out.write(buf, 0, n)
+                                    onProgress?.invoke(total, declared)
                                 }
                             }
                         }
