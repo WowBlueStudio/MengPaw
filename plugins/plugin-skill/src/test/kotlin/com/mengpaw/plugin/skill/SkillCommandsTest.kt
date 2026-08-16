@@ -209,6 +209,19 @@ class SkillCommandsTest {
     }
 
     @Test
+    fun `from project prompt contains dedup and evolution requirements`() = runBlocking {
+        val prompt = SkillFlowCommands.buildFromProjectPrompt(
+            "demo", "项目记忆内容",
+            listOf(SkillDef("old-skill", "旧技能简介", true, "general", "", "", ""))
+        )
+        assertTrue("应含 description 查重说明", prompt.contains("description"))
+        assertTrue("应带出现有技能列表", prompt.contains("old-skill"))
+        assertTrue("应含进化目标三要素", prompt.contains("进化目标"))
+        assertTrue("应含可移植规范 (无敏感)", prompt.contains("无敏感"))
+        assertTrue("应含状态协议", prompt.contains("NOT_FLOW"))
+    }
+
+    @Test
     fun `from project not flow returns without writing`() = runBlocking {
         writeProjectMemory("facts", "## 2026-08-16 10:00 · 里程碑总结\n\n项目使用蓝色主题, 用户偏好简洁风格。\n---")
         SkillPlugin.llmProvider = ScriptedLlmProvider(listOf("NOT_FLOW\n仅事实记录"))

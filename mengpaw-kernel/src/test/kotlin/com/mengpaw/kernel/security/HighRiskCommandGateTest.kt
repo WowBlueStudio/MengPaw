@@ -166,6 +166,7 @@ class HighRiskCommandGateTest {
             "plugin.enable", "plugin.disable",
             "clipboard.copy", "clipboard.paste", "clipboard.clear",
             "skill.enable", "skill.disable",
+            "skill.from.project", "skill.request",
             "agent.memory.mid.delete", "agent.memory.mid.rm",
             "agent.memory.mid.edit",
             "agent.memory.project.delete", "agent.memory.project.rm", "agent.memory.project.edit",

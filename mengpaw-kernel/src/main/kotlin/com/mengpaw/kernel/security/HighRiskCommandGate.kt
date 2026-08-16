@@ -50,6 +50,9 @@ object HighRiskCommandGate {
         // ── 技能开关 (中危) ──
         "skill.enable" to listOf(Param("id")),
         "skill.disable" to listOf(Param("id")),
+        // ── 技能流转 (中危: 派生写技能文件 / 索取复制技能) ──
+        "skill.from.project" to listOf(Param("name")),
+        "skill.request" to listOf(Param("name"), Param("agent")),
         // ── 记忆改/删 (keep/write/record/project.save 为 LOW, 不入表) ──
         "agent.memory.rm" to listOf(Param("timestamp")),
         "agent.memory.edit" to listOf(Param("timestamp"), Param("content")),
