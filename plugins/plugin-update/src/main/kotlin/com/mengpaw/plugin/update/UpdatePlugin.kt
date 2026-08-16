@@ -97,7 +97,8 @@ class UpdatePlugin : Plugin {
     data class ReleaseInfo(
         val tag: String, val name: String, val body: String,
         val shellUrl: String, val shellSize: Long,
-        val browserUrl: String, val browserSize: Long
+        val browserUrl: String, val browserSize: Long,
+        val source: String = "github"  // check 命中源 github/gitee/ghproxy — 下载按同源优先 (v0.39.2 修复)
     )
 
     // ── Lifecycle ───────────────────────────────────────────────────────
@@ -162,6 +163,11 @@ class UpdatePlugin : Plugin {
             val tag = (json["tag_name"] as? JsonPrimitive)?.content ?: return null
             val name = (json["name"] as? JsonPrimitive)?.content ?: tag
             val body = (json["body"] as? JsonPrimitive)?.content?.take(500) ?: ""
+            val source = when {
+                "gitee" in url -> "gitee"
+                "ghproxy" in url -> "ghproxy"
+                else -> "github"
+            }
 
             // Find shell + browser APK assets
             val assets = (json["assets"] as? JsonArray) ?: JsonArray(emptyList())
@@ -176,7 +182,7 @@ class UpdatePlugin : Plugin {
                     dUrl.contains("mengpaw-browser") -> { browserUrl = dUrl; browserSize = dSize }
                 }
             }
-            ReleaseInfo(tag, name, body, shellUrl, shellSize, browserUrl, browserSize)
+            ReleaseInfo(tag, name, body, shellUrl, shellSize, browserUrl, browserSize, source)
         } catch (e: Exception) {
             ErrorCollector.report(e, "UpdatePlugin.tryFetch")
             null

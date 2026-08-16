@@ -12,6 +12,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
@@ -83,8 +84,16 @@ internal class UpdateDownloader(
             val downloadDir = File(DataPaths.PLUGIN_CACHE, "updates").also { it.mkdirs() }
             val apkFile = File(downloadDir, "mengpaw-$target-${release.tag}.apk")
 
-            // Try primary URL → Gitee mirror → ghproxy
-            val downloadUrls = listOf(url, UpdatePlugin.giteeDownload(url), UpdatePlugin.ghproxyDownload(url))
+            // 下载源按 check 命中源优先排序 (v0.39.2 修复): 国内设备 Gitee 通但
+            // GitHub HTTPS/ghproxy 常被墙 — 同源优先避免首源白等连接超时
+            val giteeMirror = UpdatePlugin.giteeDownload(url)
+            val proxyMirror = UpdatePlugin.ghproxyDownload(url)
+            val downloadUrls = when (release.source) {
+                "gitee" -> listOf(giteeMirror, url, proxyMirror)
+                "ghproxy" -> listOf(proxyMirror, giteeMirror, url)
+                else -> listOf(url, giteeMirror, proxyMirror)
+            }
+            val failures = mutableListOf<String>()
             var downloaded = false
             for (dUrl in downloadUrls) {
                 // 流式边下边写 (tmp + rename) — 此前 readBytes 把整个 APK 读进内存, 大包必 OOM
@@ -92,7 +101,9 @@ internal class UpdateDownloader(
                 var conn: java.net.HttpURLConnection? = null
                 try {
                     conn = java.net.URL(dUrl).openConnection() as java.net.HttpURLConnection
-                    conn.connectTimeout = 15000; conn.readTimeout = 30000
+                    // 连接快速失败切换 (10s) + 读取放宽 (60s) — 慢速网络大文件 30s 会误杀
+                    conn.connectTimeout = 10000; conn.readTimeout = 60000
+                    conn.instanceFollowRedirects = true  // 显式跟随 Gitee 302 → CDN
                     conn.setRequestProperty("User-Agent", "MengPaw-Update/$pluginVersion")
                     val code = conn.responseCode
                     if (code in 200..299) {
@@ -123,14 +134,21 @@ internal class UpdateDownloader(
                         downloaded = true
                         break
                     }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    val err = e.message?.take(80) ?: "未知错误"
+                    failures += "$dUrl → $err"
+                    KernelLog.w("UpdatePlugin.download", "源失败 $dUrl: $err")
                     tmpFile.delete()  // 清理残片, 尝试下一源
                 } finally {
                     try { conn?.disconnect() } catch (_: Exception) { }
                 }
             }
             if (!downloaded) {
-                return ExecutionResult.fail("下载失败 — 所有下载源均不可达。💡 建议检查网络或使用 VPN。", errorCode = ErrorCodes.ERR_INTERNAL)
+                val reason = failures.joinToString(" | ").take(280)
+                return ExecutionResult.fail(
+                    "下载失败 — 所有下载源均不可达。\n$reason\n💡 建议检查网络或使用 VPN。",
+                    errorCode = ErrorCodes.ERR_INTERNAL
+                )
             }
 
             downloadedApk = apkFile
