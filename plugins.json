@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "dream-plugin",
@@ -31,7 +31,7 @@
       "commands": [],
       "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
       "size": 3129,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "tavily-plugin",
@@ -63,7 +63,7 @@
       ],
       "checksum": "sha256:547a7665041e90b2f5a9ae36fea44fa892b5954b0c30100740b8c286ad2da2f0",
       "size": 19074,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "framework-plugin",
@@ -93,7 +93,7 @@
       ],
       "checksum": "sha256:b3e9be0bd5587f2c8a755b82ab68c0d04ca00f72458785c31cd04abf5817e958",
       "size": 110868,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "fs-plugin",
@@ -132,7 +132,7 @@
       ],
       "checksum": "sha256:a78b37dc205343cb0c08f18ff77566c3b6edca5d62e6006814d656fefe5ba213",
       "size": 17951,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "memory-twin-plugin",
@@ -163,7 +163,7 @@
       ],
       "checksum": "sha256:50b874379adcb91aa5100cd4c2bc96252226a511d6bf44614fa4baf6d40c5927",
       "size": 243330,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "skill-plugin",
@@ -186,9 +186,9 @@
         "skill.enable",
         "skill.disable"
       ],
-      "checksum": "sha256:38fe2fe87c61cdc94a0830da33794824033abd738d7b1650a3cdf6bed938cc92",
-      "size": 73244,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "checksum": "sha256:680af060da62403012d64d0a7c24c6d955cc57d5ec053cd40528c54e31ada566",
+      "size": 100444,
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "clipboard-plugin",
@@ -206,7 +206,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "dev-plugin",
@@ -227,7 +227,7 @@
       ],
       "checksum": "sha256:66f20d2156a2b49e3995b4f5eed056562a8666c2c3c747df4df017ac58e111d5",
       "size": 35337,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "update-plugin",
@@ -251,7 +251,7 @@
       ],
       "checksum": "sha256:708b27edad01bd29356b5039d517a2678b9d39bcc72e6d231b0aa2b042eb8af2",
       "size": 45611,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "translate-plugin",
@@ -363,7 +363,7 @@
       ],
       "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
       "size": 282877,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "comfy-plugin",
@@ -488,7 +488,7 @@
       ],
       "checksum": "sha256:32c402304b4190083c209773186368460ab813a757bc4a356d61ba03d5fdf21b",
       "size": 46842,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "termux-plugin",
@@ -507,7 +507,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "tools-plugin",
@@ -526,7 +526,7 @@
       ],
       "checksum": "sha256:fd6cf25efe806029cda88f3c47e40eec4b31cfee1128df50b28af5fe77ea0da2",
       "size": 36752,
-      "changelog": "### 修复\n- **下载源按 check 命中源优先**: ReleaseInfo 记录命中源 (github/gitee/ghproxy),\n  下载按同源优先排序 — 国内设备 Gitee 通但 GitHub HTTPS/ghproxy 被墙,\n  不再首源白等 15s 连接超时\n- **下载超时调整**: connectTimeout 15s→10s (快速失败切换), readTimeout 30s→60s\n  (慢速网络大文件); 显式 instanceFollowRedirects=true 跟随 Gitee 302→CDN\n- **下载失败可诊断**: 每源失败原因记入日志, 错误消息附各源具体原因摘要\n- **下载主线程 ANR**: 设置页下载切 `withContext(Dispatchers.IO)` —\n  原 rememberCoroutineScope 主线程 + 同步阻塞 HttpURLConnection 下 10MB,\n  慢网直接卡死 UI 报「无响应」\n- **下载进度可见**: UpdateDownloader.onProgress 回调 + "
+      "changelog": "### 新增\n- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)\n- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)\n- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)\n- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp"
     },
     {
       "id": "connector-openclaw-plugin",

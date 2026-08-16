@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.40.0 (2026-08-16) — 技能体系三闭环 (派生 / 索取 / 进化)
+
+### 新增
+- **技能派生** `skill.from.project <项目名>`: 项目记忆 → LLM 提炼为可复用技能 (可流程化判定 + description 语义查重, 命中中止), 产物带 `## 适用场景/执行步骤/验证规则/来源/进化目标` 三要素; `agent.memory.project.save` 提示派生入口 (提示词闭环)
+- **技能索取**: `skill.request <技能名> <来源Agent>` 同设备复制 (冲突以简介为准不覆盖) + `skill.ls --agent <Agent名>` 浏览; `skill.import <技能名> [来源Agent]` 跨设备从 Fleet共享 导入 (fleet.delegate 请对端发送 → 本地落位)
+- **进化断点修复**: 系统提示词引导技能失败走 make_skills 进化升级循环; make_skills 模板补可移植规范 (完善/中性/通用/无敏感)
+- **工程**: 技能管理命令拆至 SkillManageCommands (行数红线内注释完整); 写盘原子化 (tmp+rename) + 派生/导入读回验证; skill.enable/disable 先本地后全局
+
+### 修复
+- 技能流转命令补 reason 门禁表 (HighRiskCommandGate) — 中危命令 JSON+reason 调用链路完整 (分级与门禁双源同配)
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.40.0-release.apk` (versionCode 40000)
+- browser 无变更不构建
+- 插件有变更: plugin-skill (技能闭环) — 构建 AAR 回写 plugins.json, 打 `plugins-v0.40.0` tag, GitHub Release 附全部 AAR
+- 测试: 全量 1407 用例 0 failures (kernel 577 + core 90 + shell 198 + browser 42 + 插件 500)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.39.2 (2026-08-16) — 自动更新下载链路修复 (源选择/主线程 ANR/进度条)
 
 ### 修复
