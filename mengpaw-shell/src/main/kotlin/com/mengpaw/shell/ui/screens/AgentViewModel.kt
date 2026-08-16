@@ -223,6 +223,7 @@ class AgentViewModel : ViewModel() {
         }
         // Inject provider into TribePlugin for LLM routing (tribe.route / fleet)
         try { com.mengpaw.plugin.hermes.TribePlugin.llmProvider = provider } catch (_: Exception) {}
+        try { com.mengpaw.plugin.skill.SkillPlugin.llmProvider = provider } catch (_: Exception) {}
         chatController.bind()
     }
 

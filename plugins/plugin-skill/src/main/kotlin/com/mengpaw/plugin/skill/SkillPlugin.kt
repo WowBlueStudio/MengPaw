@@ -11,6 +11,7 @@ import com.mengpaw.kernel.plugin.PluginContext
 import com.mengpaw.kernel.plugin.PluginMetadata
 import com.mengpaw.kernel.plugin.PluginType
 import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.llm.LlmProvider
 import java.io.File
 
 /**
@@ -35,6 +36,8 @@ import java.io.File
  * skill.rm <name>                         删除 Agent 本地技能
  * skill.enable <name>                     启用技能
  * skill.disable <name>                    停用技能
+ * skill.from.project <项目名>              从项目记忆派生可复用技能 (LLM 提炼)
+ * skill.request <技能名> <来源Agent>       向其他 Agent 索取技能 (复制到本地)
  * ```
  */
 class SkillPlugin : Plugin {
@@ -49,17 +52,33 @@ class SkillPlugin : Plugin {
         commands = listOf(
             "skill.ls", "skill.run", "skill.info", "skill.search",
             "skill.create", "skill.rm", "skill.pull", "skill.push",
-            "skill.enable", "skill.disable"
+            "skill.enable", "skill.disable", "skill.from.project", "skill.request"
+        ),
+        commandKeywords = mapOf(
+            "from.project" to com.mengpaw.kernel.plugin.CommandKeywords(
+                zh = listOf("从项目记忆派生技能", "提炼技能", "项目记忆转技能", "技能派生"),
+                en = listOf("derive skill from project", "extract skill", "project to skill")
+            ),
+            "request" to com.mengpaw.kernel.plugin.CommandKeywords(
+                zh = listOf("索取技能", "请求技能", "借用技能", "技能共享"),
+                en = listOf("request skill", "borrow skill", "fetch skill")
+            )
         )
     )
 
     override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "ls" to ::ls, "run" to ::run, "info" to ::info, "search" to ::search,
         "create" to ::create, "rm" to ::rm, "pull" to ::pull, "push" to ::push,
-        "enable" to ::enable, "disable" to ::disable
+        "enable" to ::enable, "disable" to ::disable,
+        "from.project" to { args, ctx -> SkillFlowCommands.fromProject(this, args, ctx) },
+        "request" to { args, ctx -> SkillFlowCommands.request(this, args, ctx) }
     )
 
     companion object {
+        /** LLM 注入 — 由 shell 在会话创建/切换时赋值 (与 TribePlugin 同模式)。 */
+        @Volatile
+        var llmProvider: LlmProvider? = null
+
         val CATEGORIES = mapOf(
             "meta" to "元技能 — 管理/创建/沉淀 Skill 本身",
             "system" to "系统操作 — 配置、诊断、维护",
@@ -79,10 +98,10 @@ class SkillPlugin : Plugin {
     }
 
     private var storageDir = com.mengpaw.kernel.DataPaths.SKILLS
-    private val globalDir: File get() = File(storageDir).also { it.mkdirs() }
+    internal val globalDir: File get() = File(storageDir).also { it.mkdirs() }
 
     /** Agent's local skills dir — `{AGENTS}/{name}/skills/`. */
-    private fun localDir(agentName: String): File =
+    internal fun localDir(agentName: String): File =
         File(com.mengpaw.kernel.DataPaths.agentSkillsDir(agentName)).also { it.mkdirs() }
 
     override suspend fun onInstall(ctx: PluginContext) {
@@ -127,13 +146,20 @@ class SkillPlugin : Plugin {
     private suspend fun ls(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         var category: String? = null
         var localOnly = false
+        var agentFilter: String? = null
         var i = 0
         while (i < args.size) {
             when (args[i]) {
                 "--category", "-c" -> { if (i + 1 < args.size) category = args[++i] }
                 "--local", "-l" -> localOnly = true
+                "--agent", "-a" -> { if (i + 1 < args.size) agentFilter = args[++i] }
             }
             i++
+        }
+
+        // 查看指定 Agent 的本地技能 (Agent 间技能发现 — 配合 skill.request 索取)
+        if (agentFilter != null) {
+            return SkillFlowCommands.lsAgent(this, agentFilter, category)
         }
 
         val skills = if (localOnly) {
@@ -311,7 +337,7 @@ class SkillPlugin : Plugin {
     // Skill CRUD
     // ═══════════════════════════════════════════════════════════════════
 
-    private fun listSkills(dir: File, category: String? = null): List<SkillDef> {
+    internal fun listSkills(dir: File, category: String? = null): List<SkillDef> {
         val all = dir.listFiles { f -> f.extension == "md" }?.mapNotNull { parseSkill(it) }?.sortedBy { it.name } ?: emptyList()
         return if (category != null) all.filter { it.category == category } else all
     }
@@ -373,4 +399,3 @@ class SkillPlugin : Plugin {
  *                "" = 用户自建/Agent 进化/后续新注册(可删)。由资产 frontmatter `source:` 声明。
  */
 data class SkillDef(val name: String, val description: String, val enabled: Boolean, val category: String, val content: String, val rawText: String = "", val source: String = "")
-

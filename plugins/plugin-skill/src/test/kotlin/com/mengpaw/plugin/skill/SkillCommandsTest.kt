@@ -5,6 +5,9 @@ package com.mengpaw.plugin.skill
 
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.cli.ExecutionContext
+import com.mengpaw.kernel.llm.LlmProvider
+import com.mengpaw.kernel.llm.ProviderInfo
+import com.mengpaw.kernel.llm.ProviderType
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
@@ -27,10 +30,21 @@ class SkillCommandsTest {
         tmp.mkdirs()
         DataPaths.initialize(tmp.absolutePath)
         plugin = SkillPlugin()
+        SkillPlugin.llmProvider = null
     }
 
     private suspend fun run(cmd: String, vararg args: String) =
         plugin.commands[cmd]!!(args.toList(), ctx)
+
+    /** 按序返回响应的脚本化 LLM — from.project 提炼测试用。 */
+    private class ScriptedLlmProvider(responses: List<String>) : LlmProvider {
+        private val queue = ArrayDeque(responses)
+        override suspend fun complete(prompt: String): String = queue.removeFirst()
+        override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
+            complete(prompt).also { onToken(it) }
+        override fun info(): ProviderInfo = ProviderInfo("mock", "skill-test", ProviderType.LOCAL)
+        override fun close() {}
+    }
 
     // ── 名称合法性 (create 正则) ────────────────────────────────────────
 
@@ -152,5 +166,161 @@ class SkillCommandsTest {
         assertTrue("来源列头应存在", r.output.contains("来源"))
         assertTrue("核心标签应显示", r.output.contains("核心"))
         assertTrue("用户技能应标用户", r.output.contains("用户"))
+    }
+
+    // ── 技能派生: skill.from.project ────────────────────────────────────
+
+    @Test
+    fun `from project derives skill with evolution goal and source`() = runBlocking {
+        writeProjectMemory("demo", "## 2026-08-16 10:00 · 里程碑总结\n\n1. 分析需求\n2. 使用 agent.write 生成页面\n3. 验证渲染结果\n4. 汇报\n---")
+        SkillPlugin.llmProvider = ScriptedLlmProvider(listOf(
+            "OK\n---\nname: theme-workflow\ndescription: 为公众号文章排版引擎新增主题的工作流\nenabled: true\ncategory: dev\n---\n" +
+                "# 主题工作流\n## 适用场景\n需要新增渲染主题时\n## 执行步骤\n1. 分析\n## 验证规则\n页面可渲染\n## 来源\nproject_demo · 项目记忆\n" +
+                "## 进化目标\n- 目标: 覆盖主流主题新增\n- 稳定锚点: 渲染管线不变\n- 收敛原则: 升级朝目标收敛"
+        ))
+        val r = run("from.project", "demo")
+        assertTrue("派生应成功: ${r.error}", r.success)
+        val file = File(DataPaths.agentSkillsDir("tester"), "theme-workflow.md")
+        assertTrue("技能文件应写入本地", file.exists())
+        val text = file.readText()
+        assertTrue("应含进化目标三要素", text.contains("## 进化目标"))
+        assertTrue("应含来源", text.contains("## 来源"))
+        assertTrue("frontmatter 应含 description", text.contains("description: 为公众号"))
+    }
+
+    @Test
+    fun `from project not flow returns without writing`() = runBlocking {
+        writeProjectMemory("facts", "## 2026-08-16 10:00 · 里程碑总结\n\n项目使用蓝色主题, 用户偏好简洁风格。\n---")
+        SkillPlugin.llmProvider = ScriptedLlmProvider(listOf("NOT_FLOW\n仅事实记录"))
+        val r = run("from.project", "facts")
+        assertTrue(r.success)
+        assertTrue("应提示无可流程化", r.output.contains("无可流程化"))
+        assertTrue("不应写入技能", File(DataPaths.agentSkillsDir("tester")).listFiles().isNullOrEmpty())
+    }
+
+    @Test
+    fun `from project duplicate aborts by description semantics`() = runBlocking {
+        writeProjectMemory("dup", "## 2026-08-16 10:00 · 里程碑总结\n\n1. 步骤\n---")
+        SkillPlugin.llmProvider = ScriptedLlmProvider(listOf("DUPLICATE\n已有技能: weather"))
+        val r = run("from.project", "dup")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("已有相似技能"))
+        assertTrue("应带出已有技能名", (r.error ?: "").contains("weather"))
+    }
+
+    @Test
+    fun `from project rejects same name conflict`() = runBlocking {
+        writeProjectMemory("conf", "## 2026-08-16 10:00 · 里程碑总结\n\n1. 步骤\n---")
+        run("create", "same-name")
+        SkillPlugin.llmProvider = ScriptedLlmProvider(listOf(
+            "OK\n---\nname: same-name\ndescription: 同名冲突\nenabled: true\ncategory: general\n---\n# X\n## 适用场景\n## 执行步骤\n## 验证规则\n## 来源\nproject_conf · 项目记忆\n## 进化目标\n- 目标\n- 稳定锚点\n- 收敛原则"
+        ))
+        val r = run("from.project", "conf")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("已存在同名技能"))
+    }
+
+    @Test
+    fun `from project missing memory not found`() = runBlocking {
+        val r = run("from.project", "nope")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("未找到项目记忆"))
+    }
+
+    @Test
+    fun `from project rejects traversal project name`() = runBlocking {
+        val r = run("from.project", "../escape")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("非法项目名"))
+    }
+
+    @Test
+    fun `from project without llm fails gracefully`() = runBlocking {
+        writeProjectMemory("x", "## 2026-08-16 10:00 · 里程碑总结\n\n1. 步骤\n---")
+        SkillPlugin.llmProvider = null
+        val r = run("from.project", "x")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("LLM 未就绪"))
+    }
+
+    @Test
+    fun `from project malformed llm output fails`() = runBlocking {
+        writeProjectMemory("y", "## 2026-08-16 10:00 · 里程碑总结\n\n1. 步骤\n---")
+        SkillPlugin.llmProvider = ScriptedLlmProvider(listOf("随便输出"))
+        val r = run("from.project", "y")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("格式异常"))
+    }
+
+    // ── 技能索取: skill.request + skill.ls --agent ──────────────────────
+
+    @Test
+    fun `request copies skill from another agent and stamps source`() = runBlocking {
+        val srcDir = File(DataPaths.agentSkillsDir("alice")); srcDir.mkdirs()
+        File(srcDir, "alice-trick.md").writeText(
+            "---\nname: alice-trick\ndescription: 数据整理技巧\nenabled: true\ncategory: general\n---\n## 执行步骤\n1. 整理\n2. 验证"
+        )
+        val r = run("request", "alice-trick", "alice")
+        assertTrue("索取应成功: ${r.error}", r.success)
+        val mine = File(DataPaths.agentSkillsDir("tester"), "alice-trick.md")
+        assertTrue("技能应复制到本地", mine.exists())
+        assertTrue("应补来源标记", mine.readText().contains("索取自 Agent `alice`"))
+    }
+
+    @Test
+    fun `request same name conflict aborts`() = runBlocking {
+        val srcDir = File(DataPaths.agentSkillsDir("alice")); srcDir.mkdirs()
+        File(srcDir, "trick.md").writeText("---\nname: trick\ndescription: 技巧\nenabled: true\ncategory: general\n---\n正文")
+        run("create", "trick")
+        val r = run("request", "trick", "alice")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("已存在同名技能"))
+    }
+
+    @Test
+    fun `request duplicate description aborts`() = runBlocking {
+        val srcDir = File(DataPaths.agentSkillsDir("alice")); srcDir.mkdirs()
+        File(srcDir, "alice-way.md").writeText("---\nname: alice-way\ndescription: 批量处理资料\nenabled: true\ncategory: general\n---\n正文")
+        run("create", "mine-way", "--description", "批量处理资料")
+        val r = run("request", "alice-way", "alice")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("简介相同"))
+    }
+
+    @Test
+    fun `request missing skill not found`() = runBlocking {
+        val r = run("request", "ghost", "alice")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("未找到"))
+    }
+
+    @Test
+    fun `request rejects traversal skill name`() = runBlocking {
+        val r = run("request", "../secret", "alice")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("非法技能名"))
+    }
+
+    @Test
+    fun `request self rejected`() = runBlocking {
+        val r = run("request", "x", "tester")
+        assertFalse(r.success)
+        assertTrue((r.error ?: "").contains("不能向自己"))
+    }
+
+    @Test
+    fun `ls agent lists another agent skills`() = runBlocking {
+        val srcDir = File(DataPaths.agentSkillsDir("bob")); srcDir.mkdirs()
+        File(srcDir, "bob-skill.md").writeText("---\nname: bob-skill\ndescription: 鲍勃技能\nenabled: true\ncategory: general\n---\n正文")
+        val r = run("ls", "--agent", "bob")
+        assertTrue(r.success)
+        assertTrue("应列出目标 Agent 技能", r.output.contains("bob-skill"))
+        assertTrue("应带描述", r.output.contains("鲍勃技能"))
+        assertTrue("应提示索取入口", r.output.contains("skill.request"))
+    }
+
+    private fun writeProjectMemory(name: String, content: String) {
+        val dir = File(DataPaths.midTermMemoryDir("tester")); dir.mkdirs()
+        File(dir, "project_${name}_memory.md").writeText(content)
     }
 }

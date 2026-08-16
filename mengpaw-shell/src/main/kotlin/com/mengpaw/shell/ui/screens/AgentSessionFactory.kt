@@ -149,6 +149,10 @@ class AgentSessionFactory(
         try {
             com.mengpaw.plugin.hermes.TribePlugin.llmProvider = provider
         } catch (_: Exception) {}
+        // Inject provider into SkillPlugin for skill.from.project LLM extraction
+        try {
+            com.mengpaw.plugin.skill.SkillPlugin.llmProvider = provider
+        } catch (_: Exception) {}
 
         val msgs = MutableStateFlow<List<ChatMessageUi>>(
             if (globalApiKey.isBlank())
