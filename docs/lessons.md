@@ -1062,5 +1062,15 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   ⑤ 验证走公开 GET `releases/latest` (无需 token), 确认 tag_name 与 assets 含 APK;
   ⑥ **已固化为发布必做流程** (mengpaw-release skill §6): GitHub/Gitee 同批创建验证,
   GITEE_TOKEN 缺失即中断不回退手动 — 用户明确要求 "不要让我再提下一次"。
+- **下载链路三坑 (v0.39.1 验证暴露, 全部已修复)**: ① **Gitee release 时序窗口** —
+  GitHub release 先建、Gitee 后建期间, 设备下载 Gitee 源 404 三源全挂
+  (发布必须先双源就绪再通知用户验证); ② **下载源选择** — 国内设备 Gitee 通但
+  GitHub HTTPS/ghproxy 被墙, 下载必须按 check 命中源优先排序 (ReleaseInfo.source);
+  ③ **主线程 ANR** — rememberCoroutineScope 是主线程 dispatcher, 同步阻塞
+  HttpURLConnection 下载 10MB 直接卡死 UI, 必须 withContext(Dispatchers.IO)
+  + onProgress 回调显示进度条 (LinearProgressIndicator)。
+- **设备交付流程变更 (v0.39.1 起, 用户定案)**: 自动更新链路跑通后 **不再 ADB 推送**,
+  发布即交付 — 双源 release 就绪后设备自行 check/download/install; 崩溃巡检变为
+  「有设备在线则做, 无设备跳过并记录」; skill §7 改为自动更新链路交付 + 事故回退说明。
 
-*最后更新: 2026-08-15 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 (v0.39.0)*
+*最后更新: 2026-08-16 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 + §31 下载链路三坑 (Gitee 时序/源选择/主线程 ANR) + 设备交付流程变更 (不再 ADB 推送, v0.39.1)*
