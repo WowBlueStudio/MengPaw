@@ -1054,5 +1054,11 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 - **提示词中英模板同改 (v0.39.0)**: 精简/外置必须 CHINESE_PROMPT 与 ENGLISH_PROMPT
   同步, TEMPLATE_HASH 自动失效无需手动 bump; 中文模板 8,546→6,659 字符
   (≈4,361→3,544 token, -19%)。
+- **Gitee release 自动化 (v0.39.0)**: ① 环境变量 `GITEE_TOKEN` 已配置, 创建 release +
+  上传 APK 全走 Gitee API, 不再要求网页手动; ② 创建 release 的 `target_commitish`
+  必填 (取 tag 的 commit SHA, 缺省 400 "target_commitish is missing"); ③ 上传附件
+  `attach_files` 的 `access_token` 必须放 URL query — 放 form 字段返回 401
+  "登录失效" (PowerShell -Form 会踩); ④ 临时 payload 含 token, 用完即删不进仓库;
+  ⑤ 验证走公开 GET `releases/latest` (无需 token), 确认 tag_name 与 assets 含 APK。
 
 *最后更新: 2026-08-15 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 (v0.39.0)*
