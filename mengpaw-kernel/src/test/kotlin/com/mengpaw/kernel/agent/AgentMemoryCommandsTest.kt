@@ -63,6 +63,13 @@ class AgentMemoryCommandsTest {
     }
 
     @Test
+    fun `project save hints skill derivation`() = runTest {
+        val r = run("memory.project.save", "排版引擎", "完成主题工作流: 分析需求后使用 agent.write 生成页面")
+        assertTrue(r.success)
+        assertTrue("输出应提示派生技能入口", r.output.contains("skill.from.project 排版引擎"))
+    }
+
+    @Test
     fun `search hits long-term memory`() = runTest {
         run("memory.write", "search-topic", "关键词: 量子纠缠")
         val r = run("memory.search", "量子")

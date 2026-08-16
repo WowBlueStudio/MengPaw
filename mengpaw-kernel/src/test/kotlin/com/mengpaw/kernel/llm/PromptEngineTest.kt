@@ -522,6 +522,8 @@ Action Input: {}
         assertTrue("identity 必须位于提示词开头", identityIdx == 0)
         assertTrue("主提示词必须在 identity 之后", mainIdx > identityIdx)
         assertTrue("docsBlock 必须在主提示词之后", docsIdx > mainIdx)
+        assertTrue("应引导项目记忆派生技能", prompt.contains("skill.from.project"))
+        assertTrue("应引导技能进化循环", prompt.contains("make_skills"))
     }
 
     @Test

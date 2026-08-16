@@ -92,6 +92,7 @@ internal class AgentMemoryMutateCommands {
             appendLine("项目记忆已保存: $projectName ✅")
             appendLine()
             appendLine("此经验将在后续类似项目中可复用。")
+            appendLine("如需沉淀为可复用技能: skill.from.project $projectName")
             appendLine("查看: agent.memory.project $projectName")
             appendLine("列表: agent.memory.project")
         })

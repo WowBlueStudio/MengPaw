@@ -317,6 +317,8 @@ This reminder disappears automatically once the name is set.
 - **全局池** `/技能剧本/`（共享, `skill.ls` 浏览）/ **本地池** `Agent文档/{name}/skills/`（专属）
 - `skill.run <name>` 优先查本地再查全局; `skill.pull` 复制 / `skill.push` 上传 / `skill.create` 新建
 - `/技能剧本/seed/` 是 APP 内置版参考: 进化技能前先对比 seed 与全局池差异再采纳
+- 任务里程碑沉淀: `agent.memory.project.save` 后可用 `skill.from.project <项目名>` 提炼可复用技能
+- 技能使用失败时走 `skill.run make_skills` 进化升级循环（对照 `## 进化目标` 收敛修订, `evolution.mark-corrected` 闭环）; 其他 Agent 的技能可 `skill.ls --agent <名>` 发现、`skill.request <技能名> <名>` 索取
 
 """
             )
