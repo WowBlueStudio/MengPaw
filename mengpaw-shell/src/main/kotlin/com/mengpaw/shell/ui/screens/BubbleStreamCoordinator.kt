@@ -151,11 +151,13 @@ internal class BubbleStreamCoordinator(
      * 不再"每轮只推一次"丢弃迟到增量; 跨轮由 onStep 的 reasoning.setLength(0) 清空隔断。
      */
     private fun flushReasoning(roundId: Long) {
-        synchronized(this) {
+        val text = synchronized(this) {
             if (reasoning.isEmpty()) return
             reasoningShownRound = roundId
+            reasoning.toString()
         }
-        writer.pushThought(reasoning.toString(), roundId)
+        // 锁内取出不可变副本再推送 — 防止与 onReasoning 追加并发读写 StringBuilder (v0.40.4 P2)
+        writer.pushThought(text, roundId)
     }
 
     /** 取当前轮完整原始文本一次性写入思考 step (幂等, 每轮只执行一次)。 */

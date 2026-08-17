@@ -224,7 +224,7 @@ class AdaptiveLlmProvider(
 
         // ── Streaming path: SSE line-by-line (Reasonix readStream pattern) ──
         if (stream && onToken != null) {
-            val reasoningBuf = StringBuilder()
+            val accumulator = ReasoningAccumulator()
             val result = consumeSseStream(
                 response, onToken, requestStart,
                 onUsage = { usage ->
@@ -235,12 +235,9 @@ class AdaptiveLlmProvider(
                         System.currentTimeMillis() - requestStart
                     )
                 },
-                onReasoning = { delta ->
-                    onReasoning?.invoke(delta)
-                    reasoningBuf.append(delta)
-                }
+                onReasoning = accumulator.callback(onReasoning)
             )
-            lastReasoning = reasoningBuf.toString().ifEmpty { null }
+            lastReasoning = accumulator.text
             return result
         }
 

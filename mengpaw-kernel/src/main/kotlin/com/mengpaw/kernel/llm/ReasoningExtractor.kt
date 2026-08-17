@@ -51,3 +51,21 @@ internal object ReasoningExtractor {
 
     private fun stringOrNull(v: JsonElement?): String? = (v as? JsonPrimitive)?.contentOrNull
 }
+
+/**
+ * 流式思维链累积器 (v0.40.4 P2 合并复用): 包装 onReasoning 回调, 同步累积全文,
+ * 供 provider 的 lastReasoning 观测字段使用 — AdaptiveLlmProvider / RemoteApi 共用,
+ * 消除两份重复的"回调转发 + StringBuilder 累积"代码。
+ */
+internal class ReasoningAccumulator {
+    private val buf = StringBuilder()
+
+    /** 构造透传回调: 先累积, 再转发给上游 (上游可为 null)。 */
+    fun callback(upstream: ((String) -> Unit)?): (String) -> Unit = { delta ->
+        buf.append(delta)
+        upstream?.invoke(delta)
+    }
+
+    /** 累积结果 — 空串归一为 null (与"本次调用未返回思考"同语义)。 */
+    val text: String? get() = buf.toString().ifEmpty { null }
+}

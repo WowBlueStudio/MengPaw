@@ -16,16 +16,15 @@ class RemoteApi(
     private val apiEndpoint: String,
     private val apiKey: String,
     private val model: String = "gpt-4o",
-    private val config: RemoteConfig = RemoteConfig()
+    private val config: RemoteConfig = RemoteConfig(),
+    /** v0.40.4 P2: 可注入测试客户端 (MockEngine); 默认共享进程级客户端。 */
+    private val client: io.ktor.client.HttpClient = LlmHttpClient.ktor
 ) : LlmProvider {
 
     data class RemoteConfig(
         val maxTokens: Int = 4096,
         val temperature: Double = 0.7
     )
-
-    // v0.29.2: 共享客户端 (LlmHttpClient) — 与主 provider 同一连接池 (Reasonix 对照 #2)
-    private val client = LlmHttpClient.ktor
 
     /** Token usage from the most recent API call (v0.29.2: fallback 链路缓存统计直通). */
     @Volatile override var lastUsage: TokenUsage? = null
@@ -97,16 +96,13 @@ class RemoteApi(
 
         // v0.40.4: 直接复用主解析器 consumeSseStream — 删除重复 SSE 循环,
         // 保证主链与 fallback 链同口径 (全厂商思维链分流 / usage / 断流语义)。
-        val reasoningBuf = StringBuilder()
+        val accumulator = ReasoningAccumulator()
         val result = consumeSseStream(
             response, onToken, System.currentTimeMillis(),
             onUsage = { usage -> lastUsage = usage },
-            onReasoning = { delta ->
-                onReasoning?.invoke(delta)
-                reasoningBuf.append(delta)
-            }
+            onReasoning = accumulator.callback(onReasoning)
         )
-        lastReasoning = reasoningBuf.toString().ifEmpty { null }
+        lastReasoning = accumulator.text
         return result
     }
 
@@ -138,27 +134,12 @@ class RemoteApi(
     }
 
     private fun parseResponse(body: String): String {
-        return try {
-            val json = Json.parseToJsonElement(body).jsonObject
-            // Usage 提取 (v0.29.2: 非流式路径缓存统计, 与主 provider parseBody 对齐)
-            json["usage"]?.jsonObject?.let { u ->
-                lastUsage = TokenUsage(
-                    promptTokens = u["prompt_tokens"]?.jsonPrimitive?.int ?: 0,
-                    completionTokens = u["completion_tokens"]?.jsonPrimitive?.int ?: 0,
-                    totalTokens = u["total_tokens"]?.jsonPrimitive?.int ?: 0,
-                    cacheHitTokens = u["prompt_cache_hit_tokens"]?.jsonPrimitive?.int ?: 0,
-                    cacheMissTokens = u["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
-                )
-            }
-            val choices = json["choices"]?.jsonArray ?: return body
-            val first = choices.firstOrNull()?.jsonObject ?: return body
-            val message = first["message"]?.jsonObject ?: return body
-            // v0.40.4: 思维链独立提取 (不混入正文), 官方口径 message.reasoning_content
-            lastReasoning = ReasoningExtractor.openAiCompat(message)
-            message["content"]?.jsonPrimitive?.content ?: body
-        } catch (e: Exception) {
-            body.take(500)
-        }
+        // v0.40.4 P2: 复用 parseBody 统一提取 content/reasoning/usage, 消除重复;
+        // maxFallbackLength=500 保留原"解析失败回退截断 500 字符"语义 (防错误体整段冒充回答)。
+        val parsed = parseBody(body, maxFallbackLength = 500)
+        lastUsage = parsed.usage
+        lastReasoning = parsed.reasoning
+        return parsed.content
     }
 
     override fun close() {

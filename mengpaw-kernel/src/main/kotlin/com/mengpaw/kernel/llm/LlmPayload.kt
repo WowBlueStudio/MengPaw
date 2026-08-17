@@ -125,13 +125,16 @@ internal fun buildRequestBody(
 }
 
 /**
- * 合并解析 LLM 响应体: 一次 Json.parseToJsonElement 同时提取 content / reasoning / usage.
+ * 合并解析 LLM 响应体: 一次 Json.parseToJsonElement 同时提取 content / reasoning / usage
+ * (v0.40.4 P2: RemoteApi.parseResponse 也复用本函数, 消除重复提取逻辑)。
  * 取代之前两次独立解析 (parseUsage + parseResponse), 减少 GC 压力.
  * 思维链 (message.reasoning_content, 各厂商官方文档口径) 提取为独立 [ParsedLlmBody.reasoning],
  * 绝不拼进 content — 防止思维链里的 "Final Answer:"/"Action:" 污染正文与 ReAct 判定。
+ * @param maxFallbackLength 解析失败/无正文时回退原始文本的最大截断长度 (null = 不截断)
  * @return [ParsedLlmBody] — content 绝不会为 null, reasoning/usage 可能为 null
  */
-internal fun parseBody(body: String): ParsedLlmBody {
+internal fun parseBody(body: String, maxFallbackLength: Int? = null): ParsedLlmBody {
+    val fallback = maxFallbackLength?.let { body.take(it) } ?: body
     return try {
         val root = Json.parseToJsonElement(body).jsonObject
         // 1. 提取 usage
@@ -154,8 +157,8 @@ internal fun parseBody(body: String): ParsedLlmBody {
         // delta 形态兜底 (流式响应被非流式路径误收时), 兼容键见 ReasoningExtractor
         val reasoning = message?.let(ReasoningExtractor::openAiCompat)
             ?: delta?.let(ReasoningExtractor::openAiCompat)
-        ParsedLlmBody(content ?: body, reasoning, usage)
+        ParsedLlmBody(content ?: fallback, reasoning, usage)
     } catch (_: Exception) {
-        ParsedLlmBody(body, null, null)
+        ParsedLlmBody(fallback, null, null)
     }
 }

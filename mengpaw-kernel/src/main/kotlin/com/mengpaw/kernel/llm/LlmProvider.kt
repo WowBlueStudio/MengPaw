@@ -62,8 +62,7 @@ interface LlmProvider : AutoCloseable {
 
     /**
      * 最近一次 API 调用的思维链全文, 如果该调用返回了思考内容 (v0.40.4, 供观测;
-     * UI 显示由流式 [onReasoning] 通道负责)。Providers that track usage also track this.
-     * Default is null (untracked / simulated providers).
+     * UI 显示由流式 [onReasoning] 通道负责)。默认 null — 未跟踪/模拟 provider 不设置。
      */
     val lastReasoning: String? get() = null
 }
