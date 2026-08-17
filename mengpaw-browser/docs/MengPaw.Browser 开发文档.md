@@ -4,6 +4,8 @@
 > 文档版本: v0.8.x · 2026-08-17 · 许可: AGPL-3.0-or-later OR LicenseRef-Commercial
 > 本文档分两部分: **第一部分**引导 Agent 通过 MCP 连接浏览器并开始操作;
 > **第二部分**面向开发者, 讲解目录结构与实现。
+> 配套文档: **MengPaw_Browser_skills.md**(Agent 完整操作手册: 命令面全表/
+> 半自动循环/表单/抓取/排障/Playwright 对照) — 下载链接: 见本文件发布说明附件。
 
 ---
 
@@ -54,67 +56,19 @@ curl -X POST http://127.0.0.1:9880/mcp \
 
 开放模式仅监听回环地址, 不暴露局域网; 请仅在可信环境开启, 用完可关回。
 
-### 4. 命令面速查
+### 4. 连接成功后的操作
 
-共 45 条: `page.*` 22 条(Playwright 语义, 主用)+ `browser.*` 23 条(保留能力)+
-原生 6 工具(旧 MCP 工具名)。完整清单与参数见同目录
-`MengPaw_Browser_skills.md` §3; 下文为高频命令。
+连接建立后, 浏览器的全部操作能力(45 条命令全表 / 半自动循环 / 表单自动化 /
+网页抓取 / 排障速查 / Playwright 对照)由配套文档
+**MengPaw_Browser_skills.md** 传达, 本开发文档不再重复。
 
-| 命令 | 用途 |
-|------|------|
-| `page.load <url> [--max-height N]` | 导航 + 全页分段截图 + 坐标系统(推荐起手) |
-| `page.goto <url> [--wait domcontentloaded\|networkidle]` | 导航 + 精确等待 |
-| `page.screenshot [--full] [--view]` / `page.screenshot.element <css>` | 截图, 只回路径 + 尺寸/坐标 |
-| `page.click <seg> <x> <y>` / `page.click <css>` | 段图坐标点击 / 选择器点击 |
-| `page.fill <css> <text>` / `page.select <css> <value>` / `page.submit <css>` | 表单 |
-| `page.content [--grep P] [--regex] [-i] [--head N] [--tail N]` | 提取正文 + 过滤 |
-| `page.text <css>` / `page.attr <css> <name>` / `page.wait_selector <css>` | 查询/等待 |
-| `page.scroll <x> <y>` / `page.scroll_by <dy>` / `page.eval <js>` | 滚动/JS |
-| `page.url` / `page.title` / `page.back` / `page.forward` / `page.key <key>` | 信息/导航/按键 |
-| `tabs` / `tab` / `tab.open` / `tab.close` / `tab.all` | 标签页(最多 4) |
-| `cookies` / `cookies.set` / `cookies.clear` / `storage` | 存储与 Cookie |
-| `browser_navigate` / `browser_extract` / `browser_eval` / ... | 原生 6 工具 |
-
-### 5. 半自动循环(推荐工作流)
-
-```text
-page.load https://example.com        # 一次完成: 导航 + 分段截图 + 坐标系统
-page.click 1 320 480                  # 看图 → 按段图坐标点击 (段 1)
-page.scroll_by 800                    # 滚动后 page.screenshot --full 核对
-page.content --grep "价格" --head 20  # 过滤提取, 不进上下文
-```
-
-`page.load` 返回格式(Agent 解析依据):
-
-```text
-## page.load 完成
-URL: https://example.com
-段数: 3 (partial: false)
-段 1: /storage/emulated/0/MengPaw/截图存档/page_..._seg1.png (1080 × 2400, 缩放 0.44)
-坐标系统: page.click <seg> <x> <y> — 框架自动还原页面坐标
-```
-
-超长页按段截取(段数上限 30, 超出标注 `partial:true`), 截图只回路径,
-Agent 自行读取 `/storage/emulated/0/MengPaw/截图存档/` 下的图片查看。
-
-### 6. 排障速查
-
-| 现象 | 处理 |
-|------|------|
-| 9880 连不上 | 浏览器未运行 → 先唤起(§2 ①) |
-| 401 unauthorized | 安全模式且无 token → 开启开放模式(§3 处置流程) |
-| `WebView not available` | 无打开标签页 → 先 `OPEN_URL` 开页 |
-| `page.load` 提示存储权限 | 未授予「所有文件访问」→ 浏览器首启弹窗或系统设置授权 |
-| `page.click` 错位/超界 | 先 `page.screenshot --full` 刷新段图, 用返回段号 + 坐标 |
-| `Selector not found` | 元素未加载/在 iframe → `page.eval` 探测 DOM, 先等加载 |
-| 页面提取为空 | JS 渲染未完成 → `page.goto` 等加载后再 `page.content` |
-| 分段截图 `partial:true` | 超长截断属正常 → 按已返回段操作或滚动重截 |
+> 下载链接: 见本文件发布说明附件(用户上传 skills 文档后补充实际链接)。
 
 ---
 
 ## 第二部分 从源码开始 — 目录结构与实现
 
-### 7. 模块与构建
+### 5. 模块与构建
 
 - 模块: `mengpaw-browser`(Gradle Android application)
 - 依赖: `mengpaw-kernel`(CLI 执行/端口表/错误码)、`mengpaw-core`(DataPaths/Logger)、
@@ -123,7 +77,7 @@ Agent 自行读取 `/storage/emulated/0/MengPaw/截图存档/` 下的图片查�
 - 测试: `.\gradlew.bat :mengpaw-browser:testDebugUnitTest`(纯 JVM 单测)
 - 产物: `mengpaw-browser/build/outputs/apk/...`
 
-### 8. 目录结构(文件地图)
+### 6. 目录结构(文件地图)
 
 ```
 com.mengpaw.browser
@@ -151,7 +105,7 @@ com.mengpaw.browser
   供 am 桥复用 → 首启申请「所有文件访问」。
 - `BrowserActivity.onDestroy`: 停止 9880 桥, token 失效。
 
-### 9. 命令面实现
+### 7. 命令面实现
 
 注册源头: `BuiltinBrowserPlugin.commands` =
 `BrowserTabCommands` + `BrowserPageCommands` + `BrowserQueryCommands` +
@@ -169,9 +123,9 @@ com.mengpaw.browser
 命令实现统一接收 `(List<String>, ExecutionContext) -> ExecutionResult`, 经
 `BrowserCommandContext` 访问 WebView 桥(`BrowserBridge`)/标签页状态/截图器。
 
-### 10. 调用通道实现
+### 8. 调用通道实现
 
-#### 10.1 9880 HTTP 桥(`McpHttpServer`)
+#### 8.1 9880 HTTP 桥(`McpHttpServer`)
 
 监听 `127.0.0.1:9880`(Ports.BROWSER_MCP), 生命周期随 BrowserActivity。
 
@@ -183,7 +137,7 @@ com.mengpaw.browser
 - 工具执行双路径分流(`BrowserMcpTools`): 内置命令后台线程 `runBlocking`;
   原生 6 工具主线程(截图 View.draw 必须主线程)
 
-#### 10.2 am 桥(`RunCommandService`)
+#### 8.2 am 桥(`RunCommandService`)
 
 ```text
 action:  com.mengpaw.browser.RUN_COMMAND
@@ -197,7 +151,7 @@ extra:   com.mengpaw.browser.RUN_COMMAND_BACKGROUND = true
 `RunCommandService` 引号感知分词, 输出落盘后由调用方读取。浏览器未运行时报
 「浏览器未就绪(请先打开 MP 浏览器再调用)」。
 
-### 11. 安全模型
+### 9. 安全模型
 
 | 层 | 措施 |
 |---|------|
@@ -211,14 +165,14 @@ extra:   com.mengpaw.browser.RUN_COMMAND_BACKGROUND = true
 认证策略为纯函数 `McpAuthPolicy.isAuthorized(openMode, expectedToken, providedHeader)`
 (安全模式 fail-closed / 开放模式放行), 单测锁定。
 
-### 12. 存储与截图
+### 10. 存储与截图
 
 - 截图/输出落盘: `/storage/emulated/0/MengPaw/截图存档`(公共目录)
 - 超长页分段: 每段 ≈ 视口高, 上限 30 段, 超出标注 `partial:true`
 - 坐标系统: 段图坐标 → 页面坐标由浏览器自动还原 (缩放比/段偏移)
 - 设置持久化: `BrowserPrefs`(SharedPreferences `mp_browser`)
 
-### 13. 测试
+### 11. 测试
 
 `src/test/kotlin/com/mengpaw/browser/`:
 
@@ -228,7 +182,7 @@ extra:   com.mengpaw.browser.RUN_COMMAND_BACKGROUND = true
 改命令面/桥/安全逻辑必须补对应单测; 核心链路改动跑
 `:mengpaw-browser:testDebugUnitTest` 全绿。
 
-### 14. 开发规范
+### 12. 开发规范
 
 - 命令核对以注册处为准(`BuiltinBrowserPlugin.commands` 聚合, 不凭 grep 印象)
 - 新增命令四源同步: 命令注册 / `MengPaw_Browser_skills.md` / 开发指南 / 提示词
