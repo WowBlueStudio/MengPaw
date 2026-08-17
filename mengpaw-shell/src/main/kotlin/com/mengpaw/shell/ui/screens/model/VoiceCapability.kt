@@ -18,7 +18,9 @@ object VoiceCapability {
         "gpt-5", "gpt-4o",                    // OpenAI: gpt-4o 起原生音频输入, gpt-5 全系
         "qwen3-omni", "qwen2.5-omni", "qwen-omni",  // 通义千问全模态
         "glm-4.5v", "glm-5v",                 // 智谱多模态（音视频理解）
-        "doubao-1.5-audio", "doubao-audio"    // 豆包语音理解
+        "doubao-1.5-audio", "doubao-audio",   // 豆包语音理解
+        // MiniMax 刻意不列入: 官方文档原文 "MiniMax-M3 可通过 OpenAI 兼容消息内容块输入
+        // 图片和视频; 当前不支持音频输入" (platform.minimaxi.com OpenAI SDK 文档, 2026-08-17)
     )
 
     /** 关键词兜底 — 自定义模型名命中即识别。 */

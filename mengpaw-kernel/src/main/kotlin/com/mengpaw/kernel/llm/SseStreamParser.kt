@@ -43,6 +43,19 @@ internal suspend fun consumeSseStream(
     val channel = response.bodyAsChannel()
     val fullContent = StringBuilder()
     var firstToken = true
+    // v0.41.0: MiniMax 默认格式 thinking 内联在 content 的 <think>...</think> 标签内 —
+    // 剥离后思维链走 onReasoning, 正文走 onToken, 标签本身丢弃
+    val thinkSplitter = ThinkTagSplitter(
+        onToken = { text ->
+            if (firstToken) { firstToken = false; KernelLog.d("MengPawLatency", "S-FIRST") }
+            fullContent.append(text)
+            onToken(text)
+        },
+        onReasoning = { text -> onReasoning?.invoke(text) }
+    )
+    // MiniMax reasoning_details 流式语义 (官方 OpenAI SDK 示例): text 为当前块累计全文,
+    // 记录上一次全文, 每次取新增部分 — 否则增量会被重复推送
+    var minimaxDetailsFull: String? = null
 
     while (!channel.isClosedForRead) {
         val line = try {
@@ -88,18 +101,26 @@ internal suspend fun consumeSseStream(
                 ?.get("delta")?.jsonObject
 
             if (openAiDelta != null) {
-                // Visible text delta (OpenAI standard)
-                openAiDelta["content"]?.jsonPrimitive?.contentOrNull?.let { text ->
-                    if (text.isNotEmpty()) {
-                        if (firstToken) { firstToken = false; KernelLog.d("MengPawLatency", "S-FIRST") }
-                        fullContent.append(text)
-                        onToken(text)
-                    }
-                }
+                // Visible text delta (OpenAI standard) — 先经 <think> 剥离器分流
+                openAiDelta["content"]?.jsonPrimitive?.contentOrNull
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { thinkSplitter.feed(it) }
+
                 // Reasoning delta (v0.40.4 全厂商键归一: reasoning_content/reasoning/thought/thinking) —
-                // 思维链走独立回调, 不进 fullContent/onToken
-                ReasoningExtractor.openAiCompat(openAiDelta)?.let { text ->
-                    if (text.isNotEmpty()) onReasoning?.invoke(text)
+                // 思维链走独立回调, 不进 fullContent/onToken。MiniMax reasoning_details 优先
+                // (官方 OpenAI SDK 流式示例只消费该字段; text 为累计全文需取增量)
+                val details = ReasoningExtractor.reasoningDetails(openAiDelta)
+                if (details != null) {
+                    val incremental = minimaxDetailsFull
+                        ?.takeIf { details.startsWith(it) }
+                        ?.let { details.substring(it.length) }
+                        ?: details
+                    minimaxDetailsFull = details
+                    if (incremental.isNotEmpty()) onReasoning?.invoke(incremental)
+                } else {
+                    ReasoningExtractor.openAiCompat(openAiDelta)?.let { text ->
+                        if (text.isNotEmpty()) onReasoning?.invoke(text)
+                    }
                 }
             } else {
                 // Anthropic content_block_delta:
@@ -127,6 +148,7 @@ internal suspend fun consumeSseStream(
         }
     }
 
+    thinkSplitter.finish()
     KernelLog.d("MengPawLatency", "S-DONE len=${fullContent.length}")
     return fullContent.toString()
 }

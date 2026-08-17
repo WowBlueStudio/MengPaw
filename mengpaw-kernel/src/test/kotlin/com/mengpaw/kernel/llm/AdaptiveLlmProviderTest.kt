@@ -66,6 +66,24 @@ class AdaptiveLlmProviderTest {
     }
 
     @Test
+    fun `provider type detection minimaxi com`() {
+        val provider = AdaptiveLlmProvider(
+            apiEndpoint = "https://api.minimaxi.com/v1/chat/completions",
+            apiKey = "test-key"
+        )
+        assertEquals("Minimax", provider.info().name)
+    }
+
+    @Test
+    fun `provider type detection minimax io`() {
+        val provider = AdaptiveLlmProvider(
+            apiEndpoint = "https://api.minimax.io/v1/chat/completions",
+            apiKey = "test-key"
+        )
+        assertEquals("Minimax", provider.info().name)
+    }
+
+    @Test
     fun `adaptive config default values`() {
         // v0.29.2: timeoutMs/socketTimeoutMs 已移除 — 超时集中配置在共享客户端 LlmHttpClient
         val config = AdaptiveLlmProvider.AdaptiveConfig()

@@ -84,4 +84,54 @@ class LlmPayloadTest {
         assertFalse("请求体不得出现 thinking 键", body.contains("thinking"))
         assertFalse("请求体不得出现 thought 键", body.contains("thought"))
     }
+
+    @Test
+    fun `MiniMax默认格式_think内联标签剥离进reasoning`() {
+        // 官方原文 (platform.minimaxi.com): reasoning_split 为 false 时 thinking 保留在
+        // content 字段的 <think>...</think> 标签内 — 响应侧剥离, 绝不混入正文
+        val parsed = parseBody(
+            """
+            {"choices": [{"message": {
+              "role": "assistant",
+              "content": "<think>草稿方案</think>这是最终答案"
+            }}]}
+            """.trimIndent()
+        )
+        assertEquals("这是最终答案", parsed.content)
+        assertEquals("草稿方案", parsed.reasoning)
+    }
+
+    @Test
+    fun `MiniMax非流式_reasoning_details独立提取`() {
+        // 官方工具使用&交错思维链文档: reasoning_split=true 时 thinking 经
+        // reasoning_details 数组返回, 每项 {type, id, format, index, text}
+        val parsed = parseBody(
+            """
+            {"choices": [{"message": {
+              "role": "assistant",
+              "content": "正文",
+              "reasoning_details": [
+                {"type": "reasoning.text", "id": "r1", "format": "MiniMax-response-v1", "index": 0, "text": "思考全文"}
+              ]
+            }}]}
+            """.trimIndent()
+        )
+        assertEquals("正文", parsed.content)
+        assertEquals("思考全文", parsed.reasoning)
+    }
+
+    @Test
+    fun `双通道同现_独立字段优先_不拼接内联思考`() {
+        val parsed = parseBody(
+            """
+            {"choices": [{"message": {
+              "role": "assistant",
+              "content": "<think>内联思考</think>正文",
+              "reasoning_content": "独立思考"
+            }}]}
+            """.trimIndent()
+        )
+        assertEquals("正文", parsed.content)
+        assertEquals("独立思考", parsed.reasoning)
+    }
 }

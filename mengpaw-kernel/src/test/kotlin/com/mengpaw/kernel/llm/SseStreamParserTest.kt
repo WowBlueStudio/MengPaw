@@ -227,4 +227,57 @@ class SseStreamParserTest {
         assertEquals("正文", r.content)
         assertTrue("非字符串思维链不得误进 onReasoning", r.reasoning.isEmpty())
     }
+
+    @Test
+    fun `MiniMax官方_reasoning_details累计全文_增量去重`() = runTest {
+        // 官方 OpenAI SDK 流式示例 (platform.minimaxi.com): 每个 delta 的 reasoning_details
+        // 数组项 text 为当前块累计全文, 示例按 len(reasoning_buffer) 取新增部分
+        val r = runSse(
+            """
+            data: {"choices":[{"delta":{"reasoning_details":[{"type":"reasoning.text","text":"先分析"}]}}]}
+
+            data: {"choices":[{"delta":{"reasoning_details":[{"type":"reasoning.text","text":"先分析再规划"}]}}]}
+
+            data: {"choices":[{"delta":{"content":"最终答案"}}]}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("最终答案", r.content)
+        assertEquals(listOf("先分析", "再规划"), r.reasoning)
+    }
+
+    @Test
+    fun `MiniMax默认格式_think内联标签剥离_思维链走onReasoning`() = runTest {
+        // 官方原文: reasoning_split 为 false 时 thinking 保留在 content 的 <think>...</think> 标签内
+        val r = runSse(
+            """
+            data: {"choices":[{"delta":{"content":"<think>先分析需求"}}]}
+
+            data: {"choices":[{"delta":{"content":"再规划步骤</think>最终答案"}}]}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("最终答案", r.content)
+        assertEquals(listOf("最终答案"), r.tokens)
+        assertEquals(listOf("先分析需求", "再规划步骤"), r.reasoning)
+    }
+
+    @Test
+    fun `MiniMax默认格式_think标签跨chunk拆分_正文不污染`() = runTest {
+        val r = runSse(
+            """
+            data: {"choices":[{"delta":{"content":"<think>思考"}}]}
+
+            data: {"choices":[{"delta":{"content":"内容</th"}}]}
+
+            data: {"choices":[{"delta":{"content":"ink>正文"}}]}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("正文", r.content)
+        assertEquals(listOf("思考", "内容"), r.reasoning)
+    }
 }

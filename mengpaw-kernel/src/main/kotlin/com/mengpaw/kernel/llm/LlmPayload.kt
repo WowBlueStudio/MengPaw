@@ -150,13 +150,20 @@ internal fun parseBody(body: String, maxFallbackLength: Int? = null): ParsedLlmB
         val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject
         val message = choice?.get("message")?.jsonObject
         val delta = choice?.get("delta")?.jsonObject
-        val content = message?.get("content")?.jsonPrimitive?.content
+        val rawContent = message?.get("content")?.jsonPrimitive?.content
             ?: delta?.get("content")?.jsonPrimitive?.content
             ?: root["data"]?.jsonArray?.firstOrNull()?.jsonObject?.get("content")?.jsonPrimitive?.content
-        // 思维链: 官方文档口径 message.reasoning_content (DeepSeek/Kimi/GLM/Qwen/豆包/xAI),
-        // delta 形态兜底 (流式响应被非流式路径误收时), 兼容键见 ReasoningExtractor
-        val reasoning = message?.let(ReasoningExtractor::openAiCompat)
-            ?: delta?.let(ReasoningExtractor::openAiCompat)
+        // MiniMax 默认格式: thinking 内联在 content 的 <think>...</think> 标签内 (官方原文:
+        // "content 字段会包含 <think> 标签内容") — 响应侧剥离到 reasoning, 绝不混入正文
+        val (content, inlineThink) = rawContent?.let(ReasoningExtractor::stripThinkTags) ?: (null to null)
+        // 思维链: 官方独立字段优先 (reasoning_content — DeepSeek/Kimi/GLM/Qwen/豆包/xAI;
+        // reasoning_details — MiniMax reasoning_split=true), <think> 内联兜底 (MiniMax 默认)。
+        // 双通道同现视为重复, 只取独立字段 (用户定案: 同包多键只取首个)
+        val reasoning = message?.let { m ->
+            ReasoningExtractor.reasoningDetails(m) ?: ReasoningExtractor.openAiCompat(m)
+        } ?: delta?.let { d ->
+            ReasoningExtractor.reasoningDetails(d) ?: ReasoningExtractor.openAiCompat(d)
+        } ?: inlineThink
         ParsedLlmBody(content ?: fallback, reasoning, usage)
     } catch (_: Exception) {
         ParsedLlmBody(fallback, null, null)

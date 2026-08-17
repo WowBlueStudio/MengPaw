@@ -36,6 +36,7 @@ class AgentSession(
             endpoint.contains("dashscope") -> "Qwen"
             endpoint.contains("volces.com") -> strings.providerVolcano
             endpoint.contains("openmodel.ai") -> "OpenModel"
+            endpoint.contains("minimaxi.com") || endpoint.contains("minimax.io") -> "MiniMax"
             else -> "Custom"
         }
         val modelLabel = modelName.take(24).ifBlank { "auto" }

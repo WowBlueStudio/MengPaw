@@ -70,9 +70,29 @@ enum class LlmProviderPreset(
             ModelInfo("qwen3.7-max", "Qwen托管"), ModelInfo("gpt-5.4-mini", "OpenAI托管"),
             ModelInfo("kimi-k3", "Kimi托管"), ModelInfo("glm-5.2", "GLM托管"),
             ModelInfo("grok-4.5", "Grok托管"), ModelInfo("(更多模型见API返回)", "提示"))),
+    // MiniMax (稀宇科技) — 官方 OpenAI SDK 文档 (platform.minimaxi.com, 2026-08-17 核对):
+    // Bearer 认证; 默认 thinking 内联在 content 的 <think> 标签内 (响应侧剥离到 onReasoning);
+    // M3 支持图片/视频输入, 官方明确"当前不支持音频输入"。显示顺序由
+    // FrameworkSettingsContent 的 sortedBy(enLabel) 决定, 与声明位置无关。
+    MINIMAX("MiniMax (稀宇科技)", "MiniMax", "https://api.minimaxi.com/v1/chat/completions", "MiniMax-M3", "",
+        listOf(ModelInfo("MiniMax-M3", "旗舰·1M上下文"), ModelInfo("MiniMax-M2.7", "均衡"),
+            ModelInfo("MiniMax-M2.7-highspeed", "极速"), ModelInfo("MiniMax-M2.5", "性价比"),
+            ModelInfo("MiniMax-M2.5-highspeed", "极速"), ModelInfo("MiniMax-M2.1", "编程"),
+            ModelInfo("MiniMax-M2.1-highspeed", "极速"), ModelInfo("MiniMax-M2", "编码/Agent"))),
     SELF_HOSTED("Self-Hosted (自建)", "Self-Hosted", "http://192.168.1.100:${com.mengpaw.kernel.ports.Ports.LLM_SELF}/v1/chat/completions", "local-model", "",
         listOf(ModelInfo("local-model", "Chat"), ModelInfo("qwen2.5:7b", "Chat"), ModelInfo("llama3.1:8b", "Chat"))),
     CUSTOM("Custom", "Custom", "", "", "", emptyList());
+
+    companion object {
+        /**
+         * 框架设置预置供应商 chips 显示顺序 (v0.41.0): 除自建/自定义外按英文名首字母排序 —
+         * 与枚举声明顺序解耦, 新增预置项无需调整声明位置。自建/自定义由调用方单独一行展示。
+         */
+        fun presetChipOrder(): List<LlmProviderPreset> =
+            entries
+                .filter { it != CUSTOM && it != SELF_HOSTED }
+                .sortedBy { it.enLabel.lowercase() }
+    }
 }
 
 fun LlmProviderPreset.modelListDisplay(): List<ModelInfo> =

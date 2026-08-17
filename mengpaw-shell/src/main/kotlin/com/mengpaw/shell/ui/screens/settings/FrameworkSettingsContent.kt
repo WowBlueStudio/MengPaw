@@ -167,8 +167,8 @@ fun FrameworkSettingsContent(
         Text(state.strings.frameworkProviderLabel, style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
         Spacer(Modifier.height(4.dp))
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            LlmProviderPreset.entries.filter { it != LlmProviderPreset.CUSTOM && it != LlmProviderPreset.SELF_HOSTED }
-                .forEach { preset ->
+            // v0.41.0: 预置供应商按英文名首字母排序 (自建/自定义除外, 单独一行)
+            LlmProviderPreset.presetChipOrder().forEach { preset ->
                     Surface(
                         onClick = { viewModel.selectProvider(preset) },
                         shape = RoundedCornerShape(ArcoRadius.sm),

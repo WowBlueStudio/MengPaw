@@ -73,6 +73,8 @@ enum class CacheStrategy {
             "volces.com" in endpoint -> CACHE_CONTROL
             "x.ai" in endpoint -> PREFIX_STABLE
             "openmodel.ai" in endpoint -> PREFIX_STABLE
+            // MiniMax 官方文档未记载 cache_control 注解/断点缓存 — 不注入, 保持前缀稳定
+            "minimaxi.com" in endpoint || "minimax.io" in endpoint -> PREFIX_STABLE
             else -> PREFIX_STABLE
         }
     }

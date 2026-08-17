@@ -32,6 +32,7 @@
 | Anthropic 兼容 | [Streaming messages](https://platform.claude.com/docs/en/build-with-claude/streaming) + [Thinking](https://platform.claude.com/docs/en/build-with-claude/thinking) | `content_block_delta` 内 `delta.type=="thinking_delta"` + `delta.thinking`；块尾 `signature_delta` |
 | Ollama | [Thinking](https://docs.ollama.com/capabilities/thinking) + [OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility) | 原生 `/api/chat` 用 `message.thinking`；`/v1` 兼容端点官方未记载思维字段（只作兜底键） |
 | OpenAI | 官方 chat/completions 文档未记载 `reasoning_content` | 仅 Responses API 文档化思维输出；接入按"OpenAI 兼容键"通用路径处理，不作厂商特有声明 |
+| MiniMax | [OpenAI SDK](https://platform.minimaxi.com/docs/api-reference/text-openai-api) + [工具使用&交错思维链](https://platform.minimaxi.com/docs/guides/text-m3-function-call.md) + [OpenAPI 规范](https://platform.minimaxi.com/docs/api-reference/text/api/openapi-chat-openai.json) | 默认 thinking 内联在 `content` 的 `<think>...</think>` 标签内（响应侧剥离）；`reasoning_split=true` 时经 `reasoning_content` + `reasoning_details` 数组返回，流式 delta 的 `text` 为累计全文（官方示例按 buffer 取增量） |
 
 ## 2. 当前支持厂商与模型名单（登记表, 2026-08-17）
 
@@ -48,6 +49,7 @@
 | Grok | https://api.x.ai/v1/chat/completions | grok-4.3 | grok-4.5(旗舰) / grok-4.3(推荐·1M上下文) / **grok-4.20-reasoning(思维链)** / grok-4.1-fast-non-reasoning(快速) / grok-build-0.1(Coding) |
 | 火山引擎(豆包) | https://ark.cn-beijing.volces.com/api/v3/chat/completions | doubao-seed-2.0-pro | doubao-seed-2.0-pro(旗舰) / doubao-seed-2.0-lite(均衡) / doubao-seed-2.0-mini(轻量) / doubao-seed-1.8(前代) / doubao-seed-1.6-flash(快速) / **doubao-seed-1.6-thinking(思维链)** / deepseek-v3-2(DeepSeek托管) / glm-4.7(GLM托管) / (需创建接入点 ep-xxx) |
 | OpenModel | https://api.openmodel.ai/v1/chat/completions | deepseek-v4-flash | **deepseek-v4-pro(思维链)** / deepseek-v4-flash(快速) / qwen3.7-max(Qwen托管) / gpt-5.4-mini(OpenAI托管) / kimi-k3(Kimi托管) / glm-5.2(GLM托管) / grok-4.5(Grok托管) / (更多模型见API返回) |
+| MiniMax | https://api.minimaxi.com/v1/chat/completions | MiniMax-M3 | MiniMax-M3(旗舰·1M上下文) / MiniMax-M2.7(均衡) / MiniMax-M2.7-highspeed(极速) / MiniMax-M2.5(性价比) / MiniMax-M2.5-highspeed(极速) / MiniMax-M2.1(编程) / MiniMax-M2.1-highspeed(极速) / MiniMax-M2(编码/Agent) |
 | Self-Hosted | http://192.168.1.100:{Ports.LLM_SELF}/v1/chat/completions | local-model | local-model(Chat) / qwen2.5:7b(Chat) / llama3.1:8b(Chat) |
 | Custom | 用户自填 | — | 无预置（OpenAI 兼容端点） |
 
@@ -103,6 +105,13 @@ private val OPENAI_COMPAT_KEYS = listOf("reasoning_content", "reasoning", "thoug
 
 - 键序即优先级：同包多键只取首个（定案: 网关重复下发同一思考 ~99%，拼接会显示两遍）。
 - Anthropic 兼容端点无需改这里（`thinking_delta` 已在 `SseStreamParser` 处理）。
+- **内联标签形态**（MiniMax 默认）：官方文档明确 thinking 保留在 `content` 的
+  `<think>...</think>` 标签内 — 流式经 `ThinkTagSplitter` 剥离（跨 chunk 拆分标签也处理），
+  非流式经 `stripThinkTags` 剥离，剥离内容都进 `onReasoning`/`ParsedLlmBody.reasoning`。
+- **数组形态**（MiniMax `reasoning_split=true`）：`reasoning_details` 数组每项含
+  `type/id/format/index/text`；**流式 delta 的 text 是当前块累计全文**（官方 OpenAI SDK
+  示例按 `len(reasoning_buffer)` 取新增），流式侧必须按全文 buffer 做增量去重，直接拼接
+  会整段重复推送。
 
 ### 3.6 会话显示名 — `mengpaw-shell/.../ui/screens/model/AgentSession.kt`
 

@@ -293,6 +293,7 @@ class AdaptiveLlmProvider(
         endpoint.contains("openmodel.ai") -> "openai"
         endpoint.contains("x.ai") || endpoint.contains("api.x.ai") -> "grok"
         endpoint.contains("volces.com") || endpoint.contains("volcengine") -> "volcano"
+        endpoint.contains("minimaxi.com") || endpoint.contains("minimax.io") -> "minimax"
         else -> "openai"
     }
 
