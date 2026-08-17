@@ -37,7 +37,7 @@ enum class LlmProviderPreset(
     val apiKeyPrefix: String = "",
     val models: List<ModelInfo> = emptyList()
 ) {
-    // ═══ Presets verified against official docs — 2026-07-21 ═══
+    // ═══ Presets verified against official docs — 2026-08-17 ═══
     // Only top models listed here; full list fetched from API on key entry.
     OPENAI("OpenAI", "OpenAI", "https://api.openai.com/v1/chat/completions", "gpt-5.4", "sk-",
         listOf(ModelInfo("gpt-5.4", "旗舰"), ModelInfo("gpt-5.4-mini", "快速"), ModelInfo("gpt-5.4-nano", "轻量"),
@@ -50,9 +50,13 @@ enum class LlmProviderPreset(
     GLM("GLM (智谱)", "GLM (Zhipu)", "https://open.bigmodel.cn/api/paas/v4/chat/completions", "glm-5.2", "",
         listOf(ModelInfo("glm-5.2", "旗舰·1M上下文"), ModelInfo("glm-5.1", "Coding"),
             ModelInfo("glm-5", "前代"), ModelInfo("glm-5-turbo", "高速"), ModelInfo("glm-5v-turbo", "多模态"))),
-    QWEN("DashScope", "DashScope", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", "qwen3.7-max", "sk-",
-        listOf(ModelInfo("qwen3.7-max", "旗舰·1M上下文"), ModelInfo("qwen3.6-35b-a3b", "开源MoE"),
-            ModelInfo("qwen3.5-plus", "均衡"), ModelInfo("qwen-flash", "快速"),
+    // DashScope 2026-08-17 核对 (help.aliyun.com/zh/model-studio/getting-started/models +
+    // 官方 Responses 兼容模型清单): qwen3.8-max 已转正为旗舰 (qwen3.8-max-preview 退役自动路由);
+    // 均衡/快速档当前为 qwen3.7-plus / qwen3.7-flash。
+    QWEN("DashScope", "DashScope", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", "qwen3.8-max", "sk-",
+        listOf(ModelInfo("qwen3.8-max", "旗舰·视觉+推理"), ModelInfo("qwen3.7-max", "前代"),
+            ModelInfo("qwen3.7-plus", "均衡·视觉"), ModelInfo("qwen3.7-flash", "快速·视觉"),
+            ModelInfo("qwen3.6-35b-a3b", "开源MoE"),
             ModelInfo("qwen3-coder-plus", "Coding"), ModelInfo("qwq-plus", "思维链"),
             ModelInfo("qwen3-vl-plus", "多模态"), ModelInfo("qwen3-omni-flash", "全模态"))),
     GROK("Grok (xAI)", "Grok (xAI)", "https://api.x.ai/v1/chat/completions", "grok-4.3", "xai-",

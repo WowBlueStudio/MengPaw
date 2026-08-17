@@ -26,13 +26,19 @@
 | DeepSeek | [思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode) | `reasoning_content` 与 `content` 同级，流式 delta 与 message 均含 |
 | Kimi | [思考模型](https://platform.kimi.com/docs/guide/use-thinking-models) | `delta.reasoning_content` / `message.reasoning_content`；kimi-k3/k2.7-code 始终思考；保留式思考官方要求多轮回传（本项目不回传, 请求侧定案） |
 | GLM/Z.AI | [Migrate to GLM-5.2](https://docs.z.ai/guides/overview/migrate-to-glm-new) | 流式须处理 `delta.reasoning_content` 与 `delta.content`；`thinking` 参数 |
-| Qwen/DashScope | [Thinking](https://docs.qwencloud.com/developer-guides/text-generation/thinking) + [FAQ](https://docs.qwencloud.com/resources/faq-text-generation) | 两阶段流式：先 `reasoning_content` 后 `content` |
+| Qwen/DashScope | [模型大全](https://help.aliyun.com/zh/model-studio/getting-started/models) + [Responses 兼容](https://help.aliyun.com/zh/model-studio/compatibility-with-openai-responses-api) + [Thinking](https://docs.qwencloud.com/developer-guides/text-generation/thinking) | 两阶段流式：先 `reasoning_content` 后 `content`；2026-08-17 核对：qwen3.8-max 已转正为旗舰（preview 退役自动路由），均衡/快速档为 qwen3.7-plus / qwen3.7-flash |
 | Grok/xAI | [Streaming](https://docs.x.ai/developers/model-capabilities/text/streaming) + [Deferred Chat Completions](https://docs.x.ai/developers/advanced-api-usage/deferred-chat-completions) | `message.reasoning_content`；官方注明 grok-4 不返回 |
 | 豆包/火山方舟 | [LLM API 文档](https://docs.volcengine.com/docs/6492/2165111?lang=zh) | `reasoning_content` 为思维链字段（含流式 delta） |
 | Anthropic 兼容 | [Streaming messages](https://platform.claude.com/docs/en/build-with-claude/streaming) + [Thinking](https://platform.claude.com/docs/en/build-with-claude/thinking) | `content_block_delta` 内 `delta.type=="thinking_delta"` + `delta.thinking`；块尾 `signature_delta` |
 | Ollama | [Thinking](https://docs.ollama.com/capabilities/thinking) + [OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility) | 原生 `/api/chat` 用 `message.thinking`；`/v1` 兼容端点官方未记载思维字段（只作兜底键） |
 | OpenAI | 官方 chat/completions 文档未记载 `reasoning_content` | 仅 Responses API 文档化思维输出；接入按"OpenAI 兼容键"通用路径处理，不作厂商特有声明 |
 | MiniMax | [OpenAI SDK](https://platform.minimaxi.com/docs/api-reference/text-openai-api) + [工具使用&交错思维链](https://platform.minimaxi.com/docs/guides/text-m3-function-call.md) + [OpenAPI 规范](https://platform.minimaxi.com/docs/api-reference/text/api/openapi-chat-openai.json) | 默认 thinking 内联在 `content` 的 `<think>...</think>` 标签内（响应侧剥离）；`reasoning_split=true` 时经 `reasoning_content` + `reasoning_details` 数组返回，流式 delta 的 `text` 为累计全文（官方示例按 buffer 取增量） |
+
+> 2026-08-17 复核记录：GLM（docs.z.ai/pricing）、Kimi（platform.kimi.com/docs/models）、
+> DashScope（help.aliyun.com 模型大全/Responses 兼容）官方原文已打开核对，预置随表更新；
+> OpenAI / xAI / 火山引擎 / Anthropic 官方原文页面本次网络不可达（Cloudflare 拦截 / 超时），
+> 虽有官方域名搜索摘要线索（如 OpenAI GPT-5.6 家族、xAI grok-4.5、火山 doubao-seed-2.0-code
+> 与 deepseek-v4/glm-5.2 托管），按总原则未以摘要为据改动预置，待原文复核后再登记。
 
 ## 2. 当前支持厂商与模型名单（登记表, 2026-08-17）
 
@@ -45,7 +51,7 @@
 | DeepSeek | https://api.deepseek.com/chat/completions | deepseek-v4-flash | deepseek-v4-flash(快速) / **deepseek-v4-pro(思维链)** |
 | Kimi | https://api.moonshot.cn/v1/chat/completions | kimi-k3 | kimi-k3(旗舰·1M上下文) / kimi-k2.7-code(Coding) / kimi-k2.6(通用) / kimi-k2.7-code-highspeed(高速Coding) |
 | GLM | https://open.bigmodel.cn/api/paas/v4/chat/completions | glm-5.2 | glm-5.2(旗舰·1M上下文) / glm-5.1(Coding) / glm-5(前代) / glm-5-turbo(高速) / glm-5v-turbo(多模态) |
-| DashScope | https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions | qwen3.7-max | qwen3.7-max(旗舰·1M上下文) / qwen3.6-35b-a3b(开源MoE) / qwen3.5-plus(均衡) / qwen-flash(快速) / qwen3-coder-plus(Coding) / **qwq-plus(思维链)** / qwen3-vl-plus(多模态) / qwen3-omni-flash(全模态) |
+| DashScope | https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions | qwen3.8-max | qwen3.8-max(旗舰·视觉+推理) / qwen3.7-max(前代) / qwen3.7-plus(均衡·视觉) / qwen3.7-flash(快速·视觉) / qwen3.6-35b-a3b(开源MoE) / qwen3-coder-plus(Coding) / **qwq-plus(思维链)** / qwen3-vl-plus(多模态) / qwen3-omni-flash(全模态) |
 | Grok | https://api.x.ai/v1/chat/completions | grok-4.3 | grok-4.5(旗舰) / grok-4.3(推荐·1M上下文) / **grok-4.20-reasoning(思维链)** / grok-4.1-fast-non-reasoning(快速) / grok-build-0.1(Coding) |
 | 火山引擎(豆包) | https://ark.cn-beijing.volces.com/api/v3/chat/completions | doubao-seed-2.0-pro | doubao-seed-2.0-pro(旗舰) / doubao-seed-2.0-lite(均衡) / doubao-seed-2.0-mini(轻量) / doubao-seed-1.8(前代) / doubao-seed-1.6-flash(快速) / **doubao-seed-1.6-thinking(思维链)** / deepseek-v3-2(DeepSeek托管) / glm-4.7(GLM托管) / (需创建接入点 ep-xxx) |
 | OpenModel | https://api.openmodel.ai/v1/chat/completions | deepseek-v4-flash | **deepseek-v4-pro(思维链)** / deepseek-v4-flash(快速) / qwen3.7-max(Qwen托管) / gpt-5.4-mini(OpenAI托管) / kimi-k3(Kimi托管) / glm-5.2(GLM托管) / grok-4.5(Grok托管) / (更多模型见API返回) |

@@ -545,11 +545,13 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > v0.40.4 增量（实测）：kernel 577 → 596（SseStreamParserTest 9 用例首次直测 consumeSseStream + LlmPayloadTest 5 用例：非流式 reasoning 分离 / 请求体不回显思维链 + RemoteApiTest 5 用例：fallback 链注入 MockEngine 直测流式分流/HTTP 错误/非流式 lastReasoning/非法响应截断/失败清空陈旧值），shell 双套 208 → 210（BubbleStreamCoordinatorTest 11 → 12：思维链与正文交错到达同轮完整显示），总数 1425 → 1446，0 failures。
 > v0.41.0 增量（实测）：kernel 596 → 604（SseStreamParserTest +3：MiniMax reasoning_details 累计全文增量去重 / <think> 内联剥离 / 标签跨 chunk 拆分；LlmPayloadTest +3：非流式 <think> 剥离 / reasoning_details / 双通道独立字段优先；AdaptiveLlmProviderTest +2：minimaxi.com 与 minimax.io），shell 双套 210 → 214（SettingsModelsPresetTest 2 用例：预置字母序 / MiniMax 模型清单），总数 1446 → 1458，0 failures。
 
+> 2026-08-17 预置核对增量（未发布，版本号未定案）：Qwen/DashScope 官方原文核对（help.aliyun.com 模型大全 + Responses 兼容）确认 qwen3.8-max 转正为旗舰，预置默认型号与旗舰更新；SettingsModelsPresetTest +1 用例（QWEN 默认/旗舰 = qwen3.8-max，双套 +2），shell 双套 214 → 216，总数 1458 → 1460，0 failures。
+
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
 | mengpaw-kernel | 596 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) + **SseStreamParserTest 9 + LlmPayloadTest 5 + RemoteApiTest 5（v0.40.4 全厂商思维链解析直测 + fallback 链直测）** |
 | mengpaw-core | 90 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex |
-| mengpaw-shell | 210 | ComplexityDetector 分档、extractMedia 提取规则、会话 JSON 编解码 (含 v0.40.2 中断恢复归一化回归)、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 流式缓冲简化回归 (v0.40.2 重构 5) + BubbleStreamCoordinator 简化显示回归 (v0.40.1 6 → v0.40.2 8 → v0.40.3 11 思维链分流 → v0.40.4 12 交错到达完整显示；全量口径 debug+release 双套合并) |
+| mengpaw-shell | 216 | ComplexityDetector 分档、extractMedia 提取规则、会话 JSON 编解码 (含 v0.40.2 中断恢复归一化回归)、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 流式缓冲简化回归 (v0.40.2 重构 5) + BubbleStreamCoordinator 简化显示回归 (v0.40.1 6 → v0.40.2 8 → v0.40.3 11 思维链分流 → v0.40.4 12 交错到达完整显示；全量口径 debug+release 双套合并) + SettingsModelsPresetTest 预置名单/排序/最新旗舰 (v0.41.0+，2026-08-17 更新) |
 | mengpaw-browser | 42 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵 |
 | plugin-hermes (tribe) | 68 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 |
 | plugin-memory-twin | 68 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |

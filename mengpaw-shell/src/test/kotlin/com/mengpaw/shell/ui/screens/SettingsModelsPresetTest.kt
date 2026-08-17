@@ -8,7 +8,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 
 /**
- * 预置供应商表与显示顺序 (v0.41.0): MiniMax 登记 + 除自建/自定义外按英文名首字母排序。
+ * 预置供应商表与显示顺序 (v0.41.0+): MiniMax 登记 + 除自建/自定义外按英文名首字母排序；
+ * 2026-08-17 官方核对后 QWEN 旗舰更新为 qwen3.8-max。
  */
 class SettingsModelsPresetTest {
 
@@ -36,5 +37,13 @@ class SettingsModelsPresetTest {
             listOf("MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5"),
             preset.models.take(4).map { it.name }
         )
+    }
+
+    @Test
+    fun `QWEN预置_最新旗舰与默认型号`() {
+        val preset = LlmProviderPreset.QWEN
+        assertEquals("qwen3.8-max", preset.defaultModel)
+        assertEquals("qwen3.8-max", preset.models.first().name)
+        assertFalse("旗舰不得重复出现", preset.models.count { it.name == "qwen3.8-max" } > 1)
     }
 }
