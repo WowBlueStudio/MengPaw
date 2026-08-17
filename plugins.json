@@ -1,7 +1,7 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
   "version": 9,
-  "updated": "2026-08-16",
+  "updated": "2026-08-18",
   "plugins": [
     {
       "id": "concise-plugin",
@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "dream-plugin",
@@ -31,7 +31,7 @@
       "commands": [],
       "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
       "size": 3129,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "tavily-plugin",
@@ -63,7 +63,7 @@
       ],
       "checksum": "sha256:547a7665041e90b2f5a9ae36fea44fa892b5954b0c30100740b8c286ad2da2f0",
       "size": 19074,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "framework-plugin",
@@ -93,7 +93,7 @@
       ],
       "checksum": "sha256:b3e9be0bd5587f2c8a755b82ab68c0d04ca00f72458785c31cd04abf5817e958",
       "size": 110868,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "fs-plugin",
@@ -132,7 +132,7 @@
       ],
       "checksum": "sha256:a78b37dc205343cb0c08f18ff77566c3b6edca5d62e6006814d656fefe5ba213",
       "size": 17951,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "memory-twin-plugin",
@@ -163,7 +163,7 @@
       ],
       "checksum": "sha256:50b874379adcb91aa5100cd4c2bc96252226a511d6bf44614fa4baf6d40c5927",
       "size": 243330,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "skill-plugin",
@@ -186,9 +186,9 @@
         "skill.enable",
         "skill.disable"
       ],
-      "checksum": "sha256:680af060da62403012d64d0a7c24c6d955cc57d5ec053cd40528c54e31ada566",
-      "size": 100444,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "checksum": "sha256:24a0222e3710cc45670991a9138f82da9043b0b32ffc5c068c319fcde271f6a7",
+      "size": 100922,
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "clipboard-plugin",
@@ -206,7 +206,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "dev-plugin",
@@ -227,7 +227,7 @@
       ],
       "checksum": "sha256:66f20d2156a2b49e3995b4f5eed056562a8666c2c3c747df4df017ac58e111d5",
       "size": 35337,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "update-plugin",
@@ -251,7 +251,7 @@
       ],
       "checksum": "sha256:aa3d0bd37df5b0e08cd279c5a1fc6dc4df2a5ad095329ddbf49ab4aa211feb6a",
       "size": 48237,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "translate-plugin",
@@ -363,7 +363,7 @@
       ],
       "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
       "size": 282877,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "comfy-plugin",
@@ -488,7 +488,7 @@
       ],
       "checksum": "sha256:32c402304b4190083c209773186368460ab813a757bc4a356d61ba03d5fdf21b",
       "size": 46842,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "termux-plugin",
@@ -507,7 +507,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "tools-plugin",
@@ -526,7 +526,7 @@
       ],
       "checksum": "sha256:fd6cf25efe806029cda88f3c47e40eec4b31cfee1128df50b28af5fe77ea0da2",
       "size": 36752,
-      "changelog": "### 修复\n- **气泡显示简化 (用户定案)**: 思考阶段取消逐字流式打字机 — 每轮思考在流式检测到完整 `Action:` 行时一次性显示 (思考先出现), 工具行在 `onStep` 按顺序挂入并带观察; 纯思考轮在 `onStep` 时一次性显示; 截断路径 (引擎异常未走 onStep) 由 `finish()` 兜底完整显示。最终答案保留流式输出, 收到 `Final Answer:` 时折叠思考容器并创建答案气泡。标记识别全部行首锚定 — 思考/正文复述 \"Final Answer:\" / \"Action:\" 字样不再误截断、不再与折叠摘要内容混同\n- **检查源只认应用发布**: GitHub `/releases/latest` 被同刻创建的 `plugins-v*` 插件发布顶替 → `update.check` 显示新版本但 `update.download` 报「该组件无可用下载」; 改用 `releases?per_page=10` 列表接口, 取第一个 tag 为 `vX.Y.Z` 且含 Shell APK 的应用发布, 拒绝 `plugins-v*`"
+      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
     },
     {
       "id": "connector-openclaw-plugin",

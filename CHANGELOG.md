@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.41.0 (2026-08-18) — MiniMax 接入 + 全厂商思维链解析 + 浏览器开放模式
+
+### 新增
+- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点
+  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3
+  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离
+  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);
+  预置供应商按首字母排序
+- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制
+  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持
+  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回
+  openMode 供第三方探测; am 桥 signature 权限与 Shell 侧 token 流程不变
+- **浏览器模块独立文档**: `mengpaw-browser/docs/` — 开发文档 (快速开始 + 从源码开始)
+  + MengPaw_Browser_skills.md (第三方 Agent 控制手册)
+
+### 修复
+- **全厂商思维链响应解析兼容 (v0.40.4)**: ReasoningExtractor 按官方文档字段归一 —
+  DeepSeek/Kimi/GLM/Qwen/xAI/火山 `reasoning_content`、Anthropic
+  `thinking_delta`/`signature_delta`、MiniMax `<think>`/`reasoning_details`; RemoteApi
+  复用主解析器 (parseBody+Accumulator), 非流式 reasoning 独立分离
+- **DeepSeek thinking mode 思维链分流 (v0.40.3)**: reasoning_content 独立通道显示,
+  消除误判根因; P2-8 思维链失败清空 — lastReasoning 调用即清空不留陈旧值, fallback
+  直通; 同包多键只取首个 (防重复显示)
+- **v0.40.4 P2 审查修复**: 思维链锁内读取 / parseBody+Accumulator 复用 /
+  RemoteApi 可注入直测 / AgentReActLoop 400 行拆分
+- **预置模型官方核对 (2026-08-17)**: Qwen/DashScope 更新为 qwen3.8-max 旗舰;
+  OpenAI/Grok/火山更新 — GPT-5.6 家族、grok-4.6 旗舰、火山托管模型
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.41.0-release.apk` (versionCode 41000)
+- Browser APK: `mengpaw-browser-v0.8.1-release.apk` (versionCode 14, 本轮有变更)
+- 插件有变更: plugin-skill 技能文档 (browser-control.md 开放模式) — 构建 AAR 回写
+  plugins.json, 打 `plugins-v0.41.0` tag, GitHub Release 附全部 AAR
+- 测试: 全量 1480 用例 0 failures (kernel 606 + core 90 + shell 220 + browser 56 + 插件 508)
+- 崩溃巡检: 无设备在线, 巡检未执行, 待用户反馈
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.40.2 (2026-08-17) — 气泡输出链路重构
 
 ### 修复

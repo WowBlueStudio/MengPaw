@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.40.2 | **更新**: 2026-08-17 | **开发**: Codex | **架构**: 微内核(123文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + Evolution Agent) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 浏览器 v0.8.0
+> **版本**: 0.41.0 | **更新**: 2026-08-17 | **开发**: Codex | **架构**: 微内核(123文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + Evolution Agent) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 浏览器 v0.8.1
 
 ---
 
@@ -23,7 +23,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | 插件同级 | 内置功能 (`sys`) 与外挂插件同等地位，均实现 `Plugin` 接口，均只依赖 kernel |
 | 零 Python | 纯 Kotlin，无 Python 运行时 |
 | 多通道 | AIDL（系统集成）/ Unix Socket（Termux）/ HTTP（调试） |
-| 独立浏览器 | `mengpaw-browser` v0.8.0，Intent 互通 + am 桥，45 条浏览器操控命令 (page.* + browser.*) |
+| 独立浏览器 | `mengpaw-browser` v0.8.1，Intent 互通 + am 桥 + MCP 开放模式，45 条浏览器操控命令 (page.* + browser.*) |
 | 多模型 | 13 LLM Provider — OpenAI / DeepSeek / Kimi / GLM / Qwen / Grok / 火山引擎 / OpenModel / MiniMax / Self-Hosted / 自定义 |
 | 插件市场 | raw 直读 `plugins.json`（GitHub raw / Gitee raw 双源），ETag 缓存，SHA256 校验，磁盘快照离线降级（v0.34.0） |
 | 记忆孪生 | v0.15.0 — 跨设备 Agent 记忆同步 + 哈希链账本 + 短码配对 + 心跳保活 + QoS 自适应 + 手动 IP 发现 (plugin-memory-twin v0.2) |
@@ -71,7 +71,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | mengpaw-core | Android Library | 20 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 8 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
 | mengpaw-shell | APK | 118 | 0.34.1 (vc=34001) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
-| mengpaw-browser | APK | 45 | 0.8.0 (vc=13) | 半自动武器: page.* Playwright 命令面 (22) + am 桥 RunCommandService + 超长页分段截图坐标 + 公共目录落盘 (MANAGE_EXTERNAL_STORAGE) + 5标签预渲染 + 会话持久化 + 收藏夹 + 暗色模式 + file:// |
+| mengpaw-browser | APK | 45 | 0.8.1 (vc=14) | 半自动武器: page.* Playwright 命令面 (22) + am 桥 RunCommandService + MCP 开放模式 (第三方免认证, 仅回环) + 超长页分段截图坐标 + 公共目录落盘 (MANAGE_EXTERNAL_STORAGE) + 5标签预渲染 + 会话持久化 + 收藏夹 + 暗色模式 + file:// |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
 
@@ -251,7 +251,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 **UI emoji 约定 (v0.31.0 清理)**: UI 文本 (系统气泡/菜单/徽标/按钮) 禁用装饰性 emoji — 纯装饰的移除, 承载语义的 (状态/图标) 换 `Icons.Outlined` 线性图标 (会话/模型/系统/搜索/发送/截图/浏览器/云/复制/箭头/失败/成功/导出/时钟/恢复/分享/刷新/语音/挂起/检查/暂停/删除/保存/编辑/目录/书签/链接/用户/设置/锁/播放)。规则: 有语义用图标, 无语义直接删除, 不保留裸 emoji; Agent 生成的文本 (模型输出) 不受限。列表变更时同步本段落。
 
-### 3.4 mengpaw-browser（独立浏览器，45 文件，v0.8.0 半自动武器）
+### 3.4 mengpaw-browser（独立浏览器，45 文件，v0.8.1 半自动武器 + MCP 开放模式）
 
 | 目录/文件 | 职责 |
 |-----------|------|
@@ -547,6 +547,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 > 2026-08-17 预置核对增量（未发布，版本号未定案）：Qwen/DashScope（help.aliyun.com 模型大全 + Responses 兼容）确认 qwen3.8-max 转正为旗舰；OpenAI（developers.openai.com Models）确认 GPT-5.6 家族为当前旗舰（gpt-5.6 别名→Sol）；Grok（docs.x.ai Models + 退役公告）确认 grok-4.6 旗舰、grok-4-1-fast 系列已退役；火山（docs.volcengine.com 套餐概览/OpenCode）确认托管第三方更新为 deepseek-v4-flash/pro + glm-5.3、新增 doubao-seed-2.1-turbo。SettingsModelsPresetTest 2 → 5 用例（QWEN 旗舰 / OpenAI+Grok 旗舰与退役清理 / VOLCANO 托管更新，双套 +6），shell 双套 214 → 220。
 > 2026-08-17 思考模式+流式输出兼容确认（官方原文逐家核对）：DeepSeek/Kimi/GLM/Qwen/xAI/火山流式均经 delta.reasoning_content 返回思维链（xAI 为 grok-4.6 思考摘要），Anthropic 为 thinking_delta/signature_delta，MiniMax 为 reasoning_details 累计全文或 <think> 内联，OpenAI 官方 chat/completions 不暴露思考（reasoning tokens not visible）。SseStreamParserTest 15 → 17 用例（+2：五家 reasoning_content 系官方流式夹具 / OpenAI 无思考字段边界），kernel 604 → 606，总数 1458 → 1466，0 failures。
+> 2026-08-18 浏览器开放模式增量（v0.41.0 发布实测）：McpAuthPolicyTest 7 用例（安全模式 fail-closed / 开放模式放行 / expected 空恒拒绝，双套 +14），browser 双套 42 → 56，总数 1466 → 1480，0 failures。
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
@@ -1096,7 +1097,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **命令去重 (v0.36.x)**: `agent.read/write/ls/rm/mkdir` 与 `fs.*`（plugin-fs 已整体移除）有 Android 等价命令（cat/echo/ls/rm/mkdir/cp/mv/stat/grep/find），不再重复定义——Agent 直接用 Linux 命令。原框架特有保障的承接: ① `agent.write` 自动读回验证 → Linux 通道对重定向写（`> 文件`）成功后自动附「请 cat 读回验证」提示 + 提示词「结果纪律」要求引用真实文本; ② `agent.rm` 系统路径保护 → CommandMonitor CONFIRM 弹窗 + overwrite-system/写保护路径 BLOCK 规则; ③ `agent.write` 路径沙箱 → 工作区/输出目录为 Linux 通道默认 cwd 与允许写区, 插件仓库/配置目录写保护 BLOCK。**注意**: Linux 命令不经 Pipeline IntegrityGuard, 插件仓库/配置等核心目录的写保护由 CommandMonitor 写保护路径检查承接。
 
-### 5.3 浏览器内置命令 (page.* + browser.*, 45) — 半自动武器 (v0.8.0)
+### 5.3 浏览器内置命令 (page.* + browser.*, 45) — 半自动武器 (v0.8.0) + MCP 开放模式 (v0.8.1)
 
 > 2026-08-11 用户拍板方案 (docs/browser-autopilot-plan.md)：Playwright 语义命令面 + am 桥 + 去重。
 > `page.*` 能完成的指令，`browser.*` 冗余已删；截图只回路径（公共目录，Agent 可读）；
