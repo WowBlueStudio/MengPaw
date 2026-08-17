@@ -14,6 +14,7 @@
 | `swarm-design.md` | 7 KB | 火种 (Swarm) 模式设计：规划器/Worker/Verifier/合成器、JIT 三闸门、Andon 协议 | 改火种模式或写多 Agent 任务时 |
 | `browser-autopilot-plan.md` | 9 KB | MP 浏览器「半自动武器」升级方案：Playwright 语义命令面 (page.*)、Termux 式 am 桥调用、page.load 分段截图+按段坐标系统、browser.* 去重清单（2026-08-11 拍板，Phase 1-3 已实施；真机自测后退役 9880 桥） | 升级浏览器能力、做浏览器自动化或执行去重时 |
 | `llm-multistage-dataflow.md` | 8 KB | LLM 多阶段输出数据流：ReAct 每回合 LLM/框架/UI 各环节实际收到的内容（parse 规则/Observation 组装/历史累积/边界防御） | 理解 Agent 循环、排查工具调用链路、调试 LLM 输出时 |
+| `add-llm-provider.md` | 6 KB | 新增 LLM 供应商接入指南：官方文档核对五件事 + 6 个代码改动点（预置/识别/认证/缓存/思考字段/显示名）+ 官方格式测试与文档同步（v0.40.4 全厂商兼容基线） | 新增/审计 LLM 供应商、核对思考字段时 |
 | `audit-methodology.md` | 7 KB | **三层十二问 · 功能闭环审计**：Agent 认知层(6问) + 软件逻辑层(6问) + 服务基础设施层(6问)，逐条过"Agent 能否自主完成功能闭环"（v0.24.0 清理后恢复 + 通用化抽象） | 审查新功能/子系统/插件是否闭环，或复盘"代码存在但 Agent 无法触达"类缺陷时 |
 | `code-review-9-dimensions.md` | 8 KB | **九维代码审查法**：机器门禁先行 + 可维护性/可读性/可扩展性/灵活性/简洁性/可复用性/可测试性/健壮性/兼容性 九维逐维过（含搜索模式），输出 P0-P2 分级（v0.24.0 清理后恢复 + 通用化抽象） | 做 PR 评审、大文件重构、模块交接、技术债盘点时 |
 
