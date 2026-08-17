@@ -31,13 +31,16 @@ interface LlmProvider : AutoCloseable {
     /**
      * Stream a structured messages list token by token.
      * Each message has "role" and "content" keys for proper chat formatting.
+     * [onReasoning] (v0.40.3, DeepSeek thinking mode): 思维链 (reasoning_content)
+     * 增量独立回调 — 与可见正文 [onToken] 分流, 由调用方决定如何展示。
      *
      * Default implementation joins messages into a flat prompt and falls back
      * to [completeStreaming]; providers with native messages support override.
      */
     suspend fun completeStreamingWithMessages(
         messages: List<Map<String, String>>,
-        onToken: (String) -> Unit
+        onToken: (String) -> Unit,
+        onReasoning: ((String) -> Unit)? = null
     ): String {
         val flatPrompt = messages.joinToString("\n") { "${it["role"]}: ${it["content"]}" }
         return completeStreaming(flatPrompt, onToken)

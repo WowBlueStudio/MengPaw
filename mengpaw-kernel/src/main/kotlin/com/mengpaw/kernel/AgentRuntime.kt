@@ -186,12 +186,13 @@ internal class AgentRuntime(private val engine: AgentEngine) {
     suspend fun run(
         task: String, maxSteps: Int = 50, onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
-        attachments: List<AttachmentData> = emptyList()
+        attachments: List<AttachmentData> = emptyList(),
+        onReasoning: ((String) -> Unit)? = null
     ): String {
         // P0 注入防护: 任务入口静默剥离精确注入模式 (本地输入 + 远程委托 inbox 任务统一)
         val guardedTask = com.mengpaw.kernel.security.UntrustedContent.sanitizeForAgent(task)
         return engine.runReActLoop(task = guardedTask, maxSteps = maxSteps, onStep = onStep, onDelta = onDelta,
-            attachments = attachments)
+            attachments = attachments, onReasoning = onReasoning)
     }
 
     /**
@@ -204,8 +205,9 @@ internal class AgentRuntime(private val engine: AgentEngine) {
         contextPrefix: String = "",
         onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
-        attachments: List<AttachmentData> = emptyList()
-    ): String = reactLoop.runReActLoop(task, maxSteps, contextPrefix, onStep, onDelta, attachments)
+        attachments: List<AttachmentData> = emptyList(),
+        onReasoning: ((String) -> Unit)? = null
+    ): String = reactLoop.runReActLoop(task, maxSteps, contextPrefix, onStep, onDelta, attachments, onReasoning)
 
     internal fun recordTaskMemory(task: String, result: String) {
         // 单轨记忆 (v0.22.0): 任务记忆写入三轨中期 memory_{date}.md (梦境读中期的输入面)

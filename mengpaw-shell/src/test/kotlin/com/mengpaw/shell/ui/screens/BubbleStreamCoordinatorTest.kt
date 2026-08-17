@@ -264,4 +264,75 @@ class BubbleStreamCoordinatorTest {
             session.messages.value.count { it is ChatMessageUi.FinalAnswer }
         )
     }
+
+    @Test
+    fun `思维链显示为思考_content的Thought不覆盖`() = runBlocking {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, null, null)
+        writer.start()
+        val coordinator = BubbleStreamCoordinator(writer)
+        val job = coordinator.launchPlayback(this)
+
+        // DeepSeek thinking mode: reasoning_content (思维链) 先到, content 后到
+        coordinator.onReasoning("我需要先查询北京天气，再对比两地数据。这是完整的思维链。")
+        coordinator.onDelta("Thought: 查询\nAction: search\nAction Input: {}\n")
+
+        val proc = process(session)
+        assertEquals(
+            "思维链必须作为该轮思考一次性显示",
+            "我需要先查询北京天气，再对比两地数据。这是完整的思维链。",
+            proc.steps[0].thought
+        )
+        coordinator.onStep("search", "ok", false)
+        assertEquals(
+            "content 的 Thought 不得覆盖思维链",
+            "我需要先查询北京天气，再对比两地数据。这是完整的思维链。",
+            process(session).steps[0].thought
+        )
+        assertFalse("思维链不得误判为最终答案", coordinator.isFinalAnswerStarted)
+        coordinator.finish()
+        job.join()
+    }
+
+    @Test
+    fun `思维链含Final Answer字样_不进入ReAct检测不误判`() = runBlocking {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, null, null)
+        writer.start()
+        val coordinator = BubbleStreamCoordinator(writer)
+        val job = coordinator.launchPlayback(this)
+
+        // 思维链里自拟答案 (含行首 "Final Answer:") — v0.40.3 前会误判最终答案轮
+        coordinator.onReasoning("我考虑两种方案。\nFinal Answer: 方案A较优，但还需查询验证。")
+        coordinator.onDelta("Thought: 继续\nAction: search\nAction Input: {}\n")
+        coordinator.onStep("search", "验证结果", false)
+
+        assertFalse("思维链里的 Final Answer 字样不得触发最终答案", coordinator.isFinalAnswerStarted)
+        val proc = process(session)
+        assertEquals(1, proc.steps.size)
+        assertTrue("思维链全文必须显示", proc.steps[0].thought.contains("方案A较优"))
+        coordinator.finish()
+        job.join()
+    }
+
+    @Test
+    fun `思维链加最终答案轮_思维链进容器_答案进气泡`() = runBlocking {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, null, null)
+        writer.start()
+        val coordinator = BubbleStreamCoordinator(writer)
+        val job = coordinator.launchPlayback(this)
+
+        coordinator.onReasoning("分析完成，总结如下。")
+        coordinator.onDelta("Final Answer: 北京晴，25度")
+        assertTrue("content 里的真实 Final Answer 必须触发", coordinator.isFinalAnswerStarted)
+        coordinator.finish()
+        job.join()
+
+        val proc = process(session)
+        assertTrue("思维链必须写入思考容器最后一步", proc.steps.last().thought.contains("分析完成"))
+        val fa = finalAnswer(session)
+        assertTrue("答案必须进气泡", fa != null && fa!!.content.contains("北京晴"))
+        assertFalse("容器必须折叠", proc.isRunning)
+    }
 }

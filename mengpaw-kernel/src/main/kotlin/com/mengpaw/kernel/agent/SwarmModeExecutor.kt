@@ -65,7 +65,8 @@ class SwarmModeExecutor(
         maxRetriesPerSubtask: Int = 2,
         maxTotalSteps: Int = maxSubtasks * maxStepsPerSubtask,
         onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
-        onDelta: ((String) -> Unit)? = null
+        onDelta: ((String) -> Unit)? = null,
+        onReasoning: ((String) -> Unit)? = null
     ): String {
         // P0 注入防护: 任务入口静默剥离精确注入模式
         val guardedTask = com.mengpaw.kernel.security.UntrustedContent.sanitizeForAgent(task)
@@ -80,7 +81,7 @@ class SwarmModeExecutor(
             val subtasks = decompose(guardedTask, planner, maxSubtasks)
             if (subtasks.isEmpty()) {
                 // 拆解失败兜底: 退化为单 Agent 执行 (同 Mission 策略)
-                return agentEngine.run(guardedTask, maxStepsPerSubtask * maxSubtasks, onStep, onDelta)
+                return agentEngine.run(guardedTask, maxStepsPerSubtask * maxSubtasks, onStep, onDelta, onReasoning = onReasoning)
             }
 
             val budget = SwarmBudget(maxTotalSteps)

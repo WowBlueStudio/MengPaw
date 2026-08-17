@@ -35,7 +35,8 @@ class PlanModeExecutor(
     suspend fun runWithPlan(
         task: String, maxStepsPerPlanStep: Int = 5,
         onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
-        onDelta: ((String) -> Unit)? = null
+        onDelta: ((String) -> Unit)? = null,
+        onReasoning: ((String) -> Unit)? = null
     ): String {
         val llmProvider = agentEngine.getLlmProvider()
 
@@ -60,7 +61,7 @@ class PlanModeExecutor(
             com.mengpaw.kernel.agent.PlanMonitor.updateStep(step.index, PlanStepStatus.RUNNING)
             agentEngine.updateAgentState(AgentState.Running("[Step ${step.index + 1}/${plan.totalSteps}] ${step.description}", step.index + 1, plan.totalSteps))
             try {
-                val stepResult = executePlanStep(step, maxStepsPerPlanStep, llmProvider, onDelta)
+                val stepResult = executePlanStep(step, maxStepsPerPlanStep, llmProvider, onDelta, onReasoning)
                 results.add("[OK] Step ${step.index + 1}: ${stepResult}")
                 step.status = PlanStepStatus.COMPLETED
                 com.mengpaw.kernel.agent.PlanMonitor.updateStep(step.index, PlanStepStatus.COMPLETED)
@@ -133,7 +134,8 @@ class PlanModeExecutor(
     private suspend fun executePlanStep(
         step: PlanStep, maxSteps: Int,
         llmProvider: com.mengpaw.kernel.llm.LlmProvider,
-        onDelta: ((String) -> Unit)? = null
+        onDelta: ((String) -> Unit)? = null,
+        onReasoning: ((String) -> Unit)? = null
     ): String {
         val stepSession = sessionManager.createSession("PlanStep: ${step.description}")
         val context = ExecutionContext(sessionId = stepSession.id)
@@ -143,7 +145,7 @@ class PlanModeExecutor(
             val conversation = agentEngine.buildConversation(stepSession.id)
             // v0.28.4: 步骤执行 LLM 调用流式化 (onDelta 透传)
             val llmResponse = if (onDelta != null) {
-                llmProvider.completeStreamingWithMessages(conversation, onDelta)
+                llmProvider.completeStreamingWithMessages(conversation, onDelta, onReasoning)
             } else {
                 llmProvider.completeWithMessages(conversation)
             }

@@ -23,7 +23,10 @@ import kotlinx.serialization.json.jsonPrimitive
  *
  * Handles:
  * - OpenAI-compatible `data: {...}` events with `choices[0].delta.content`
- * - DeepSeek `reasoning_content` delta
+ * - DeepSeek thinking mode `reasoning_content` delta — 与 content 分流:
+ *   思维链经 [onReasoning] 单独回调 (v0.40.3, 对齐 DeepSeek thinking mode 文档),
+ *   绝不混入 [onToken]/fullContent — 否则 UI 流式缓冲被思维链污染, 误判
+ *   "Final Answer:"/"Action:" (用户 v0.40.1/0.40.2 复现三症状的根因)
  * - `[DONE]` terminator
  * - Inline `usage` in the final event (经 [onUsage] 回调, 调用方写入 lastUsage + 遥测)
  *
@@ -34,7 +37,8 @@ internal suspend fun consumeSseStream(
     response: HttpResponse,
     onToken: (String) -> Unit,
     requestStart: Long,
-    onUsage: (TokenUsage) -> Unit
+    onUsage: (TokenUsage) -> Unit,
+    onReasoning: ((String) -> Unit)? = null
 ): String {
     val channel = response.bodyAsChannel()
     val fullContent = StringBuilder()
@@ -92,9 +96,10 @@ internal suspend fun consumeSseStream(
                         onToken(text)
                     }
                 }
-                // Reasoning delta (DeepSeek reasoning_content)
+                // Reasoning delta (DeepSeek thinking mode reasoning_content) —
+                // 思维链走独立回调, 不进 fullContent/onToken (v0.40.3)
                 openAiDelta["reasoning_content"]?.jsonPrimitive?.contentOrNull?.let { text ->
-                    if (text.isNotEmpty()) onToken(text)
+                    if (text.isNotEmpty()) onReasoning?.invoke(text)
                 }
             } else {
                 // Anthropic content_block_delta: delta.text (text_delta)

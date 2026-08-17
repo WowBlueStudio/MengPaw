@@ -283,8 +283,9 @@ class AgentEngine(
     suspend fun run(
         task: String, maxSteps: Int = 50, onStep: ((TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
-        attachments: List<AttachmentData> = emptyList()
-    ): String = runtime.run(task, maxSteps, onStep, onDelta, attachments)
+        attachments: List<AttachmentData> = emptyList(),
+        onReasoning: ((String) -> Unit)? = null
+    ): String = runtime.run(task, maxSteps, onStep, onDelta, attachments, onReasoning)
 
     // ── Goal Mode (delegated to GoalModeExecutor) ────────────────────
 
@@ -295,8 +296,9 @@ class AgentEngine(
     suspend fun runWithGoal(
         task: String, maxTurns: Int = 20, maxTokensBudget: Int = 300_000,
         onStep: ((TraceStep) -> Unit)? = null,
-        onDelta: ((String) -> Unit)? = null
-    ): String = goalModeExecutor.runWithGoal(task, maxTurns, maxTokensBudget, onStep, onDelta)
+        onDelta: ((String) -> Unit)? = null,
+        onReasoning: ((String) -> Unit)? = null
+    ): String = goalModeExecutor.runWithGoal(task, maxTurns, maxTokensBudget, onStep, onDelta, onReasoning)
 
     /**
      * 会话结束兜底触发 Evolution Agent (v0.37.3) — 新失败累计达批次阈值时
@@ -324,8 +326,9 @@ class AgentEngine(
         contextPrefix: String = "",
         onStep: ((TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
-        attachments: List<AttachmentData> = emptyList()
-    ): String = runtime.runReActLoop(task, maxSteps, contextPrefix, onStep, onDelta, attachments)
+        attachments: List<AttachmentData> = emptyList(),
+        onReasoning: ((String) -> Unit)? = null
+    ): String = runtime.runReActLoop(task, maxSteps, contextPrefix, onStep, onDelta, attachments, onReasoning)
 
     // ── 火种模式 (Swarm Mode) — 规划器拆解 → 并行 Worker → Verifier → 合成器 ──
 
@@ -347,10 +350,11 @@ class AgentEngine(
         maxRetriesPerSubtask: Int = 2,
         maxTotalSteps: Int = maxSubtasks * maxStepsPerSubtask,
         onStep: ((TraceStep) -> Unit)? = null,
-        onDelta: ((String) -> Unit)? = null
+        onDelta: ((String) -> Unit)? = null,
+        onReasoning: ((String) -> Unit)? = null
     ): String = swarmModeExecutor.runWithSwarm(
         task, roles, maxSubtasks, maxParallel, maxStepsPerSubtask,
-        maxRetriesPerSubtask, maxTotalSteps, onStep, onDelta
+        maxRetriesPerSubtask, maxTotalSteps, onStep, onDelta, onReasoning
     )
 
     // ── Fleet Mode (转发到火种模式) ─────────────────────────────────
@@ -366,11 +370,13 @@ class AgentEngine(
         roles: Map<String, LlmProvider> = emptyMap(),
         maxSubtasks: Int = 5, maxStepsPerSubtask: Int = 12,
         maxRetriesPerSubtask: Int = 2, onStep: ((TraceStep) -> Unit)? = null,
-        onDelta: ((String) -> Unit)? = null
+        onDelta: ((String) -> Unit)? = null,
+        onReasoning: ((String) -> Unit)? = null
     ): String = runWithSwarm(
         task = task, roles = roles, maxSubtasks = maxSubtasks, maxParallel = 4,
         maxStepsPerSubtask = maxStepsPerSubtask, maxRetriesPerSubtask = maxRetriesPerSubtask,
-        maxTotalSteps = maxSubtasks * maxStepsPerSubtask, onStep = onStep, onDelta = onDelta
+        maxTotalSteps = maxSubtasks * maxStepsPerSubtask, onStep = onStep, onDelta = onDelta,
+        onReasoning = onReasoning
     )
 
     // ── Plan Mode (delegated to PlanModeExecutor) ─────────────────────
@@ -382,8 +388,9 @@ class AgentEngine(
     suspend fun runWithPlan(
         task: String, maxStepsPerPlanStep: Int = 5,
         onStep: ((TraceStep) -> Unit)? = null,
-        onDelta: ((String) -> Unit)? = null
-    ): String = planModeExecutor.runWithPlan(task, maxStepsPerPlanStep, onStep, onDelta)
+        onDelta: ((String) -> Unit)? = null,
+        onReasoning: ((String) -> Unit)? = null
+    ): String = planModeExecutor.runWithPlan(task, maxStepsPerPlanStep, onStep, onDelta, onReasoning)
 
     /** Format a plan summary for display. Delegates to [PlanModeExecutor]. */
     fun formatPlanSummary(plan: TaskPlan): String = planModeExecutor.formatPlanSummary(plan)

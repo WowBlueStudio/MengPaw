@@ -77,7 +77,8 @@ class RemoteApi(
      */
     override suspend fun completeStreamingWithMessages(
         messages: List<Map<String, String>>,
-        onToken: (String) -> Unit
+        onToken: (String) -> Unit,
+        onReasoning: ((String) -> Unit)?
     ): String {
         val requestBody = buildRequestBody(messages, stream = true)
 
@@ -134,6 +135,11 @@ class RemoteApi(
                             fullContent.append(text)
                             onToken(text)
                         }
+                    }
+                    // DeepSeek thinking mode reasoning_content — 思维链独立回调 (v0.40.3),
+                    // 不进 fullContent/onToken, 与主 provider (SseStreamParser) 同口径
+                    openAiDelta["reasoning_content"]?.jsonPrimitive?.contentOrNull?.let { text ->
+                        if (text.isNotEmpty()) onReasoning?.invoke(text)
                     }
                 } else {
                     // Anthropic 兼容: content_block_delta → delta.text (text_delta)

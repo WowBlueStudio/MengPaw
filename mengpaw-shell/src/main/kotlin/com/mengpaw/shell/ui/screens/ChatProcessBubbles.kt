@@ -312,19 +312,13 @@ fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: Strin
 }
 
 /**
- * 等待期指示器: spinner + 已等待秒数 — 让 LLM 准备期/答案流式前有"活着"的反馈。
- * v0.40.2: 秒数随运行态终止而消失 (所有路径都会 finalize/fail, 不再无限计时);
- * 已废弃 "正在执行 X…" 前缀分支 (工具行由 ProcessTool 承载, 无等待气泡)。
+ * 等待期指示器 — v0.40.3 起只显示 spinner, 不再显示 "思考中… Ns" 计时文本
+ * (用户定案: 任何阶段都不出现单独计时气泡; 运行态由 finalize/fail 收口保证终止)。
+ * 思维链 (reasoning_content) 已作为思考过程展示, 等待期不再需要秒数反馈。
  */
 @Composable
 internal fun WaitingIndicator() {
-    var seconds by remember { mutableIntStateOf(0) }
-    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); seconds++ } }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp, color = ThemeColors.brand)
-        Spacer(Modifier.width(6.dp))
-        Text("思考中… ${seconds}s", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-    }
+    CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp, color = ThemeColors.brand)
 }
 
 @Composable

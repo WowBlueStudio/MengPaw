@@ -207,6 +207,11 @@ internal class TaskExecutionPipeline(
                     coordinator.onDelta(delta)
                 }
 
+                // DeepSeek thinking mode 思维链分流 (v0.40.3): reasoning_content 走
+                // 独立回调 → 协调器思维链展示; 绝不混入 onDelta (否则思维链里的
+                // "Final Answer:"/"Action:" 字样会误判 ReAct 标记, v0.40.1/0.40.2 根因)
+                val onReasoning: (String) -> Unit = { delta -> coordinator.onReasoning(delta) }
+
                 // 播放协程: 每 STREAM_PLAYBACK_INTERVAL_MS 把未播放增量推给 UI (打字机)
                 // v0.28.5: 必须用 Dispatchers.Default — SSE 突发到达时(如服务端缓存回放)
                 // readUTF8Line 从不挂起, 主线程被读取循环占死, Main 调度的播放协程会被饿死
@@ -243,18 +248,18 @@ internal class TaskExecutionPipeline(
 
                 // Mode dispatch: map slash command + loopMode to the correct engine method
                 val result = when {
-                    executionMode == ExecutionMode.PLAN -> session.engine.runWithPlan(task = finalTask, onStep = onStep, onDelta = onDelta)
-                    executionMode == ExecutionMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep, onDelta = onDelta)
+                    executionMode == ExecutionMode.PLAN -> session.engine.runWithPlan(task = finalTask, onStep = onStep, onDelta = onDelta, onReasoning = onReasoning)
+                    executionMode == ExecutionMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep, onDelta = onDelta, onReasoning = onReasoning)
                     // ── 显式斜杠命令结束, 以下为 loopMode 分发 ──
                     // v0.33.0+: REACT 主链路透传附件 (历史经 getStructuredHistory 挂二进制键);
                     // 目标模式 (GOAL/FLEET/SWARM) 执行器签名不含附件 — 附件不传 (注释: P2)
-                    inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta, attachments = attachments)
-                    inputTagManager.loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep, onDelta = onDelta)
+                    inputTagManager.loopMode == LoopMode.REACT -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta, attachments = attachments, onReasoning = onReasoning)
+                    inputTagManager.loopMode == LoopMode.GOAL -> session.engine.runWithGoal(task = finalTask, maxTurns = 20, onStep = onStep, onDelta = onDelta, onReasoning = onReasoning)
                     inputTagManager.loopMode == LoopMode.SWARM ->
-                        session.engine.runWithSwarm(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep, onDelta = onDelta)
+                        session.engine.runWithSwarm(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep, onDelta = onDelta, onReasoning = onReasoning)
                     inputTagManager.loopMode == LoopMode.FLEET ->
-                        session.engine.runWithFleet(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep, onDelta = onDelta)
-                    else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta, attachments = attachments)
+                        session.engine.runWithFleet(task = finalTask, roles = sessionFactory.buildSwarmRoles(), onStep = onStep, onDelta = onDelta, onReasoning = onReasoning)
+                    else -> session.engine.run(task = finalTask, maxSteps = 50, onStep = onStep, onDelta = onDelta, attachments = attachments, onReasoning = onReasoning)
                 }
 
                 // ── 思考容器闭环兜底 (v0.36.2 P1): 引擎返回但流式从未检测到 "Final Answer:" 标记 ──

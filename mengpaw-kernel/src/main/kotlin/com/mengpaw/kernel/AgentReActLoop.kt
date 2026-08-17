@@ -44,7 +44,8 @@ internal class AgentReActLoop(
         contextPrefix: String = "",
         onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
-        attachments: List<AttachmentData> = emptyList()
+        attachments: List<AttachmentData> = emptyList(),
+        onReasoning: ((String) -> Unit)? = null
     ): String {
         ErrorCollector.init()
 
@@ -138,7 +139,7 @@ internal class AgentReActLoop(
                 val conversationMsgs = conversation.buildConversation(session.id)
                 // 流式调用: 增量 token 经 onDelta 实时透传 UI(打字机效果); 完整文本仍用于解析
                 val llmResponse = if (onDelta != null)
-                    engine.getLlmProvider().completeStreamingWithMessages(conversationMsgs, onDelta)
+                    engine.getLlmProvider().completeStreamingWithMessages(conversationMsgs, onDelta, onReasoning)
                 else engine.getLlmProvider().completeWithMessages(conversationMsgs)
                 // 利用 LLM 等待窗口刚刚结束的间隙刷盘中期记忆 (I/O 成本隐藏)
                 com.mengpaw.kernel.agent.AgentDocs.flushMidTermMemoryQueue()

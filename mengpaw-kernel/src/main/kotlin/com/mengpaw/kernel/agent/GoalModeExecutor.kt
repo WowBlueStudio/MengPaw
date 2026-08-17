@@ -29,7 +29,8 @@ class GoalModeExecutor(
     suspend fun runWithGoal(
         task: String, maxTurns: Int = 20, maxTokensBudget: Int = 300_000,
         onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
-        onDelta: ((String) -> Unit)? = null
+        onDelta: ((String) -> Unit)? = null,
+        onReasoning: ((String) -> Unit)? = null
     ): String {
         val llmProvider = agentEngine.getLlmProvider()
         // P0 注入防护: 任务入口静默剥离精确注入模式
@@ -64,7 +65,8 @@ class GoalModeExecutor(
                 task = "$goalPrompt\n\n$guardedTask",
                 maxSteps = 50,
                 onStep = onStep,
-                onDelta = onDelta
+                onDelta = onDelta,
+                onReasoning = onReasoning
             )
             turnResults.add(result)
 

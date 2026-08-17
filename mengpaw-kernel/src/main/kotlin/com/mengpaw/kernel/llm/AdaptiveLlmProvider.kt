@@ -74,9 +74,10 @@ class AdaptiveLlmProvider(
 
     override suspend fun completeStreamingWithMessages(
         messages: List<Map<String, String>>,
-        onToken: (String) -> Unit
+        onToken: (String) -> Unit,
+        onReasoning: ((String) -> Unit)?
     ): String {
-        return callWithRetryAndFallback(messages, stream = true, onToken = onToken)
+        return callWithRetryAndFallback(messages, stream = true, onToken = onToken, onReasoning = onReasoning)
     }
 
     override fun info(): ProviderInfo = ProviderInfo(
@@ -98,7 +99,8 @@ class AdaptiveLlmProvider(
     private suspend fun callWithRetryAndFallback(
         messages: List<Map<String, String>>,
         stream: Boolean,
-        onToken: ((String) -> Unit)? = null
+        onToken: ((String) -> Unit)? = null,
+        onReasoning: ((String) -> Unit)? = null
     ): String {
         val chain = listOf("primary" to this) + fallbackProviders.mapIndexed { i, fb ->
             "fallback[$i]" to fb
@@ -108,7 +110,7 @@ class AdaptiveLlmProvider(
 
         for ((label, provider) in chain) {
             try {
-                val result = executeWithRetry(provider, label, messages, stream, onToken)
+                val result = executeWithRetry(provider, label, messages, stream, onToken, onReasoning)
                 // v0.29.2: fallback 服务成功后 usage 直通主 provider — 否则壳层读
                 // session.provider.lastUsage 恒 null, fallback 调用无缓存统计
                 if (provider !== this) this.lastUsage = provider.lastUsage
@@ -140,7 +142,8 @@ class AdaptiveLlmProvider(
         label: String,
         messages: List<Map<String, String>>,
         stream: Boolean,
-        onToken: ((String) -> Unit)?
+        onToken: ((String) -> Unit)?,
+        onReasoning: ((String) -> Unit)?
     ): String {
         var lastError: Exception? = null
 
@@ -148,12 +151,12 @@ class AdaptiveLlmProvider(
             try {
                 return if (provider is AdaptiveLlmProvider) {
                     LlmRateLimiter.withLimit {
-                        provider.callDirectApi(messages, stream, onToken)
+                        provider.callDirectApi(messages, stream, onToken, onReasoning)
                     }
                 } else if (stream && onToken != null) {
                     // v0.28.4: fallback provider 流式化 — 此前恒走非流式 completeWithMessages,
                     // onToken 被丢弃 → 主 API 失败后回答整段弹出 (金字塔彻查根因)
-                    provider.completeStreamingWithMessages(messages, onToken)
+                    provider.completeStreamingWithMessages(messages, onToken, onReasoning)
                 } else {
                     provider.completeWithMessages(messages)
                 }
@@ -195,7 +198,8 @@ class AdaptiveLlmProvider(
     internal suspend fun callDirectApi(
         messages: List<Map<String, String>>,
         stream: Boolean,
-        onToken: ((String) -> Unit)?
+        onToken: ((String) -> Unit)?,
+        onReasoning: ((String) -> Unit)? = null
     ): String {
         val requestStart = System.currentTimeMillis()  // P2-12(自检报告): LLM 耗时统计锚点
         val requestBody = buildRequestBody(model, config, messages, stream)
@@ -217,14 +221,18 @@ class AdaptiveLlmProvider(
 
         // ── Streaming path: SSE line-by-line (Reasonix readStream pattern) ──
         if (stream && onToken != null) {
-            return consumeSseStream(response, onToken, requestStart) { usage ->
-                lastUsage = usage
-                // P2-12(自检报告): token/耗时统计 — 部分 API 仅在末块内联 usage
-                com.mengpaw.kernel.Telemetry.recordLlm(
-                    usage.promptTokens, usage.completionTokens,
-                    System.currentTimeMillis() - requestStart
-                )
-            }
+            return consumeSseStream(
+                response, onToken, requestStart,
+                onUsage = { usage ->
+                    lastUsage = usage
+                    // P2-12(自检报告): token/耗时统计 — 部分 API 仅在末块内联 usage
+                    com.mengpaw.kernel.Telemetry.recordLlm(
+                        usage.promptTokens, usage.completionTokens,
+                        System.currentTimeMillis() - requestStart
+                    )
+                },
+                onReasoning = onReasoning
+            )
         }
 
         // ── Non-streaming path ──

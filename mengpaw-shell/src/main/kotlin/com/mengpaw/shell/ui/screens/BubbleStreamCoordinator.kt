@@ -23,6 +23,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  *  - 最终答案: 行首 "Final Answer:" 或引擎返回 (ensureFinalAnswer) 时折叠思考
  *    容器并创建答案气泡; 播放协程无条件流式推送最终轮文本; run() 返回后由
  *    applyFinalResult 定型 — 任何路径 (含截断/异常) 都不会残留运行态气泡。
+ * v0.40.3 (DeepSeek thinking mode 分流): 思维链 (reasoning_content) 经 [onReasoning]
+ * 独立通道累积 — 绝不进 StreamPlaybackBuffer / ReAct 检测。否则思维链里的
+ * "Final Answer:" / "Action:" 字样会误判标记 (用户 v0.40.1/0.40.2 三症状根因)。
+ * 思维链在 content 到达时作为该轮思考一次性显示 (比 content 的 "Thought:" 更完整),
+ * content 的 Thought 不再覆盖。
  * 行为由 BubbleStreamCoordinatorTest 锁死: 思考含 "Final Answer:" 字样不误判、
  * 截断路径兜底、纯文本最终轮进答案气泡而非思考容器。
  */
@@ -36,8 +41,20 @@ internal class BubbleStreamCoordinator(
     private val finalAnswerLine = Regex("""(?m)^\s*Final Answer[:：]""")
     /** 当前轮思考是否已一次性显示 — 幂等守卫 (仅 engine 回调 / 主协程访问)。 */
     private var thoughtShownRound = -1L
+    /** 当前 LLM 调用 (轮) 的思维链累积 (v0.40.3) — 与 content 分流, 独立显示。 */
+    private val reasoning = StringBuilder()
+    /** 当前轮思维链是否已写入思考容器 — 幂等守卫。 */
+    private var reasoningShownRound = -1L
 
     val isFinalAnswerStarted: Boolean get() = finalAnswerStarted.get()
+
+    /**
+     * DeepSeek thinking mode 思维链增量 (engine 回调线程) — 独立通道累积,
+     * 不参与 Action 扫描 / Final Answer 检测 / 最终答案流式。
+     */
+    fun onReasoning(delta: String) {
+        synchronized(this) { reasoning.append(delta) }
+    }
 
     /**
      * 流式增量 (engine 回调线程): 累积 + 工具轮思考一次性显示 + Final Answer 检测。
@@ -48,6 +65,8 @@ internal class BubbleStreamCoordinator(
      */
     fun onDelta(delta: String): StreamPlaybackBuffer.ToolAnnounce? {
         val newTool = streamBuffer.append(delta)
+        // content 到达 → 本轮思维链已完整, 一次性写入该轮思考 (思维链先显示)
+        flushReasoning(streamBuffer.currentRoundId())
         // 工具轮: 完整 Action 行落地 → 该轮思考已完整, 一次性显示 (取消逐字打字机)
         newTool?.let { if (!finalAnswerStarted.get()) showThoughtOnce(it.roundId) }
         // 检查累积原文而非单个 delta — "Final" / " Answer:" 跨 chunk 拆分也能命中
@@ -55,6 +74,7 @@ internal class BubbleStreamCoordinator(
             finalAnswerLine.containsMatchIn(streamBuffer.currentRawText()) &&
             streamBuffer.announcedToolNames().isEmpty()
         ) {
+            flushReasoning(streamBuffer.currentRoundId())
             finalAnswerStarted.set(true)
             writer.beginFinalAnswer()
         }
@@ -69,6 +89,8 @@ internal class BubbleStreamCoordinator(
     fun onStep(action: String?, observation: String?, isError: Boolean) {
         if (finalAnswerStarted.get()) return
         val roundId = streamBuffer.currentRoundId()
+        // 纯 content 轮 (无 Action 行): 思维链在此一次性显示
+        flushReasoning(roundId)
         showThoughtOnce(roundId)
         action?.let { line ->
             val name = line.trim().split(" ").firstOrNull() ?: ""
@@ -76,6 +98,8 @@ internal class BubbleStreamCoordinator(
             writer.completeTool(line, observation.orEmpty(), isError)
         }
         streamBuffer.sealRound()
+        // 本轮结束 — 清空思维链, 下一 LLM 调用的思维链开新轮累积
+        synchronized(this) { reasoning.setLength(0) }
     }
 
     /** 播放协程 — 只服务最终答案轮 (打字机): 每 tick 把整轮最终文本覆盖式推给
@@ -95,6 +119,7 @@ internal class BubbleStreamCoordinator(
     fun finish() {
         if (!finalAnswerStarted.get()) {
             val roundId = streamBuffer.currentRoundId()
+            flushReasoning(roundId)
             // 截断的工具轮 (已宣布 Action 行但未走 onStep): 思考 + 工具行补挂
             if (!streamBuffer.isCurrentRoundSealed() &&
                 streamBuffer.announcedToolNames().isNotEmpty()
@@ -103,14 +128,30 @@ internal class BubbleStreamCoordinator(
                 streamBuffer.announcedToolNames().forEach { writer.addTool(it, roundId) }
             }
             // 无标记最终轮兜底闭环 — 最终文本已由缓冲持有, 播放器流式输出
-            if (finalAnswerStarted.compareAndSet(false, true)) writer.beginFinalAnswer()
+            if (finalAnswerStarted.compareAndSet(false, true)) {
+                flushReasoning(streamBuffer.currentRoundId())
+                writer.beginFinalAnswer()
+            }
         }
         streamBuffer.finish()
     }
 
     /** 引擎返回兜底闭环 — 流式未检测到 Final Answer 时强制折叠容器并建答案气泡。 */
     fun ensureFinalAnswer() {
-        if (finalAnswerStarted.compareAndSet(false, true)) writer.beginFinalAnswer()
+        if (finalAnswerStarted.compareAndSet(false, true)) {
+            flushReasoning(streamBuffer.currentRoundId())
+            writer.beginFinalAnswer()
+        }
+    }
+
+    /** 把当前思维链一次性写入当前轮思考 step (幂等) — 思维链即最终思考过程。 */
+    private fun flushReasoning(roundId: Long) {
+        synchronized(this) {
+            if (reasoning.isEmpty()) return
+            if (reasoningShownRound == roundId) return
+            reasoningShownRound = roundId
+        }
+        writer.pushThought(reasoning.toString(), roundId)
     }
 
     /** 取当前轮完整原始文本一次性写入思考 step (幂等, 每轮只执行一次)。 */
@@ -119,6 +160,8 @@ internal class BubbleStreamCoordinator(
             if (thoughtShownRound == roundId) return
             thoughtShownRound = roundId
         }
+        // 该轮思考已由思维链承载 → content 的 "Thought:" 不覆盖 (思维链更完整)
+        if (reasoningShownRound == roundId) return
         streamBuffer.currentRawText()
             .let(::computeStreamDisplayText)
             .takeIf { it.isNotBlank() }
