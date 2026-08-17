@@ -50,6 +50,9 @@ class AdaptiveLlmProvider(
     /** Token usage from the most recent API call. Read by shell layer for stats collection. */
     @Volatile override var lastUsage: TokenUsage? = null
 
+    /** 最近一次调用的思维链全文 (v0.40.4, 供观测; UI 显示由 onReasoning 流式通道负责)。 */
+    @Volatile override var lastReasoning: String? = null
+
     /** Detect provider type from endpoint URL for request format adaptation. */
     private val providerType: String by lazy { detectProviderType(apiEndpoint) }
 
@@ -221,7 +224,8 @@ class AdaptiveLlmProvider(
 
         // ── Streaming path: SSE line-by-line (Reasonix readStream pattern) ──
         if (stream && onToken != null) {
-            return consumeSseStream(
+            val reasoningBuf = StringBuilder()
+            val result = consumeSseStream(
                 response, onToken, requestStart,
                 onUsage = { usage ->
                     lastUsage = usage
@@ -231,8 +235,13 @@ class AdaptiveLlmProvider(
                         System.currentTimeMillis() - requestStart
                     )
                 },
-                onReasoning = onReasoning
+                onReasoning = { delta ->
+                    onReasoning?.invoke(delta)
+                    reasoningBuf.append(delta)
+                }
             )
+            lastReasoning = reasoningBuf.toString().ifEmpty { null }
+            return result
         }
 
         // ── Non-streaming path ──
@@ -246,15 +255,16 @@ class AdaptiveLlmProvider(
             )
         }
 
-        // 合并双次 JSON 解析: 一次 parseToJsonElement 同时提取 usage 和 content
-        val (parsedContent, usage) = parseBody(body)
-        lastUsage = usage
+        // 合并双次 JSON 解析: 一次 parseToJsonElement 同时提取 content / reasoning / usage (v0.40.4)
+        val parsed = parseBody(body)
+        lastUsage = parsed.usage
+        lastReasoning = parsed.reasoning
         // P2-12(自检报告): token/耗时统计 — 非流式响应 usage 直录 (API 无 usage 时记 0)
         com.mengpaw.kernel.Telemetry.recordLlm(
-            usage?.promptTokens ?: 0, usage?.completionTokens ?: 0,
+            parsed.usage?.promptTokens ?: 0, parsed.usage?.completionTokens ?: 0,
             System.currentTimeMillis() - requestStart
         )
-        return parsedContent
+        return parsed.content
     }
 
     // ── Fallback Provider Factory ─────────────────────────────────────────

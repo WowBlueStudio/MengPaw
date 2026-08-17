@@ -26,6 +26,15 @@ data class TokenUsage(
 )
 
 /**
+ * 非流式 LLM 响应体解析结果 (v0.40.4): content 与 reasoning 分离 — 思维链绝不混入正文。
+ */
+data class ParsedLlmBody(
+    val content: String,
+    val reasoning: String?,
+    val usage: TokenUsage?
+)
+
+/**
  * Fallback provider entry for automatic degradation.
  */
 data class FallbackEntry(
@@ -116,11 +125,13 @@ internal fun buildRequestBody(
 }
 
 /**
- * 合并解析 LLM 响应体: 一次 Json.parseToJsonElement 同时提取 content 和 usage.
+ * 合并解析 LLM 响应体: 一次 Json.parseToJsonElement 同时提取 content / reasoning / usage.
  * 取代之前两次独立解析 (parseUsage + parseResponse), 减少 GC 压力.
- * @return Pair(content, usage) — content 绝不会为 null, usage 可能为 null
+ * 思维链 (message.reasoning_content, 各厂商官方文档口径) 提取为独立 [ParsedLlmBody.reasoning],
+ * 绝不拼进 content — 防止思维链里的 "Final Answer:"/"Action:" 污染正文与 ReAct 判定。
+ * @return [ParsedLlmBody] — content 绝不会为 null, reasoning/usage 可能为 null
  */
-internal fun parseBody(body: String): Pair<String, TokenUsage?> {
+internal fun parseBody(body: String): ParsedLlmBody {
     return try {
         val root = Json.parseToJsonElement(body).jsonObject
         // 1. 提取 usage
@@ -132,13 +143,19 @@ internal fun parseBody(body: String): Pair<String, TokenUsage?> {
             val cm = u["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
             TokenUsage(pt, ct, tt, ch, cm)
         }
-        // 2. 提取 content (OpenAI / GLM 格式)
-        val content = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.let { c ->
-            c["message"]?.jsonObject?.get("content")?.jsonPrimitive?.content
-                ?: c["delta"]?.jsonObject?.get("content")?.jsonPrimitive?.content
-        } ?: root["data"]?.jsonArray?.firstOrNull()?.jsonObject?.get("content")?.jsonPrimitive?.content
-        Pair(content ?: body, usage)
+        // 2. 提取 content / reasoning (OpenAI / GLM 等 OpenAI 兼容格式)
+        val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject
+        val message = choice?.get("message")?.jsonObject
+        val delta = choice?.get("delta")?.jsonObject
+        val content = message?.get("content")?.jsonPrimitive?.content
+            ?: delta?.get("content")?.jsonPrimitive?.content
+            ?: root["data"]?.jsonArray?.firstOrNull()?.jsonObject?.get("content")?.jsonPrimitive?.content
+        // 思维链: 官方文档口径 message.reasoning_content (DeepSeek/Kimi/GLM/Qwen/豆包/xAI),
+        // delta 形态兜底 (流式响应被非流式路径误收时), 兼容键见 ReasoningExtractor
+        val reasoning = message?.let(ReasoningExtractor::openAiCompat)
+            ?: delta?.let(ReasoningExtractor::openAiCompat)
+        ParsedLlmBody(content ?: body, reasoning, usage)
     } catch (_: Exception) {
-        Pair(body, null)
+        ParsedLlmBody(body, null, null)
     }
 }

@@ -207,9 +207,10 @@ internal class TaskExecutionPipeline(
                     coordinator.onDelta(delta)
                 }
 
-                // DeepSeek thinking mode 思维链分流 (v0.40.3): reasoning_content 走
-                // 独立回调 → 协调器思维链展示; 绝不混入 onDelta (否则思维链里的
-                // "Final Answer:"/"Action:" 字样会误判 ReAct 标记, v0.40.1/0.40.2 根因)
+                // 全厂商思维链分流 (v0.40.4): reasoning_content (OpenAI 兼容系) /
+                // Anthropic thinking_delta 等一律走独立回调 → 协调器思维链展示;
+                // 绝不混入 onDelta (否则思维链里的 "Final Answer:"/"Action:" 字样会
+                // 误判 ReAct 标记, v0.40.1/0.40.2 三症状根因)
                 val onReasoning: (String) -> Unit = { delta -> coordinator.onReasoning(delta) }
 
                 // 播放协程: 每 STREAM_PLAYBACK_INTERVAL_MS 把未播放增量推给 UI (打字机)

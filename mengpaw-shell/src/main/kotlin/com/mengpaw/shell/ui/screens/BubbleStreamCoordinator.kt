@@ -23,7 +23,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *  - 最终答案: 行首 "Final Answer:" 或引擎返回 (ensureFinalAnswer) 时折叠思考
  *    容器并创建答案气泡; 播放协程无条件流式推送最终轮文本; run() 返回后由
  *    applyFinalResult 定型 — 任何路径 (含截断/异常) 都不会残留运行态气泡。
- * v0.40.3 (DeepSeek thinking mode 分流): 思维链 (reasoning_content) 经 [onReasoning]
+ * v0.40.3+ (全厂商思维链分流): 思维链 (OpenAI 兼容系 reasoning_content /
+ * Anthropic thinking_delta, 字段以各厂商官方文档为唯一准则) 经 [onReasoning]
  * 独立通道累积 — 绝不进 StreamPlaybackBuffer / ReAct 检测。否则思维链里的
  * "Final Answer:" / "Action:" 字样会误判标记 (用户 v0.40.1/0.40.2 三症状根因)。
  * 思维链在 content 到达时作为该轮思考一次性显示 (比 content 的 "Thought:" 更完整),
@@ -49,7 +50,7 @@ internal class BubbleStreamCoordinator(
     val isFinalAnswerStarted: Boolean get() = finalAnswerStarted.get()
 
     /**
-     * DeepSeek thinking mode 思维链增量 (engine 回调线程) — 独立通道累积,
+     * 全厂商思维链增量 (engine 回调线程) — 独立通道累积,
      * 不参与 Action 扫描 / Final Answer 检测 / 最终答案流式。
      */
     fun onReasoning(delta: String) {
@@ -144,11 +145,14 @@ internal class BubbleStreamCoordinator(
         }
     }
 
-    /** 把当前思维链一次性写入当前轮思考 step (幂等) — 思维链即最终思考过程。 */
+    /**
+     * 把当前思维链一次性写入当前轮思考 step — 思维链即最终思考过程。
+     * pushThought 按 roundId 覆盖同一步, 故交错到达时后续增量重推即更新 (v0.40.4),
+     * 不再"每轮只推一次"丢弃迟到增量; 跨轮由 onStep 的 reasoning.setLength(0) 清空隔断。
+     */
     private fun flushReasoning(roundId: Long) {
         synchronized(this) {
             if (reasoning.isEmpty()) return
-            if (reasoningShownRound == roundId) return
             reasoningShownRound = roundId
         }
         writer.pushThought(reasoning.toString(), roundId)

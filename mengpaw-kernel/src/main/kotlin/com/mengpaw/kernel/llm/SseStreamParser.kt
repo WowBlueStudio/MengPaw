@@ -23,10 +23,10 @@ import kotlinx.serialization.json.jsonPrimitive
  *
  * Handles:
  * - OpenAI-compatible `data: {...}` events with `choices[0].delta.content`
- * - DeepSeek thinking mode `reasoning_content` delta — 与 content 分流:
- *   思维链经 [onReasoning] 单独回调 (v0.40.3, 对齐 DeepSeek thinking mode 文档),
- *   绝不混入 [onToken]/fullContent — 否则 UI 流式缓冲被思维链污染, 误判
- *   "Final Answer:"/"Action:" (用户 v0.40.1/0.40.2 复现三症状的根因)
+ * - 全厂商思维链增量分流 (v0.40.4, 字段以各厂商官方 API 文档为唯一准则, 见 [ReasoningExtractor]):
+ *   思维链经 [onReasoning] 单独回调, 绝不混入 [onToken]/fullContent — 否则 UI 流式缓冲被
+ *   思维链污染, 误判 "Final Answer:"/"Action:" (用户 v0.40.1/0.40.2 复现三症状的根因)
+ * - Anthropic 兼容 `content_block_delta`: thinking_delta 走 [onReasoning], text_delta 走 [onToken]
  * - `[DONE]` terminator
  * - Inline `usage` in the final event (经 [onUsage] 回调, 调用方写入 lastUsage + 遥测)
  *
@@ -96,21 +96,31 @@ internal suspend fun consumeSseStream(
                         onToken(text)
                     }
                 }
-                // Reasoning delta (DeepSeek thinking mode reasoning_content) —
-                // 思维链走独立回调, 不进 fullContent/onToken (v0.40.3)
-                openAiDelta["reasoning_content"]?.jsonPrimitive?.contentOrNull?.let { text ->
+                // Reasoning delta (v0.40.4 全厂商键归一: reasoning_content/reasoning/thought/thinking) —
+                // 思维链走独立回调, 不进 fullContent/onToken
+                ReasoningExtractor.openAiCompat(openAiDelta)?.let { text ->
                     if (text.isNotEmpty()) onReasoning?.invoke(text)
                 }
             } else {
-                // Anthropic content_block_delta: delta.text (text_delta)
-                val text = json["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
-                if (!text.isNullOrEmpty()) {
-                    if (firstToken) { firstToken = false; KernelLog.d("MengPawLatency", "S-FIRST") }
-                    fullContent.append(text)
-                    onToken(text)
+                // Anthropic content_block_delta:
+                // - delta.type == "thinking_delta" → delta.thinking (思维链, v0.40.4)
+                // - delta.type == "text_delta" → delta.text (正文)
+                // - signature_delta / message_start / message_delta / ping 等自然跳过 (签名不回放)
+                val deltaObj = json["delta"]?.jsonObject
+                if (deltaObj != null) {
+                    val thinking = ReasoningExtractor.anthropicThinkingDelta(deltaObj)
+                    val text = thinking
+                        ?: deltaObj["text"]?.jsonPrimitive?.contentOrNull
+                    if (!text.isNullOrEmpty()) {
+                        if (thinking != null) {
+                            onReasoning?.invoke(thinking)
+                        } else {
+                            if (firstToken) { firstToken = false; KernelLog.d("MengPawLatency", "S-FIRST") }
+                            fullContent.append(text)
+                            onToken(text)
+                        }
+                    }
                 }
-                // Anthropic 事件名校验: 只处理 content_block_delta, 跳过 message_start/message_delta/ping
-                // (无 delta.text 的事件自然被上面的 null 检查跳过)
             }
         } catch (_: Exception) {
             // Skip malformed SSE lines (same resilience as Reasonix readStream)

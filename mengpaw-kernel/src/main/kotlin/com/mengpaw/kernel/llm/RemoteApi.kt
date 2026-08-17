@@ -6,8 +6,6 @@ package com.mengpaw.kernel.llm
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.utils.io.*
-import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
 
 /**
@@ -31,6 +29,9 @@ class RemoteApi(
 
     /** Token usage from the most recent API call (v0.29.2: fallback 链路缓存统计直通). */
     @Volatile override var lastUsage: TokenUsage? = null
+
+    /** 最近一次调用的思维链全文 (v0.40.4, 与主 provider 同口径)。 */
+    @Volatile override var lastReasoning: String? = null
 
     override suspend fun complete(prompt: String): String {
         val messages = listOf(mapOf("role" to "user", "content" to prompt))
@@ -94,65 +95,19 @@ class RemoteApi(
             throw LlmApiException(response.status.value, "HTTP ${response.status.value}: ${errorBody.take(200)}")
         }
 
-        // SSE streaming: read data: lines incrementally
-        val channel = response.bodyAsChannel()
-        val fullContent = StringBuilder()
-
-        while (!channel.isClosedForRead) {
-            val line = try {
-                channel.readUTF8Line()?.trim()
-            } catch (e: CancellationException) {
-                throw e  // 取消契约: 用户 stop() 不得把半截响应当完整回答返回
-            } catch (_: Exception) { break }
-
-            if (line == null) break
-            if (line.isEmpty() || !line.startsWith("data:")) continue
-
-            val data = line.removePrefix("data:").trim()
-            if (data == "[DONE]") break
-
-            try {
-                val json = Json.parseToJsonElement(data).jsonObject
-
-                // Capture usage from inline usage event (v0.29.2: 与主 provider 对齐)
-                json["usage"]?.jsonObject?.let { u ->
-                    lastUsage = TokenUsage(
-                        promptTokens = u["prompt_tokens"]?.jsonPrimitive?.int ?: 0,
-                        completionTokens = u["completion_tokens"]?.jsonPrimitive?.int ?: 0,
-                        totalTokens = u["total_tokens"]?.jsonPrimitive?.int ?: 0,
-                        cacheHitTokens = u["prompt_cache_hit_tokens"]?.jsonPrimitive?.int ?: 0,
-                        cacheMissTokens = u["prompt_cache_miss_tokens"]?.jsonPrimitive?.int ?: 0
-                    )
-                }
-
-                // OpenAI 兼容: choices[0].delta.content
-                val openAiDelta = json["choices"]?.jsonArray
-                    ?.firstOrNull()?.jsonObject
-                    ?.get("delta")?.jsonObject
-                if (openAiDelta != null) {
-                    openAiDelta["content"]?.jsonPrimitive?.contentOrNull?.let { text ->
-                        if (text.isNotEmpty()) {
-                            fullContent.append(text)
-                            onToken(text)
-                        }
-                    }
-                    // DeepSeek thinking mode reasoning_content — 思维链独立回调 (v0.40.3),
-                    // 不进 fullContent/onToken, 与主 provider (SseStreamParser) 同口径
-                    openAiDelta["reasoning_content"]?.jsonPrimitive?.contentOrNull?.let { text ->
-                        if (text.isNotEmpty()) onReasoning?.invoke(text)
-                    }
-                } else {
-                    // Anthropic 兼容: content_block_delta → delta.text (text_delta)
-                    val text = json["delta"]?.jsonObject?.get("text")?.jsonPrimitive?.contentOrNull
-                    if (!text.isNullOrEmpty()) {
-                        fullContent.append(text)
-                        onToken(text)
-                    }
-                }
-            } catch (_: Exception) { /* skip malformed SSE */ }
-        }
-
-        return fullContent.toString()
+        // v0.40.4: 直接复用主解析器 consumeSseStream — 删除重复 SSE 循环,
+        // 保证主链与 fallback 链同口径 (全厂商思维链分流 / usage / 断流语义)。
+        val reasoningBuf = StringBuilder()
+        val result = consumeSseStream(
+            response, onToken, System.currentTimeMillis(),
+            onUsage = { usage -> lastUsage = usage },
+            onReasoning = { delta ->
+                onReasoning?.invoke(delta)
+                reasoningBuf.append(delta)
+            }
+        )
+        lastReasoning = reasoningBuf.toString().ifEmpty { null }
+        return result
     }
 
     override fun info(): ProviderInfo = ProviderInfo(
@@ -198,6 +153,8 @@ class RemoteApi(
             val choices = json["choices"]?.jsonArray ?: return body
             val first = choices.firstOrNull()?.jsonObject ?: return body
             val message = first["message"]?.jsonObject ?: return body
+            // v0.40.4: 思维链独立提取 (不混入正文), 官方口径 message.reasoning_content
+            lastReasoning = ReasoningExtractor.openAiCompat(message)
             message["content"]?.jsonPrimitive?.content ?: body
         } catch (e: Exception) {
             body.take(500)

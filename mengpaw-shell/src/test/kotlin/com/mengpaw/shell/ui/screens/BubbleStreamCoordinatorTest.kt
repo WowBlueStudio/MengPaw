@@ -335,4 +335,31 @@ class BubbleStreamCoordinatorTest {
         assertTrue("答案必须进气泡", fa != null && fa!!.content.contains("北京晴"))
         assertFalse("容器必须折叠", proc.isRunning)
     }
+
+    @Test
+    fun `思维链与正文交错到达_同轮思考完整显示`() = runBlocking {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, null, null)
+        writer.start()
+        val coordinator = BubbleStreamCoordinator(writer)
+        val job = coordinator.launchPlayback(this)
+
+        // 全厂商 (v0.40.4): 思维链增量与正文增量交错到达 — 两通道互不污染,
+        // 迟到思维链增量必须更新同轮思考 (而非丢弃)
+        coordinator.onReasoning("第一步思考。")
+        coordinator.onDelta("Thought: 工具轮\nAction: search\nAction Input: {}\n")
+        coordinator.onReasoning("第二步思考。")
+        coordinator.onDelta("补充正文")
+
+        assertFalse("思维链不得误判为最终答案", coordinator.isFinalAnswerStarted)
+        val proc = process(session)
+        assertEquals(
+            "交错到达的思维链必须完整拼接显示",
+            "第一步思考。第二步思考。",
+            proc.steps[0].thought
+        )
+        coordinator.onStep("search", "ok", false)
+        coordinator.finish()
+        job.join()
+    }
 }
