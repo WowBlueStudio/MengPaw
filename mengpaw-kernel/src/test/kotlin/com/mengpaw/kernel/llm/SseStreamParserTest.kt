@@ -280,4 +280,96 @@ class SseStreamParserTest {
         assertEquals("正文", r.content)
         assertEquals(listOf("思考", "内容"), r.reasoning)
     }
+
+    @Test
+    fun `官方流式夹具_五家reasoning_content系全兼容`() = runTest {
+        // Kimi 官方流式示例 (platform.kimi.com/docs/guide/use-thinking-models):
+        // choice.delta.reasoning_content 为思考 / choice.delta.content 为回答
+        val kimi = runSse(
+            """
+            data: {"choices":[{"delta":{"reasoning_content":"K-思考1"}}]}
+
+            data: {"choices":[{"delta":{"content":"K-正文"}}]}
+
+            data: {"choices":[{"delta":{"reasoning_content":"K-思考2"}}]}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("K-正文", kimi.content)
+        assertEquals(listOf("K-思考1", "K-思考2"), kimi.reasoning)
+
+        // GLM/Z.AI 官方迁移指南 (docs.z.ai/guides/overview/migrate-to-glm-new):
+        // 流式须处理 delta.reasoning_content 与 delta.content
+        val glm = runSse(
+            """
+            data: {"choices":[{"delta":{"reasoning_content":"G-思考"}}]}
+
+            data: {"choices":[{"delta":{"content":"G-答案"}}]}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("G-答案", glm.content)
+        assertEquals(listOf("G-思考"), glm.reasoning)
+
+        // Qwen/DashScope 官方 (docs.qwencloud.com/developer-guides/text-generation/thinking):
+        // 先 reasoning_content 后 content 两阶段流式
+        val qwen = runSse(
+            """
+            data: {"choices":[{"delta":{"reasoning_content":"Q-思考"}}]}
+
+            data: {"choices":[{"delta":{"content":"Q-回答"}}]}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("Q-回答", qwen.content)
+        assertEquals(listOf("Q-思考"), qwen.reasoning)
+
+        // xAI grok-4.6 官方 (docs.x.ai/developers/model-capabilities/text/reasoning):
+        // 流式思考摘要经 chunk.reasoning_content 与正文一并返回
+        val xai = runSse(
+            """
+            data: {"choices":[{"delta":{"reasoning_content":"X-摘要"}}]}
+
+            data: {"choices":[{"delta":{"content":"X-正文"}}]}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("X-正文", xai.content)
+        assertEquals(listOf("X-摘要"), xai.reasoning)
+
+        // 火山/豆包 官方 (docs.volcengine.com/docs/6492/2165111):
+        // reasoning_content 为思维链字段, 与 content 同级
+        val volcano = runSse(
+            """
+            data: {"choices":[{"delta":{"reasoning_content":"V-推理"}}]}
+
+            data: {"choices":[{"delta":{"content":"V-输出"}}]}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("V-输出", volcano.content)
+        assertEquals(listOf("V-推理"), volcano.reasoning)
+    }
+
+    @Test
+    fun `OpenAI官方chat_completions无思考字段_正文正常且onReasoning零调用`() = runTest {
+        // OpenAI 官方 reasoning 指南 (developers.openai.com/api/docs/guides/reasoning):
+        // "reasoning tokens are not visible via the API", chat/completions 流式仅 delta.content —
+        // 正文不受影响, 思维链通道自然为空 (官方能力边界, 非缺陷)。
+        val r = runSse(
+            """
+            data: {"choices":[{"delta":{"content":"官方正文"}}]}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("官方正文", r.content)
+        assertEquals(listOf("官方正文"), r.tokens)
+        assertTrue("官方不暴露思考时 onReasoning 应为零调用", r.reasoning.isEmpty())
+    }
 }
