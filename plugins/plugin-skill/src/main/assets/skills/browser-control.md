@@ -68,6 +68,26 @@ Agent 用 `agent.read` 看图)
 `browser_click`/`browser_type`/`browser_extract`/`browser_eval` 及保留的 browser.* 命令短名)。
 am 桥落地验证后随 9880 桥退役 (方案文档 §六)。
 
+### 开放模式 (第三方 Agent 接入, 2026-08-17+)
+
+默认 9880 桥为签名级安全模型 (Bearer token 仅同签名 Shell 可拿)。需要让**第三方 AI
+Agent 框架**直接控制浏览器时, 在浏览器设置 →「开放 MCP 控制」开启 (Playwright 式):
+
+- 开启后 `/mcp` 免 Bearer token, 本机任意进程可经 `127.0.0.1:9880` 控制浏览器;
+  仅回环地址, 不暴露局域网
+- 默认关闭; 切换即时生效, 无需重启浏览器
+- `/health` 返回 `openMode: true/false`, 第三方可探测当前模式
+- am 桥 (`RunCommandService`) 保持 signature 权限不变 — 仅同签名 Shell 可调,
+  第三方走 9880 HTTP 桥
+
+第三方接入三步:
+
+```
+1. 唤起:  am start -a com.mengpaw.action.OPEN_URL --es url "https://example.com"
+2. 探测:  curl http://127.0.0.1:9880/health      # {"ok":true,"status":"online","openMode":true}
+3. 调用:  curl -X POST http://127.0.0.1:9880/mcp -d '{"tool":"page.content","args":{"head":"20"}}'
+```
+
 ## 三、网页转档 (search.*)
 
 不依赖浏览器在线 — Agent 直接抓取转换:

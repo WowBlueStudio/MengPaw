@@ -1299,6 +1299,7 @@ Shell ↔ 浏览器进程的 127.0.0.1:9880 HTTP 桥 (`McpHttpServer`/`BrowserMc
 - **token 通道**: 浏览器经签名级 ContentProvider (`com.mengpaw.permission.MCP_BRIDGE`, protectionLevel=signature → 仅同签名 APK 可访问) 写入 Shell 进程 `BridgeTokenProvider` → 反射同步到 `BrowserMcpPlugin.bridgeToken`
 - **请求认证**: `BrowserMcpPlugin` 每次 /mcp 请求带 `Authorization: Bearer <token>`; 服务端 token 不匹配或为空 → **401 fail-closed** (无 token 时浏览器拒绝一切工具调用, 直到从 MengPaw 主应用打开浏览器建立通道)
 - `/health` 免认证 (仅在线状态, 无敏感信息)
+- **开放模式 (v0.8.x, 第三方接入)**: 浏览器设置 →「开放 MCP 控制」可显式开启 Playwright 式开放 — `/mcp` 免 Bearer token, 本机任意进程经 `127.0.0.1:9880` 直接控制浏览器 (仅回环, 不暴露局域网; 默认关闭, 切换即时生效); 认证策略抽为纯函数 `McpAuthPolicy` (安全模式 fail-closed / 开放模式放行, 单测锁定); `/health` 返回 `openMode` 供第三方探测; am 桥 signature 权限与 Shell 侧 token 流程不受影响
 - 另: **JavaBridge 移除 (P0)**: `addJavascriptInterface("MengPaw")` 已删除 — 网页 JS 从未引用, Agent 控制全走 Kotlin 直接调用; 任意网页原本可截屏填盘/调协程 API/泄露内部路径
 
 ### 6.9 P1 加固 (v0.32.1+, 九维审查)
