@@ -28,8 +28,8 @@ import java.io.File
  * 拆分说明 (400 行文件拆分项目): 数据逻辑按职责外移至同包 internal 控制器 —
  * SessionChatController (聊天状态流/绑定), TaskExecutionPipeline (submitTask 主链路),
  * TaskExecutionHelpers (纠正/建议/摘要/错误兜底), SessionMessageCenter (消息注入/撤回),
- * AgentTaskInbox (触发器/浏览器/部落轮询), StreamPlaybackBuffer (流式打字机),
- * ThinkingProcessWriter (思考过程容器+最终答案, v0.34.3), StreamStepTracker (前缀/正则/索引守卫)。
+ * AgentTaskInbox (触发器/浏览器/部落轮询), StreamPlaybackBuffer (流式缓冲+最终答案打字机),
+ * ThinkingProcessWriter (思考过程容器+最终答案, v0.34.3, v0.40.2 去 tracker)。
  * 公开 API (属性/方法签名) 零变化, 消费方 (MainScreen/AppRoot/AgentRuntime 等) 无需改动。
  */
 class AgentViewModel : ViewModel() {

@@ -8,150 +8,120 @@ import kotlinx.coroutines.Job
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 流式气泡编排协调器 (v0.37.3 拆分)。
+ * 流式气泡编排协调器 (v0.40.2 重构, 替代 v0.40.1 实现)。
  *
- * 背景: 思考气泡"卡在第 1 轮"反复出现 (v0.28.3 / v0.36.2 / v0.36.3 / v0.37.3 四次修复),
- * 根因是编排胶水散落在 TaskExecutionPipeline 300 行大函数里 — finalAnswerStarted 全局
- * 标记、轮次封口、播放路由三处共享状态靠"调用顺序恰好正确"维持, 跨三个线程
- * (engine 回调 / 播放协程 / 主协程), 任何顺序变化就出新缺陷。
+ * v0.40.1 简化显示 (思考一次性显示 + 最终答案流式 + 收到最终折叠) 实现失败,
+ * 用户复现三症状: ① "思考中... xxs" 单独气泡计时不停; ② 一轮思考后停止,
+ * 无最终答案; ③ 思考过程运行中不展开。根因是 finalAnswerRoundId / thoughtShown /
+ * stepClosed / pendingTools / 播放路由多套状态互相牵扯, 播放协程对最终答案的
+ * 推送被 "raw 含 Final Answer 字样" 条件拦截, 引擎返回兜底又把无标记最终轮
+ * 误写进思考容器 — 任一路径脱轨, FinalAnswer 气泡就永远 blank + isRunning=true。
  *
- * 本类把"流式增量 → 思考/工具/最终答案气泡"的编排收敛为五个入口, 全部状态
- * (finalAnswerStarted / 轮次封口 / 播放路由) 在此内部管理, TaskExecutionPipeline
- * 只做调用, 不再自己捏状态。行为由 BubbleStreamCoordinatorTest 锁死:
- * 思考含 "Final Answer:" 字样不误判、截断路径播完、多轮按序。
- *
- * v0.40.1 简化显示流程 (用户定案):
- *  - 思考阶段: 取消逐字流式打字机 — 工具轮在流式检测到完整 Action 行时
- *    一次性显示整轮思考 (思考先出现), 工具行在 onStep (工具完成) 时按顺序
- *    挂入并带观察; 纯思考轮 (无 Action) 在 onStep 时一次性显示。
- *  - 最终答案: 收到最终答案 (Final Answer 检测 / 引擎返回兜底) 时折叠思考
- *    容器并创建答案气泡, 最终回复仍由播放协程流式输出 (打字机保留)。
+ * 本版把编排收敛为三件事, 其余状态全部删除:
+ *  - 思考轮: 完整 Action 行检测到 (onDelta) 或 onStep 时, 整轮思考一次性写入容器;
+ *  - 工具行: onStep 时按顺序挂入当前 step 并带观察 (思考先出现, 调用后出现);
+ *  - 最终答案: 行首 "Final Answer:" 或引擎返回 (ensureFinalAnswer) 时折叠思考
+ *    容器并创建答案气泡; 播放协程无条件流式推送最终轮文本; run() 返回后由
+ *    applyFinalResult 定型 — 任何路径 (含截断/异常) 都不会残留运行态气泡。
+ * 行为由 BubbleStreamCoordinatorTest 锁死: 思考含 "Final Answer:" 字样不误判、
+ * 截断路径兜底、纯文本最终轮进答案气泡而非思考容器。
  */
 internal class BubbleStreamCoordinator(
     private val writer: ThinkingProcessWriter,
     val streamBuffer: StreamPlaybackBuffer = StreamPlaybackBuffer()
 ) {
     private val finalAnswerStarted = AtomicBoolean(false)
-    /** 触发最终答案时的轮次 — 该轮及之后路由到 FinalAnswer, 之前的思考轮按序播完。 */
-    @Volatile
-    private var finalAnswerRoundId = Long.MAX_VALUE
-    /** 行首锚定: 只有独立成行的 "Final Answer:" 才算最终答案轮 —
-     *  思考里 "我需要给出 Final Answer: xxx"(行中字样)不误判 (v0.37.3)。 */
-    private val finalAnswerLine = Regex("""(?m)^\s*Final Answer:""")
-    /** 任意位置标记 (大小写/中英冒号) — 判断最终轮原始文本是否已输出答案标记。 */
-    private val finalAnswerAny = Regex("""(?i)final answer[:：]""")
-    /** 已一次性显示思考的轮次 — onDelta (工具行完整) / onStep / finish 兜底幂等去重。
-     *  仅在引擎回调线程 (主协程) 访问, 播放协程不触碰。 */
-    private val thoughtShown = mutableSetOf<Long>()
-    /** 已走 onStep 封口的轮次 — 工具行 (含观察) 已挂入 step; finish 兜底据此
-     *  为"思考已显示但工具未挂"的截断轮补挂工具行。 */
-    private val stepClosed = mutableSetOf<Long>()
+    /** 行首锚定 (中英冒号) — 只有独立成行的 "Final Answer:" 才算最终答案轮;
+     *  思考正文里复述该字样 (行中) 不误判; 同轮已宣布 Action 行时也不判 (v0.37.3)。 */
+    private val finalAnswerLine = Regex("""(?m)^\s*Final Answer[:：]""")
+    /** 当前轮思考是否已一次性显示 — 幂等守卫 (仅 engine 回调 / 主协程访问)。 */
+    private var thoughtShownRound = -1L
 
     val isFinalAnswerStarted: Boolean get() = finalAnswerStarted.get()
 
     /**
-     * 流式增量 (engine 回调线程) — 累积 + 思考一次性显示 + Final Answer 检测。
-     * Final Answer 检测双重判据 (v0.37.3): 当前增量含 "Final Answer:" **且**当前轮
-     * 未宣布工具行 — 思考轮里出现该字样 (同轮有 Action) 不误判; 真实最终答案轮
-     * 无 Action, 正常触发。误判会把后续思考全部改道 FinalAnswer 气泡 (历史缺陷)。
+     * 流式增量 (engine 回调线程): 累积 + 工具轮思考一次性显示 + Final Answer 检测。
+     * Final Answer 双重判据 (v0.37.3): 当前轮原始文本含行首 "Final Answer:" **且**
+     * 本轮未宣布工具行 — 思考轮里出现该字样 (同轮有 Action) 不误判; 真实最终答案轮
+     * 无 Action, 正常触发。
      * @return 新宣布的完整工具调用行 (无则 null)
      */
     fun onDelta(delta: String): StreamPlaybackBuffer.ToolAnnounce? {
         val newTool = streamBuffer.append(delta)
-        // 工具轮: 流式检测到完整 Action 行时, 该轮思考已完整 — 一次性显示 (取消打字机),
-        // 工具行等 onStep (工具完成) 再挂, 保证"思考先出现, 调用后出现"。
-        newTool?.let { t ->
-            if (!finalAnswerStarted.get() && thoughtShown.add(t.roundId)) {
-                showThoughtOnce(t.roundId)
-            }
-        }
+        // 工具轮: 完整 Action 行落地 → 该轮思考已完整, 一次性显示 (取消逐字打字机)
+        newTool?.let { if (!finalAnswerStarted.get()) showThoughtOnce(it.roundId) }
+        // 检查累积原文而非单个 delta — "Final" / " Answer:" 跨 chunk 拆分也能命中
         if (!finalAnswerStarted.get() &&
-            finalAnswerLine.containsMatchIn(delta) &&
-            !streamBuffer.currentRoundHasTool()
+            finalAnswerLine.containsMatchIn(streamBuffer.currentRawText()) &&
+            streamBuffer.announcedToolNames().isEmpty()
         ) {
             finalAnswerStarted.set(true)
-            finalAnswerRoundId = streamBuffer.currentRoundId()
             writer.beginFinalAnswer()
         }
         return newTool
     }
 
     /**
-     * 工具轮完成 (engine 回调) — 观察全文挂载 + 当前流式轮次封口。
-     * 纯思考轮 (无 Action 行) 在此一次性显示思考; 工具轮补挂观察。
-     * 封口后该轮快进跳过播放 (思考已一次性显示, 不逐字)。
+     * 工具轮完成 (engine 回调): 纯思考轮 (无 Action 行) 在此一次性显示思考;
+     * 工具行 (含观察全文) 挂入当前 step; 封口当前轮。多 Action 批的多次 onStep
+     * 幂等 (思考守卫跳过, 工具行逐个追加)。最终答案轮无工具 — 防御性忽略。
      */
     fun onStep(action: String?, observation: String?, isError: Boolean) {
+        if (finalAnswerStarted.get()) return
         val roundId = streamBuffer.currentRoundId()
-        // 纯思考轮 (模型只输出 Thought, 无 Action 行): 之前未显示, 这里一次性显示
-        if (thoughtShown.add(roundId)) {
-            showThoughtOnce(roundId)
-        }
+        showThoughtOnce(roundId)
         action?.let { line ->
             val name = line.trim().split(" ").firstOrNull() ?: ""
             writer.addTool(name, roundId)
             writer.completeTool(line, observation.orEmpty(), isError)
         }
-        stepClosed.add(roundId)
-        streamBuffer.skipRound(roundId)
         streamBuffer.sealRound()
     }
 
-    /** 播放协程 — 思考轮已一次性显示并快进, 只对最终答案轮做流式打字机输出。 */
+    /** 播放协程 — 只服务最终答案轮 (打字机): 每 tick 把整轮最终文本覆盖式推给
+     *  FinalAnswer 气泡; 思考轮不经过播放器。收流 (finish) 后推完即退。 */
     fun launchPlayback(scope: CoroutineScope): Job =
-        streamBuffer.launchPlayback(scope) { roundId, text ->
-            if (finalAnswerStarted.get() && roundId >= finalAnswerRoundId) {
-                // 标记未到达前丢弃思考段: 最终轮中途 tick 的文本可能只有
-                // "Thought: ..." (无 Final Answer 标记), 不推入答案气泡避免闪现
-                if (streamBuffer.roundRawText(roundId)?.let { finalAnswerAny.containsMatchIn(it) } == true) {
-                    writer.pushFinal(text)
-                }
-            }
+        streamBuffer.launchPlayback(scope) { text ->
+            if (finalAnswerStarted.get()) writer.pushFinal(text)
         }
 
-    /** run() 已返回 — 标记流结束 + 封口全部轮次; 截断路径 (引擎异常/未走 onStep
-     *  的轮次) 兜底一次性显示思考与工具行。 */
+    /**
+     * run() 已返回 — 结束流 + 截断兜底:
+     *  - 未走 onStep 的工具轮 (引擎异常/截断): 思考一次性显示 + 工具行补挂 (无观察);
+     *  - 无 Final Answer 标记的最终轮 (parse Rule 3/4): 兜底闭环 — 折叠思考容器 +
+     *    创建答案气泡, 最终文本由播放协程流式推送, applyFinalResult 定型。
+     * 幂等: ensureFinalAnswer 已触发时只做封口。
+     */
     fun finish() {
-        streamBuffer.finish()
-        streamBuffer.snapshotRounds().forEach { (roundId, raw) ->
-            // 最终答案轮不进思考容器 (已由播放器流式输出)
-            if (finalAnswerStarted.get() && roundId >= finalAnswerRoundId) return@forEach
-            if (thoughtShown.add(roundId)) {
-                computeStreamDisplayText(raw)
-                    .takeIf { it.isNotBlank() }
-                    ?.let { writer.pushThought(it, roundId) }
+        if (!finalAnswerStarted.get()) {
+            val roundId = streamBuffer.currentRoundId()
+            // 截断的工具轮 (已宣布 Action 行但未走 onStep): 思考 + 工具行补挂
+            if (!streamBuffer.isCurrentRoundSealed() &&
+                streamBuffer.announcedToolNames().isNotEmpty()
+            ) {
+                showThoughtOnce(roundId)
+                streamBuffer.announcedToolNames().forEach { writer.addTool(it, roundId) }
             }
-            // 工具行兜底: 已宣布 Action 行但引擎异常未走 onStep 的轮, 补挂工具行
-            // (无观察, 折叠显示 "…")。thoughtShown 守卫不可复用 — 思考可能已由
-            // onDelta 显示而工具未挂, 须按 stepClosed 独立判断。
-            if (roundId !in stepClosed) {
-                streamBuffer.roundToolNames(roundId).forEach { writer.addTool(it, roundId) }
-            }
+            // 无标记最终轮兜底闭环 — 最终文本已由缓冲持有, 播放器流式输出
+            if (finalAnswerStarted.compareAndSet(false, true)) writer.beginFinalAnswer()
         }
-    }
-
-    /** 播放器异常退出兜底 — 推完剩余缓冲。 */
-    fun flushRemaining() {
-        val flushText = streamBuffer.flushText() ?: return
-        if (finalAnswerStarted.get() && flushText.roundId >= finalAnswerRoundId) writer.pushFinal(flushText.tool)
-        else if (thoughtShown.add(flushText.roundId)) writer.pushThought(flushText.tool, flushText.roundId)
+        streamBuffer.finish()
     }
 
     /** 引擎返回兜底闭环 — 流式未检测到 Final Answer 时强制折叠容器并建答案气泡。 */
     fun ensureFinalAnswer() {
-        if (finalAnswerStarted.compareAndSet(false, true)) {
-            // 引擎返回兜底: 无最终答案轮标记 — 剩余全部按思考轮播完
-            finalAnswerRoundId = Long.MAX_VALUE
-            writer.beginFinalAnswer()
-        }
+        if (finalAnswerStarted.compareAndSet(false, true)) writer.beginFinalAnswer()
     }
 
-    /** 取该轮完整原始文本一次性写入思考 step (幂等, 由 thoughtShown 保证只执行一次)。 */
+    /** 取当前轮完整原始文本一次性写入思考 step (幂等, 每轮只执行一次)。 */
     private fun showThoughtOnce(roundId: Long) {
-        streamBuffer.roundRawText(roundId)?.let { raw ->
-            computeStreamDisplayText(raw)
-                .takeIf { it.isNotBlank() }
-                ?.let { writer.pushThought(it, roundId) }
+        synchronized(this) {
+            if (thoughtShownRound == roundId) return
+            thoughtShownRound = roundId
         }
+        streamBuffer.currentRawText()
+            .let(::computeStreamDisplayText)
+            .takeIf { it.isNotBlank() }
+            ?.let { writer.pushThought(it, roundId) }
     }
 }

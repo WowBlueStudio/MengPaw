@@ -15,27 +15,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * 运行中消息索引解析 (自 AgentViewModel 拆出 — 纯函数, 跨线程安全):
- * 快路径 [cachedIndex] 经引用身份对 [cachedRef] 校验; 仅在并发插入
- * (如 notifyAgentMessage) 位移列表时退化为线性扫描。找不到运行中消息返回 -1。
- */
-internal fun resolveRunningIndex(
-    list: List<ChatMessageUi>,
-    cachedIndex: Int,
-    cachedRef: ChatMessageUi?
-): Int {
-    // Fast path: identity match at cached index (O(1) — normal case)
-    if (cachedIndex in list.indices && list[cachedIndex] === cachedRef) return cachedIndex
-    // Slow path: concurrent insertion shifted the list — identity scan (O(n))
-    cachedRef?.let { ref ->
-        val found = list.indexOfFirst { it === ref }
-        if (found >= 0) return found
-    }
-    // Last resort: scan by type (shouldn't happen unless ref was GC'd)
-    return list.indexOfLast { (it is ChatMessageUi.ThinkingProcess && it.isRunning) || (it is ChatMessageUi.FinalAnswer && it.isRunning) }
-}
-
-/**
  * 会话聊天状态控制器 (自 AgentViewModel 拆出 — delegate-object 模式):
  * 持有可观察 UI 状态 (messages/isRunning/inputEnabled/pendingTasks/activeAgent),
  * 负责把活动会话的消息流与引擎状态流绑定到这些 StateFlow, 并解析活动会话。

@@ -89,9 +89,9 @@ internal class TaskExecutionPipeline(
             val savedLoopMode = inputTagManager.loopMode
             val modePrefix = executionMode?.prefix
             // v0.34.3 气泡 UI 重构: 思考过程容器 + 最终答案 (ThinkingProcessWriter)
-            // P2 修复: 局部 var 被三线程共享 → @Volatile 追踪器 (见 RunningStepTracker)
             val writer = ThinkingProcessWriter(session, modePrefix, agentRef)
             var playbackJob: Job? = null // 流式播放协程句柄 (try 外声明, catch 路径可取消)
+            var coordinator: BubbleStreamCoordinator? = null // 异常路径收口用
             try {
                 // /Goal /Fleet: 临时覆盖 loopMode
                 if (executionMode == ExecutionMode.GOAL) {
@@ -177,7 +177,7 @@ internal class TaskExecutionPipeline(
                 // 缓冲每轮结束(onStep)清空, 避免 "Action:" 标记跨轮残留 (v0.28.3 根因1)
                 // v0.37.3: 流式气泡编排收敛到独立协调器 (finalAnswerStarted/轮次封口/
                 // 播放路由三处共享状态此前散落在本函数, 反复触发"卡在第 1 轮"缺陷)
-                val coordinator = BubbleStreamCoordinator(writer)
+                coordinator = BubbleStreamCoordinator(writer)
                 // 工具提前通知 (v0.29.2, Reasonix ③ 对标): 流式中完整 "Action: <tool>" 行
                 // 出现即推送 — 不等工具执行完成 (onStep), 消除工具轮流式空屏
 
@@ -258,29 +258,23 @@ internal class TaskExecutionPipeline(
                 }
 
                 // ── 思考容器闭环兜底 (v0.36.2 P1): 引擎返回但流式从未检测到 "Final Answer:" 标记 ──
-                // 内核 PromptEngine.parse 规则 3/4 把无标记的纯文本自然回答 / Thought-only 也判为最终答案
-                // (闲聊/简单问答/非 ReAct 模型常见)。原实现只在 onDelta 里认 "Final Answer:" 前缀 →
-                // 这类回答思考容器永不折叠 (isRunning 永 true): UI 恒显"思考中…"、自动折叠失效,
-                // 手动折叠后滚动回收 (LazyColumn 重组, rememberSaveable 丢失) 又恢复展开。
-                // 引擎返回即兜底闭环: 折叠容器 + 创建 FinalAnswer 气泡, 后续 applyFinalResult 定型。
+                // 内核 PromptEngine.parse 规则 3/4 把无标记的纯文本自然回答 / Thought-only 也判为
+                // 最终答案。引擎返回即兜底闭环: 折叠容器 + 创建 FinalAnswer 气泡, 最终文本由
+                // 播放协程流式推送, applyFinalResult 定型 (v0.40.2 不再把最终轮误写进思考容器)。
                 coordinator.ensureFinalAnswer()
 
-                // ── 尾段: run() 已返回 — 标记流结束, 等待播放器把剩余缓冲按节奏播完
-                // (打字机收尾, 最长 ~2.5s); join 防 Default 线程晚到 tick 覆盖最终消息
+                // ── 尾段: run() 已返回 — 截断兜底 + 标记流结束, 等待播放器把最终答案
+                // 按节奏播完 (打字机收尾, 最长 ~2.5s); join 防 Default 线程晚到 tick 覆盖最终消息
                 // (doTranslate 开启时跳过等待: 最终 replace 整段替换为中文,
                 //  英文逐字播放无意义, 旧实现同样跳过尾段)
                 coordinator.finish()
                 if (!doTranslate) playbackJob?.join()
                 playbackJob?.cancel()
-                if (!doTranslate) {
-                    // 兜底 flush: 播放器异常退出时推完剩余; 正常播完时此处无操作
-                    coordinator.flushRemaining()
-                }
 
                 // Translate result back to Chinese for US models
                 val displayResult = if (doTranslate) translator.toChinese(result) else result
 
-                applyFinalResult(session, writer, coordinator.streamBuffer, displayResult, result, modePrefix, agentRef, pluginViewModel)
+                applyFinalResult(writer, displayResult, result, modePrefix, agentRef, pluginViewModel)
                 // 会话结束兜底: Evolution Agent 分析触发 (v0.37.3) — 新失败累计达
                 // 批次阈值时生成进化报告, 子 Agent 产出放用户气泡侧 (User 消息),
                 // 主 Agent 参考 evolution 技能审阅采纳
@@ -303,6 +297,9 @@ internal class TaskExecutionPipeline(
             } catch (e: Throwable) {
                 // Safety net: catch OOM, unexpected runtime errors, etc.
                 // Prevents process crash — degrades gracefully to error message
+                // v0.40.2: 异常路径同样收口 — 未走 onStep 的工具轮补挂思考+工具行,
+                // 缓冲标记结束, 再交给 applyError 把错误写入答案气泡
+                coordinator?.finish()
                 applyError(e, session, writer, savedLoopMode, playbackJob, modePrefix, agentRef,
                     chat, inputTagManager, sessionPersistence) { processNextPending() }
                 // 异常结束同样兜底触发进化分析 (失败也是进化原料)

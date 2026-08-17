@@ -8,21 +8,24 @@ import com.mengpaw.shell.ui.screens.model.ChatMessageUi
 import kotlinx.coroutines.flow.update
 
 /**
- * 思考过程容器写入器 (v0.34.3 气泡 UI 重构, 替代 StepBubbleWriter)。
+ * 思考过程容器写入器 (v0.40.2 重构)。
  *
  * 一次任务 = 单一过程容器 (ThinkingProcess: 思考/调用/观察循环, 折叠) + 最终答案
- * (FinalAnswer) 气泡。时间轴主导: 思考流式写入容器 → Action 出现插入折叠工具行 →
+ * (FinalAnswer) 气泡。时间轴主导: 思考一次性写入容器 → Action 出现插入折叠工具行 →
  * 工具完成挂观察全文 → 检测到 Final Answer 自动折叠容器 + 答案气泡流式。
  *
- * 线程纪律沿用 RunningStepTracker: engine 回调线程 (onDelta/onStep) / 播放协程
- * (Default) / 主协程三方读写, @Volatile ref 跨线程可见。
+ * v0.40.2 删除 RunningStepTracker (index/ref 身份追踪): 该追踪器在消息列表被
+ * 重建/恢复 (进程死亡恢复) 后身份失效, 是"思考中... xxs 气泡永远 isRunning"的
+ * 结构性诱因之一。任务串行执行, 本任务的容器/气泡恒为列表中最后一个对应类型 —
+ * 直接按类型定位最后一条, 无跨线程共享索引, 天然幂等。
+ * 线程纪律: 所有写入经 session.messages.update (MutableStateFlow CAS), engine
+ * 回调线程 / 播放协程 / 主协程三方安全。
  */
 internal class ThinkingProcessWriter(
     private val session: AgentSession,
     private val modePrefix: String?,
     private val agentRef: String?,
 ) {
-    val tracker = RunningStepTracker()
 
     /** 任务开始: 创建过程容器 (展开, 思考中)。 */
     fun start() {
@@ -30,17 +33,13 @@ internal class ThinkingProcessWriter(
             steps = emptyList(), isRunning = true, collapsed = false,
             executionMode = modePrefix, agentRef = agentRef
         )
-        tracker.ref = msg
-        tracker.index = session.messages.value.size
         session.messages.value = session.messages.value + msg
     }
 
     /**
-     * 流式思考更新 — 播放器每次推完整显示文本, 覆盖当前轮 thought。
-     * 按 roundId 路由: 同一轮 (roundId 相同) 增量覆盖同一步, 跨轮 (roundId
-     * 递增) 才另起新 step — 修复 v0.36.3 回归: 原实现用 last.tools 非空判轮界,
-     * 当前轮 addTool 插入工具行后, 同轮后续思考增量全被误判为"上一轮已固化"
-     * 而另起 step, 导致前几轮思考只显示 1~3 字并产生重复 step。
+     * 流式思考一次性显示 — 按 roundId 路由: 同一轮覆盖同一步, 跨轮另起新 step。
+     * (v0.36.3 修复: 原实现用 last.tools 非空判轮界, 当前轮 addTool 插入工具行后,
+     *  同轮后续思考增量全被误判为"上一轮已固化"而另起 step。)
      */
     fun pushThought(text: String, roundId: Long) {
         updateProcess { steps ->
@@ -55,7 +54,7 @@ internal class ThinkingProcessWriter(
         }
     }
 
-    /** 工具提前通知: 流式检测到完整 "Action: <tool>" 行 → 插入折叠工具行。
+    /** 工具提前通知: 完整 "Action: <tool>" 行 → 插入折叠工具行。
      *  按 roundId 挂到对应 step — 思考增量未到 (突发流) 时先建 step, 后续
      *  pushThought 同轮更新, 不再拆成两个 step。 */
     fun addTool(command: String, roundId: Long) {
@@ -89,116 +88,111 @@ internal class ThinkingProcessWriter(
         }
     }
 
-    /** 检测到 Final Answer 开始: 过程容器自动折叠 (isRunning=false), 创建最终答案气泡。 */
+    /**
+     * 检测到 Final Answer 开始: 过程容器自动折叠 (isRunning=false), 创建最终答案气泡。
+     * 幂等: 本任务容器已折叠且已有 FinalAnswer 时直接返回 — 防 onDelta 与引擎返回
+     * 兜底双触发产生两个答案气泡。
+     */
     fun beginFinalAnswer() {
         session.messages.update { current ->
             val mutable = current.toMutableList()
-            val pidx = resolveRunningIndex(mutable, tracker.index, tracker.ref)
-            if (pidx >= 0 && mutable[pidx] is ChatMessageUi.ThinkingProcess) {
-                mutable[pidx] = (mutable[pidx] as ChatMessageUi.ThinkingProcess)
-                    .copy(collapsed = true, isRunning = false)
+            val tpIdx = mutable.indexOfLast { it is ChatMessageUi.ThinkingProcess }
+            val tp = mutable.getOrNull(tpIdx) as? ChatMessageUi.ThinkingProcess
+            // 本任务已闭环: 容器已折叠 + 末尾已是 FinalAnswer → 幂等返回
+            if (tp != null && tp.collapsed && !tp.isRunning &&
+                mutable.lastOrNull() is ChatMessageUi.FinalAnswer
+            ) {
+                return@update current
             }
+            if (tp != null) {
+                mutable[tpIdx] = tp.copy(collapsed = true, isRunning = false)
+            }
+            if (mutable.lastOrNull() is ChatMessageUi.FinalAnswer) return@update current
             val fa = ChatMessageUi.FinalAnswer(
                 content = "", isRunning = true,
                 executionMode = modePrefix, agentRef = agentRef
             )
-            tracker.ref = fa
-            tracker.index = mutable.size
             mutable.add(fa)
             mutable
         }
     }
 
-    /** 最终答案流式更新 (覆盖 — 播放器每次推完整文本)。 */
+    /** 最终答案流式更新 (覆盖 — 播放器每 tick 推完整文本)。 */
     fun pushFinal(text: String) {
         session.messages.update { current ->
             val mutable = current.toMutableList()
-            val idx = resolveFinalAnswerIndex(mutable)
+            val idx = mutable.indexOfLast { it is ChatMessageUi.FinalAnswer }
             if (idx >= 0) {
-                val updated = (mutable[idx] as ChatMessageUi.FinalAnswer).copy(content = text)
-                tracker.ref = updated
-                tracker.index = idx
-                mutable[idx] = updated
+                mutable[idx] = (mutable[idx] as ChatMessageUi.FinalAnswer).copy(content = text)
             }
             mutable
         }
     }
 
-    /** 最终答案定型 (applyFinalResult 调用)。 */
+    /**
+     * 最终答案定型 (applyFinalResult 调用): 折叠/停止思考容器, 写完整答案并退出
+     * 运行态; 无 FinalAnswer (异常路径) 时兜底追加 Agent 气泡。
+     */
     fun finalize(answer: String) {
         session.messages.update { current ->
             val mutable = current.toMutableList()
-            val idx = resolveFinalAnswerIndex(mutable)
+            stopProcessContainer(mutable)
+            val idx = mutable.indexOfLast { it is ChatMessageUi.FinalAnswer }
             if (idx >= 0) {
-                val updated = (mutable[idx] as ChatMessageUi.FinalAnswer)
+                mutable[idx] = (mutable[idx] as ChatMessageUi.FinalAnswer)
                     .copy(content = answer, isRunning = false)
-                tracker.ref = updated
-                tracker.index = idx
-                mutable[idx] = updated
             } else {
-                // 兜底: 无 FinalAnswer (如纯文本最终轮未经 beginFinalAnswer) → 追加 Agent
                 mutable.add(ChatMessageUi.Agent(answer, executionMode = modePrefix, agentRef = agentRef))
             }
             mutable
         }
     }
 
-    /** 失败兜底: 最终答案气泡替换为错误消息 (若存在); 否则过程容器后追加 Agent 错误。 */
+    /**
+     * 失败兜底 (applyError 调用): 最终答案气泡替换为错误消息 (若存在);
+     * 否则过程容器收尾 + 追加 Agent 错误。
+     */
     fun fail(errorMsg: String) {
         session.messages.update { current ->
             val mutable = current.toMutableList()
-            val idx = resolveFinalAnswerIndex(mutable)
+            val idx = mutable.indexOfLast { it is ChatMessageUi.FinalAnswer }
             if (idx >= 0) {
-                val updated = (mutable[idx] as ChatMessageUi.FinalAnswer)
+                mutable[idx] = (mutable[idx] as ChatMessageUi.FinalAnswer)
                     .copy(content = errorMsg, isRunning = false)
-                tracker.ref = updated
-                tracker.index = idx
-                mutable[idx] = updated
             } else {
-                // 过程容器收尾 + 追加错误
-                val pidx = mutable.indexOfLast { it is ChatMessageUi.ThinkingProcess && it.isRunning }
-                if (pidx >= 0) mutable[pidx] = (mutable[pidx] as ChatMessageUi.ThinkingProcess)
-                    .copy(isRunning = false)
+                stopProcessContainer(mutable)
                 mutable.add(ChatMessageUi.Agent(errorMsg, executionMode = modePrefix, agentRef = agentRef))
             }
             mutable
         }
     }
 
-    /** 更新过程容器 steps (跨线程安全)。 */
+    /** 插件缺失建议气泡 — 追加到消息列表末尾 (applyFinalResult 调用)。 */
+    fun appendSuggestion(suggestion: PluginSuggestion) {
+        session.messages.value = session.messages.value + ChatMessageUi.Suggestion(suggestion)
+    }
+
+    /** 更新过程容器 steps (按类型定位最后一条 — 任务串行, 恒为本任务容器)。 */
     private fun updateProcess(transform: (List<ChatMessageUi.ProcessStep>) -> List<ChatMessageUi.ProcessStep>) {
         session.messages.update { current ->
             val mutable = current.toMutableList()
-            // beginFinalAnswer 后 tracker.ref 指向 FinalAnswer — 播放协程的思考回填
-            // 需按类型定位过程容器 (折叠后 isRunning=false, 不能依赖运行态扫描)
-            val tpIdx = resolveProcessIndex(mutable)
+            val tpIdx = mutable.indexOfLast { it is ChatMessageUi.ThinkingProcess }
             if (tpIdx >= 0) {
                 val prev = mutable[tpIdx] as ChatMessageUi.ThinkingProcess
-                val updated = prev.copy(steps = transform(prev.steps))
-                tracker.ref = updated
-                tracker.index = tpIdx
-                mutable[tpIdx] = updated
+                mutable[tpIdx] = prev.copy(steps = transform(prev.steps))
             }
             mutable
         }
     }
 
-    /** 按类型定位过程容器 (优先 tracker 快路径, 退化为类型扫描)。 */
-    private fun resolveProcessIndex(mutable: List<ChatMessageUi>): Int {
-        val idx = resolveRunningIndex(mutable, tracker.index, tracker.ref)
-        return if (idx >= 0 && mutable[idx] is ChatMessageUi.ThinkingProcess) idx
-        else mutable.indexOfLast { it is ChatMessageUi.ThinkingProcess }
-    }
-
-    /**
-     * 按类型定位最终答案气泡 — v0.37.3 修复: updateProcess (思考回填) 会把
-     * tracker.ref 改写为 ThinkingProcess, 若 pushFinal/finalize 仍依赖 ref 定位,
-     * 会定位失败 → FinalAnswer 残留 isRunning=true + content 空, UI 恒显
-     * "思考中..." 计时气泡。
-     */
-    private fun resolveFinalAnswerIndex(mutable: List<ChatMessageUi>): Int {
-        val idx = resolveRunningIndex(mutable, tracker.index, tracker.ref)
-        return if (idx >= 0 && mutable[idx] is ChatMessageUi.FinalAnswer) idx
-        else mutable.indexOfLast { it is ChatMessageUi.FinalAnswer }
+    /** 停止/折叠运行中的思考容器 — 定型与失败兜底共用。 */
+    private fun stopProcessContainer(mutable: MutableList<ChatMessageUi>) {
+        val tpIdx = mutable.indexOfLast { it is ChatMessageUi.ThinkingProcess }
+        if (tpIdx >= 0) {
+            val tp = mutable[tpIdx] as ChatMessageUi.ThinkingProcess
+            if (tp.isRunning || !tp.collapsed) {
+                mutable[tpIdx] = tp.copy(isRunning = false, collapsed = true)
+            }
+        }
     }
 }

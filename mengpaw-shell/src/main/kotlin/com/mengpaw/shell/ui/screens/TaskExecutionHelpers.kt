@@ -139,40 +139,24 @@ internal fun runBangCommand(scope: CoroutineScope, session: AgentSession, origin
 
 /**
  * 最终答案替换 + 插件建议 (原 submitTask 尾段 messages.update 块, 逻辑不变):
- * 把运行中步骤气泡替换为最终答案 (思考从流式缓冲提取), 或追加普通 Agent 气泡;
+ * 经 ThinkingProcessWriter.finalize 定型 FinalAnswer 气泡 (无气泡时兜底追加 Agent);
  * 命中未知命令时追加 Suggestion 气泡并通知 PluginViewModel。
  */
 internal fun applyFinalResult(
-    session: AgentSession,
     writer: ThinkingProcessWriter,
-    streamBuffer: StreamPlaybackBuffer,
     displayResult: String,
     result: String,
     modePrefix: String?,
     agentRef: String?,
     pluginViewModel: PluginViewModel?,
 ) {
-    session.messages.update { current ->
-        val mutable = current.toMutableList()
-        // v0.34.3: 最终答案气泡已由 beginFinalAnswer 创建 — 定型 content
-        val idx = resolveRunningIndex(mutable, writer.tracker.index, writer.tracker.ref)
-        if (idx >= 0 && mutable[idx] is ChatMessageUi.FinalAnswer) {
-            val updated = (mutable[idx] as ChatMessageUi.FinalAnswer)
-                .copy(content = displayResult, isRunning = false)
-            writer.tracker.ref = updated
-            writer.tracker.index = idx
-            mutable[idx] = updated
-        } else {
-            mutable.add(ChatMessageUi.Agent(displayResult,
-                executionMode = modePrefix, agentRef = agentRef))
-        }
+    // v0.40.2: 定型交给 writer — 幂等折叠思考容器 + 写完整答案 + 退出运行态
+    writer.finalize(displayResult)
 
-        val suggestion = checkMissingPlugin(result)
-        if (suggestion != null && pluginViewModel != null) {
-            mutable.add(ChatMessageUi.Suggestion(suggestion))
-            pluginViewModel.suggestPluginForCommand(result)
-        }
-        mutable
+    val suggestion = checkMissingPlugin(result)
+    if (suggestion != null && pluginViewModel != null) {
+        writer.appendSuggestion(suggestion)
+        pluginViewModel.suggestPluginForCommand(result)
     }
 }
 

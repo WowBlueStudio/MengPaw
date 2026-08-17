@@ -4,6 +4,7 @@
 package com.mengpaw.shell.ui.screens
 
 import com.mengpaw.kernel.session.AttachmentData
+import com.mengpaw.shell.ui.screens.model.ChatMessageUi
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
@@ -121,5 +122,49 @@ class SessionPersistenceDataTest {
         val trace = TraceData(step = 5, thought = "想", action = "做", observation = "看")
         val decoded = json.decodeFromString<TraceData>(json.encodeToString(trace))
         assertEquals(trace, decoded)
+    }
+
+    @Test
+    fun `recoverInterruptedMessages归一化运行态_思考容器折叠_答案气泡定型`() {
+        // v0.40.2 回归: 进程死亡落盘残留运行态消息, 重启后恒显"思考中… Ns"计时气泡。
+        // AgentWithTrace / ThinkingProcess / FinalAnswer 三种运行态必须全部归一化。
+        val msgs = listOf(
+            ChatMessageUi.User("任务"),
+            ChatMessageUi.AgentWithTrace(
+                finalContent = "", traces = emptyList(), isRunning = true
+            ),
+            ChatMessageUi.ThinkingProcess(
+                steps = listOf(ChatMessageUi.ProcessStep(thought = "思考")),
+                isRunning = true, collapsed = false
+            ),
+            ChatMessageUi.FinalAnswer(content = "", isRunning = true)
+        )
+
+        val (recovered, wasStuck) = recoverInterruptedMessages(msgs)
+        assertTrue("存在运行态消息必须标记恢复", wasStuck)
+        assertEquals("4 条消息 + 1 条系统恢复提示", 5, recovered.size)
+        assertTrue(recovered[1] is ChatMessageUi.Agent)
+
+        val tp = recovered[2] as ChatMessageUi.ThinkingProcess
+        assertFalse("思考容器必须退出运行态", tp.isRunning)
+        assertTrue("思考容器必须折叠", tp.collapsed)
+        assertEquals("思考内容必须保留可回看", "思考", tp.steps[0].thought)
+
+        val fa = recovered[3]
+        assertTrue("空白运行态 FinalAnswer 必须替换为提示", fa is ChatMessageUi.Agent)
+        assertTrue("尾部必须追加系统恢复提示", recovered[4] is ChatMessageUi.System)
+    }
+
+    @Test
+    fun `recoverInterruptedMessages_有内容的FinalAnswer保留并退出运行态`() {
+        val msgs = listOf(
+            ChatMessageUi.FinalAnswer(content = "部分答案", isRunning = true)
+        )
+
+        val (recovered, wasStuck) = recoverInterruptedMessages(msgs)
+        assertTrue(wasStuck)
+        val fa = recovered[0] as ChatMessageUi.FinalAnswer
+        assertEquals("部分答案", fa.content)
+        assertFalse("有内容答案气泡必须退出运行态", fa.isRunning)
     }
 }

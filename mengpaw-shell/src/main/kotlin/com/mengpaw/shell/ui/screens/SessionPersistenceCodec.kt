@@ -270,19 +270,46 @@ internal fun readCurrentSessionFile(): CurrentSessionRead {
     }
 }
 
-/** 恢复中断消息: 运行中的 AgentWithTrace → 打断提示文本, 尾部追加系统恢复消息。 */
+/**
+ * 恢复中断消息 — v0.40.2 补全 ThinkingProcess/FinalAnswer 归一化:
+ * 进程死亡时落盘可能残留运行态消息, 重启后若无任务再驱动它们, UI 会恒显
+ * "思考中… Ns" 计时气泡且永不停止 (用户 v0.40.1 复现症状之一)。
+ *  - AgentWithTrace 运行中 → 打断提示文本;
+ *  - ThinkingProcess 运行中 → 停止 + 折叠 (思考过程保留可回看);
+ *  - FinalAnswer 运行中 → 有内容则保留并退出运行态; 空白则替换为打断提示。
+ * 尾部追加系统恢复消息。
+ */
 internal fun recoverInterruptedMessages(msgs: List<ChatMessageUi>): Pair<List<ChatMessageUi>, Boolean> {
     val recovered = msgs.toMutableList()
     var wasStuck = false
     for (i in recovered.indices) {
         val m = recovered[i]
-        if (m is ChatMessageUi.AgentWithTrace && m.isRunning) {
-            recovered[i] = ChatMessageUi.Agent(
-                "智能体生成被打断，请回复指令以继续。",
-                executionMode = m.executionMode,
-                agentRef = m.agentRef
-            )
-            wasStuck = true
+        when (m) {
+            is ChatMessageUi.AgentWithTrace -> if (m.isRunning) {
+                recovered[i] = ChatMessageUi.Agent(
+                    "智能体生成被打断，请回复指令以继续。",
+                    executionMode = m.executionMode,
+                    agentRef = m.agentRef
+                )
+                wasStuck = true
+            }
+            is ChatMessageUi.ThinkingProcess -> if (m.isRunning) {
+                recovered[i] = m.copy(isRunning = false, collapsed = true)
+                wasStuck = true
+            }
+            is ChatMessageUi.FinalAnswer -> if (m.isRunning) {
+                recovered[i] = if (m.content.isBlank()) {
+                    ChatMessageUi.Agent(
+                        "智能体生成被打断，请回复指令以继续。",
+                        executionMode = m.executionMode,
+                        agentRef = m.agentRef
+                    )
+                } else {
+                    m.copy(isRunning = false)
+                }
+                wasStuck = true
+            }
+            else -> {}
         }
     }
     if (wasStuck) {

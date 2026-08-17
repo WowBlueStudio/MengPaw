@@ -41,12 +41,12 @@ import com.mengpaw.design.tokens.ArcoSpacing
 @Composable
 fun ThinkingProcessBubble(message: ChatMessageUi.ThinkingProcess, agentName: String = "MengPaw") {
     // 自动折叠: 最终答案开始 (collapsed=true) 默认收起; 运行中强制展开 (思考可见)
-    var expanded by rememberSaveable(message.stableId) { mutableStateOf(!message.collapsed) }
+    // v0.40.2: isRunning 优先 — 运行中的容器必须展开, 思考过程全程可见, 消除
+    // "思考时思考过程没有展开" 的异常组合 (collapsed=true 且 isRunning=true)。
+    var expanded by rememberSaveable(message.stableId) { mutableStateOf(true) }
     LaunchedEffect(message.collapsed, message.isRunning) {
-        // 防御 (v0.36.2): 异常状态组合 (collapsed=true 且 isRunning=true) 不强制展开 —
-        // 原逻辑 isRunning 优先, 一旦闭环信号与残留运行态并存, 用户手动折叠会被覆盖。
-        if (message.isRunning && !message.collapsed) expanded = true
-        else if (!message.isRunning && message.collapsed) expanded = false
+        if (message.isRunning) expanded = true
+        else if (message.collapsed) expanded = false
     }
 
     Column(Modifier.fillMaxWidth()) {
@@ -159,7 +159,7 @@ fun FinalAnswerBubble(message: ChatMessageUi.FinalAnswer, agentName: String = "M
                 Spacer(Modifier.height(ArcoSpacing.xs))
                 if (message.isRunning &&
                     (cleanFinal.isBlank() || cleanFinal == "思考中...")) {
-                    WaitingIndicator("思考中...")
+                    WaitingIndicator()
                 } else if (cleanFinal.isNotBlank()) {
                     SelectionContainer {
                         MarkdownText(content = cleanFinal,
@@ -232,9 +232,8 @@ fun AgentStepBubble(message: ChatMessageUi.AgentStep, agentName: String = "MengP
                     Spacer(Modifier.height(ArcoSpacing.xs))
                     // 等待期反馈: 思考中/正在执行 → spinner + 秒数
                     if (message.isRunning &&
-                        (message.content == "思考中..." || message.content.isBlank() ||
-                            message.content.startsWith(EXECUTING_TOOL_PREFIX))) {
-                        WaitingIndicator(message.content)
+                        (message.content == "思考中..." || message.content.isBlank())) {
+                        WaitingIndicator()
                     } else if (message.content.isNotBlank()) {
                         SelectionContainer {
                             MarkdownText(content = message.content,
@@ -301,12 +300,10 @@ fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: Strin
                         AttachmentCardList(mediaCards, isUserSide = false)
                     }
                     // ── 等待期反馈 (v0.28.6): 思考中 → spinner + 已等待秒数, 流式文本到达后自动消失
-                    //    (v0.29.2): 工具轮显示 "正在执行 X… Ns" — 流式检测到 Action 行即推送 (Reasonix ③) ──
                     if (message.isRunning &&
-                        (message.finalContent == "思考中..." || message.finalContent.isBlank() ||
-                            message.finalContent.startsWith(EXECUTING_TOOL_PREFIX))) {
+                        (message.finalContent == "思考中..." || message.finalContent.isBlank())) {
                         Spacer(Modifier.height(ArcoSpacing.xs))
-                        WaitingIndicator(message.finalContent)
+                        WaitingIndicator()
                     }
                 }
             }
@@ -315,19 +312,18 @@ fun AgentBubbleWithTrace(message: ChatMessageUi.AgentWithTrace, agentName: Strin
 }
 
 /**
- * 等待期指示器: spinner + 已等待秒数 — 让 4-13s 的 LLM 准备期有"活着"的反馈.
- * [waitingText] = "思考中..." (无工具) 或 "$EXECUTING_TOOL_PREFIX<tool>…" (工具轮, v0.29.2).
+ * 等待期指示器: spinner + 已等待秒数 — 让 LLM 准备期/答案流式前有"活着"的反馈。
+ * v0.40.2: 秒数随运行态终止而消失 (所有路径都会 finalize/fail, 不再无限计时);
+ * 已废弃 "正在执行 X…" 前缀分支 (工具行由 ProcessTool 承载, 无等待气泡)。
  */
 @Composable
-internal fun WaitingIndicator(waitingText: String) {
+internal fun WaitingIndicator() {
     var seconds by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); seconds++ } }
-    val label = if (waitingText.startsWith(EXECUTING_TOOL_PREFIX))
-        waitingText.removePrefix(EXECUTING_TOOL_PREFIX) else "思考中…"
     Row(verticalAlignment = Alignment.CenterVertically) {
         CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp, color = ThemeColors.brand)
         Spacer(Modifier.width(6.dp))
-        Text("$label ${seconds}s", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
+        Text("思考中… ${seconds}s", style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
     }
 }
 

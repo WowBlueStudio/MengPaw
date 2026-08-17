@@ -18,14 +18,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * BubbleStreamCoordinator 行为测试 — 锁死"卡在第 1 轮"系列回归 (v0.37.3 拆分)
- * + v0.40.1 简化显示流程 (思考一次性显示, 最终答案流式)。
+ * BubbleStreamCoordinator v0.40.2 重构测试 — 锁死"卡在第 1 轮"系列历史回归
+ * + v0.40.1 三症状回归 (思考中 xxs 计时不停 / 一轮后停止无答案 / 思考不展开)。
  *
- * 历史缺陷 (反复出现 4 次): 编排状态散落 TaskExecutionPipeline, Final Answer 误判 /
- * 轮次封口缺失都会让思考容器停在当前步、后续 delta 不再进入思考气泡。
- * v0.40.1 用户定案: 思考阶段取消逐字流式 — 工具轮在完整 Action 行检测到时
- * 一次性显示整轮思考 (思考先出现), 工具行在 onStep 挂观察; 最终答案轮仍
- * 流式输出并折叠容器。本测试把每个历史坑 + 新行为固化为用例。
+ * v0.40.2 定案: 思考轮一次性显示 + 工具行 onStep 挂观察 + 最终答案轮无条件流式
+ * (不再要求 raw 含 "Final Answer:" 字样), 引擎返回兜底把纯文本最终轮送进答案气泡
+ * 而非思考容器; 任何路径最终都会 beginFinalAnswer + finalize, 不残留运行态气泡。
  */
 class BubbleStreamCoordinatorTest {
 
@@ -54,6 +52,9 @@ class BubbleStreamCoordinatorTest {
 
     private fun process(session: AgentSession): ChatMessageUi.ThinkingProcess =
         session.messages.value.filterIsInstance<ChatMessageUi.ThinkingProcess>().first()
+
+    private fun finalAnswer(session: AgentSession): ChatMessageUi.FinalAnswer? =
+        session.messages.value.filterIsInstance<ChatMessageUi.FinalAnswer>().lastOrNull()
 
     @Test
     fun `工具轮_思考一次性显示且工具行onStep后挂观察`() = runBlocking {
@@ -92,7 +93,7 @@ class BubbleStreamCoordinatorTest {
         val job = coordinator.launchPlayback(this)
 
         // 第 1 轮: 思考行中段出现 "Final Answer:" 字样 (行首锚定不应误判,
-        // v0.40.1 显示文本同样行首锚定 — 思考完整保留, 不截到字样后)
+        // 显示文本同样行首锚定 — 思考完整保留, 不截到字样后)
         coordinator.onDelta("Thought: 我先查资料, 最终我给出 Final Answer: 待定\nAction: search\nAction Input: {}\n")
         coordinator.onStep("search", "观察结果1", false)
         assertFalse("思考轮行中字样不得误判为最终答案", coordinator.isFinalAnswerStarted)
@@ -136,9 +137,14 @@ class BubbleStreamCoordinatorTest {
         assertTrue("最终答案必须触发", coordinator.isFinalAnswerStarted)
         coordinator.finish()
         job.join()
+
+        // v0.40.2: 收流后播放器已把最终文本流式推入气泡
+        val faBefore = finalAnswer(session)
+        assertTrue("最终答案必须已流式输出", faBefore != null && faBefore!!.content.trim() == "最终结论")
+
         // 真实链路尾段: applyFinalResult 定型 (播放器已播完, 覆盖为完整答案)
         applyFinalResult(
-            session, writer, coordinator.streamBuffer,
+            writer,
             displayResult = "最终结论", result = "最终结论",
             modePrefix = null, agentRef = null, pluginViewModel = null
         )
@@ -146,10 +152,40 @@ class BubbleStreamCoordinatorTest {
         val proc = process(session)
         assertFalse("容器必须折叠", proc.isRunning)
         assertTrue("容器折叠态必须置位", proc.collapsed)
-        val fa = session.messages.value.filterIsInstance<ChatMessageUi.FinalAnswer>().firstOrNull()
+        val fa = finalAnswer(session)
         assertTrue("必须存在 FinalAnswer 气泡", fa != null)
         assertEquals("最终答案必须流式输出完整内容", "最终结论", fa!!.content.trim())
         assertFalse("定型后答案气泡退出运行态", fa.isRunning)
+    }
+
+    @Test
+    fun `纯文本最终轮_不进思考容器_答案进气泡并流式输出`() = runBlocking {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, null, null)
+        writer.start()
+        val coordinator = BubbleStreamCoordinator(writer)
+        val job = coordinator.launchPlayback(this)
+
+        // 一轮工具思考
+        coordinator.onDelta("Thought: 查询天气\nAction: search\nAction Input: {}\n")
+        coordinator.onStep("search", "晴天", false)
+        // 最终轮为纯文本 (无 "Final Answer:" 标记 — parse Rule 3, 常见于闲聊/简单问答)
+        coordinator.onDelta("北京的天气是晴天")
+        coordinator.finish()
+        job.join()
+
+        val proc = process(session)
+        assertEquals("纯文本最终轮不得写入思考容器 (只保留工具轮)", 1, proc.steps.size)
+        assertFalse("引擎返回兜底后容器必须折叠", proc.isRunning)
+        assertTrue("容器折叠态必须置位", proc.collapsed)
+        val fa = finalAnswer(session)
+        assertTrue("兜底必须创建 FinalAnswer 气泡", fa != null)
+        assertEquals("纯文本最终答案必须流式输出", "北京的天气是晴天", fa!!.content.trim())
+
+        // 真实链路尾段: applyFinalResult 定型
+        applyFinalResult(writer, "北京的天气是晴天", "北京的天气是晴天", null, null, null)
+        assertFalse("定型后答案气泡退出运行态", finalAnswer(session)!!.isRunning)
+        assertEquals("定型后内容不得丢失", "北京的天气是晴天", finalAnswer(session)!!.content.trim())
     }
 
     @Test
@@ -209,6 +245,23 @@ class BubbleStreamCoordinatorTest {
         assertTrue(
             "必须创建 FinalAnswer 气泡",
             session.messages.value.any { it is ChatMessageUi.FinalAnswer }
+        )
+    }
+
+    @Test
+    fun `ensureFinalAnswer与finish双触发_只创建一个答案气泡`() {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, null, null)
+        writer.start()
+        val coordinator = BubbleStreamCoordinator(writer)
+
+        coordinator.ensureFinalAnswer()
+        coordinator.finish()
+
+        assertEquals(
+            "双触发不得产生两个 FinalAnswer 气泡",
+            1,
+            session.messages.value.count { it is ChatMessageUi.FinalAnswer }
         )
     }
 }

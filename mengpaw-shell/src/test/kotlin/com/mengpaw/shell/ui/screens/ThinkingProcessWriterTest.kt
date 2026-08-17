@@ -206,4 +206,38 @@ class ThinkingProcessWriterTest {
         assertEquals("最终答案", fa!!.content)
         assertFalse("定型后 isRunning 必须为 false (不再显示思考中计时)", fa.isRunning)
     }
+
+    @Test
+    fun `beginFinalAnswer幂等_只创建一个答案气泡`() {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, modePrefix = null, agentRef = null)
+
+        writer.start()
+        writer.beginFinalAnswer()
+        writer.beginFinalAnswer()
+
+        assertEquals(
+            "onDelta 与引擎返回兜底双触发不得产生两个答案气泡",
+            1,
+            sessionMessages(session).count { it is ChatMessageUi.FinalAnswer }
+        )
+    }
+
+    @Test
+    fun `finalize兜底_无FinalAnswer时停止容器并追加Agent`() {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, modePrefix = null, agentRef = null)
+
+        writer.start()
+        writer.pushThought("思考", roundId = 0)
+        // 异常路径: 从未 beginFinalAnswer 直接定型
+        writer.finalize("答案")
+
+        val tp = sessionMessages(session).filterIsInstance<ChatMessageUi.ThinkingProcess>().first()
+        assertFalse("无答案气泡时容器必须退出运行态", tp.isRunning)
+        assertTrue("无答案气泡时容器必须折叠", tp.collapsed)
+        val agent = sessionMessages(session).filterIsInstance<ChatMessageUi.Agent>().lastOrNull()
+        assertTrue("必须兜底追加 Agent 气泡", agent != null)
+        assertEquals("答案", agent!!.content)
+    }
 }
