@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.40.2 (2026-08-17) — 气泡输出链路重构
+
+### 修复
+- **气泡输出链路重构 (v0.40.1 简化显示未生效, 用户复现三症状: "思考中… xxs" 单独气泡计时不停 / 一轮思考后停止无最终答案 / 思考过程不展开)**: 删除轮次队列 / `skipRound` / `snapshotRounds` / `flushText` / `thoughtShown` / `stepClosed` / `finalAnswerRoundId` 六套互相牵扯的状态 — `StreamPlaybackBuffer` 只保留当前轮累积 + 完整 `Action:` 行扫描 + 最终答案流式文本, 思考轮不再经过播放协程; `BubbleStreamCoordinator` 收敛为三件事 (思考一次性显示 / 工具行 onStep 挂观察 / 最终答案无条件流式) — 纯文本最终轮 (parse Rule 3/4) 经引擎返回兜底后由播放器把整轮文本流式送进答案气泡, 不再误写进思考容器
+- **运行态零残留**: `ThinkingProcessWriter` 删除 `RunningStepTracker` 身份追踪 (列表重建/恢复后身份失效), 改按类型定位最后一条, `beginFinalAnswer`/`finalize` 幂等 — 任何路径 (含异常/截断/进程死亡恢复) 都终止运行态, 不残留 "思考中… Ns" 计时气泡; 进程中断恢复时归一化 ThinkingProcess/FinalAnswer 运行态消息; UI 运行中强制展开思考容器
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.40.2-release.apk` (versionCode 40002)
+- browser 无变更不构建
+- plugins.json 无变更 (本轮无插件构建/tag)
+- 测试: 全量 1419 用例 0 failures (kernel 577 + core 90 + shell 202 + browser 42 + 插件 508)
+- 崩溃巡检: 无设备在线, 巡检未执行, 待用户反馈
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.40.1 (2026-08-16) — 气泡显示简化 + 自动更新修复
 
 ### 修复
