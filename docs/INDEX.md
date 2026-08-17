@@ -13,6 +13,7 @@
 | `PROTOCOL.md` | 7 KB | 框架通信协议：双轨架构(本机 MCP 9881 / 远程 ACP 9876)、连接器 SPI 开发指南、消息格式、接入清单 | 对接外部框架、写连接器插件时 |
 | `swarm-design.md` | 7 KB | 火种 (Swarm) 模式设计：规划器/Worker/Verifier/合成器、JIT 三闸门、Andon 协议 | 改火种模式或写多 Agent 任务时 |
 | `browser-autopilot-plan.md` | 9 KB | MP 浏览器「半自动武器」升级方案：Playwright 语义命令面 (page.*)、Termux 式 am 桥调用、page.load 分段截图+按段坐标系统、browser.* 去重清单（2026-08-11 拍板，Phase 1-3 已实施；真机自测后退役 9880 桥） | 升级浏览器能力、做浏览器自动化或执行去重时 |
+| `mengpaw-browser/docs/` | 16 KB | 浏览器模块独立文档：`MengPaw.Browser 开发文档.md`（架构/命令面/桥协议/安全模型/开发规范）+ `MengPaw_Browser_skills.md`（第三方 AI Agent 控制手册, 含开放模式接入） | 单独开源浏览器、给第三方框架写接入、改浏览器命令面/桥/安全时 |
 | `llm-multistage-dataflow.md` | 8 KB | LLM 多阶段输出数据流：ReAct 每回合 LLM/框架/UI 各环节实际收到的内容（parse 规则/Observation 组装/历史累积/边界防御） | 理解 Agent 循环、排查工具调用链路、调试 LLM 输出时 |
 | `add-llm-provider.md` | 10 KB | 新增 LLM 供应商接入指南：官方文档原文核对表（9 家, 含核对日期）+ 当前支持厂商/模型名单登记表（10 预置, 与 SettingsModels.kt 同步铁律）+ 6 个代码改动点 + 官方格式测试（v0.41.0 基线） | 新增/审计 LLM 供应商、核对思考字段、查当前支持名单时 |
 | `audit-methodology.md` | 7 KB | **三层十二问 · 功能闭环审计**：Agent 认知层(6问) + 软件逻辑层(6问) + 服务基础设施层(6问)，逐条过"Agent 能否自主完成功能闭环"（v0.24.0 清理后恢复 + 通用化抽象） | 审查新功能/子系统/插件是否闭环，或复盘"代码存在但 Agent 无法触达"类缺陷时 |
