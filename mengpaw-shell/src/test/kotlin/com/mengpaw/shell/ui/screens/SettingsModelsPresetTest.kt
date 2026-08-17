@@ -5,6 +5,7 @@ package com.mengpaw.shell.ui.screens
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -45,5 +46,34 @@ class SettingsModelsPresetTest {
         assertEquals("qwen3.8-max", preset.defaultModel)
         assertEquals("qwen3.8-max", preset.models.first().name)
         assertFalse("旗舰不得重复出现", preset.models.count { it.name == "qwen3.8-max" } > 1)
+    }
+
+    @Test
+    fun `OPENAI与GROK预置_最新旗舰且不含官方退役型号`() {
+        val openai = LlmProviderPreset.OPENAI
+        assertEquals("gpt-5.6", openai.defaultModel)
+        assertEquals("gpt-5.6", openai.models.first().name)
+        assertFalse("o4-mini 官方已 Deprecated", openai.models.any { it.name == "o4-mini" })
+
+        val grok = LlmProviderPreset.GROK
+        assertEquals("grok-4.6", grok.defaultModel)
+        assertEquals("grok-4.6", grok.models.first().name)
+        assertFalse(
+            "grok-4.1-fast-non-reasoning 官方 2026-05-15 已退役",
+            grok.models.any { it.name == "grok-4.1-fast-non-reasoning" }
+        )
+    }
+
+    @Test
+    fun `VOLCANO预置_托管模型更新为官方当前型号`() {
+        val preset = LlmProviderPreset.VOLCANO
+        assertEquals("doubao-seed-2.0-pro", preset.defaultModel)
+        val names = preset.models.map { it.name }
+        assertTrue("应含 deepseek-v4-flash", "deepseek-v4-flash" in names)
+        assertTrue("应含 deepseek-v4-pro", "deepseek-v4-pro" in names)
+        assertTrue("应含 glm-5.3", "glm-5.3" in names)
+        assertTrue("应含 doubao-seed-2.1-turbo", "doubao-seed-2.1-turbo" in names)
+        assertFalse("deepseek-v3-2 已过时", "deepseek-v3-2" in names)
+        assertFalse("glm-4.7 已过时", "glm-4.7" in names)
     }
 }

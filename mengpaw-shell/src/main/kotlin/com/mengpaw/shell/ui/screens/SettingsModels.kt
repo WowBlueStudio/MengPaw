@@ -39,9 +39,12 @@ enum class LlmProviderPreset(
 ) {
     // ═══ Presets verified against official docs — 2026-08-17 ═══
     // Only top models listed here; full list fetched from API on key entry.
-    OPENAI("OpenAI", "OpenAI", "https://api.openai.com/v1/chat/completions", "gpt-5.4", "sk-",
-        listOf(ModelInfo("gpt-5.4", "旗舰"), ModelInfo("gpt-5.4-mini", "快速"), ModelInfo("gpt-5.4-nano", "轻量"),
-            ModelInfo("gpt-5", "前代"), ModelInfo("o4-mini", "思维链"))),
+    // OpenAI 2026-08-17 核对 (developers.openai.com/api/docs/models): GPT-5.6 家族为当前旗舰
+    // (gpt-5.6 别名路由到 GPT-5.6 Sol, 1.05M 上下文; Terra 均衡 / Luna 轻量); o4-mini 官方标记
+    // Deprecated 已移除, gpt-5.5 / gpt-5.4 为前代。
+    OPENAI("OpenAI", "OpenAI", "https://api.openai.com/v1/chat/completions", "gpt-5.6", "sk-",
+        listOf(ModelInfo("gpt-5.6", "旗舰·1.05M上下文"), ModelInfo("gpt-5.6-terra", "均衡"),
+            ModelInfo("gpt-5.6-luna", "轻量"), ModelInfo("gpt-5.5", "前代"), ModelInfo("gpt-5.4", "前代"))),
     DEEPSEEK("DeepSeek", "DeepSeek", "https://api.deepseek.com/chat/completions", "deepseek-v4-flash", "sk-",
         listOf(ModelInfo("deepseek-v4-flash", "快速"), ModelInfo("deepseek-v4-pro", "思维链"))),
     KIMI("Kimi (月之暗面)", "Kimi (Moonshot)", "https://api.moonshot.cn/v1/chat/completions", "kimi-k3", "sk-",
@@ -59,15 +62,23 @@ enum class LlmProviderPreset(
             ModelInfo("qwen3.6-35b-a3b", "开源MoE"),
             ModelInfo("qwen3-coder-plus", "Coding"), ModelInfo("qwq-plus", "思维链"),
             ModelInfo("qwen3-vl-plus", "多模态"), ModelInfo("qwen3-omni-flash", "全模态"))),
-    GROK("Grok (xAI)", "Grok (xAI)", "https://api.x.ai/v1/chat/completions", "grok-4.3", "xai-",
-        listOf(ModelInfo("grok-4.5", "旗舰"), ModelInfo("grok-4.3", "推荐·1M上下文"),
-            ModelInfo("grok-4.20-reasoning", "思维链"), ModelInfo("grok-4.1-fast-non-reasoning", "快速"),
+    // Grok 2026-08-17 核对 (docs.x.ai/developers/models + 退役公告): grok-4.6 为当前旗舰 (500K);
+    // grok-4.1-fast-non-reasoning 官方 2026-05-15 退役 (自动重定向 grok-4.3) 已移除;
+    // grok-4.20-reasoning 为 grok-4.20-0309-reasoning 的别名, 取官方规范名。
+    GROK("Grok (xAI)", "Grok (xAI)", "https://api.x.ai/v1/chat/completions", "grok-4.6", "xai-",
+        listOf(ModelInfo("grok-4.6", "旗舰·500K上下文"), ModelInfo("grok-4.5", "前代"),
+            ModelInfo("grok-4.3", "推荐·1M上下文"), ModelInfo("grok-4.20-0309-reasoning", "思维链"),
             ModelInfo("grok-build-0.1", "Coding"))),
+    // 火山 2026-08-17 核对 (docs.volcengine.com 套餐概览 + OpenCode 配置): 托管第三方当前为
+    // deepseek-v4-flash / deepseek-v4-pro / glm-5.3 (glm-5.2 即将下线, 原 deepseek-v3-2/glm-4.7
+    // 已过时替换); 新增官方 2.1 系列 doubao-seed-2.1-turbo。
     VOLCANO("火山引擎 (豆包)", "Volcano Engine (Doubao)", "https://ark.cn-beijing.volces.com/api/v3/chat/completions", "doubao-seed-2.0-pro", "",
-        listOf(ModelInfo("doubao-seed-2.0-pro", "旗舰"), ModelInfo("doubao-seed-2.0-lite", "均衡"),
-            ModelInfo("doubao-seed-2.0-mini", "轻量"), ModelInfo("doubao-seed-1.8", "前代"),
+        listOf(ModelInfo("doubao-seed-2.0-pro", "旗舰"), ModelInfo("doubao-seed-2.1-turbo", "2.1系列·快速"),
+            ModelInfo("doubao-seed-2.0-lite", "均衡"), ModelInfo("doubao-seed-2.0-mini", "轻量"),
+            ModelInfo("doubao-seed-1.8", "前代"),
             ModelInfo("doubao-seed-1.6-flash", "快速"), ModelInfo("doubao-seed-1.6-thinking", "思维链"),
-            ModelInfo("deepseek-v3-2", "DeepSeek托管"), ModelInfo("glm-4.7", "GLM托管"),
+            ModelInfo("deepseek-v4-flash", "DeepSeek托管"), ModelInfo("deepseek-v4-pro", "DeepSeek托管·思维链"),
+            ModelInfo("glm-5.3", "GLM托管"),
             ModelInfo("(需创建接入点 ep-xxx)", "提示"))),
     OPENMODEL("OpenModel", "OpenModel", "https://api.openmodel.ai/v1/chat/completions", "deepseek-v4-flash", "sk-",
         listOf(ModelInfo("deepseek-v4-pro", "思维链"), ModelInfo("deepseek-v4-flash", "快速"),
