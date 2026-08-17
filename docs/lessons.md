@@ -1166,3 +1166,27 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
    在线, 崩溃巡检跳过并记录「待用户反馈」; ⑥ 设备交付走自动更新链路, 不发 ADB。
 
 *最后更新: 2026-08-17 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 + §31 下载链路三坑 (Gitee 时序/源选择/主线程 ANR) + 设备交付流程变更 (不再 ADB 推送, v0.39.1) + §32 技能闭环三连 (删注释教训/reason 门禁表独立源/审计追执行链) + 腾讯记忆系统评审不入致谢 + §33 v0.40.0 发布实操四则 (用例数口径/Gitee 上传慢/origin 双 push/崩溃旧记录) + §34 v0.40.1 发布实操 (ANR 闭环/UI 入口统一线程纪律/读栈防误导/跨会话 diff 核对) + §35 气泡显示简化用户定案/GitHub push 网络波动复现 + §36 气泡重构 v0.40.2 发布实操 (2026-08-17)*
+
+### 37. v0.41.0 发布实操 (MiniMax + 浏览器开放模式, 2026-08-18)
+
+① **GitHub push 网络波动第 3 次复现 (SNI 级)**: github.com:443 完全不通 (curl 000,
+   Test-NetConnection False) 而 api.github.com / ssh.github.com:443 / github.com:22 通 —
+   本地无 GitHub SSH key 用不了旁路; 按 §35 先例 **Gitee 先行** (master + v0.41.0 +
+   plugins-v0.41.0 全推 + Gitee release 建好 + 2 APK 上传), 之后间隔重试
+   (30s→45s→60s) **第 7 次成功**; 结论不变: 不必生成临时 SSH key, 耐心间隔重试 +
+   Gitee 兜底。
+② **plugin-memory-twin flaky (UncaughtExceptionsBeforeTest)**: 全量 test 偶发
+   `TwinSyncEngineTest.syncWithPeer 服务未启动返回明确错误` — 前序测试泄漏的后台协程
+   写已清理的临时目录 (FileNotFoundException, Dispatchers.IO), 报 "uncaught exceptions
+   before the test started"; 单模块重跑即绿 (0.38.2/0.38.3 同类先例, 记录不修)。
+③ **plugins.json changelog 回写行为**: build-plugins.ps1 用 CHANGELOG 最新条目回写
+   全部插件 changelog 字段 (逐条相同), 属脚本既有行为; 校验重点 = version 字段未被
+   回写 (内置插件 version="" 不变)。
+④ **browser 独立版本节奏**: mengpaw-browser/build.gradle.kts 的 browserVersion 单点 +
+   versionCode 手动 +1 (0.8.0 vc=13 → 0.8.1 vc=14); 与 shell mengpaw.version 解耦,
+   发布时两个 APK 分别构建/上传双平台。
+⑤ **全量测试口径 1480**: kernel 606 + core 90 + shell 220 + browser 56 + 插件 508 =
+   1480, 0 failures; browser 双套 28 用例 (McpAuthPolicyTest 7 × 2)。
+⑥ 崩溃巡检: 无设备在线, 记录「待用户反馈」; 设备交付走自动更新链路。
+
+*最后更新: 2026-08-18 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 + §31 下载链路三坑 (Gitee 时序/源选择/主线程 ANR) + 设备交付流程变更 (不再 ADB 推送, v0.39.1) + §32 技能闭环三连 (删注释教训/reason 门禁表独立源/审计追执行链) + 腾讯记忆系统评审不入致谢 + §33 v0.40.0 发布实操四则 (用例数口径/Gitee 上传慢/origin 双 push/崩溃旧记录) + §34 v0.40.1 发布实操 (ANR 闭环/UI 入口统一线程纪律/读栈防误导/跨会话 diff 核对) + §35 气泡显示简化用户定案/GitHub push 网络波动复现 + §36 气泡重构 v0.40.2 发布实操 (2026-08-17) + §37 v0.41.0 发布实操 (2026-08-18)*
