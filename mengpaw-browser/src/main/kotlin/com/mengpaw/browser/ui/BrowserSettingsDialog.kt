@@ -31,6 +31,8 @@ fun BrowserSettingsDialog(
     onAdBlockToggled: (Boolean) -> Unit,
     darkMode: Boolean,
     onDarkModeToggled: (Boolean) -> Unit,
+    mcpOpenMode: Boolean,
+    onMcpOpenModeToggled: (Boolean) -> Unit,
     searchEngine: SearchEngine,
     onDefaultEngineChanged: (SearchEngine) -> Unit,
     webViewVersion: String = "",
@@ -91,6 +93,20 @@ fun BrowserSettingsDialog(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("暗色模式")
                         Switch(checked = darkMode, onCheckedChange = onDarkModeToggled)
+                    }
+                }
+                item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
+                item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("开放 MCP 控制")
+                            Text(
+                                "第三方 Agent 可经 127.0.0.1:9880 免认证控制浏览器（仅本机，默认关闭）",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ThemeColors.textSecondary
+                            )
+                        }
+                        Switch(checked = mcpOpenMode, onCheckedChange = onMcpOpenModeToggled)
                     }
                 }
                 if (webViewVersion.isNotBlank()) {

@@ -108,6 +108,7 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
     var searchEngine by remember { mutableStateOf(prefs.defaultEngine()) }
     var adBlockEnabled by remember { mutableStateOf(prefs.adBlockEnabled) }
     var darkMode by remember { mutableStateOf(prefs.darkMode) }
+    var mcpOpenMode by remember { mutableStateOf(prefs.mcpOpenMode) }
     var quickClickEnabled by remember { mutableStateOf(prefs.quickClickEnabled) }
     var autoInjectBridge by remember { mutableStateOf(prefs.autoInjectBridge) }
     var screenshotMaxH by remember { mutableStateOf(prefs.screenshotMaxHeight) }
@@ -346,6 +347,12 @@ fun BrowserApp(initialUrl: String? = null, initialMdContent: String? = null) {
                 showSettings = showSettings, onDismissSettings = { showSettings = false },
                 adBlockEnabled = adBlockEnabled, onAdBlockToggled = { adBlockEnabled = it; prefs.adBlockEnabled = it },
                 darkMode = darkMode, onDarkModeToggled = { darkMode = it; prefs.darkMode = it; webViewMap[activeTabId]?.reload() },
+                mcpOpenMode = mcpOpenMode,
+                onMcpOpenModeToggled = {
+                    mcpOpenMode = it
+                    prefs.mcpOpenMode = it
+                    com.mengpaw.browser.mcp.McpHttpServer.setOpenMode(it)
+                },
                 searchEngine = searchEngine, onDefaultEngineChanged = { searchEngine = it },
                 webViewVersion = remember {
                     try { WebView.getCurrentWebViewPackage()?.versionName ?: "" } catch (_: Exception) { "" }

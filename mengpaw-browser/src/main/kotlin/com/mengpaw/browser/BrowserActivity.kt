@@ -55,8 +55,11 @@ class BrowserActivity : ComponentActivity() {
         } catch (e: Exception) {
             android.util.Log.w("MengPaw", "MCP bridge token 注入失败 (Shell 未运行?): ${e.message}")
         }
-        // Bind Quick Click toggle and screenshot settings to BuiltinBrowserPlugin
+        // 开放模式 (Playwright 式): 用户显式开启后 /mcp 免 token, 本机任意进程可控制;
+        // 默认关闭, 保持签名级安全模型 (开关见设置 → 开放 MCP 控制)。
         val prefs = BrowserPrefs(this)
+        com.mengpaw.browser.mcp.McpHttpServer.setOpenMode(prefs.mcpOpenMode)
+        // Bind Quick Click toggle and screenshot settings to BuiltinBrowserPlugin
         com.mengpaw.browser.plugin.BuiltinBrowserPlugin.quickClickEnabled = { prefs.quickClickEnabled }
         com.mengpaw.browser.plugin.BuiltinBrowserPlugin.screenshotMaxHeight = { prefs.screenshotMaxHeight }
         // am 桥共享实例（Phase 2）— RunCommandService 经 signature 权限调用同一命令引擎

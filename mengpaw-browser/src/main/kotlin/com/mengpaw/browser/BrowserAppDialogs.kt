@@ -46,6 +46,7 @@ internal fun BrowserAppDialogs(
     showSettings: Boolean, onDismissSettings: () -> Unit,
     adBlockEnabled: Boolean, onAdBlockToggled: (Boolean) -> Unit,
     darkMode: Boolean, onDarkModeToggled: (Boolean) -> Unit,
+    mcpOpenMode: Boolean, onMcpOpenModeToggled: (Boolean) -> Unit,
     searchEngine: SearchEngine, onDefaultEngineChanged: (SearchEngine) -> Unit,
     webViewVersion: String, onOpenCoolApk: () -> Unit, onOpenApkCombo: () -> Unit,
     // ── Agent Collaboration Settings ──
@@ -84,6 +85,8 @@ internal fun BrowserAppDialogs(
         onAdBlockToggled = onAdBlockToggled,
         darkMode = darkMode,
         onDarkModeToggled = onDarkModeToggled,
+        mcpOpenMode = mcpOpenMode,
+        onMcpOpenModeToggled = onMcpOpenModeToggled,
         searchEngine = searchEngine,
         onDefaultEngineChanged = onDefaultEngineChanged,
         webViewVersion = remember {

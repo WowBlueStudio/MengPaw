@@ -70,6 +70,16 @@ class BrowserPrefs(ctx: Context) {
         get() = p.getBoolean("dark_mode", false)
         set(v) = p.edit().putBoolean("dark_mode", v).apply()
 
+    // ── MCP 开放控制 (v0.8.x 第三方接入) ──
+
+    /**
+     * MCP 桥开放模式 (Playwright 式): 开启后 127.0.0.1:9880 的 /mcp 免 Bearer token,
+     * 本机任意进程可直接控制浏览器; 默认关闭保持签名级安全模型。
+     */
+    var mcpOpenMode: Boolean
+        get() = p.getBoolean("mcp_open_mode", false)
+        set(v) = p.edit().putBoolean("mcp_open_mode", v).apply()
+
     // ── Bookmarks ──
     var bookmarks: List<String>
         get() = (p.getString("bookmarks", "") ?: "").split(",").filter { it.isNotBlank() }

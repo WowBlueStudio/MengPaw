@@ -41,11 +41,23 @@ object McpHttpServer {
      */
     @Volatile private var authToken: String = ""
 
+    /**
+     * 开放模式 (Playwright 式, 默认关闭): true 时 /mcp 免 Bearer token 校验,
+     * 本机任意进程可直接控制浏览器 (仅回环 127.0.0.1:9880 可达)。
+     */
+    @Volatile private var openMode: Boolean = false
+
     /** 设置认证 token (BrowserActivity 生成后调用)。 */
     fun setAuthToken(token: String) { authToken = token }
 
+    /** 设置开放模式 (BrowserActivity 启动/设置切换时调用)。 */
+    fun setOpenMode(enabled: Boolean) { openMode = enabled }
+
     /** 当前认证 token (调试/provider 用)。 */
     fun currentToken(): String = authToken
+
+    /** 当前开放模式 (health/调试用)。 */
+    fun isOpenMode(): Boolean = openMode
 
     val isRunning: Boolean get() = running
 
@@ -114,15 +126,13 @@ object McpHttpServer {
             when {
                 method == "GET" && path == "/health" -> {
                     // 健康检查无敏感信息 — 免认证
-                    response = """{"ok":true,"status":"online","tools":6}"""
+                    response = """{"ok":true,"status":"online","tools":6,"openMode":$openMode}"""
                     status = "200 OK"
                 }
                 method == "POST" && path == "/mcp" -> {
-                    // P0 fix: 认证校验 — 无 token 或 token 不匹配 → 401 (fail-closed)。
-                    // 此前 127.0.0.1:9880 零认证, 设备上任意 app 可完全控制浏览器。
-                    val expected = authToken
-                    val provided = authorization.removePrefix("Bearer").trim()
-                    if (expected.isBlank() || provided != expected) {
+                    // 认证校验: 安全模式 fail-closed (九维审查 P0 定案);
+                    // 开放模式 (用户显式开启) 免认证放行 — Playwright 式本机回环模型。
+                    if (!McpAuthPolicy.isAuthorized(openMode, authToken, authorization)) {
                         response = """{"ok":false,"error":"unauthorized: missing or invalid bridge token (重启主应用或从 MengPaw 打开浏览器)"}"""
                         status = "401 Unauthorized"
                     } else {
