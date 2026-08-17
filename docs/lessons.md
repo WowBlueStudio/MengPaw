@@ -689,6 +689,36 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
   应用启动后才设置的 User 级变量不会自动出现；
 - **处置**：`[Environment]::GetEnvironmentVariable($name,'User')` 分作用域检查，存在则当前
   会话注入 `$env:GITEE_TOKEN = ...` 后直接复用，无需用户重设；
+
+## 18. MiniMax 接入：官方文档三种形态与解析层两个坑（2026-08-17，v0.41.0）
+
+### 18.1 MiniMax 思维链官方形态（platform.minimaxi.com 原文核对）
+
+- **默认（不注入 `reasoning_split`）**：thinking 内联在 `content` 的 `<think>...</think>`
+  标签内，官方原文 "content 字段会包含 <think> 标签内容" — 本项目按"仅响应侧解析"定案
+  在流式/非流式两侧剥离到 `onReasoning`/`ParsedLlmBody.reasoning`，标签丢弃；
+- **`reasoning_split=true`**：thinking 经 `reasoning_content` + `reasoning_details` 数组
+  返回，数组每项 `{type:"reasoning.text", id, format, index, text}`；
+- **流式 `reasoning_details` 的 text 是"当前块累计全文"**，不是增量 — 官方 OpenAI SDK
+  示例用 `reasoning_text[len(reasoning_buffer):]` 取新增，直接逐项拼接会导致整段重复
+  推送；实现必须维护上一次全文 buffer 做增量去重（`SseStreamParser` 的
+  `minimaxDetailsFull`）。
+
+### 18.2 同包顶层扩展函数在 Compose 文件调用点 Unresolved reference
+
+- **现象**：`SettingsModels.kt` 新增同包顶层扩展函数 `LlmProviderPreset.presetChipOrder()`，
+  `FrameworkSettingsContent.kt`（Compose）调用时报 `Unresolved reference 'presetChipOrder'`，
+  连显式 `import ...presetChipOrder` 都无效（import 本身不报错），换 `./gradlew clean`
+  类方案前先试 companion object 即解决；
+- **处置**：枚举/数据模型上的"静态排序/工厂"逻辑优先写成 `companion object` 成员，
+  避免顶层扩展函数在 Compose 编译单元中的解析不确定性。
+
+### 18.3 官方"完整保留"要求 vs 用户"仅响应侧解析"定案
+
+- MiniMax 官方要求多轮 Function Call 必须把含 `<think>` 的完整 `content` /
+  `reasoning_details` 的 `response_message` 回传历史以保持思维链连续性 — 与 Kimi 保留式
+  思考同属**请求侧范围**；本项目用户定案只做响应侧解析、思维链不回传，冲突时以用户
+  定案为准（开发指南已注明）。
 - **教训**：① 查环境变量必须分 Process/User/Machine 三作用域，不能只看默认；
   ② 向用户报告"未设置"前先查 User 级，避免误报；③ 密钥仍只从环境读，不落盘不打印（红线 4）。
 
