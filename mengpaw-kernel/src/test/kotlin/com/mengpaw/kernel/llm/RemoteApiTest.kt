@@ -121,4 +121,41 @@ class RemoteApiTest {
             client.close()
         }
     }
+
+    @Test
+    fun `失败调用_清空上次思维链_不留陈旧值`() = runTest {
+        var call = 0
+        val engine = MockEngine {
+            call++
+            if (call == 1) {
+                respond(
+                    """
+                    {"choices":[{"message":{"role":"assistant","content":"正文","reasoning_content":"思维链"}}]}
+                    """.trimIndent(),
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                respond("{\"error\":\"boom\"}", HttpStatusCode.InternalServerError)
+            }
+        }
+        val client = HttpClient(engine)
+        try {
+            val api = RemoteApi("http://localhost/v1/chat/completions", "k", client = client)
+            val answer = api.completeWithMessages(listOf(mapOf("role" to "user", "content" to "hi")))
+            assertEquals("正文", answer)
+            assertEquals("思维链", api.lastReasoning)
+
+            // 第二次调用失败 (HTTP 500) — 思维链是 LLM 瞬态输出, 失败不得残留上次值
+            var thrown: LlmApiException? = null
+            try {
+                api.completeWithMessages(listOf(mapOf("role" to "user", "content" to "hi")))
+            } catch (e: LlmApiException) {
+                thrown = e
+            }
+            assertNotNull("第二次调用必须失败", thrown)
+            assertEquals("失败调用必须清空上次思维链", null, api.lastReasoning)
+        } finally {
+            client.close()
+        }
+    }
 }

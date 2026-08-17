@@ -33,6 +33,9 @@ class RemoteApi(
     @Volatile override var lastReasoning: String? = null
 
     override suspend fun complete(prompt: String): String {
+        // v0.40.4 P2-8: 调用开始时清空 — 失败不留上次成功调用的陈旧值;
+        // 思维链是 LLM 瞬态输出, 不属进化记录范畴
+        lastReasoning = null
         val messages = listOf(mapOf("role" to "user", "content" to prompt))
         val requestBody = buildRequestBody(messages)
         val response = client.post(apiEndpoint) {
@@ -49,6 +52,8 @@ class RemoteApi(
     }
 
     override suspend fun completeWithMessages(messages: List<Map<String, String>>): String {
+        // v0.40.4 P2-8: 同上 — 调用开始即清空, 成功路径由 parseResponse 写入
+        lastReasoning = null
         val requestBody = buildRequestBody(messages)
         val response = client.post(apiEndpoint) {
             header(HttpHeaders.Authorization, "Bearer $apiKey")
@@ -80,6 +85,8 @@ class RemoteApi(
         onToken: (String) -> Unit,
         onReasoning: ((String) -> Unit)?
     ): String {
+        // v0.40.4 P2-8: 同上 — 调用开始即清空, 成功收流后由 accumulator 写入
+        lastReasoning = null
         val requestBody = buildRequestBody(messages, stream = true)
 
         val response = client.post(apiEndpoint) {

@@ -116,7 +116,11 @@ class AdaptiveLlmProvider(
                 val result = executeWithRetry(provider, label, messages, stream, onToken, onReasoning)
                 // v0.29.2: fallback 服务成功后 usage 直通主 provider — 否则壳层读
                 // session.provider.lastUsage 恒 null, fallback 调用无缓存统计
-                if (provider !== this) this.lastUsage = provider.lastUsage
+                if (provider !== this) {
+                    this.lastUsage = provider.lastUsage
+                    // v0.40.4 P2-8: 思维链同样直通 — 观测语义与 usage 一致
+                    this.lastReasoning = provider.lastReasoning
+                }
                 return result
             } catch (e: Exception) {
                 if (e is CancellationException) throw e  // 取消契约: 用户 stop() 不得被包装成"已重试 6 次"假错误
@@ -205,6 +209,8 @@ class AdaptiveLlmProvider(
         onReasoning: ((String) -> Unit)? = null
     ): String {
         val requestStart = System.currentTimeMillis()  // P2-12(自检报告): LLM 耗时统计锚点
+        // v0.40.4 P2-8: 调用开始即清空 — 失败/重试不留上次成功调用的陈旧思维链
+        lastReasoning = null
         val requestBody = buildRequestBody(model, config, messages, stream)
         KernelLog.d("MengPawLatency", "S-OPEN ${apiEndpoint.take(48)}")
         val response = client.post(apiEndpoint) {

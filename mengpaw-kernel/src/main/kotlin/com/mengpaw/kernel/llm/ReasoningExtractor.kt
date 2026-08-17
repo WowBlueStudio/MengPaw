@@ -31,7 +31,14 @@ internal object ReasoningExtractor {
     /** OpenAI 兼容 delta/message 的思维链键序 — 官方字段在前, 兼容兜底在后。 */
     private val OPENAI_COMPAT_KEYS = listOf("reasoning_content", "reasoning", "thought", "thinking")
 
-    /** 取 OpenAI 兼容对象里的首个非空思维链字符串; 非字符串/空值安全跳过, 绝不抛异常。 */
+    /**
+     * 取 OpenAI 兼容对象里的首个非空思维链字符串; 非字符串/空值安全跳过, 绝不抛异常。
+     *
+     * 决策定案 (2026-08-17 用户拍板): 多键同时出现时**只取第一个** —
+     * reasoning_content 与 reasoning 同包出现的情形 ~99% 是网关为兼容不同客户端
+     * 重复下发同一段思考, 拼接会导致思考内容显示两遍; 为极小概率的"两段不同思考"
+     * 引入去重拼接得不偿失。若未来确有分段场景, 再按"内容不同才拼接"演进。
+     */
     fun openAiCompat(delta: JsonObject): String? {
         for (key in OPENAI_COMPAT_KEYS) {
             val text = stringOrNull(delta[key])
