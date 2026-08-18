@@ -240,4 +240,42 @@ class ThinkingProcessWriterTest {
         assertTrue("必须兜底追加 Agent 气泡", agent != null)
         assertEquals("答案", agent!!.content)
     }
+
+    @Test
+    fun `fail在无最终答案时停止容器并追加提示`() {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, modePrefix = null, agentRef = null)
+
+        writer.start()
+        writer.pushThought("思考", roundId = 0)
+        // 用户点停止 → engine.stop() 取消 run() → 取消路径收口调用 fail
+        writer.fail("已停止执行")
+
+        val tp = sessionMessages(session).filterIsInstance<ChatMessageUi.ThinkingProcess>().first()
+        assertFalse("停止后容器必须退出运行态 (不得残留思考中计时)", tp.isRunning)
+        assertTrue("停止后容器必须折叠", tp.collapsed)
+        val agent = sessionMessages(session).filterIsInstance<ChatMessageUi.Agent>().lastOrNull()
+        assertTrue("必须追加停止提示气泡", agent != null)
+        assertEquals("已停止执行", agent!!.content)
+    }
+
+    @Test
+    fun `fail替换最终答案并退出运行态`() {
+        val session = newSession()
+        val writer = ThinkingProcessWriter(session, modePrefix = null, agentRef = null)
+
+        writer.start()
+        writer.beginFinalAnswer()
+        writer.pushFinal("部分答案")
+        // 停止发生在最终答案流式中途 → 内容替换为停止提示, 退出运行态
+        writer.fail("已停止执行")
+
+        val fa = sessionMessages(session).filterIsInstance<ChatMessageUi.FinalAnswer>().first()
+        assertEquals("停止提示应替换流式半成品", "已停止执行", fa.content)
+        assertFalse("最终答案气泡必须退出运行态", fa.isRunning)
+        val runningProcesses = sessionMessages(session)
+            .filterIsInstance<ChatMessageUi.ThinkingProcess>()
+            .count { it.isRunning }
+        assertEquals("不得残留运行中的思考容器", 0, runningProcesses)
+    }
 }

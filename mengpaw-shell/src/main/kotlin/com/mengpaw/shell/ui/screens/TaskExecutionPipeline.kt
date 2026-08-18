@@ -299,6 +299,15 @@ internal class TaskExecutionPipeline(
                 // Normal coroutine cancellation — re-throw to maintain cancellation chain
                 playbackJob?.cancel()
                 playbackJob?.join()
+                // P1 修复 (2026-08-18): 用户点停止按钮 / 切换智能体 / 撤回消息 →
+                // engine.stop() 取消 run(), 原实现只取消播放协程就 re-throw,
+                // 思考容器残留 isRunning=true 恒显"思考中…"转圈。
+                // 取消路径同样收口: finish 截断兜底 + fail 折叠容器并提示已停止。
+                // 撤回路径 (retractLastUserMessage) 已删除容器 → 跳过提示, 防追加多余气泡。
+                coordinator?.finish()
+                if (session.messages.value.any { it is ChatMessageUi.ThinkingProcess }) {
+                    writer.fail("已停止执行")
+                }
                 throw e
             } catch (e: Throwable) {
                 // Safety net: catch OOM, unexpected runtime errors, etc.

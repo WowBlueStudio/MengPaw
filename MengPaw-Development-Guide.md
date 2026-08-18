@@ -549,12 +549,13 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > 2026-08-17 思考模式+流式输出兼容确认（官方原文逐家核对）：DeepSeek/Kimi/GLM/Qwen/xAI/火山流式均经 delta.reasoning_content 返回思维链（xAI 为 grok-4.6 思考摘要），Anthropic 为 thinking_delta/signature_delta，MiniMax 为 reasoning_details 累计全文或 <think> 内联，OpenAI 官方 chat/completions 不暴露思考（reasoning tokens not visible）。SseStreamParserTest 15 → 17 用例（+2：五家 reasoning_content 系官方流式夹具 / OpenAI 无思考字段边界），kernel 604 → 606，总数 1458 → 1466，0 failures。
 > 2026-08-18 浏览器开放模式增量（v0.41.0 发布实测）：McpAuthPolicyTest 7 用例（安全模式 fail-closed / 开放模式放行 / expected 空恒拒绝，双套 +14），browser 双套 42 → 56，总数 1466 → 1480，0 failures。
 > 2026-08-18 自动更新安装结果对账增量（未发布，版本号未定案）：UpdateLogicTest 21 → 24 用例（+3：安装结果对账清理 / 空目录安全 / 无 Context 安全，双套 +6），plugin-update 双套 42 → 48，插件 508 → 514，总数 1480 → 1486，0 failures。
+> 2026-08-18 思考气泡取消路径收口增量（未发布，版本号未定案）：ThinkingProcessWriterTest 10 → 12 用例（+2：fail 无最终答案停止容器+提示 / fail 替换流式半成品，双套 +4），shell 双套 220 → 224，总数 1486 → 1490，0 failures。
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
 | mengpaw-kernel | 606 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) + **SseStreamParserTest 17 + LlmPayloadTest 8 + RemoteApiTest 5（v0.40.4 全厂商思维链解析直测 + 2026-08-17 五家官方流式夹具）** |
 | mengpaw-core | 90 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex |
-| mengpaw-shell | 220 | ComplexityDetector 分档、extractMedia 提取规则、会话 JSON 编解码 (含 v0.40.2 中断恢复归一化回归)、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 流式缓冲简化回归 (v0.40.2 重构 5) + BubbleStreamCoordinator 简化显示回归 (v0.40.1 6 → v0.40.2 8 → v0.40.3 11 思维链分流 → v0.40.4 12 交错到达完整显示；全量口径 debug+release 双套合并) + SettingsModelsPresetTest 预置名单/排序/最新旗舰/退役清理 (v0.41.0+，2026-08-17 更新) |
+| mengpaw-shell | 224 | ComplexityDetector 分档、extractMedia 提取规则、会话 JSON 编解码 (含 v0.40.2 中断恢复归一化回归)、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 流式缓冲简化回归 (v0.40.2 重构 5) + BubbleStreamCoordinator 简化显示回归 (v0.40.1 6 → v0.40.2 8 → v0.40.3 11 思维链分流 → v0.40.4 12 交错到达完整显示；全量口径 debug+release 双套合并) + SettingsModelsPresetTest 预置名单/排序/最新旗舰/退役清理 (v0.41.0+，2026-08-17 更新) + ThinkingProcessWriter fail 停止收口 (未发布: 取消路径折叠容器, +2) |
 | mengpaw-browser | 56 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵、McpAuthPolicy 开放模式认证矩阵 (v0.41.0, 双套 +14) |
 | plugin-hermes (tribe) | 68 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 |
 | plugin-memory-twin | 68 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
