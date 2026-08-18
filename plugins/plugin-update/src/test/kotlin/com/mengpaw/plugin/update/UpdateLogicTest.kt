@@ -242,6 +242,44 @@ class UpdateLogicTest {
         assertTrue("不影响其他目标", File(dir, "mengpaw-browser-v0.32.0.apk").exists())
     }
 
+    // ── 安装结果对账 (P1 修复: 安装生效后清理残留 APK, 防设置页残留「安装」按钮) ──
+
+    @Test
+    fun `pruneInstalledApks removes shell apks not newer than current version`() {
+        val dir = tmp.newFolder("prune")
+        File(dir, "mengpaw-shell-v0.40.0.apk").writeText("same")
+        File(dir, "mengpaw-shell-v0.39.0.apk").writeText("older")
+        File(dir, "mengpaw-shell-v0.41.0.apk").writeText("newer")
+        File(dir, "mengpaw-browser-v0.40.0.apk").writeText("browser-same")
+        File(dir, "readme.txt").writeText("readme")
+
+        val removed = UpdatePlugin.pruneInstalledApks(dir, "0.40.0")
+
+        assertEquals("应删除当前版本+旧版本 shell APK", 2, removed.size)
+        assertTrue("返回被删文件名", removed.contains("mengpaw-shell-v0.40.0.apk"))
+        assertTrue("返回被删文件名", removed.contains("mengpaw-shell-v0.39.0.apk"))
+        assertFalse("当前版本 APK 应删除", File(dir, "mengpaw-shell-v0.40.0.apk").exists())
+        assertFalse("旧版本 APK 应删除", File(dir, "mengpaw-shell-v0.39.0.apk").exists())
+        assertTrue("更新版本 APK 应保留等待安装", File(dir, "mengpaw-shell-v0.41.0.apk").exists())
+        assertTrue("browser 独立版本线不受 shell 对账影响", File(dir, "mengpaw-browser-v0.40.0.apk").exists())
+        assertTrue("非 APK 文件不受影响", File(dir, "readme.txt").exists())
+    }
+
+    @Test
+    fun `pruneInstalledApks is safe on missing or empty dir`() {
+        assertEquals("不存在目录返回空", emptyList<String>(), UpdatePlugin.pruneInstalledApks(File(tmp.root, "nope"), "0.40.0"))
+        val dir = tmp.newFolder("empty")
+        assertEquals("空目录返回空", emptyList<String>(), UpdatePlugin.pruneInstalledApks(dir, "0.40.0"))
+    }
+
+    @Test
+    fun `reconcileInstalledState is safe without app context`() {
+        // JVM 单测无 Android Context — 不抛异常、状态不受影响即可 (真机对账路径由集成兜底)
+        val d = newDownloader()
+        d.reconcileInstalledState()
+        assertFalse("无 Context 时不应误报待安装", d.hasDownloaded)
+    }
+
     // ── 安装中重复下载防护 (P2 修复) ─────────────────────────────────────
 
     @Test

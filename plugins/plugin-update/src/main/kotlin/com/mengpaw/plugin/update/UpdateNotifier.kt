@@ -47,6 +47,10 @@ object UpdateNotifier {
                 showVersionUpdated(context, current)
             }
             prefs.edit().putString(PREF_VERSION_KEY, current).apply()
+            // P1 修复 (2026-08-18): 每次启动做安装结果对账 — 已下载 APK 版本 ≤ 当前版本
+            // 视为安装已生效 (含用户误点重复安装同一版本), 删除残留 APK,
+            // 防设置页继续显示「安装」按钮。版本未变 (取消安装) 时旧 APK 保留可重试。
+            UpdatePlugin.pruneInstalledApks(context, current)
         } catch (_: Exception) {}
     }
 

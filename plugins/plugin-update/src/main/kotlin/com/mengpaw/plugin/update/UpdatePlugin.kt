@@ -6,6 +6,7 @@ package com.mengpaw.plugin.update
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
@@ -21,6 +22,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
+import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -145,6 +147,7 @@ class UpdatePlugin : Plugin {
                 // P2 修复: 当前版本已追上最新 → 安装已生效, 清除「安装中」标记
                 if (compareVersions(result.tag.removePrefix("v"), getCurrentVersion() ?: "") <= 0) {
                     downloader.clearInstallPending()
+                    downloader.reconcileInstalledState()
                 }
                 return formatCheckResult(currentVersion, result)
             }
@@ -314,15 +317,7 @@ class UpdatePlugin : Plugin {
     }
 
     /** internal 为测试可见性 (版本号比较单测)。 */
-    internal fun compareVersions(a: String, b: String): Int {
-        val ap = a.split(".").map { it.toIntOrNull() ?: 0 }
-        val bp = b.split(".").map { it.toIntOrNull() ?: 0 }
-        for (i in 0 until maxOf(ap.size, bp.size)) {
-            val av = ap.getOrElse(i) { 0 }; val bv = bp.getOrElse(i) { 0 }
-            if (av != bv) return av.compareTo(bv)
-        }
-        return 0
-    }
+    internal fun compareVersions(a: String, b: String): Int = compareVersionsImpl(a, b)
 
     /** internal 为测试可见性 (Locale.ROOT hex 输出单测)。 */
     internal fun sha256(bytes: ByteArray): String {
@@ -378,6 +373,48 @@ class UpdatePlugin : Plugin {
          *  internal 为测试可见性 (镜像 URL 单测)。 */
         internal fun giteeDownload(githubUrl: String): String =
             githubUrl.replace("github.com", "gitee.com")
+
+        /**
+         * 安装结果对账 (P1 修复 2026-08-18): 删除 updates 目录中版本已 ≤ 当前应用版本的
+         * 已下载 Shell APK。系统安装器是外部异步流程, App 无法感知安装结果 — 以版本号
+         * 比较兜底: 安装已生效 (当前版本追平 APK 版本) 或重复包 (当前版本更高) 一律清理,
+         * 防 updates 目录残留 APK 导致设置页继续显示「安装」按钮误导用户重复安装。
+         * 仅限 shell: browser 是独立版本线 (如 v0.8.1), 与 shell 当前版本比较会恒判为过期
+         * 误删 browser 更新包; browser 靠下载新包时 cleanupOldApks 防累积。
+         * @return 被删除的 APK 文件名列表 (空 = 无过期包)。
+         */
+        internal fun pruneInstalledApks(dir: File, currentVersion: String): List<String> {
+            return try {
+                dir.listFiles { f ->
+                    f.isFile && f.name.startsWith("mengpaw-shell-") && f.name.endsWith(".apk")
+                }?.filter { apk ->
+                    val tag = apk.name.removePrefix("mengpaw-shell-").removeSuffix(".apk")
+                    compareVersionsImpl(tag.removePrefix("v"), currentVersion) <= 0
+                }?.mapNotNull { apk -> if (apk.delete()) apk.name else null }
+                    ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+
+        /** Context 版入口 — 启动对账与下载器 reconcile 共用 (路径固定为 updates 目录)。 */
+        internal fun pruneInstalledApks(context: Context, currentVersion: String): List<String> =
+            try {
+                pruneInstalledApks(File(DataPaths.PLUGIN_CACHE, "updates"), currentVersion)
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+        /** 版本号比较实现 — 实例方法 compareVersions 与伴生清理共用 (P1 修复 2026-08-18)。 */
+        private fun compareVersionsImpl(a: String, b: String): Int {
+            val ap = a.split(".").map { it.toIntOrNull() ?: 0 }
+            val bp = b.split(".").map { it.toIntOrNull() ?: 0 }
+            for (i in 0 until maxOf(ap.size, bp.size)) {
+                val av = ap.getOrElse(i) { 0 }; val bv = bp.getOrElse(i) { 0 }
+                if (av != bv) return av.compareTo(bv)
+            }
+            return 0
+        }
 
         /** 启动版本检测 — MainActivity.deferInit 调用 (P2 修复: 安装结果回传兜底)。 */
         fun notifyIfUpdated(context: Context) = UpdateNotifier.notifyIfUpdated(context)

@@ -548,13 +548,14 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > 2026-08-17 预置核对增量（未发布，版本号未定案）：Qwen/DashScope（help.aliyun.com 模型大全 + Responses 兼容）确认 qwen3.8-max 转正为旗舰；OpenAI（developers.openai.com Models）确认 GPT-5.6 家族为当前旗舰（gpt-5.6 别名→Sol）；Grok（docs.x.ai Models + 退役公告）确认 grok-4.6 旗舰、grok-4-1-fast 系列已退役；火山（docs.volcengine.com 套餐概览/OpenCode）确认托管第三方更新为 deepseek-v4-flash/pro + glm-5.3、新增 doubao-seed-2.1-turbo。SettingsModelsPresetTest 2 → 5 用例（QWEN 旗舰 / OpenAI+Grok 旗舰与退役清理 / VOLCANO 托管更新，双套 +6），shell 双套 214 → 220。
 > 2026-08-17 思考模式+流式输出兼容确认（官方原文逐家核对）：DeepSeek/Kimi/GLM/Qwen/xAI/火山流式均经 delta.reasoning_content 返回思维链（xAI 为 grok-4.6 思考摘要），Anthropic 为 thinking_delta/signature_delta，MiniMax 为 reasoning_details 累计全文或 <think> 内联，OpenAI 官方 chat/completions 不暴露思考（reasoning tokens not visible）。SseStreamParserTest 15 → 17 用例（+2：五家 reasoning_content 系官方流式夹具 / OpenAI 无思考字段边界），kernel 604 → 606，总数 1458 → 1466，0 failures。
 > 2026-08-18 浏览器开放模式增量（v0.41.0 发布实测）：McpAuthPolicyTest 7 用例（安全模式 fail-closed / 开放模式放行 / expected 空恒拒绝，双套 +14），browser 双套 42 → 56，总数 1466 → 1480，0 failures。
+> 2026-08-18 自动更新安装结果对账增量（未发布，版本号未定案）：UpdateLogicTest 21 → 24 用例（+3：安装结果对账清理 / 空目录安全 / 无 Context 安全，双套 +6），plugin-update 双套 42 → 48，插件 508 → 514，总数 1480 → 1486，0 failures。
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
 | mengpaw-kernel | 606 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) + **SseStreamParserTest 17 + LlmPayloadTest 8 + RemoteApiTest 5（v0.40.4 全厂商思维链解析直测 + 2026-08-17 五家官方流式夹具）** |
 | mengpaw-core | 90 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex |
 | mengpaw-shell | 220 | ComplexityDetector 分档、extractMedia 提取规则、会话 JSON 编解码 (含 v0.40.2 中断恢复归一化回归)、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 流式缓冲简化回归 (v0.40.2 重构 5) + BubbleStreamCoordinator 简化显示回归 (v0.40.1 6 → v0.40.2 8 → v0.40.3 11 思维链分流 → v0.40.4 12 交错到达完整显示；全量口径 debug+release 双套合并) + SettingsModelsPresetTest 预置名单/排序/最新旗舰/退役清理 (v0.41.0+，2026-08-17 更新) |
-| mengpaw-browser | 42 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵 |
+| mengpaw-browser | 56 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵、McpAuthPolicy 开放模式认证矩阵 (v0.41.0, 双套 +14) |
 | plugin-hermes (tribe) | 68 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 |
 | plugin-memory-twin | 68 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
 | plugin-agent-tools | 44 | 工具集解析 |
@@ -566,7 +567,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 | plugin-root | 20 | 危险命令拦截 11 变体、rm 规范化、shellQuote 注入免疫 |
 | plugin-termux | 22 | am 参数构造 (payload 无逗号/timeout 包裹)、脚本生成、环境名白名单 (注入/穿越拒绝)、高危规则审查、结果标记解析、错误提示 |
 | plugin-dev | 12 | dev.plugin 审计/关键词链路 |
-| plugin-update | 42 | UpdateLogicTest 版本比较/下载源排序/安装 tag 提取/自动下载跳过 + 发布解析过滤 (v0.40.1: tag 校验/Shell APK 判定, +4) |
+| plugin-update | 48 | UpdateLogicTest 版本比较/下载源排序/安装 tag 提取/自动下载跳过 + 发布解析过滤 (v0.40.1: tag 校验/Shell APK 判定, +4) + 安装结果对账 (未发布: 过期 APK 清理, +3) |
 
 > 外置插件 (mengpaw-connectors, MIT): browser-search 54 等随连接器仓库独立测试。update 已迁回内置 (v0.37.3)，其 UpdateLogicTest 在 plugins/plugin-update（双套 42 用例）。
 
@@ -1064,6 +1065,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 `check` | `download` | `install` | `auto`
 > 双源回退 (GitHub → Gitee → ghproxy)；安装经系统安装器（签名校验 + FileProvider 授权）；Shell 与 Browser 必须同一签名证书。设置页「系统设置 → 自动更新」提供检查/下载/安装入口与 WiFi 自动检查、自动下载开关。**检查源只认应用发布**（tag 为 `vX.Y.Z` 且含 Shell APK；GitHub 用 `releases?per_page=10` 列表接口，`/releases/latest` 会被同刻创建的 `plugins-v*` 插件发布顶替——v0.40.0 实测踩坑）。
 > **线程纪律 (v0.40.1)**: 设置页 check/download/install 三个入口与 `UpdateDownloader` 下载逻辑全部包 `withContext(Dispatchers.IO)` — check 内部 tryFetch 走 OkHttp 同步网络、install 内含 APK 签名校验 (读 10MB 文件)，任一在主线程执行即 Input dispatching timed out ANR（2026-08-16 设备实测，下载按钮 v0.39.2 已修、检查按钮本版补齐）。
+> **安装结果对账 (未发布, P1)**: 系统安装器是外部异步流程，App 无法感知安装结果——安装生效后 `updates` 目录残留 APK，设置页 `readyToInstall` 只认文件存在，导致新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复：每次启动（`UpdateNotifier.notifyIfUpdated`）与设置页刷新（`hasDownloaded` 懒检查）对账——已下载 APK 版本 ≤ 当前版本即删除并清除「待安装/安装中」状态；用户取消安装（版本未变）时 APK 保留可重试。
 
 #### browser.push — 跨设备推送 (4)（外置插件，mengpaw-connectors）
 `push <url>` | `pending` | `accept <id>` | `reject <id>`

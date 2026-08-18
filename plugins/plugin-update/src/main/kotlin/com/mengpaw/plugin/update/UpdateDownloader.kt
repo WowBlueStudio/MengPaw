@@ -50,8 +50,27 @@ internal class UpdateDownloader(
 
     /** 是否已有下载好的 APK 待安装 — 供设置页显示"安装"入口 (v0.38.2)。
      *  重启后内存态丢失, 按文件名约定扫描 updates 目录兜底 (P2 修复)。 */
-    val hasDownloaded: Boolean get() =
-        downloadedApk?.exists() == true || findDownloadedApk("shell") != null
+    val hasDownloaded: Boolean get() {
+        // P1 修复 (2026-08-18): 先做安装结果对账 — 当前版本已追平/高于已下载 APK 版本时
+        // 删除残留 APK, 否则安装生效后设置页仍显示「安装」按钮误导用户重复安装。
+        reconcileInstalledState()
+        return downloadedApk?.exists() == true || findDownloadedApk("shell") != null
+    }
+
+    /**
+     * 安装结果对账: 当前应用版本 ≥ 已下载 APK 版本 → 安装已生效/重复包,
+     * 删除 APK 并清除「待安装」「安装中」状态。供 [hasDownloaded] 懒检查
+     * 调用; 启动兜底由 UpdateNotifier 直接走 prune, 本方法为设置页刷新路径。
+     */
+    internal fun reconcileInstalledState() {
+        val context = UpdatePlugin.appContext ?: return
+        val current = UpdateNotifier.currentVersion(context) ?: return
+        val removed = UpdatePlugin.pruneInstalledApks(context, current)
+        if (removed.isNotEmpty()) {
+            downloadedApk = downloadedApk?.takeIf { it.exists() }
+            installPendingKey = null
+        }
+    }
 
     /** APK 下载大小上限 (512MB) — 防异常响应撑爆存储, 流式写入时按字节计数。 */
     private val maxApkBytes = 512L * 1024 * 1024
