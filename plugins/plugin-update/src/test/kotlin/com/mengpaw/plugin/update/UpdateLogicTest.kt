@@ -304,4 +304,41 @@ class UpdateLogicTest {
         d.clearInstallPending()
         assertFalse("清除后不应跳过任何版本", d.shouldSkipAutoDownload("shell", "v0.38.4"))
     }
+
+    // ── 安装版本校验 + 残留包清理 (v0.42.2 加固) ─────────────────────────
+
+    @Test
+    fun `installVersionError rejects stale and intermediate apks`() {
+        val d = newDownloader()
+        // 残留旧包: 不高于当前版本 → 拒绝
+        val stale = d.installVersionError("v0.41.0", currentVersion = "0.41.0", latestTag = "v0.42.2")
+        assertNotNull("同版本残留包应拒绝", stale)
+        assertTrue("错误应含残留旧包提示", stale!!.contains("不高于当前版本"))
+        // 中间版本: 高于当前但低于最新 → 拒绝并提示下载最新
+        val middle = d.installVersionError("v0.42.1", currentVersion = "0.41.0", latestTag = "v0.42.2")
+        assertNotNull("中间版本应拒绝", middle)
+        assertTrue("错误应含最新版本提示", middle!!.contains("v0.42.2"))
+        // 最新版本 → 放行
+        assertNull("最新版本应放行", d.installVersionError("v0.42.2", "0.41.0", "v0.42.2"))
+        // 未 check (latestTag 未知) 时高于当前版本 → 放行
+        assertNull("无最新信息时高于当前应放行", d.installVersionError("v0.42.2", "0.41.0", null))
+    }
+
+    @Test
+    fun `pruneBelowLatestApks removes only versions below latest`() {
+        val dir = tmp.newFolder("updates2")
+        File(dir, "mengpaw-shell-v0.42.1.apk").writeText("old")
+        File(dir, "mengpaw-shell-v0.42.0.apk").writeText("older")
+        val keep = File(dir, "mengpaw-shell-v0.42.2.apk").apply { writeText("new") }
+        val removed = UpdatePlugin.pruneBelowLatestApks(dir, "v0.42.2")
+        assertEquals("应删除两个旧版本", 2, removed.size)
+        assertTrue("最新包应保留", keep.exists())
+        assertFalse("v0.42.1 应被删", File(dir, "mengpaw-shell-v0.42.1.apk").exists())
+        assertFalse("v0.42.0 应被删", File(dir, "mengpaw-shell-v0.42.0.apk").exists())
+    }
+
+    @Test
+    fun `pruneBelowLatestApks is safe on missing dir`() {
+        assertEquals("不存在目录返回空", emptyList<String>(), UpdatePlugin.pruneBelowLatestApks(File(tmp.root, "nope"), "v0.42.2"))
+    }
 }

@@ -115,6 +115,9 @@ internal class UpdateDownloader(
         return try {
             val downloadDir = File(DataPaths.PLUGIN_CACHE, "updates").also { it.mkdirs() }
             val apkFile = File(downloadDir, "mengpaw-$target-${release.tag}.apk")
+            // v0.42.2 加固: 下载前清理同目标旧 APK — 防下载失败/中断时旧包残留,
+            // 设置页「安装」入口命中旧包装错版本
+            cleanupOldApks(target, apkFile)
 
             // 下载源按 check 命中源优先排序 (v0.39.2 修复): 国内设备 Gitee 通但
             // GitHub HTTPS/ghproxy 常被墙 — 同源优先避免首源白等连接超时
@@ -217,6 +220,21 @@ internal class UpdateDownloader(
         if (!apk.exists()) {
             downloadedApk = null
             return ExecutionResult.fail("APK 文件不存在，请重新下载", errorCode = ErrorCodes.ERR_NOT_FOUND)
+        }
+
+        // v0.42.2 加固: 版本校验 — 残留旧包 (不高于当前) 或中间版本包 (低于最新) 直接
+        // 删除并提示重新下载, 杜绝「点安装装旧版」 (0.41.0 用户复现: 旧包残留导致
+        // 更新入口变安装, 且装的是旧包)
+        val apkTag = tagFromApkName(apk.name)
+        val versionError = installVersionError(
+            apkTag = apkTag,
+            currentVersion = UpdateNotifier.currentVersion(context),
+            latestTag = releaseProvider()?.tag,
+        )
+        if (versionError != null) {
+            downloadedApk = null
+            apk.delete()
+            return ExecutionResult.fail(versionError, errorCode = ErrorCodes.ERR_INVALID_INPUT)
         }
 
         // SECURITY: Verify APK signature matches current app before installing
@@ -341,6 +359,30 @@ internal class UpdateDownloader(
     private fun cleanupOldApks(target: String, keep: File) {
         try {
             cleanupOldApksIn(File(DataPaths.PLUGIN_CACHE, "updates"), target, keep)
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * 待安装 APK 版本校验 — 不高于当前版本 (残留/重复包) 或低于最新版本 (中间残留包)
+     * 时返回错误消息; 校验通过返回 null (v0.42.2 加固, 防 updates 目录旧包残留装错版本)。
+     */
+    internal fun installVersionError(apkTag: String, currentVersion: String?, latestTag: String?): String? {
+        val ver = apkTag.removePrefix("v")
+        if (currentVersion != null && UpdatePlugin.compareVersionsImpl(ver, currentVersion) <= 0) {
+            return "待安装包 $apkTag 不高于当前版本 v$currentVersion (残留旧包), 已删除。请执行 update.download 重新下载。"
+        }
+        if (latestTag != null && UpdatePlugin.compareVersionsImpl(ver, latestTag.removePrefix("v")) < 0) {
+            return "存在更新的版本 ${latestTag}, 已删除旧下载包 $apkTag。请执行 update.download 下载最新版。"
+        }
+        return null
+    }
+
+    /** check 发现新版本时清理低于最新版的残留包 — 设置页刷新后不再命中旧包「安装」入口 (v0.42.2 加固)。 */
+    internal fun pruneBelowLatest() {
+        val latest = releaseProvider() ?: return
+        try {
+            UpdatePlugin.pruneBelowLatestApks(File(DataPaths.PLUGIN_CACHE, "updates"), latest.tag)
+            downloadedApk = downloadedApk?.takeIf { it.exists() }
         } catch (_: Exception) {}
     }
 

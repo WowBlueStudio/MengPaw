@@ -144,8 +144,12 @@ class UpdatePlugin : Plugin {
                 latestRelease = result
                 lastCheckTime = System.currentTimeMillis()
                 saveConfig()  // P2 修复: 上次检查时间即时落盘, 重启后不丢失
-                // P2 修复: 当前版本已追上最新 → 安装已生效, 清除「安装中」标记
-                if (compareVersions(result.tag.removePrefix("v"), getCurrentVersion() ?: "") <= 0) {
+                if (compareVersions(result.tag.removePrefix("v"), getCurrentVersion() ?: "") > 0) {
+                    // v0.42.2 加固: 发现新版本 → 清理 updates 中低于最新版的残留包
+                    // (含中间版本), 防设置页「安装」按钮命中旧包装错版本
+                    downloader.pruneBelowLatest()
+                } else {
+                    // P2 修复: 当前版本已追上最新 → 安装已生效, 清除「安装中」标记
                     downloader.clearInstallPending()
                     downloader.reconcileInstalledState()
                 }
@@ -405,8 +409,27 @@ class UpdatePlugin : Plugin {
                 emptyList()
             }
 
+        /**
+         * 清理 updates 目录中版本低于 latestTag 的同目标 APK — check 发现新版本时调用,
+         * 防中间版本残留包被设置页「安装」按钮装错 (v0.42.2 加固)。
+         * @return 被删除的 APK 文件名列表 (空 = 无过期包)。
+         */
+        internal fun pruneBelowLatestApks(dir: File, latestTag: String): List<String> {
+            return try {
+                dir.listFiles { f ->
+                    f.isFile && f.name.startsWith("mengpaw-shell-") && f.name.endsWith(".apk")
+                }?.filter { apk ->
+                    val tag = apk.name.removePrefix("mengpaw-shell-").removeSuffix(".apk")
+                    compareVersionsImpl(tag.removePrefix("v"), latestTag.removePrefix("v")) < 0
+                }?.mapNotNull { apk -> if (apk.delete()) apk.name else null }
+                    ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+
         /** 版本号比较实现 — 实例方法 compareVersions 与伴生清理共用 (P1 修复 2026-08-18)。 */
-        private fun compareVersionsImpl(a: String, b: String): Int {
+        internal fun compareVersionsImpl(a: String, b: String): Int {
             val ap = a.split(".").map { it.toIntOrNull() ?: 0 }
             val bp = b.split(".").map { it.toIntOrNull() ?: 0 }
             for (i in 0 until maxOf(ap.size, bp.size)) {
