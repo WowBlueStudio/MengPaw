@@ -124,6 +124,9 @@ class RemoteApi(
         val firstMsg = messages.firstOrNull()
         if (firstMsg?.get("role") == "system") SystemPromptShape.monitor(firstMsg["content"] ?: "")
 
+        // DeepSeek 思考模式回传 (v0.41.1 未发布): 与主 provider 同口径 —
+        // 仅 deepseek 端点回传 assistant 的 reasoning_content (其它端点不接受该字段)。
+        val includeReasoning = apiEndpoint.contains("deepseek.com")
         return buildJsonObject {
             put("model", model)
             put("max_tokens", config.maxTokens)
@@ -134,6 +137,11 @@ class RemoteApi(
                     addJsonObject {
                         put("role", msg["role"] ?: "user")
                         put("content", msg["content"] ?: "")
+                        if (includeReasoning && msg["role"] == "assistant") {
+                            msg["reasoning_content"]?.takeIf { it.isNotBlank() }?.let {
+                                put("reasoning_content", it)
+                            }
+                        }
                     }
                 }
             }

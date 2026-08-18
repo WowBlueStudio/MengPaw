@@ -6,6 +6,7 @@ package com.mengpaw.kernel.llm
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -58,6 +59,51 @@ class LlmPayloadTest {
         )
         assertEquals("这是最终答案", parsed.content)
         assertEquals("草稿方案\nFinal Answer: 先自查再定稿", parsed.reasoning)
+    }
+
+    @Test
+    fun `deepseek请求体回传assistant的reasoning_content`() {
+        // v0.41.1 未发布: DeepSeek 思考模式官方要求多轮工具调用时 reasoning_content
+        // 必须原样回传, 否则 API 400 — 仅 deepseek 端点 includeReasoning=true
+        val body = buildRequestBody(
+            model = "deepseek-v4-pro",
+            config = AdaptiveLlmProvider.AdaptiveConfig(),
+            messages = listOf(
+                mapOf("role" to "system", "content" to "sys"),
+                mapOf("role" to "user", "content" to "任务"),
+                mapOf("role" to "assistant", "content" to "Action: search", "reasoning_content" to "先想一下")
+            ),
+            stream = true,
+            includeReasoning = true
+        )
+        assertTrue("assistant 消息必须回传 reasoning_content", body.contains("\"reasoning_content\":\"先想一下\""))
+        assertTrue("正文内容保留", body.contains("Action: search"))
+    }
+
+    @Test
+    fun `非deepseek端点不回传reasoning_content`() {
+        val body = buildRequestBody(
+            model = "gpt-4.1",
+            config = AdaptiveLlmProvider.AdaptiveConfig(),
+            messages = listOf(
+                mapOf("role" to "assistant", "content" to "Action: search", "reasoning_content" to "先想一下")
+            ),
+            includeReasoning = false
+        )
+        assertFalse("OpenAI 等端点不接受该字段, 不得外泄", body.contains("reasoning_content"))
+    }
+
+    @Test
+    fun `deepseek端点_assistant无思维链时不带reasoning_content键`() {
+        val body = buildRequestBody(
+            model = "deepseek-v4-pro",
+            config = AdaptiveLlmProvider.AdaptiveConfig(),
+            messages = listOf(
+                mapOf("role" to "assistant", "content" to "普通回复")
+            ),
+            includeReasoning = true
+        )
+        assertFalse("无思维链时不带空键", body.contains("reasoning_content"))
     }
 
     @Test

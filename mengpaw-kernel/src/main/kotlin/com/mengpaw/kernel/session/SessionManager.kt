@@ -19,7 +19,13 @@ data class Message(
     val localOnly: Boolean = false,
     val interruptedTurn: InterruptedTurnRecovery? = null,
     // 结构化附件 (v0.33.0+): 旧会话 JSON 无此键 → 默认空列表, 零迁移
-    val attachments: List<AttachmentData> = emptyList()
+    val attachments: List<AttachmentData> = emptyList(),
+    // DeepSeek 思考模式 (v0.41.1 未发布): 思维链 reasoning_content — 官方要求
+    // 多轮工具调用时 assistant 的 reasoning_content 必须原样回传, 否则 API 400
+    // ("The reasoning_content in the thinking mode must be passed back to the API")。
+    // 旧会话 JSON 无此键 → 默认 null, 零迁移; 仅 assistant 消息持有, 仅请求侧
+    // 按供应商 (deepseek) 透传, 其它 OpenAI 兼容端点忽略该键。
+    val reasoning: String? = null
 )
 
 /**

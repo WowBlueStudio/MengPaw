@@ -28,6 +28,28 @@ class SessionManagerHistoryTest {
     }
 
     @Test
+    fun `getStructuredHistory回传assistant的reasoning_content`() {
+        // v0.41.1 未发布: DeepSeek 思考模式多轮工具调用必须回传 reasoning_content —
+        // 历史拼接时 assistant 消息附 reasoning_content 键 (请求侧再按供应商过滤)
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.addMessage(session.id, Message("user", "任务"))
+        manager.addMessage(session.id, Message("assistant", "Action: search", reasoning = "先想一下"))
+        val structured = manager.getStructuredHistory(session.id)
+        assertEquals("assistant 消息应回传思维链", "先想一下", structured[1]["reasoning_content"])
+    }
+
+    @Test
+    fun `getStructuredHistory无思维链时不带reasoning_content键`() {
+        val manager = SessionManager()
+        val session = manager.createSession("Test")
+        manager.addMessage(session.id, Message("user", "任务"))
+        manager.addMessage(session.id, Message("assistant", "普通回复"))
+        val structured = manager.getStructuredHistory(session.id)
+        assertFalse("无思维链不得带空键", structured[1].containsKey("reasoning_content"))
+    }
+
+    @Test
     fun `getStructuredHistory attaches binary only to the last attachment user message`() {
         // v0.32.1+ 重发成本修复: 历史附件每轮全量 base64 会击穿上下文窗口 —
         // 仅最后一条带附件的 user 消息挂二进制键, 更早消息只保留路径文本

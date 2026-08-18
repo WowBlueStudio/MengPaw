@@ -211,7 +211,12 @@ class AdaptiveLlmProvider(
         val requestStart = System.currentTimeMillis()  // P2-12(自检报告): LLM 耗时统计锚点
         // v0.40.4 P2-8: 调用开始即清空 — 失败/重试不留上次成功调用的陈旧思维链
         lastReasoning = null
-        val requestBody = buildRequestBody(model, config, messages, stream)
+        // DeepSeek 思考模式回传 (v0.41.1 未发布): 仅 deepseek 端点回传 reasoning_content —
+        // OpenAI 等端点不接受该字段, 传了会 400 (官方 Copilot CLI 集成页明示)。
+        val requestBody = buildRequestBody(
+            model, config, messages, stream,
+            includeReasoning = providerType == "deepseek"
+        )
         KernelLog.d("MengPawLatency", "S-OPEN ${apiEndpoint.take(48)}")
         val response = client.post(apiEndpoint) {
             header(HttpHeaders.Authorization, buildAuthHeader(providerType, apiKey))

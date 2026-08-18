@@ -237,9 +237,15 @@ class SessionManager {
         val lastAttachmentUser = filtered.lastOrNull { it.role == "user" && it.attachments.isNotEmpty() }
         return filtered.map { msg ->
             val base = mapOf("role" to msg.role, "content" to msg.content)
-            if (msg === lastAttachmentUser) {
-                AttachmentPayload.attachBinary(base, msg.attachments)
+            // DeepSeek 思考模式回传 (v0.41.1 未发布): assistant 消息附 reasoning_content —
+            // 官方要求多轮工具调用时必须回传, 否则 400。仅带思维链的 assistant 消息附加;
+            // 请求侧 (buildRequestBody) 再按供应商过滤, 非 deepseek 端点不会外泄该键。
+            val withReasoning = if (msg.role == "assistant" && !msg.reasoning.isNullOrBlank()) {
+                base + ("reasoning_content" to msg.reasoning!!)
             } else base
+            if (msg === lastAttachmentUser) {
+                AttachmentPayload.attachBinary(withReasoning, msg.attachments)
+            } else withReasoning
         }
     }
 

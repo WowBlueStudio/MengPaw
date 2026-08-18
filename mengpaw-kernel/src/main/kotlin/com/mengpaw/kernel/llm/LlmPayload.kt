@@ -63,7 +63,14 @@ internal fun buildRequestBody(
     model: String,
     config: AdaptiveLlmProvider.AdaptiveConfig,
     messages: List<Map<String, String>>,
-    stream: Boolean = false
+    stream: Boolean = false,
+    /**
+     * DeepSeek 思考模式回传 (v0.41.1 未发布): 官方要求多轮工具调用时 assistant 的
+     * reasoning_content 必须原样回传, 否则 API 400 ("The reasoning_content in the
+     * thinking mode must be passed back to the API")。仅 DeepSeek 端点启用 —
+     * OpenAI 等其它兼容端点不接受该字段, 传了会 400。
+     */
+    includeReasoning: Boolean = false
 ): String {
     // 前缀形状监测 — system prompt 变化即告警
     val firstMsg = messages.firstOrNull()
@@ -110,6 +117,13 @@ internal fun buildRequestBody(
                         }
                     } else {
                         put("content", textContent)
+                    }
+                    // DeepSeek 思考模式: assistant 思维链原样回传 (仅 deepseek 端点启用)。
+                    // 无工具调用的轮次 DeepSeek 官方明确会忽略该字段, 不报错。
+                    if (includeReasoning && msg["role"] == "assistant") {
+                        msg["reasoning_content"]?.takeIf { it.isNotBlank() }?.let {
+                            put("reasoning_content", it)
+                        }
                     }
                     // Inject cache_control annotation for supported providers
                     if (msg["_cache_control"] == "ephemeral") {

@@ -172,7 +172,14 @@ internal class AgentReActLoop(
                 engine.llmRequestBuilder.calibrateFromUsage(estimatedTokens, totalChars)
 
                 val postResult = engine.postCallMiddleware.onPostCall(sanitized, state.step + 1, totalChars, estimatedTokens)
-                engine.getSessionManager().addMessage(session.id, Message("assistant", postResult.text))
+                // DeepSeek 思考模式回传 (v0.41.1 未发布): 本轮思维链随 assistant 消息落历史,
+                // 下一轮 buildConversation 原样回传 — 官方要求工具调用轮次必须回传,
+                // 否则 API 400 ("The reasoning_content in the thinking mode must be
+                // passed back to the API"), 导致多轮任务后段中断/混乱。
+                engine.getSessionManager().addMessage(
+                    session.id,
+                    Message("assistant", postResult.text, reasoning = engine.getLlmProvider().lastReasoning)
+                )
                 engine._output.value = postResult.text
 
                 if (postResult.shouldFold) {
