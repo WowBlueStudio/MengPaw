@@ -49,7 +49,7 @@
 - **Gradle 任务勿并行**(clean 与编译互踩);browser 构建 ~9 分钟,shell ~2 分钟;不要手删 build 目录,用 `./gradlew clean`
 - **签名验证用 apksigner**(keytool 只验 v1 会误报):`apksigner.bat verify --print-certs` 期望 `CN=MengPaw, OU=Studio, O=WowBlue`
 - **ADB 无线端口每次配对都变**:用户给的通常是配对端口,连接端口用 `adb mdns services` 查;荣耀平板安装必弹 ICP 警告,由用户点"继续安装",勿再试静默方案
-- **发布流程**:`mengpaw-release` skill(版本号/端口必须询问用户;browser 无变更不构建;双远端 push;gh release 必须附 APK;发布前 dropbox 巡检)
+- **发布流程**:`mengpaw-release` skill(版本号/端口必须询问用户;browser 无变更不构建;双远端 push;gh release 必须附 APK)
 - **崩溃排查**:设备"启动即闪退"且清数据仍崩 → 先 `adb shell dumpsys dropbox --print`(crash buffer 在荣耀/vivo 上会丢),再 logcat
 
 ## 六、测试纪律
