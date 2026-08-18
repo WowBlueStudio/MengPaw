@@ -126,19 +126,13 @@ internal fun AgentGroupItem(
                 modifier = Modifier.weight(1f),
                 maxLines = 1, overflow = TextOverflow.Ellipsis
             )
-            // Session count badge
+            // Session count — 纯文字数字, 无底色 (2026-08-18 UI 调整)
             if (sessions.isNotEmpty()) {
-                Surface(
-                    shape = RoundedCornerShape(ArcoRadius.sm),
-                    color = ThemeColors.bgCardHigh
-                ) {
-                    Text(
-                        "${sessions.size}",
-                        Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                        fontSize = 11.sp,
-                        color = ThemeColors.textSecondary
-                    )
-                }
+                Text(
+                    "${sessions.size}",
+                    fontSize = 11.sp,
+                    color = ThemeColors.textSecondary
+                )
                 Spacer(Modifier.width(4.dp))
             }
             // New session button [+]

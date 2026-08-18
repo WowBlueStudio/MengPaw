@@ -27,7 +27,7 @@ import com.mengpaw.design.components.SectionHeader
  *
  * Layout:
  *   [Header]
- *   ── 智能体 ── (local agents)
+ *   (local agents, 无分组标题)
  *     ├ Agent name  [N] [+]  ← collapsible section header
  *     │  ├ Session 1
  *     │  └ Session 2
@@ -104,9 +104,6 @@ fun HistorySidebar(
         ) {
             // ── Section: 智能体 (local agents) ──
             if (localGroups.isNotEmpty()) {
-                item(key = "sec_local") {
-                    SectionHeader("智能体")
-                }
                 items(localGroups, key = { "local_${it.agentName}" }) { group ->
                     AgentGroupItem(
                         agentName = group.agentName,
