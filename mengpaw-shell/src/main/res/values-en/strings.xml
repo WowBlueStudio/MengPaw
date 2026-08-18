@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MengPaw</string>
+    <string name="accessibility_service_label">MengPaw Accessibility Service</string>
+    <string name="accessibility_service_description">Enables the MengPaw agent to control the screen: read the current UI tree (sys.accessibility.dump), and simulate taps, swipes, text input, and navigation (sys.accessibility.click / swipe / input / back). All actions are gated by command risk levels — enable only in trusted scenarios.</string>
+</resources>

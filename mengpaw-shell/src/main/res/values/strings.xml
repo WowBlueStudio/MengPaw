@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">MengPaw</string>
+    <string name="accessibility_service_label">MengPaw 无障碍服务</string>
+    <string name="accessibility_service_description">为 MengPaw 智能体提供屏幕级操控能力：读取当前界面控件结构（sys.accessibility.dump），以及模拟点击、滑动、输入与返回等操作（sys.accessibility.click / swipe / input / back）。所有操作均受命令权限分级管控，请仅在信任场景开启。</string>
 </resources>
