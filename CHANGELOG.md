@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.42.3 (2026-08-18) — 更新链路残留包加固（开发中，未发布）
+## v0.42.3 (2026-08-18) — 更新链路残留包加固 + bang 结果气泡定案
 
 ### 修复
 - **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,
@@ -13,6 +13,15 @@
   空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡
   (error 为空兜底「命令执行失败」)。不引入"执行中"气泡 (用户定案, 避免闭环负担);
   输出保留原文 (空判定用 isBlank, 不 trim), 超长截断 4000 字符
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.42.3-release.apk` (versionCode 42003)
+- Browser APK: 本轮无变更, 不构建
+- 插件: plugin-update 有变更 (残留包加固 + install 版本校验) — 构建 AAR 回写
+  plugins.json, 打 `plugins-v0.42.3` tag, GitHub Release 附全部 AAR
+- 测试: 全量 1543 用例 0 failures (kernel 619 + core 116 + shell 232 + browser 56 + 插件 520)
+- 崩溃巡检: 无设备在线, 巡检未执行, 待用户反馈
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
 
 ## v0.42.2 (2026-08-18) — 无障碍屏幕级操控 + 思考气泡独立嵌套
 
