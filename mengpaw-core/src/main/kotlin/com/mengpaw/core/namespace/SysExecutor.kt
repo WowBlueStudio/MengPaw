@@ -11,6 +11,7 @@ import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.cli.ErrorCodes
 import java.lang.ref.WeakReference
 import com.mengpaw.core.namespace.sys.AppExecutor
+import com.mengpaw.core.namespace.sys.AccessibilityExecutor
 import com.mengpaw.core.namespace.sys.BatteryPowerExecutor
 import com.mengpaw.core.namespace.sys.CalendarExecutor
 import com.mengpaw.core.namespace.sys.ClipboardIntentExecutor
@@ -36,7 +37,7 @@ import com.mengpaw.core.namespace.sys.TtsExecutor
 /**
  * Android system executor — exposes real device capabilities to Agent.
  *
- * ## Command groups (85 commands)
+ * ## Command groups (93 commands)
  * Delegates to domain executors in [com.mengpaw.core.namespace.sys].
  *
  * ```
@@ -125,6 +126,14 @@ import com.mengpaw.core.namespace.sys.TtsExecutor
  * sys.calendar.list       列出日历事件
  * sys.calendar.delete     删除日历事件
  * sys.calendar.calendars  列出日历账户
+ * sys.accessibility.status  无障碍服务状态
+ * sys.accessibility.dump    读取屏幕控件树
+ * sys.accessibility.click   模拟点击
+ * sys.accessibility.swipe   模拟滑动
+ * sys.accessibility.input   模拟输入
+ * sys.accessibility.back    返回键
+ * sys.accessibility.home    回到桌面
+ * sys.accessibility.recents 最近任务
  * ```
  */
 object SysExecutor {
@@ -274,6 +283,15 @@ object SysExecutor {
         "calendar.list" to CalendarExecutor::calendarList,
         "calendar.delete" to CalendarExecutor::calendarDelete,
         "calendar.calendars" to CalendarExecutor::calendarCalendars,
+        // ── Accessibility (无障碍屏幕级操控, 需系统无障碍服务) ──
+        "accessibility.status" to AccessibilityExecutor::status,
+        "accessibility.dump" to AccessibilityExecutor::dump,
+        "accessibility.click" to AccessibilityExecutor::click,
+        "accessibility.swipe" to AccessibilityExecutor::swipe,
+        "accessibility.input" to AccessibilityExecutor::input,
+        "accessibility.back" to AccessibilityExecutor::back,
+        "accessibility.home" to AccessibilityExecutor::home,
+        "accessibility.recents" to AccessibilityExecutor::recents,
         // ── Media capture ──
         "screenshot" to ScreenCaptureExecutor::screenshot,
         "screenrecord.start" to ScreenCaptureExecutor::screenRecordStart,

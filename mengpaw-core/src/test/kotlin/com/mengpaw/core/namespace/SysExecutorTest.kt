@@ -13,7 +13,7 @@ import java.util.regex.Pattern
  * SysExecutor 命令表测试 — object 初始化不触达 Android API (命令映射为方法引用,
  * init 块仅向纯 JVM 的 CommandSearch 内存索引注册), 可直接读取 commands 表。
  *
- * 覆盖: 命令数量与文档一致 (85)、键唯一且命名规范、PERMISSION_MAP 引用的命令真实存在、
+ * 覆盖: 命令数量与文档一致 (93)、键唯一且命名规范、PERMISSION_MAP 引用的命令真实存在、
  * 中文同义词表非空无空词 (搜索索引质量冒烟)。
  */
 class SysExecutorTest {
@@ -23,7 +23,7 @@ class SysExecutorTest {
 
     @Test
     fun 命令表非空且数量与文档一致() {
-        assertEquals("命令数量与 SysExecutor 头注 85 条一致", 85, commands.size)
+        assertEquals("命令数量与 SysExecutor 头注 93 条一致", 93, commands.size)
     }
 
     @Test

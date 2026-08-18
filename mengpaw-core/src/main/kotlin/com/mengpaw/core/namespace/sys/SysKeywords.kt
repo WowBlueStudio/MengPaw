@@ -92,5 +92,13 @@ internal val SYS_KEYWORDS_ZH: Map<String, List<String>> = mapOf(
     "wakelock.release" to listOf("释放唤醒锁", "恢复熄屏"),
     "ir.transmit" to listOf("红外", "红外遥控", "发射红外"),
     "usb.list" to listOf("USB设备", "USB列表", "外设"),
-    "usb.request" to listOf("USB授权", "连接USB", "USB权限")
+    "usb.request" to listOf("USB授权", "连接USB", "USB权限"),
+    "accessibility.status" to listOf("无障碍", "辅助功能", "无障碍状态", "服务状态"),
+    "accessibility.dump" to listOf("读取屏幕", "屏幕内容", "控件树", "界面结构", "无障碍快照", "页面内容", "屏幕读取"),
+    "accessibility.click" to listOf("模拟点击", "自动点击", "点击控件", "点击屏幕"),
+    "accessibility.swipe" to listOf("模拟滑动", "滑动屏幕", "手势", "滑动"),
+    "accessibility.input" to listOf("模拟输入", "输入文本", "填写", "打字", "输入"),
+    "accessibility.back" to listOf("返回", "返回键", "后退"),
+    "accessibility.home" to listOf("回到桌面", "主页", "桌面", "HOME"),
+    "accessibility.recents" to listOf("最近任务", "任务列表", "多任务", "RECENTS")
 )

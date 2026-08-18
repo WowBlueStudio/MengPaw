@@ -63,6 +63,19 @@ class RiskGateTest {
     }
 
     @Test
+    fun `无障碍命令分级_读屏中危_模拟操作高危`() {
+        assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("sys.accessibility.status"))
+        assertEquals(RiskLevel.MID, CommandRiskLevels.levelOf("sys.accessibility.dump --max 100"))
+        assertEquals(RiskLevel.HIGH, CommandRiskLevels.levelOf("sys.accessibility.click 100 200"))
+        assertEquals(RiskLevel.HIGH, CommandRiskLevels.levelOf("sys.accessibility.click --text 确定"))
+        assertEquals(RiskLevel.HIGH, CommandRiskLevels.levelOf("sys.accessibility.swipe 0 0 300 600"))
+        assertEquals(RiskLevel.HIGH, CommandRiskLevels.levelOf("sys.accessibility.input hello"))
+        assertEquals(RiskLevel.HIGH, CommandRiskLevels.levelOf("sys.accessibility.back"))
+        assertEquals(RiskLevel.HIGH, CommandRiskLevels.levelOf("sys.accessibility.home"))
+        assertEquals(RiskLevel.HIGH, CommandRiskLevels.levelOf("sys.accessibility.recents"))
+    }
+
+    @Test
     fun `未登记命令默认 LOW`() {
         // Linux 命令未登记风险表 → 默认 LOW, 实际安全由 CommandMonitor 规则承载
         assertEquals(RiskLevel.LOW, CommandRiskLevels.levelOf("cat profile.md"))

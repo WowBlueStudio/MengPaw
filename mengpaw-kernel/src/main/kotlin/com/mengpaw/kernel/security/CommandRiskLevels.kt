@@ -52,6 +52,7 @@ object CommandRiskLevels {
         "sys.usb.list" to RiskLevel.LOW,
         "sys.download" to RiskLevel.LOW,
         "sys.wallpaper.set" to RiskLevel.LOW,
+        "sys.accessibility.status" to RiskLevel.LOW,
         // ── 中危: 删除/修改/隐私读取 (默认拒绝, TRUSTED 放行) ──
         // agent.rm/fs.mv 已随 Linux 通道移除 — Linux rm/mv 由 CommandMonitor CONFIRM 弹窗承接
         "agent.memory.rm" to RiskLevel.MID,
@@ -92,6 +93,7 @@ object CommandRiskLevels {
         "sys.phone.call" to RiskLevel.MID,
         "sys.usb.request" to RiskLevel.MID,
         "sys.wifi.scan" to RiskLevel.MID,
+        "sys.accessibility.dump" to RiskLevel.MID,
         "plugin.install" to RiskLevel.MID,
         "plugin.enable" to RiskLevel.MID,
         "plugin.disable" to RiskLevel.MID,
@@ -104,6 +106,13 @@ object CommandRiskLevels {
         // ── 高危: 清空/卸载/系统级/整片删除/拍照 (弹窗确认) ──
         "clipboard.clear" to RiskLevel.HIGH,
         "sys.app.uninstall" to RiskLevel.HIGH,
+        // 无障碍模拟操作 (v0.42.2): 点击/滑动/输入/全局导航 = 模拟用户操作任意应用, 高危
+        "sys.accessibility.click" to RiskLevel.HIGH,
+        "sys.accessibility.swipe" to RiskLevel.HIGH,
+        "sys.accessibility.input" to RiskLevel.HIGH,
+        "sys.accessibility.back" to RiskLevel.HIGH,
+        "sys.accessibility.home" to RiskLevel.HIGH,
+        "sys.accessibility.recents" to RiskLevel.HIGH,
         "plugin.uninstall" to RiskLevel.HIGH,
         "agent.memory.mid.delete" to RiskLevel.HIGH,
         "agent.memory.project.delete" to RiskLevel.HIGH,
