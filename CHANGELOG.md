@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.42.1 (2026-08-18) — 自动更新对账 + DeepSeek 思维链回传 + 对话需求跟踪
+
+### 修复
+- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装
+  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,
+  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页
+  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装
+  (版本未变) 时 APK 保留可重试
+- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →
+  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就
+  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补
+  `coordinator.finish()` + `writer.fail("已停止执行")` 折叠容器并退出运行态
+- **DeepSeek 思考模式多轮工具调用回传 (v0.42.1)**: 官方要求 assistant 的
+  `reasoning_content` 必须在下一次请求中原样回传, 否则 API 400 ("The reasoning_content
+  in the thinking mode must be passed back to the API") — 原实现只存 content 不回传,
+  多轮工具调用任务后段 400/行为漂移, 表现为前几次对话正常、后几次折叠/格式判断混乱。
+  修复: `Message.reasoning` 随 assistant 消息落历史 → `getStructuredHistory` 附键 →
+  `buildRequestBody` 仅 deepseek 端点透传 (OpenAI 等端点不接受该字段)
+
+### 新增
+- **sys 敏感命令权限前置引导 (v0.42.1)**: 短信/联系人/通话/拨号命令依赖 Android
+  运行时权限 — 系统提示词 + android 技能文档注入「执行前置」: 先
+  `sys.permission.check` 确认, 未授予先 `sys.permission.request` 弹窗引导用户授权,
+  禁止绕路或谎报已执行
+- **对话需求跟踪 (v0.42.1)**: 规则式目标栈 — 每轮请求自动从会话消息抽取最近需求,
+  最新为「当前重点」置顶、旧需求为「待办/背景」, 配合提示词纪律: 新话题不丢旧目标、
+  旧目标不淹没新重点; 零持久化、零 LLM 评估成本, 不破坏前缀缓存
+- **右侧历史边栏精简**: 去掉「智能体」分组标题, 会话数量数字去底色
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.42.1-release.apk` (versionCode 42001)
+- Browser APK: 本轮无变更, 不构建
+- 插件有变更: plugin-update (自动更新对账) + plugin-skill (android 技能文档权限前置) —
+  构建 AAR 回写 plugins.json, 打 `plugins-v0.42.1` tag, GitHub Release 附全部 AAR
+- 测试: 全量 1502 用例 0 failures (kernel 618 + core 90 + shell 224 + browser 56 + 插件 514)
+- 崩溃巡检: 无设备在线, 巡检未执行, 待用户反馈
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.41.0 (2026-08-18) — MiniMax 接入 + 全厂商思维链解析 + 浏览器开放模式
 
 ### 新增

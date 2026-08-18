@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.41.0 | **更新**: 2026-08-17 | **开发**: Codex | **架构**: 微内核(123文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + Evolution Agent) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 浏览器 v0.8.1
+> **版本**: 0.42.1 | **更新**: 2026-08-18 | **开发**: Codex | **架构**: 微内核(123文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + Evolution Agent) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
 
 ---
 
@@ -553,6 +553,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > 2026-08-18 sys 敏感命令权限前置增量（未发布，版本号未定案）：PromptEngineTest 46 → 47 用例（+1：sys 敏感命令权限前置引导常驻防回归），kernel 606 → 607，总数 1490 → 1491，0 failures。
 > 2026-08-18 DeepSeek 思考模式回传增量（未发布，版本号未定案）：LlmPayloadTest 8 → 11 用例（+3：deepseek 请求体回传 reasoning_content / 非 deepseek 端点不外泄 / 无思维链不带键）+ SessionManagerHistoryTest 3 → 5 用例（+2：历史拼接回传思维链 / 无键），kernel 607 → 612，总数 1491 → 1496，0 failures。
 > 2026-08-18 对话需求跟踪增量（未发布，版本号未定案）：SessionManagerHistoryTest 5 → 10 用例（+5：目标块单条当前重点 / 多条待办排序 / 过滤系统引导 / 限长最近 5 条 / 空列表 null）+ PromptEngineTest 47 → 48 用例（+1：对话需求纪律常驻），kernel 612 → 618，总数 1496 → 1502，0 failures。
+> v0.42.1 发布实测（2026-08-18）：kernel 618 + core 90 + shell 224 + browser 56 + 插件 514 = 1502 用例，0 failures。
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|

@@ -1189,4 +1189,21 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
    1480, 0 failures; browser 双套 28 用例 (McpAuthPolicyTest 7 × 2)。
 ⑥ 崩溃巡检: 无设备在线, 记录「待用户反馈」; 设备交付走自动更新链路。
 
+### 38. v0.42.1 发布实操 (自动更新对账 + DeepSeek 回传 + 对话需求跟踪, 2026-08-18)
+
+① **全量测试口径 1502**: kernel 618 + core 90 + shell 224 + browser 56 + 插件 514,
+   0 failures; 与开发指南 §3.7 增量行预计算完全一致, 无 NEW 失败, 无 flaky 复现。
+② **插件有变更必须同步**: 本轮 plugin-update (Kotlin 逻辑) + plugin-skill
+   (android.md 技能文档) 有变更 — build-plugins.ps1 构建 15 个 AAR 全量回写
+   plugins.json (15 条目, builtin version="" 语义不变), validate-plugins.ps1
+   PASS (仅已知自定义命名空间警告), 打 plugins-v0.42.1 tag 随 Shell 同批推送。
+③ **browser 无变更跳过构建**: git log v0.41.0..HEAD -- mengpaw-browser/ 为空 →
+   不构建 browser APK (v0.30.0 起只构建有变更的 APK)。
+④ **clean+assembleRelease 5m07s**: 本轮 shell 有变更走 clean 防脏缓存; 产物
+   mengpaw-shell-v0.42.1-release.apk (10.1MB), apksigner 证书
+   CN=MengPaw, OU=Studio, O=WowBlue 验证通过。
+⑤ **崩溃巡检**: 无设备在线 (adb devices 空), 记录「待用户反馈」; GITEE_TOKEN
+   就绪, 双平台 Release 同批创建。
+
+*最后更新: 2026-08-18 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 + §31 下载链路三坑 (Gitee 时序/源选择/主线程 ANR) + 设备交付流程变更 (不再 ADB 推送, v0.39.1) + §32 技能闭环三连 (删注释教训/reason 门禁表独立源/审计追执行链) + 腾讯记忆系统评审不入致谢 + §33 v0.40.0 发布实操四则 (用例数口径/Gitee 上传慢/origin 双 push/崩溃旧记录) + §34 v0.40.1 发布实操 (ANR 闭环/UI 入口统一线程纪律/读栈防误导/跨会话 diff 核对) + §35 气泡显示简化用户定案/GitHub push 网络波动复现 + §36 气泡重构 v0.40.2 发布实操 (2026-08-17) + §37 v0.41.0 发布实操 (2026-08-18) + §38 v0.42.1 发布实操 (2026-08-18)*
 *最后更新: 2026-08-18 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 + §31 下载链路三坑 (Gitee 时序/源选择/主线程 ANR) + 设备交付流程变更 (不再 ADB 推送, v0.39.1) + §32 技能闭环三连 (删注释教训/reason 门禁表独立源/审计追执行链) + 腾讯记忆系统评审不入致谢 + §33 v0.40.0 发布实操四则 (用例数口径/Gitee 上传慢/origin 双 push/崩溃旧记录) + §34 v0.40.1 发布实操 (ANR 闭环/UI 入口统一线程纪律/读栈防误导/跨会话 diff 核对) + §35 气泡显示简化用户定案/GitHub push 网络波动复现 + §36 气泡重构 v0.40.2 发布实操 (2026-08-17) + §37 v0.41.0 发布实操 (2026-08-18)*

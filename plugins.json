@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "dream-plugin",
@@ -31,7 +31,7 @@
       "commands": [],
       "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
       "size": 3129,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "tavily-plugin",
@@ -63,7 +63,7 @@
       ],
       "checksum": "sha256:547a7665041e90b2f5a9ae36fea44fa892b5954b0c30100740b8c286ad2da2f0",
       "size": 19074,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "framework-plugin",
@@ -93,7 +93,7 @@
       ],
       "checksum": "sha256:b3e9be0bd5587f2c8a755b82ab68c0d04ca00f72458785c31cd04abf5817e958",
       "size": 110868,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "fs-plugin",
@@ -132,7 +132,7 @@
       ],
       "checksum": "sha256:a78b37dc205343cb0c08f18ff77566c3b6edca5d62e6006814d656fefe5ba213",
       "size": 17951,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "memory-twin-plugin",
@@ -163,7 +163,7 @@
       ],
       "checksum": "sha256:50b874379adcb91aa5100cd4c2bc96252226a511d6bf44614fa4baf6d40c5927",
       "size": 243330,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "skill-plugin",
@@ -186,9 +186,9 @@
         "skill.enable",
         "skill.disable"
       ],
-      "checksum": "sha256:24a0222e3710cc45670991a9138f82da9043b0b32ffc5c068c319fcde271f6a7",
-      "size": 100922,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "checksum": "sha256:ec087eb82a508215514da02ad91bf2ec83397b48585f778142f61504a46f08fe",
+      "size": 101169,
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "clipboard-plugin",
@@ -206,7 +206,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "dev-plugin",
@@ -227,7 +227,7 @@
       ],
       "checksum": "sha256:66f20d2156a2b49e3995b4f5eed056562a8666c2c3c747df4df017ac58e111d5",
       "size": 35337,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "update-plugin",
@@ -249,9 +249,9 @@
         "update.install",
         "update.auto"
       ],
-      "checksum": "sha256:aa3d0bd37df5b0e08cd279c5a1fc6dc4df2a5ad095329ddbf49ab4aa211feb6a",
-      "size": 48237,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "checksum": "sha256:261ebbd0a87ae69fb2de33391e4fcbfa0411972e09f25a88993644a261531e1c",
+      "size": 51100,
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "translate-plugin",
@@ -363,7 +363,7 @@
       ],
       "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
       "size": 282877,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "comfy-plugin",
@@ -488,7 +488,7 @@
       ],
       "checksum": "sha256:32c402304b4190083c209773186368460ab813a757bc4a356d61ba03d5fdf21b",
       "size": 46842,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "termux-plugin",
@@ -507,7 +507,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "tools-plugin",
@@ -526,7 +526,7 @@
       ],
       "checksum": "sha256:fd6cf25efe806029cda88f3c47e40eec4b31cfee1128df50b28af5fe77ea0da2",
       "size": 36752,
-      "changelog": "### 新增\n- **MiniMax 供应商接入 (v0.41.0)**: 预置 MiniMax (稀宇科技) — 端点\n  `https://api.minimaxi.com/v1/chat/completions`, Bearer 认证, 模型 MiniMax-M3\n  (1M 上下文, 旗舰) / M2.7~M2 全系; 思维链两种官方形态全支持 — `<think>` 内联剥离\n  (ThinkTagSplitter 跨 chunk 拆分) 与 `reasoning_details` 数组 (流式全文 buffer 增量去重);\n  预置供应商按首字母排序\n- **浏览器 MCP 开放模式 (v0.8.1)**: 第三方 AI Agent 可经 127.0.0.1:9880 免认证控制\n  浏览器 (Playwright 式, 仅回环) — 设置 →「开放 MCP 控制」显式开启, 默认关闭保持\n  签名级安全模型; 认证策略抽为纯函数 McpAuthPolicy + 7 用例单测锁定; /health 返回\n  openMode 供第三方探测; am 桥 signature "
+      "changelog": "### 修复\n- **自动更新安装结果对账 (v0.42.1)**: 系统安装器是外部异步流程, App 无法感知安装\n  结果 — 安装生效后 `updates` 目录残留 APK, 设置页 `readyToInstall` 只认文件存在,\n  新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复: 每次启动与设置页\n  刷新对账 — 已下载 Shell APK 版本 ≤ 当前版本即删除并清除待安装状态; 用户取消安装\n  (版本未变) 时 APK 保留可重试\n- **思考气泡取消路径收口 (v0.42.1)**: 用户点停止按钮 / 切换智能体 / 撤回消息 →\n  `engine.stop()` 取消 `run()`, 原实现 `CancellationException` 分支只取消播放协程就\n  re-throw, 思考容器残留 `isRunning=true` 恒显「思考中…」转圈 — 取消分支补\n  `coordinator.finish()` + `writer.fail(\"已停止执行\")` 折叠容器并退出运行态\n- **DeepSeek 思考模式多轮工具调用回传"
     },
     {
       "id": "connector-openclaw-plugin",
