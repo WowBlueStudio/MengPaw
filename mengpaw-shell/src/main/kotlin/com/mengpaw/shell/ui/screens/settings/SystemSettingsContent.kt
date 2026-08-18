@@ -426,7 +426,7 @@ fun SystemSettingsContent(
 
     SectionHeader(state.strings.about)
     InfoRow(state.strings.version, com.mengpaw.kernel.AgentEngine.CORE_VERSION)
-    InfoRow(state.strings.core, "mengpaw-core")
+    InfoRow(state.strings.core, "MengPaw Harness")
 
     Spacer(Modifier.height(ArcoSpacing.md))
     SectionHeader(state.strings.systemLegalContact)

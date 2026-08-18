@@ -6,6 +6,8 @@
 
 > **Agent 通过内置 CLI 操控自身，API Key 是唯一安全禁区。**
 
+**Agent = Model + Harness** — MengPaw 是一个跨平台 Agent Harness：纯 JVM 的微内核（`mengpaw-kernel`）是 Harness 运行时本体，可拆出适配任意系统；Android 能力层与宿主应用围绕它分层搭建。
+
 ## Why MengPaw
 
 中国的数字生态是被切碎的——微信能发消息不能管文件，米家能控小米设备不认华为，各种 AI 能聊天但不能"活着"。用户不缺能力，缺的是**轮毂**。

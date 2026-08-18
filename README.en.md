@@ -4,6 +4,8 @@ A self-bootstrapping Android OS framework for Agents.
 
 > **The Agent controls itself through built-in CLI commands; the API key is the only forbidden zone.**
 
+**Agent = Model + Harness** — MengPaw is a cross-platform Agent Harness: the pure-JVM microkernel (`mengpaw-kernel`) is the portable Harness runtime that adapts to any system, with the Android capability layer and host app built around it.
+
 ## Why MengPaw
 
 China's digital ecosystem is fragmented — WeChat can message but not manage files, Mi Home controls Xiaomi devices but ignores Huawei, and various AIs can chat but cannot truly "live". Users don't lack capabilities; they lack a **hub**.

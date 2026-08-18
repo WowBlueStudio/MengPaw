@@ -78,7 +78,7 @@ val EnglishStrings = AppStrings().apply {
 
     about = "About"
     version = "Version"
-    core = "Core"
+    core = "Core Framework"
     design = "Design"
     resetDefaults = "Reset to Defaults"
 

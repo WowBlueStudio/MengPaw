@@ -78,7 +78,7 @@ val ChineseStrings = AppStrings().apply {
 
     about = "关于"
     version = "版本"
-    core = "内核 (Core)"
+    core = "核心框架"
     design = "设计 (Design)"
     resetDefaults = "恢复默认设置"
 
