@@ -209,6 +209,7 @@ val ChineseStrings = AppStrings().apply {
     frameworkTestingConnection = "正在测试连接..."
     frameworkTavilyKey = "Tavily API Key"
     frameworkTavilyKeyDesc = "内置 Tavily 网页搜索的 API Key，可直接填写保存，留空则不配置。"
+    frameworkTavilyKeySubtitle = "申请 Tavily API 之后，可以免费提升搜索性能"
     frameworkTavilyKeyConfigured = "已配置"
     frameworkTavilyKeyNotConfigured = "未配置"
     frameworkTavilyKeySave = "保存"

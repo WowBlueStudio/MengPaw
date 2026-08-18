@@ -253,6 +253,10 @@ fun FrameworkSettingsContent(
 
     // ── Tavily API Key (v0.43.x) — 内置 Tavily 搜索插件的 key 入口 ──
     SectionHeader(state.strings.frameworkTavilyKey)
+    Spacer(Modifier.height(4.dp))
+    Text(state.strings.frameworkTavilyKeySubtitle,
+        style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary)
+    Spacer(Modifier.height(ArcoSpacing.sm))
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(ArcoRadius.lg),

@@ -209,6 +209,7 @@ val EnglishStrings = AppStrings().apply {
     frameworkTestingConnection = "Testing connection..."
     frameworkTavilyKey = "Tavily API Key"
     frameworkTavilyKeyDesc = "API key for the built-in Tavily web search. Fill in and save directly; leave blank to not configure."
+    frameworkTavilyKeySubtitle = "After getting a Tavily API, you can boost search performance for free"
     frameworkTavilyKeyConfigured = "Configured"
     frameworkTavilyKeyNotConfigured = "Not configured"
     frameworkTavilyKeySave = "Save"

@@ -220,6 +220,7 @@ class AppStrings {
     var frameworkTestingConnection: String = ""
     var frameworkTavilyKey: String = ""
     var frameworkTavilyKeyDesc: String = ""
+    var frameworkTavilyKeySubtitle: String = ""
     var frameworkTavilyKeyConfigured: String = ""
     var frameworkTavilyKeyNotConfigured: String = ""
     var frameworkTavilyKeySave: String = ""
