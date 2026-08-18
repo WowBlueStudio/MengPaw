@@ -1290,4 +1290,20 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   文档,避免后续会话重复侦查;技能沉淀放到 `~/.codex/skills/`(Codex 权威位置),项目内 `.claude/skills/`
   为兼容保留以 Codex 为准。
 
-*最后更新: 2026-08-18 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 + §31 下载链路三坑 (Gitee 时序/源选择/主线程 ANR) + 设备交付流程变更 (不再 ADB 推送, v0.39.1) + §32 技能闭环三连 (删注释教训/reason 门禁表独立源/审计追执行链) + 腾讯记忆系统评审不入致谢 + §33 v0.40.0 发布实操四则 (用例数口径/Gitee 上传慢/origin 双 push/崩溃旧记录) + §34 v0.40.1 发布实操 (ANR 闭环/UI 入口统一线程纪律/读栈防误导/跨会话 diff 核对) + §35 气泡显示简化用户定案/GitHub push 网络波动复现 + §36 气泡重构 v0.40.2 发布实操 (2026-08-17) + §37 v0.41.0 发布实操 (2026-08-18) + §38 v0.42.1 发布实操 (2026-08-18) + §39 v0.42.2 发布实操 (2026-08-18) + §40 v0.42.3 发布实操 (2026-08-18) + §41 v0.42.4 发布实操 (2026-08-18) + §42 发布流程简化定案 (2026-08-18) + §43 接手与知识沉淀 (2026-08-18)*
+### 44. v0.42.5 发布实操 (Tavily API Key 配置入口, 2026-08-19)
+
+① **GITEE_TOKEN 在 User 作用域, 进程不继承**: 发布 Agent 的 `pwsh` 每次调用都是全新进程,
+   `$env:GITEE_TOKEN` 读不到用户终端里设的变量。注册在系统/用户作用域时, 用
+   `[System.Environment]::GetEnvironmentVariable('GITEE_TOKEN','User')` 显式读入当前进程即可。
+   验证: 调 `https://gitee.com/api/v5/user?access_token=...` 确认能认证。别让「缺失」中断整个发布——
+   先检查 User/Machine 作用域再判缺失。
+② **插件同步触发条件**: `git log v0.42.4..HEAD -- plugins/ plugins.json` 命中 plugin-tavily
+   (companion 存储/状态 API 重构) → 必须走 build-plugins.ps1 + validate-plugins.ps1 + plugins-v tag +
+   双平台 Release 附 AAR(15 个)。内置插件 version="" 语义不变, 脚本只回写 checksum/size/changelog。
+③ **全量测试口径 1543**: kernel 619 + core 116 + shell 232 + browser 56 + 插件 520, 0 failures,
+   与 v0.42.4 持平 (Tavily 入口 UI + companion 重构无新增用例)。
+④ browser 无变更跳过构建; shell 构建 `clean :mengpaw-shell:assembleRelease` 8m23s。
+⑤ 双远端推送 + 双平台 Release(§5)一次到位: origin 双 push URL 同时推 GitHub+Gitee,
+   Gitee release 经 API 创建 (target_commitish 取 tag SHA) + curl -F 上传 APK, 均已验证。
+
+*最后更新: 2026-08-19 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 + §31 下载链路三坑 (Gitee 时序/源选择/主线程 ANR) + 设备交付流程变更 (不再 ADB 推送, v0.39.1) + §32 技能闭环三连 (删注释教训/reason 门禁表独立源/审计追执行链) + 腾讯记忆系统评审不入致谢 + §33 v0.40.0 发布实操四则 (用例数口径/Gitee 上传慢/origin 双 push/崩溃旧记录) + §34 v0.40.1 发布实操 (ANR 闭环/UI 入口统一线程纪律/读栈防误导/跨会话 diff 核对) + §35 气泡显示简化用户定案/GitHub push 网络波动复现 + §36 气泡重构 v0.40.2 发布实操 (2026-08-17) + §37 v0.41.0 发布实操 (2026-08-18) + §38 v0.42.1 发布实操 (2026-08-18) + §39 v0.42.2 发布实操 (2026-08-18) + §40 v0.42.3 发布实操 (2026-08-18) + §41 v0.42.4 发布实操 (2026-08-18) + §42 发布流程简化定案 (2026-08-18) + §43 接手与知识沉淀 (2026-08-18) + §44 v0.42.5 发布实操 (2026-08-19)*
