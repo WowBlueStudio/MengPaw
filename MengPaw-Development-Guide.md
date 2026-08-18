@@ -557,6 +557,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > v0.42.2 发布实测（2026-08-18）：kernel 619 + core 116 + shell 224 + browser 56 + 插件 514 = 1529 用例，0 failures。增量：kernel +1（RiskGateTest 无障碍命令分级），core +26（AccessibilitySnapshotTest 6 + AccessibilityExecutorTest 7 + SysExecutorTest 命令表 85→93 口径 + 既有用例对齐），shell/browser/插件不变（UI 重构无新增用例）。
 > v0.42.3 发布实测（2026-08-18）：kernel 619 + core 116 + shell 232 + browser 56 + 插件 520 = 1543 用例，0 failures。增量：shell +8（BangResultMessageTest 4 × 双套），plugin-update +6（installVersionError / pruneBelowLatestApks / 空目录安全 3 × 双套）。
 > v0.42.4 发布实测（2026-08-18）：kernel 619 + core 116 + shell 232 + browser 56 + 插件 520 = 1543 用例，0 failures。增量：无（思考气泡层级 UI 重构无新增用例）。
+> v0.42.5 发布实测（2026-08-19）：kernel 619 + core 116 + shell 232 + browser 56 + 插件 520 = 1543 用例，0 failures。增量：无（Tavily API Key 设置入口 + plugin-tavily companion 存储 API 重构无新增用例）。
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|

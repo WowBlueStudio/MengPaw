@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.42.5 (2026-08-19) — Tavily API Key 配置入口
+
+### 新增
+- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方
+  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +
+  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题
+  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`
+  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志
+  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。
+  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。
+
+### 修复
+- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.42.5-release.apk` (versionCode 42005)
+- Browser APK: 本轮无变更, 不构建
+- 插件: plugin-tavily 有变更 (新增公共设置页存储/状态 API) — 构建 AAR 回写 plugins.json,
+  打 `plugins-v0.42.5` tag, GitHub Release 附 AAR
+- 测试: 全量 1543 用例 0 failures (kernel 619 + core 116 + shell 232 + browser 56 + 插件 520)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.42.4 (2026-08-18) — 思考气泡层级定案改回
 
 ### 修复

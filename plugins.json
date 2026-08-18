@@ -1,7 +1,7 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
   "version": 9,
-  "updated": "2026-08-18",
+  "updated": "2026-08-19",
   "plugins": [
     {
       "id": "concise-plugin",
@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "dream-plugin",
@@ -31,7 +31,7 @@
       "commands": [],
       "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
       "size": 3129,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "tavily-plugin",
@@ -61,9 +61,9 @@
         "tavily.extract",
         "tavily.setup"
       ],
-      "checksum": "sha256:547a7665041e90b2f5a9ae36fea44fa892b5954b0c30100740b8c286ad2da2f0",
-      "size": 19074,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "checksum": "sha256:ab121f541be212f54a85949a8df59fadf1ab181baadd0019bb8fa3e175a601e9",
+      "size": 21596,
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "framework-plugin",
@@ -93,7 +93,7 @@
       ],
       "checksum": "sha256:b3e9be0bd5587f2c8a755b82ab68c0d04ca00f72458785c31cd04abf5817e958",
       "size": 110868,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "fs-plugin",
@@ -132,7 +132,7 @@
       ],
       "checksum": "sha256:a78b37dc205343cb0c08f18ff77566c3b6edca5d62e6006814d656fefe5ba213",
       "size": 17951,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "memory-twin-plugin",
@@ -163,7 +163,7 @@
       ],
       "checksum": "sha256:50b874379adcb91aa5100cd4c2bc96252226a511d6bf44614fa4baf6d40c5927",
       "size": 243330,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "skill-plugin",
@@ -188,7 +188,7 @@
       ],
       "checksum": "sha256:ec087eb82a508215514da02ad91bf2ec83397b48585f778142f61504a46f08fe",
       "size": 101169,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "clipboard-plugin",
@@ -206,7 +206,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "dev-plugin",
@@ -227,7 +227,7 @@
       ],
       "checksum": "sha256:66f20d2156a2b49e3995b4f5eed056562a8666c2c3c747df4df017ac58e111d5",
       "size": 35337,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "update-plugin",
@@ -251,7 +251,7 @@
       ],
       "checksum": "sha256:7622e5e5136a7301d3e152056b8f4845f00e88144ba8cc36da96c58804d32bc1",
       "size": 52305,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "translate-plugin",
@@ -363,7 +363,7 @@
       ],
       "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
       "size": 282877,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "comfy-plugin",
@@ -488,7 +488,7 @@
       ],
       "checksum": "sha256:32c402304b4190083c209773186368460ab813a757bc4a356d61ba03d5fdf21b",
       "size": 46842,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "termux-plugin",
@@ -507,7 +507,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "tools-plugin",
@@ -526,7 +526,7 @@
       ],
       "checksum": "sha256:fd6cf25efe806029cda88f3c47e40eec4b31cfee1128df50b28af5fe77ea0da2",
       "size": 36752,
-      "changelog": "### 修复\n- **防残留旧包装错版本 (v0.42.3)**: 0.41.0 用户复现 — updates 目录残留旧 APK 时,\n  设置页 `hasDownloaded` 按文件名扫描命中旧包, 显示「安装」而非「下载」, 点击安装的\n  是旧包, 导致无法升级。加固: ① `update.install` 增加版本校验 — 待安装包不高于\n  当前版本 (残留/重复包) 或低于最新版本 (中间残留包) 直接删除并提示重新下载;\n  ② `update.check` 发现新版本时清理低于最新版的残留包; ③ `update.download`\n  下载前清理同目标旧 APK, 防下载失败残留\n- **bang 命令结果气泡定案 (v0.42.3)**: `!命令` 执行结果直接返回 — 成功且输出为\n  空值时不追加气泡; 成功有输出返回灰气泡 (CommandResult 正常样式); 失败返回红气泡\n  (error 为空兜底「命令执行失败」)。不引入\"执行中\"气泡 (用户定案, 避免闭环负担);\n  输出保留原文 (空判定用 isBlank, 不 trim), 超长截断"
+      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
     },
     {
       "id": "connector-openclaw-plugin",
