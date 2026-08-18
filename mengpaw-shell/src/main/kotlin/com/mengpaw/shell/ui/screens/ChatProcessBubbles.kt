@@ -32,132 +32,105 @@ import com.mengpaw.design.tokens.ArcoRadius
 import com.mengpaw.design.tokens.ArcoSpacing
 
 // ═══════════════════════════════════════════════════════════════════════
-// v0.34.3 气泡 UI 重构: 思考过程容器 + 最终答案
-// 时间轴主导: 思考/调用/观察循环收进单一可折叠容器, 最终答案独立气泡。
-// 工具行只显示命令名 (失败红字), 观察全文点击展开; 思考全文保留可回看;
-// 折叠态显示 "N 轮思考 · M 次调用" 摘要。
+// v0.34.3 气泡 UI 重构 → 2026-08-18 用户定案改回 (推翻 v0.42.2 逐轮折叠):
+// 一次任务 = 思考过程容器 (一级折叠: 答案前的全部过程一个折叠) + 最终答案气泡。
+// 一级折叠: 跨所有轮次整体收起/展开, 运行中强制展开, 回答开始后默认收起;
+// 每轮 ProcessStep 渲染为独立气泡 (无折叠头, 思维链全文直展);
+// 工具调用+调用结果每组二级折叠 (默认收起, 无气泡底色);
+// 思考区相比回答气泡左右各缩进 8dp。
 // ═══════════════════════════════════════════════════════════════════════
 
 @Composable
 fun ThinkingProcessBubble(message: ChatMessageUi.ThinkingProcess, agentName: String = "MengPaw") {
-    Column(Modifier.fillMaxWidth()) {
-        // ── Agent 头 (v0.42.2): 思考过程归属 Agent 消息, 内部每轮独立嵌套气泡 ──
+    // 一级折叠: 运行中强制展开; 最终答案开始后 (collapsed=true) 默认收起; 手动状态跨重组保留
+    var containerExpanded by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(message.isRunning, message.collapsed) {
+        if (message.isRunning) containerExpanded = true
+        else if (message.collapsed) containerExpanded = false
+    }
+
+    // 思考区整体比回答气泡 (fillMaxWidth(0.9f)) 左右各缩进 8dp
+    Column(Modifier.fillMaxWidth(0.9f).padding(horizontal = 8.dp)) {
+        // ── Agent 头: 与最终答案气泡一致 ──
         Row(
-            Modifier.fillMaxWidth(0.95f).padding(horizontal = ArcoSpacing.sm, vertical = 4.dp),
+            Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.sm, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AgentBubbleHeader(agentName = agentName, executionMode = message.executionMode,
                 agentRef = message.agentRef)
         }
 
-        // ── 运行态总状态行 (不参与折叠): 思考中 + 轮次/调用摘要 ──
+        // ── 运行态总状态行 (不参与折叠): 思考中 + spinner ──
         if (message.isRunning) {
             Row(
-                Modifier.fillMaxWidth(0.95f).padding(horizontal = ArcoSpacing.sm, vertical = 4.dp),
+                Modifier.fillMaxWidth().padding(horizontal = ArcoSpacing.sm, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
                 Spacer(Modifier.width(6.dp))
                 Text("思考中…", style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
-                val summary = buildList {
-                    if (message.steps.isNotEmpty()) add("${message.steps.size} 轮思考")
-                    if (message.toolCount > 0) add("${message.toolCount} 次调用")
-                }.joinToString(" · ")
-                if (summary.isNotEmpty()) {
-                    Spacer(Modifier.width(8.dp))
-                    Text(summary,
-                        style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-                }
                 Spacer(Modifier.width(8.dp))
                 CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp,
                     color = ThemeColors.brand)
             }
         }
 
-        // ── 每轮独立思考气泡 — 独立折叠, 折叠互不影响 ──
-        message.steps.forEachIndexed { i, step ->
-            ThinkingStepBubble(
-                step = step,
-                index = i,
-                stepCount = message.steps.size,
-                isRunning = message.isRunning,
-                autoCollapsed = message.collapsed,
-            )
+        // ── 一级折叠头: 整个思考过程 (跨所有轮次) 收起/展开 ──
+        Row(
+            Modifier.fillMaxWidth()
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { containerExpanded = !containerExpanded }
+                .padding(horizontal = ArcoSpacing.sm, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(if (containerExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                null, Modifier.size(16.dp), tint = ThemeColors.brand)
+            Spacer(Modifier.width(6.dp))
+            Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
+            Spacer(Modifier.width(6.dp))
+            Text("思考过程", style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
+        }
+
+        // ── 展开内容: 每轮独立思考气泡 — 无折叠头, 思维链全文直展 ──
+        AnimatedVisibility(visible = containerExpanded) {
+            Column {
+                message.steps.forEach { step -> ThinkingStepBubble(step = step) }
+            }
         }
     }
 }
 
 /**
- * 单轮思考嵌套气泡 (v0.42.2) — 每轮思维链独立气泡外观, 内部工具块各自独立折叠;
- * 折叠工具调用 (ProcessToolRow) 不再连带折叠该轮思维链。
- * 折叠策略沿用 v0.40.2: 运行中强制展开 (思考可见); 最终答案开始 (autoCollapsed=true)
- * 默认收起, 用户手动展开/收起跨重组保留。
+ * 单轮思考气泡 (2026-08-18 用户定案) — 每轮思维链独立气泡外观, 无折叠头
+ * (不做二级折叠); 内部工具调用+调用结果各自二级折叠 (默认收起, 无气泡底色)。
  */
 @Composable
-private fun ThinkingStepBubble(
-    step: ChatMessageUi.ProcessStep,
-    index: Int,
-    stepCount: Int,
-    isRunning: Boolean,
-    autoCollapsed: Boolean,
-) {
+private fun ThinkingStepBubble(step: ChatMessageUi.ProcessStep) {
     val hasThought = step.thought.isNotBlank()
     val hasTools = step.tools.isNotEmpty()
     if (!hasThought && !hasTools) return
 
-    var expanded by rememberSaveable("thinking_step_$index") { mutableStateOf(true) }
-    LaunchedEffect(isRunning, autoCollapsed) {
-        if (isRunning) expanded = true
-        else if (autoCollapsed) expanded = false
-    }
-
     Surface(
         shape = RoundedCornerShape(ArcoRadius.md),
         color = ThemeColors.bgCardHigh,
-        modifier = Modifier.fillMaxWidth(0.95f).padding(bottom = ArcoSpacing.sm)
+        modifier = Modifier.fillMaxWidth().padding(bottom = ArcoSpacing.sm)
     ) {
-        Column {
-            // ── 折叠头: 第 N 轮思考 · 摘要 — 点击折叠/展开本气泡 ──
-            Row(
-                Modifier.fillMaxWidth()
-                    .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { expanded = !expanded }
-                    .padding(horizontal = ArcoSpacing.sm, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                    null, Modifier.size(16.dp), tint = ThemeColors.brand)
-                Spacer(Modifier.width(6.dp))
-                Icon(Icons.Outlined.Psychology, null, Modifier.size(16.dp), tint = ThemeColors.brand)
-                Spacer(Modifier.width(6.dp))
-                Text(if (stepCount > 1) "第 ${index + 1} 轮思考" else "思考",
-                    style = MaterialTheme.typography.labelSmall, color = ThemeColors.brand)
-                if (hasTools) {
-                    Spacer(Modifier.width(8.dp))
-                    Text("${step.tools.size} 次调用",
-                        style = MaterialTheme.typography.labelSmall, color = ThemeColors.textSecondary)
-                }
+        Column(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = ArcoSpacing.sm)) {
+            if (hasThought) {
+                // 思考支持 Markdown (v0.37.3) — nestedScroll: 外层 LazyColumn 已有滚动
+                com.mengpaw.design.components.MarkdownText(
+                    content = step.thought,
+                    textStyle = MaterialTheme.typography.bodySmall.copy(color = ThemeColors.textSecondary),
+                    nestedScroll = true
+                )
+                if (hasTools) Spacer(Modifier.height(6.dp))
             }
-            // ── 展开内容: 思维链全文 + 独立工具折叠块 ──
-            AnimatedVisibility(visible = expanded) {
-                Column(Modifier.padding(start = ArcoSpacing.sm, end = ArcoSpacing.sm, bottom = ArcoSpacing.sm)) {
-                    if (hasThought) {
-                        // 思考支持 Markdown (v0.37.3) — nestedScroll: 外层 LazyColumn 已有滚动
-                        com.mengpaw.design.components.MarkdownText(
-                            content = step.thought,
-                            textStyle = MaterialTheme.typography.bodySmall.copy(color = ThemeColors.textSecondary),
-                            nestedScroll = true
-                        )
-                        if (hasTools) Spacer(Modifier.height(6.dp))
-                    }
-                    // 工具块 — 各自独立折叠, 不连带思维链
-                    step.tools.forEach { tool -> ProcessToolRow(tool) }
-                }
-            }
+            // 工具块 — 调用+结果每组二级折叠, 默认收起, 无气泡底色
+            step.tools.forEach { tool -> ProcessToolRow(tool) }
         }
     }
 }
 
-/** 工具调用折叠行 — 只显示命令名; 失败红字; 点击展开参数与观察全文。 */
+/** 工具调用+调用结果二级折叠行 — 只显示命令名; 失败红字; 默认收起, 点击展开参数与观察全文 (无气泡底色)。 */
 @Composable
 private fun ProcessToolRow(tool: ChatMessageUi.ProcessTool) {
     var showDetail by remember(tool.command) { mutableStateOf(false) }

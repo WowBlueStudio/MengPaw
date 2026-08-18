@@ -155,7 +155,7 @@ Final Answer: 你的电量是 85%……
 
 UI 侧从"每 ReAct 步骤一个气泡"改为**时间轴主导**（`ThinkingProcessWriter` 写入，`MainScreen.reflowLegacyMessages` 渲染）：
 
-- **思考过程容器** (`ChatMessageUi.ThinkingProcess`)：单一可折叠，跨所有轮次。思考流式写入（`pushThought`）；完整 `Action:` 行出现即插入折叠工具行（`addTool`，只显示命令名）；工具完成挂观察全文 + 成败（`completeTool`，失败红字，点击展开参数+观察）。折叠态显示 "N 轮思考 · M 次调用" 摘要，展开可回看全部思考。
+- **思考过程容器** (`ChatMessageUi.ThinkingProcess`)：一级折叠容器，跨所有轮次，折叠头「思考过程」收起答案前的全部过程（运行中强制展开，回答开始后默认收起）。思考流式写入（`pushThought`）；完整 `Action:` 行出现即插入工具行（`addTool`，只显示命令名）；工具完成挂观察全文 + 成败（`completeTool`，失败红字，点击展开参数+观察）。每轮 `ProcessStep` 渲染为独立气泡（无折叠头，思维链全文直展），工具调用+调用结果每组二级折叠（默认收起，无气泡底色）；思考区相比回答气泡左右各缩进 8dp。
 - **最终答案气泡** (`ChatMessageUi.FinalAnswer`)：独立气泡。`onDelta` 用**原始增量累积**检测 `Final Answer:`（显示文本会剥离标记，不能用于检测）→ `beginFinalAnswer` 同步折叠过程容器 → 答案流式（`pushFinal`）→ `applyFinalResult.finalize` 定型。
 - **历史统一重排**：`reflowLegacyMessages` 渲染层把旧 `agent_step`/`agent_trace` 序列合并为过程容器 + 最终答案，新旧会话视觉一致；持久化新增 `thinking_process`/`final_answer` 类型（默认值兼容旧文件）。
 
