@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.42.2 (2026-08-18) — 无障碍服务接入（开发中，未发布）
+
+### 新增
+- **无障碍屏幕级操控 (v0.42.2)**: 新增系统无障碍服务 (`MengPawAccessibilityService`),
+  用户需在系统『无障碍』手动开启。Agent 经 `sys.accessibility.*` 命令驱动:
+  `status` (服务状态) | `dump` (读取当前屏幕控件树 JSON, 深度/节点数可限) |
+  `click <x> <y>|--text <文本>|--id <viewId>` (坐标/文本/控件 id 点击) |
+  `swipe <x1> <y1> <x2> <y2> [--duration ms]` | `input <文本>` (写入聚焦输入框) |
+  `back` / `home` / `recents` (全局导航)。安全分级: dump MID (读屏), 模拟操作全部
+  HIGH (弹窗确认); 服务被动响应命令, 不监听/记录无障碍事件。Manifest 声明 +
+  `accessibility_service_config.xml` + 中英服务描述, 系统提示词/开发指南/无障碍指南同步
+
 ## v0.42.1 (2026-08-18) — 自动更新对账 + DeepSeek 思维链回传 + 对话需求跟踪
 
 ### 修复

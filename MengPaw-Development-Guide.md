@@ -961,7 +961,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 **dev 插件扩展 (6)**：`create --type script|native --name <name> [--author <作者>] [--desc <描述>]` | `audit --target <id>` | `share --plugin <id> --to <target>` | `examples` | `keywords --target <id>` | `guide`
 > dev 插件的命令实际注册为 `dev.plugin.create` / `dev.plugin.audit` / `dev.plugin.share` / `dev.plugin.examples` / `dev.plugin.keywords` / `dev.plugin.guide`，因为 PluginManager 根据插件 ID (`dev-plugin`) 自动派生命名空间 `dev`。`plugin.create` 在 CLI 文档中出现时均指 `dev.plugin.create`。`dev.plugin.guide` 输出能力边界文档并落盘 `插件文档/plugin-dev-guide.md` 供用户阅读。
 
-#### sys — Android 系统 (85 命令，通过 Android 适配层注入)
+#### sys — Android 系统 (93 命令，通过 Android 适配层注入)
 
 **设备信息 (1)**: `device` (型号/厂商/SDK/架构)
 
@@ -1001,6 +1001,8 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 > **权限前置 (2026-08-18, Agent 认知层)**: 本组命令依赖 Android 运行时权限 — Agent 执行前先 `sys.permission.check <权限名>`，未授予先 `sys.permission.request <权限名>` 弹窗引导用户授权；已同步注入系统提示词 (PromptEngine 命令双轨) 与 android 技能文档 (执行前置)，禁止 Agent 绕路或谎报已执行。
 
 **其他设备能力 (9)**: `download <url> [文件名]` | `download.status <id>` | `wallpaper.set <路径|content://>` | `toast <文本>` | `wakelock.acquire` / `wakelock.release` | `ir.transmit <频率> <时长...>` (需红外硬件) | `usb.list` | `usb.request <设备名>` (MID)
+
+**无障碍 (8, v0.42.2, 需用户先在系统『无障碍』手动开启服务; 执行前先 `accessibility.status` 确认)**: `accessibility.status` (LOW) | `accessibility.dump [--max N] [--depth N]` (读取屏幕控件树 JSON, 读屏 MID) | `accessibility.click <x> <y>|--text <文本>|--id <viewId>` (坐标/文本/viewId 点击) | `accessibility.swipe <x1> <y1> <x2> <y2> [--duration ms]` | `accessibility.input <文本>` (写入聚焦输入框) | `accessibility.back` | `accessibility.home` | `accessibility.recents` — 模拟操作类全部 HIGH (弹窗确认)
 
 **权限 (3)**: `permission.list` | `permission.request <name>` | `permission.check <name>`
 

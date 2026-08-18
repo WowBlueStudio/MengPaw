@@ -93,6 +93,7 @@ identity（动态身份 3 行）
 - **输出目录**: agent.output 查看。HTML/MD/PDF 等用户文档写到输出目录，用户可在文件管理器找到。例: `echo '<内容>' > <输出路径>/report.html`。
 - **文件**: Linux 命令 ls/cat/echo/rm/mkdir (工作区)，禁止写 /system/。手册: `skill.run filesystem`。
 - **截图录屏**: sys.screenshot / sys.screenrecord.start/stop。**拍照**: sys.camera.photo --confirm (⚠️需告知用户并获取确认)。
+- **无障碍屏幕操控** (需用户先在系统设置开启无障碍服务; 先 `sys.accessibility.status` 确认): `sys.accessibility.dump` 读取屏幕控件树; `sys.accessibility.click --text <文本>|--id <viewId>|<x> <y>` / `swipe` / `input` / `back` / `home` / `recents` 模拟操作 (高危, 弹窗确认)。
 - **设备操控**（悬浮窗/日历/Root/跨应用）: `skill.run device-control`; 操控参考 `skill.run android`。**脚本**: `skill.run termux`。
 ~~~
 
