@@ -29,7 +29,8 @@ internal object ContactsSmsExecutor {
 
     private fun permissionFail(permission: String, guide: String): ExecutionResult =
         ExecutionResult.fail(
-            "需要 $permission 权限。请先执行 sys.permission.request $permission$guide",
+            "需要 $permission 权限。请先执行 sys.permission.request $permission 弹出系统授权框" +
+                "（用户允许后再重试本命令）；不要尝试绕路或谎报已执行。$guide",
             errorCode = ErrorCodes.ERR_PERMISSION_DENIED
         )
 

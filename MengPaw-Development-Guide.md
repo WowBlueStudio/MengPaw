@@ -550,10 +550,11 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > 2026-08-18 浏览器开放模式增量（v0.41.0 发布实测）：McpAuthPolicyTest 7 用例（安全模式 fail-closed / 开放模式放行 / expected 空恒拒绝，双套 +14），browser 双套 42 → 56，总数 1466 → 1480，0 failures。
 > 2026-08-18 自动更新安装结果对账增量（未发布，版本号未定案）：UpdateLogicTest 21 → 24 用例（+3：安装结果对账清理 / 空目录安全 / 无 Context 安全，双套 +6），plugin-update 双套 42 → 48，插件 508 → 514，总数 1480 → 1486，0 failures。
 > 2026-08-18 思考气泡取消路径收口增量（未发布，版本号未定案）：ThinkingProcessWriterTest 10 → 12 用例（+2：fail 无最终答案停止容器+提示 / fail 替换流式半成品，双套 +4），shell 双套 220 → 224，总数 1486 → 1490，0 failures。
+> 2026-08-18 sys 敏感命令权限前置增量（未发布，版本号未定案）：PromptEngineTest 46 → 47 用例（+1：sys 敏感命令权限前置引导常驻防回归），kernel 606 → 607，总数 1490 → 1491，0 failures。
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 606 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) + **SseStreamParserTest 17 + LlmPayloadTest 8 + RemoteApiTest 5（v0.40.4 全厂商思维链解析直测 + 2026-08-17 五家官方流式夹具）** |
+| mengpaw-kernel | 607 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) + **SseStreamParserTest 17 + LlmPayloadTest 8 + RemoteApiTest 5（v0.40.4 全厂商思维链解析直测 + 2026-08-17 五家官方流式夹具）** + PromptEngineTest sys 权限前置 (未发布: 敏感命令先申请权限, +1) |
 | mengpaw-core | 90 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表、SkillSeeds hex |
 | mengpaw-shell | 224 | ComplexityDetector 分档、extractMedia 提取规则、会话 JSON 编解码 (含 v0.40.2 中断恢复归一化回归)、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 流式缓冲简化回归 (v0.40.2 重构 5) + BubbleStreamCoordinator 简化显示回归 (v0.40.1 6 → v0.40.2 8 → v0.40.3 11 思维链分流 → v0.40.4 12 交错到达完整显示；全量口径 debug+release 双套合并) + SettingsModelsPresetTest 预置名单/排序/最新旗舰/退役清理 (v0.41.0+，2026-08-17 更新) + ThinkingProcessWriter fail 停止收口 (未发布: 取消路径折叠容器, +2) |
 | mengpaw-browser | 56 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵、McpAuthPolicy 开放模式认证矩阵 (v0.41.0, 双套 +14) |
@@ -994,6 +995,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 **通知 (4)**: `notification.id` | `notification.send <title> <text>` | `notification.cancel <id>` | `notification.list` (需『通知使用权』, MID)
 
 **敏感数据 (5, 全部 MID)**: `contacts.list [条数]` (需 READ_CONTACTS) | `sms.send <号码> <内容>` (需 SEND_SMS) | `sms.list [条数]` (需 READ_SMS) | `calllog.list [条数]` (需 READ_CALL_LOG) | `phone.call <号码>` (需 CALL_PHONE)
+> **权限前置 (2026-08-18, Agent 认知层)**: 本组命令依赖 Android 运行时权限 — Agent 执行前先 `sys.permission.check <权限名>`，未授予先 `sys.permission.request <权限名>` 弹窗引导用户授权；已同步注入系统提示词 (PromptEngine 命令双轨) 与 android 技能文档 (执行前置)，禁止 Agent 绕路或谎报已执行。
 
 **其他设备能力 (9)**: `download <url> [文件名]` | `download.status <id>` | `wallpaper.set <路径|content://>` | `toast <文本>` | `wakelock.acquire` / `wakelock.release` | `ir.transmit <频率> <时长...>` (需红外硬件) | `usb.list` | `usb.request <设备名>` (MID)
 

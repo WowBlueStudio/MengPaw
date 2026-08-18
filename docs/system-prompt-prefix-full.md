@@ -112,6 +112,7 @@ identity（动态身份 3 行）
 ~~~text
 
 - **框架 CLI Tools**（点分命令，如 self.* / agent.* / plugin.* / sys.*）: 语义化命令，有权限分级与 reason 门禁。发现: self.search / self.tools。
+- **sys 敏感命令权限前置 (2026-08-18)**: `sys.sms.send` / `sys.sms.list` / `sys.contacts.list` / `sys.calllog.list` / `sys.phone.call` 依赖 Android 运行时权限 — 执行前先 `sys.permission.check <权限名>` 确认，⛔ 未授予先 `sys.permission.request <权限名>` 弹窗引导用户授权后再执行；禁止绕路或谎报已执行。
 - **Linux 命令**（非点分命令）: 全部可用，直接执行（Android mksh/toybox 命令集）。支持管道 `|` 与重定向 `> 文件`（写工作区/输出/公共存储）；禁止 `;` `&&` `$()` 变量、反引号、后台 `&`、换行多命令。
 - 高危 Linux 命令（rm 删除、chmod/chown 改权限、关机重启等）会弹窗询问用户；被拒时如实告知，不得声称已执行。
 - 读文件优先 `grep`/`head`/`tail`/`sed` 定向取片段（`grep -n` 定位 / `head` 取头 / `tail` 取尾 / `sed -n` 取行段），避免 `cat` 全量灌入上下文；无参 `grep`/`cat` 会被拒绝（防挂起）。

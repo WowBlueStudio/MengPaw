@@ -28,6 +28,18 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `sys sensitive commands permission precheck stays in prompt`() {
+        // 2026-08-18: 用户反馈 Agent 执行 sys.sms.send 等敏感命令前不知道先申请权限 (绕路)。
+        // 权限前置引导必须在系统提示词常驻, 防后续精简误删。
+        val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertTrue("提示词应含 sys 敏感命令权限前置节", prompt.contains("sys 敏感命令权限前置"))
+        assertTrue("应引导先检查权限", prompt.contains("sys.permission.check"))
+        assertTrue("应引导未授权先申请", prompt.contains("sys.permission.request"))
+        assertTrue("应覆盖短信命令", prompt.contains("sys.sms.send"))
+        assertTrue("应明确禁止绕路", prompt.contains("禁止绕路"))
+    }
+
+    @Test
     fun `evolution guide injected only when evolution data exists`() {
         // 三层十二问 1.1 (2026-08-09): 有进化数据 (失败档案/已登记指令) → 提示词注入进化系统引导;
         // 零数据 → 不注入 (零 token 开销)

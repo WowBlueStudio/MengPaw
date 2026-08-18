@@ -241,7 +241,12 @@ sys.sms.list [条数]               # 短信收件箱 (READ_SMS)
 sys.calllog.list [条数]           # 通话记录 (READ_CALL_LOG)
 sys.phone.call <号码>             # 直接拨号 (CALL_PHONE)
 ```
-- 权限不足时输出引导: 先 `sys.permission.request <权限名>`
+- **执行前置 (必须遵守, 2026-08-18)**: 这些命令都依赖 Android 运行时权限。
+  执行前先 `sys.permission.check <权限名>` 确认状态 — ⛔ 未授予时必须先
+  `sys.permission.request <权限名>` 弹出系统授权框 (需用户在弹窗点"允许"),
+  授权后再执行命令。**禁止**在未授权时尝试其它方式"变通"绕过, 也禁止谎报
+  已发送/已读取; 用户拒绝授权时如实告知, 并说明需要授权才能完成。
+- 权限不足时命令会输出引导: 先 `sys.permission.request <权限名>`
 
 ### 其他设备能力 (v0.36.x)
 ```
