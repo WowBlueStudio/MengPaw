@@ -189,7 +189,7 @@ fun MainScreen(
     )
 
     // ── Auto-scroll behavior (拆至 MainScreenScrollBehavior.kt) ──
-    rememberAutoScrollBehavior(listState, displayedMessages, isRunning, inputFocus)
+    rememberAutoScrollBehavior(listState, displayedMessages, isRunning)
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.fillMaxSize().widthIn(max = MAX_CONTENT_WIDTH.dp)) {
