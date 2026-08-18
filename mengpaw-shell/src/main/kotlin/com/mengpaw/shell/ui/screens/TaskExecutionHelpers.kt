@@ -131,10 +131,30 @@ internal fun runBangCommand(scope: CoroutineScope, session: AgentSession, origin
         } catch (e: Throwable) {
             ExecutionResult.fail(e.message ?: "未知错误", errorCode = ErrorCodes.ERR_INTERNAL)
         }
-        val truncated = (if (result.success) result.output else result.error ?: "命令执行失败")
-            .let { if (it.length > 4000) it.take(4000) + "\n\n...(输出过长, 已截断)" else it }
-        session.messages.update { it + ChatMessageUi.CommandResult(truncated, isError = !result.success) }
+        // v0.42.3 用户定案: 空结果不返回气泡; 成功=灰气泡, 失败=红气泡
+        bangResultMessage(result)?.let { text ->
+            session.messages.update { it + ChatMessageUi.CommandResult(text, isError = !result.success) }
+        }
     }
+}
+
+/**
+ * bang 命令结果 → 气泡文本 (v0.42.3 用户定案):
+ * - 成功且输出为空/空白 → null (不追加气泡)
+ * - 成功有输出 → 输出文本 (CommandResultBubble 灰气泡)
+ * - 失败 → 错误文本 (红气泡), error 为空时兜底 "命令执行失败"
+ */
+internal fun bangResultMessage(result: com.mengpaw.kernel.cli.ExecutionResult): String? {
+    val text = if (result.success) {
+        result.output
+    } else {
+        // 失败必返回红气泡 — error 为空/空白时兜底, 不落入"空值不返回"分支
+        result.error?.takeIf { it.isNotBlank() } ?: "命令执行失败"
+    }
+    // 仅成功且输出为空时跳过气泡 (v0.42.3 用户定案)
+    if (result.success && text.isBlank()) return null
+    // 空判定用 isBlank, 返回保留原文 (不 trim, 忠实呈现 Shell 输出)
+    return if (text.length > 4000) text.take(4000) + "\n\n...(输出过长, 已截断)" else text
 }
 
 /**
