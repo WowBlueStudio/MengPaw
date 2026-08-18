@@ -66,9 +66,56 @@ class TavilyPlugin : Plugin {
     companion object {
         /** 混淆密钥 (P2 折中 — 防目录浏览级泄露, 非真加密, 见类头注释)。 */
         private const val OBFUSCATION_KEY = 0x5A
+
+        /** 配置文件路径 — 与实例私有 getter 同源, 供 UI 设置页读写复用。 */
+        internal fun configFile(): File = File(com.mengpaw.kernel.DataPaths.CONFIG, "tavily.json")
+
+        /** 轻量混淆 (P2 折中, 见类头注释) — UTF-8 字节 XOR, 防"目录浏览即得明文"。
+         *  internal 为测试可见性 (编解码单测)。 */
+        internal fun obfuscate(plain: String): String {
+            val bytes = plain.toByteArray(Charsets.UTF_8)
+            for (i in bytes.indices) bytes[i] = (bytes[i].toInt() xor OBFUSCATION_KEY).toByte()
+            return String(bytes, Charsets.ISO_8859_1) // 逐字节映射, 不经 UTF-8 校验
+        }
+
+        /** internal 为测试可见性 (编解码单测)。 */
+        internal fun deobfuscate(encoded: String): String {
+            val bytes = encoded.toByteArray(Charsets.ISO_8859_1)
+            for (i in bytes.indices) bytes[i] = (bytes[i].toInt() xor OBFUSCATION_KEY).toByte()
+            return String(bytes, Charsets.UTF_8)
+        }
+
+        /**
+         * 供 Shell 框架设置页调用 — 写 API key 到 tavily.json (XOR 混淆落盘)。
+         * key 明文仅作为函数参数进入本调用, 不写日志、不回显; 返回是否成功。
+         */
+        fun saveApiKeyFromUi(key: String): Boolean = try {
+            configFile().parentFile?.mkdirs()
+            configFile().writeText(buildJsonObject { put("apiKey", "obf:" + obfuscate(key)) }.toString())
+            true
+        } catch (e: Exception) {
+            false
+        }
+
+        /** 供 Shell 框架设置页调用 — API key 是否已配置 (env 优先, 其次配置文件; 均按真实 key 判空)。 */
+        fun isApiKeyConfigured(): Boolean =
+            System.getenv("TAVILY_API_KEY")?.takeIf { it.isNotBlank() } != null || storedConfiguredKey().isNotEmpty()
+
+        /** 供 Shell 框架设置页调用 — 已配置 key 的长度 (仅回显长度, 不暴露明文)。 */
+        fun configuredApiKeyLength(): Int {
+            val env = System.getenv("TAVILY_API_KEY")?.takeIf { it.isNotBlank() }
+            return if (env != null) env.length else storedConfiguredKey().length
+        }
+
+        /** 从配置文件读取真实 key (兼容旧明文 + "obf:" 混淆), 空/缺失返回 ""。 */
+        internal fun storedConfiguredKey(): String = runCatching {
+            val obj = Json.parseToJsonElement(configFile().readText()).jsonObject
+            val stored = obj["apiKey"]?.jsonPrimitive?.content.orEmpty()
+            if (stored.startsWith("obf:")) deobfuscate(stored.removePrefix("obf:")) else stored
+        }.getOrDefault("")
     }
 
-    private val configFile: File get() = File(com.mengpaw.kernel.DataPaths.CONFIG, "tavily.json")
+    private val configFile: File get() = configFile()
 
     /**
      * API key: env 优先, 其次配置文件 (tavily.setup 写入)。
@@ -84,19 +131,11 @@ class TavilyPlugin : Plugin {
             }.getOrDefault("")
 
     /** 轻量混淆 (P2 折中, 见类头注释) — UTF-8 字节 XOR, 防"目录浏览即得明文"。
-     *  internal 为测试可见性 (编解码单测)。 */
-    internal fun obfuscate(plain: String): String {
-        val bytes = plain.toByteArray(Charsets.UTF_8)
-        for (i in bytes.indices) bytes[i] = (bytes[i].toInt() xor OBFUSCATION_KEY).toByte()
-        return String(bytes, Charsets.ISO_8859_1) // 逐字节映射, 不经 UTF-8 校验
-    }
+     *  internal 为测试可见性 (编解码单测); 委托 companion 避免重复实现。 */
+    internal fun obfuscate(plain: String): String = Companion.obfuscate(plain)
 
-    /** internal 为测试可见性 (编解码单测)。 */
-    internal fun deobfuscate(encoded: String): String {
-        val bytes = encoded.toByteArray(Charsets.ISO_8859_1)
-        for (i in bytes.indices) bytes[i] = (bytes[i].toInt() xor OBFUSCATION_KEY).toByte()
-        return String(bytes, Charsets.UTF_8)
-    }
+    /** internal 为测试可见性 (编解码单测); 委托 companion 避免重复实现。 */
+    internal fun deobfuscate(encoded: String): String = Companion.deobfuscate(encoded)
 
     private val keyError: String
         get() = "Tavily API key 未配置。用 `tavily.setup --from-file <路径>` 写入配置 (key 不进会话历史) 或设置环境变量 TAVILY_API_KEY。"

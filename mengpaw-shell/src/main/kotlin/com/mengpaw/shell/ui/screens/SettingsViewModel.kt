@@ -55,6 +55,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _state.value = _state.value.copy(useChinese = v != "false")
             }
         } catch (_: Exception) {}
+        // Tavily key 已配置状态 — 供框架设置页展示 (明文不进入 UI 文本/状态)
+        try {
+            _state.value = _state.value.copy(
+                tavilyKeyConfigured = com.mengpaw.plugin.tavily.TavilyPlugin.isApiKeyConfigured()
+            )
+        } catch (_: Exception) {}
     }
 
     /** Returns the first saved provider, or null if none configured. */
@@ -201,6 +207,34 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun toggleShowApiKey() {
         _state.value = _state.value.copy(showApiKey = !_state.value.showApiKey)
+    }
+
+    // ── Tavily 搜索 API key (框架设置页) ───────────────────────────────
+    /** 更新 Tavily key 输入框临时值 (仅内存, 不落盘)。 */
+    fun updateTavilyApiKey(v: String) {
+        _state.value = _state.value.copy(tavilyApiKeyInput = v)
+    }
+
+    /** 密码框明文切换。 */
+    fun toggleShowTavilyKey() {
+        _state.value = _state.value.copy(showTavilyKey = !_state.value.showTavilyKey)
+    }
+
+    /** 保存 Tavily key — 走插件混淆落盘, 保存后清空输入框并刷新已配置状态。 */
+    fun saveTavilyApiKey() {
+        val key = _state.value.tavilyApiKeyInput
+        if (key.isBlank()) return
+        val ok = com.mengpaw.plugin.tavily.TavilyPlugin.saveApiKeyFromUi(key)
+        _state.value = _state.value.copy(
+            tavilyApiKeyInput = "",
+            tavilyKeyConfigured = ok || com.mengpaw.plugin.tavily.TavilyPlugin.isApiKeyConfigured()
+        )
+    }
+
+    /** 清除已保存的 Tavily key — 空串写入覆盖原配置。 */
+    fun clearTavilyApiKey() {
+        com.mengpaw.plugin.tavily.TavilyPlugin.saveApiKeyFromUi("")
+        _state.value = _state.value.copy(tavilyApiKeyInput = "", tavilyKeyConfigured = false)
     }
 
     /** 自动翻译开关 — 默认关, 用户主动开启才启用 Google 翻译中间件. */

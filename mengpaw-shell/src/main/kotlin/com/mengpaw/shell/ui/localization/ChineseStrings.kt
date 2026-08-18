@@ -207,6 +207,12 @@ val ChineseStrings = AppStrings().apply {
     frameworkSaveConnection = "保存"
     frameworkTestConnection = "测试"
     frameworkTestingConnection = "正在测试连接..."
+    frameworkTavilyKey = "Tavily API Key"
+    frameworkTavilyKeyDesc = "内置 Tavily 网页搜索的 API Key，可直接填写保存，留空则不配置。"
+    frameworkTavilyKeyConfigured = "已配置"
+    frameworkTavilyKeyNotConfigured = "未配置"
+    frameworkTavilyKeySave = "保存"
+    frameworkTavilyKeyClear = "清除"
 
     // Settings - Sidebar tabs
     sidebarSettingsAgent = "智能体设置"

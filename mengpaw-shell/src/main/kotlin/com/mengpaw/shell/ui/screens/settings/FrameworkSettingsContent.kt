@@ -251,6 +251,63 @@ fun FrameworkSettingsContent(
     HorizontalDivider(color = ThemeColors.border)
     Spacer(Modifier.height(ArcoSpacing.lg))
 
+    // ── Tavily API Key (v0.43.x) — 内置 Tavily 搜索插件的 key 入口 ──
+    SectionHeader(state.strings.frameworkTavilyKey)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(ArcoRadius.lg),
+        color = ThemeColors.bgCard
+    ) {
+        Column(Modifier.padding(ArcoSpacing.lg)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(state.strings.frameworkTavilyKeyDesc,
+                    style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary,
+                    modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(ArcoSpacing.md))
+                Surface(
+                    shape = RoundedCornerShape(ArcoRadius.sm),
+                    color = if (state.tavilyKeyConfigured) ArcoColors.Green1 else ArcoColors.Gray1
+                ) {
+                    Text(if (state.tavilyKeyConfigured) state.strings.frameworkTavilyKeyConfigured else state.strings.frameworkTavilyKeyNotConfigured,
+                        Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (state.tavilyKeyConfigured) ArcoColors.Green7 else ThemeColors.textSecondary)
+                }
+            }
+            Spacer(Modifier.height(ArcoSpacing.md))
+            SettingsTextField(Icons.Outlined.Key, state.strings.frameworkTavilyKey, state.tavilyApiKeyInput,
+                onValueChange = { viewModel.updateTavilyApiKey(it) },
+                visualTransformation = if (state.showTavilyKey) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { viewModel.toggleShowTavilyKey() }) {
+                        Icon(if (state.showTavilyKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                            contentDescription = if (state.showTavilyKey) state.strings.apiKeyHide else state.strings.apiKeyShow)
+                    }
+                })
+            Spacer(Modifier.height(ArcoSpacing.md))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
+                OutlinedButton(onClick = { viewModel.saveTavilyApiKey() }, modifier = Modifier.weight(1f),
+                    enabled = state.tavilyApiKeyInput.isNotBlank(), shape = RoundedCornerShape(ArcoRadius.md)) {
+                    Icon(Icons.Outlined.Check, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(state.strings.frameworkTavilyKeySave, style = MaterialTheme.typography.labelSmall)
+                }
+                if (state.tavilyKeyConfigured) {
+                    OutlinedButton(onClick = { viewModel.clearTavilyApiKey() }, modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(ArcoRadius.md)) {
+                        Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(state.strings.frameworkTavilyKeyClear, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+    }
+
+    Spacer(Modifier.height(ArcoSpacing.lg))
+    HorizontalDivider(color = ThemeColors.border)
+    Spacer(Modifier.height(ArcoSpacing.lg))
+
     SectionHeader(state.strings.frameworkMemoryManagement)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {

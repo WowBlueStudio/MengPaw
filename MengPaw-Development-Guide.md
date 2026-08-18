@@ -1354,7 +1354,7 @@ Shell ↔ 浏览器进程的 127.0.0.1:9880 HTTP 桥 (`McpHttpServer`/`BrowserMc
 
 **browser**: ComfyUI URL 子串匹配 → URI host/端口精确匹配; 截图 32MB 像素上限 + 等比缩放 (scale 字段回传, coordClick 坐标还原); UA 硬编码 → BuildConfig.VERSION_NAME; maxTabs 全路径收敛 (TopBar/DesktopTabBar/TabDialog/Agent 桥统一 openNewTab 守卫); 主页 URL 持久化 homeUrl 设置; SettingsDialog 不再重置默认引擎; savePasswords 假开关 → 固定说明; AdBlocker 子串误拦 → host 逐段精确匹配 (路径规则同步生效); SmartNavigate "3.14" 误判 → 末段无字母按搜索; Tab 键劫持放行 (NewTabPage)。
 
-**core/plugins**: IntegrityGuard.verify 接线 (AppInitializer 启动告警, 不阻断); PermissionExecutor 权限清单唯一源 (以 Manifest 为基准, 清 4 项未声明); ScreenCaptureExecutor 相机真实分辨率 (SCALER 查询, 失败回退 1920×1080); TribePlugin sendViaTransport 3 处空 catch → ErrorCollector.report; FsPlugin symlink 检测修正 (未解析 vs 解析路径比较); UpdatePlugin 自动检查幂等 (AtomicBoolean CAS); TavilyPlugin API Key XOR 混淆落盘 (插件零 Android 依赖, EncryptedSharedPreferences 不可达 — 混淆≠加密, 根治需 kernel 密钥存储桥); McpGateway 4MB 请求体上限 (413 不分配内存); TwinWorkspace 原子写; EventReceiver manifest 死声明删除。
+**core/plugins**: IntegrityGuard.verify 接线 (AppInitializer 启动告警, 不阻断); PermissionExecutor 权限清单唯一源 (以 Manifest 为基准, 清 4 项未声明); ScreenCaptureExecutor 相机真实分辨率 (SCALER 查询, 失败回退 1920×1080); TribePlugin sendViaTransport 3 处空 catch → ErrorCollector.report; FsPlugin symlink 检测修正 (未解析 vs 解析路径比较); UpdatePlugin 自动检查幂等 (AtomicBoolean CAS); TavilyPlugin API Key XOR 混淆落盘 (插件零 Android 依赖, EncryptedSharedPreferences 不可达 — 混淆≠加密, 根治需 kernel 密钥存储桥); **Tavily API Key 设置入口 (v0.43.x)**: 框架设置页 API 供应商下方、记忆管理上方新增「Tavily API Key」卡片 — 直接填写+保存/清除 (密码框可切换明文), 保存走 `TavilyPlugin.saveApiKeyFromUi` 混淆落盘 (`tavily.json`, 复用 setup 同款格式, 明文不进会话/审计), 已配置状态以 `isApiKeyConfigured` 判定; McpGateway 4MB 请求体上限 (413 不分配内存); TwinWorkspace 原子写; EventReceiver manifest 死声明删除。
 
 ---
 

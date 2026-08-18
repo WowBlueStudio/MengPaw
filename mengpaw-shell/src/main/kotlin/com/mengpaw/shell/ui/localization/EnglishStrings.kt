@@ -207,6 +207,12 @@ val EnglishStrings = AppStrings().apply {
     frameworkSaveConnection = "Save"
     frameworkTestConnection = "Test"
     frameworkTestingConnection = "Testing connection..."
+    frameworkTavilyKey = "Tavily API Key"
+    frameworkTavilyKeyDesc = "API key for the built-in Tavily web search. Fill in and save directly; leave blank to not configure."
+    frameworkTavilyKeyConfigured = "Configured"
+    frameworkTavilyKeyNotConfigured = "Not configured"
+    frameworkTavilyKeySave = "Save"
+    frameworkTavilyKeyClear = "Clear"
 
     // Settings - Sidebar tabs
     sidebarSettingsAgent = "Agent Settings"

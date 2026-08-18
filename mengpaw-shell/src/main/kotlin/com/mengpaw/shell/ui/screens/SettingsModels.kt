@@ -186,6 +186,12 @@ data class SettingsState(
     val savedProviders: List<SavedProvider> = emptyList(),
     val isTesting: Boolean = false,
     val balance: String = "",
+    /** Tavily 搜索插件 API key — 输入框临时值 (明文仅存内存, 保存走混淆落盘)。 */
+    val tavilyApiKeyInput: String = "",
+    /** Tavily key 是否已配置 (用于 UI 展示状态)。 */
+    val tavilyKeyConfigured: Boolean = false,
+    /** 框架设置页 Tavily key 是否显示明文 (密码框切换)。 */
+    val showTavilyKey: Boolean = false,
     /** 角色模型路由 — Fleet/火种各角色 → provider 快照（只配想覆盖的角色，缺省回退主模型）。 */
     val swarmRoles: Map<String, SavedProvider> = emptyMap()
 ) {

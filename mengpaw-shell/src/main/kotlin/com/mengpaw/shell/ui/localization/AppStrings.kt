@@ -218,6 +218,12 @@ class AppStrings {
     var frameworkSaveConnection: String = ""
     var frameworkTestConnection: String = ""
     var frameworkTestingConnection: String = ""
+    var frameworkTavilyKey: String = ""
+    var frameworkTavilyKeyDesc: String = ""
+    var frameworkTavilyKeyConfigured: String = ""
+    var frameworkTavilyKeyNotConfigured: String = ""
+    var frameworkTavilyKeySave: String = ""
+    var frameworkTavilyKeyClear: String = ""
 
     // Settings - Sidebar tabs
     var sidebarSettingsAgent: String = ""
