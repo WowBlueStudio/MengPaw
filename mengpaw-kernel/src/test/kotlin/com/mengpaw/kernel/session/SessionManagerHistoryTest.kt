@@ -3,10 +3,53 @@
 
 package com.mengpaw.kernel.session
 
+import com.mengpaw.kernel.buildGoalTrackingBlock
 import org.junit.Assert.*
 import org.junit.Test
 
 class SessionManagerHistoryTest {
+    // ── 对话需求跟踪块 (v0.41.1 未发布, 规则式) ──────────────────────
+
+    @Test
+    fun `目标块_单条消息只有当前重点`() {
+        val block = buildGoalTrackingBlock(listOf("帮我查一下天气"))
+        assertNotNull(block)
+        assertTrue("最新需求应为当前重点", block!!.contains("当前重点: 帮我查一下天气"))
+        assertFalse("无旧需求不应有待办条目 (规则文本含'待办'字样, 按行首格式判断)", block.contains("- 待办/背景:"))
+    }
+
+    @Test
+    fun `目标块_多条消息最新为当前重点旧需求为待办`() {
+        val block = buildGoalTrackingBlock(listOf("旧目标A", "旧目标B", "新需求C"))!!
+        assertTrue("最新消息应是当前重点", block.contains("当前重点: 新需求C"))
+        assertTrue("最近的旧需求应排在待办最前", block.indexOf("待办/背景: 旧目标B") < block.indexOf("待办/背景: 旧目标A"))
+    }
+
+    @Test
+    fun `目标块_过滤系统引导与空消息`() {
+        val block = buildGoalTrackingBlock(
+            listOf("", "继续。输出 Action: <命令> 和 Action Input: <参数>。", "真实需求")
+        )!!
+        assertTrue("只保留真实用户需求", block.contains("真实需求"))
+        assertFalse("系统引导不得进目标清单", block.contains("继续。输出 Action"))
+    }
+
+    @Test
+    fun `目标块_限长只取最近5条`() {
+        val reqs = (1..8).map { "需求$it" }
+        val block = buildGoalTrackingBlock(reqs)!!
+        assertTrue("最新需求在", block.contains("需求8"))
+        assertFalse("超过 5 条的最旧需求被丢弃", block.contains("需求1"))
+        assertFalse("第 4 条 (第 6 新) 也应被丢弃", block.contains("需求3"))
+        assertTrue("第 5 新的需求应保留", block.contains("需求4"))
+    }
+
+    @Test
+    fun `目标块_无有效需求返回null`() {
+        assertNull(buildGoalTrackingBlock(emptyList()))
+        assertNull(buildGoalTrackingBlock(listOf("", "继续。输出 Action: x")))
+    }
+
     @Test
     fun `getStructuredHistory returns non-localOnly messages only`() {
         val manager = SessionManager()

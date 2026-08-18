@@ -40,6 +40,17 @@ class PromptEngineTest {
     }
 
     @Test
+    fun `conversation goal discipline stays in prompt`() {
+        // 2026-08-18: 对话需求跟踪 — 新话题不丢旧目标, 旧目标不淹没新重点。
+        // 纪律指令必须在系统提示词常驻, 与 buildConversation 注入的目标清单配合。
+        val prompt = engine.buildSystemPrompt(lang = PromptEngine.AgentLanguage.CHINESE, agentName = "MengPaw")
+        assertTrue("提示词应含对话需求纪律", prompt.contains("对话需求纪律"))
+        assertTrue("应说明当前重点语义", prompt.contains("当前重点"))
+        assertTrue("应说明待办保留", prompt.contains("待办"))
+        assertTrue("应禁止新话题丢弃旧目标", prompt.contains("不要因为新话题丢弃旧目标"))
+    }
+
+    @Test
     fun `evolution guide injected only when evolution data exists`() {
         // 三层十二问 1.1 (2026-08-09): 有进化数据 (失败档案/已登记指令) → 提示词注入进化系统引导;
         // 零数据 → 不注入 (零 token 开销)

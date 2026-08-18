@@ -157,6 +157,12 @@ internal class AgentConversation(private val engine: AgentEngine) {
                 pendingVeracityFeedback = null
                 injectables.add(it)
             }
+            // 对话需求跟踪块 (v0.41.1 未发布): 规则式目标清单 — 从会话 user 消息抽取
+            // 最近需求, 最新为当前重点、旧需求为待办。只进当轮请求, 不落历史;
+            // 追加到末尾保护前缀缓存 (与进化引导/静默门禁同机制)。
+            buildGoalTrackingBlock(
+                rawMessages.filter { it.role == "user" && !it.localOnly }.map { it.content }
+            )?.let { injectables.add(it) }
         }
         if (injectables.isNotEmpty()) {
             val mutable = nonSystemHistory.toMutableList()
@@ -168,4 +174,31 @@ internal class AgentConversation(private val engine: AgentEngine) {
         KernelLog.d("MengPawLatency", "BC-EXIT $sessionId normal")
         return engine.llmRequestBuilder.buildMessages(nonSystemHistory, injectCacheAnnotations = true)
     }
+}
+
+/**
+ * 对话需求跟踪块构造 (v0.41.1 未发布, 规则式) — 解决"新话题覆盖旧目标 / 旧目标淹没新重点"
+ * 的两难: 从会话 user 消息自动抽取最近需求, 最新一条 = 当前重点 (置顶), 之前的 = 待办/背景。
+ * 仅提示, 不落会话历史; 由 buildConversation 追加到请求末尾 (保护前缀缓存, 与进化引导同机制)。
+ *
+ * 过滤: 空消息 / needsContinue 注入的 "继续。输出 Action..." 系统引导 (非用户需求)。
+ * 限长: 最多保留最近 [MAX_GOALS] 条, 每条截断, 控制注入 token 成本。
+ */
+internal fun buildGoalTrackingBlock(userRequests: List<String>, maxGoals: Int = 5): String? {
+    val reqs = userRequests
+        .map { it.trim() }
+        .filter { it.isNotBlank() && !it.startsWith("继续。输出 Action") }
+        .takeLast(maxGoals)
+    if (reqs.isEmpty()) return null
+    val sb = StringBuilder("## 对话需求跟踪（自动维护，仅参考）\n")
+    sb.appendLine("- 当前重点: ${reqs.last().take(80)}")
+    reqs.dropLast(1).reversed().forEach { req ->
+        sb.appendLine("- 待办/背景: ${req.take(60)}")
+    }
+    sb.appendLine(
+        "规则: 当前重点优先。若当前重点是旧需求的补充/延续, 合并进原目标推进, 不要另起炉灶;" +
+            "若用户明确转向新话题, 新话题成为当前重点, 未完成的旧需求保留为待办;" +
+            "完成当前重点后用户未转向时, 可主动询问是否继续待办; 已放弃/完成的忽略。"
+    )
+    return sb.toString()
 }
