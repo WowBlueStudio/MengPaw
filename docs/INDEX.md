@@ -26,6 +26,17 @@
 | `pyramid-investigation.md` | 10 KB | 金字塔彻查法：从现象逐层拆链路、证据排除、反模式与实战案例（含证据等级 0.2.0） | 功能"永远修不好"或做链路级排障时 |
 | `roadmap.md` | 2 KB | 开发路线图 Phase 1-10（Phase 1-6 完成，7-10 未来规划） |
 
+## 技能沉淀（~/.codex/skills/，权威；项目内 `.claude/skills/` 为兼容保留）
+
+| 技能 | 触发 | 内容 |
+|------|------|------|
+| `mengpaw-onboarding` | 接任/开始任何开发任务前 | 上手与日常开发对齐：知识入口/红线/工作方式/环境构建铁律/测试纪律/技能导航 |
+| `mengpaw-release` | 用户说"发布/发新版/release" | 版本发布全流程（版本号/CHANGELOG/测试/构建/签名/双远端/GitHub+Gitee Release/自动更新交付） |
+| `mengpaw-plugin-dev` | 插件开发/审计/市场发布 | 插件创建/审计/关键词/构建/plugins.json 回写/发布 |
+| `mengpaw-pr-review` | 用户说"评审这个 PR" | PR 机器门禁 + 九维审查 + 分级输出 |
+| `closure-audit-12q` | 功能闭环审计/12问 | 三层十二问功能闭环审计 |
+| `code-review-9d` | 九维审查/代码质量 | 九维代码审查法 |
+
 > 已归档（git 历史可溯）：九维审查总结→Codex skill `mengpaw-pr-review`；审计方法论→记忆 `bug-audit-methodology`；编译问题速查→`lessons.md` §15；流式调查记录→主文档 §4.1.1 定论；审校记录→`CHANGELOG.md`；make-skill 对比→`CHANGELOG.md` v0.26.2；根发布流程 RELEASE.md→Codex skill `mengpaw-release`（2026-08-07 由 `.claude/skills/release.md` 迁移）。
 
 ## 根目录文档
