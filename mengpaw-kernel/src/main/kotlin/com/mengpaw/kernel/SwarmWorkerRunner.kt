@@ -70,6 +70,10 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
 
             var step = 0
             var tokens = 0L
+            // P2-3: 渐进式纠正状态 — 连续失败早停 + 回合内重试循环停指令 (对齐主循环)。
+            var consecutiveWorkerFails = 0
+            val failureCounts = mutableMapOf<Pair<String, String>, Int>()
+            val retryNotified = mutableSetOf<Pair<String, String>>()
             while (step < maxSteps) {
                 // stop() 可达检查 (与主循环同款: Job.isActive 成员属性)
                 val job = currentCoroutineContext()[Job]
@@ -102,7 +106,7 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                 // P2 修复: 多 Action 并行（与主循环对齐 — 一次 LLM 输出多工具）
                 val actionList = parsed.actions.ifEmpty { listOfNotNull(parsed.action) }
                 if (actionList.isNotEmpty()) {
-                    val entries = coroutineScope {
+                    val actionResults = coroutineScope {
                         actionList.map { call ->
                             async(KernelDispatchers.BACKGROUND) {
                                 // P0 对齐 (v0.34.1): 高危门禁 + 来源黑名单硬闸 (与主循环同一纯函数)
@@ -153,9 +157,37 @@ internal class SwarmWorkerRunner(private val engine: AgentEngine) {
                                     KernelLog.w("SwarmWorker", "检测到疑似$it, 内容已净化 (worker 零用户交互)")
                                 }
                                 onStep?.invoke(AgentEngine.TraceStep(step + 1, parsed.thought, commandLine, cleaned))
-                                "Command: $commandLine\nResult: ${com.mengpaw.kernel.security.UntrustedContent.wrap(cleaned)}"
+                                WorkerActionResult(
+                                    commandLine = commandLine,
+                                    errorCode = if (result.success) null else (result.errorCode ?: "TOOL_CALL_FAILED"),
+                                    observation = "Command: $commandLine\nResult: ${com.mengpaw.kernel.security.UntrustedContent.wrap(cleaned)}"
+                                )
                             }
                         }.awaitAll()
+                    }
+                    // ── 渐进式纠正 (P2-3): 回合内重试循环停指令 + 连续失败早停 (对齐主循环) ──
+                    val entries = mutableListOf<String>()
+                    var anyFailure = false
+                    actionResults.forEach { r ->
+                        entries.add(r.observation)
+                        if (r.errorCode == null) { consecutiveWorkerFails = 0; return@forEach }
+                        anyFailure = true
+                        consecutiveWorkerFails++
+                        val key = r.commandLine to r.errorCode
+                        val cnt = (failureCounts[key] ?: 0) + 1
+                        failureCounts[key] = cnt
+                        com.mengpaw.kernel.evolution.EvolutionStore.retryLoopDirective(
+                            r.commandLine, r.errorCode, cnt, key in retryNotified
+                        )?.let { directive ->
+                            retryNotified.add(key)
+                            entries.add(directive)
+                        }
+                    }
+                    if (!anyFailure) consecutiveWorkerFails = 0
+                    if (consecutiveWorkerFails >= CONSECUTIVE_FAILURE_LIMIT) {
+                        recordWorkerTermination(session.id, "worker_consecutive_failures", "",
+                            "WORKER_CONSECUTIVE_FAILURES", subtask.description)
+                        return WorkerOutcome("连续 $CONSECUTIVE_FAILURE_LIMIT 次命令失败，停止执行", step + 1, tokens, "consecutive_failures")
                     }
                     engine.getSessionManager().addMessage(session.id, Message("assistant", entries.joinToString("\n\n")))
                 }
@@ -213,3 +245,13 @@ internal data class WorkerOutcome(
     val error: String? = null,
     val budgetExhausted: Boolean = false
 )
+
+/** Worker 单条 Action 的并行执行结果 — 供渐进式纠正统计失败/注入停指令 (P2-3)。 */
+internal data class WorkerActionResult(
+    val commandLine: String,
+    val errorCode: String?,
+    val observation: String
+)
+
+/** 连续失败早停阈值 (P2-3, 对齐主循环 trackResult 的 5)。 */
+private const val CONSECUTIVE_FAILURE_LIMIT = 5
