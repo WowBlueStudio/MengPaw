@@ -119,8 +119,14 @@ internal class AgentReActLoop(
                 engine._state.value = AgentState.Running(task, state.step + 1, effectiveMax)
 
                 // ── Adaptive step extension ──
-                // If agent is still making productive progress near the limit, auto-extend
-                if (!extended && state.step >= effectiveMax * 0.75 && state.consecutiveFailures == 0) {
+                // If agent is still making productive progress near the limit, auto-extend.
+                // P1-4: 幻觉门禁拒绝 (hallucinationRejections > 0) 时禁止扩展 — 模型在顽固
+                // 输出含幻觉 Final Answer, 拒绝只消耗步数且不记失败, 原条件 (仅看
+                // consecutiveFailures) 会被扩展放大成本/时长; 加入该门后最多烧到
+                // effectiveMax (=originalMaxSteps), 不再 1.5× 放大。
+                if (!extended && state.step >= effectiveMax * 0.75 &&
+                    state.consecutiveFailures == 0 && state.hallucinationRejections == 0
+                ) {
                     val extendTo = minOf((effectiveMax * 1.5).toInt(), originalMaxSteps * 2)
                     if (extendTo > effectiveMax) {
                         effectiveMax = extendTo

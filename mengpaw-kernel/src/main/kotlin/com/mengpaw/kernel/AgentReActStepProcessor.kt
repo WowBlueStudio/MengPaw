@@ -8,6 +8,8 @@ import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.error.ErrorType
+import com.mengpaw.kernel.llm.LoopDetector
+import com.mengpaw.kernel.llm.ReActParser
 import com.mengpaw.kernel.llm.ReActResponse
 import com.mengpaw.kernel.llm.ToolCall
 import com.mengpaw.kernel.security.HighRiskCommandGate
@@ -17,6 +19,8 @@ import com.mengpaw.kernel.session.SessionEventBus
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 /**
  * ReAct 单步处理器 (v0.40.4 P2 拆自 AgentReActLoop 400 行红线)。
@@ -32,8 +36,13 @@ internal class AgentReActStepProcessor(
     private val termination: AgentTerminationRecorder
 ) {
 
+    /** 最终答案退化检测解析器 — 复用单实例 (P2-6, 原每轮 new 一个)。 */
+    private val reactParser = ReActParser()
+
     /**
      * 单轮共享可变状态 — 由主循环创建, 本类与主循环共同读写 (均在同一协程串行, 无竞争)。
+     * [loopDetector] 为每运行实例 (P2-2): 检测状态不与 PromptEngine 共享, 天然隔离,
+     * 多并发循环 (主循环 + worker) 各自独立检测, 无需跨任务 reset。
      */
     internal class ReActStepState(
         val session: Session,
@@ -44,7 +53,8 @@ internal class AgentReActStepProcessor(
         var hallucinationRejections: Int,
         val sessionFailures: MutableList<Pair<String, String>>,
         val retryCounts: MutableMap<Pair<String, String>, Int>,
-        val retryNotified: MutableSet<Pair<String, String>>
+        val retryNotified: MutableSet<Pair<String, String>>,
+        val loopDetector: LoopDetector = LoopDetector()
     )
 
     /**
@@ -61,6 +71,8 @@ internal class AgentReActStepProcessor(
     private companion object {
         /** 探针连续失配告警阈值 — 单轮失配可能是模型遵从性差异, 连续 N 次才疑似铲子。 */
         const val PROBE_MISS_ALERT_THRESHOLD = 5
+        /** 默认单批最大并行工具数 (P1-2, 对齐 DSH agent-loop 有界滚动池)。 */
+        const val MAX_PARALLEL_TOOL_CALLS = 8
     }
 
     /**
@@ -70,7 +82,7 @@ internal class AgentReActStepProcessor(
     internal suspend fun processFinalAnswer(state: ReActStepState, answer: String): ReActTurnResult {
         // v0.37.3: 退化输出拦截 — 模型卡在重复 XML 标签/同一 token 流时
         // 不当最终答案 (否则用户看到一长串 <Action> 垃圾), 直接中止并提示重试
-        if (com.mengpaw.kernel.llm.ReActParser().isDegenerateOutput(answer)) {
+        if (reactParser.isDegenerateOutput(answer)) {
             val msg = "模型输出异常: 检测到重复标记 (格式退化), 请重试该任务。"
             engine.getSessionManager().addMessage(state.session.id, Message("assistant", msg))
             engine._state.value = AgentState.Finished(msg)
@@ -186,34 +198,41 @@ internal class AgentReActStepProcessor(
             }
         }
 
-        // Loop detection on the first command (kept serial — shared mutable state)
-        if (engine.getPromptEngine().detectLoop(commandLines.first())) {
-            val cmd = commandLines.first()
-            ErrorCollector.report(ErrorType.LOOP_DETECTED, "AgentEngine", cmd,
+        // Loop detection — 全部命令逐一检测 (P1-3: 原只查 first() 会漏"非首命令循环"),
+        // 检测状态走每运行实例 loopDetector (P2-2), 不再共享 PromptEngine。
+        val loopCmd = commandLines.firstOrNull { state.loopDetector.detectLoop(it) }
+        if (loopCmd != null) {
+            ErrorCollector.report(ErrorType.LOOP_DETECTED, "AgentEngine", loopCmd,
                 sessionId = state.session.id, agentName = engine.agentName)
-            val errorMsg = localizedError("loop_detected", cmd, engine.agentLanguage)
+            val errorMsg = localizedError("loop_detected", loopCmd, engine.agentLanguage)
             engine.getSessionManager().addMessage(state.session.id, Message("assistant", errorMsg))
             engine._state.value = AgentState.Error(errorMsg)
-            onStep?.invoke(AgentEngine.TraceStep(state.step + 1, parsed.thought, cmd, errorMsg))
+            onStep?.invoke(AgentEngine.TraceStep(state.step + 1, parsed.thought, loopCmd, errorMsg))
             // 失败截断进化介入: 剪取上下文片段, 记录循环终止模式
-            termination.record(state.session.id, "loop_detected", cmd, "LOOP_DETECTED", state.task)
+            termination.record(state.session.id, "loop_detected", loopCmd, "LOOP_DETECTED", state.task)
             return errorMsg
         }
 
         // ── 并行执行（结构化并发: async 内 withTimeout + pipeline.execute）──
+        // P1-2: 显式有界并发 — 无论调度器并发上限如何, 同批最多
+        // [MAX_PARALLEL_TOOL_CALLS] 条命令同时执行 (Semaphore), 防单次 LLM 输出大量
+        // Action 瞬间并发击穿本地/上游 (对齐 DSH agent-loop 的有界滚动池)。
+        val parallelSemaphore = Semaphore(MAX_PARALLEL_TOOL_CALLS)
         val results = coroutineScope {
             formattedCalls.map { gate ->
                 async(KernelDispatchers.BACKGROUND) {
-                    try {
-                        when {
-                            // 门禁拒绝 (REASON_REQUIRED / PARAM_FORMAT_ERROR): 不执行, 直接反馈引导
-                            gate.error != null ->
-                                ExecutionResult.fail(gate.error, errorCode = gate.errorCode ?: ErrorCodes.PARAM_FORMAT_ERROR)
-                            else ->
-                                runRiskGuarded(engine, gate, engine.agentName, context)
+                    parallelSemaphore.withPermit {
+                        try {
+                            when {
+                                // 门禁拒绝 (REASON_REQUIRED / PARAM_FORMAT_ERROR): 不执行, 直接反馈引导
+                                gate.error != null ->
+                                    ExecutionResult.fail(gate.error, errorCode = gate.errorCode ?: ErrorCodes.PARAM_FORMAT_ERROR)
+                                else ->
+                                    runRiskGuarded(engine, gate, engine.agentName, context)
+                            }
+                        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                            ExecutionResult.fail("命令超时 (60s): ${gate.commandLine}。请检查网络连接或尝试其他方式。", errorCode = ErrorCodes.ERR_INTERNAL)
                         }
-                    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                        ExecutionResult.fail("命令超时 (60s): ${gate.commandLine}。请检查网络连接或尝试其他方式。", errorCode = ErrorCodes.ERR_INTERNAL)
                     }
                 }
             }.awaitAll()
@@ -320,9 +339,9 @@ internal class AgentReActStepProcessor(
                 }
             }
         }
-        // 连续失败统计与失败循环检测（串行，无竞争）
+        // 连续失败统计与失败循环检测（串行，无竞争）— 每运行实例 loopDetector (P2-2)
         if (anyFailure) state.consecutiveFailures++ else state.consecutiveFailures = 0
-        if (engine.getPromptEngine().trackResult(!anyFailure)) {
+        if (state.loopDetector.trackResult(!anyFailure)) {
             val errorMsg = localizedError("consecutive_failures", "5", engine.agentLanguage)
             engine.getSessionManager().addMessage(state.session.id, Message("assistant", errorMsg))
             engine._state.value = AgentState.Error(errorMsg)

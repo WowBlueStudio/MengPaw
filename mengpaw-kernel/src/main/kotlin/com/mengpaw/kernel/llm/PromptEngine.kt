@@ -13,8 +13,6 @@ package com.mengpaw.kernel.llm
  */
 class PromptEngine {
 
-    private val recentCommands = java.util.LinkedList<String>()
-
     /** 系统提示词构建器 — 工作区文档缓存 + mtime/模板哈希快照 (拆自本类)。 */
     private val systemBuilder = PromptSystemBuilder()
 
@@ -340,45 +338,28 @@ class PromptEngine {
      */
     fun parse(text: String): ReActResponse = parser.parse(text)
 
-    /** Safe-to-repeat commands — never trigger loop detection. */
-    private val safeCommands = setOf(
-        "agent.docs", "agent.cli", "agent.memory", "agent.profile", "agent.boost", "agent.modes",
-        "agent.soul", "agent.audit", "agent.storage", "agent.sessions",
-        // Linux 只读命令 — v0.36.x 去重后取代原 agent 文件读命令
-        "cat", "head", "tail", "grep", "sed", "find", "stat", "ls", "less", "more", "wc", "du", "df", "file",
-        "self.stats", "self.version", "self.time", "self.tools", "self.search", "self.status",
-        "plugin.list", "plugin.info", "plugin.marketplace",
-        "sys.battery", "sys.network", "sys.cpu", "sys.memory", "sys.storage",
-    )
+    // ── 循环检测 (委托给 LoopDetector) ────────────────────────────────
+    // P2-2 (v0.4x): 检测状态收敛到每次运行一个 LoopDetector 实例, 主 ReAct 循环
+    // 用 ReActStepState 内新建的实例 (天然隔离, 无需跨任务 reset, 并行 worker 亦可
+    // 独立检测)。此处保留委托入口仅为兼容既有 API (shell 的 resetLoopDetection 调用),
+    // 不再作为主循环的共享可变状态。
 
     /**
-     * Detect command loops (same command repeated 5+ times in recent window).
+     * Detect command loops (exact repeat / name-level variant / 2-cycle alternation).
      * Safe info/list commands are exempt — 仅按命令名精确匹配。
-     * P2 修复: 旧前缀匹配 "agent.memory" 会豁免 agent.memory.write/edit/rm/delete
-     * 等全部写命令的循环检测 (agent.boost 亦连带豁免 agent.boost.delete);
-     * 改为取命令名首 token 精确比对 — 读命令带参数仍豁免, 写子命令不再豁免。
      */
-    fun detectLoop(command: String): Boolean {
-        val commandName = command.substringBefore(' ').substringBefore('\t')
-        if (commandName in safeCommands) return false
-        recentCommands.add(command)
-        if (recentCommands.size > 8) recentCommands.removeFirst()
-        return recentCommands.count { it == command } >= 5
-    }
-
-    private var consecutiveFailures = 0
+    fun detectLoop(command: String): Boolean = loopDetector.detectLoop(command)
 
     /**
      * Track command result for failure-loop detection.
      * Call after each command execution. If 5+ consecutive commands fail,
      * the agent is likely stuck in a failure loop and should stop.
      */
-    fun trackResult(success: Boolean): Boolean {
-        if (success) { consecutiveFailures = 0; return false }
-        consecutiveFailures++
-        return consecutiveFailures >= 5
-    }
+    fun trackResult(success: Boolean): Boolean = loopDetector.trackResult(success)
 
-    /** Reset loop detection state (call on session/model switch). */
-    fun resetLoopDetection() { recentCommands.clear(); consecutiveFailures = 0 }
+    /** Reset loop detection state (call on session/model switch). 保留兼容。 */
+    fun resetLoopDetection() { loopDetector.reset() }
+
+    /** 共享委托实例 — 仅供 PromptEngine 兼容入口使用; 主循环走每运行实例。 */
+    private val loopDetector = LoopDetector()
 }

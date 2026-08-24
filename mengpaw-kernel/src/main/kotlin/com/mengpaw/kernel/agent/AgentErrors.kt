@@ -14,7 +14,7 @@ import com.mengpaw.kernel.llm.PromptEngine
  */
 fun localizedError(key: String, detail: String, agentLanguage: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE): String = when (agentLanguage) {
     PromptEngine.AgentLanguage.CHINESE -> when (key) {
-        "loop_detected" -> "错误：检测到命令循环 — '$detail' 已重复 3+ 次"
+        "loop_detected" -> "错误：检测到命令循环 — '$detail' 已重复 5+ 次"
         "consecutive_failures" -> "错误：连续 $detail 次命令执行失败，Agent 可能陷入困境。请检查网络、权限或换个方式提问。"
         "max_steps" -> "已达到最大步数 ($detail)，未获得最终答案"
         "agent_error" -> "Agent 错误：$detail"
@@ -24,7 +24,7 @@ fun localizedError(key: String, detail: String, agentLanguage: PromptEngine.Agen
         else -> detail
     }
     PromptEngine.AgentLanguage.ENGLISH -> when (key) {
-        "loop_detected" -> "Error: Detected command loop — '$detail' repeated 3+ times"
+        "loop_detected" -> "Error: Detected command loop — '$detail' repeated 5+ times"
         "consecutive_failures" -> "Error: $detail consecutive command failures. Agent may be stuck. Check network, permissions, or rephrase."
         "max_steps" -> "Max steps ($detail) reached without final answer"
         "agent_error" -> "Agent error: $detail"
