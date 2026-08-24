@@ -3,10 +3,15 @@
 
 package com.mengpaw.kernel.agent
 
+import kotlinx.serialization.Serializable
+
 /**
  * Runtime state for an active Goal-mode execution session.
  * Ported & adapted from QwenPaw GoalSession architecture.
+ *
+ * @Serializable: 支持 [GoalSessionStore] 持久化到磁盘, 实现跨会话续跑 (P2-4)。
  */
+@Serializable
 data class GoalSession(
     val goal: String,
     var active: Boolean = true,

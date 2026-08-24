@@ -4,6 +4,7 @@
 package com.mengpaw.kernel
 
 import com.mengpaw.kernel.agent.GoalSession
+import com.mengpaw.kernel.agent.GoalSessionStore
 import com.mengpaw.kernel.agent.RubricEvaluator
 
 /**
@@ -23,11 +24,14 @@ class GoalModeExecutor(
      * @param task the goal description
      * @param maxTurns maximum goal iterations
      * @param maxTokensBudget maximum tokens to spend across all turns
+     * @param sessionFile optional 持久化文件 (P2-4): 非 null 时每轮结束后落盘会话状态;
+     *   若该文件已存在 (上次中断残留) 则从存档续跑而非新建, 实现跨会话恢复。
      * @param onStep optional step callback for progress tracking
      * @return the final result string
      */
     suspend fun runWithGoal(
         task: String, maxTurns: Int = 20, maxTokensBudget: Int = 300_000,
+        sessionFile: String? = null,
         onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
         onReasoning: ((String) -> Unit)? = null
@@ -35,14 +39,21 @@ class GoalModeExecutor(
         val llmProvider = agentEngine.getLlmProvider()
         // P0 注入防护: 任务入口静默剥离精确注入模式
         val guardedTask = com.mengpaw.kernel.security.UntrustedContent.sanitizeForAgent(task)
-        val session = GoalSession(
-            goal = guardedTask, maxIterations = maxTurns, maxTokens = maxTokensBudget
-        )
+        // P2-4: 续跑 — 若指定了存档文件且存在有效会话 (目标一致), 复用其状态继续;
+        // 否则新建会话。
+        val persistFile = sessionFile?.let { java.io.File(it) }
+        val resumeSession = persistFile?.let { GoalSessionStore.load(it) }
+        val session = resumeSession
+            ?.takeIf { it.goal == guardedTask }
+            ?: GoalSession(
+                goal = guardedTask, maxIterations = maxTurns, maxTokens = maxTokensBudget
+            )
         val evaluator = RubricEvaluator()
         val turnResults = mutableListOf<String>()
         var offTrackCount = 0
 
-        for (turn in 0 until maxTurns) {
+        // 续跑: 从上次已完成的轮次继续, 不重做已完成轮次
+        for (turn in session.iteration until session.maxIterations) {
             if (!session.active) break
             session.iteration = turn + 1
 
@@ -55,7 +66,7 @@ class GoalModeExecutor(
                     "【目标一致性】你的每一步行动必须服务于原目标，禁止擅自扩展或偏离任务范围；" +
                     "若某操作与目标无关，立即停止并说明原因。"
             } else {
-                "## 目标 (第 ${turn + 1}/$maxTurns 轮)\n${session.goal}\n\n反馈: ${session.lastFeedback.ifEmpty { "无" }}" +
+                "## 目标 (第 ${turn + 1}/${session.maxIterations} 轮)\n${session.goal}\n\n反馈: ${session.lastFeedback.ifEmpty { "无" }}" +
                     "如果任务无法完成，明确说明并停止，不要空转。" +
                     "【目标一致性】不得偏离原目标；回到目标继续。"
             }
@@ -119,7 +130,14 @@ class GoalModeExecutor(
                     session.active = false
                 }
             }
+            // P2-4: 每轮结束落盘会话状态 — 中断后可从存档续跑
+            persistFile?.let { GoalSessionStore.save(session, it) }
         }
+
+        // P2-4: 走到这里即本次运行已终结 (完成/中断/预算耗尽/轮次耗尽) — 清理存档,
+        // 避免下次误续跑一个已无预算的旧会话。若中途被取消 (CancellationException) 抛出,
+        // 则不会执行到此处, 存档保留供续跑。
+        persistFile?.let { GoalSessionStore.clear(it) }
 
         return if (!session.active && session.lastVerdict.startsWith("SATISFIED")) {
             "目标已完成: ${session.goal}\n\n" + turnResults.lastOrNull().orEmpty()

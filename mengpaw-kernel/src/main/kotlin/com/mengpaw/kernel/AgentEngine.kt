@@ -52,6 +52,7 @@ class AgentEngine(
     private val goalModeExecutor = GoalModeExecutor(this)
     private val planModeExecutor = PlanModeExecutor(this, pipelineManager, sessionManager, promptEngine)
     private val swarmModeExecutor = SwarmModeExecutor(this)
+    private val ralphRunner = RalphRunner(this)
     var integrityProvider: IntegrityProvider = NoOpIntegrityProvider
         set(value) {
             field = value
@@ -295,10 +296,23 @@ class AgentEngine(
      */
     suspend fun runWithGoal(
         task: String, maxTurns: Int = 20, maxTokensBudget: Int = 300_000,
+        sessionFile: String? = null,
         onStep: ((TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
         onReasoning: ((String) -> Unit)? = null
-    ): String = goalModeExecutor.runWithGoal(task, maxTurns, maxTokensBudget, onStep, onDelta, onReasoning)
+    ): String = goalModeExecutor.runWithGoal(task, maxTurns, maxTokensBudget, sessionFile, onStep, onDelta, onReasoning)
+
+    // ── Ralph 模式 (delegated to RalphRunner) ─────────────────────────
+
+    /**
+     * Ralph 风格串行 fresh-agent 迭代 (P2-5): 同一目标交给多个全新子 agent (每轮新会话),
+     * 每轮注入目标 + 上一轮交接, 用共享工作区作长期记忆。完成判定 LLM 评估。
+     * 详见 [RalphRunner]。
+     */
+    suspend fun runRalph(
+        objective: String, maxRounds: Int = 3, maxStepsPerRound: Int = 20,
+        onStep: ((TraceStep) -> Unit)? = null
+    ): RalphRunner.RalphOutcome = ralphRunner.run(objective, llmProvider, maxRounds, maxStepsPerRound, onStep)
 
     /**
      * 会话结束兜底触发 Evolution Agent (v0.37.3) — 新失败累计达批次阈值时
