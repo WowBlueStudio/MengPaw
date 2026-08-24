@@ -51,4 +51,50 @@ class ReActParserTest {
         assertEquals("evolution.audit", parsed.action?.name)
         assertEquals("近3条", parsed.action?.parameters?.get("q"))
     }
+
+    // ── P1-1: JSON 数组工具调用 ──────────────────────────────────────
+
+    @Test
+    fun `json array of tool calls is translated`() {
+        val parsed = parser.parse(
+            """[{"command":"fs.cat","input":{"path":"/a"}},{"name":"agent.ls","parameters":{"path":"."}}]"""
+        )
+        assertFalse("JSON 数组工具调用不应被当最终答案", parsed.isFinal)
+        assertEquals(2, parsed.actions.size)
+        assertEquals("fs.cat", parsed.actions[0].name)
+        assertEquals("/a", parsed.actions[0].parameters["path"])
+        assertEquals("agent.ls", parsed.actions[1].name)
+        assertEquals(".", parsed.actions[1].parameters["path"])
+    }
+
+    @Test
+    fun `json array inside code fence is translated`() {
+        val parsed = parser.parse(
+            """先执行以下命令：
+```json
+[{"command":"self.status"},{"command":"agent.ls","input":{"path":"docs"}}]
+```"""
+        )
+        assertFalse("代码块内 JSON 数组应转译", parsed.isFinal)
+        assertEquals(2, parsed.actions.size)
+        assertEquals("self.status", parsed.actions[0].name)
+        assertTrue("无输入命令应为空参数", parsed.actions[0].parameters.isEmpty())
+        assertEquals("docs", parsed.actions[1].parameters["path"])
+    }
+
+    @Test
+    fun `file listing with only name keys stays final`() {
+        // 数据答案 [{name:...}] 无命令/输入键 — 不得误判为工具调用
+        val parsed = parser.parse("""结果是: [{"name":"a.txt","size":100},{"name":"b.txt","size":200}]""")
+        assertTrue("仅含 name 的文件清单应保持最终答案", parsed.isFinal)
+        assertTrue(parsed.actions.isEmpty())
+    }
+
+    @Test
+    fun `json object with command and string input maps to raw`() {
+        val parsed = parser.parse("""[{"command":"agent.memory","input":"记住这个"}]""")
+        assertFalse(parsed.isFinal)
+        assertEquals("agent.memory", parsed.actions.first().name)
+        assertEquals("记住这个", parsed.actions.first().parameters["raw"])
+    }
 }

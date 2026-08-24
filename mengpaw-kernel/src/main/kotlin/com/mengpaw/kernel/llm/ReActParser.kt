@@ -93,6 +93,17 @@ internal class ReActParser {
             return ReActResponse(thought, xmlCalls.first(), isFinal = false, actions = xmlCalls)
         }
 
+        // ── Rule 2c: JSON 数组工具调用 (P1-1 补强) ──
+        // 模型可能直接输出 JSON 数组 (或 ```json 代码块) 形式的工具调用, 而非 ReAct 文本。
+        // 本规则把这类结构化形态转译为 ToolCall, 复用去重/循环检测/门卫/超时整条链路,
+        // 降低"依赖复读文本标记"的脆弱性。保守门禁: 对象须带 command/name 键 (name 需再带
+        // input/parameters 等输入键) 才认定是工具调用, 避免把"文件清单 [{name:...}]"这类
+        // 合法 JSON 答案误判为工具调用。
+        val jsonCalls = parseJsonToolCalls(normalized)
+        if (jsonCalls.isNotEmpty()) {
+            return ReActResponse(extractThought(normalized), jsonCalls.first(), isFinal = false, actions = jsonCalls)
+        }
+
         // ── Rule 3: No "Action:" and no "Final Answer:" → natural language response ──
         // Key distinction:
         //   Explicit "Thought:" without "Action:" → model mid-reasoning → needsContinue
@@ -150,6 +161,67 @@ internal class ReActParser {
         if (lines.size >= 3 && lines.distinct().size == 1) return true
         return false
     }
+
+    /**
+     * 解析 JSON 数组形态的工具调用 (P1-1):
+     * ```
+     * [{"command":"fs.cat","input":{"path":"/a"}}, {"name":"agent.ls","parameters":{"path":"."}}]
+     * ```
+     * 兼容 ```json 代码块包裹。对象须带 "command"/"name" 键 (仅 name 时需再带
+     * input/parameters/params/arguments 输入键) 才认定为工具调用。无匹配返回空列表,
+     * 交回既有文本规则处理。永不抛异常。
+     */
+    private fun parseJsonToolCalls(text: String): List<ToolCall> {
+        try {
+            val candidate = extractJsonArray(text) ?: return emptyList()
+            val array = try {
+                Json.parseToJsonElement(candidate) as? JsonArray ?: return emptyList()
+            } catch (_: Exception) {
+                return emptyList()
+            }
+            val calls = array.mapNotNull { element ->
+                val obj = element as? JsonObject ?: return@mapNotNull null
+                // 分开取值, 避免 `as?` 与 `?.takeIf` 优先级歧义
+                val rawName = obj["command"] ?: obj["name"]
+                val namePrim = rawName as? JsonPrimitive
+                val name = namePrim?.takeIf { it.isString }?.content?.trim()
+                    ?: return@mapNotNull null
+                if (name.isEmpty()) return@mapNotNull null
+                // 仅 name 无输入键 → 疑似数据答案 (如文件清单), 不当工具调用
+                val hasInputKey = INPUT_KEYS.any { obj[it] != null }
+                if (obj["command"] == null && !hasInputKey) return@mapNotNull null
+                val inputValue = INPUT_KEYS.firstNotNullOfOrNull { obj[it] }
+                val params = when (inputValue) {
+                    is JsonObject -> inputValue.mapValues { (_, v) ->
+                        (v as? JsonPrimitive)?.content ?: v.toString()
+                    }
+                    is JsonPrimitive -> mapOf("raw" to inputValue.content)
+                    null -> emptyMap()
+                    else -> emptyMap()
+                }
+                ToolCall(name, params)
+            }
+            return calls
+        } catch (_: Exception) {
+            return emptyList()
+        }
+    }
+
+    /** 提取 JSON 数组候选: 优先 ```json 代码块内容, 其次整串开头即 '['。 */
+    private fun extractJsonArray(text: String): String? {
+        val fenceRe = Regex("(?is)```(?:json)?\\s*([\\s\\S]*?)\\s*```")
+        val fenced = fenceRe.find(text)?.groupValues?.get(1)?.trim()
+        if (fenced != null && fenced.startsWith("[") && fenced.endsWith("]")) return fenced
+        val trimmed = text.trimStart()
+        if (trimmed.startsWith("[")) {
+            val end = trimmed.indexOfLast { it == ']' }
+            if (end > 0) return trimmed.substring(0, end + 1)
+        }
+        return null
+    }
+
+    /** 工具调用的输入键候选 (按优先级取第一个存在者)。 */
+    private val INPUT_KEYS = listOf("input", "parameters", "params", "arguments")
 
     /** Extract Thought content from ReAct-format text, or return truncated beginning. */
     private fun extractThought(normalized: String): String {
