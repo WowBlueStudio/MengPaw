@@ -32,29 +32,33 @@ internal fun rememberAutoScrollBehavior(
     isRunning: Boolean,
 ) {
     /**
-     * 滚动到列表真正末端 — 末条高于视口时 scrollToItem 只对齐其顶部,
-     * 需按剩余距离补滚; 内容流式增长时循环校正直到 canScrollForward=false。
+     * 滚动到列表真正末端 — 跟随流式末尾且避免高频闪烁。
+     *
+     * 修复 (v0.44): 原实现每 100ms 先 `scrollToItem(total-1)` 把末条**顶部**对齐视口,
+     * 再 `scrollBy(remaining)` 且 remaining 是按"末条底部绝对坐标 - 视口高"算的绝对目标、
+     * 却用**累加**语义的 scrollBy 应用 → 每次都过滚被 clamp, 视口"上跳(对齐顶部)再下跳(回到底部)"
+     * 往复 → 生成期末条(流式答案)较长时高频闪烁。
+     * 新实现: 末条尚未可见才 scrollToItem(一次性定位); 正在跟随末条时只按
+     * "末条底部超出视口底部"的真实溢出向下滚, 不再顶部对齐, 消除上跳下跳。
      */
     suspend fun scrollToBottom() {
         val total = listState.layoutInfo.totalItemsCount
         if (total == 0) return
         try {
-            listState.scrollToItem(total - 1)
-            var guard = 0
-            while (listState.canScrollForward && guard < 10) {
-                val last = listState.layoutInfo.visibleItemsInfo.lastOrNull() ?: break
-                if (last.index != total - 1) {
-                    // 末条尚未可见 (布局重排/内容剧增) — 重新定位
-                    listState.scrollToItem(total - 1)
-                    guard++
-                    continue
-                }
-                // 末条底部超出视口底部的距离 (底部 contentPadding 由 canScrollForward 收口)
-                val remaining = last.offset + last.size - listState.layoutInfo.viewportSize.height
-                if (remaining <= 0) break
-                listState.scroll { scrollBy(remaining.toFloat()) }
-                guard++
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull() ?: return
+            // 末条尚未可见 → 定位到末条 (对齐其顶部, 一次性)
+            if (lastVisible.index != total - 1) {
+                listState.scrollToItem(total - 1)
+                return
             }
+            // 正在跟随末条 → 只按真实溢出向下滚 (当前滚动位置 = 首可见项内容偏移 + 首项已滚过像素)
+            val first = info.visibleItemsInfo.firstOrNull() ?: return
+            val currentScroll = first.offset + listState.firstVisibleItemScrollOffset
+            val viewportBottom = currentScroll + info.viewportSize.height
+            val lastBottom = lastVisible.offset + lastVisible.size
+            val overflow = lastBottom - viewportBottom
+            if (overflow > 0) listState.scroll { scrollBy(overflow.toFloat()) }
         } catch (e: CancellationException) {
             throw e // 协程取消正常传播 (组件退出/效果重启)
         } catch (_: Exception) { /* layout not ready, ignore */ }
