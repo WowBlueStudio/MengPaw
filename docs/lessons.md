@@ -4,6 +4,30 @@
 
 ---
 
+## 0. v0.43.0 — 利用 DeepSeek Harness 开发 (ReAct/Loop 修补) 踩坑
+
+> 本轮参照 DeepSeek Harness 的 ReAct/Loop 设计修补 MengPaw (P1-1~P2-6), 新增 Kernel 能力时踩的 Kotlin/工程坑:
+
+- **Kotlin `as?` 与 `?.` 优先级歧义**: `(expr) as? Type?.takeIf { }.content` 会被解析成
+  `expr as? (Type?.takeIf { ... }.content)` 触发 "Incomplete code/Expecting function type" 编译错。
+  **解法**: `as?` 结果先存局部变量, 再 `?.takeIf` — 分开两步写, 别连写。
+- **类内只允许一个 `companion object`**: 新增常量时并入既有 companion, 别再加第二个, 否则
+  "Only one companion object is allowed per class"。
+- **Kotlin 测试不能 `override fun finalize()`** (Java 受保护方法在 Kotlin 不继承可写): 用 JUnit
+  `@Before`/`@After` 做建/拆目录, 否则 "finalize overrides nothing"。
+- **循环检测安全命令集含 `ls`/`agent.docs`**: 给 `LoopDetector` 写"等价变体/交替"测试时, 用
+  `fs.cat`/`fs.ls` 这类**非安全**命令名, 否则命令根本不入检测窗口, 断言永不触发。
+- **包错位**: `GoalModeExecutor` 在 `com.mengpaw.kernel` 包, 而 `GoalSessionStore` 在
+  `com.mengpaw.kernel.agent` — 需显式 import, 否则一堆 `Unresolved reference 'GoalSessionStore'`
+  级联到整个方法体 (类型推断崩)。
+- **public 函数不得暴露 internal 返回类型**: 新增公开入口 (如 `AgentEngine.runRalph`) 时, 其
+  返回类型/承载类 (`RalphRunner`/`RalphOutcome`) 必须 public, 否则 "Function 'public' exposes its
+  'internal' return type"。
+- **发布前置**: 大改动先跑 target tests (`--tests ...`) 快速定位编译错, 全绿后再 `./gradlew test`
+  全量; gradle 配置缓存因 `gradle.properties` 版本号变化会失效一次 (正常)。
+
+---
+
 ## 1. 性能优化
 
 ### 1.1 缓存粒度的价值不在命中率，在失效精准度

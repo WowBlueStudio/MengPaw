@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.43.0 (2026-08-19) — 利用 DeepSeek Harness 开发 (ReAct/Loop 加固 + Ralph 迭代)
+
+> **本版本利用 DeepSeek Harness 进行开发**: 参照 DSH 的 `ReactLoopAgent` / `agent-loop` /
+> `dsh-goal-round-driver` / `dsh-tool-ralph` 设计, 对 MengPaw 的 ReAct/Loop 全部潜在问题
+> (P1-1 至 P2-6) 逐项修补并补齐两类编排能力。
+
+### 新增
+- **ReAct 解析器支持 JSON 数组工具调用 (P1-1)**: 模型直接输出 JSON 数组 (或 json 代码块)
+  形态工具调用时转译为 ToolCall, 复用去重/循环检测/门卫/超时链路; 保守门禁避免把文件清单等
+  合法 JSON 答案误判。降低"依赖复读文本标记"的脆弱性。
+- **Goal 会话持久续跑 (P2-4)**: `GoalModeExecutor` 支持 `sessionFile` 把 Goal 会话状态落盘
+  JSON, 任务中断后可从存档续跑 (对齐 DSH goal-round-driver 同目标续跑); 完成/终结时自动清理存档。
+- **Ralph 串行 fresh-agent 迭代 (P2-5)**: 新增 `RalphRunner` + `AgentEngine.runRalph` — 同一
+  不可变目标交给多个全新子 agent (每轮新会话, 注入目标 + 上一轮结构化交接, 共享工作区作长期
+  记忆), LLM 评估完成度 (对齐 DSH `dsh-tool-ralph`)。
+
+### 修复
+- **循环检测隔离并补强三通道 (P2-2/P1-3/P2-1)**: 检测状态收敛到每次运行一个 `LoopDetector`,
+  不再共享 PromptEngine 可变状态 (主循环与并行 worker 天然隔离); `detectLoop` 补 精确串重复 /
+  命令名等价变体 / 周期2交替 三通道, 消除 A-B 交替与参数变体绕行缺口, 并对整批命令逐一检测
+  (原只查首命令); 修正 `loop_detected` 文案阈值 3+ → 5+ 与实现一致。
+- **工具并行执行加有界并发 (P1-2)**: 主循环工具执行加 `Semaphore` 有界并发 (默认 8), 防单次
+  LLM 输出大量 Action 瞬间并发击穿本地/上游 (对齐 DSH agent-loop 有界滚动池)。
+- **幻觉门禁抑制自适应步数扩展 (P1-4)**: 模型顽固输出含幻觉 Final Answer 时不再触发 1.5×
+  步数扩展, 避免成本/时长放大。
+- **Swarm worker 渐进式纠正 (P2-3)**: 对齐主循环 — 同命令同错误码失败满阈值注入重试停指令,
+  连续 5 次失败早停, 不再干烧预算到 maxSteps。
+- **复用 ReActParser 实例 (P2-6)**: 最终答案退化检测不再每轮 new 解析器。
+
+### 发行
+- **开发工具**: 本版本利用 DeepSeek Harness 进行开发。
+- Shell APK: `mengpaw-shell-v0.43.0-release.apk` (versionCode 43000)
+- Browser APK: 本轮无变更, 不构建
+- 插件: 本轮 plugins/plugins.json 无变更, 不构建 AAR、不打 `plugins-v0.43.0` tag
+- 测试: 全量 1560 用例 0 failures (kernel 636 + core 116 + shell 232 + browser 56 + 插件 520)；并把 `SwarmModeExecutorTest.workers execute in parallel` 断言由墙钟阈值改为并发重叠 (负载无关 flake 修复)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.42.5 (2026-08-19) — Tavily API Key 配置入口
 
 ### 新增
