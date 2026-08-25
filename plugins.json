@@ -1,7 +1,7 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
   "version": 9,
-  "updated": "2026-08-19",
+  "updated": "2026-08-26",
   "plugins": [
     {
       "id": "concise-plugin",
@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "dream-plugin",
@@ -31,7 +31,7 @@
       "commands": [],
       "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
       "size": 3129,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "tavily-plugin",
@@ -63,7 +63,7 @@
       ],
       "checksum": "sha256:ab121f541be212f54a85949a8df59fadf1ab181baadd0019bb8fa3e175a601e9",
       "size": 21596,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "framework-plugin",
@@ -93,7 +93,7 @@
       ],
       "checksum": "sha256:b3e9be0bd5587f2c8a755b82ab68c0d04ca00f72458785c31cd04abf5817e958",
       "size": 110868,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "fs-plugin",
@@ -132,7 +132,7 @@
       ],
       "checksum": "sha256:a78b37dc205343cb0c08f18ff77566c3b6edca5d62e6006814d656fefe5ba213",
       "size": 17951,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "memory-twin-plugin",
@@ -163,7 +163,7 @@
       ],
       "checksum": "sha256:50b874379adcb91aa5100cd4c2bc96252226a511d6bf44614fa4baf6d40c5927",
       "size": 243330,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "skill-plugin",
@@ -186,9 +186,9 @@
         "skill.enable",
         "skill.disable"
       ],
-      "checksum": "sha256:ec087eb82a508215514da02ad91bf2ec83397b48585f778142f61504a46f08fe",
-      "size": 101169,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "checksum": "sha256:b21806d075a6573ec35635a4d37198f1365b653e5850e6a2a4937d3c8e6bd5b7",
+      "size": 103154,
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "clipboard-plugin",
@@ -206,7 +206,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "dev-plugin",
@@ -227,7 +227,7 @@
       ],
       "checksum": "sha256:66f20d2156a2b49e3995b4f5eed056562a8666c2c3c747df4df017ac58e111d5",
       "size": 35337,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "update-plugin",
@@ -251,7 +251,7 @@
       ],
       "checksum": "sha256:7622e5e5136a7301d3e152056b8f4845f00e88144ba8cc36da96c58804d32bc1",
       "size": 52305,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "translate-plugin",
@@ -363,7 +363,7 @@
       ],
       "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
       "size": 282877,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "comfy-plugin",
@@ -488,7 +488,7 @@
       ],
       "checksum": "sha256:32c402304b4190083c209773186368460ab813a757bc4a356d61ba03d5fdf21b",
       "size": 46842,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "termux-plugin",
@@ -507,7 +507,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "tools-plugin",
@@ -526,7 +526,7 @@
       ],
       "checksum": "sha256:fd6cf25efe806029cda88f3c47e40eec4b31cfee1128df50b28af5fe77ea0da2",
       "size": 36752,
-      "changelog": "### 新增\n- **框架设置「Tavily API Key」配置入口**: 在框架设置页 API 供应商下方、记忆管理上方\n  新增「Tavily API Key」卡片 — 内置 Tavily 网页搜索插件的 key 入口, 密码框直接填写 +\n  保存/清除 (可切换明文显示), 卡片右侧显示「已配置 / 未配置」状态徽标, 标题下方附副标题\n  「申请 Tavily API 之后，可以免费提升搜索性能」。保存走插件侧 `TavilyPlugin.saveApiKeyFromUi`\n  XOR 混淆落盘 (`tavily.json`, 复用 `tavily.setup` 同款格式) — key 明文不进会话历史/审计日志\n  (遵守 API Key 安全红线); 已配置状态经 `isApiKeyConfigured` 判定, 兼容旧明文 + `obf:` 格式。\n  免 Key 即可使用默认搜索, 配置 key 后可免费提升搜索性能。\n\n### 修复\n- (无功能性 bug 修复; 本轮为功能 + 文档/流程沉淀)\n\n### 发行\n- Shell APK: `mengpaw-she"
+      "changelog": "### 新增\n- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——\n  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；\n  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；\n  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；\n  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把"
     },
     {
       "id": "connector-openclaw-plugin",

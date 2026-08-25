@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.44.0 (2026-08-25) — 静默分支进化 + Chat 气泡闪烁修复
+
+### 新增
+- **静默分支进化 (智能体进化闭环重构)**: 进化从主会话彻底移出，改为静默分支会话自动沉淀——
+  - **持久化进化队列 `EvolutionQueue`**: 任意失败 / 用户纠正即入队（失败按命令名+错误码去重、幂等），落盘 `queue.jsonl` 重启不丢；
+  - **分支会话 Runner (`EvolutionBranchRunner`)**: scope=evolution 零待命分支会话，读失败/纠正 → 按 `evolution-branch` 剧本（金字塔四层 + 5-Why + 聚类 + 基础进化优先 + 四要素模板）分析 → 沉淀到共享工作区（memory / 指令集 / soul / 技能）→ `markCorrected`；会话保留供右侧边栏复盘，主对话全程不被污染；
+  - **新 skill 剧本 `evolution-branch`**: 随 plugin-skill 分发，Agent 与开发者可读可改；
+  - **触发**: `EvolutionHook` 失败捕获 + 用户纠正均入队；会话收尾异步处理进化队列，不再把进化报告当 User 消息丢进聊天。
+
+### 修复
+- **Chat 生成期气泡高频闪烁**: `MainScreenScrollBehavior.scrollToBottom` 每 100ms 先 `scrollToItem` 把末条顶部对齐视口、再以绝对目标 `scrollBy` 累加应用导致过滚被 clamp，视口"上跳再下跳"往复 → 流式答案较长时高频闪烁。改为"末条尚未可见才一次性定位，跟随末条时只按真实溢出向下滚"，消除上跳下跳。
+- **复现计数跨重启丢失 (G2)**: `ensureFailuresLoaded` 从磁盘回填 `repeatIndex`，跨会话复现数不再被覆盖为 1。
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.44.0-release.apk` (versionCode 44000)
+- Browser APK: 本轮无变更, 不构建
+- 插件: plugin-skill 有变更 (新增 evolution-branch skill 资产) — 构建 AAR 回写 plugins.json, 打 `plugins-v0.44.0` tag, GitHub Release 附 AAR
+- 测试: 全量 1565 用例 0 failures (kernel 641 + core 116 + shell 232 + browser 56 + 插件 520)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.43.0 (2026-08-19) — 利用 DeepSeek Harness 开发 (ReAct/Loop 加固 + Ralph 迭代)
 
 > **本版本利用 DeepSeek Harness 进行开发**: 参照 DSH 的 `ReactLoopAgent` / `agent-loop` /

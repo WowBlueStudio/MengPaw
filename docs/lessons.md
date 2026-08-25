@@ -28,6 +28,24 @@
 
 ---
 
+## 0.5 v0.44.0 — 静默分支进化 + 气泡闪烁修复 踩坑
+
+> 进化闭环重构 (分支会话) + Chat 气泡闪烁排障的坑:
+
+- **进化元任务不应侵入用户主会话**: 原 `buildFragment`/`buildSessionBrief`/复现强制二选一 以 system
+  消息注入主对话, 既污染上下文又打断任务。重构后进化移入 scope=evolution 静默分支会话, 主对话只保留
+  失败捕获 + retryLoopDirective 回合安全闸 + 幻觉统计。**设计**: 元任务与用户任务分离上下文。
+- **Compose LazyColumn `scrollBy` 是累加语义, 传绝对目标会过滚**: 贴底滚动 `scrollBy(last.offset +
+  last.size - viewportHeight)` 把"绝对目标"当增量应用 → 每帧过滚被 clamp, 视口"上跳(对齐顶部)再
+  下跳(回底部)"往复 → 生成期高频闪烁。**解法**: 只按"末条底部超出视口底部"的真实溢出 `delta>0` 才
+  滚; 且不要每帧 `scrollToItem` 顶部对齐末条。
+- **Compose `LazyListItemInfo.offset` 是内容坐标(绝对), 不是视口相对**: 求"当前滚动位置"要用
+  `firstVisibleItem.offset + firstVisibleItemScrollOffset`; 求溢出用 `last.offset + last.size - 视口底`。
+- **`listState.scrollBy` 不在 LazyListState 直接可见**: 需 `listState.scroll { scrollBy(...) }`
+  (ScrollScope receiver), 否则 "Unresolved reference 'scrollBy'"。
+
+---
+
 ## 1. 性能优化
 
 ### 1.1 缓存粒度的价值不在命中率，在失效精准度
