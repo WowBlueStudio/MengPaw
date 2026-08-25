@@ -323,17 +323,10 @@ internal class TaskExecutionPipeline(
         }
     }
 
-    /** 会话结束兜底: Evolution Agent 分析触发 + 报告投递 (成功/异常路径共用, v0.37.3)。 */
+    /** 会话结束兜底: 静默分支进化 (v0.44) — 处理进化队列, 不再把报告当 User 消息丢进聊天。 */
     private suspend fun maybeDeliverEvolutionReport(session: AgentSession) {
         try {
-            val evolutionReport = session.engine.maybeTriggerEvolution()
-            if (evolutionReport != null) {
-                session.messages.value = session.messages.value +
-                    ChatMessageUi.User(
-                        "🧬 Evolution Agent 进化报告已生成\n\n报告: $evolutionReport\n\n" +
-                            "请按 evolution 技能审阅采纳 (金字塔追问 + 增量沉淀)。"
-                    )
-            }
+            session.engine.runEvolutionBranches()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (_: Exception) {}
