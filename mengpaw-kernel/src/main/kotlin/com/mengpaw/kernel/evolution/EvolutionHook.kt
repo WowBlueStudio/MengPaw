@@ -44,6 +44,14 @@ object EvolutionHook {
                 source = entry.source,
                 sessionId = entry.sessionId ?: ""
             )
+            // 静默分支进化 (v0.44): 出失败即入队, 由分支会话异步处理 (去重: 同模式待处理跳过)
+            EvolutionQueue.enqueueFailure(
+                agentName = entry.agentName,
+                command = command,
+                errorCode = errorCode,
+                message = entry.message,
+                sessionId = entry.sessionId ?: ""
+            )
         } catch (_: Exception) { /* 钩子永不崩溃 */ }
     }
 
@@ -54,6 +62,8 @@ object EvolutionHook {
     fun recordCorrection(agentName: String?, correction: String, contextSnippet: String, task: String) {
         try {
             EvolutionProviderRegistry.active().recordCorrection(agentName, correction, contextSnippet, task)
+            // 静默分支进化 (v0.44): 用户纠正 (语义/行为类问题) 也入队进化
+            EvolutionQueue.enqueueCorrection(agentName, correction, contextSnippet, task)
         } catch (_: Exception) { /* 钩子永不崩溃 */ }
     }
 }

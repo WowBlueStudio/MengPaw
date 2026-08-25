@@ -53,6 +53,7 @@ class AgentEngine(
     private val planModeExecutor = PlanModeExecutor(this, pipelineManager, sessionManager, promptEngine)
     private val swarmModeExecutor = SwarmModeExecutor(this)
     private val ralphRunner = RalphRunner(this)
+    private val evolutionBranchRunner = com.mengpaw.kernel.evolution.EvolutionBranchRunner(this)
     var integrityProvider: IntegrityProvider = NoOpIntegrityProvider
         set(value) {
             field = value
@@ -327,6 +328,21 @@ class AgentEngine(
             throw e
         } catch (_: Exception) {
             null
+        }
+    }
+
+    /**
+     * 静默分支进化 (v0.44): 处理进化队列 (失败/纠正), 在 scope=evolution 分支会话中
+     * 沉淀到共享工作区。由会话收尾方 (TaskExecutionPipeline) 异步调用。
+     * @return 成功处理的队列项数。
+     */
+    suspend fun runEvolutionBranches(): Int {
+        return try {
+            evolutionBranchRunner.drain(agentName, llmProvider)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            0
         }
     }
 
