@@ -57,11 +57,23 @@ class DelayLlmProvider(
 ) : LlmProvider {
     val calls = CopyOnWriteArrayList<String>()
     private val idx = AtomicInteger(0)
+    private val active = AtomicInteger(0)
+
+    /** 并发调用峰值 — 并行执行断言用 (负载无关, 替代脆弱的墙钟阈值)。 */
+    @Volatile
+    var maxConcurrent: Int = 0
+        private set
 
     override suspend fun complete(prompt: String): String {
         calls.add(prompt)
-        delay(delayMs)
-        return responses[idx.getAndIncrement().coerceAtMost(responses.lastIndex)]
+        val cur = active.incrementAndGet()
+        if (cur > maxConcurrent) maxConcurrent = cur
+        try {
+            delay(delayMs)
+            return responses[idx.getAndIncrement().coerceAtMost(responses.lastIndex)]
+        } finally {
+            active.decrementAndGet()
+        }
     }
 
     override suspend fun completeWithMessages(messages: List<Map<String, String>>): String =

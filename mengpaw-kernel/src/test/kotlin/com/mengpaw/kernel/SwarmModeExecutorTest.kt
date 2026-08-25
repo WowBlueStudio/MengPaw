@@ -94,7 +94,10 @@ class SwarmModeExecutorTest {
 
     @Test
     fun `workers execute in parallel`() = runBlocking {
-        // 4 子任务, 每 worker 2 轮 LLM (每轮 100ms) → 单 worker 200ms; 顺序执行需 ≥800ms
+        // 4 子任务, 每 worker 2 轮 LLM (每轮 100ms) — 并行时应互相重叠。
+        // 断言改为「并发重叠」而非墙钟阈值 (v0.43.0): 原 elapsed<700ms 在本机高负载
+        // (其他进程占满 CPU) 下会超时误报, 且 100ms 级时序受机器负载放大失真。
+        // 用共享 DelayLlmProvider 的 maxConcurrent>=2 语义验证并行 (负载无关)。
         val planner = ScriptedLlmProvider(listOf(
             """[{"id":"a","desc":"任务A","criteria":"完成A"},{"id":"b","desc":"任务B","criteria":"完成B"},""" +
                 """{"id":"c","desc":"任务C","criteria":"完成C"},{"id":"d","desc":"任务D","criteria":"完成D"}]"""
@@ -107,7 +110,6 @@ class SwarmModeExecutorTest {
         )
         val engine = engineWith(planner)
 
-        val start = System.currentTimeMillis()
         engine.runWithSwarm(
             task = "并行任务",
             roles = mapOf(
@@ -116,10 +118,12 @@ class SwarmModeExecutorTest {
             ),
             maxSubtasks = 4, maxParallel = 4
         )
-        val elapsed = System.currentTimeMillis() - start
 
-        // 并行: ~200ms + 拆解/合成; 顺序: ≥800ms
-        assertTrue("并行执行应显著快于顺序 (elapsed=$elapsed)", elapsed < 700)
+        // 4 个 worker 若并行, 至少 2 次 LLM 调用在飞重叠; 串行则恒为 1
+        assertTrue(
+            "worker 应并行重叠执行 (maxConcurrent=${worker.maxConcurrent}, 期望>=2)",
+            worker.maxConcurrent >= 2
+        )
     }
 
     // ── 用例 3: 会话隔离 (回归锚点) ─────────────────────────────────
