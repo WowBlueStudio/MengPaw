@@ -527,12 +527,12 @@ class AgentEngineTest {
         assertTrue(result.contains("已达到最大步数") || result.contains("Max steps"))
     }
 
-    // ── P0 静默门禁 (2026-08-08): 幻觉拦截对用户不可见 ──
+    // ── v0.44 静默分支进化: 幻觉即时门禁已移除 (幻觉偶发, 由分支会话沉淀) ──
 
     @Test
-    fun `final answer gate rejects silently and injects feedback only to LLM`() = runBlocking {
-        // 失败 → 声称成功 (幻觉) → 门禁静默拒绝 → 反馈仅注入下一轮 LLM 请求 (不落会话历史) → 如实回答
-        val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_gate_silent_" + System.nanoTime()
+    fun `hallucinated final answer passes through since gate removed`() = runBlocking {
+        // 失败 → 声称成功 (幻觉) → v0.44 门禁移除 → 答案直接放行, 不注入"内部反馈" (幻觉率统计仍保留)
+        val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_gate_removed_" + System.nanoTime()
         com.mengpaw.kernel.DataPaths.initialize(tmp)
         val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
         agentDir.mkdirs()
@@ -546,7 +546,7 @@ class AgentEngineTest {
             }
             override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
                 respond().also { onToken(it) }
-            override fun info() = ProviderInfo("mock", "silent-gate", ProviderType.LOCAL)
+            override fun info() = ProviderInfo("mock", "no-gate", ProviderType.LOCAL)
             override fun close() {}
             fun respond(): String = when (turn++) {
                 0 -> """
@@ -554,21 +554,17 @@ class AgentEngineTest {
                     Action: cat
                     Action Input: missing.md
                 """.trimIndent()
-                1 -> "Final Answer: 文件已成功读取, 内容完整。"
-                else -> "Final Answer: 无法读取 missing.md, 文件不存在。"
+                else -> "Final Answer: 文件已成功读取, 内容完整。"
             }
         }
         val sm2 = SessionManager()
         val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
         val result = engine2.run("静默门禁测试", maxSteps = 5)
-        assertTrue("应返回如实回答: $result", result.contains("无法读取"))
-        val history = sm2.getHistory(engine2.currentConversationId()!!).joinToString("\n") { it.content }
-        assertFalse("门禁反馈不得写入会话历史 (静默): $history",
-            history.contains("内部反馈") || history.contains("声称任务完成"))
+        assertTrue("幻觉答案现直接放行: $result", result.contains("已成功读取"))
         val injected = receivedByLlm.any { msgs ->
             msgs.any { it["role"] == "system" && it["content"].orEmpty().contains("内部反馈") }
         }
-        assertTrue("反馈应注入下一轮 LLM 请求 (仅 LLM 可见)", injected)
+        assertFalse("不应再注入内部反馈 (门禁移除)", injected)
     }
 
     @Test
@@ -621,9 +617,8 @@ class AgentEngineTest {
     }
 
     @Test
-    fun `stubborn hallucinated final answer terminates at step budget instead of passing`() = runBlocking {
-        // 顽固幻觉: 失败后 LLM 反复声称成功, 门禁拒绝不设上限 → 幻觉答案绝不放行,
-        // 每次拒绝消耗一步预算, 循环在 effectiveMax 处终止 (返回 max_steps, 而非假成功)
+    fun `stubborn hallucinated final answer passes through since gate removed`() = runBlocking {
+        // v0.44: 幻觉即时门禁移除 — 顽固幻觉答案不再被拒绝到步数上限, 直接放行; 由静默分支进化沉淀。
         val tmp = System.getProperty("java.io.tmpdir") + "/mengpaw_gate_stubborn_" + System.nanoTime()
         com.mengpaw.kernel.DataPaths.initialize(tmp)
         val agentDir = java.io.File(tmp, "Agent文档/MengPaw")
@@ -638,7 +633,7 @@ class AgentEngineTest {
             }
             override suspend fun completeStreaming(prompt: String, onToken: (String) -> Unit): String =
                 respond().also { onToken(it) }
-            override fun info() = ProviderInfo("mock", "stubborn-gate", ProviderType.LOCAL)
+            override fun info() = ProviderInfo("mock", "no-gate-stubborn", ProviderType.LOCAL)
             override fun close() {}
             fun respond(): String = when (turn++) {
                 0 -> """
@@ -646,17 +641,15 @@ class AgentEngineTest {
                     Action: cat
                     Action Input: missing.md
                 """.trimIndent()
-                // 此后永远声称成功 — 门禁必须拒绝到底, 不得超限放行
                 else -> "Final Answer: 文件已成功读取, 内容完整。"
             }
         }
         val sm2 = SessionManager()
         val engine2 = AgentEngine(llmProvider = llm, sessionManager = sm2)
         val result = engine2.run("顽固幻觉测试", maxSteps = 3)
-        assertFalse("幻觉答案绝不能被放行: $result", result.contains("已成功读取"))
-        assertTrue("应由步数上限终止: $result", result.contains("最大步数") || result.contains("Max steps"))
-        // 1 次 Action + 2 次拒绝后 (step 达上限) 终止, 而非无限循环
-        assertEquals("拒绝应消耗步数预算 (LLM 共 3 轮)", 3, receivedByLlm.size)
+        assertTrue("幻觉答案现在直接放行: $result", result.contains("已成功读取"))
+        // 1 次 Action + 1 次 Final Answer = 2 轮 (不再拒绝烧到步数上限)
+        assertEquals("幻觉答案应一轮放行 (LLM 共 2 轮)", 2, receivedByLlm.size)
     }
 
     @Test

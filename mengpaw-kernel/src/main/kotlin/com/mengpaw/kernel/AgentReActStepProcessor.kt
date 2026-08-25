@@ -102,37 +102,11 @@ internal class AgentReActStepProcessor(
                     "疑似第三方服务端篡改/剥离系统提示词 (铲子式注入), 请核查 LLM 供应商/中转端点")
             }
         }
-        // P0: 会话结局真实度 — 检测 Final Answer 是否如实提及本轮失败 (幻觉率)
+        // P0: 会话结局真实度 — 检测 Final Answer 是否如实提及本轮失败 (幻觉率统计)
+        // v0.44 (静默分支进化): 仅保留统计 (veracity.jsonl 作分支数据源), 移除会话内
+        // 幻觉门禁即时拦截 — 幻觉已属偶发, 不再主会话内调整, 由分支会话静默沉淀。
         com.mengpaw.kernel.evolution.EvolutionStore.recordSessionOutcome(
             engine.agentName, state.sessionFailures, cleaned)
-        // P0 实质化: Final Answer 门禁 — 本轮有失败但未如实提及 → 拒绝并静默纠正。
-        // 统计只度量幻觉; 门禁在幻觉发生的当下拦截, 把"声称成功"打回为"如实汇报"。
-        // 拒绝不设次数上限 (2026-08-08): 幻觉答案绝不放行; 防死循环由 step 预算兜底 —
-        // 每次拒绝也消耗一步 (step++), LLM 若顽固反复输出幻觉 Final Answer,
-        // 循环会在 effectiveMax 处终止并返回 max_steps 错误, 而不是放行假成功。
-        if (state.sessionFailures.isNotEmpty()) {
-            val unmentioned = com.mengpaw.kernel.evolution.EvolutionStore.unmentionedFailures(
-                cleaned, state.sessionFailures)
-            if (unmentioned.isNotEmpty()) {
-                state.hallucinationRejections++
-                state.step++
-                val failedList = unmentioned.joinToString("\n") { "  - ${it.first} → Error [${it.second}]" }
-                // 静默门禁 (2026-08-08): 反馈只注入下一轮 LLM 请求 (buildConversation
-                // 末尾追加 system), 不写入会话历史 — UI/持久化/后续上下文零污染。
-                // 引导方向: 优先静默纠正 (重试/换命令), 成功则正常收尾不暴露内部过程;
-                // 确认无法完成时才用自然语言如实说明, 不再强制堆内部错误码。
-                conversation.pendingVeracityFeedback =
-                    "【内部反馈 · 仅本轮有效, 不向用户展示】你的上一轮 Final Answer 声称任务完成, " +
-                    "但以下操作实际失败且未如实反映:\n$failedList\n\n" +
-                    "要求: ① 若失败可修复, 立即静默纠正 (重试或换用其他命令), 成功后正常给出 " +
-                    "Final Answer, 无需复述历史失败; ② 若确认无法完成, 最终回答须如实说明未能完成 " +
-                    "的部分与原因 (自然语言即可, 不必引用内部错误码)。" +
-                    "禁止声称失败的操作已成功。请重新输出 Final Answer。"
-                com.mengpaw.kernel.KernelLog.w("AgentEngine",
-                    "幻觉门禁拒绝 Final Answer (第 ${state.hallucinationRejections} 次, 静默注入): ${unmentioned.size} 条失败未提及")
-                return ReActTurnResult.Continue
-            }
-        }
         engine.getSessionManager().addMessage(state.session.id, Message("assistant", cleaned))
         // No boundary message — the conversation continues naturally.
         // The LLM sees full history: previous FinalAnswer + new user message = context.
@@ -268,9 +242,8 @@ internal class AgentReActStepProcessor(
                 ErrorCollector.report(ErrorType.TOOL_CALL_FAILED, "AgentEngine",
                     "$commandLine → ${result.error}", sessionId = state.session.id, agentName = engine.agentName,
                     metadata = mapOf("errorCode" to errorCode, "command" to commandLine))
-                // 进化省察: 生成金字塔引导片段, 下次 LLM 调用注入 (轻/深分级)
-                conversation.pendingGuideFragment = com.mengpaw.kernel.evolution.EvolutionGuide.buildFragment(
-                    agentName = engine.agentName, command = commandLine, message = result.error ?: "")
+                // 进化省察引导已移出主会话 (v0.44 静默分支进化) — 由分支会话沉淀,
+                // 不再注入主对话 system 片段。
             }
             // errorCode 注入 Observation — 模型可见错误类型 (PARAM_FORMAT_ERROR/NETWORK_OFFLINE/...)
             var rawObservation = if (result.success) {
@@ -280,15 +253,12 @@ internal class AgentReActStepProcessor(
             }
             // ── QwenPaw-style tool result pruning ──
             rawObservation = engine.toolResultManager.pruneToolResult(commandLine, rawObservation, state.step + 1)
-            // ── P1 闭环 (2026-08-08 自检): 复现模式命中且未沉淀 → 注入强制处理提醒 ──
-            // prune 之后追加, 防被结果裁剪截掉; 提醒是框架级指令, 非不可信数据。
+            // ── 回合内重试循环停指令 (2026-08-08, 对齐 QwenPaw PR #3178) ──
+            // 同命令同错误码满 3 次: 注入"停止重试, 换方法或向用户说明", 而非立即终止 —
+            // 给 Agent 一次转向机会; 继续空转由 detectLoop/trackResult/max_steps 兜底。
+            // (v0.44 保留: 这是当前任务循环安全闸, 非进化引导; 复现强制提醒 recurrenceReminder
+            //  已移出主会话, 由静默分支进化处理。)
             if (!result.success) {
-                val recurrence = com.mengpaw.kernel.evolution.EvolutionStore.recurrenceReminder(
-                    engine.agentName, commandLine, result.errorCode ?: "")
-                if (recurrence != null) rawObservation = "$rawObservation\n\n$recurrence"
-                // ── 回合内重试循环停指令 (2026-08-08, 对齐 QwenPaw PR #3178) ──
-                // 同命令同错误码满 3 次: 注入"停止重试, 换方法或向用户说明", 而非立即终止 —
-                // 给 Agent 一次转向机会; 继续空转由 detectLoop/trackResult/max_steps 兜底。
                 val retryKey = commandLine to (result.errorCode ?: "TOOL_CALL_FAILED")
                 val stop = com.mengpaw.kernel.evolution.EvolutionStore.retryLoopDirective(
                     commandLine, retryKey.second, state.retryCounts[retryKey] ?: 0, retryKey in state.retryNotified)

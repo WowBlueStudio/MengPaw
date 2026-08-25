@@ -12,14 +12,9 @@ import com.mengpaw.kernel.session.*
  */
 internal class AgentConversation(private val engine: AgentEngine) {
 
-    // ── Evolution (Agent 进化系统) ─────────────────────────────────
-    /** 待注入的金字塔省察引导片段 (失败后生成, 下次 LLM 调用消费). */
-    @Volatile internal var pendingGuideFragment: String? = null
-    /** 本会话已注入引导次数 (限流, 防刷屏). */
-    internal var guideInjections = 0
-    // ── P0 静默门禁 (2026-08-08): Final Answer 幻觉拦截反馈 ──
-    /** 待注入的静默门禁反馈 (拒绝幻觉 Final Answer 后生成, 只进下一轮 LLM 请求, 不落会话历史). */
-    @Volatile internal var pendingVeracityFeedback: String? = null
+    // ── v0.44 静默分支进化 ─────────────────────────────────────────
+    // 原 pendingGuideFragment/guideInjections/pendingVeracityFeedback 字段已随
+    // "进化省察引导 + 幻觉门禁移出主会话"一并移除 (由分支会话沉淀)。
 
     // ── Integrity terminal latch (matching OpenClaw terminal latch pattern) ──
     // Once tripped, blocks further LLM calls until the session is repaired.
@@ -137,29 +132,17 @@ internal class AgentConversation(private val engine: AgentEngine) {
         }
 
         // ── 注入片段 (只进当轮请求, 不落会话历史) ──
-        // ① 进化省察引导: 金字塔提问片段 (限流 MAX_INJECTIONS/会话)
-        // ② 静默门禁反馈: 幻觉 Final Answer 拒绝后的纠正指令
+        // v0.44 (静默分支进化): 进化省察引导 / 幻觉静默门禁已移出主会话, 由分支会话沉淀;
+        // 此处仅保留对话需求跟踪块注入。
         // 追加到对话末尾而非 add(0) 前插 — 前插会使后续所有消息位移, 击穿整个
         // 前缀缓存 (prompt caching 按字节前缀命中); 末尾追加只增不改, 缓存前缀不受扰动,
         // 且"最新指令"语义更强（紧贴当前轮次）。
-        // 只对主会话注入 — 并行 worker（mission/swarm 零待命会话）不消费主循环遗留的
-        // 注入片段（防注入错目标会话）。worker 各自有独立循环, 门禁反馈仅主循环产生。
         val isWorkerScope = engine.getSessionManager().getSession(sessionId)?.scope in AgentEngine.WORKER_SCOPES
         val injectables = mutableListOf<String>()
         if (!isWorkerScope) {
-            val guide = pendingGuideFragment
-            if (guide != null && guideInjections < com.mengpaw.kernel.evolution.EvolutionGuide.MAX_INJECTIONS) {
-                guideInjections++
-                pendingGuideFragment = null
-                injectables.add(guide)
-            }
-            pendingVeracityFeedback?.let {
-                pendingVeracityFeedback = null
-                injectables.add(it)
-            }
             // 对话需求跟踪块 (v0.41.1 未发布): 规则式目标清单 — 从会话 user 消息抽取
             // 最近需求, 最新为当前重点、旧需求为待办。只进当轮请求, 不落历史;
-            // 追加到末尾保护前缀缓存 (与进化引导/静默门禁同机制)。
+            // 追加到末尾保护前缀缓存。
             buildGoalTrackingBlock(
                 rawMessages.filter { it.role == "user" && !it.localOnly }.map { it.content }
             )?.let { injectables.add(it) }

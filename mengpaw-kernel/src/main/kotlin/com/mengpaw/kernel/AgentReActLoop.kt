@@ -40,10 +40,10 @@ internal class AgentReActLoop(
     ): String {
         ErrorCollector.init()
 
-        // ── Evolution: 钩子归系统 + 绩效反馈注入 ──
+        // ── Evolution: 钩子归系统 (失败捕获入队) ──
+        // v0.44 (静默分支进化): 会话开局绩效提醒 buildSessionBrief 已移出主会话,
+        // 不再注入主对话; 进化由失败/纠正入队后分支会话静默沉淀。
         com.mengpaw.kernel.evolution.EvolutionHook.install()
-        conversation.guideInjections = 0
-        conversation.pendingGuideFragment = com.mengpaw.kernel.evolution.EvolutionGuide.buildSessionBrief(engine.agentName)
 
         // ── Persistent conversation (Claude Code pattern) ──
         // Reuse existing session across multiple user messages so the
