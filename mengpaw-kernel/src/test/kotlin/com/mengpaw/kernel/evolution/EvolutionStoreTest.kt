@@ -43,6 +43,22 @@ class EvolutionStoreTest {
     }
 
     @Test
+    fun `repeat count survives process restart via disk backfill (G2)`() {
+        // G2 (v0.44): ensureFailuresLoaded 从磁盘回填 repeatIndex, 跨重启复现数不丢失
+        EvolutionStore.resetFailuresForTest()
+        EvolutionStore.recordFailure("evo-g2", "fs.cat /a", "ERR_IO", "m", "Pipeline")
+        EvolutionStore.recordFailure("evo-g2", "fs.cat /a", "ERR_IO", "m", "Pipeline")
+        assertEquals("同进程第 2 次应计 2", 2,
+            EvolutionStore.recentFailures("evo-g2", 1).first().repeatCount)
+        // 模拟进程重启: 清空内存态 (repeatIndex/buffer/懒加载标记), 保留磁盘
+        EvolutionStore.resetFailuresForTest()
+        // 重启后再次失败 — 应继续计 3, 而非重置为 1
+        EvolutionStore.recordFailure("evo-g2", "fs.cat /a", "ERR_IO", "m", "Pipeline")
+        assertEquals("跨重启复现数应继续到 3", 3,
+            EvolutionStore.recentFailures("evo-g2", 1).first().repeatCount)
+    }
+
+    @Test
     fun `markCorrected flags failure for performance close`() {
         val f = EvolutionStore.recordFailure("evo-test-3", "net.get", "ERR_TIMEOUT", "timeout", "Pipeline")
         assertTrue(EvolutionStore.markCorrected("evo-test-3", f.id))

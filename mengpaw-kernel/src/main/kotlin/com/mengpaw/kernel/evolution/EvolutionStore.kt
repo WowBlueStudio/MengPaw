@@ -587,6 +587,11 @@ object EvolutionStore {
                 }
                 val merged = mergePatterns(raw)
                 buffer.addAll(merged)
+                // G2 (v0.44): 从磁盘回填 repeatIndex — 否则重启后 recordFailure 用
+                // (repeatIndex[key] ?: 0)+1 重算 count=1, 覆盖磁盘真实复现数, 跨会话复现历史丢失。
+                merged.forEach { f ->
+                    repeatIndex["$agent|${commandNameOf(f.command)}|${f.errorCode}"] = f.repeatCount
+                }
                 // 历史有重复行 → 整理落盘 (去重后每模式一行)
                 if (merged.size != raw.size) rewriteFile(agent)
             } catch (_: Exception) { /* 读取失败降级为空档案 */ }
