@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.44.0 | **更新**: 2026-08-25 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(124文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
+> **版本**: 0.44.0 | **更新**: 2026-08-25 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(124文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
 
 ---
 
@@ -71,7 +71,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | mengpaw-core | Android Library | 20 | — | Android 适配层：Vault / IntegrityGuard / SysExecutor |
 | mengpaw-design-system | Android Library | 8 | — | Arco 主题 / Markdown 渲染 / 基础组件 |
 | mengpaw-shell | APK | 118 | 0.34.1 (vc=34001) | 主应用：AgentRuntime + Chat UI + 设置 + 会话管理 (独立持久化/切换恢复/跨会话搜索) + 智能体管理 + 扩展功能重构 |
-| mengpaw-browser | APK | 45 | 0.8.1 (vc=14) | 半自动武器: page.* Playwright 命令面 (22) + am 桥 RunCommandService + MCP 开放模式 (第三方免认证, 仅回环) + 超长页分段截图坐标 + 公共目录落盘 (MANAGE_EXTERNAL_STORAGE) + 5标签预渲染 + 会话持久化 + 收藏夹 + 暗色模式 + file:// |
+| ~~mengpaw-browser~~ | ~~APK~~ | ~~45~~ | ~~0.8.1 (vc=14)~~ | **已拆分独立仓库** `WowBlueStudio/MengPaw-Browser` (v0.8.x 独立版本线)，经 JitPack 依赖本仓库 kernel/core/design-system 构件。详见 §3.4 |
 
 ### 2.3 内置命名空间（在 kernel 中，始终可用）
 
@@ -108,10 +108,10 @@ mengpaw-shell
       memory-twin / root / hermes(tribe) / agent-tools / dream / evolution / concise / tavily
       (self 与 memory 已融入内核, 非插件)
 
-mengpaw-browser
-  ├── mengpaw-kernel
-  ├── mengpaw-core
-  └── mengpaw-design-system
+mengpaw-browser (独立仓库 MengPaw-Browser, 经 JitPack 依赖)
+  ├── com.github.WowBlueStudio.MengPaw:mengpaw-kernel
+  ├── com.github.WowBlueStudio.MengPaw:mengpaw-core
+  └── com.github.WowBlueStudio.MengPaw:mengpaw-design-system
 
 plugins/ (16 模块, 全部内置捆绑; 13 个外置插件见独立仓库 mengpaw-connectors)
   └── mengpaw-kernel  ← 所有插件只依赖微内核（同级）
@@ -251,7 +251,11 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 **UI emoji 约定 (v0.31.0 清理)**: UI 文本 (系统气泡/菜单/徽标/按钮) 禁用装饰性 emoji — 纯装饰的移除, 承载语义的 (状态/图标) 换 `Icons.Outlined` 线性图标 (会话/模型/系统/搜索/发送/截图/浏览器/云/复制/箭头/失败/成功/导出/时钟/恢复/分享/刷新/语音/挂起/检查/暂停/删除/保存/编辑/目录/书签/链接/用户/设置/锁/播放)。规则: 有语义用图标, 无语义直接删除, 不保留裸 emoji; Agent 生成的文本 (模型输出) 不受限。列表变更时同步本段落。
 
-### 3.4 mengpaw-browser（独立浏览器，45 文件，v0.8.1 半自动武器 + MCP 开放模式）
+### 3.4 mengpaw-browser（独立浏览器，已拆分独立仓库 `WowBlueStudio/MengPaw-Browser`）
+
+> **仓库拆分 (v0.45.0)**: 浏览器模块源码已移至独立仓库 `MengPaw-Browser`（v0.8.x 独立版本线），
+> 经 JitPack 依赖本仓库共享地基构件（`com.github.WowBlueStudio.MengPaw:mengpaw-kernel/core/design-system:<tag>`）。
+> 本节保留浏览器架构文档供参考，源码与版本节奏以独立仓库为准。45 文件，v0.8.1 半自动武器 + MCP 开放模式。
 
 | 目录/文件 | 职责 |
 |-----------|------|
@@ -1080,6 +1084,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 #### update — 自动更新 (4)（内置插件，v0.37.3 迁入 plugins/plugin-update）
 `check` | `download` | `install` | `auto`
 > 双源回退 (GitHub → Gitee → ghproxy)；安装经系统安装器（签名校验 + FileProvider 授权）；Shell 与 Browser 必须同一签名证书。设置页「系统设置 → 自动更新」提供检查/下载/安装入口与 WiFi 自动检查、自动下载开关。**检查源只认应用发布**（tag 为 `vX.Y.Z` 且含 Shell APK；GitHub 用 `releases?per_page=10` 列表接口，`/releases/latest` 会被同刻创建的 `plugins-v*` 插件发布顶替——v0.40.0 实测踩坑）。
+> **仓库拆分 (v0.45.0)**: Shell 主仓库 (`WowBlueStudio/MengPaw`) release 提供 Shell APK；Browser 独立仓库 (`WowBlueStudio/MengPaw-Browser`, 独立版本线 v0.8.x) 提供 Browser APK。`update.check` 分别拉取两个仓库合并——shell 更新不受 browser 仓库可达性影响（browser 仓库不可达时仅 browser 更新缺省）。
 > **线程纪律 (v0.40.1)**: 设置页 check/download/install 三个入口与 `UpdateDownloader` 下载逻辑全部包 `withContext(Dispatchers.IO)` — check 内部 tryFetch 走 OkHttp 同步网络、install 内含 APK 签名校验 (读 10MB 文件)，任一在主线程执行即 Input dispatching timed out ANR（2026-08-16 设备实测，下载按钮 v0.39.2 已修、检查按钮本版补齐）。
 > **安装结果对账 (未发布, P1)**: 系统安装器是外部异步流程，App 无法感知安装结果——安装生效后 `updates` 目录残留 APK，设置页 `readyToInstall` 只认文件存在，导致新版装好后仍显示「安装」按钮误导用户重复安装同一版本。修复：每次启动（`UpdateNotifier.notifyIfUpdated`）与设置页刷新（`hasDownloaded` 懒检查）对账——已下载 APK 版本 ≤ 当前版本即删除并清除「待安装/安装中」状态；用户取消安装（版本未变）时 APK 保留可重试。
 
