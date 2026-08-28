@@ -224,17 +224,22 @@ internal class UpdateDownloader(
 
         // v0.42.2 加固: 版本校验 — 残留旧包 (不高于当前) 或中间版本包 (低于最新) 直接
         // 删除并提示重新下载, 杜绝「点安装装旧版」 (0.41.0 用户复现: 旧包残留导致
-        // 更新入口变安装, 且装的是旧包)
-        val apkTag = tagFromApkName(apk.name)
-        val versionError = installVersionError(
-            apkTag = apkTag,
-            currentVersion = UpdateNotifier.currentVersion(context),
-            latestTag = releaseProvider()?.tag,
-        )
-        if (versionError != null) {
-            downloadedApk = null
-            apk.delete()
-            return ExecutionResult.fail(versionError, errorCode = ErrorCodes.ERR_INVALID_INPUT)
+        // 更新入口变安装, 且装的是旧包)。
+        // v0.44.2 修复: 仅对 shell 做版本校验。browser 是独立版本线 (v0.8.x),
+        // 与 shell 当前版本比较会恒判为过期误删 browser 更新包 — browser 由
+        // Agent 按需自行下载安装 (设计定案), 不套 shell 版本门禁。
+        if (!shouldSkipVersionCheck(target)) {
+            val apkTag = tagFromApkName(apk.name)
+            val versionError = installVersionError(
+                apkTag = apkTag,
+                currentVersion = UpdateNotifier.currentVersion(context),
+                latestTag = releaseProvider()?.tag,
+            )
+            if (versionError != null) {
+                downloadedApk = null
+                apk.delete()
+                return ExecutionResult.fail(versionError, errorCode = ErrorCodes.ERR_INVALID_INPUT)
+            }
         }
 
         // SECURITY: Verify APK signature matches current app before installing
@@ -278,6 +283,14 @@ internal class UpdateDownloader(
     /** 从 APK 文件名提取版本 tag (mengpaw-shell-v0.38.4.apk → v0.38.4) — internal 为测试可见性。 */
     internal fun tagFromApkName(name: String): String =
         name.removePrefix("mengpaw-shell-").removePrefix("mengpaw-browser-").removeSuffix(".apk")
+
+    /**
+     * 该目标是否应跳过版本校验 — v0.44.2 修复 (browser 独立版本线)。
+     * shell 用 shell 当前版本做门禁 (残留旧包/中间版本防误装); browser 是独立版本线
+     * (v0.8.x), 与 shell 版本比较会恒判为过期误删, 由 Agent 按需自行下载安装 (设计定案),
+     * 故跳过 shell 版本门禁。internal 为测试可见性。
+     */
+    internal fun shouldSkipVersionCheck(target: String): Boolean = target != "shell"
 
     /**
      * Verify the downloaded APK is signed with the same certificate as the currently

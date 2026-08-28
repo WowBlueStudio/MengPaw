@@ -386,6 +386,16 @@ class UpdateLogicTest {
         assertNull("无最新信息时高于当前应放行", d.installVersionError("v0.42.2", "0.41.0", null))
     }
 
+    // ── v0.44.2 修复: browser 独立版本线跳过 shell 版本门禁 ───────────────
+
+    @Test
+    fun `shouldSkipVersionCheck skips only non-shell targets`() {
+        val d = newDownloader()
+        assertFalse("shell 应做版本校验", d.shouldSkipVersionCheck("shell"))
+        assertTrue("browser 独立版本线应跳过 shell 版本校验", d.shouldSkipVersionCheck("browser"))
+        assertTrue("未知目标应跳过 (非 shell)", d.shouldSkipVersionCheck("other"))
+    }
+
     @Test
     fun `pruneBelowLatestApks removes only versions below latest`() {
         val dir = tmp.newFolder("updates2")

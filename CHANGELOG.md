@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.44.2 (2026-08-28) — 修复 browser 安装版本校验误判
+
+### 修复
+- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。
+- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)
+- Browser APK: 已拆分独立仓库, 独立版本线 v0.8.1, 于 `WowBlueStudio/MengPaw-Browser` 独立发布
+- 插件: 本轮 plugin-update 有变更 (browser 版本校验修复), 构建 AAR 回写 plugins.json, 打 `plugins-v0.44.2` tag, GitHub Release 附 AAR
+- 测试: 全量 1519 用例 0 failures (kernel 641 + core 116 + shell 232 + 插件 530, browser 已拆独立仓库不在此口径)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.44.1 (2026-08-28) — 仓库拆分: 浏览器独立仓库 + 自动更新双仓库解析
 
 ### 新增

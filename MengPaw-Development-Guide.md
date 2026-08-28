@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.44.1 | **更新**: 2026-08-28 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(124文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
+> **版本**: 0.44.2 | **更新**: 2026-08-28 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(124文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
 
 ---
 
@@ -565,6 +565,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > v0.43.0 发布实测（2026-08-19，利用 DeepSeek Harness 开发）：kernel 619 → 636（+17）+ core 116 + shell 232 + browser 56 + 插件 520 = 1560 用例，0 failures。增量：LoopDetectorTest 6 + AgentErrorsTest 2 + ReActParserTest JSON 数组 4 + GoalSessionStoreTest 3 + RalphRunnerTest 2；并把 SwarmModeExecutorTest「workers execute in parallel」断言由墙钟阈值（elapsed<700ms，高负载下 flake）改为**并发重叠**（DelayLlmProvider.maxConcurrent≥2，负载无关）。
 > v0.44.0 发布实测（2026-08-25，静默分支进化 + 气泡闪烁修复）：kernel 636 → 641（+5）+ core 116 + shell 232 + browser 56 + 插件 520 = 1565 用例，0 failures。增量：EvolutionQueueTest 4 + EvolutionStoreTest G2 跨重启复现计数 1；AgentEngineTest 幻觉门禁两用例改断言新行为（幻觉答案直接放行）。
 > v0.44.1 发布实测（2026-08-28，仓库拆分 + 自动更新双仓库解析）：**browser 已拆独立仓库（MengPaw-Browser），主仓库测试口径不再含 browser**。kernel 641 + core 116 + shell 232 + 插件 528 = **1517 用例**，0 failures。增量：plugin-update +8（parseBrowserRelease 接受/拒绝/plugins 过滤 + mergeBrowserRelease 冒烟 4 用例 × 双套；口径: 插件 520 → 528）。仓库拆分后 browser 56 用例移至独立仓库。
+> v0.44.2 发布实测（2026-08-28，修复 browser 安装版本校验误判）：kernel 641 + core 116 + shell 232 + 插件 530 = **1519 用例**，0 failures。增量：plugin-update +2（`shouldSkipVersionCheck skips only non-shell targets` × 双套；口径: 插件 528 → 530）。browser 独立版本线 (v0.8.x) 跳过 shell 版本门禁。
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
