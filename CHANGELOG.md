@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.44.1 (2026-08-28) — 仓库拆分: 浏览器独立仓库 + 自动更新双仓库解析
+
+### 新增
+- **浏览器独立仓库拆分 (按 APK 产物)**: `mengpaw-browser` 模块源码移至独立仓库 `WowBlueStudio/MengPaw-Browser` (Gitee 镜像同步), 浏览器独立版本线 (v0.8.x); 共享地基 (kernel/core/design-system) 配置 `maven-publish` 支持 JitPack 构件 (`com.github.WowBlueStudio.MengPaw:<module>:<tag>`) 供浏览器仓库依赖。
+- **共享地基 JitPack 化**: kernel/core/design-system 发布 release 变体, 浏览器独立仓库经 JitPack 拉取, 与 mengpaw-connectors 同模式。
+
+### 修复
+- **自动更新改双仓库解析源**: `update.check` 分别拉取 Shell 主仓库 (`WowBlueStudio/MengPaw`, 提供 Shell APK) 与浏览器独立仓库 (`WowBlueStudio/MengPaw-Browser`, 提供 Browser APK) 合并进同一 ReleaseInfo; 浏览器仓库不可达不影响 Shell 更新。修复浏览器拆分后 Browser APK 更新源指向错误仓库的问题。
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.44.1-release.apk` (versionCode 44001)
+- Browser APK: 已拆分独立仓库, 独立版本线 v0.8.1, 于 `WowBlueStudio/MengPaw-Browser` 独立发布
+- 插件: 本轮 plugin-update 有变更 (自动更新双仓库解析), 构建 AAR 回写 plugins.json, 打 `plugins-v0.44.1` tag, GitHub Release 附 AAR
+- 测试: 全量 1517 用例 0 failures (kernel 641 + core 116 + shell 232 + 插件 528, browser 已拆独立仓库不在此口径)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.44.0 (2026-08-25) — 静默分支进化 + Chat 气泡闪烁修复
 
 ### 新增
