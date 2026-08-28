@@ -4,10 +4,21 @@
 plugins {
     kotlin("jvm")
     kotlin("plugin.serialization")
+    `maven-publish`
 }
 
-group = "com.mengpaw"
-version = "0.1.0"
+// 单一事实源: 与 gradle.properties 的 mengpaw.version 对齐, JitPack 发布时以 git tag 覆盖
+val publishGroup: String = providers.gradleProperty("mengpaw.group").orElse("com.github.WowBlueStudio.MengPaw").get()
+group = publishGroup
+version = providers.gradleProperty("mengpaw.version").orElse("0.1.0").get()
+
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            from(components["java"])
+        }
+    }
+}
 
 // ── Generate MengPawVersion.kt from gradle.properties ──
 val mengpawVersion: String = project.findProperty("mengpaw.version") as? String ?: "0.0.0"

@@ -5,7 +5,13 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
+    `maven-publish`
 }
+
+// 单一事实源: 与 gradle.properties 的 mengpaw.version 对齐, JitPack 发布时以 git tag 覆盖
+val publishGroup: String = providers.gradleProperty("mengpaw.group").orElse("com.github.WowBlueStudio.MengPaw").get()
+group = publishGroup
+version = providers.gradleProperty("mengpaw.version").orElse("0.0.0").get()
 
 android {
     namespace = "com.mengpaw.core"
@@ -27,6 +33,18 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false  // Library module — let app module handle minification
+        }
+    }
+}
+
+// Android library: 发布 release AAR 变体
+afterEvaluate {
+    publishing {
+        publications {
+            create<MavenPublication>("release") {
+                from(components["release"])
+                artifactId = "mengpaw-core"
+            }
         }
     }
 }
