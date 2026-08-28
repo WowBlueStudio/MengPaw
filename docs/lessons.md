@@ -1348,4 +1348,39 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 ⑤ 双远端推送 + 双平台 Release(§5)一次到位: origin 双 push URL 同时推 GitHub+Gitee,
    Gitee release 经 API 创建 (target_commitish 取 tag SHA) + curl -F 上传 APK, 均已验证。
 
-*最后更新: 2026-08-19 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 + §31 下载链路三坑 (Gitee 时序/源选择/主线程 ANR) + 设备交付流程变更 (不再 ADB 推送, v0.39.1) + §32 技能闭环三连 (删注释教训/reason 门禁表独立源/审计追执行链) + 腾讯记忆系统评审不入致谢 + §33 v0.40.0 发布实操四则 (用例数口径/Gitee 上传慢/origin 双 push/崩溃旧记录) + §34 v0.40.1 发布实操 (ANR 闭环/UI 入口统一线程纪律/读栈防误导/跨会话 diff 核对) + §35 气泡显示简化用户定案/GitHub push 网络波动复现 + §36 气泡重构 v0.40.2 发布实操 (2026-08-17) + §37 v0.41.0 发布实操 (2026-08-18) + §38 v0.42.1 发布实操 (2026-08-18) + §39 v0.42.2 发布实操 (2026-08-18) + §40 v0.42.3 发布实操 (2026-08-18) + §41 v0.42.4 发布实操 (2026-08-18) + §42 发布流程简化定案 (2026-08-18) + §43 接手与知识沉淀 (2026-08-18) + §44 v0.42.5 发布实操 (2026-08-19)*
+
+*最后更新: 2026-08-19 · §1-14 主题经验 + §15 历史教训浓缩库（原 LESSONS.md 118 条 → 约 80 条要点）+ §16 外置插件迁移 + §17 会话收尾归档 + §18 Linux 命令通道 + §19 浏览器半自动武器 + §20 插件增量发布 + 思考容器闭环/通知权限 + §21 ReAct 思考流式动画截断 + §22 Termux 多层环境桥接 + §23 sys.* 审查修复 + §24 sys.* 补满/12q/v0.37.0 + §25 Token 图表口径重构/v0.37.1 + §26 发布断网/自绘UI自动化/v0.37.1 + §27 印象笔记连接器/v0.37.2 + §28 思考气泡四连坑/Evolution Agent/v0.38.0 + v0.38.1 发布快照口径核对/Gitee release 回填实操 + v0.38.3 GitHub push 网络波动处理 + §29 表格渲染三连坑/自动更新入口设计/发版 Gitee 同步 + §30 自动更新安装链路 FileProvider P0/系统提示词剧本化/中英同改 + §31 下载链路三坑 (Gitee 时序/源选择/主线程 ANR) + 设备交付流程变更 (不再 ADB 推送, v0.39.1) + §32 技能闭环三连 (删注释教训/reason 门禁表独立源/审计追执行链) + 腾讯记忆系统评审不入致谢 + §33 v0.40.0 发布实操四则 (用例数口径/Gitee 上传慢/origin 双 push/崩溃旧记录) + §34 v0.40.1 发布实操 (ANR 闭环/UI 入口统一线程纪律/读栈防误导/跨会话 diff 核对) + §35 气泡显示简化用户定案/GitHub push 网络波动复现 + §36 气泡重构 v0.40.2 发布实操 (2026-08-17) + §37 v0.41.0 发布实操 (2026-08-18) + §38 v0.42.1 发布实操 (2026-08-18) + §39 v0.42.2 发布实操 (2026-08-18) + §40 v0.42.3 发布实操 (2026-08-18) + §41 v0.42.4 发布实操 (2026-08-18) + §42 发布流程简化定案 (2026-08-18) + §43 接手与知识沉淀 (2026-08-18) + §44 v0.42.5 发布实操 (2026-08-19) + §45 仓库拆分: 浏览器独立仓库 + 自动更新双仓库解析 (2026-08-28)*
+
+---
+
+## 45. 仓库拆分: 浏览器独立仓库 + 自动更新双仓库解析 (2026-08-28)
+
+> 按最终 APK 产物将单仓库拆分为 **shell 主仓库** (`D:\MengPaw`, 含 kernel/core/design-system/shell/全部插件) 与 **browser 独立仓库** (`D:\MengPaw-browser`, 仅浏览器模块, 经 JitPack 依赖主仓库共享地基)。
+
+### 关键决策
+- **共享地基归属**: kernel/core/design-system 是两者共享, 不能塞进任一方 → **JitPack 依赖** (browser 仓库只含自身源码, 地基经 `com.github.WowBlueStudio.MengPaw:<module>:<tag>` 拉取)。与 mengpaw-connectors 依赖内核同模式。
+- **版本线**: browser 独立版本 v0.8.x (build.gradle.kts `browserVersion` + gradle.properties `mengpaw.browser.version` 双点, 需同步); 地基版本 `mengpaw.foundation.version` 指向主仓库 kernel tag。
+- **自动更新 D3 定案**: 仍由 shell 的 update-plugin 捎带 browser, 但 **shell 主仓库 release 只含 Shell APK, browser 独立仓库 release 含 Browser APK** → check 分别拉取两仓库合并。
+
+### 技术要点
+- **共享地基发布配置**: 三模块加 `maven-publish` + `maven-publish` 插件。kernel 用 `components["java"]` (JVM); core/design-system 是 Android library, 用 `components["release"]` + `afterEvaluate { publishing { publications { create<MavenPublication>("release") } } }`。groupId 经 gradle.properties `mengpaw.group` 统一 (默认 `com.github.WowBlueStudio.MengPaw`, 点连接非冒号)。版本用 `mengpaw.version`, JitPack 发布时以 git tag 覆盖。
+- **发布 POM 传递依赖**: design-system/core 的 POM 已正确声明 `mengpaw-kernel` 为 runtime 依赖 (Gradle metadata), 消费者经 JitPack/mavenLocal 拉 design-system 时会自动传递解析 kernel, 无需显式重复依赖。
+- **JitPack 网络坑 (关键)**: 独立仓库 `settings.gradle.kts` 若同时声明 `mavenLocal()` 在前 + `jitpack.io` 在后, 在线构建会**优先尝试 jitpack.io 导致连接超时卡死** (首次解析 design-system POM 的 compose-bom 传递依赖时)。**解法**: 用 gradle 属性 `mengpaw.useLocal=true` 门控 mavenLocal (本地验证用), 缺省走 jitpack (CI/生产)。本地验证命令: `gradlew ... --offline -Pmengpaw.useLocal=true`。注意 PowerShell 中 `-P` 参数会被误解析, 需引号包裹 `"-Pmengpaw.useLocal=true"`。
+- **离线构建可复用主仓库缓存**: 独立仓库与主仓库同 Gradle 8.12 + AGP 8.7.3 + Kotlin 2.0.21, 共享全局依赖缓存, `--offline` 构建有效 (前提是地基构件已 publishToMavenLocal)。
+- **browser 依赖 shell 的 proguard-common.pro**: 原 `../mengpaw-shell/proguard-common.pro` 跨模块引用, 拆分后需在独立仓库根复制一份 `proguard-common.pro`, build.gradle 改 `../proguard-common.pro`。
+
+### 自动更新双仓库改造
+- `UpdatePlugin.check()`: 拉 shell 主仓库 (`WowBlueStudio/MengPaw`) → shellUrl + 主 tag; 新增 `mergeBrowserRelease()` 拉 browser 独立仓库 (`WowBlueStudio/MengPaw-Browser`) → browserUrl, 合并进同一 `ReleaseInfo`。browser 仓库不可达时仅 browser 缺省, **不影响 shell 更新**。
+- 新增常量 `BROWSER_GITHUB_API_URL` / `BROWSER_GITEE_API_URL` + `parseBrowserRelease()` / `tryFetchBrowserRelease()`。
+- 版本 tag 过滤复用 `isAppReleaseTag` (vX.Y.Z), browser 仓库同样排除 plugins-v*。
+- 测试: `UpdateLogicTest` 新增 parseBrowserRelease 用例 (接受/拒绝/plugins 过滤), 全量 31 用例通过。注意 `ReleaseInfo` 是 data class 位置参数多, 构造务必用**命名参数**, 否则 String/Long 类型错位 (实踩: shellSize 传了 String)。
+
+### 流程坑
+- **gradle 并行任务勿并行**: 独立仓库与主仓库共享 daemon 时, 若前一个 build (如 assembleDebug) 未释放 daemon, 后续 test 会排队等待卡死。**先 `gradlew --stop` + 杀 java 进程, 再单跑一个任务**。
+- **PowerShell `-P` 参数**: `-Pmengpaw.useLocal=true` 被 PS 当开关解析 → "Task not found" 或解析错。用 `--` 或引号 `"-Pkey=value"` 包裹。
+- **git commit 粒度污染**: 用 `git rm` 删除 browser 模块后, 若暂存区残留删除记录, 后续 `git add` 特定文件时**不会**清掉已暂存的删除 → 第一个 commit 会混入 browser 删除。**提交前先 `git status` 核对暂存区**, 或用 `git add -p` 精确控制。
+- **gitee-upload.sh 过时脚本**: 含硬编码 token (红线违规) + v0.6.1 旧 browser APK 路径, 已被 gitee-release.ps1 取代 → 直接删除。
+
+### 验收口径
+- 主仓库: kernel 80 套件 641 用例 0 失败; `:mengpaw-shell:compileDebugKotlin` 通过; `:plugin-update:testDebugUnitTest` 31 用例通过。
+- browser 独立仓库: `:mengpaw-browser:assembleDebug` + `testDebugUnitTest` (28 用例) 通过, 产出 `mengpaw-browser-v0.8.1-debug.apk` (19.35MB)。
