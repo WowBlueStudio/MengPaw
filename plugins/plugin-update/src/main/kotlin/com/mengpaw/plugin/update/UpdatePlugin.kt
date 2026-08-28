@@ -135,16 +135,20 @@ class UpdatePlugin : Plugin {
             return formatCheckResult(currentVersion, release)
         }
 
+        // Shell 主仓库 (WowBlueStudio/MengPaw): 解析 Shell APK + 主版本 tag。
         // Try GitHub → Gitee → ghproxy
         val urls = listOf(GITHUB_API_URL, GITEE_API_URL, GHPROXY_API_URL)
         var lastError: String? = null
         for ((i, url) in urls.withIndex()) {
             val result = tryFetchRelease(url)
             if (result != null) {
-                latestRelease = result
+                // 仓库拆分后: browser 独立仓库 (MengPaw-Browser) 解析 browser APK, 合并进同一 ReleaseInfo。
+                // shell 主仓库 release 只含 shell APK; browser 由独立仓库提供 (D3: shell 捎带, URL 改指)。
+                val withBrowser = mergeBrowserRelease(result)
+                latestRelease = withBrowser
                 lastCheckTime = System.currentTimeMillis()
                 saveConfig()  // P2 修复: 上次检查时间即时落盘, 重启后不丢失
-                if (compareVersions(result.tag.removePrefix("v"), getCurrentVersion() ?: "") > 0) {
+                if (compareVersions(withBrowser.tag.removePrefix("v"), getCurrentVersion() ?: "") > 0) {
                     // v0.42.2 加固: 发现新版本 → 清理 updates 中低于最新版的残留包
                     // (含中间版本), 防设置页「安装」按钮命中旧包装错版本
                     downloader.pruneBelowLatest()
@@ -153,12 +157,84 @@ class UpdatePlugin : Plugin {
                     downloader.clearInstallPending()
                     downloader.reconcileInstalledState()
                 }
-                return formatCheckResult(currentVersion, result)
+                return formatCheckResult(currentVersion, withBrowser)
             }
             lastError = if (i == urls.lastIndex) "所有更新源均不可达。💡 建议检查网络连接，或使用 VPN 访问 GitHub。" else null
         }
 
         return ExecutionResult.fail(lastError ?: "检查更新失败", errorCode = ErrorCodes.ERR_INTERNAL)
+    }
+
+    /**
+     * 从独立 browser 仓库 (MengPaw-Browser) 拉取 browser APK, 合并进 shell 的 ReleaseInfo。
+     * shell 主仓库与 browser 仓库是两条独立版本线 (shell v0.44.x / browser v0.8.x) —
+     * browser 下载 URL 改指 browser 仓库 (D3 定案)。
+     * browser 仓库不可达时保留原 shell 信息 (shell 更新不受影响), 不阻断。
+     */
+    private suspend fun mergeBrowserRelease(shell: ReleaseInfo): ReleaseInfo {
+        val browserUrls = listOf(BROWSER_GITHUB_API_URL, BROWSER_GITEE_API_URL)
+        for (url in browserUrls) {
+            val browserRelease = tryFetchBrowserRelease(url) ?: continue
+            if (browserRelease.browserUrl.isNotEmpty()) {
+                return shell.copy(browserUrl = browserRelease.browserUrl, browserSize = browserRelease.browserSize)
+            }
+        }
+        return shell
+    }
+
+    /** Try to fetch browser repo release info from a single URL. Returns null on failure. */
+    private suspend fun tryFetchBrowserRelease(url: String): ReleaseInfo? {
+        return try {
+            val response = client.get(url) {
+                if ("gitee" in url) header("Accept", "application/json")
+                else header("Accept", "application/vnd.github.v3+json")
+            }
+            if (response.status.value !in 200..299) return null
+
+            val json = Json.parseToJsonElement(response.bodyAsText())
+            val source = when {
+                "gitee" in url -> "gitee"
+                else -> "github"
+            }
+            val candidates = when (json) {
+                is JsonArray -> json.filterIsInstance<JsonObject>()
+                is JsonObject -> listOf(json)
+                else -> return null
+            }
+            for (obj in candidates) {
+                parseBrowserRelease(obj, source)?.let { return it }
+            }
+            null
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "UpdatePlugin.tryFetchBrowser")
+            null
+        }
+    }
+
+    /**
+     * 解析 browser 仓库的单个 release 对象 — 只认 browser APK 资产。
+     * browser 仓库 tag 走独立版本线 (v0.8.x), 同样以 vX.Y.Z 应用 tag 过滤 (排除非应用发布)。
+     * internal 为测试可见性。
+     */
+    internal fun parseBrowserRelease(json: JsonObject, source: String): ReleaseInfo? {
+        val tag = (json["tag_name"] as? JsonPrimitive)?.content ?: return null
+        if (!isAppReleaseTag(tag)) return null  // 排除 plugins-v* 等非应用发布
+        if ((json["prerelease"] as? JsonPrimitive)?.content == "true") return null
+        val assets = (json["assets"] as? JsonArray) ?: JsonArray(emptyList())
+        var browserUrl = ""; var browserSize = 0L
+        assets.forEach { a ->
+            if (a !is JsonObject) return@forEach
+            val dUrl = (a["browser_download_url"] as? JsonPrimitive)?.content ?: ""
+            val dSize = (a["size"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L
+            if (dUrl.contains("mengpaw-browser")) { browserUrl = dUrl; browserSize = dSize }
+        }
+        if (browserUrl.isEmpty()) return null  // browser 仓库发布必带 Browser APK
+        // browser 仓库不承载 shell — shell 字段留空 (由 shell 主仓库填充)
+        return ReleaseInfo(
+            tag = tag, name = tag, body = "",
+            shellUrl = "", shellSize = 0L,
+            browserUrl = browserUrl, browserSize = browserSize, source = source
+        )
     }
 
     /** Try to fetch release info from a single URL. Returns null on failure. */
@@ -364,6 +440,10 @@ class UpdatePlugin : Plugin {
         private const val GITHUB_API_URL = "https://api.github.com/repos/WowBlueStudio/MengPaw/releases?per_page=10"
         private const val GITEE_API_URL = "https://gitee.com/api/v5/repos/WowBlueStudio/MengPaw/releases/latest"
         private const val GHPROXY_API_URL = "https://ghproxy.com/$GITHUB_API_URL"
+        // 仓库拆分 (v0.45.0+): browser 独立仓库 MengPaw-Browser, 独立版本线 (v0.8.x)。
+        // browser APK 由该仓库发布; shell 主仓库 release 只含 shell APK。
+        private const val BROWSER_GITHUB_API_URL = "https://api.github.com/repos/WowBlueStudio/MengPaw-Browser/releases?per_page=10"
+        private const val BROWSER_GITEE_API_URL = "https://gitee.com/api/v5/repos/WowBlueStudio/MengPaw-Browser/releases/latest"
         /** 应用发布 tag 格式 vX.Y.Z — 排除 plugins-v* 插件发布 (P2 修复)。 */
         private val APP_TAG_REGEX = Regex("""^v\d+\.\d+\.\d+$""")
 

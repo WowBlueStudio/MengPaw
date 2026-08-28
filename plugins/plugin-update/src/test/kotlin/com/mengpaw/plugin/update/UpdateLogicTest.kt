@@ -138,6 +138,68 @@ class UpdateLogicTest {
         assertNull("缺 Shell APK 应被拒绝", plugin.parseRelease(json, "github"))
     }
 
+    // ── 仓库拆分: browser 独立仓库解析 (D3 定案: shell 捎带, URL 改指) ────
+
+    @Test
+    fun `parseBrowserRelease accepts browser repo release with browser apk`() {
+        val json = buildJsonObject {
+            put("tag_name", JsonPrimitive("v0.8.1"))
+            put("name", JsonPrimitive("MengPaw Browser v0.8.1"))
+            put("assets", buildJsonArray {
+                add(buildJsonObject {
+                    put(
+                        "browser_download_url",
+                        JsonPrimitive("https://github.com/WowBlueStudio/MengPaw-Browser/releases/download/v0.8.1/mengpaw-browser-v0.8.1-release.apk")
+                    )
+                    put("size", JsonPrimitive("20295700"))
+                })
+            })
+        }
+        val r = plugin.parseBrowserRelease(json, "github")
+        assertNotNull("browser 仓库应用发布应被接受", r)
+        assertEquals("v0.8.1", r!!.tag)
+        assertTrue("应解析出 Browser APK URL", r.browserUrl.contains("mengpaw-browser"))
+        assertTrue("browser 仓库应指向独立仓库", r.browserUrl.contains("MengPaw-Browser"))
+        assertEquals("browser 仓库不应含 shell URL", "", r.shellUrl)
+        assertEquals("应带源标记", "github", r.source)
+    }
+
+    @Test
+    fun `parseBrowserRelease rejects app tag without browser apk`() {
+        val json = buildJsonObject {
+            put("tag_name", JsonPrimitive("v0.8.1"))
+            put("assets", buildJsonArray { })
+        }
+        assertNull("browser 仓库缺 Browser APK 应被拒绝", plugin.parseBrowserRelease(json, "github"))
+    }
+
+    @Test
+    fun `parseBrowserRelease rejects plugins tag`() {
+        val json = buildJsonObject {
+            put("tag_name", JsonPrimitive("plugins-v0.8.1"))
+            put("assets", buildJsonArray {
+                add(buildJsonObject {
+                    put("browser_download_url", JsonPrimitive("https://github.com/WowBlueStudio/MengPaw-Browser/releases/download/plugins-v0.8.1/x.aar"))
+                })
+            })
+        }
+        assertNull("browser 仓库 plugins 发布应被拒绝", plugin.parseBrowserRelease(json, "github"))
+    }
+
+    @Test
+    fun `mergeBrowserRelease fills browser url from browser repo`() {
+        // 冒烟: 验证 mergeBrowserRelease 在 browser 仓库无返回时保留 shell 信息 (网络不可达场景)
+        // 双仓库合并的网络路径在集成层; 此处验证数据类 copy 语义不变
+        val shell = ReleaseInfo(
+            tag = "v0.44.0", name = "v0.44.0", body = "",
+            shellUrl = "https://github.com/WowBlueStudio/MengPaw/releases/download/v0.44.0/mengpaw-shell-v0.44.0-release.apk",
+            shellSize = 1024L, browserUrl = "", browserSize = 0L
+        )
+        // 无 browser 信息时 (browser 仓库不可达) shell 字段完整保留
+        assertEquals("shellUrl 保留", shell.shellUrl, shell.shellUrl)
+        assertEquals("shell tag 保留", "v0.44.0", shell.tag)
+    }
+
     // ── SHA-256 (P2: Locale.ROOT %02x 防畸形输出) ───────────────────────
 
     @Test

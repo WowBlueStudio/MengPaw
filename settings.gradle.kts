@@ -23,7 +23,7 @@ include(":mengpaw-kernel")
 include(":mengpaw-core")
 include(":mengpaw-design-system")
 include(":mengpaw-shell")
-include(":mengpaw-browser")
+// mengpaw-browser 已拆分为独立仓库 (MengPaw-Browser, 经 JitPack 依赖本仓库共享地基)
 
 // ── Plugins (active) ────────────────────────────────────
 include(":plugin-framework")
