@@ -32,6 +32,7 @@
 |------|------|------|
 | `mengpaw-onboarding` | 接任/开始任何开发任务前 | 上手与日常开发对齐：知识入口/红线/工作方式/环境构建铁律/测试纪律/技能导航 |
 | `mengpaw-release` | 用户说"发布/发新版/release" | 版本发布全流程（版本号/CHANGELOG/测试/构建/签名/双远端/GitHub+Gitee Release/自动更新交付） |
+| `mengpaw-r8-opt` | R8 优化/R8 慢/keep 规则/全模式 | R8 全模式(AGP 8+ 默认)/printSeedsR8/-whyareyoukeeping 诊断/避免过宽 keep/shrinkResources/Baseline Profiles（编译与发布时 R8 配套） |
 | `mengpaw-plugin-dev` | 插件开发/审计/市场发布 | 插件创建/审计/关键词/构建/plugins.json 回写/发布 |
 | `mengpaw-pr-review` | 用户说"评审这个 PR" | PR 机器门禁 + 九维审查 + 分级输出 |
 | `closure-audit-12q` | 功能闭环审计/12问 | 三层十二问功能闭环审计 |
