@@ -1,7 +1,7 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
   "version": 9,
-  "updated": "2026-08-28",
+  "updated": "2026-08-29",
   "plugins": [
     {
       "id": "concise-plugin",
@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "dream-plugin",
@@ -31,7 +31,7 @@
       "commands": [],
       "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
       "size": 3129,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "tavily-plugin",
@@ -63,7 +63,7 @@
       ],
       "checksum": "sha256:ab121f541be212f54a85949a8df59fadf1ab181baadd0019bb8fa3e175a601e9",
       "size": 21596,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "framework-plugin",
@@ -93,7 +93,7 @@
       ],
       "checksum": "sha256:b3e9be0bd5587f2c8a755b82ab68c0d04ca00f72458785c31cd04abf5817e958",
       "size": 110868,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "fs-plugin",
@@ -132,7 +132,7 @@
       ],
       "checksum": "sha256:a78b37dc205343cb0c08f18ff77566c3b6edca5d62e6006814d656fefe5ba213",
       "size": 17951,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "memory-twin-plugin",
@@ -163,7 +163,7 @@
       ],
       "checksum": "sha256:50b874379adcb91aa5100cd4c2bc96252226a511d6bf44614fa4baf6d40c5927",
       "size": 243330,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "skill-plugin",
@@ -186,9 +186,9 @@
         "skill.enable",
         "skill.disable"
       ],
-      "checksum": "sha256:b21806d075a6573ec35635a4d37198f1365b653e5850e6a2a4937d3c8e6bd5b7",
-      "size": 103154,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "checksum": "sha256:1e3314818042b2a9fd2591dbd52108eab3a8199d44cdbebf5d00460cbbdde55c",
+      "size": 102559,
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "clipboard-plugin",
@@ -206,7 +206,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "dev-plugin",
@@ -227,7 +227,7 @@
       ],
       "checksum": "sha256:66f20d2156a2b49e3995b4f5eed056562a8666c2c3c747df4df017ac58e111d5",
       "size": 35337,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "update-plugin",
@@ -251,7 +251,7 @@
       ],
       "checksum": "sha256:446b750f6ba0044b7067337c04c5528dfb568fac0b891c58bb2fe477415431c9",
       "size": 55941,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "translate-plugin",
@@ -363,7 +363,7 @@
       ],
       "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
       "size": 282877,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "comfy-plugin",
@@ -488,7 +488,7 @@
       ],
       "checksum": "sha256:32c402304b4190083c209773186368460ab813a757bc4a356d61ba03d5fdf21b",
       "size": 46842,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "termux-plugin",
@@ -507,7 +507,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "tools-plugin",
@@ -526,7 +526,7 @@
       ],
       "checksum": "sha256:fd6cf25efe806029cda88f3c47e40eec4b31cfee1128df50b28af5fe77ea0da2",
       "size": 36752,
-      "changelog": "### 修复\n- **`update.install browser` 恒失败 (P0)**: `UpdateDownloader.install()` 的版本校验 `installVersionError` 用 **Shell 当前版本** (v0.44.x) 校验**所有目标**的 APK 版本 — browser 是独立版本线 (v0.8.x), 拿它与 shell 版本比较恒判为「残留旧包」删除, 导致 `update.install browser` 永远失败。修复: browser (及非 shell 目标) 跳过 shell 版本门禁 (`shouldSkipVersionCheck`), 仅保留签名验证 + 安装 — browser 由 Agent 按需自行下载安装 (设计定案)。\n- 新增单测 `shouldSkipVersionCheck skips only non-shell targets` 锁定行为。\n\n### 发行\n- Shell APK: `mengpaw-shell-v0.44.2-release.apk` (versionCode 44002)\n- "
+      "changelog": "### 变更\n- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。\n- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。\n\n### 修复\n- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `"
     },
     {
       "id": "connector-openclaw-plugin",

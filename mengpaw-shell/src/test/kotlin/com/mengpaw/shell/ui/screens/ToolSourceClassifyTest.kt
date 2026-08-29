@@ -32,7 +32,7 @@ class ToolSourceClassifyTest {
         assertEquals("plugin", toolSourceFor("net.curl"))
         assertEquals("plugin", toolSourceFor("skill.ls"))
         assertEquals("plugin", toolSourceFor("clipboard.copy"))
-        assertEquals("plugin", toolSourceFor("browser.mcp.status"))
+        assertEquals("plugin", toolSourceFor("tribe.memo"))
         assertEquals("plugin", toolSourceFor("update.check"))
     }
 

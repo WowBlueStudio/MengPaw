@@ -5,10 +5,10 @@ enabled: true
 category: browser
 source: core
 ---
-# Playwright 能力对照 (page.* 命令面, v0.8.0 半自动武器)
+# Playwright 能力对照 (page.* 命令面, v0.9.0 am 桥单通道)
 
-> MengPaw 浏览器命令面对齐 Playwright 语义（LLM 零学习成本）。调用通道: am 桥
-> （shell 子进程, 白名单 page.*/browser.*）或 9880 桥（过渡, browser.mcp.invoke）。
+> MengPaw 浏览器命令面对齐 Playwright 语义（LLM 零学习成本）。调用通道: **am 桥单通道**
+> （shell 子进程, 白名单 page.*/browser.*）。9880 HTTP 桥与 MCP 工具已退役 (v0.9.0)。
 > 用法完整版: `skill.run browser-control`。
 
 ## 映射表

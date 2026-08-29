@@ -45,8 +45,8 @@ internal object AgentCliDocTables {
   --es com.mengpaw.browser.RUN_COMMAND_ARGUMENTS "-c,<page.*|browser.* 命令串>"
   [--es com.mengpaw.browser.RUN_COMMAND_OUTPUT <输出路径>]` — signature 权限, 白名单只放行
   page.*/browser.* 命令 (CommandMonitor 校验), 输出可落盘公共目录后 cat 读回
-- **9880 MCP 桥 (过渡)**: 浏览器打开自动启用, 供 browser-mcp-plugin 的 browser.mcp.* 调用;
-  退役计划见方案文档 (Phase 2 验证后移除)
+- **9880 MCP 桥 (已退役 v0.9.0)**: 原浏览器 MCP 工具 browser.mcp.* 与 /mcp /health 端点已移除,
+  浏览器控制统一 am 桥单通道 (上一条)
 
 ## 5. 网页转档与提炼 (不依赖浏览器在线)
 - `search.md <url> [--name x]` — 抓取转 Markdown 存 SEARCH_OUTPUTS

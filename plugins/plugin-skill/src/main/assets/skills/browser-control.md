@@ -5,10 +5,11 @@ enabled: true
 category: browser
 source: core
 ---
-# 浏览器协作完整手册 (v0.8.0 半自动武器)
+# 浏览器协作完整手册 (v0.9.0 am 桥单通道)
 
-> 浏览器 (MP Browser) 是独立 APK。Agent 经 am 桥直接调用浏览器命令面
-> (page.* / browser.*, 白名单), 或经 9880 桥 (过渡) / 网页转档协作。
+> 浏览器 (MP Browser) 是独立 APK。Agent 经 **am 桥单通道**直接调用浏览器命令面
+> (page.* / browser.*, 白名单)。9880 HTTP 桥与 MCP 开放模式已退役 (决策 #7),
+> 仅同签名 Shell 可经 am 桥调用, 第三方接入不再支持。
 
 ## 快速上手
 
@@ -25,14 +26,13 @@ source: core
 | 命令 | 语法 | 说明 |
 |------|------|------|
 | `sys.browser.open` | `sys.browser.open [url]` | 唤起 MP 浏览器到前台; 带 url 同时打开 |
-| `browser.mcp.status` | `browser.mcp.status` | 检查 MCP 桥在线/离线 (浏览器未运行时报离线) |
 
-**说明**: 唤起浏览器后 MCP 桥自动启动 (浏览器 onCreate), 无需手动启用。
+**说明**: 唤起浏览器后 am 桥可用 (浏览器 onCreate 初始化 `BuiltinBrowserPlugin.shared`)。
 浏览器未安装时 `sys.browser.open` 明确报错。
 
 ## 二、半自动武器命令面 (page.*, 推荐)
 
-命令名/参数对齐 Playwright (LLM 零学习成本)。调用通道 am 桥:
+命令名/参数对齐 Playwright (LLM 零学习成本)。调用通道 **am 桥单通道**:
 
 ```
 am startservice -n com.mengpaw.browser/.service.RunCommandService \
@@ -58,35 +58,12 @@ Agent 用 `agent.read` 看图)
 `page.url` | `page.title` | `page.back` | `page.forward`
 
 **保留的 browser.\***: 标签页 (`tabs/tab/tab.open/tab.close/tab.all`)、
-效率 (`batch/q/inject/diff/preload`)、存储/Cookie (`storage/cookies 系`)、
+效率 (`inject/diff/preload`)、存储/Cookie (`storage/cookies 系`)、
 设置/查询 (`viewport/userAgent/version/visible/enabled`)、等待/对话框 (`wait/wait.nav/dialog.*`)。
 
-### 过渡通道: MCP 工具 (browser.mcp.*, 9880 桥, 退役前可用)
-
-设备内 HTTP 桥 `127.0.0.1:9880`。`browser.mcp.tools` 查看实时工具列表;
-`browser.mcp.invoke <工具> <JSON参数>` 调用 (`browser_navigate`/`browser_screenshot`/
-`browser_click`/`browser_type`/`browser_extract`/`browser_eval` 及保留的 browser.* 命令短名)。
-am 桥落地验证后随 9880 桥退役 (方案文档 §六)。
-
-### 开放模式 (第三方 Agent 接入, 2026-08-17+)
-
-默认 9880 桥为签名级安全模型 (Bearer token 仅同签名 Shell 可拿)。需要让**第三方 AI
-Agent 框架**直接控制浏览器时, 在浏览器设置 →「开放 MCP 控制」开启 (Playwright 式):
-
-- 开启后 `/mcp` 免 Bearer token, 本机任意进程可经 `127.0.0.1:9880` 控制浏览器;
-  仅回环地址, 不暴露局域网
-- 默认关闭; 切换即时生效, 无需重启浏览器
-- `/health` 返回 `openMode: true/false`, 第三方可探测当前模式
-- am 桥 (`RunCommandService`) 保持 signature 权限不变 — 仅同签名 Shell 可调,
-  第三方走 9880 HTTP 桥
-
-第三方接入三步:
-
-```
-1. 唤起:  am start -a com.mengpaw.action.OPEN_URL --es url "https://example.com"
-2. 探测:  curl http://127.0.0.1:9880/health      # {"ok":true,"status":"online","openMode":true}
-3. 调用:  curl -X POST http://127.0.0.1:9880/mcp -d '{"tool":"page.content","args":{"head":"20"}}'
-```
+> **9880 HTTP 桥与开放模式已退役 (v0.9.0)**: 不再有 `browser.mcp.*` 工具
+> (browser_navigate/browser_screenshot/browser_click 等) 与 `/mcp` `/health` HTTP 端点。
+> 浏览器控制统一走 am 桥单通道。旧命令 `batch/q` 已移除 (browser.* 23→21)。
 
 ## 三、网页转档 (search.*)
 
@@ -101,11 +78,11 @@ Agent 框架**直接控制浏览器时, 在浏览器设置 →「开放 MCP 控�
 
 **浏览器提炼闭环**: 浏览器菜单「提炼网页要点」→ Agent 收到任务 → search.md 转换 → LLM 提炼要点 → 写回传文件 → Shell 自动回传浏览器预览。
 
-## 四、浏览器扩展 (2026-08-11 半自动武器更新)
+## 四、浏览器扩展 (v0.9.0 am 桥单通道)
 
 > 浏览器进程内插件注册机制 (BrowserPlugin / BrowserPluginRegistry) 已删除 (P2 死代码清理)。
-> 浏览器能力 = 内置命令面 `page.*` (22 条) + `browser.*` (23 条, BuiltinBrowserPlugin 合流),
-> 经 am 桥 (signature 白名单) / 9880 桥 (过渡) 暴露。需要新浏览器能力时, 在浏览器侧扩展
+> 浏览器能力 = 内置命令面 `page.*` (22 条) + `browser.*` (21 条, BuiltinBrowserPlugin 合流),
+> 经 **am 桥单通道** (signature 白名单) 暴露。需要新浏览器能力时, 在浏览器侧扩展
 > `BuiltinBrowserPlugin` 命令或 `RunCommandService` 即可。
 
 ## 常见问题

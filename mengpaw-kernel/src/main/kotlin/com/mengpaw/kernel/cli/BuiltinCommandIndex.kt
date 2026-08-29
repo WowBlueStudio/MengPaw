@@ -203,8 +203,8 @@ object BuiltinCommandIndex {
         idx("agent.audit", "查看命令执行审计日志 (最近 N 条: 成败/会话/命令/输出摘要)", "agent.audit [条数]",
             listOf("审计", "日志", "历史", "记录", "命令", "Audit"),
             listOf("audit", "log", "history", "record", "command"))
-        idx("agent.browser-tools", "查看浏览器协作能力参考 (唤醒 sys.browser.open / MCP 工具 browser.mcp.* / 网页转档 search.*)", "agent.browser-tools",
-            listOf("浏览器", "WebView", "操控", "MCP", "转档", "Browser"),
+        idx("agent.browser-tools", "查看浏览器协作能力参考 (唤醒 sys.browser.open / am 桥 page.*+browser.* / 网页转档 search.*)", "agent.browser-tools",
+            listOf("浏览器", "WebView", "操控", "am桥", "转档", "Browser"),
             listOf("browser", "WebView", "tools", "mcp", "commands", "control"))
         idx("agent.dream", "触发梦境模式: 分析中期记忆 → 提炼洞察 → 写入长期记忆", "agent.dream",
             listOf("梦境", "整理", "压缩", "归档", "分析", "回顾", "Dream", "记忆管理"),

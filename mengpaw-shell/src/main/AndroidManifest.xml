@@ -73,10 +73,7 @@
     <uses-feature android:name="android.hardware.consumerir" android:required="false" />
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
-    <!-- 设备内 MCP 桥认证: signature 级权限 — 仅同签名 (MengPaw) 的 APK 可写 token (P0 修复) -->
-    <permission
-        android:name="com.mengpaw.permission.MCP_BRIDGE"
-        android:protectionLevel="signature" />
+    <!-- 9880 桥已退役 (v0.9.0): 原 com.mengpaw.permission.MCP_BRIDGE signature 权限移除 -->
 
     <application
         android:allowBackup="false"
@@ -174,13 +171,8 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- 设备内 MCP 桥 token 通道 (P0 修复) — 仅签名级权限可写, 浏览器进程经它注入认证 token -->
-        <provider
-            android:name=".mcp.BridgeTokenProvider"
-            android:authorities="com.mengpaw.bridge.token"
-            android:exported="true"
-            android:permission="com.mengpaw.permission.MCP_BRIDGE"
-            android:grantUriPermissions="false" />
+        <!-- 9880 桥已退役 (v0.9.0): 原 BridgeTokenProvider (MCP 桥 token 通道) 移除,
+             浏览器控制统一 am 桥单通道, 不再需要签名级 token 注入 -->
     </application>
 
 </manifest>

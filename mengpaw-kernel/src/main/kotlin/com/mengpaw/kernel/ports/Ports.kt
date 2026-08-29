@@ -19,7 +19,7 @@ object Ports {
     /** ACP (Agent Communication Protocol) — 本机监听, 设备间 Agent 通信. */
     const val ACP = 9876
 
-    /** MP 浏览器 MCP 桥 — 本机监听 (127.0.0.1), Shell 进程调浏览器 MCP 工具. */
+    /** MP 浏览器 MCP 桥 — 本机监听 (127.0.0.1)。**已退役 (v0.9.0)**: 浏览器控制统一 am 桥单通道. */
     const val BROWSER_MCP = 9880
 
     /** 本机 MCP 网关 — 标准 MCP JSON-RPC 端点 (127.0.0.1), 任何 MCP client 直连. */
@@ -68,7 +68,7 @@ object Ports {
         ),
         PortInfo(
             port = BROWSER_MCP, protocol = "HTTP/JSON", direction = Direction.INBOUND,
-            owner = "MP 浏览器", purpose = "设备内 MCP 桥 — Shell 调浏览器 MCP 工具 (导航/截图/点击/输入/提取/执行脚本)",
+            owner = "MP 浏览器", purpose = "设备内 MCP 桥 — 已退役 (v0.9.0, 浏览器控制统一 am 桥单通道)",
             configurable = false
         ),
         PortInfo(

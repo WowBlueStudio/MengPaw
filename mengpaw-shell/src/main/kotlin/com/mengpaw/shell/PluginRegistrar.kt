@@ -118,7 +118,7 @@ object PluginRegistrar {
         "comfy-plugin" to "ComfyUI 工作流 (默认端口 8188)",
         "browser-push-plugin" to "浏览器推送",
         "browser-search-plugin" to "网页转档/提炼",
-        "browser-mcp-plugin" to "浏览器 MCP 工具 (9880 桥)"
+        "browser-mcp-plugin" to "浏览器 MCP 工具 (9880 桥, 已退役 v0.9.0)"
     )
 
     /** PluginViewModel 类注册 — 使内置插件类可被反射实例化 (install 时用类名加载). */

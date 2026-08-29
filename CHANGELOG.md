@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.44.3 (2026-08-29) — 同步浏览器 v0.9.0: 9880 桥退役, 浏览器控制统一 am 桥单通道
+
+### 变更
+- **浏览器控制 Skill 同步 (v0.9.0 am 桥单通道)**: 浏览器 v0.9.0 退役 9880 HTTP 桥与 MCP 开放模式 (决策 #7), 浏览器控制统一 am 桥单通道 (仅同签名 Shell 可调)。同步更新 plugin-skill 的 5 个浏览器技能文档 (browser-control/debug/form/playwright/spider): 移除 `browser.mcp.*` 工具 / `/mcp` `/health` 端点 / 开放模式引用, 对齐 am 桥单通道。
+- **shell 侧 9880 桥退役清理**: 移除 `BridgeTokenProvider` (MCP 桥 token 通道 ContentProvider) 与 `com.mengpaw.permission.MCP_BRIDGE` signature 权限 (9880 桥认证通道, 退役后不再需要)。`Ports.BROWSER_MCP (9880)` 标注已退役。
+
+### 修复
+- 浏览器 v0.9.0 起 `browser.*` 去重收尾 `batch/q` 移除 (23→21), 同步开发指南 §5.3 命令清单 (page.* 22 + browser.* 21 = 43)。
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.44.3-release.apk` (versionCode 44003)
+- Browser APK: 已拆分独立仓库, **v0.9.0** (9880 桥退役, am 桥单通道), 于 `WowBlueStudio/MengPaw-Browser` 独立发布
+- 插件: 本轮 plugin-skill 有变更 (浏览器技能文档同步), 构建 AAR 回写 plugins.json, 打 `plugins-v0.44.3` tag, GitHub Release 附 AAR
+- 测试: 全量 1519 用例 0 failures (kernel 641 + core 116 + shell 232 + 插件 530, browser 已拆独立仓库不在此口径)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.44.2 (2026-08-28) — 修复 browser 安装版本校验误判
 
 ### 修复

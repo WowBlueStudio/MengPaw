@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.44.2 | **更新**: 2026-08-28 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(124文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
+> **版本**: 0.44.3 | **更新**: 2026-08-29 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(124文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
 
 ---
 
@@ -23,7 +23,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 | 插件同级 | 内置功能 (`sys`) 与外挂插件同等地位，均实现 `Plugin` 接口，均只依赖 kernel |
 | 零 Python | 纯 Kotlin，无 Python 运行时 |
 | 多通道 | AIDL（系统集成）/ Unix Socket（Termux）/ HTTP（调试） |
-| 独立浏览器 | `mengpaw-browser` v0.8.1，Intent 互通 + am 桥 + MCP 开放模式，45 条浏览器操控命令 (page.* + browser.*) |
+| 独立浏览器 | `mengpaw-browser` v0.9.0，Intent 互通 + am 桥单通道（9880 桥/MCP 开放模式已退役），43 条浏览器操控命令 (page.* + browser.*) |
 | 多模型 | 13 LLM Provider — OpenAI / DeepSeek / Kimi / GLM / Qwen / Grok / 火山引擎 / OpenModel / MiniMax / Self-Hosted / 自定义 |
 | 插件市场 | raw 直读 `plugins.json`（GitHub raw / Gitee raw 双源），ETag 缓存，SHA256 校验，磁盘快照离线降级（v0.34.0） |
 | 记忆孪生 | v0.15.0 — 跨设备 Agent 记忆同步 + 哈希链账本 + 短码配对 + 心跳保活 + QoS 自适应 + 手动 IP 发现 (plugin-memory-twin v0.2) |
@@ -253,9 +253,10 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ### 3.4 mengpaw-browser（独立浏览器，已拆分独立仓库 `WowBlueStudio/MengPaw-Browser`）
 
-> **仓库拆分 (v0.45.0)**: 浏览器模块源码已移至独立仓库 `MengPaw-Browser`（v0.8.x 独立版本线），
+> **仓库拆分 (v0.45.0)**: 浏览器模块源码已移至独立仓库 `MengPaw-Browser`（独立版本线），
 > 经 JitPack 依赖本仓库共享地基构件（`com.github.WowBlueStudio.MengPaw:mengpaw-kernel/core/design-system:<tag>`）。
-> 本节保留浏览器架构文档供参考，源码与版本节奏以独立仓库为准。45 文件，v0.8.1 半自动武器 + MCP 开放模式。
+> 本节保留浏览器架构文档供参考，源码与版本节奏以独立仓库为准。**v0.9.0**: 9880 HTTP 桥与
+> MCP 开放模式退役，统一 am 桥单通道（同签名 Shell 可调）。
 
 | 目录/文件 | 职责 |
 |-----------|------|
@@ -566,6 +567,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > v0.44.0 发布实测（2026-08-25，静默分支进化 + 气泡闪烁修复）：kernel 636 → 641（+5）+ core 116 + shell 232 + browser 56 + 插件 520 = 1565 用例，0 failures。增量：EvolutionQueueTest 4 + EvolutionStoreTest G2 跨重启复现计数 1；AgentEngineTest 幻觉门禁两用例改断言新行为（幻觉答案直接放行）。
 > v0.44.1 发布实测（2026-08-28，仓库拆分 + 自动更新双仓库解析）：**browser 已拆独立仓库（MengPaw-Browser），主仓库测试口径不再含 browser**。kernel 641 + core 116 + shell 232 + 插件 528 = **1517 用例**，0 failures。增量：plugin-update +8（parseBrowserRelease 接受/拒绝/plugins 过滤 + mergeBrowserRelease 冒烟 4 用例 × 双套；口径: 插件 520 → 528）。仓库拆分后 browser 56 用例移至独立仓库。
 > v0.44.2 发布实测（2026-08-28，修复 browser 安装版本校验误判）：kernel 641 + core 116 + shell 232 + 插件 530 = **1519 用例**，0 failures。增量：plugin-update +2（`shouldSkipVersionCheck skips only non-shell targets` × 双套；口径: 插件 528 → 530）。browser 独立版本线 (v0.8.x) 跳过 shell 版本门禁。
+> v0.44.3 发布实测（2026-08-29，同步浏览器 v0.9.0 9880 桥退役）：kernel 641 + core 116 + shell 232 + 插件 530 = **1519 用例**，0 failures。增量：无新增用例（浏览器技能文档同步 + BridgeTokenProvider/MCP_BRIDGE 退役清理，不改逻辑）。
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
@@ -826,7 +828,7 @@ MCP 协议极其简单——JSON-RPC + 三个原语（tool / resource / prompt�
 | 端口 | 绑定 | 用途 | 认证 |
 |---|---|---|---|
 | `9876` (ACP) | **0.0.0.0 全部接口** (设备间通道, 故意) | 设备↔设备直连: 会话同步/工作区/委托/REVOKE/MCP-over-ACP | peerId↔来源 IP 绑定 (`AcpServer.bindPeerIp`); 敏感类型额外要求 IP 匹配; 设备级认证靠 `sharedSecret` (pairing 派生, 未设置启动即告警) |
-| `9880` (BROWSER_MCP) | `127.0.0.1` 回环 | Shell ↔ 浏览器进程 HTTP 桥 | Bearer token (`McpHttpServer` 无 token 一律 401, fail-closed) |
+| `9880` (BROWSER_MCP) | `127.0.0.1` 回环 | Shell ↔ 浏览器进程 HTTP 桥 — **已退役 (v0.9.0)**, 浏览器控制统一 am 桥单通道 | Bearer token (`McpHttpServer` 无 token 一律 401, fail-closed) |
 | `9881` (MCP_LOCAL) | `127.0.0.1` 回环 | 本机 MCP 网关 (plugin-framework) | Bearer token (`McpGatewayAuth`, v0.34.3 — 无/错 token 一律 401 fail-closed; token 持久化 `配置/mcp_gateway_token`, `self.mcp token` 获取) |
 
 安全要点: 唯一暴露到局域网的是 ACP `9876` — 这是设备间通道的设计意图 (对端设备必须能直连)。防护层级: ① msg.from 不可信, 所有 peerId 绑定到实际来源 socket IP; ② 敏感消息类型 (会话/工作区/REVOKE/MCP) 额外要求来源 IP 与该 peerId 历史通信 IP 匹配, 防局域网冒充; ③ 生产配对必须传 `AcpServer(profile, port, derivedSecret)` 派生密钥, 不要使用 `AcpHolder` 默认占位值。其余两端口回环绑定, 仅本机进程可达。
@@ -1122,12 +1124,13 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **命令去重 (v0.36.x)**: `agent.read/write/ls/rm/mkdir` 与 `fs.*`（plugin-fs 已整体移除）有 Android 等价命令（cat/echo/ls/rm/mkdir/cp/mv/stat/grep/find），不再重复定义——Agent 直接用 Linux 命令。原框架特有保障的承接: ① `agent.write` 自动读回验证 → Linux 通道对重定向写（`> 文件`）成功后自动附「请 cat 读回验证」提示 + 提示词「结果纪律」要求引用真实文本; ② `agent.rm` 系统路径保护 → CommandMonitor CONFIRM 弹窗 + overwrite-system/写保护路径 BLOCK 规则; ③ `agent.write` 路径沙箱 → 工作区/输出目录为 Linux 通道默认 cwd 与允许写区, 插件仓库/配置目录写保护 BLOCK。**注意**: Linux 命令不经 Pipeline IntegrityGuard, 插件仓库/配置等核心目录的写保护由 CommandMonitor 写保护路径检查承接。
 
-### 5.3 浏览器内置命令 (page.* + browser.*, 45) — 半自动武器 (v0.8.0) + MCP 开放模式 (v0.8.1)
+### 5.3 浏览器内置命令 (page.* 22 + browser.* 21 = 43) — 半自动武器 (v0.9.0 am 桥单通道)
 
 > 2026-08-11 用户拍板方案 (docs/browser-autopilot-plan.md)：Playwright 语义命令面 + am 桥 + 去重。
 > `page.*` 能完成的指令，`browser.*` 冗余已删；截图只回路径（公共目录，Agent 可读）；
-> 超长页截断分多段、坐标按段拆分；调用通道 = am 桥（shell 子进程，signature 白名单）+
-> 9880 桥（过渡，Phase 2 验证后退役）。
+> 超长页截断分多段、坐标按段拆分；调用通道 = **am 桥单通道**（shell 子进程，signature 白名单）。
+> **v0.9.0 (2026-08-28)**: 9880 HTTP 桥与 MCP 开放模式退役（决策 #7），`browser.mcp.*` 工具与
+> `/mcp` `/health` 端点移除；`browser.*` 去重收尾 `batch/q` 移除 (23→21)。浏览器控制统一走 am 桥。
 
 **半自动合体 (1)**: `page.load <url> [--max-height N]` — 导航 + 精确等待 + 全页分段截图 + 坐标系统
 
@@ -1141,9 +1144,9 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **滚动/JS/信息 (7)**: `page.scroll <x> <y>` | `page.scroll_by <dy>` | `page.eval <js>` | `page.url` | `page.title` | `page.back` | `page.forward`
 
-**保留的 browser.\* (23, page.\* 不覆盖)**:
+**保留的 browser.\* (21, page.\* 不覆盖, batch/q 已移除)**:
 - 标签页 (5): `tabs` | `tab <N>` | `tab.open <N> <url>` | `tab.close <N>` | `tab.all`
-- 效率 (5): `batch <cmd1;;cmd2>` | `q <shorthand>` | `inject` | `diff` | `preload`
+- 效率 (3): `inject` | `diff` | `preload`
 - 等待/对话框 (4): `wait` | `wait.nav` | `dialog.accept` | `dialog.dismiss`
 - 存储/Cookie (4): `storage` | `cookies` | `cookies.set` | `cookies.clear`
 - 设置/查询 (5): `viewport` | `userAgent` | `version` | `visible` | `enabled`

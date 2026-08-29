@@ -7,7 +7,8 @@ source: core
 ---
 # 网页抓取工作流
 
-> 通道: `sys.browser.open` 唤醒 / am 桥 `page.*` 提取 (推荐) / `browser.mcp.invoke` (过渡) / `search.md` 转档。主手册: `skill.run browser-control`。
+> 通道: `sys.browser.open` 唤醒 / am 桥单通道 `page.*` 提取 (推荐) / `search.md` 转档。
+> 9880 桥 / MCP 工具已退役 (v0.9.0)。主手册: `skill.run browser-control`。
 > am 桥形式: `am startservice -n com.mengpaw.browser/.service.RunCommandService --es com.mengpaw.browser.RUN_COMMAND_ARGUMENTS "-c,<命令串>"`。
 
 ## 适用场景
@@ -38,7 +39,7 @@ page.eval var n=document.querySelector('.next');if(n){n.click();'next'}
 
 | 场景 | 通道 | 原因 |
 |------|------|------|
-| 需登录/JS 渲染/反爬强的页面 | MCP (浏览器) | 真实浏览器环境, 带 cookie/JS |
+| 需登录/JS 渲染/反爬强的页面 | am 桥 page.* (浏览器) | 真实浏览器环境, 带 cookie/JS |
 | 静态页面/批量抓取 | `search.md` / `net.curl` | 快, 不占浏览器, 可并发 |
 | 高质量搜索 | `tavily.search` | 结构化结果, 免解析 |
 
@@ -55,13 +56,13 @@ page.eval var n=document.querySelector('.next');if(n){n.click();'next'}
 
 ## 反爬应对
 
-- 403/验证码 → 换浏览器通道 (MCP) 重试
+- 403/验证码 → 换浏览器通道 (am 桥) 重试
 - 限流 → 逐条间隔 + `search.md` 分步
-- 需要登录 → 浏览器会话天然带登录态 (browser_navigate 登录后保持)
+- 需要登录 → 浏览器会话天然带登录态 (page.goto 登录后保持)
 
 ## 注意事项
 
-- 大页面前 `browser_extract` 核对结构再批量 eval，避免选择器失配空转
+- 大页面前 `page.content` 核对结构再批量 eval，避免选择器失配空转
 - 转档命名用语义名（list_1/article_N），便于后续检索定位
 
 ## 进化目标
