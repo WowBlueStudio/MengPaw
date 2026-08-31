@@ -81,6 +81,9 @@ internal fun buildRequestBody(
         put("max_tokens", config.maxTokens)
         put("temperature", config.temperature)
         put("stream", stream)
+        // v0.46.0 P0: 流式必须请求 include_usage — 否则 OpenAI 兼容系(DeepSeek 等)流式响应
+        // 默认不带 usage, SseStreamParser.onUsage 永不触发 → lastUsage 恒 null → 用量统计(调用/输入输出Token)恒 0
+        if (stream) putJsonObject("stream_options") { put("include_usage", true) }
         putJsonArray("messages") {
             messages.forEach { msg ->
                 addJsonObject {

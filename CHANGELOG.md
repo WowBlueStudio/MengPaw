@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.46.0 (2026-08-31) — 新增内置 Office 文档编辑插件 + 用量统计夜间模式适配
+
+### 新增
+- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。
+  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本
+  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿
+  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格
+  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)
+  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar/PluginClassRegistry/plugins.json)
+
+### 修复
+- **Token 用量统计 总调用次数/输入输出Token 恒为 0 (P0)**: 流式 LLM 请求体缺 `stream_options: {"include_usage": true}`, 导致 OpenAI 兼容系 (DeepSeek 等) 流式响应默认不带 usage → `SseStreamParser.onUsage` 永不触发 → `AdaptiveLlmProvider.lastUsage` 恒 null → `record()` 从不执行。已在 `LlmPayload`/`RemoteApi` 两处请求构造补 `include_usage`, 流式响应末尾内联 usage 供统计记录。
+- **Token 用量统计夜间模式适配**: 4 张统计卡亮色浅底深字 → 暗色品牌深色底+白字; 图表网格线/Y轴刻度/日期标签/柱顶总Token标注改用夜间可读色 (深灰线+更亮刻度+白字标注)。
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.46.0-release.apk` (versionCode 46000)
+- Browser APK: 本轮无变更，不构建；浏览器独立版本线 (v0.9.0) 保持不变
+- 插件: 本轮新增 plugin-office，构建 AAR 回写 plugins.json，打 `plugins-v0.46.0` tag，GitHub Release 附 AAR
+- 测试: 全量 1539 用例 0 failures (kernel 641 + core 116 + shell 236 + 插件 546, browser 已拆独立仓库不在此口径)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.45.1 (2026-08-31) — 用量统计去叠压: 统计卡均分防挤压 + 图表柱顶标注防叠压
 
 ### 修复

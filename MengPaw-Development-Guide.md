@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.45.1 | **更新**: 2026-08-31 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(124文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
+> **版本**: 0.46.0 | **更新**: 2026-08-31 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(124文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
 
 ---
 
@@ -571,6 +571,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > v0.44.2 发布实测（2026-08-28，修复 browser 安装版本校验误判）：kernel 641 + core 116 + shell 232 + 插件 530 = **1519 用例**，0 failures。增量：plugin-update +2（`shouldSkipVersionCheck skips only non-shell targets` × 双套；口径: 插件 528 → 530）。browser 独立版本线 (v0.8.x) 跳过 shell 版本门禁。
 > v0.44.3 发布实测（2026-08-29，同步浏览器 v0.9.0 9880 桥退役）：kernel 641 + core 116 + shell 232 + 插件 530 = **1519 用例**，0 failures。增量：无新增用例（浏览器技能文档同步 + BridgeTokenProvider/MCP_BRIDGE 退役清理，不改逻辑）。
 > v0.45.0 发布实测（2026-08-31，用量统计增强）：kernel 641 + core 116 + shell 236 + 插件 530 = **1523 用例**，0 failures。增量：TokenStatsCollectorTest +4（总调用次数聚合 / 按模型聚合含输入输出 Token × 双套；口径: shell 232 → 236）。
+> v0.46.0 发布实测（2026-08-31，内置 Office 文档编辑插件 + 夜间模式 + 流式 usage 修复）：kernel 641 + core 116 + shell 236 + 插件 546 = **1539 用例**，0 failures。增量：plugin-office +16（OfficePluginTest 8 用例：三格式创建/读写/回读 + 单元格引用解析 + 边界 × 双套；口径: 插件 530 → 546）。修复流式请求缺 `stream_options.include_usage` 致用量统计恒 0（LlmPayload/RemoteApi）。
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|

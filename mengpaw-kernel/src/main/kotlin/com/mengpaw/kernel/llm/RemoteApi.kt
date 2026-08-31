@@ -132,6 +132,8 @@ class RemoteApi(
             put("max_tokens", config.maxTokens)
             put("temperature", config.temperature)
             put("stream", stream)
+            // v0.46.0 P0: 同上 — 流式请求末尾内联 usage, 供 token 用量统计记录
+            if (stream) putJsonObject("stream_options") { put("include_usage", true) }
             putJsonArray("messages") {
                 messages.forEach { msg ->
                     addJsonObject {
