@@ -11,6 +11,7 @@
   - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar/PluginClassRegistry/plugins.json)
 
 ### 修复
+- **自动更新 Gitee 源被 plugins-v\* release 顶替 (P2)**: `UpdatePlugin.GITEE_API_URL` 原用 `/releases/latest`, 同批创建的 plugins-v\* 插件发布会按创建时间顶替 latest, 导致国内设备走 Gitee 源 `update.check` 拿到插件发布而更新失败。改用列表接口 (`/releases?per_page=100`) + 取版本号最高的合法应用发布 (兼容 Gitee 列表按 id 升序 / GitHub 降序)。
 - **Token 用量统计 总调用次数/输入输出Token 恒为 0 (P0)**: 流式 LLM 请求体缺 `stream_options: {"include_usage": true}`, 导致 OpenAI 兼容系 (DeepSeek 等) 流式响应默认不带 usage → `SseStreamParser.onUsage` 永不触发 → `AdaptiveLlmProvider.lastUsage` 恒 null → `record()` 从不执行。已在 `LlmPayload`/`RemoteApi` 两处请求构造补 `include_usage`, 流式响应末尾内联 usage 供统计记录。
 - **Token 用量统计夜间模式适配**: 4 张统计卡亮色浅底深字 → 暗色品牌深色底+白字; 图表网格线/Y轴刻度/日期标签/柱顶总Token标注改用夜间可读色 (深灰线+更亮刻度+白字标注)。
 

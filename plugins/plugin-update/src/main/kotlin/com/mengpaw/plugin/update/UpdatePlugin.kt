@@ -259,10 +259,16 @@ class UpdatePlugin : Plugin {
                 is JsonObject -> listOf(json)
                 else -> return null
             }
+            // v0.46.0: 取版本号最高的合法应用发布 — 兼容 Gitee 列表按 id 升序(旧→新)/GitHub 降序
+            // (直接取 first 在 Gitee 升序下会返回最旧版本)
+            var best: Pair<String, ReleaseInfo>? = null
             for (obj in candidates) {
-                parseRelease(obj, source)?.let { return it }
+                parseRelease(obj, source)?.let { r ->
+                    val v = r.tag.removePrefix("v")
+                    if (best == null || compareVersions(v, best.first) > 0) best = v to r
+                }
             }
-            null
+            best?.second
         } catch (e: Exception) {
             ErrorCollector.report(e, "UpdatePlugin.tryFetch")
             null
@@ -435,10 +441,10 @@ class UpdatePlugin : Plugin {
         /** Android Context — 由 Shell MainActivity.deferInit 注入 (替代失效的 getAppContext 反射)。 */
         @Volatile var appContext: Context? = null
 
-        // P2 修复 (2026-08-16): /releases/latest 会被同刻创建的 plugins-v* 插件发布顶替
-        // (GitHub 按创建时间取 latest) — 改用列表接口, 取第一个合法应用发布 (vX.Y.Z + Shell APK)
+        // P2 修复 (2026-08-16, v0.46.0 补 Gitee): /releases/latest 会被同刻创建的 plugins-v* 插件发布顶替
+        // (GitHub/Gitee 均按创建时间取 latest) — 双源改用列表接口, 取第一个合法应用发布 (vX.Y.Z + Shell APK)
         private const val GITHUB_API_URL = "https://api.github.com/repos/WowBlueStudio/MengPaw/releases?per_page=10"
-        private const val GITEE_API_URL = "https://gitee.com/api/v5/repos/WowBlueStudio/MengPaw/releases/latest"
+        private const val GITEE_API_URL = "https://gitee.com/api/v5/repos/WowBlueStudio/MengPaw/releases?per_page=100"
         private const val GHPROXY_API_URL = "https://ghproxy.com/$GITHUB_API_URL"
         // 仓库拆分 (v0.45.0+): browser 独立仓库 MengPaw-Browser, 独立版本线 (v0.8.x)。
         // browser APK 由该仓库发布; shell 主仓库 release 只含 shell APK。
