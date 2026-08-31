@@ -103,6 +103,7 @@ object CommandRiskLevels {
         "skill.from.project" to RiskLevel.MID,
         "skill.request" to RiskLevel.MID,
         "skill.import" to RiskLevel.MID,
+        "office.write" to RiskLevel.MID,   // 修改 Office 文档 (docx 追加/xlsx 写单元格) — 中危, TRUSTED 放行
         // ── 高危: 清空/卸载/系统级/整片删除/拍照 (弹窗确认) ──
         "clipboard.clear" to RiskLevel.HIGH,
         "sys.app.uninstall" to RiskLevel.HIGH,

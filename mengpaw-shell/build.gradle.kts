@@ -134,6 +134,7 @@ dependencies {
     implementation(project(":plugin-concise"))
     implementation(project(":plugin-tavily"))
     implementation(project(":plugin-update"))
+    implementation(project(":plugin-office"))
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))

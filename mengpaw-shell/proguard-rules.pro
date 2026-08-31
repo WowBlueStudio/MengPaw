@@ -109,3 +109,22 @@
 # ── Tink crypto (required by EncryptedSharedPreferences) ──
 -keep class com.google.crypto.tink.** { *; }
 -keep interface com.google.crypto.tink.** { *; }
+
+# ── Apache POI (plugin-office: docx/xlsx/pptx) ──
+# POI 用反射 + ServiceLoader 动态加载工厂与 XMLBeans 生成类, 不 keep 则 R8 裁剪导致
+# ClassNotFound/NoClassDefFound. 宽 keep 牺牲体积换取运行时稳定 (POI 体积大头不可避免).
+-keep class org.apache.poi.** { *; }
+-keep class org.apache.xmlbeans.** { *; }
+-keep class org.openxmlformats.** { *; }
+-keep class schemaorg_apache_xmlbeans.** { *; }
+-keep class com.graphbuilder.** { *; }
+-keep class org.apache.commons.collections4.** { *; }
+-keep class org.apache.commons.compress.** { *; }
+-dontwarn org.apache.poi.**
+-dontwarn org.apache.xmlbeans.**
+-dontwarn org.openxmlformats.**
+-dontwarn schemaorg_apache_xmlbeans.**
+-dontwarn com.graphbuilder.**
+-dontwarn java.awt.**
+-dontwarn org.apache.logging.log4j.**
+-keep class org.apache.logging.log4j.** { *; }

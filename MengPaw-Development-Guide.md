@@ -301,6 +301,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | plugin-net | net | curl, get, post, proxy (4) | ⭐ |
 | plugin-skill | skill | ls, run, info, search, create, rm, pull, push, enable, disable, from.project, request, import (13) | ⭐ |
 | plugin-clipboard | clipboard | copy, paste, clear (3) | ⭐ |
+| plugin-office | office | read, create, write (3) — Word(docx)/Excel(xlsx)/PPT(pptx) | ⭐ |
 | plugin-framework | framework | discover, add, peers, trust, untrust, info, ping, connect, call, disconnect, adapters, pair.ls, pair.accept, pair.decline, delegate (15) | ⭐ |
 | plugin-agent-tools | tools | import, ls, remove, search (4) | ⭐ |
 

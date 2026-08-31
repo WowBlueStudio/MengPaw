@@ -47,6 +47,8 @@ object HighRiskCommandGate {
         "clipboard.copy" to listOf(Param("text")),
         "clipboard.paste" to emptyList(),
         "clipboard.clear" to emptyList(),
+        // ── Office 文档修改 (中危: docx 追加 / xlsx 写单元格) ──
+        "office.write" to listOf(Param("path"), Param("content")),
         // ── 技能开关 (中危) ──
         "skill.enable" to listOf(Param("id")),
         "skill.disable" to listOf(Param("id")),

@@ -42,6 +42,7 @@ internal object PluginClassRegistry {
         "browser-search-plugin" to "com.mengpaw.plugin.browsersearch.BrowserSearchPlugin",
         "browser-mcp-plugin" to "com.mengpaw.plugin.browsermcp.BrowserMcpPlugin",
         "update-plugin" to "com.mengpaw.plugin.update.UpdatePlugin",
+        "office-plugin" to "com.mengpaw.plugin.office.OfficePlugin",
         "memory-twin-plugin" to "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin",
         "root-plugin" to "com.mengpaw.plugin.root.RootPlugin",
         "dream-plugin" to "com.mengpaw.plugin.dream.DreamPlugin",

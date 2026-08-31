@@ -9,6 +9,7 @@ import com.mengpaw.plugin.dev.DevPlugin
 import com.mengpaw.plugin.framework.FrameworkPlugin
 import com.mengpaw.plugin.memorytwin.MemoryTwinPlugin
 import com.mengpaw.plugin.net.NetPlugin
+import com.mengpaw.plugin.office.OfficePlugin
 import com.mengpaw.plugin.skill.SkillPlugin
 import com.mengpaw.plugin.tavily.TavilyPlugin
 import com.mengpaw.plugin.update.UpdatePlugin
@@ -36,7 +37,7 @@ object PluginRegistrar {
         "net-plugin", "clipboard-plugin",
         "memory-twin-plugin", "root-plugin", "tribe-plugin", "tools-plugin",
         "dream-plugin", "evolution-plugin", "concise-plugin", "termux-plugin",
-        "tavily-plugin", "update-plugin"
+        "tavily-plugin", "update-plugin", "office-plugin"
     )
 
     /**
@@ -73,6 +74,7 @@ object PluginRegistrar {
         "termux-plugin" to "Termux Bridge",
         "tavily-plugin" to "AI Search",
         "update-plugin" to "Auto Update",
+        "office-plugin" to "Office Documents",
         // remote
         "update-plugin" to "Auto Update",
         "translate-plugin" to "Translation Engine",
@@ -106,7 +108,8 @@ object PluginRegistrar {
         "concise-plugin" to ("言简意赅" to "去除系统提示词中的结构性输出干扰（强制 Thought/Action 样板、Markdown 装饰），让模型回答更简洁 (Removes structural-output noise from the system prompt (forced Thought/Action boilerplate, Markdown decoration) for cleaner answers)"),
         "termux-plugin" to ("Termux 桥" to "通过 Termux 登录 ubuntu 执行命令与 conda 环境 Python — 逐层探测/脚本执行/输出回传 (Termux bridge — run commands/Python inside Termux+ubuntu+miniconda, with layer detection and output retrieval)"),
         "tavily-plugin" to ("AI 搜索" to "Tavily AI 优化搜索引擎 — 结构化搜索结果 + 网页正文提取，Agent 原生搜索能力 (Tavily AI-optimized search — structured results + web content extraction, Agent's native search)"),
-        "update-plugin" to ("自动更新" to "WiFi 环境自动检测更新，可选自动下载安装 — 检查 GitHub/Gitee Releases，安装 APK (Auto update: check/download/install/auto)")
+        "update-plugin" to ("自动更新" to "WiFi 环境自动检测更新，可选自动下载安装 — 检查 GitHub/Gitee Releases，安装 APK (Auto update: check/download/install/auto)"),
+        "office-plugin" to ("Office 文档" to "Office 文档编辑 — Word(docx)/Excel(xlsx)/PowerPoint(pptx) 创建/读取/写入 (Office document editing: create/read/write docx/xlsx/pptx)")
     )
 
     /** 远程/按需安装插件候选描述 (v0.34.3 P0-1) — CLI.md 远程插件表数据源,
@@ -138,6 +141,7 @@ object PluginRegistrar {
         PluginViewModel.registerPluginClass("concise-plugin", "com.mengpaw.plugin.concise.ConcisePlugin")
         PluginViewModel.registerPluginClass("tavily-plugin", "com.mengpaw.plugin.tavily.TavilyPlugin")
         PluginViewModel.registerPluginClass("update-plugin", "com.mengpaw.plugin.update.UpdatePlugin")
+        PluginViewModel.registerPluginClass("office-plugin", "com.mengpaw.plugin.office.OfficePlugin")
     }
 
     /** 捆绑插件实例清单 — 随 APK 编译进壳, 首次启动自动 install + activate. */
@@ -155,6 +159,7 @@ object PluginRegistrar {
         "termux-plugin" to com.mengpaw.plugin.termux.TermuxPlugin(),
         "tavily-plugin" to TavilyPlugin(),
         "update-plugin" to UpdatePlugin(),
+        "office-plugin" to OfficePlugin(),
     )
 
     /** 捆绑插件自动安装 — 已安装跳过, 逐个容错 (单插件失败不影响其余). */
