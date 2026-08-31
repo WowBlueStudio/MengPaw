@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.45.0 (2026-08-31) — 用量统计增强: 总调用/输入输出 Token/按模型统计 + 图表纵坐标冻结
+
+### 新增
+- **用量统计卡片扩容**: `TokenUsageStatsPanel` 拆分为独立文件 (自 SystemSettingsContent)，第一行 4 卡展示总调用次数 / 输入 Token / 输出 Token / 总 Token。
+- **按模型统计表格**: 另起一行表格按模型列出 [模型名称][总调用次数][输入 Token][输出 Token][总 Token]。
+- **图表纵坐标冻结**: 每日/每周/每月用量统计图表保持数据区横向可滑动，纵坐标 (Y 轴) 冻结不随滚动移动，网格线对齐。
+- **图表柱顶标注**: 当日数据 ≠ 0 时在柱顶标注两行 — 第一行当日总 Token，第二行总缓存命中 (缓存 > 0 时显示)。
+- `TokenStatsCollector` 新增 `totalCalls()` / `totalPromptTokens()` / `totalCompletionTokens()` / `byModel()` 聚合；`record()` 增补 `cacheHit` / `cacheHitTokens` 缓存命中数据。
+
+### 测试
+- `TokenStatsCollectorTest` 新增用例：总调用次数聚合、按模型聚合 (含输入/输出 Token)。
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.45.0-release.apk` (versionCode 45000)
+- Browser APK: 本轮无变更，不构建；浏览器独立版本线 (v0.9.0) 保持不变
+- 插件: 本轮 plugins/ 无变更，不打 `plugins-v0.45.0` tag，plugins.json 不重写
+- 测试: 全量 1523 用例 0 failures (kernel 641 + core 116 + shell 236 + 插件 530, browser 已拆独立仓库不在此口径)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.44.3 (2026-08-29) — 同步浏览器 v0.9.0: 9880 桥退役, 浏览器控制统一 am 桥单通道
 
 ### 变更
