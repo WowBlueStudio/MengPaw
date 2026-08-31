@@ -113,6 +113,8 @@
 # ── Apache POI (plugin-office: docx/xlsx/pptx) ──
 # POI 用反射 + ServiceLoader 动态加载工厂与 XMLBeans 生成类, 不 keep 则 R8 裁剪导致
 # ClassNotFound/NoClassDefFound. 宽 keep 牺牲体积换取运行时稳定 (POI 体积大头不可避免).
+# XmlBeans 生成类 getter 依赖泛型签名反射, 须保留 Signature/EnclosingMethod 元数据.
+-keepattributes Signature, EnclosingMethod
 -keep class org.apache.poi.** { *; }
 -keep class org.apache.xmlbeans.** { *; }
 -keep class org.openxmlformats.** { *; }
