@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.45.1 (2026-08-31) — 用量统计去叠压: 统计卡均分防挤压 + 图表柱顶标注防叠压
+
+### 修复
+- **第一行 4 统计卡挤压/叠压 + 底部空白**: `StatCard` 原用 `Modifier.fillMaxWidth()` 置于 `Row` 中 (4 个无 weight 均互相抢占/溢出), 现改为每个 `weight(1f)` 均分 + 卡片内 padding 紧凑 + 数字/标题限行防换行撑高, 消除挤压截断与异常底部空间。
+- **图表柱顶标注叠压**: 原两行标注 (总Token/缓存命中) 用 20sp 大字号画柱顶上方且缓存行画进柱内渐变段, 与柱体及相邻标注叠压。重写为总Token 柱顶上方单行短文本 (14sp, 不画进柱内) + 缓存命中柱内顶部白色小字 (12sp, 仅柱高足够时, 不越界)。
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.45.1-release.apk` (versionCode 45001)
+- Browser APK: 本轮无变更，不构建；浏览器独立版本线 (v0.9.0) 保持不变
+- 插件: 本轮 plugins/ 无变更，不打 `plugins-v0.45.1` tag，plugins.json 不重写
+- 测试: 全量 1523 用例 0 failures (kernel 641 + core 116 + shell 236 + 插件 530, browser 已拆独立仓库不在此口径; 本轮纯 UI 修复无新增用例)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.45.0 (2026-08-31) — 用量统计增强: 总调用/输入输出 Token/按模型统计 + 图表纵坐标冻结
 
 ### 新增
