@@ -128,3 +128,8 @@
 -dontwarn java.awt.**
 -dontwarn org.apache.logging.log4j.**
 -keep class org.apache.logging.log4j.** { *; }
+# commons-compress 可选编解码器 (zstd/brotli/xz/pack200/asm) — POI 仅用 zip, 忽略缺类
+-dontwarn org.tukaani.xz.**
+-dontwarn com.github.luben.zstd.**
+-dontwarn org.brotli.dec.**
+-dontwarn org.objectweb.asm.**
