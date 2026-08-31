@@ -278,24 +278,30 @@ fun TokenBarChart(
                                     )
                                 }
                             }
-                            // 数据≠0 时标注两行: 总Token / 总缓存命中 (v0.44.3)
+                            // 数据≠0 时标注 (v0.45.0 去叠压重写):
+                            // 总Token → 柱顶上方单行短文本 (14sp, 不画进柱内)
+                            // 缓存命中 → 柱内顶部白色小字 (12sp, 仅柱高足够, 不越界)
                             val dayTotalVal = totals[i]
                             val dayCache = cacheSeries.getOrNull(i)?.second ?: 0L
                             if (dayTotalVal > 0) {
-                                val labelPaint = android.graphics.Paint().apply {
-                                    color = if (dayCache > 0) 0xFF0E4397.toInt() else 0xFF86909C.toInt() // Blue6 / Gray6
-                                    textSize = 20f
+                                val barTop = padTop + chartHeight - dayTotal.toFloat() * yScale * growProgress
+                                val barHpx = dayTotal.toFloat() * yScale * growProgress
+                                val totalPaint = android.graphics.Paint().apply {
+                                    color = 0xFF0E4397.toInt() // ArcoColors.Blue6
+                                    textSize = 14f
                                     isAntiAlias = true
                                 }
-                                // 柱顶上方两行: 第一行总Token, 第二行缓存命中 (缓存>0 时显示)
-                                val barTop = padTop + chartHeight - dayTotal.toFloat() * yScale * growProgress
-                                val row1Y = barTop - 6f
                                 drawContext.canvas.nativeCanvas.drawText(
-                                    formatTokenCount(dayTotalVal), x - 6f, row1Y, labelPaint
+                                    formatTokenCount(dayTotalVal), x, barTop - 6f, totalPaint
                                 )
-                                if (dayCache > 0) {
+                                if (dayCache > 0 && barHpx > 20f) {
+                                    val cachePaint = android.graphics.Paint().apply {
+                                        color = 0xFFFFFFFF.toInt() // 柱顶渐变深色底, 白字可读
+                                        textSize = 12f
+                                        isAntiAlias = true
+                                    }
                                     drawContext.canvas.nativeCanvas.drawText(
-                                        "缓存${formatTokenCount(dayCache)}", x - 6f, row1Y + 14f, labelPaint
+                                        formatTokenCount(dayCache), x + 2f, barTop + 13f, cachePaint
                                     )
                                 }
                             }

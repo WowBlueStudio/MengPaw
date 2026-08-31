@@ -29,14 +29,15 @@ import com.mengpaw.design.components.SectionHeader
 fun StatCard(
     title: String, value: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    bgColor: Color, fgColor: Color
+    bgColor: Color, fgColor: Color,
+    modifier: Modifier = Modifier
 ) {
-    Surface(modifier = Modifier.fillMaxWidth(), color = bgColor) {
-        Column(Modifier.padding(ArcoSpacing.md)) {
-            Icon(icon, null, Modifier.size(20.dp), tint = fgColor)
-            Spacer(Modifier.height(6.dp))
-            Text(value, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = fgColor)
-            Text(title, fontSize = 11.sp, color = fgColor.copy(alpha = 0.7f))
+    Surface(modifier = modifier, color = bgColor, shape = RoundedCornerShape(ArcoRadius.sm)) {
+        Column(Modifier.padding(horizontal = ArcoSpacing.sm, vertical = ArcoSpacing.md)) {
+            Icon(icon, null, Modifier.size(18.dp), tint = fgColor)
+            Spacer(Modifier.height(4.dp))
+            Text(value, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = fgColor, maxLines = 1)
+            Text(title, fontSize = 10.sp, color = fgColor.copy(alpha = 0.7f), maxLines = 2)
         }
     }
 }
