@@ -187,6 +187,8 @@ internal class TaskExecutionPipeline(
                         com.mengpaw.shell.ui.components.TokenStatsCollector.record(
                             model = session.modelName,
                             tokens = usage.totalTokens,
+                            promptTokens = usage.promptTokens,
+                            completionTokens = usage.completionTokens,
                             cacheHit = usage.cacheHitTokens > 0,
                             cacheHitTokens = usage.cacheHitTokens
                         )

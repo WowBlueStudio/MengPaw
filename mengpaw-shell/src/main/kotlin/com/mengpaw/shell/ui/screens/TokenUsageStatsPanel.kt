@@ -7,9 +7,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AttachMoney
+import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.Cached
+import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -83,15 +84,47 @@ fun TokenUsageStatsPanel(state: SettingsState) {
             style = MaterialTheme.typography.bodySmall, color = ThemeColors.textSecondary, modifier = Modifier.padding(vertical = ArcoSpacing.lg))
     }
 
+    // v0.44.3: 第一行 4 项 — 总调用次数 / 输入 Token / 输出 Token / 总 Token
     val totalTokens = collector.totalTokens()
-    val cacheSaved = collector.totalCacheSaved()
-    if (totalTokens > 0) {
+    val totalCalls = collector.totalCalls()
+    val totalPrompt = collector.totalPromptTokens()
+    val totalCompletion = collector.totalCompletionTokens()
+    if (totalTokens > 0 || totalCalls > 0) {
         Spacer(Modifier.height(ArcoSpacing.md))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
-            StatCard(state.strings.systemTotalUsage, formatTokenCount(totalTokens), Icons.Outlined.BarChart, ArcoColors.Blue1, ArcoColors.Blue6)
-            StatCard(state.strings.systemCacheSaved, formatTokenCount(cacheSaved), Icons.Outlined.Cached, ArcoColors.Green1, ArcoColors.Green6)
-            StatCard(state.strings.systemEstimatedSavings, "\$" + "%.2f".format(collector.estimatedSavingsUsd()),
-                Icons.Outlined.AttachMoney, ArcoColors.Orange1, ArcoColors.Orange6)
+            StatCard(state.strings.systemTotalCalls, formatTokenCount(totalCalls), Icons.Outlined.Call, ArcoColors.Blue1, ArcoColors.Blue6)
+            StatCard(state.strings.systemInputTokens, formatTokenCount(totalPrompt), Icons.Outlined.ArrowForward, ArcoColors.Green1, ArcoColors.Green6)
+            StatCard(state.strings.systemOutputTokens, formatTokenCount(totalCompletion), Icons.Outlined.ArrowBack, ArcoColors.Orange1, ArcoColors.Orange6)
+            StatCard(state.strings.systemTotalUsage, formatTokenCount(totalTokens), Icons.Outlined.BarChart, ArcoColors.Pink1, ArcoColors.Pink6)
+        }
+    }
+
+    // v0.44.3: 按模型统计表格 — 模型名称 / 总调用次数 / 输入 Token / 输出 Token / 总 Token
+    val byModel = collector.byModel()
+    if (byModel.isNotEmpty()) {
+        Spacer(Modifier.height(ArcoSpacing.lg))
+        HorizontalDivider(color = ThemeColors.border)
+        Spacer(Modifier.height(ArcoSpacing.lg))
+        SectionHeader(state.strings.systemModelStats)
+        Column(Modifier.fillMaxWidth()) {
+            // 表头
+            Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm)) {
+                Text(state.strings.systemModelName, Modifier.weight(1.2f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = ThemeColors.textPrimary)
+                Text(state.strings.systemTotalCalls, Modifier.weight(0.8f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = ThemeColors.textSecondary)
+                Text(state.strings.systemInputTokens, Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = ThemeColors.textSecondary)
+                Text(state.strings.systemOutputTokens, Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = ThemeColors.textSecondary)
+                Text(state.strings.systemModelTotalTokens, Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = ThemeColors.textSecondary)
+            }
+            HorizontalDivider(color = ThemeColors.border)
+            byModel.forEach { m ->
+                Row(Modifier.fillMaxWidth().padding(vertical = ArcoSpacing.sm)) {
+                    Text(m.model, Modifier.weight(1.2f), fontSize = 12.sp, color = ThemeColors.textPrimary)
+                    Text(formatTokenCount(m.calls), Modifier.weight(0.8f), fontSize = 12.sp, color = ThemeColors.textSecondary)
+                    Text(formatTokenCount(m.promptTokens), Modifier.weight(1f), fontSize = 12.sp, color = ThemeColors.textSecondary)
+                    Text(formatTokenCount(m.completionTokens), Modifier.weight(1f), fontSize = 12.sp, color = ThemeColors.textSecondary)
+                    Text(formatTokenCount(m.totalTokens), Modifier.weight(1f), fontSize = 12.sp, color = ThemeColors.textPrimary)
+                }
+            }
         }
     }
 }

@@ -25,7 +25,14 @@ object TokenStatsCollector {
         val date: String,
         val modelTokens: Map<String, Long>,     // model → token count
         val cacheHitTokens: Long,
-        val totalTokens: Long
+        val totalTokens: Long,
+        // v0.44.3 扩展: 输入/输出 Token 拆分 + 调用次数 (按模型聚合)
+        val promptTokens: Long = 0,
+        val completionTokens: Long = 0,
+        val calls: Long = 0,
+        val modelCalls: Map<String, Long> = emptyMap(),   // model → 调用次数
+        val modelPrompt: Map<String, Long> = emptyMap(),  // model → 输入 Token
+        val modelCompletion: Map<String, Long> = emptyMap() // model → 输出 Token
     )
 
     data class WeeklySummary(
@@ -33,6 +40,15 @@ object TokenStatsCollector {
         val totalTokens: Long,
         val cacheHitTokens: Long,
         val modelTokens: Map<String, Long>
+    )
+
+    /** 按模型聚合的统计 (v0.44.3): 每个模型的调用次数/输入/输出/总 Token。 */
+    data class ModelStats(
+        val model: String,
+        val calls: Long,
+        val promptTokens: Long,
+        val completionTokens: Long,
+        val totalTokens: Long
     )
 
     private var records = mutableListOf<DayRecord>()
@@ -58,18 +74,40 @@ object TokenStatsCollector {
                     val model = parts[1]
                     val tokens = parts[2].toLongOrNull() ?: 0
                     val cache = parts.getOrNull(3)?.toLongOrNull() ?: 0
+                    // v0.44.3 扩展: 旧 CSV (date,model,tokens,cache) 无 prompt/completion/calls, 按 0 处理
+                    val prompt = parts.getOrNull(4)?.toLongOrNull() ?: 0
+                    val completion = parts.getOrNull(5)?.toLongOrNull() ?: 0
+                    val calls = parts.getOrNull(6)?.toLongOrNull() ?: 0
                     val existing = records.find { it.date == date }
                     if (existing != null) {
                         val updated = existing.modelTokens.toMutableMap()
                         updated[model] = (updated[model] ?: 0) + tokens
+                        val callsMap = existing.modelCalls.toMutableMap()
+                        callsMap[model] = (callsMap[model] ?: 0) + calls
+                        val promptMap = existing.modelPrompt.toMutableMap()
+                        promptMap[model] = (promptMap[model] ?: 0) + prompt
+                        val completionMap = existing.modelCompletion.toMutableMap()
+                        completionMap[model] = (completionMap[model] ?: 0) + completion
                         val idx = records.indexOf(existing)
                         records[idx] = existing.copy(
                             modelTokens = updated,
                             cacheHitTokens = existing.cacheHitTokens + cache,
-                            totalTokens = existing.totalTokens + tokens
+                            totalTokens = existing.totalTokens + tokens,
+                            promptTokens = existing.promptTokens + prompt,
+                            completionTokens = existing.completionTokens + completion,
+                            calls = existing.calls + calls,
+                            modelCalls = callsMap,
+                            modelPrompt = promptMap,
+                            modelCompletion = completionMap
                         )
                     } else {
-                        records.add(DayRecord(date, mapOf(model to tokens), cacheHitTokens = cache, totalTokens = tokens))
+                        records.add(DayRecord(
+                            date, mapOf(model to tokens), cacheHitTokens = cache, totalTokens = tokens,
+                            promptTokens = prompt, completionTokens = completion, calls = calls,
+                            modelCalls = mapOf(model to calls),
+                            modelPrompt = mapOf(model to prompt),
+                            modelCompletion = mapOf(model to completion)
+                        ))
                     }
                 }
             }
@@ -83,30 +121,61 @@ object TokenStatsCollector {
             val lines = records.flatMap { r ->
                 r.modelTokens.map { (model, tokens) ->
                     val cache = if (r.modelTokens.size == 1) r.cacheHitTokens else (r.cacheHitTokens / r.modelTokens.size)
-                    "${r.date},$model,$tokens,$cache"
+                    val prompt = r.modelPrompt[model] ?: 0L
+                    val completion = r.modelCompletion[model] ?: 0L
+                    val calls = r.modelCalls[model] ?: 0L
+                    "${r.date},$model,$tokens,$cache,$prompt,$completion,$calls"
                 }
             }
             csvFile.writeText(lines.joinToString("\n"))
         } catch (_: Exception) { }
     }
 
-    /** Record token usage for a single LLM call. */
-    fun record(model: String, tokens: Int, cacheHit: Boolean, cacheHitTokens: Int = 0) {
+    /**
+     * Record token usage for a single LLM call (v0.44.3: 记录输入/输出 Token 拆分 + 调用次数)。
+     * @param tokens 总 token (totalTokens)
+     * @param promptTokens 输入 token (输入侧统计)
+     * @param completionTokens 输出 token (输出侧统计)
+     * @param cacheHit 是否命中缓存
+     * @param cacheHitTokens 缓存命中节省的 token
+     */
+    fun record(model: String, tokens: Int, promptTokens: Int = tokens, completionTokens: Int = 0,
+               cacheHit: Boolean, cacheHitTokens: Int = 0) {
         val day = today
         val existing = records.find { it.date == day }
         if (existing != null) {
             val updated = existing.modelTokens.toMutableMap()
             updated[model] = (updated[model] ?: 0) + tokens
+            val callsMap = existing.modelCalls.toMutableMap()
+            callsMap[model] = (callsMap[model] ?: 0) + 1
+            val promptMap = existing.modelPrompt.toMutableMap()
+            promptMap[model] = (promptMap[model] ?: 0) + promptTokens
+            val completionMap = existing.modelCompletion.toMutableMap()
+            completionMap[model] = (completionMap[model] ?: 0) + completionTokens
             val idx = records.indexOf(existing)
             records[idx] = existing.copy(
                 modelTokens = updated,
                 cacheHitTokens = existing.cacheHitTokens + if (cacheHit) cacheHitTokens else 0,
-                totalTokens = existing.totalTokens + tokens
+                totalTokens = existing.totalTokens + tokens,
+                promptTokens = existing.promptTokens + promptTokens,
+                completionTokens = existing.completionTokens + completionTokens,
+                calls = existing.calls + 1,
+                modelCalls = callsMap,
+                modelPrompt = promptMap,
+                modelCompletion = completionMap
             )
         } else {
-            records.add(DayRecord(day, mapOf(model to tokens.toLong()),
+            records.add(DayRecord(
+                day, mapOf(model to tokens.toLong()),
                 cacheHitTokens = if (cacheHit) cacheHitTokens.toLong() else 0,
-                totalTokens = tokens.toLong()))
+                totalTokens = tokens.toLong(),
+                promptTokens = promptTokens.toLong(),
+                completionTokens = completionTokens.toLong(),
+                calls = 1,
+                modelCalls = mapOf(model to 1L),
+                modelPrompt = mapOf(model to promptTokens.toLong()),
+                modelCompletion = mapOf(model to completionTokens.toLong())
+            ))
         }
         // v0.37.1: 保留上限 90 天 → 24 月 (用户定案: 日 90 天/周 50 周/月 24 月),
         // 按日期清理而非固定 removeAt(0) (防 CSV 乱序误删)。
@@ -269,4 +338,35 @@ object TokenStatsCollector {
 
     /** Estimated USD saved (cache hits × ~$0.14/1M tokens). */
     fun estimatedSavingsUsd(): Double = totalCacheSaved() * 0.0001372
+
+    // ── v0.44.3 新增: 调用次数 / 输入输出 Token / 按模型统计 ─────────────
+
+    /** 全部历史调用次数。 */
+    fun totalCalls(): Long = records.sumOf { it.calls }
+
+    /** 全部历史输入 token 总量。 */
+    fun totalPromptTokens(): Long = records.sumOf { it.promptTokens }
+
+    /** 全部历史输出 token 总量。 */
+    fun totalCompletionTokens(): Long = records.sumOf { it.completionTokens }
+
+    /**
+     * 按模型聚合的统计 (v0.44.3) — 每个模型的调用次数/输入/输出/总 Token。
+     * 只返回有记录的模型; 排序: 调用次数降序。
+     */
+    fun byModel(): List<ModelStats> {
+        val merged = linkedMapOf<String, ModelStats>()
+        records.forEach { r ->
+            r.modelCalls.keys.union(r.modelTokens.keys).forEach { model ->
+                val cur = merged[model] ?: ModelStats(model, 0, 0, 0, 0)
+                merged[model] = cur.copy(
+                    calls = cur.calls + (r.modelCalls[model] ?: 0),
+                    promptTokens = cur.promptTokens + (r.modelPrompt[model] ?: 0),
+                    completionTokens = cur.completionTokens + (r.modelCompletion[model] ?: 0),
+                    totalTokens = cur.totalTokens + (r.modelTokens[model] ?: 0)
+                )
+            }
+        }
+        return merged.values.sortedByDescending { it.calls }
+    }
 }

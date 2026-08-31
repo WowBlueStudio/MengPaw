@@ -117,4 +117,49 @@ class TokenStatsCollectorTest {
         assertEquals("末月应为本月且含今日数据", 900L, series.last().totalTokens)
         assertEquals("上上月数据应为 700", 700L, series.firstOrNull { it.totalTokens > 0 && it.totalTokens != 900L }?.totalTokens)
     }
+
+    // ── v0.44.3: 调用次数 / 输入输出 Token / 按模型统计 ─────────────────────
+
+    private fun record(date: String, model: String, tokens: Long, prompt: Long = tokens, completion: Long = 0, calls: Long = 1): TokenStatsCollector.DayRecord =
+        TokenStatsCollector.DayRecord(
+            date = date,
+            modelTokens = mapOf(model to tokens),
+            cacheHitTokens = if (tokens > 0) tokens / 10 else 0,
+            totalTokens = tokens,
+            promptTokens = prompt,
+            completionTokens = completion,
+            calls = calls,
+            modelCalls = mapOf(model to calls),
+            modelPrompt = mapOf(model to prompt),
+            modelCompletion = mapOf(model to completion)
+        )
+
+    @Test
+    fun 总调用次数与输入输出Token() {
+        setRecords(listOf(
+            record(dateOffset(2), "gpt-4o", 300, prompt = 200, completion = 100),
+            record(dateOffset(1), "gpt-4o", 150, prompt = 100, completion = 50),
+            record(dateOffset(0), "gpt-4o-mini", 60, prompt = 40, completion = 20)
+        ))
+        assertEquals("调用次数应累加", 3L, TokenStatsCollector.totalCalls())
+        assertEquals("输入 token 应累加", 340L, TokenStatsCollector.totalPromptTokens())
+        assertEquals("输出 token 应累加", 170L, TokenStatsCollector.totalCompletionTokens())
+        assertEquals("总 token 应累加", 510L, TokenStatsCollector.totalTokens())
+    }
+
+    @Test
+    fun 按模型统计聚合() {
+        setRecords(listOf(
+            record(dateOffset(2), "gpt-4o", 300, prompt = 200, completion = 100, calls = 1),
+            record(dateOffset(1), "gpt-4o", 150, prompt = 100, completion = 50, calls = 1),
+            record(dateOffset(0), "gpt-4o-mini", 60, prompt = 40, completion = 20, calls = 1)
+        ))
+        val byModel = TokenStatsCollector.byModel()
+        assertEquals("应有 2 个模型", 2, byModel.size)
+        val gpt4o = byModel.find { it.model == "gpt-4o" }
+        assertEquals("gpt-4o 调用 2 次", 2L, gpt4o?.calls)
+        assertEquals("gpt-4o 输入 300", 300L, gpt4o?.promptTokens)
+        assertEquals("gpt-4o 输出 150", 150L, gpt4o?.completionTokens)
+        assertEquals("gpt-4o 总 token 450", 450L, gpt4o?.totalTokens)
+    }
 }
