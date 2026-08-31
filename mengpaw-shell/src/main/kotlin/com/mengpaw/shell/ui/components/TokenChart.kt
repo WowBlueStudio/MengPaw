@@ -180,6 +180,14 @@ fun TokenBarChart(
         // 固定 Y 轴刻度常量 — 供冻结 Y 轴 + 数据区共用, 保证网格对齐
         val yScaleFor = { chartHeight: Float -> chartHeight / yMax.toFloat() }
 
+        // v0.45.x 夜间适配: Canvas draw 内无法调 @Composable, 在此捕获主题感知颜色供两个 Canvas 共用。
+        // 亮色: 浅灰网格/深蓝标注; 暗色: 深灰线 + 更亮刻度 + 白字标注 (避免浅色线/深蓝字在深色背景不可见)
+        val isDark = ThemeColors.isDark
+        val axisTextArgb = if (isDark) 0xFFA9AEB8.toInt() else 0xFF86909C.toInt()  // Gray5/Gray6
+        val gridLine = if (isDark) Color(0xFF4E5969) else ArcoColors.Gray3  // Gray8/Gray3
+        val emptyBar = if (isDark) Color(0xFF4E5969) else ArcoColors.Gray4  // Gray8/Gray4
+        val barLabelArgb = if (isDark) 0xFFFFFFFF.toInt() else 0xFF0E4397.toInt()  // White/Blue6
+
         Row(Modifier.fillMaxWidth()) {
             // ── 冻结 Y 轴 (不随滚动移动) ──
             Box(
@@ -190,7 +198,7 @@ fun TokenBarChart(
                     val chartHeight = size.height - padTop - padBottom
                     val yScale = yScaleFor(chartHeight)
                     val textPaint = android.graphics.Paint().apply {
-                        color = 0xFF86909C.toInt() // ArcoColors.Gray6
+                        color = axisTextArgb
                         textSize = 22f
                         isAntiAlias = true
                     }
@@ -229,7 +237,7 @@ fun TokenBarChart(
                         val yScale = yScaleFor(chartHeight)
 
                         val textPaint = android.graphics.Paint().apply {
-                            color = 0xFF86909C.toInt() // ArcoColors.Gray6
+                            color = axisTextArgb
                             textSize = 22f
                             isAntiAlias = true
                         }
@@ -237,7 +245,7 @@ fun TokenBarChart(
                         for (i in 0..4) {
                             val yVal = yMax * i / 4
                             val y = padTop + chartHeight - yVal * yScale
-                            drawLine(ArcoColors.Gray3, Offset(0f, y), Offset(w - padRight, y), strokeWidth = 1f)
+                            drawLine(gridLine, Offset(0f, y), Offset(w - padRight, y), strokeWidth = 1f)
                         }
 
                         // 堆叠柱 — 每日一根, 模型分段着色 (自底向上)
@@ -271,7 +279,7 @@ fun TokenBarChart(
                                 } else {
                                     val ph = 2f * growProgress
                                     drawRoundRect(
-                                        ArcoColors.Gray4,
+                                        emptyBar,
                                         topLeft = Offset(x, padTop + chartHeight - ph),
                                         size = Size(barWidthPx, ph),
                                         cornerRadius = CornerRadius(1f, 1f)
@@ -287,7 +295,7 @@ fun TokenBarChart(
                                 val barTop = padTop + chartHeight - dayTotal.toFloat() * yScale * growProgress
                                 val barHpx = dayTotal.toFloat() * yScale * growProgress
                                 val totalPaint = android.graphics.Paint().apply {
-                                    color = 0xFF0E4397.toInt() // ArcoColors.Blue6
+                                    color = barLabelArgb  // 夜间白字, 亮色品牌蓝
                                     textSize = 14f
                                     isAntiAlias = true
                                 }

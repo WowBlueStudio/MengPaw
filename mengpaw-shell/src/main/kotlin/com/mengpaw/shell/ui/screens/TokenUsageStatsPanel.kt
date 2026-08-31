@@ -87,6 +87,8 @@ fun TokenUsageStatsPanel(state: SettingsState) {
     // v0.45.0: 第一行 4 项 — 总调用次数 / 输入 Token / 输出 Token / 总 Token
     // 修复: 原 4 卡在 Row 里均 fillMaxWidth 无 weight → 相互抢占/溢出挤压截断。
     // 改为每个 weight(1f) 均分, 卡片内 padding 紧凑, 数字/标题限行防换行撑高。
+    val isDark = ThemeColors.isDark
+    // v0.45.x 夜间适配: 亮色=浅底深字(*1/*6); 暗色=品牌深色底(*6)+白字 (避免浅色卡在夜间刺眼)
     val totalTokens = collector.totalTokens()
     val totalCalls = collector.totalCalls()
     val totalPrompt = collector.totalPromptTokens()
@@ -94,10 +96,14 @@ fun TokenUsageStatsPanel(state: SettingsState) {
     if (totalTokens > 0 || totalCalls > 0) {
         Spacer(Modifier.height(ArcoSpacing.md))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {
-            StatCard(state.strings.systemTotalCalls, formatTokenCount(totalCalls), Icons.Outlined.Call, ArcoColors.Blue1, ArcoColors.Blue6, Modifier.weight(1f))
-            StatCard(state.strings.systemInputTokens, formatTokenCount(totalPrompt), Icons.Outlined.ArrowForward, ArcoColors.Green1, ArcoColors.Green6, Modifier.weight(1f))
-            StatCard(state.strings.systemOutputTokens, formatTokenCount(totalCompletion), Icons.Outlined.ArrowBack, ArcoColors.Orange1, ArcoColors.Orange6, Modifier.weight(1f))
-            StatCard(state.strings.systemTotalUsage, formatTokenCount(totalTokens), Icons.Outlined.BarChart, ArcoColors.Pink1, ArcoColors.Pink6, Modifier.weight(1f))
+            StatCard(state.strings.systemTotalCalls, formatTokenCount(totalCalls), Icons.Outlined.Call,
+                if (isDark) ArcoColors.Blue6 else ArcoColors.Blue1, if (isDark) Color.White else ArcoColors.Blue6, Modifier.weight(1f))
+            StatCard(state.strings.systemInputTokens, formatTokenCount(totalPrompt), Icons.Outlined.ArrowForward,
+                if (isDark) ArcoColors.Green6 else ArcoColors.Green1, if (isDark) Color.White else ArcoColors.Green6, Modifier.weight(1f))
+            StatCard(state.strings.systemOutputTokens, formatTokenCount(totalCompletion), Icons.Outlined.ArrowBack,
+                if (isDark) ArcoColors.Orange6 else ArcoColors.Orange1, if (isDark) Color.White else ArcoColors.Orange6, Modifier.weight(1f))
+            StatCard(state.strings.systemTotalUsage, formatTokenCount(totalTokens), Icons.Outlined.BarChart,
+                if (isDark) ArcoColors.Pink6 else ArcoColors.Pink1, if (isDark) Color.White else ArcoColors.Pink6, Modifier.weight(1f))
         }
     }
 
