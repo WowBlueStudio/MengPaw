@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.46.1 (2026-09-01) — token 用量记录重构根治多模式统计缺失 + 并发安全 + 更新源修复
+
+### 修复
+- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。
+- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (object 单例锁)。
+- **自动更新 browser 源取最高版本**: `tryFetchBrowserRelease` 与 shell 侧一致改为取版本号最高的合法应用发布 (兼容 Gitee 升序/GitHub 降序), 防 browser 仓库将来被 plugins-v\* 顶替。
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.46.1-release.apk` (versionCode 46001)
+- Browser APK: 本轮无变更，不构建；浏览器独立版本线 (v0.9.0) 保持不变
+- 插件: 本轮 plugin-update 有变更，构建 AAR 回写 plugins.json，打 `plugins-v0.46.1` tag，GitHub Release 附 AAR
+- 测试: 全量 1541 用例 0 failures (kernel 643 + core 116 + shell 236 + 插件 546, browser 已拆独立仓库不在此口径)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.46.0 (2026-08-31) — 新增内置 Office 文档编辑插件 + 用量统计夜间模式适配
 
 ### 新增

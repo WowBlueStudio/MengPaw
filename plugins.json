@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "dream-plugin",
@@ -31,7 +31,7 @@
       "commands": [],
       "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
       "size": 3129,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "tavily-plugin",
@@ -63,7 +63,7 @@
       ],
       "checksum": "sha256:ab121f541be212f54a85949a8df59fadf1ab181baadd0019bb8fa3e175a601e9",
       "size": 21596,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "framework-plugin",
@@ -93,7 +93,7 @@
       ],
       "checksum": "sha256:b3e9be0bd5587f2c8a755b82ab68c0d04ca00f72458785c31cd04abf5817e958",
       "size": 110868,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "fs-plugin",
@@ -132,7 +132,7 @@
       ],
       "checksum": "sha256:a78b37dc205343cb0c08f18ff77566c3b6edca5d62e6006814d656fefe5ba213",
       "size": 17951,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "memory-twin-plugin",
@@ -163,7 +163,7 @@
       ],
       "checksum": "sha256:50b874379adcb91aa5100cd4c2bc96252226a511d6bf44614fa4baf6d40c5927",
       "size": 243330,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "skill-plugin",
@@ -188,7 +188,7 @@
       ],
       "checksum": "sha256:1e3314818042b2a9fd2591dbd52108eab3a8199d44cdbebf5d00460cbbdde55c",
       "size": 102559,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "clipboard-plugin",
@@ -206,7 +206,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "dev-plugin",
@@ -227,7 +227,7 @@
       ],
       "checksum": "sha256:66f20d2156a2b49e3995b4f5eed056562a8666c2c3c747df4df017ac58e111d5",
       "size": 35337,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "update-plugin",
@@ -249,9 +249,9 @@
         "update.install",
         "update.auto"
       ],
-      "checksum": "sha256:446b750f6ba0044b7067337c04c5528dfb568fac0b891c58bb2fe477415431c9",
-      "size": 55941,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "checksum": "sha256:2fcb14e1b0d5eac9ff32d8bcc9ccad36c10121a41b4e75cbb129501164151159",
+      "size": 56173,
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "translate-plugin",
@@ -363,7 +363,7 @@
       ],
       "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
       "size": 282877,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "comfy-plugin",
@@ -488,7 +488,7 @@
       ],
       "checksum": "sha256:32c402304b4190083c209773186368460ab813a757bc4a356d61ba03d5fdf21b",
       "size": 46842,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "termux-plugin",
@@ -507,7 +507,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "tools-plugin",
@@ -526,7 +526,7 @@
       ],
       "checksum": "sha256:fd6cf25efe806029cda88f3c47e40eec4b31cfee1128df50b28af5fe77ea0da2",
       "size": 36752,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "office-plugin",
@@ -544,7 +544,7 @@
       ],
       "checksum": "sha256:91b333fc9bdfe6cf74e06d60fec4f6e9e532dc9462677f1cb0be101f9578c7f6",
       "size": 21466,
-      "changelog": "### 新增\n- **内置插件 plugin-office (office.* 命令)**: 基于 Apache POI 5.4.1 读写 Word(docx)/Excel(xlsx)/PowerPoint(pptx)。\n  - `office.read <path>` — 提取 docx 段落/表格、xlsx 单元格 (CSV 形式)、pptx 文本\n  - `office.create <path> <docx|xlsx|pptx>` — 新建空文档/工作簿/演示文稿\n  - `office.write <path> <content>` — docx 追加段落; xlsx 按 `Sheet:<cellRef>:<值>` 写单元格\n  - 命令在 `Dispatchers.IO` 执行; 文件 IO 全 try/catch; 规避 java.awt (不自动列宽/不读写图片/不碰 pptx 锚点)\n  - 安全分级: `office.write` MID (TRUSTED 放行), `office.read/create` LOW; 已挂接内置插件 (PluginRegistrar"
+      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
       "id": "connector-openclaw-plugin",
