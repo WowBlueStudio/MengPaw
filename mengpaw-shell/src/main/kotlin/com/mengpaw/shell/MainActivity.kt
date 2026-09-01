@@ -199,6 +199,14 @@ class MainActivity : ComponentActivity() {
 
         // ── Token 统计 ──
         try { com.mengpaw.shell.ui.components.TokenStatsCollector.load() } catch (_: Exception) {}
+        // v0.46.1: 统一用量记录 — 内核 LLM 调用完成经 TokenUsageRegistry 广播到此记录器
+        // (根治 swarm/fleet/plan/goal 模式统计缺失; 取代 onStep 事后读共享 lastUsage)
+        com.mengpaw.kernel.llm.TokenUsageRegistry.recorder = { model, usage ->
+            com.mengpaw.shell.ui.components.TokenStatsCollector.record(
+                model, usage.totalTokens, usage.promptTokens, usage.completionTokens,
+                usage.cacheHitTokens > 0, usage.cacheHitTokens
+            )
+        }
 
         // ── PluginViewModel 类注册 (装配清单见 PluginRegistrar) ──
         PluginRegistrar.registerPluginClasses()

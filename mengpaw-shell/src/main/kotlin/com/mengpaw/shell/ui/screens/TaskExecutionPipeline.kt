@@ -181,18 +181,10 @@ internal class TaskExecutionPipeline(
                 // 工具提前通知 (v0.29.2, Reasonix ③ 对标): 流式中完整 "Action: <tool>" 行
                 // 出现即推送 — 不等工具执行完成 (onStep), 消除工具轮流式空屏
 
-                // Shared step callback: 固化当前 step + 批内合并 + token stats
+                // Shared step callback: 固化当前 step + 批内合并
+                // v0.46.1: 用量记录移出 onStep — 由内核 TokenUsageRegistry 回调统一记录
+                // (根治 swarm/fleet/plan/goal 模式; 此处不再读共享 lastUsage, 避免依赖时序与模式差异)
                 val onStep: (com.mengpaw.kernel.AgentEngine.TraceStep) -> Unit = { trace ->
-                    session.provider.lastUsage?.let { usage ->
-                        com.mengpaw.shell.ui.components.TokenStatsCollector.record(
-                            model = session.modelName,
-                            tokens = usage.totalTokens,
-                            promptTokens = usage.promptTokens,
-                            completionTokens = usage.completionTokens,
-                            cacheHit = usage.cacheHitTokens > 0,
-                            cacheHitTokens = usage.cacheHitTokens
-                        )
-                    }
                     // v0.34.3: 工具完成 → 挂观察全文 + 成败 (失败红字渲染)
                     coordinator.onStep(
                         action = trace.action,

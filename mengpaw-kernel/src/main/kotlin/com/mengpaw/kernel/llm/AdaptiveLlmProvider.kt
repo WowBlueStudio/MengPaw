@@ -240,6 +240,8 @@ class AdaptiveLlmProvider(
                 response, onToken, requestStart,
                 onUsage = { usage ->
                     lastUsage = usage
+                    // v0.46.1: 统一用量记录 — 经注册器广播给宿主 (shell), 根治多模式统计缺失
+                    TokenUsageRegistry.record(model, usage)
                     // P2-12(自检报告): token/耗时统计 — 部分 API 仅在末块内联 usage
                     com.mengpaw.kernel.Telemetry.recordLlm(
                         usage.promptTokens, usage.completionTokens,
@@ -266,6 +268,8 @@ class AdaptiveLlmProvider(
         // 合并双次 JSON 解析: 一次 parseToJsonElement 同时提取 content / reasoning / usage (v0.40.4)
         val parsed = parseBody(body)
         lastUsage = parsed.usage
+        // v0.46.1: 统一用量记录 — 非流式响应 usage 也经注册器广播
+        parsed.usage?.let { TokenUsageRegistry.record(model, it) }
         lastReasoning = parsed.reasoning
         // P2-12(自检报告): token/耗时统计 — 非流式响应 usage 直录 (API 无 usage 时记 0)
         com.mengpaw.kernel.Telemetry.recordLlm(
