@@ -201,10 +201,16 @@ class UpdatePlugin : Plugin {
                 is JsonObject -> listOf(json)
                 else -> return null
             }
+            // v0.46.x: 取版本号最高的合法应用发布 — 与 shell 侧 tryFetchRelease 一致,
+            // 兼容 Gitee 列表按 id 升序 / GitHub 降序, 防 browser 仓库将来被 plugins-v* 顶替
+            var best: Pair<String, ReleaseInfo>? = null
             for (obj in candidates) {
-                parseBrowserRelease(obj, source)?.let { return it }
+                parseBrowserRelease(obj, source)?.let { r ->
+                    val v = r.tag.removePrefix("v")
+                    if (best == null || compareVersions(v, best.first) > 0) best = v to r
+                }
             }
-            null
+            best?.second
         } catch (e: Exception) {
             ErrorCollector.report(e, "UpdatePlugin.tryFetchBrowser")
             null

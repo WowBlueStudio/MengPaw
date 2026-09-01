@@ -6,6 +6,7 @@ package com.mengpaw.shell.ui.components
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.jvm.Synchronized
 
 /**
  * Lightweight token usage collector, records per-model daily totals + cache hits.
@@ -63,7 +64,7 @@ object TokenStatsCollector {
     }
 
     /** Load persisted records on startup. */
-    fun load() {
+    @Synchronized fun load() {
         try {
             if (!csvFile.exists()) return
             records.clear()
@@ -115,7 +116,7 @@ object TokenStatsCollector {
         } catch (_: Exception) { }
     }
 
-    private fun save() {
+    @Synchronized private fun save() {
         try {
             csvFile.parentFile?.mkdirs()
             val lines = records.flatMap { r ->
@@ -139,7 +140,7 @@ object TokenStatsCollector {
      * @param cacheHit 是否命中缓存
      * @param cacheHitTokens 缓存命中节省的 token
      */
-    fun record(model: String, tokens: Int, promptTokens: Int = tokens, completionTokens: Int = 0,
+    @Synchronized fun record(model: String, tokens: Int, promptTokens: Int = tokens, completionTokens: Int = 0,
                cacheHit: Boolean, cacheHitTokens: Int = 0) {
         val day = today
         val existing = records.find { it.date == day }
@@ -184,7 +185,7 @@ object TokenStatsCollector {
     }
 
     /** Get daily records for the last N days. */
-    fun dailyRecords(days: Int = 14): List<DayRecord> =
+    @Synchronized fun dailyRecords(days: Int = 14): List<DayRecord> =
         records.takeLast(days)
 
     /**
@@ -192,7 +193,7 @@ object TokenStatsCollector {
      * 0 值占位 (信息完整性: 中间没用量的区间条形也必须可见, 不跳空)。
      * 无记录返回空列表。
      */
-    fun dailySeries(days: Int = 90): List<DayRecord> {
+    @Synchronized fun dailySeries(days: Int = 90): List<DayRecord> {
         if (records.isEmpty()) return emptyList()
         val byDate = records.associateBy { it.date }
         val cal = Calendar.getInstance()
@@ -211,7 +212,7 @@ object TokenStatsCollector {
     }
 
     /** Aggregate into weekly summaries. */
-    fun weeklyRecords(weeks: Int = 12): List<WeeklySummary> {
+    @Synchronized fun weeklyRecords(weeks: Int = 12): List<WeeklySummary> {
         val result = mutableListOf<WeeklySummary>()
         val cal = Calendar.getInstance()
         cal.time = Date()
@@ -242,7 +243,7 @@ object TokenStatsCollector {
      * 连续周序列 (v0.37.1 重构) — 最近 [weeks] 周 (默认 50) 逐周生成, 空周补 0 值
      * 占位 (不跳空; 用户定案: 中间没用量的区间条形必须可见)。无记录返回空列表。
      */
-    fun weeklySeries(weeks: Int = 50): List<WeeklySummary> {
+    @Synchronized fun weeklySeries(weeks: Int = 50): List<WeeklySummary> {
         if (records.isEmpty()) return emptyList()
         val cal = Calendar.getInstance()
         cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
@@ -273,7 +274,7 @@ object TokenStatsCollector {
     }
 
     /** Aggregate into monthly summaries. */
-    fun monthlyRecords(months: Int = 6): List<WeeklySummary> {
+    @Synchronized fun monthlyRecords(months: Int = 6): List<WeeklySummary> {
         val result = mutableListOf<WeeklySummary>()
         val cal = Calendar.getInstance()
         cal.time = Date()
@@ -299,7 +300,7 @@ object TokenStatsCollector {
      * 连续月序列 (v0.37.1 重构) — 最近 [months] 个月 (默认 24) 逐月生成, 空月补 0 值
      * 占位 (不跳空; 用户定案: 中间没用量的月份条形必须可见)。无记录返回空列表。
      */
-    fun monthlySeries(months: Int = 24): List<WeeklySummary> {
+    @Synchronized fun monthlySeries(months: Int = 24): List<WeeklySummary> {
         if (records.isEmpty()) return emptyList()
         val cal = Calendar.getInstance()
         cal.set(Calendar.DAY_OF_MONTH, 1)
@@ -327,34 +328,34 @@ object TokenStatsCollector {
     }
 
     /** All distinct model names seen so far. */
-    fun allModels(): List<String> =
+    @Synchronized fun allModels(): List<String> =
         records.flatMap { it.modelTokens.keys }.distinct().sorted()
 
     /** Total cache-hit tokens saved. */
-    fun totalCacheSaved(): Long = records.sumOf { it.cacheHitTokens }
+    @Synchronized fun totalCacheSaved(): Long = records.sumOf { it.cacheHitTokens }
 
     /** 全部历史 token 总量 (v0.37.1 重构: 统计卡不再按最近 14 天口径, 与图表全量一致)。 */
-    fun totalTokens(): Long = records.sumOf { it.totalTokens }
+    @Synchronized fun totalTokens(): Long = records.sumOf { it.totalTokens }
 
     /** Estimated USD saved (cache hits × ~$0.14/1M tokens). */
-    fun estimatedSavingsUsd(): Double = totalCacheSaved() * 0.0001372
+    @Synchronized fun estimatedSavingsUsd(): Double = totalCacheSaved() * 0.0001372
 
     // ── v0.44.3 新增: 调用次数 / 输入输出 Token / 按模型统计 ─────────────
 
     /** 全部历史调用次数。 */
-    fun totalCalls(): Long = records.sumOf { it.calls }
+    @Synchronized fun totalCalls(): Long = records.sumOf { it.calls }
 
     /** 全部历史输入 token 总量。 */
-    fun totalPromptTokens(): Long = records.sumOf { it.promptTokens }
+    @Synchronized fun totalPromptTokens(): Long = records.sumOf { it.promptTokens }
 
     /** 全部历史输出 token 总量。 */
-    fun totalCompletionTokens(): Long = records.sumOf { it.completionTokens }
+    @Synchronized fun totalCompletionTokens(): Long = records.sumOf { it.completionTokens }
 
     /**
      * 按模型聚合的统计 (v0.44.3) — 每个模型的调用次数/输入/输出/总 Token。
      * 只返回有记录的模型; 排序: 调用次数降序。
      */
-    fun byModel(): List<ModelStats> {
+    @Synchronized fun byModel(): List<ModelStats> {
         val merged = linkedMapOf<String, ModelStats>()
         records.forEach { r ->
             r.modelCalls.keys.union(r.modelTokens.keys).forEach { model ->
