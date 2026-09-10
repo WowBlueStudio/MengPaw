@@ -149,6 +149,10 @@ internal class AgentReActLoop(
                 // 修复: 空响应不入库空白消息, 重试一次 (step 不递增); 仍空则写明确错误并终止。
                 if (sanitized.isBlank()) {
                     emptyResponseCount++
+                    // v0.46.3 诊断: 区分「仅思维链(正文空)」与「完全空流」— 前者是模型/思考模式行为,
+                    // 后者是链路问题, 排查方向完全不同。只记长度计数, 不记内容。
+                    val reasoningChars = engine.getLlmProvider().lastReasoning?.length ?: 0
+                    val mode = if (reasoningChars > 0) "reasoning_only" else "empty_stream"
                     if (emptyResponseCount >= 2) {
                         val errorMsg = localizedError("empty_response", "", engine.agentLanguage)
                         engine.getSessionManager().addMessage(session.id, Message("assistant", errorMsg))
@@ -156,15 +160,22 @@ internal class AgentReActLoop(
                             kind = SessionEventBus.EventKind.LLM_CALL_ERROR,
                             sessionId = session.id,
                             agentName = engine.agentName,
-                            summary = "Empty LLM response after retry",
-                            payload = mapOf("error" to "empty_response", "consecutive" to "true")
+                            summary = "Empty LLM response after retry ($mode, reasoning=${reasoningChars} chars)",
+                            payload = mapOf(
+                                "error" to "empty_response",
+                                "consecutive" to "true",
+                                "mode" to mode,
+                                "reasoning_chars" to reasoningChars.toString(),
+                                "model" to (engine.getLlmProvider().info().model)
+                            )
                         ))
+                        KernelLog.w("AgentEngine", "连续空响应终止: mode=$mode reasoningChars=$reasoningChars model=${engine.getLlmProvider().info().model}")
                         engine._state.value = AgentState.Error(errorMsg)
                         // 进化介入 (2026-08-08): 模型层失败 (连续空响应) — 记录上下文
                         termination.record(session.id, "empty_response", "", "LLM_EMPTY_RESPONSE", task)
                         return errorMsg
                     }
-                    KernelLog.w("AgentEngine", "Empty LLM response at step ${state.step} — retrying once")
+                    KernelLog.w("AgentEngine", "Empty LLM response at step ${state.step} — mode=$mode reasoningChars=$reasoningChars — retrying once")
                     continue
                 }
                 emptyResponseCount = 0

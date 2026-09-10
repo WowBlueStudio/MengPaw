@@ -4,8 +4,13 @@
 package com.mengpaw.kernel.llm
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -13,6 +18,45 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+
+/**
+ * 取 OpenAI 兼容正文增量 (v0.46.3 加固) — 官方形态是纯字符串, 但部分网关/多模态型号把
+ * `content` 下发为**内容块数组** `[{"type":"text","text":"…"}]`。旧实现直接 `jsonPrimitive`
+ * 取值, 遇数组抛 IllegalArgumentException, 又被 SSE 循环的 `catch (_: Exception)` 连**整条事件**
+ * 一起丢弃 → 正文永久零增量, 上层只能报「模型未返回任何内容（空响应）」。
+ * 现: 数组形态按块拼接 text; 无法识别时返回 null 由调用方记录形态 (不静默丢事件)。
+ */
+internal fun extractTextDelta(element: JsonElement?): String? = when (element) {
+    null, JsonNull -> null
+    is kotlinx.serialization.json.JsonPrimitive -> element.contentOrNull?.takeIf { it.isNotEmpty() }
+    is JsonArray -> element.mapNotNull { part ->
+        val obj = part as? JsonObject ?: return@mapNotNull null
+        obj["text"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }
+    }.joinToString("").takeIf { it.isNotEmpty() }
+    else -> null
+}
+
+/** 结构描述 — **只含键名与类型, 绝不含内容值**, 用于线上定位异常线格式。 */
+internal fun shapeOf(element: JsonElement?): String = when (element) {
+    null, JsonNull -> "null"
+    is JsonArray -> "array(size=${element.size})"
+    is JsonObject -> "object(keys=${element.keys.joinToString(",")})"
+    else -> "primitive"
+}
+
+/**
+ * 从「非流式 JSON 整包」里抢救 message/delta 正文 (v0.46.3) —
+ * 部分中转/网关忽略 `stream: true` 直接回整包 JSON, 此时 SSE 逐行解析得到零增量,
+ * 会被上层误判为「模型未返回任何内容」。解析失败返回 null (绝不把原始报文当回答)。
+ */
+internal fun extractMessageContentOrNull(body: String): String? = try {
+    val root = Json.parseToJsonElement(body).jsonObject
+    val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject
+    val carrier = choice?.get("message")?.jsonObject ?: choice?.get("delta")?.jsonObject
+    carrier?.get("content")?.let { extractTextDelta(it) }
+} catch (_: Exception) {
+    null
+}
 
 /**
  * Token usage data extracted from LLM API response.
@@ -177,12 +221,14 @@ internal fun parseBody(body: String, maxFallbackLength: Int? = null): ParsedLlmB
             TokenUsage(pt, ct, tt, ch, cm)
         }
         // 2. 提取 content / reasoning (OpenAI / GLM 等 OpenAI 兼容格式)
+        // v0.46.3: content 支持"内容块数组"形态 (extractTextDelta) — 直接 jsonPrimitive
+        // 取值遇数组会抛异常并静默丢事件, 表现为永久空响应
         val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject
         val message = choice?.get("message")?.jsonObject
         val delta = choice?.get("delta")?.jsonObject
-        val rawContent = message?.get("content")?.jsonPrimitive?.content
-            ?: delta?.get("content")?.jsonPrimitive?.content
-            ?: root["data"]?.jsonArray?.firstOrNull()?.jsonObject?.get("content")?.jsonPrimitive?.content
+        val rawContent = extractTextDelta(message?.get("content"))
+            ?: extractTextDelta(delta?.get("content"))
+            ?: extractTextDelta(root["data"]?.jsonArray?.firstOrNull()?.jsonObject?.get("content"))
         // MiniMax 默认格式: thinking 内联在 content 的 <think>...</think> 标签内 (官方原文:
         // "content 字段会包含 <think> 标签内容") — 响应侧剥离到 reasoning, 绝不混入正文
         val (content, inlineThink) = rawContent?.let(ReasoningExtractor::stripThinkTags) ?: (null to null)

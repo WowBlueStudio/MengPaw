@@ -159,6 +159,85 @@ class SseStreamParserTest {
         assertEquals(listOf("只思考不回答"), r.reasoning)
     }
 
+    // ── v0.46.3 空响应加固 (用户实测「换了三个 DeepSeek id 仍报空响应」后的链路加固) ──
+
+    @Test
+    fun `content为内容块数组_不得整事件丢弃`() = runTest {
+        // 部分网关/多模态型号把 content 下发为 [{type:text,text:…}] —
+        // 旧实现 jsonPrimitive 取数组抛异常 → 整条事件被 catch 吞掉 → 正文永久零增量
+        val r = runSse(
+            """
+            data: {"choices":[{"delta":{"content":[{"type":"text","text":"数组"},{"type":"text","text":"正文"}],"reasoning_content":"想一下"}}]}
+
+            data: {"choices":[{"delta":{"content":"尾"}}]}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("数组正文尾", r.content)
+        assertEquals(listOf("数组正文", "尾"), r.tokens)
+        assertEquals(listOf("想一下"), r.reasoning)
+    }
+
+    @Test
+    fun `content形态完全无法解析_reasoning仍须分流`() = runTest {
+        // 同一事件里 content 形态异常时, 不得连带丢弃 reasoning (旧实现整事件丢弃)
+        val r = runSse(
+            """
+            data: {"choices":[{"delta":{"content":{"unexpected":1},"reasoning_content":"思维链保留"}}]}
+
+            data: {"choices":[{"delta":{"content":"正文"}}]}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("正文", r.content)
+        assertEquals(listOf("思维链保留"), r.reasoning)
+    }
+
+    @Test
+    fun `网关忽略stream_回整包JSON时兜底取出正文`() = runTest {
+        // 中转/网关忽略 stream=true 直接回非流式整包 JSON → 无 data: 行, 逐行解析零增量
+        val r = runSse("""{"choices":[{"message":{"content":"整包正文"},"finish_reason":"stop"}]}""")
+        assertEquals("整包正文", r.content)
+        assertEquals(listOf("整包正文"), r.tokens)
+    }
+
+    @Test
+    fun `非JSON垃圾报文_不得当正文回填`() = runTest {
+        val r = runSse("<html>502 Bad Gateway</html>")
+        assertEquals("", r.content)
+        assertTrue(r.tokens.isEmpty())
+    }
+
+    @Test
+    fun `流内error事件_上抛真实报错而非空响应`() = runTest {
+        // HTTP 200 + data: {"error":…} — 旧实现静默跳过, 上层一律误报「空响应」
+        var thrown: LlmApiException? = null
+        try {
+            runSse(
+                """
+                data: {"error":{"message":"upstream rejected: reasoning_content must be passed back","type":"invalid_request_error"}}
+
+                data: [DONE]
+                """.trimIndent()
+            )
+        } catch (e: LlmApiException) {
+            thrown = e
+        }
+        assertTrue("必须抛出 LlmApiException", thrown != null)
+        assertTrue("必须带上游原文: ${thrown?.message}", thrown?.message?.contains("reasoning_content must be passed back") == true)
+        assertEquals("非限流类错误按 400 (不白重试 6 次)", 400, thrown?.httpStatus)
+    }
+
+    @Test
+    fun `流内error限流_保留可重试状态码`() {
+        assertEquals(429, streamErrorStatus("Rate limit reached for requests"))
+        assertEquals(429, streamErrorStatus("HTTP 429 too many requests"))
+        assertEquals(503, streamErrorStatus("The server is overloaded, please try again later"))
+        assertEquals(400, streamErrorStatus("Invalid parameter: max_tokens"))
+    }
+
     @Test
     fun `思维链与正文交错到达_两通道互不污染`() = runTest {
         val r = runSse(

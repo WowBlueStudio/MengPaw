@@ -1429,3 +1429,31 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
    `git commit` 会给出 "CRLF will be replaced by LF" 警告 — 提交内容仍是 LF, 但工作区不一致会让后续 diff 噪音变大;
    发现即用 `[System.IO.File]::WriteAllText(path, text -replace "\r\n","\n", UTF8Encoding(false))` 归一化。
 
+⑨ **「换模型也无效」= 客户端问题的强信号 (2026-09-10 实测 18 次探测)**: 用户报"切到
+   deepseek-v4-flash-vision-exp / deepseek-flash 仍报空响应"后, 用 DSH 既有凭据直连官方
+   `POST https://api.deepseek.com/chat/completions` 逐项复现: MengPaw v0.46.2 原样请求体
+   (thinking+reasoning_effort+stream_options+temperature) / 去 thinking / 去 stream_options /
+   去 temperature / thinking=disabled / 带 assistant 的 reasoning_content 回传 / 非流式 / effort=low /
+   四个模型 id (v4-flash, vision-exp, deepseek-flash, v4-pro) — **全部 HTTP 200 且 content 非空**;
+   Agent 式 ReAct 提示词各 6 次 (max_tokens 4096 与 16384) 也全绿 (completion_tokens 39~161)。
+   结论: 服务端与请求体都正常, **空响应出在客户端链路**; 若真凶是模型, 换 id 至少会变。
+   → 教训: 报错"看起来像服务端问题"时, 先用最小复现脚本把**请求体逐项对照**打一遍 (去变量法),
+   再回头查客户端; 别在服务端假设上继续堆修改。
+
+⑩ **客户端"零正文"的四条静默路径 (v0.46.3 全部堵住)**: ① **流内错误被静默跳过** — 上游用
+   HTTP 200 + `data: {"error":{...}}` 报错时, 旧实现当"无 content 的行"忽略, 上层一律误报
+   「模型未返回任何内容」, 真实原因 (参数/额度/上下文超限) 完全不可见 → 现解析并上抛
+   `LlmApiException` (限流/过载保留可重试语义, 其余按 400 直通用户, 不白重试 6 次);
+   ② **content 为内容块数组** `[{"type":"text","text":…}]` → 旧 `jsonPrimitive` 抛异常, 被
+   `catch (_: Exception)` 连**整条事件**一起吞掉 → 现 `extractTextDelta` 兼容数组形态, 且 content
+   解析异常不再连带丢弃同事件的 reasoning; ③ **网关忽略 `stream=true` 回整包 JSON** (中转站常见) →
+   无 `data:` 行, 逐行解析零增量 → 现用原始报文采样做非流式兜底 (`extractMessageContentOrNull`,
+   非法 JSON 绝不回退原文当回答); ④ **零诊断线索** → 现零正文流打印
+   `dataEvents/reasoningChunks/rawLen/jsonLike/anomalousContent`, ReAct 空响应记录
+   `mode=reasoning_only|empty_stream` 与 `reasoning_chars`, 下次排查不必靠猜。
+
+⑪ **诊断日志只记形状不记内容**: 形态诊断经 `shapeOf()` 输出类型与键名
+   (`object(keys=content,role)` / `array(size=2)`), 既能定位线上线格式, 又不把模型正文/用户数据写进日志;
+   测试专门断言形态串不含内容值 (`形态描述只含键名与类型_不含内容值`)。
+
+

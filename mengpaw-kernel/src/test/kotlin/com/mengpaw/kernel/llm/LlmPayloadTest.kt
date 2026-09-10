@@ -8,6 +8,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.serialization.json.Json
 
 /**
  * parseBody 非流式思维链分离提取 (v0.40.4) — 官方文档口径:
@@ -170,6 +171,39 @@ class LlmPayloadTest {
         assertEquals(ThinkingEffort.HIGH, ThinkingEffort.fromStorage(null))
         assertEquals(ThinkingEffort.HIGH, ThinkingEffort.fromStorage(""))
         assertEquals(ThinkingEffort.HIGH, ThinkingEffort.fromStorage("legacy-value"))
+    }
+
+    // ── v0.46.3 正文提取加固 (内容块数组 / 整包 JSON 兜底 / 形态日志不带内容) ──
+
+    @Test
+    fun `非流式message_content为内容块数组_正确提取正文`() {
+        val parsed = parseBody(
+            """
+            {"choices":[{"message":{"content":[{"type":"text","text":"第一段"},{"type":"text","text":"第二段"}],
+            "reasoning_content":"想一下"},"finish_reason":"stop"}]}
+            """.trimIndent()
+        )
+        assertEquals("第一段第二段", parsed.content)
+        assertEquals("想一下", parsed.reasoning)
+    }
+
+    @Test
+    fun `整包JSON兜底_合法取正文_垃圾返回null`() {
+        assertEquals("整包正文", extractMessageContentOrNull("""{"choices":[{"message":{"content":"整包正文"}}]}"""))
+        assertEquals("增量正文", extractMessageContentOrNull("""{"choices":[{"delta":{"content":"增量正文"}}]}"""))
+        assertNull("非法 JSON 不得回退原文", extractMessageContentOrNull("<html>502</html>"))
+        assertNull("无 choices 不得回退", extractMessageContentOrNull("""{"error":{"message":"boom"}}"""))
+    }
+
+    @Test
+    fun `形态描述只含键名与类型_不含内容值`() {
+        val el = Json.parseToJsonElement("""{"content":[{"type":"text","text":"机密内容"}],"role":"assistant"}""")
+        val shape = shapeOf(el)
+        assertTrue("应含类型与键名: $shape", shape.contains("object") && shape.contains("content") && shape.contains("role"))
+        assertFalse("绝不泄露内容值: $shape", shape.contains("机密内容"))
+        assertEquals("array(size=2)", shapeOf(Json.parseToJsonElement("""[1,2]""")))
+        assertEquals("primitive", shapeOf(Json.parseToJsonElement("\"文本\"")))
+        assertEquals("null", shapeOf(null))
     }
 
     @Test
