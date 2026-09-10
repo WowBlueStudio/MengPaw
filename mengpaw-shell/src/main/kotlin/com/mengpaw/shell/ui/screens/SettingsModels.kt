@@ -53,7 +53,15 @@ enum class LlmProviderPreset(
     // 思考模式默认开启 (effort 默认 high), 思维链与正文共享输出预算。
     // 2026-09-10 V4.1 Flash 正式上线, flash 线路统一由 V4.1 Flash 承接, /models 新增
     // deepseek-flash; 平台公告: 2026-09-14 12:00 起下线 V4 Pro 并路由到 V4.1 Flash。
-    // deepseek-v4-flash-vision-exp 为官方多模态实验型号 (图像理解, 支持 image_url/base64/Files API)。
+    // deepseek-v4-flash-vision-exp 为官方多模态实验型号 (图像理解: 仅该 id 的官方示例接受
+    // image_url 块 / base64 / Files API, detail=low 缩放 512×512; FIM 官方标注"不支持")。
+    // **三 id 当前同源 (2026-09-10 实测)**: 模型指纹监测显示 V4.1 Flash 于 09-10 凌晨上线后,
+    // deepseek-v4-flash / deepseek-v4-flash-vision-exp / deepseek-flash 三个 id 的 serving 指纹
+    // 完全相同 (aeb5640…), 响应内 model 字段均回 "deepseek-flash"; 而 09-08 时 flash 与
+    // vision-exp 指纹不同 (a26a795… vs aa8d6ca…) — 即"原先确是两份模型, 现在后端合一"。
+    // 仍并列保留三 id: ① 官方文档/价格页仍按三个模型并列 (模型版本/FIM 支持/并发限制/图片计费各异),
+    // 预置以官方文档为唯一准则; ② vision-exp 是官方"图像理解"入口 id; ③ deepseek-flash 是
+    // GET /models 新返回的规范 id, 且 09-14 12:00 后 V4 Pro 会路由到它。
     DEEPSEEK("DeepSeek", "DeepSeek", "https://api.deepseek.com/chat/completions", "deepseek-v4-flash", "sk-",
         listOf(ModelInfo("deepseek-v4-flash", "快速·思考默认"),
             ModelInfo("deepseek-v4-pro", "思维链·旗舰"),

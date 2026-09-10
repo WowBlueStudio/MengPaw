@@ -54,11 +54,18 @@
 > **同步铁律**: 改代码必改本表、改本表必改代码；核对日期随每次更新刷新。
 > 思考强度档位 (v0.46.2, 仅 DeepSeek 生效): Max / High / Low / Off, 默认 High (官方默认) —
 > 存于 `SavedProvider.thinkingEffort`。
+> **DeepSeek 三 id 同源说明 (2026-09-10 实测)**: `deepseek-v4-flash` /
+> `deepseek-v4-flash-vision-exp` / `deepseek-flash` 三个 id 目前由**同一份后端模型**承接 —
+> 模型指纹监测显示 09-10 凌晨 V4.1 Flash 上线后三者 serving 指纹一致 (aeb5640…)、响应内
+> `model` 字段均回 `deepseek-flash`; 09-08 时 flash 与 vision-exp 指纹不同 (a26a795… vs
+> aa8d6ca…) 说明**原先确是两份模型**。仍并列保留: 官方文档/价格页按三个模型并列 (模型版本、
+> FIM 支持、并发限制、图片计费各异), 且 `vision-exp` 是官方"图像理解"入口 id、
+> `deepseek-flash` 是 `GET /models` 返回的规范 id (09-14 12:00 后 V4 Pro 路由到它)。
 
 | 预置 | 端点 | 默认型号 | 型号清单（type 标注） |
 |------|------|---------|---------------------|
 | OpenAI | https://api.openai.com/v1/chat/completions | gpt-5.6 | gpt-5.6(旗舰·1.05M上下文) / gpt-5.6-terra(均衡) / gpt-5.6-luna(轻量) / gpt-5.5(前代) / gpt-5.4(前代) |
-| DeepSeek | https://api.deepseek.com/chat/completions | deepseek-v4-flash | deepseek-v4-flash(快速·思考默认) / **deepseek-v4-pro(思维链·旗舰)** / deepseek-v4-flash-vision-exp(**多模态**) / deepseek-flash(V4.1 Flash, API 返回) |
+| DeepSeek | https://api.deepseek.com/chat/completions | deepseek-v4-flash | deepseek-v4-flash(快速·思考默认) / **deepseek-v4-pro(思维链·旗舰)** / deepseek-v4-flash-vision-exp(**多模态**, 官方图像理解入口) / deepseek-flash(V4.1 Flash, API 返回; 与上两者当前同源) |
 | Kimi | https://api.moonshot.cn/v1/chat/completions | kimi-k3 | kimi-k3(旗舰·1M上下文) / kimi-k2.7-code(Coding) / kimi-k2.6(通用) / kimi-k2.7-code-highspeed(高速Coding) |
 | GLM | https://open.bigmodel.cn/api/paas/v4/chat/completions | glm-5.2 | glm-5.2(旗舰·1M上下文) / glm-5.1(Coding) / glm-5(前代) / glm-5-turbo(高速) / glm-5v-turbo(多模态) |
 | DashScope | https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions | qwen3.8-max | qwen3.8-max(旗舰·视觉+推理) / qwen3.7-max(前代) / qwen3.7-plus(均衡·视觉) / qwen3.7-flash(快速·视觉) / qwen3.6-35b-a3b(开源MoE) / qwen3-coder-plus(Coding) / **qwq-plus(思维链)** / qwen3-vl-plus(多模态) / qwen3-omni-flash(全模态) |
