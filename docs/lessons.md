@@ -1570,6 +1570,39 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
       SSH-443" — 提前上兜底会白白多出密钥登记/删除步骤。发布链耗时: 门禁 26 用例 +
       `assembleRelease --build-cache --console=plain`(未 clean) **1m10s**, 增量复用 43 任务 up-to-date。
 
+## 48. 插件退役的"发行版本移除"实操与三个 API 坑 (2026-09-10, v0.46.3 后清理)
+
+**口径确立 (用户指令)**: 退役 = *本地删除 + 发行版本移除*, **不动仓库历史** — 源码用 `git rm` 正常提交保留
+可追溯性, tag / release 条目 / CHANGELOG 历史一律保留, 只摘掉已退役插件的**二进制附件**。理由: 附件是
+"可直接安装的入口", 留着等于给用户一条装到死插件的路; 源码历史则是证据链, 删了就再也说不清为什么退役。
+
+① **退役判定要三源对齐, 不能凭目录印象**: ① `plugins/`(主仓库) 或 `plugin-*/`(connectors) 模块是否还在;
+   ② `plugins.json` 是否还有该 id; ③ CHANGELOG 是否留有退役记载 (本次实测: `CHANGELOG.md:1441`
+   一次性退役 notification/workflow/incubator/browser-inspector + browser-cdp; `:1483` plugin-memory 并入
+   内核 `agent.memory.*`; `:1494` plugin-self 并入进化系统; plugin-fs 于 v0.36、browser-mcp 与外部
+   plugin-update 于本轮)。**同名插件按仓库语义分别判断**: `plugin-update` / `plugin-tavily` 在主仓库是
+   **存活**内置插件 (资产保留), 在 connectors 仓库是重复实现已退役 (资产删除) — 全局按名字删会误伤。
+
+② **GitHub 全量扫附件必须走 `gh api` 分页**: `gh release list --limit 60` 只回最近 60 个 release, 主仓库
+   有 128 个 → 最早的 `plugins-v0.20.1/0.20.2` 直接被漏掉 (首轮扫描"零命中"是假绿)。正确姿势:
+   `gh api "repos/{owner}/{repo}/releases?per_page=100&page=N" --jq '.[] | "\(.tag_name)\t\(.assets|map(.name)|join(","))"'`
+   逐页取到空为止, 再用正则筛附件名。删除用 `gh release delete-asset <tag> <name> --yes` (成功时**无输出**,
+   不要以"没回显"当失败)。
+
+③ **Gitee 删附件必须两步, release 列表里没有附件 id**: release 列表 (`/releases`) 的 `assets` 只有
+   `name` 与 `browser_download_url` — **没有 `id`**, 直接拿它拼 DELETE 无从下手。正确链:
+   `GET /v5/repos/{owner}/{repo}/releases/{release_id}/attach_files` 拿 `id` →
+   `DELETE /v5/repos/{owner}/{repo}/releases/{release_id}/attach_files/{attach_file_id}?access_token=…`。
+   另注意该 GET 偶发 `405 Method Not Allowed` (重试即通), 而 release 列表里看到的 `plugins-vX.zip/.tar.gz`
+   是平台**自动源码包**、不出现在 attach_files 中, 所以按 attach_files 删除不会误伤源码包。
+
+④ **本轮结果**: GitHub 侧 26 个 (主仓库 `plugins-v0.20.1` 9 个 AAR + `plugins-v0.20.2` 9 个 AAR;
+   connectors `plugins-v0.20.2` 3 个 jar + `v0.3.0`/`v0.4.0` 各 2 个 + `v0.5.0` 1 个) + Gitee 侧 8 个
+   (connectors 同上前四个 tag; 主仓库 Gitee 仅有 `plugins-v0.46.0/0.46.1` 两个插件 release, 无退役件)
+   = **34 个附件双侧移除**。事后全量复核: GitHub 128 + 7 个 release、Gitee 37 + 7 个 release **零命中**
+   retired 正则; tag / release 条目 / CHANGELOG 历史原样保留。**删除前先确认 `plugins.json` 无引用**
+   (本次 28 条 id / 12 条 downloadUrl 全部指向当前 `plugins-v*`, 无一条指向 v0.20.x), 否则会剪断在线安装链路。
+
 
 
 
