@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.46.2 (2026-09-10) — DeepSeek 思考强度四档 + 空响应根因修复 + 模型选择链路修复
+
+### 新增
+- **DeepSeek 思考强度四档 Max / High / Low / Off**: 官方 思考模式 文档口径 — `{"thinking":{"type":"enabled/disabled"}}` + `{"reasoning_effort":"low/high/max"}`（Off 档只发 `disabled`）。**仅 DeepSeek 端点注入**（其余厂商仍不注入任何思考参数，定案不变），默认 High（即官方默认，行为不变）。供应商卡片与框架设置表单新增四档选择，随 `SavedProvider.thinkingEffort` 落 Vault（旧配置回退 High），并贯穿到新建会话/切换 Agent/角色路由/梦境 Worker。官方原文「思考模式默认打开，且 effort 默认为 high」— Agent 任务建议 Low 或 Off。
+- **DeepSeek 预置型号增补**: `deepseek-v4-flash-vision-exp`（官方多模态视觉实验型号，图像理解）与 `deepseek-flash`（V4.1 Flash，`GET /models` 新增 id）；型号标注更新为 快速·思考默认 / 思维链·旗舰。
+
+### 修复
+- **DeepSeek「模型未返回任何内容（空响应）」(P0)**: 根因 — 官方原文「思考模式默认打开，且 effort 默认为 high」，思维链与正文**共享 `max_tokens`**；官方模型还存在「思维链未终止 → 整段回答落进 `reasoning_content`、`content` 为空」的行为，而 ReAct 链只读 `content`。叠加 2026-09-10 12:00 V4.1 Flash 上线（flash 线路统一由它承接，思考更长），预置的 4096 输出上限被思考阶段吃满 → 空响应。修复：`AdaptiveConfig.forEndpoint()` 将思考型端点默认上限提到 **16K**（DeepSeek 官方最大输出 384K，放宽上限不改实际用量与计费），其余端点保持 4096。
+- **模型选择点了不生效 / 无法选中 (P0)**: `AppRoot` 的 `onAgentSelectProvider` 原为**空实现**，卡片点模型只改「新增 provider」表单值 → 已保存条目模型永不更新（radio 恒不选中），活动会话也不换模型。现写回 Vault 并立即应用到活动 Agent。
+- **刷新模型列表冲掉配置 (P1)**: 卡片刷新按钮原走 `selectProvider(saved.preset)`，把端点/模型重置为预置默认值（自定义端点被抹掉）、模型缺失时回填列表首项。现按已保存条目抓取且不回填。
+- **模型列表探测 URL 派生错误 (P1)**: 改为「端点去掉 `/chat/completions` 后接 `/models`」— 修复前 DashScope 被裁成裸域名导致刷新恒空，且所有 `/v1` 端点白试一次 `.../v1/v1/models`；连通性探测走同一条派生。
+- **多模态型号图标不显示 (P2)**: 卡片图标判定为全等比较，型号 type 必须精确写 `多模态`。
+
+### 文档
+- **DeepSeek 端点复核结论**: 预置 `https://api.deepseek.com/chat/completions` 与官方 curl **逐字一致**（base_url `https://api.deepseek.com`，无 `/v1`、无多余路径段）；「多了一步 `/chat`」的怀疑不成立。模型列表为官方 `GET /models`。
+- **OpenModel 预置不可用已登记**: 官方原文明确「OpenModel does not provide the Chat Completions API or other OpenAI API endpoints」（仅 Responses `/v1/responses` 与 Messages `/v1/messages`），端点探针实测 404 — 本项目 Chat-Completions-only 内核当前无法使用该供应商，待协议适配后启用（`docs/add-llm-provider.md` §2）。
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.46.2-release.apk` (versionCode 46002)
+- Browser APK: 本轮无变更，不构建；浏览器独立版本线保持不变
+- 插件: 本轮 `plugins/` 与 `plugins.json` 无变更，不打 `plugins-v0.46.2` tag
+- 测试: 全量 **1560 用例 0 failures** (kernel 650 + core 116 + shell 248 + 插件 546)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.46.1 (2026-09-01) — token 用量记录重构根治多模式统计缺失 + 并发安全 + 更新源修复
 
 ### 修复

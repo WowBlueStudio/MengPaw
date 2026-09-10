@@ -1384,3 +1384,48 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 ### 验收口径
 - 主仓库: kernel 80 套件 641 用例 0 失败; `:mengpaw-shell:compileDebugKotlin` 通过; `:plugin-update:testDebugUnitTest` 31 用例通过。
 - browser 独立仓库: `:mengpaw-browser:assembleDebug` + `testDebugUnitTest` (28 用例) 通过, 产出 `mengpaw-browser-v0.8.1-debug.apk` (19.35MB)。
+
+---
+
+## 46. v0.46.2: DeepSeek 思考模式空响应根因 + 端点路径核对法 (2026-09-10)
+
+① **「路径多了一段」这类直觉必须用官方原文证伪, 不能用探针替代文档**: 用户怀疑 DeepSeek 端点多了
+   `/chat` 段 — 打开 `api-docs.deepseek.com/zh-cn/` 原文页, 官方 curl 就是
+   `POST https://api.deepseek.com/chat/completions` (base_url `https://api.deepseek.com`, 无 `/v1`),
+   预置端点逐字一致 → 假设不成立。教训: **无鉴权探针只能区分 404/401**, 而 DeepSeek 网关鉴权先于路由
+   (连 `.../chat/completions/chat/completions` 也回 401), 探针**不能**验证路径正确性 — 路径只认官方文档原文。
+   另: 用户报告的现象若与怀疑点对不上 (空响应 ≠ 404), 就要顺着现象找根因, 不要顺着怀疑改代码。
+
+② **模型列表探测 URL 是独立事实源**: `SettingsRemote` 原先只按 `/chat/completions`、`/v1/chat`、
+   `/compatible-mode/v1` 三条字面量裁 base 再拼 `/v1/models` — DashScope 被裁成裸域名 → **刷新恒空**;
+   已带 `/v1` 的端点白试 `.../v1/v1/models`。改为「端点去掉 `/chat/completions` 后接 `/models`,
+   仅无版本段时补 `/v1`」。**派生 URL 要按厂商文档路径, 不要按"常见形状"拼接**; 连通性探测必须复用同一派生。
+
+③ **DeepSeek「模型未返回任何内容（空响应）」= 思考模式, 不是网络/Key**: 官方原文「思考模式默认打开，
+   且 effort 默认为 high」+ 思维链与正文**共享 `max_tokens`**; 官方模型还存在「思维链未终止 → 整段回答落进
+   `reasoning_content`、`content` 为空」的行为 (vLLM deepseek_v4 parser 议题 / Hermes Agent 同类修复 /
+   生产环境 chatbox 案例), 而 MengPaw 的 ReAct 链**只读 content** → 报空响应。叠加 2026-09-10 12:00
+   V4.1 Flash 上线 (flash 线路统一承接, 思考更长), 旧默认 4096 上限被思考吃满 → 每轮必失败。
+   修复: `AdaptiveConfig.forEndpoint()` 思考型端点默认上限 4096 → 16K (只放宽上限, 不改实际用量) +
+   新增 Max/High/Low/Off 四档 (`ThinkingEffort`, 仅 DeepSeek 注入, 默认 High 保持行为不变)。
+
+④ **"点了不生效/选不中"先 grep 回调实参**: `onAgentSelectProvider = { }` 这类"先留接口后实现"的占位,
+   症状是 radio 恒不选中 + 会话不换模型。排查顺序: 组件内部状态 → 回调实参 → 持久化, 别只看 UI。
+
+⑤ **卡片刷新别复用"选择供应商"路径**: `selectProvider(preset)` 会把表单端点/模型重置为预置默认值
+   (自定义端点当场被抹), 且模型缺失时回填列表首项 → 预览一次就冲掉用户配置。刷新应按已保存条目取参数
+   (`refreshModelsFor(saved)`), 且不做回填。
+
+⑥ **型号 `type` 是 UI 判定键**: 卡片图标用**全等**比较 (`type == "多模态"`), 写 "多模态·视觉" 图标就不显示 —
+   本次由新加的预置测试当场抓住 (assertion 失败), 说明「预置表 + 断言」是低成本护栏。
+
+⑦ **本轮发布口径**: plugins/ 与 plugins.json 无变更 → 跳过 §2.5 插件同步 (无 `plugins-v*` tag);
+   browser 已拆独立仓库且无变更 → 不构建; 全量 **1560 用例 0 failures**(kernel 650 + core 116 + shell 248 +
+   插件 546, browser 不在主仓库口径); `:mengpaw-shell:assembleRelease --offline --build-cache --console=plain`
+   10m47s, 产物 `mengpaw-shell-v0.46.2-release.apk` (versionCode 46002, 15.47MB), apksigner 验签
+   `CN=MengPaw, OU=Studio, O=WowBlue` 通过; 未 clean (缓存复用, 414/423 任务 up-to-date)。
+
+⑧ **编辑工具会改行尾**: `edit` 写回的文件可能出现 CRLF (仓库 `.gitattributes` 规定 `*.kt eol=lf`),
+   `git commit` 会给出 "CRLF will be replaced by LF" 警告 — 提交内容仍是 LF, 但工作区不一致会让后续 diff 噪音变大;
+   发现即用 `[System.IO.File]::WriteAllText(path, text -replace "\r\n","\n", UTF8Encoding(false))` 归一化。
+
