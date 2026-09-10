@@ -185,7 +185,7 @@ Agent 通过 CLI 命令操控设备：
 | 服务商 | Endpoint | 默认模型 |
 |--------|----------|---------|
 | OpenAI | api.openai.com | gpt-4o |
-| DeepSeek | api.deepseek.com | deepseek-chat |
+| DeepSeek | api.deepseek.com | deepseek-v4-flash |
 | Kimi (月之暗面) | api.moonshot.cn | moonshot-v1-8k |
 | GLM (智谱) | open.bigmodel.cn | glm-4-plus |
 | Qwen (通义千问) | dashscope.aliyuncs.com | qwen-plus |
@@ -194,6 +194,8 @@ Agent 通过 CLI 命令操控设备：
 | OpenModel | 自定义 | 自定义 |
 | Self-Hosted | 自定义 | 自定义 |
 | Custom | 自定义 | 自定义 |
+
+> 型号清单与端点路径以 `docs/add-llm-provider.md` §2 登记表为准（与 `SettingsModels.kt` 同步铁律）。
 
 ## 许可证（双许可）
 

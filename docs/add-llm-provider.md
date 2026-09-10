@@ -1,7 +1,7 @@
 # 新增 LLM 供应商接入指南
 
 > 适用版本: v0.41.0 起（全厂商思维链兼容基线）
-> 最后核对: 2026-08-17（官方文档原文）
+> 最后核对: 2026-09-10（DeepSeek 端点/模型/思考档位复核；其余厂商 2026-08-17 官方文档原文）
 > 面向: 维护者 / Codex 后续会话。新增供应商 = 核对官方文档原文 + 登记名单 + 改动 6 个代码点 + 补官方格式测试。
 
 ## 0. 总原则（违反 = 返工）
@@ -14,6 +14,15 @@
 2. **仅响应侧解析**（用户定案）：本应用不注入任何"开启思考"请求参数（`thinking` /
    `enable_thinking` 等），也不把思维链回传进后续请求历史。预置中标注"思维链"的型号
    本身默认输出思考内容，接入时如实标注能力即可。
+   - **v0.46.2 例外（用户定案新增）**：DeepSeek 端点新增**思考强度四档 Max/High/Low/Off**
+     （官方 思考模式 文档 `{"thinking":{"type":"enabled/disabled"}}` + `{"reasoning_effort":"low/high/max"}`），
+     由用户在设置页显式选择后按档注入；未选择/非 DeepSeek 端点依旧不注入任何思考参数。
+     动因：官方「思考模式默认打开，且 effort 默认为 high」+ 思维链与正文共享 `max_tokens`，
+     且官方模型存在「思维链未终止 → 整段回答落进 `reasoning_content`、`content` 为空」的行为，
+     只读 `content` 的 ReAct 链会拿到空响应（2026-09-10 用户实测）。ReAct 类任务建议 Low/Off。
+     实现：`mengpaw-kernel/.../llm/ThinkingEffort.kt`（档位 + `effectiveThinkingEffort` 仅 DeepSeek 注入）
+     → `LlmPayload.buildRequestBody(thinkingEffort=)` → `AdaptiveLlmProvider(thinkingEffort=)`
+     → shell `SavedProvider.thinkingEffort`（Vault 持久化，旧配置回退 HIGH）。
 3. **思维链绝不混入正文**：新厂商的思考字段必须走独立 `onReasoning` 通道，否则会污染
    UI 流式缓冲并误判 `Final Answer:` / `Action:`（v0.40.1/0.40.2 三症状根因）。
 
@@ -23,7 +32,7 @@
 
 | 厂商 | 官方文档原文 | 核对要点 |
 |------|-------------|---------|
-| DeepSeek | [思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode) | `reasoning_content` 与 `content` 同级，流式 delta 与 message 均含；官方要求工具调用场景必须回传 `reasoning_content` 否则 400（本项目仅响应侧解析不回传, 请求侧定案, 工具调用场景注意） |
+| DeepSeek | [首次调用 API](https://api-docs.deepseek.com/zh-cn/) + [模型 & 价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) + [思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode) + [获取模型列表](https://api-docs.deepseek.com/zh-cn/api/list-models/) | **端点路径 (2026-09-10 复核)**: base_url(OpenAI) = `https://api.deepseek.com`, 官方 curl 为 `POST https://api.deepseek.com/chat/completions` — **无 `/v1` 段、无多余路径段**, 预置端点与官方示例逐字一致; 模型列表为 `GET /models` (即 `https://api.deepseek.com/models`)。思考模式: **默认打开且 effort 默认 high**, 开关 `{"thinking":{"type":"enabled/disabled"}}`, 强度 `{"reasoning_effort":"low/high/max"}` (请求 low→low, medium/high/xhigh→high, max→max); 思考模式下 `temperature`/`top_p` 官方忽略。`reasoning_content` 与 `content` 同级, 流式 delta 与 message 均含; 携带 `tools` 时必须原样回传否则 400 (无 `tools` 时官方忽略该字段)。2026-09-10 V4.1 Flash 上线: `flash` 线路统一由 V4.1 Flash 承接, `GET /models` 新增 `deepseek-flash`; 平台公告 2026-09-14 12:00 起下线 V4 Pro 并路由到 V4.1 Flash |
 | Kimi | [思考模型](https://platform.kimi.com/docs/guide/use-thinking-models) | `delta.reasoning_content` / `message.reasoning_content`；kimi-k3/k2.7-code 始终思考；保留式思考官方要求多轮回传（本项目不回传, 请求侧定案） |
 | GLM/Z.AI | [Migrate to GLM-5.2](https://docs.z.ai/guides/overview/migrate-to-glm-new) | 流式须处理 `delta.reasoning_content` 与 `delta.content`；`thinking` 参数 |
 | Qwen/DashScope | [模型大全](https://help.aliyun.com/zh/model-studio/getting-started/models) + [Responses 兼容](https://help.aliyun.com/zh/model-studio/compatibility-with-openai-responses-api) + [Thinking](https://docs.qwencloud.com/developer-guides/text-generation/thinking) | 两阶段流式：先 `reasoning_content` 后 `content`；2026-08-17 核对：qwen3.8-max 已转正为旗舰（preview 退役自动路由），均衡/快速档为 qwen3.7-plus / qwen3.7-flash |
@@ -39,21 +48,23 @@
 > Grok（docs.x.ai Models + 退役公告）、火山（docs.volcengine.com 套餐概览/OpenCode）、
 > Anthropic（platform.claude.com Models overview）官方原文均已打开核对，预置随表更新。
 
-## 2. 当前支持厂商与模型名单（登记表, 2026-08-17）
+## 2. 当前支持厂商与模型名单（登记表, DeepSeek 2026-09-10 / 其余 2026-08-17）
 
 > 数据源: `mengpaw-shell/.../ui/screens/SettingsModels.kt` 的 `LlmProviderPreset`。
 > **同步铁律**: 改代码必改本表、改本表必改代码；核对日期随每次更新刷新。
+> 思考强度档位 (v0.46.2, 仅 DeepSeek 生效): Max / High / Low / Off, 默认 High (官方默认) —
+> 存于 `SavedProvider.thinkingEffort`。
 
 | 预置 | 端点 | 默认型号 | 型号清单（type 标注） |
 |------|------|---------|---------------------|
 | OpenAI | https://api.openai.com/v1/chat/completions | gpt-5.6 | gpt-5.6(旗舰·1.05M上下文) / gpt-5.6-terra(均衡) / gpt-5.6-luna(轻量) / gpt-5.5(前代) / gpt-5.4(前代) |
-| DeepSeek | https://api.deepseek.com/chat/completions | deepseek-v4-flash | deepseek-v4-flash(快速) / **deepseek-v4-pro(思维链)** |
+| DeepSeek | https://api.deepseek.com/chat/completions | deepseek-v4-flash | deepseek-v4-flash(快速·思考默认) / **deepseek-v4-pro(思维链·旗舰)** / deepseek-v4-flash-vision-exp(**多模态**) / deepseek-flash(V4.1 Flash, API 返回) |
 | Kimi | https://api.moonshot.cn/v1/chat/completions | kimi-k3 | kimi-k3(旗舰·1M上下文) / kimi-k2.7-code(Coding) / kimi-k2.6(通用) / kimi-k2.7-code-highspeed(高速Coding) |
 | GLM | https://open.bigmodel.cn/api/paas/v4/chat/completions | glm-5.2 | glm-5.2(旗舰·1M上下文) / glm-5.1(Coding) / glm-5(前代) / glm-5-turbo(高速) / glm-5v-turbo(多模态) |
 | DashScope | https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions | qwen3.8-max | qwen3.8-max(旗舰·视觉+推理) / qwen3.7-max(前代) / qwen3.7-plus(均衡·视觉) / qwen3.7-flash(快速·视觉) / qwen3.6-35b-a3b(开源MoE) / qwen3-coder-plus(Coding) / **qwq-plus(思维链)** / qwen3-vl-plus(多模态) / qwen3-omni-flash(全模态) |
 | Grok | https://api.x.ai/v1/chat/completions | grok-4.6 | grok-4.6(旗舰·500K上下文) / grok-4.5(前代) / grok-4.3(推荐·1M上下文) / **grok-4.20-0309-reasoning(思维链)** / grok-build-0.1(Coding) |
 | 火山引擎(豆包) | https://ark.cn-beijing.volces.com/api/v3/chat/completions | doubao-seed-2.0-pro | doubao-seed-2.0-pro(旗舰) / doubao-seed-2.1-turbo(2.1系列·快速) / doubao-seed-2.0-lite(均衡) / doubao-seed-2.0-mini(轻量) / doubao-seed-1.8(前代) / doubao-seed-1.6-flash(快速) / **doubao-seed-1.6-thinking(思维链)** / deepseek-v4-flash(DeepSeek托管) / deepseek-v4-pro(DeepSeek托管·思维链) / glm-5.3(GLM托管) / (需创建接入点 ep-xxx) |
-| OpenModel | https://api.openmodel.ai/v1/chat/completions | deepseek-v4-flash | **deepseek-v4-pro(思维链)** / deepseek-v4-flash(快速) / qwen3.7-max(Qwen托管) / gpt-5.4-mini(OpenAI托管) / kimi-k3(Kimi托管) / glm-5.2(GLM托管) / grok-4.5(Grok托管) / (更多模型见API返回) |
+| OpenModel | https://api.openmodel.ai/v1/chat/completions | deepseek-v4-flash | **⚠ 2026-09-10 核对 (docs.openmodel.ai/en/docs/sdks/openai-sdk)**: 官方原文「OpenModel does not provide the Chat Completions API or other OpenAI API endpoints」— 仅提供 Responses (`/v1/responses`) 与 Messages (`/v1/messages`) 协议; 探针 `POST https://api.openmodel.ai/v1/chat/completions` 实测 404 (无鉴权与带鉴权均 404)。本项目内核目前只讲 Chat Completions, 故该预置当前**不可用**, 待 Responses/Messages 适配后启用。模型清单: **deepseek-v4-pro(思维链)** / deepseek-v4-flash(快速) / qwen3.7-max(Qwen托管) / gpt-5.4-mini(OpenAI托管) / kimi-k3(Kimi托管) / glm-5.2(GLM托管) / grok-4.5(Grok托管) / (更多模型见API返回) |
 | MiniMax | https://api.minimaxi.com/v1/chat/completions | MiniMax-M3 | MiniMax-M3(旗舰·1M上下文) / MiniMax-M2.7(均衡) / MiniMax-M2.7-highspeed(极速) / MiniMax-M2.5(性价比) / MiniMax-M2.5-highspeed(极速) / MiniMax-M2.1(编程) / MiniMax-M2.1-highspeed(极速) / MiniMax-M2(编码/Agent) |
 | Self-Hosted | http://192.168.1.100:{Ports.LLM_SELF}/v1/chat/completions | local-model | local-model(Chat) / qwen2.5:7b(Chat) / llama3.1:8b(Chat) |
 | Custom | 用户自填 | — | 无预置（OpenAI 兼容端点） |
@@ -127,6 +138,21 @@ private val OPENAI_COMPAT_KEYS = listOf("reasoning_content", "reasoning", "thoug
 厂商型号支持原生音频输入时，在 `KNOWN_PREFIXES` 加精确前缀（gemini 排除教训见文件头）；
 不建议依赖 `KEYWORDS` 兜底做正式声明。
 
+### 3.8 思考型端点的输出预算与思考档位（v0.46.2，DeepSeek 类型）
+
+官方记载"思考模式默认开启 + 思维链与正文共享输出预算"的厂商（当前仅 DeepSeek V4 系列）需两处配套：
+
+1. **输出上限**：`mengpaw-kernel/.../llm/AdaptiveLlmProvider.kt` 的
+   `AdaptiveConfig.forEndpoint(endpoint)` — 思考型端点默认上限 16K（`THINKING_ENDPOINT_MAX_TOKENS`），
+   其余端点 4096。上限只放宽、不改变实际用量与计费。构造函数默认参数已接该工厂，
+   调用方显式传 config 时以传入值为准。
+2. **思考档位**：`mengpaw-kernel/.../llm/ThinkingEffort.kt`（Max/High/Low/Off）+
+   `LlmPayload.buildRequestBody(thinkingEffort=)`；仅经 `effectiveThinkingEffort(providerType, ...)`
+   判定为 DeepSeek 时注入，其余厂商传 null 不写字段。shell 侧：`SavedProvider.thinkingEffort`
+   （表单态 `SettingsState.thinkingEffort`）→ `AppRoot` 应用配置 → `AgentViewModel.applyConfiguration`
+   → `AgentSessionFactory.globalThinkingEffort`（新建会话/切换 Agent 沿用）。UI 复用
+   `settings/ThinkingEffortSection.kt`（供应商卡片 + 框架设置表单，仅 DeepSeek 显示）。
+
 ## 4. 测试（必做）
 
 1. `mengpaw-kernel/.../llm/SseStreamParserTest.kt`：按**官方文档原文夹具**加用例 —
@@ -147,6 +173,7 @@ private val OPENAI_COMPAT_KEYS = listOf("reasoning_content", "reasoning", "thoug
 - [ ] §2 登记表已同步最新厂商与型号（含"思维链"标注），核对日期已刷新
 - [ ] 6 个代码点已改（预置/识别/认证/缓存/思考字段/显示名），语音能力按需
 - [ ] 官方格式测试已加，kernel + 全量测试全绿
-- [ ] 未注入请求侧参数、未回传思维链
+- [ ] 思考型端点已接输出预算与档位（§3.8），档位仅对官方记载该字段的厂商注入
+- [ ] 未注入请求侧参数（DeepSeek 思考档位为用户显式选择的例外）、未回传思维链
 - [ ] 新 .kt 带 SPDX 双许可头（如需新建）
 - [ ] 开发指南 §3.7 / CHANGELOG 已同步

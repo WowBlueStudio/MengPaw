@@ -185,7 +185,7 @@ This project is developed with AI assistance. Since 2026-08-07 it is maintained 
 | Provider | Endpoint | Default model |
 |----------|----------|--------------|
 | OpenAI | api.openai.com | gpt-4o |
-| DeepSeek | api.deepseek.com | deepseek-chat |
+| DeepSeek | api.deepseek.com | deepseek-v4-flash |
 | Kimi (Moonshot) | api.moonshot.cn | moonshot-v1-8k |
 | GLM (Zhipu) | open.bigmodel.cn | glm-4-plus |
 | Qwen (Tongyi Qianwen) | dashscope.aliyuncs.com | qwen-plus |
@@ -194,6 +194,8 @@ This project is developed with AI assistance. Since 2026-08-07 it is maintained 
 | OpenModel | Custom | Custom |
 | Self-Hosted | Custom | Custom |
 | Custom | Custom | Custom |
+
+> Model lists and endpoint paths follow the registry in `docs/add-llm-provider.md` §2 (kept in sync with `SettingsModels.kt`).
 
 ## License (Dual)
 

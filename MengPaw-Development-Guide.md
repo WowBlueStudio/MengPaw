@@ -708,7 +708,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 | 服务商 | Endpoint | 默认模型 | 缓存策略 |
 |--------|----------|----------|----------|
 | OpenAI | api.openai.com | gpt-4o | CACHE_CONTROL |
-| DeepSeek | api.deepseek.com | deepseek-chat | PREFIX_STABLE |
+| DeepSeek | api.deepseek.com | deepseek-v4-flash | PREFIX_STABLE |
 | Kimi | api.moonshot.cn | moonshot-v1-8k | CACHE_CONTROL |
 | GLM | open.bigmodel.cn | glm-4-plus | CACHE_CONTROL |
 | Qwen | dashscope.aliyuncs.com | qwen-plus | CACHE_CONTROL |
@@ -717,6 +717,31 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 | OpenModel | 自定义 | 自定义 | PREFIX_STABLE |
 | Self-Hosted | 自定义 | 自定义 | CACHE_CONTROL |
 | Custom | 自定义 | 自定义 | CACHE_CONTROL |
+
+> 型号清单/端点路径以 `docs/add-llm-provider.md` §2 登记表为准（与 `SettingsModels.kt` 同步铁律），本表只列端点与缓存策略。
+
+**DeepSeek 端点复核 + 思考档位 (v0.46.2, 2026-09-10 官方文档原文)**: 预置端点
+`https://api.deepseek.com/chat/completions` 与官方 curl 逐字一致（base_url 为
+`https://api.deepseek.com`，**无 `/v1`、无多余路径段**；模型列表为 `GET /models`）。
+官方原文「思考模式默认打开，且 effort 默认为 high」，思维链与正文共享 `max_tokens`，
+且存在「思维链未终止 → 整段回答落进 `reasoning_content`、`content` 为空」的行为 —
+只读 `content` 的 ReAct 链会报「模型未返回任何内容（空响应）」。两处修复：
+
+- **输出预算**: `AdaptiveConfig.forEndpoint(endpoint)` — 思考型端点默认上限 16K
+  （`THINKING_ENDPOINT_MAX_TOKENS`），其余端点仍 4096；上限只放宽、不改变实际用量与计费。
+- **思考强度四档 Max/High/Low/Off**: 内核 `llm/ThinkingEffort.kt` +
+  `LlmPayload.buildRequestBody(thinkingEffort=)`，仅经 `effectiveThinkingEffort` 判定为
+  DeepSeek 时注入（官方 `thinking.type` 开关 + `reasoning_effort` 强度；Off 只发 disabled）。
+  持久化在 `SavedProvider.thinkingEffort`（旧配置回退官方默认 HIGH），表单态为
+  `SettingsState.thinkingEffort`，UI 复用 `settings/ThinkingEffortSection.kt`（供应商卡片与
+  框架设置表单，仅 DeepSeek 显示），经 `AppRoot` → `AgentViewModel.applyConfiguration` →
+  `AgentSessionFactory.globalThinkingEffort` 贯穿到新建会话/切换 Agent。ReAct 类任务建议 Low/Off。
+
+**模型列表探测 URL 派生 (v0.46.2)**: `SettingsRemote.modelsProbeUrls()` 以「端点去掉
+`/chat/completions` 后接 `/models`」为唯一准则（DeepSeek `.../models`、OpenAI `.../v1/models`、
+DashScope `.../compatible-mode/v1/models`、GLM `.../api/paas/v4/models`），已带版本段的端点
+不再补 `/v1`。修复前 DashScope 被裁成裸域名导致刷新恒空、且所有 `/v1` 端点白试一次
+`.../v1/v1/models`。连通性探测 (`testConnectionResult`) 走同一条派生。
 
 ### 4.3 对话压缩
 
