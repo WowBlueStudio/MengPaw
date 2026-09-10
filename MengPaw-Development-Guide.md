@@ -432,7 +432,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 ### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0)
 
-8 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起, 哈希链账本已移除) + 短码配对 + 心跳保活 + QoS 自适应。
+25 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起, 哈希链账本已移除) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
 
 **设计**: 孪生 = 同步整个 `{agent}/` 工作区文档, 保持跨设备一致。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trumanshow.md/{date}_dream.md) + `memory/` 全部; **排除**: inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。(CLI.md 已随 v0.34.3 移除, 不再生成/同步)
 
@@ -440,14 +440,42 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 | 文件 | 职责 |
 |------|------|
-| `MemoryTwinPlugin.kt` | 插件入口, 16 条 `twin.*` CLI 命令注册 |
+| `MemoryTwinPlugin.kt` | 插件入口, 17 条 `twin.*` CLI 命令注册 |
 | `TwinWorkspace.kt` | 同步范围/清单 (SHA-256 + mtime)/冲突落盘 (LWW + .conflict 备份) |
 | `TwinSyncEngine.kt` | 同步流程 (WS_MANIFEST→WS_PULL) + 心跳保活 + QoS 自适应 |
 | `TwinAcpHandler.kt` | `AcpHandler` 实现 — 处理 8 种孪生 ACP 消息类型 |
 | `TwinDiscovery.kt` | Android NSD (mDNS) 局域网自动发现 |
 | `TwinPairingEngine.kt` | 短码验证配对协议 (4 步: ANNOUNCE→CHALLENGE→VERIFY→CONFIRM) |
-| `TwinCapability.kt` | `CapabilityCard` + `TwinCapabilityCollector` — 设备能力采集与协议版本协商 |
-| `TwinRouter.kt` | 能力感知任务路由 |
+| `TwinCapability.kt` | `CapabilityCard` + `TwinCapabilityCollector` — 设备能力采集与协议版本协商 (模型能力判定委托 `ModelProfileResolver`) |
+| `ModelCapabilityRules.kt` | 模型能力规则表 (2026-09-10 进化) — 内置厂商族级事实 + 工作区外置规则 `{agent}/twin-model-rules.json`, 逐维度合并 |
+| `ModelEvidenceStore.kt` | 模型实测证据库 `{AGENTS}/twin/model-evidence.json` — "用中学", 证据优先于声明 |
+| `ModelProfileResolver.kt` | 能力画像解析: 实测 > 外置规则 > 内置规则 > 档位推断 > 中性未知 |
+| `TwinRouter.kt` | 能力感知任务路由 (未知能力中性化 + 判定来源标注 + 可追溯结论) |
+
+#### 模型能力判定进化 (2026-09-10, 用户定案"顺应 LLM 迭代节奏")
+
+**问题**: 旧实现把"哪个名字算旗舰 / 上下文多长 / 会不会看图"硬编码在 `collectModel` 的
+if-else 关键词链里, 型号一换代就静默判错, 且判错直接改变路由结论 — 活样本: DeepSeek 把
+`…-vision-exp` 换成规范 id `deepseek-flash` 后视觉能力即被判为 false。
+
+**定案**: 能力判定 = 数据与证据, 不是代码里的名字猜测。四层来源逐维度合并:
+
+| 优先级 | 来源 | 载体 |
+|--------|------|------|
+| 1 实测 | `LEARNED` | `ModelEvidenceStore` (`{AGENTS}/twin/model-evidence.json`) |
+| 2 外置规则 | `EXTERNAL` | 工作区 `{agent}/twin-model-rules.json` — **登记新模型零代码零发版**, 且随孪生同步扩散 (一处学到, 全网共享) |
+| 3 内置规则 | `BUILTIN` | `ModelCapabilityRules.BUILTIN` — 只写厂商族级档位 + 有官方依据的精确能力 |
+| 4 档位推断 | `GUESS` | 由档位猜的上下文, 路由只给部分分 (+8 vs +20) |
+| — 无 | `UNKNOWN` | **中性处理** (不奖不罚), 不再兜底 BASIC 把新模型压在旧型号之下 |
+
+配套:
+- 能力卡 `ModelProfile` 增 `qualitySource/ctxSource/visionSource/toolsSource/evidenceCount/matchedRuleId`
+  (全带默认值 → 旧版对端能力卡仍可解析), `enum CapabilitySource` 表达来源。
+- `TwinWorkspace` 的非 `.md` 同步白名单新增 `twin-model-rules.json` (解析设三重上限: 条数 200 /
+  正则 200 字符 / 文件 64KB — 文件可能来自对端)。
+- 命令 `twin.model [show|rules|evidence|observe <fact> [value]|reset]` — 画像查看与"用中学"入口。
+- 事实枚举 `EvidenceFact`: vision_ok / vision_rejected / tool_ok / tool_rejected /
+  context_ok / context_overflow / success / failure。上下文证据按"成功取最大、溢出取最小上界"收敛。
 
 #### 配对流程 (UI 隐藏, 5 连击触发)
 

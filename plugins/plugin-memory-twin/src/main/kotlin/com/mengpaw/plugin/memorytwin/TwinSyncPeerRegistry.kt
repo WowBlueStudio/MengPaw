@@ -200,6 +200,7 @@ internal class TwinSyncPeerRegistry(
                 appendLine("- `twin.sync` — 手动触发工作区同步 (接收/发送/冲突数)")
                 appendLine("- `twin.delegate <peer> <task>` — 委派任务到对端")
                 appendLine("- `twin.capabilities --all` — 对比所有节点能力")
+                appendLine("- `twin.model` — 本机模型能力画像与判定来源; `twin.model observe <fact>` 记录实测证据")
                 appendLine("- `twin.sync` — 手动触发全量同步")
                 appendLine()
                 appendLine("## 安全提示")

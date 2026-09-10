@@ -51,6 +51,7 @@ class MemoryTwinPlugin : Plugin {
             "twin.pair", "twin.unpair",
             "twin.sync", "twin.sync.auto", "twin.sync.qos",
             "twin.capabilities",
+            "twin.model",
             "twin.delegate", "twin.route",
             "twin.lost", "twin.recover"
         )
@@ -155,6 +156,7 @@ class MemoryTwinPlugin : Plugin {
         "sync.auto" to syncCommands::cmdSyncAuto,
         "sync.qos" to syncCommands::cmdSyncQos,
         "capabilities" to capabilityCommands::cmdCapabilities,
+        "model" to capabilityCommands::cmdModel,
         "delegate" to capabilityCommands::cmdDelegate,
         "route" to capabilityCommands::cmdRoute,
         "lost" to peerCommands::cmdLost,

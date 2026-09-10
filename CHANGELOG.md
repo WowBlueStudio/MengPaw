@@ -1,6 +1,6 @@
 # Changelog
 
-## 未发布 (2026-09-10) — DeepSeek V4.1 Flash 单一化（版本号待定案，未发版）
+## 未发布 (2026-09-10) — DeepSeek V4.1 Flash 单一化 + 孪生能力判定进化（版本号待定案，未发版）
 
 ### 变更
 - **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pro`），`defaultModel` 改为 `deepseek-flash`，型号标 `多模态`（官方 图像理解 指南载明「deepseek-flash 模型支持在文本之外输入图片」，原 vision-exp 的图像理解入口由本 id 承接）。
@@ -8,8 +8,19 @@
 - **孪生能力画像补偿**: `plugin-memory-twin` 的 `collectModel` 原本靠模型名含 `vision` 判定视觉能力，规范 id 不含该词会误判 DeepSeek 无视觉能力（`TwinRouter` 的 `model:vision` 需求命中 +15 分）— 现显式登记 `deepseek-flash` → `supportsVision`。
 - **配套同步**: `scripts/check-deepseek.ps1` 默认模型改 `deepseek-flash`；`reasonix.toml` 删除走 `deepseek-v4-pro` 的 `deepseek-pro` provider、默认模型改 `deepseek-flash`，并按官方新价校准（空闲时段 缓存命中 0.02 / 输入 1 / 输出 4 元每百万 tokens，原 `output = 2` 为 V4 Flash 旧价）；开发指南 §4.2、`docs/add-llm-provider.md` §1/§2 登记表、README 中英双语默认模型同步（DeepSeek 端点路径与 `/chat/completions` 无 `/v1` 的结论不变）。
 
+### 孪生路由进化 — 能力判定不再靠名字硬编码（顺应 LLM 迭代节奏）
+- **问题**: `TwinCapabilityCollector.collectModel` 用 if-else 关键词链猜能力 (`pro`→HIGH / `flash`→MEDIUM / `mini`→BASIC / `deepseek-v4`→HIGH …), 顺序即优先级。LLM 迭代已远超发版节奏 → 型号一换代就静默判错, 且判错**直接改变路由结论** (DeepSeek 换规范 id 后视觉能力被判 false 即实例); 更糟的是未知模型兜底 `BASIC`, 于是最新最强的模型永远排在旧型号之后。
+- **新定案: 四层来源逐维度合并** — **实测证据(LEARNED) > 外置规则(EXTERNAL) > 内置规则(BUILTIN) > 档位推断(GUESS) > 中性未知(UNKNOWN)**:
+  - `ModelCapabilityRules` (新): 内置表**只登记厂商族级事实** (族级档位 + 有官方依据的精确能力), 型号级能力不再内置; 支持工作区外置规则 `{agent}/twin-model-rules.json` — **Agent 自己登记新模型, 零代码零发版**, 且该文件随孪生同步扩散到所有设备 (一处学到, 全网共享)。解析设三重上限 (条数 200 / 正则 200 字符 / 文件 64KB — 文件可能来自对端), 坏条目跳过而非整表失效。
+  - `ModelEvidenceStore` (新): 实测证据落 `{AGENTS}/twin/model-evidence.json` — 视觉被上游拒绝/带图成功、工具被拒、上下文实测与溢出 (`CONTEXT_OK` 取最大、`CONTEXT_OVERFLOW` 取最小上界 = 最保守已知上界)。**上下文实测可推翻夸大声明** (声明 1M 但实测 300K 溢出 → 听实测)。证据经能力卡广播给对端, 形成跨设备集体经验。
+  - `ModelProfileResolver` (新): `collectModel` 逻辑整体迁入 — 判定优先级 + 来源标注。
+  - `TwinRouter`: **未知能力中性化** (不奖不罚)、推断值只给部分分 (+8 vs 声明/实测 +20)、结论带来源标注 (实测/外置规则/内置规则/推断)。
+  - 能力卡 `ModelProfile` 增 `qualitySource/ctxSource/visionSource/toolsSource/evidenceCount/matchedRuleId` (全带默认值 → 旧版对端卡仍可解析)。
+  - 命令 `twin.model [show|rules|evidence|observe <fact> [value]|reset]` — 画像查看 + "用中学"入口 (记录一次真实结果, 判定立即修正, 不必等任何人改代码)。
+  - 顺带修正顺序陷阱: `gpt-5.4-mini` 不再因名字含 `mini` 掉到 BASIC (族级规则先表态), `deepseek-flash` 判 HIGH 且原生多模态 (官方 1M 上下文/图像理解)。
+
 ### 验证
-- `:mengpaw-kernel:test` **663 用例 0 failures**（测试数据中的旧 id 同步为规范 id）；`:mengpaw-shell:testDebugUnitTest` **125 用例 0 failures**（`SettingsModelsPresetTest` 7 → 8 用例：预置单一化 + 存量归一/列表过滤）；`:plugin-memory-twin:testDebugUnitTest` **34 用例 0 failures**。
+- `:mengpaw-kernel:test` **663 用例 0 failures**（测试数据中的旧 id 同步为规范 id）；`:mengpaw-shell:testDebugUnitTest` **125 用例 0 failures**（`SettingsModelsPresetTest` 7 → 8 用例：预置单一化 + 存量归一/列表过滤）；`:plugin-memory-twin:testDebugUnitTest` **64 用例 0 failures**（34 → 64，新增 `ModelCapabilityRulesTest` 16 / `ModelEvidenceStoreTest` 7 / `TwinRouterEvolutionTest` 6 用例 + `TwinWorkspaceTest` 增规则文件同步断言）。
 - 官方口径取证：`GET https://api.deepseek.com/models` 返回 `deepseek-flash, deepseek-v4-pro`，与官方 list-models 示例逐字一致；官方 更新日志 / 模型 & 价格 脚注 / 图像理解 指南原文均已打开核对（`references` 见 `docs/add-llm-provider.md` §1 表格）。
 
 ### 发行

@@ -72,7 +72,7 @@ mengpaw/
     ├── plugin-skill/           # Two-tier skill system (10 commands) ⭐💎
     ├── plugin-clipboard/       # Clipboard (3 commands)
     ├── plugin-framework/       # Framework communication protocol (15 commands) ⭐💎
-    ├── plugin-memory-twin/     # Memory Twin (16 commands) ⭐💎
+    ├── plugin-memory-twin/     # Memory Twin (17 commands) ⭐💎
     ├── plugin-agent-tools/     # Agent toolset import (4 commands) ⭐💎
     ├── plugin-root/            # Root access (19 commands)
     ├── plugin-hermes/          # Tribe collaboration 💎
@@ -123,7 +123,7 @@ The Agent controls the device through CLI commands:
 | `self` | `status`, `tools`, `search`, `time` | Agent self-management |
 | `evolution` | `audit`, `report`, `learn.command`, `mark-corrected` | Agent evolution (learning from failure) |
 | `plugin` | `marketplace`, `install`, `search` | Plugin management |
-| `twin` | `peers`, `sync`, `delegate`, `route` | Memory Twin |
+| `twin` | `peers`, `sync`, `delegate`, `route`, `model` | Memory Twin |
 
 ### Execution Modes
 

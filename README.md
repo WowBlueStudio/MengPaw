@@ -74,7 +74,7 @@ mengpaw/
     ├── plugin-skill/           # 双层技能系统 (10 命令) ⭐💎
     ├── plugin-clipboard/       # 剪贴板 (3 命令)
     ├── plugin-framework/       # 框架通信协议 (15 命令) ⭐💎
-    ├── plugin-memory-twin/     # 记忆孪生 (16 命令) ⭐💎
+    ├── plugin-memory-twin/     # 记忆孪生 (17 命令) ⭐💎
     ├── plugin-agent-tools/     # Agent 命令集 (4 命令) ⭐💎
     ├── plugin-root/            # Root 权限 (19 命令)
     ├── plugin-hermes/          # 部落协作 Tribe 💎
@@ -123,7 +123,7 @@ Agent 通过 CLI 命令操控设备：
 | `self` | `status`, `tools`, `search`, `time` | Agent 自我管理 |
 | `evolution` | `audit`, `report`, `learn.command`, `mark-corrected` | 智能体进化 (失败学习) |
 | `plugin` | `marketplace`, `install`, `search` | 插件管理 |
-| `twin` | `peers`, `sync`, `delegate`, `route` | 记忆孪生 |
+| `twin` | `peers`, `sync`, `delegate`, `route`, `model` | 记忆孪生 |
 
 ### 执行模式
 
