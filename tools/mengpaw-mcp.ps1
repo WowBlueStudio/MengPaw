@@ -109,14 +109,14 @@ if (-not ($List -or $Query -or $Task -or $Command -or $Review)) {
 MengPaw MCP Client
 ==================
   -List                List all Agent tools (MCP tools/list)
-  -Query <cmd>          Sync query (e.g. "agent.read /path")
+  -Query <cmd>          Sync query (e.g. "cat /path")
   -Task <description>   Async task (Agent picks up from inbox)
   -Command <cmd>        Execute CLI command (requires trust)
   -Review               Trigger code review
 
 Examples:
   .\mengpaw-mcp.ps1 -List
-  .\mengpaw-mcp.ps1 -Query "agent.read /sdcard/Download/task.md"
+  .\mengpaw-mcp.ps1 -Query "cat /sdcard/Download/task.md"
   .\mengpaw-mcp.ps1 -Task "分析框架协议的问题"
   .\mengpaw-mcp.ps1 -Query "self.version"
 "@

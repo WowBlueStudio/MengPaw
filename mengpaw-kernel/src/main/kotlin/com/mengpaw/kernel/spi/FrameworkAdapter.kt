@@ -52,6 +52,13 @@ data class FrameworkTarget(
 object FrameworkAdapterRegistry {
     private val adapters = LinkedHashMap<String, FrameworkAdapter>()
 
+    /**
+     * 历史拼写别名 (2026-09-10): TRAE IDE 连接器早期把 frameworkName 写成 `trea-ide`
+     * (字母转置; 上游产品名为 Trae)。正名后保留别名解析, 既存通讯录里以旧拼写登记的
+     * peer 仍可连接, 用户无需重新配置。
+     */
+    private val LEGACY_ALIASES = mapOf("trea-ide" to "trae-ide")
+
     @Synchronized
     fun register(adapter: FrameworkAdapter) { adapters[adapter.frameworkName] = adapter }
 
@@ -59,7 +66,8 @@ object FrameworkAdapterRegistry {
     fun unregister(frameworkName: String) { adapters.remove(frameworkName) }
 
     @Synchronized
-    fun find(frameworkName: String): FrameworkAdapter? = adapters[frameworkName]
+    fun find(frameworkName: String): FrameworkAdapter? =
+        adapters[frameworkName] ?: LEGACY_ALIASES[frameworkName]?.let { adapters[it] }
 
     @Synchronized
     fun list(): List<FrameworkAdapter> = adapters.values.toList()

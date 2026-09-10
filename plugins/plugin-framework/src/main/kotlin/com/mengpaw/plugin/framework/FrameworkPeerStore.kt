@@ -18,7 +18,9 @@ object FrameworkPeerStore {
     /** 支持的框架类型、协议分类及默认端口（基于 GitHub 源码分析）。 */
     val FRAMEWORK_TYPES = mapOf(
         "mengpaw" to Ports.ACP,
-        "claude-code" to 0, "trea-ide" to 0, "trea-work" to 0, "cursor" to 0, "opencode" to 0,
+        "claude-code" to 0, "trae-ide" to 0, "trea-work" to 0, "cursor" to 0, "opencode" to 0,
+        // 历史拼写 (2026-09-10 正名): 早期写作 trea-ide — 保留识别, 老 peer 广告旧名仍能归类
+        "trea-ide" to 0,
         "reasonix" to 0, "workbuddy" to 0,
         "openclaw" to Ports.OPENCLAW_WS, "qclaw" to Ports.OPENCLAW_WS, "hermes" to 0, "codex" to 0,
         "qwenpaw" to Ports.QWENPAW_REST, "coze" to Ports.QWENPAW_REST,
@@ -30,7 +32,9 @@ object FrameworkPeerStore {
     val PROTOCOL_LABELS: Map<String, Pair<String, String>> = mapOf(
         "mengpaw" to ("ACP" to "HTTP :${Ports.ACP} · 双向实时 · mDNS 发现"),
         "claude-code" to ("MCP" to "JSON-RPC · 单向实时 · 手动配置"),
-        "trea-ide" to ("MCP" to "JSON-RPC · 单向实时 · 手动配置"),
+        "trae-ide" to ("MCP" to "JSON-RPC · 单向实时 · 手动配置"),
+        // 历史拼写别名 (2026-09-10 正名) — 老 peer 仍可能以 trea-ide 登记, 保留标签避免显示回退
+        "trea-ide" to ("MCP" to "JSON-RPC · 单向实时 · 手动配置 (旧拼写)"),
         "trea-work" to ("MCP" to "JSON-RPC · 单向实时 · 云端执行"),
         "cursor" to ("MCP" to "JSON-RPC · 单向实时 · IDE 扩展"),
         "opencode" to ("MCP" to "JSON-RPC · 单向实时 · 手动配置"),

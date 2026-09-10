@@ -10,7 +10,7 @@ ConvertTo-Json 的中文 unicode-escape 转义与格式化缺陷.
     python update-plugins-json.py <repo-root> <artifacts.json> <version>
 
 artifacts.json 由 build-plugins.ps1 生成:
-    [{"id": "fs-plugin", "module": "plugin-fs", "file": "plugin-fs-0.21.0-release.aar",
+    [{"id": "clipboard-plugin", "module": "plugin-clipboard", "file": "plugin-clipboard-0.46.3-release.aar",
       "sha256": "...", "sizeBytes": 12345}, ...]
 
 行为:
