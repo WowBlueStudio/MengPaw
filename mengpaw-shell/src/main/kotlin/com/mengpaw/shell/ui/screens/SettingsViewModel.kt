@@ -147,7 +147,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         fetchModelsJob = viewModelScope.launch(Dispatchers.IO) {
             kotlinx.coroutines.delay(500) // wait for user to finish typing
             try {
-                val models = fetchModelsFromEndpoint(ep, key)
+                // 2026-09-10: 官方过渡期仍返回 deepseek-v4-pro → 剔除 DeepSeek 停用 id
+                val models = filterRetiredModelIds(ep, fetchModelsFromEndpoint(ep, key))
                 if (models.isNotEmpty()) {
                     val currentModel = _state.value.modelName
                     val currentInList = models.any { it.equals(currentModel, ignoreCase = true) }

@@ -47,27 +47,22 @@ enum class LlmProviderPreset(
     OPENAI("OpenAI", "OpenAI", "https://api.openai.com/v1/chat/completions", "gpt-5.6", "sk-",
         listOf(ModelInfo("gpt-5.6", "旗舰·1.05M上下文"), ModelInfo("gpt-5.6-terra", "均衡"),
             ModelInfo("gpt-5.6-luna", "轻量"), ModelInfo("gpt-5.5", "前代"), ModelInfo("gpt-5.4", "前代"))),
-    // DeepSeek 2026-09-10 核对 (api-docs.deepseek.com/zh-cn/ 首次调用 API + 模型 & 价格 +
-    // GET /models + 平台首页公告): 官方 OpenAI 格式 base_url 为 https://api.deepseek.com,
-    // 对话路径为 POST /chat/completions — 与官方 curl 示例逐字一致 (**无 /v1, 也无多余段**);
+    // DeepSeek 2026-09-10 复核 (api-docs.deepseek.com 更新日志 + 模型 & 价格 + 首次调用 API +
+    // GET /models 实测): 官方 OpenAI 格式 base_url 为 https://api.deepseek.com, 对话路径为
+    // POST /chat/completions — 与官方 curl 示例逐字一致 (**无 /v1, 也无多余段**);
     // 思考模式默认开启 (effort 默认 high), 思维链与正文共享输出预算。
-    // 2026-09-10 V4.1 Flash 正式上线, flash 线路统一由 V4.1 Flash 承接, /models 新增
-    // deepseek-flash; 平台公告: 2026-09-14 12:00 起下线 V4 Pro 并路由到 V4.1 Flash。
-    // deepseek-v4-flash-vision-exp 为官方多模态实验型号 (图像理解: 仅该 id 的官方示例接受
-    // image_url 块 / base64 / Files API, detail=low 缩放 512×512; FIM 官方标注"不支持")。
-    // **三 id 当前同源 (2026-09-10 实测)**: 模型指纹监测显示 V4.1 Flash 于 09-10 凌晨上线后,
-    // deepseek-v4-flash / deepseek-v4-flash-vision-exp / deepseek-flash 三个 id 的 serving 指纹
-    // 完全相同 (aeb5640…), 响应内 model 字段均回 "deepseek-flash"; 而 09-08 时 flash 与
-    // vision-exp 指纹不同 (a26a795… vs aa8d6ca…) — 即"原先确是两份模型, 现在后端合一"。
-    // 仍并列保留三 id: ① 官方文档/价格页仍按三个模型并列 (模型版本/FIM 支持/并发限制/图片计费各异),
-    // 预置以官方文档为唯一准则; ② vision-exp 是官方"图像理解"入口 id; ③ deepseek-flash 是
-    // GET /models 新返回的规范 id, 且 09-14 12:00 后 V4 Pro 会路由到它。
-    DEEPSEEK("DeepSeek", "DeepSeek", "https://api.deepseek.com/chat/completions", "deepseek-v4-flash", "sk-",
-        listOf(ModelInfo("deepseek-v4-flash", "快速·思考默认"),
-            ModelInfo("deepseek-v4-pro", "思维链·旗舰"),
-            // type 必须精确写 "多模态" — AgentProviderModelPanel 的图标判定是全等比较
-            ModelInfo("deepseek-v4-flash-vision-exp", "多模态"),
-            ModelInfo("deepseek-flash", "V4.1 Flash (API 返回)"))),
+    // **V4.1 Flash 单一化 (2026-09-10 官方更新日志原文)**: 「旧版本模型 V4 Flash 与
+    // V4 Flash Vision Exp 现已下线」, 旧 id 仅"出于兼容考虑"被临时路由到 V4.1 Flash;
+    // 且 V4.1 Flash「在性能、费用、速度、总用时等各项指标上已全面超越 DeepSeek V4 Pro」→
+    // 2026-09-14 12:00 起 deepseek-v4-pro 的请求也全部路由到 V4.1 Flash 并按 Flash 单价计费。
+    // 价格页脚注: 「模型名请使用 deepseek-flash」; V4.1 Flash 官方原文「原生支持多模态视觉理解」
+    // — 原 vision-exp 的图像理解能力已由本 id 承接。
+    // 故预置只保留规范 id deepseek-flash: 旧三 id (deepseek-v4-flash /
+    // deepseek-v4-flash-vision-exp / deepseek-v4-pro) 已从预置表移除, 存量配置由
+    // [normalizeRetiredModelId] 静默归一。
+    // type 必须精确写 "多模态" — AgentProviderModelPanel 的图标判定是全等比较。
+    DEEPSEEK("DeepSeek", "DeepSeek", "https://api.deepseek.com/chat/completions", "deepseek-flash", "sk-",
+        listOf(ModelInfo("deepseek-flash", "多模态"))),
     KIMI("Kimi (月之暗面)", "Kimi (Moonshot)", "https://api.moonshot.cn/v1/chat/completions", "kimi-k3", "sk-",
         listOf(ModelInfo("kimi-k3", "旗舰·1M上下文"), ModelInfo("kimi-k2.7-code", "Coding"),
             ModelInfo("kimi-k2.6", "通用"), ModelInfo("kimi-k2.7-code-highspeed", "高速Coding"))),
@@ -138,6 +133,42 @@ enum class LlmProviderPreset(
 
 fun LlmProviderPreset.modelListDisplay(): List<ModelInfo> =
     if (models.size <= 5) models else models.take(5)
+
+/**
+ * DeepSeek 官方已下线/即将下线的模型 id (2026-09-10 官方更新日志 + 图像理解指南原文):
+ *
+ * - `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp`: 「旧版本模型 V4 Flash 与
+ *   V4 Flash Vision Exp 现已下线」— 旧 id 仅"出于兼容考虑"被临时路由到 V4.1 Flash;
+ * - `deepseek-v4-pro`: 「北京时间 2026 年 9 月 14 日 12:00 之后 … 访问 deepseek-v4-pro 的请求
+ *   将全部路由到 V4.1 Flash，并按 V4.1 Flash 价格计费」。
+ *
+ * 三者当前均由规范 id `deepseek-flash` 承接, 故存量配置归一为它。
+ */
+private val RETIRED_DEEPSEEK_MODEL_IDS = setOf(
+    "deepseek-v4-flash",
+    "deepseek-v4-flash-vision-exp",
+    "deepseek-v4-pro"
+)
+
+/**
+ * 存量配置归一 (2026-09-10 DeepSeek V4.1 Flash 单一化): 官方价格页脚注「模型名请使用
+ * `deepseek-flash`」, 停用 id 一律改写为规范 id — UI/审计/请求体不再出现停用模型名。
+ *
+ * **只在 DeepSeek 官方端点生效**: 火山方舟等第三方平台存在同名托管条目, 那是平台自有命名,
+ * 改写会在该平台直接失效 (官方下线公告不覆盖第三方托管)。
+ */
+internal fun normalizeRetiredModelId(endpoint: String, model: String): String {
+    if (!endpoint.contains("deepseek.com", ignoreCase = true)) return model
+    return if (model.trim() in RETIRED_DEEPSEEK_MODEL_IDS) LlmProviderPreset.DEEPSEEK.defaultModel else model
+}
+
+/**
+ * 剔除模型列表中的 DeepSeek 停用 id — 官方 `GET /models` 在过渡期仍返回 `deepseek-v4-pro`
+ * (2026-09-10 实测: 仅列 `deepseek-flash` 与 `deepseek-v4-pro`), 不过滤则「API 返回的模型」
+ * 区会把即将退场的 id 摆在用户面前并可选中。同样只在 DeepSeek 官方端点生效。
+ */
+internal fun filterRetiredModelIds(endpoint: String, models: List<String>): List<String> =
+    models.filter { normalizeRetiredModelId(endpoint, it) == it }
 
 /**
  * Settings state for the app.

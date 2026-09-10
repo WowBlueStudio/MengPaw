@@ -40,7 +40,8 @@ internal class SettingsProviderStore(private val vault: Vault) {
                     preset = try { LlmProviderPreset.valueOf(p.preset) } catch (_: Exception) { LlmProviderPreset.CUSTOM },
                     apiKey = p.apiKey,
                     endpoint = p.endpoint,
-                    model = p.model,
+                    // 2026-09-10: DeepSeek 停用 id (v4-flash / v4-flash-vision-exp / v4-pro) → deepseek-flash
+                    model = normalizeRetiredModelId(p.endpoint, p.model),
                     balance = p.balance,
                     // v0.46.2: 旧配置无该字段 → "" → 回退 HIGH (官方默认档)
                     thinkingEffort = com.mengpaw.kernel.llm.ThinkingEffort.fromStorage(p.thinkingEffort)
@@ -55,7 +56,8 @@ internal class SettingsProviderStore(private val vault: Vault) {
                     roles = rolesJson.mapNotNull { (role, p) ->
                         val sp = SavedProvider(
                             preset = try { LlmProviderPreset.valueOf(p.preset) } catch (_: Exception) { LlmProviderPreset.CUSTOM },
-                            apiKey = p.apiKey, endpoint = p.endpoint, model = p.model, balance = p.balance,
+                            apiKey = p.apiKey, endpoint = p.endpoint,
+                            model = normalizeRetiredModelId(p.endpoint, p.model), balance = p.balance,
                             thinkingEffort = com.mengpaw.kernel.llm.ThinkingEffort.fromStorage(p.thinkingEffort)
                         )
                         if (sp.endpoint.isBlank()) null else role to sp
