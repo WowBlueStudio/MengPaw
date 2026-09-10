@@ -1557,6 +1557,18 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
    (11,354,677 B), Gitee 侧 `releases/latest` 复核 = v0.10.0; **plugins.json 无变更** (browser 仓库不含
    插件市场, 跳过 §2.5); 设备交付走自动更新链路, 未做 ADB 推送。
 
+⑨ **v0.10.1 (Z, 纯文档发布) 实操 — 三个可复用点**: 本轮只有文档变更 (项目定位纠正: Browser 与
+   Shell 脱钩), 仍走完整发布链, 实测要点:
+   1. **纯文档发布也必须手改 versionCode 并重出 APK**: 功能代码与 v0.10.0 逐字节一致, 但
+      versionCode 16→17 后产物是**新的 APK**(两者字节数恰好都是 11,354,677 B, 仅元数据不同) —
+      不改 versionCode 客户端就识别不出更新 (§47 ① 的同一根因)。
+   2. **"命令手册"随版本对齐**: `MengPaw_Browser_skills.md` 是唯一同步给 Shell 侧的资产, 版本号
+      必须跟着发布走 (v0.10.0→v0.10.1), 否则 Shell 侧拿到的资产版本与实际能力脱节。
+   3. **GitHub HTTPS 阻断是时段性的, 别预设不通就上兜底**: 同一台机器、同一天, 上午连 10+ 次全败
+      (§47 ②③), 本轮**第 1 次即通**。故动手顺序应是"先按规定间隔重试 (45s × 5~8), 全败再走
+      SSH-443" — 提前上兜底会白白多出密钥登记/删除步骤。发布链耗时: 门禁 26 用例 +
+      `assembleRelease --build-cache --console=plain`(未 clean) **1m10s**, 增量复用 43 任务 up-to-date。
+
 
 
 
