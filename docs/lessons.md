@@ -1612,6 +1612,36 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
    tag 集合应**逐个一致** (本次 136 = 136)。注解 tag 注意 `git tag -d` 回显的是 **tag 对象 sha**, 与
    `git log -1 <tag>` 显示的 commit sha 不同, 不是删错了对象。
 
+## 49. v0.47.0: 模型单一化 + 孪生能力判定进化 — 5 个坑 (2026-09-10)
+
+① **模型 id 更名 → 能力判定静默回归 (名字关键词的固有病)**: DeepSeek 把多模态入口
+   `deepseek-v4-flash-vision-exp` 换成规范 id `deepseek-flash` 后, 孪生 `collectModel` 的
+   `model.contains("vision")` 立刻变 false —— 名字里没这个词了。**症状极隐蔽**: 不报错, 路由只是
+   悄悄不再把 DeepSeek 设备派给视觉任务。推广结论: 凡"用名字片段推断能力"的代码, 上游改名 =
+   静默行为回归, 且改名方永远不会通知你。修法不是再加一条 `contains("deepseek-flash")`
+   (下个型号还得再改一次), 而是把判定搬出代码: 规则表(数据) + 实测证据(经验) + 未知中性。
+
+② **"未知"不该被当作"弱"**: 旧实现 `else -> ModelQuality.BASIC` 让新模型一出现就垫底 —— 与
+   "LLM 迭代快"直接冲突 (最强的新模型永远排在旧型号之后)。定案: 未知 = 中性 0 分 + 提示"待实测",
+   只有**确实知道**才加减分; 猜出来的值(GUESS)只给部分分 (+8 vs 声明/实测 +20)。
+
+③ **PowerShell 引号转义坑 → commit 分组错乱 (本次真实踩到)**: `git commit -m "... \"vision\" ..."`
+   在 PowerShell 里 `\"` **不是转义** → 整串被拆成 message + 后续 pathspec, 报
+   `pathspec ... did not match`; 紧接着的 `git add -A` 又把本该独立提交的改动卷进了下一个 commit。
+   规矩: ① 含引号/中文的 commit message 一律用**单引号**包裹 (`-m '...'`), 内部双引号原样写;
+   ② `git reset --soft HEAD~N` 重做分组后必须显式 `git restore --staged .` 清空暂存区, 再按组
+   `git add <显式路径>` —— reset 保留的暂存内容会再次污染分组 (本次连续错两次);
+   ③ 提交后**必须 `git show --stat` 核对文件清单与标题是否对应**, 只看 `git log --oneline` 看不出来。
+
+④ **Kotlin 两个编译坑 (本次两处)**: ① `evidence?.x ?: 0 > 0` —— `?:` 优先级低于 `>` , 实际解析成
+   `evidence?.x ?: (0 > 0)` → 类型不匹配; 必须写 `(evidence?.x ?: 0) > 0`。② `if (a?.b?.c != null) a.b.c`
+   —— 属性链的非空检查**不做 smart cast**, 赋值给非空类型必报错; 改用局部 val 存下 `a?.b?.c` 再判空。
+
+⑤ **孪生同步白名单是 `.md` 专属**: `TwinWorkspace.scanDir` 有 `if (!f.name.endsWith(".md")) continue`,
+   所以任何非 md 新文件 (如 `twin-model-rules.json`)**默认不会跨设备同步**。要让"一处学到全网共享"
+   成立必须显式放行 (`SHARED_EXTRA_FILES`); 且该文件可能来自对端 → 解析必须设界
+   (条数 200 / 正则 200 字符 / 文件 64KB 三重上限), 坏条目跳过而非整表失效。
+
 
 
 

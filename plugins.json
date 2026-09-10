@@ -1,7 +1,7 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
   "version": 9,
-  "updated": "2026-09-01",
+  "updated": "2026-09-11",
   "plugins": [
     {
       "id": "concise-plugin",
@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "dream-plugin",
@@ -31,7 +31,7 @@
       "commands": [],
       "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
       "size": 3129,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "tavily-plugin",
@@ -63,7 +63,7 @@
       ],
       "checksum": "sha256:ab121f541be212f54a85949a8df59fadf1ab181baadd0019bb8fa3e175a601e9",
       "size": 21596,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "framework-plugin",
@@ -91,9 +91,9 @@
         "framework.pair.decline",
         "framework.delegate"
       ],
-      "checksum": "sha256:b3e9be0bd5587f2c8a755b82ab68c0d04ca00f72458785c31cd04abf5817e958",
-      "size": 110868,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "checksum": "sha256:0574d358452bc9d3eb0f3b5bb8df75f7df427dea62b741d11f82fc5a31440067",
+      "size": 110950,
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "net-plugin",
@@ -112,7 +112,7 @@
       ],
       "checksum": "sha256:a78b37dc205343cb0c08f18ff77566c3b6edca5d62e6006814d656fefe5ba213",
       "size": 17951,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "memory-twin-plugin",
@@ -141,9 +141,9 @@
         "twin.lost",
         "twin.recover"
       ],
-      "checksum": "sha256:50b874379adcb91aa5100cd4c2bc96252226a511d6bf44614fa4baf6d40c5927",
-      "size": 243330,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "checksum": "sha256:f1842d5066ba8608c99a4deaebe9c3c26d7749664f62fbfbebf795e528deda33",
+      "size": 302592,
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "skill-plugin",
@@ -166,9 +166,9 @@
         "skill.enable",
         "skill.disable"
       ],
-      "checksum": "sha256:1e3314818042b2a9fd2591dbd52108eab3a8199d44cdbebf5d00460cbbdde55c",
-      "size": 102559,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "checksum": "sha256:baec8bcfab674aa598063c75f884e28ec6490db710866a57fe5f87d194dca35c",
+      "size": 103735,
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "clipboard-plugin",
@@ -186,7 +186,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "dev-plugin",
@@ -205,9 +205,9 @@
         "dev.plugin.keywords",
         "dev.plugin.guide"
       ],
-      "checksum": "sha256:66f20d2156a2b49e3995b4f5eed056562a8666c2c3c747df4df017ac58e111d5",
-      "size": 35337,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "checksum": "sha256:dc9e4cc80d320aff8aae8edc0d2c6451ed62d0e3e113dc37d05f694de92234d5",
+      "size": 35529,
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "update-plugin",
@@ -231,7 +231,7 @@
       ],
       "checksum": "sha256:2fcb14e1b0d5eac9ff32d8bcc9ccad36c10121a41b4e75cbb129501164151159",
       "size": 56173,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "translate-plugin",
@@ -343,7 +343,7 @@
       ],
       "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
       "size": 282877,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "comfy-plugin",
@@ -448,7 +448,7 @@
       ],
       "checksum": "sha256:32c402304b4190083c209773186368460ab813a757bc4a356d61ba03d5fdf21b",
       "size": 46842,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "termux-plugin",
@@ -467,7 +467,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "tools-plugin",
@@ -486,7 +486,7 @@
       ],
       "checksum": "sha256:fd6cf25efe806029cda88f3c47e40eec4b31cfee1128df50b28af5fe77ea0da2",
       "size": 36752,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "office-plugin",
@@ -504,7 +504,7 @@
       ],
       "checksum": "sha256:91b333fc9bdfe6cf74e06d60fec4f6e9e532dc9462677f1cb0be101f9578c7f6",
       "size": 21466,
-      "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
+      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
     },
     {
       "id": "connector-openclaw-plugin",

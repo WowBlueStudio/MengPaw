@@ -1,6 +1,6 @@
 # Changelog
 
-## 未发布 (2026-09-10) — DeepSeek V4.1 Flash 单一化 + 孪生能力判定进化（版本号待定案，未发版）
+## v0.47.0 (2026-09-10) — DeepSeek V4.1 Flash 单一化 + 孪生能力判定进化
 
 ### 变更
 - **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pro`），`defaultModel` 改为 `deepseek-flash`，型号标 `多模态`（官方 图像理解 指南载明「deepseek-flash 模型支持在文本之外输入图片」，原 vision-exp 的图像理解入口由本 id 承接）。
@@ -21,10 +21,15 @@
 
 ### 验证
 - `:mengpaw-kernel:test` **663 用例 0 failures**（测试数据中的旧 id 同步为规范 id）；`:mengpaw-shell:testDebugUnitTest` **125 用例 0 failures**（`SettingsModelsPresetTest` 7 → 8 用例：预置单一化 + 存量归一/列表过滤）；`:plugin-memory-twin:testDebugUnitTest` **64 用例 0 failures**（34 → 64，新增 `ModelCapabilityRulesTest` 16 / `ModelEvidenceStoreTest` 7 / `TwinRouterEvolutionTest` 6 用例 + `TwinWorkspaceTest` 增规则文件同步断言）。
+- 发布前全量 `./gradlew test --offline --build-cache --console=plain` **1635 用例 0 failures**（kernel 663 + core 116 + shell 250 + 插件 606，debug + release 双套合并）。
 - 官方口径取证：`GET https://api.deepseek.com/models` 返回 `deepseek-flash, deepseek-v4-pro`，与官方 list-models 示例逐字一致；官方 更新日志 / 模型 & 价格 脚注 / 图像理解 指南原文均已打开核对（`references` 见 `docs/add-llm-provider.md` §1 表格）。
 
 ### 发行
-- 本轮**不发布**（版本号待定案）— 无 APK 构建、无 tag、无远程推送。
+- Shell APK: `mengpaw-shell-v0.47.0-release.apk` (versionCode 47000)
+- Browser APK: 本轮无变更（`mengpaw-browser/` 无提交），不构建；浏览器独立版本线保持不变
+- 插件: 本轮 `plugins/` 有变更（memory-twin 能力判定进化 + plugin-skill 孪生指南）→ 打 `plugins-v0.47.0` tag 并上传全部 AAR（§2.5 强制）
+- 测试: 全量 **1635 用例 0 failures** (kernel 663 + core 116 + shell 250 + 插件 606；双套合并口径)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
 
 ## v0.46.3 (2026-09-10) — 根治 DeepSeek「模型未返回任何内容（空响应）」+ 流式解析加固
 
