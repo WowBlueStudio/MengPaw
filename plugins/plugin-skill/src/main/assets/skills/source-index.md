@@ -12,8 +12,8 @@ source: core
 ## 使用步骤
 
 1. 从用户问题中提取关键词（对照下表）
-2. 用 `agent.memory [query]` 查阅对应文档
-3. 仍不足时，用 `agent.read <路径>` 读对应源码（内置，不需插件）
+2. 用 `agent.memory search <关键词>` 查阅对应文档
+3. 仍不足时，用 Linux 命令通道读对应源码（`ls` / `cat <路径>` / `grep`，内置，不需插件）
 
 ## 关键词 → 文档与源码
 
@@ -28,27 +28,29 @@ source: core
 | ACP、设备通信、配对 | — | `mengpaw-kernel/.../acp/AcpServer.kt` |
 | Agent、引擎、ReAct、循环 | — | `mengpaw-kernel/.../AgentEngine.kt` |
 | UI、设置、主题、Compose | — | `mengpaw-shell/.../ui/screens/SettingsScreen.kt` |
-| 浏览器、WebView | — | `mengpaw-browser/.../BrowserActivity.kt` |
+| 浏览器、WebView | — | 已拆独立仓库 MengPaw-Browser（本仓库无此路径） |
 | 技能、skill、剧本 | agent.memory | `plugins/plugin-skill/.../SkillPlugin.kt` |
-| 文件系统、fs、读写 | agent.memory | `plugins/plugin-fs/.../FsPlugin.kt` |
+| 文件、目录、读写、ls、cat | — | `mengpaw-kernel/.../cli/LinuxCommandExecutor.kt` |
 | 网络、HTTP、curl | agent.memory | `plugins/plugin-net/.../NetPlugin.kt` |
 | 记忆、memory、存储 | agent.memory | `mengpaw-kernel/.../agent/AgentDocs.kt` + `AgentExecutor.kt` |
 | 翻译、translate、语言 | — | `mengpaw-kernel/.../llm/TranslateMiddleware.kt` |
 
 ## 模块速查
 
+> 文件数为 2026-09-10 快照（`src/main/kotlin` 下 `.kt` 计数），仅供量级参考。
+
 | 模块 | 位置 | 文件数 | 职责 |
 |------|------|--------|------|
-| kernel | `mengpaw-kernel/src/.../kernel/` | 44 | 微内核（CLI/LLM/安全/会话/插件框架） |
-| core | `mengpaw-core/src/.../core/` | 6 | Android 适配（Vault/IntegrityGuard/SysExecutor） |
-| shell | `mengpaw-shell/src/.../shell/` | 21 | 主应用（Chat UI/设置/服务） |
-| browser | `mengpaw-browser/src/.../browser/` | 5 | 独立浏览器 |
-| design | `mengpaw-design-system/src/.../design/` | 5 | Arco 主题/Markdown 渲染 |
+| kernel | `mengpaw-kernel/src/.../kernel/` | 154 | 微内核（CLI/LLM/安全/会话/插件框架） |
+| core | `mengpaw-core/src/.../core/` | 35 | Android 适配（Vault/IntegrityGuard/SysExecutor） |
+| shell | `mengpaw-shell/src/.../shell/` | 123 | 主应用（Chat UI/设置/服务） |
+| browser | 独立仓库 MengPaw-Browser | — | 独立浏览器（本仓库不含） |
+| design | `mengpaw-design-system/src/.../design/` | 8 | Arco 主题/Markdown 渲染 |
 
 ## 约定
 
-- 先读文档（`agent.memory`），再读源码（`agent.read`，内置）
+- 先读文档（`agent.memory search`），再读源码（Linux 命令通道 `cat`/`grep`，内置）
 - `agent.cli` 返回完整 CLI 参考
 - `agent.memory search <关键词>` 全文搜索所有记忆文档
-- 不确定时先 `agent.read` 看看当前有什么，不要盲目猜测路径
-- 文件 I/O 用 `agent.read`/`agent.write`，如果装了 fs 插件也可以用 `fs.*` 命令
+- 不确定时先 `ls` 看看当前有什么，不要盲目猜测路径
+- 文件读写用 Linux 命令通道（`cat` / `sed` / 重定向），如需批量网络请求用 net 插件 `net.*` 命令
