@@ -193,6 +193,9 @@ class AppStrings {
     var agentWorkspaceFiles: String = ""
     var agentAutoTranslate: String = ""
     var agentAutoTranslateDesc: String = ""
+    /** 思考强度档位 (v0.46.2, 仅 DeepSeek: Max/High/Low/Off)。 */
+    var agentThinkingEffort: String = ""
+    var agentThinkingEffortDesc: String = ""
     // Agent 引导进度 (P2-13)
     var agentBoostPanel: String = ""
     var agentBoostPanelDesc: String = ""

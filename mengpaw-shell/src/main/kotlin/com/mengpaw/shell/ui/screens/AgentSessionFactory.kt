@@ -44,6 +44,10 @@ class AgentSessionFactory(
     var globalModel: String = "unknown"
     var globalAgentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE
 
+    /** 思考强度档位 (v0.46.2, 仅 DeepSeek 端点注入) — 新建会话/切换 Agent 沿用主配置。 */
+    @Volatile
+    var globalThinkingEffort: com.mengpaw.kernel.llm.ThinkingEffort = com.mengpaw.kernel.llm.ThinkingEffort.DEFAULT
+
     /** 角色模型路由 — Fleet/火种各角色 → provider 快照（设置页配置，缺省回退主模型）。 */
     @Volatile
     var globalSwarmRoles: Map<String, SavedProvider> = emptyMap()
@@ -62,7 +66,8 @@ class AgentSessionFactory(
         val built = globalSwarmRoles.mapNotNull { (role, sp) ->
             if (sp.endpoint.isBlank() || sp.apiKey.isBlank()) null
             else try { role to AdaptiveLlmProvider(sp.endpoint, sp.apiKey, sp.model,
-                networkGate = com.mengpaw.shell.service.NetworkConditionMonitor) }
+                networkGate = com.mengpaw.shell.service.NetworkConditionMonitor,
+                thinkingEffort = sp.thinkingEffort) }
             catch (e: Exception) {
                 KernelLog.w("AgentVM", "角色 $role provider 构造失败，已跳过: ${e.message}")
                 null
@@ -75,12 +80,14 @@ class AgentSessionFactory(
     fun defaultProvider(): LlmProvider =
         if (globalApiKey.isBlank()) UnconfiguredLlmProvider()
         else try { AdaptiveLlmProvider(globalEndpoint, globalApiKey, globalModel,
-            networkGate = com.mengpaw.shell.service.NetworkConditionMonitor) } catch (_: Exception) { UnconfiguredLlmProvider() }
+            networkGate = com.mengpaw.shell.service.NetworkConditionMonitor,
+            thinkingEffort = globalThinkingEffort) } catch (_: Exception) { UnconfiguredLlmProvider() }
 
     fun createProviderForSession(endpoint: String, apiKey: String, model: String): LlmProvider =
         if (apiKey.isBlank()) UnconfiguredLlmProvider()
         else try { AdaptiveLlmProvider(endpoint, apiKey, model,
-            networkGate = com.mengpaw.shell.service.NetworkConditionMonitor) }
+            networkGate = com.mengpaw.shell.service.NetworkConditionMonitor,
+            thinkingEffort = globalThinkingEffort) }
         catch (e: Exception) {
             KernelLog.w("AgentViewModel", "Cannot create real provider, using unconfigured: ${e.message}")
             UnconfiguredLlmProvider()

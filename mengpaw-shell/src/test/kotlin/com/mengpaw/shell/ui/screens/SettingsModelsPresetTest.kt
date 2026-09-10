@@ -30,6 +30,40 @@ class SettingsModelsPresetTest {
     }
 
     @Test
+    fun `DEEPSEEK预置_官方端点无多余路径段且含视觉型号`() {
+        // 官方 api-docs.deepseek.com: base_url(OpenAI) = https://api.deepseek.com,
+        // 官方 curl 为 POST https://api.deepseek.com/chat/completions — 无 /v1、无多余段
+        val preset = LlmProviderPreset.DEEPSEEK
+        assertEquals("https://api.deepseek.com/chat/completions", preset.endpoint)
+        assertEquals("deepseek-v4-flash", preset.defaultModel)
+        val names = preset.models.map { it.name }
+        assertEquals(
+            listOf("deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp", "deepseek-flash"),
+            names
+        )
+        assertEquals(
+            "多模态",
+            preset.models.first { it.name == "deepseek-v4-flash-vision-exp" }.type
+        )
+    }
+
+    @Test
+    fun `供应商预置_思考强度档位默认High且仅DeepSeek可切换`() {
+        val ds = SavedProvider(
+            preset = LlmProviderPreset.DEEPSEEK, apiKey = "sk-x",
+            endpoint = LlmProviderPreset.DEEPSEEK.endpoint, model = "deepseek-v4-flash"
+        )
+        assertEquals("默认为官方默认档 High", com.mengpaw.kernel.llm.ThinkingEffort.HIGH, ds.thinkingEffort)
+        assertTrue("DeepSeek 支持思考强度档位", ds.supportsThinkingEffort)
+
+        val openai = SavedProvider(
+            preset = LlmProviderPreset.OPENAI, apiKey = "sk-x",
+            endpoint = LlmProviderPreset.OPENAI.endpoint, model = "gpt-5.6"
+        )
+        assertFalse("非 DeepSeek 端点不展示档位", openai.supportsThinkingEffort)
+    }
+
+    @Test
     fun `MiniMax预置_官方模型清单与端点`() {
         val preset = LlmProviderPreset.MINIMAX
         assertEquals("https://api.minimaxi.com/v1/chat/completions", preset.endpoint)

@@ -127,9 +127,11 @@ private fun AppRootContent(
             agentViewModel.applyConfiguration(
                 saved.endpoint, saved.apiKey, saved.model,
                 com.mengpaw.kernel.llm.AdaptiveLlmProvider(saved.endpoint, saved.apiKey, saved.model,
-                    networkGate = com.mengpaw.shell.service.NetworkConditionMonitor),
+                    networkGate = com.mengpaw.shell.service.NetworkConditionMonitor,
+                    thinkingEffort = saved.thinkingEffort),
                 settingsViewModel.state.value.effectiveAgentLanguage,
-                swarmRoles = settingsViewModel.state.value.swarmRoles
+                swarmRoles = settingsViewModel.state.value.swarmRoles,
+                thinkingEffort = saved.thinkingEffort
             )
         } else if (settingsViewModel.state.value.swarmRoles.isNotEmpty()) {
             // 只有角色路由配置（无主 key）也要同步
@@ -164,9 +166,11 @@ private fun AppRootContent(
                 agentViewModel.applyConfiguration(
                     s.apiEndpoint, s.apiKey, s.modelName,
                     com.mengpaw.kernel.llm.AdaptiveLlmProvider(s.apiEndpoint, s.apiKey, s.modelName,
-                        networkGate = com.mengpaw.shell.service.NetworkConditionMonitor),
+                        networkGate = com.mengpaw.shell.service.NetworkConditionMonitor,
+                        thinkingEffort = s.thinkingEffort),
                     s.effectiveAgentLanguage,
-                    swarmRoles = s.swarmRoles
+                    swarmRoles = s.swarmRoles,
+                    thinkingEffort = s.thinkingEffort
                 )
             } else if (s.swarmRoles.isNotEmpty()) {
                 agentViewModel.applyConfiguration(
@@ -284,7 +288,23 @@ private fun AppRootContent(
             agentFramework = agentFramework,
             activeAgentEndpoint = agentEp,
             activeAgentModel = agentModel,
-            onAgentSelectProvider = { },
+            onAgentSelectProvider = { updated ->
+                // v0.46.2 修复: 此前传空实现 ({}), 卡片里选模型只改表单值 →
+                // 已保存条目模型不更新 (radio 恒不选中), 活动会话也不换模型 ("选了不生效")。
+                // 现: ① 写回 Vault ② 立即应用到活动 Agent (与退出设置页的应用逻辑同口径)。
+                settingsViewModel.updateSavedProvider(updated)
+                if (updated.apiKey.isNotBlank()) {
+                    agentViewModel.applyConfiguration(
+                        updated.endpoint, updated.apiKey, updated.model,
+                        com.mengpaw.kernel.llm.AdaptiveLlmProvider(updated.endpoint, updated.apiKey, updated.model,
+                            networkGate = com.mengpaw.shell.service.NetworkConditionMonitor,
+                            thinkingEffort = updated.thinkingEffort),
+                        settingsViewModel.state.value.effectiveAgentLanguage,
+                        swarmRoles = settingsViewModel.state.value.swarmRoles,
+                        thinkingEffort = updated.thinkingEffort
+                    )
+                }
+            },
             pluginItems = settingsItems.pluginItems,
             toolItems = settingsItems.toolItems,
             skillItems = settingsItems.skillItems,

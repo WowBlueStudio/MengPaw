@@ -207,6 +207,15 @@ fun FrameworkSettingsContent(
         Spacer(Modifier.height(ArcoSpacing.sm))
         SettingsTextField(Icons.Outlined.Link, state.strings.apiEndpoint, state.apiEndpoint,
             onValueChange = { viewModel.updateApiEndpoint(it) })
+        // 思考强度四档 (v0.46.2) — 仅 DeepSeek 端点支持 (官方 思考模式 文档)
+        if (state.selectedProvider == LlmProviderPreset.DEEPSEEK || state.apiEndpoint.contains("deepseek.com")) {
+            Spacer(Modifier.height(ArcoSpacing.sm))
+            ThinkingEffortSection(
+                strings = state.strings,
+                current = state.thinkingEffort,
+                onSelect = { viewModel.updateThinkingEffort(it) }
+            )
+        }
         Spacer(Modifier.height(ArcoSpacing.sm))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ArcoSpacing.sm)) {

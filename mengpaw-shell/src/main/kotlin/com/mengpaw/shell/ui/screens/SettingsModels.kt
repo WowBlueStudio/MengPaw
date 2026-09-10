@@ -21,7 +21,9 @@ internal data class SavedProviderJson(
     val apiKey: String,
     val endpoint: String,
     val model: String,
-    val balance: String = ""
+    val balance: String = "",
+    /** 思考强度档位名 (v0.46.2, DeepSeek Max/High/Low/Off) — 旧配置缺字段时回退 HIGH。 */
+    val thinkingEffort: String = ""
 )
 
 /**
@@ -45,8 +47,19 @@ enum class LlmProviderPreset(
     OPENAI("OpenAI", "OpenAI", "https://api.openai.com/v1/chat/completions", "gpt-5.6", "sk-",
         listOf(ModelInfo("gpt-5.6", "旗舰·1.05M上下文"), ModelInfo("gpt-5.6-terra", "均衡"),
             ModelInfo("gpt-5.6-luna", "轻量"), ModelInfo("gpt-5.5", "前代"), ModelInfo("gpt-5.4", "前代"))),
+    // DeepSeek 2026-09-10 核对 (api-docs.deepseek.com/zh-cn/ 首次调用 API + 模型 & 价格 +
+    // GET /models + 平台首页公告): 官方 OpenAI 格式 base_url 为 https://api.deepseek.com,
+    // 对话路径为 POST /chat/completions — 与官方 curl 示例逐字一致 (**无 /v1, 也无多余段**);
+    // 思考模式默认开启 (effort 默认 high), 思维链与正文共享输出预算。
+    // 2026-09-10 V4.1 Flash 正式上线, flash 线路统一由 V4.1 Flash 承接, /models 新增
+    // deepseek-flash; 平台公告: 2026-09-14 12:00 起下线 V4 Pro 并路由到 V4.1 Flash。
+    // deepseek-v4-flash-vision-exp 为官方多模态实验型号 (图像理解, 支持 image_url/base64/Files API)。
     DEEPSEEK("DeepSeek", "DeepSeek", "https://api.deepseek.com/chat/completions", "deepseek-v4-flash", "sk-",
-        listOf(ModelInfo("deepseek-v4-flash", "快速"), ModelInfo("deepseek-v4-pro", "思维链"))),
+        listOf(ModelInfo("deepseek-v4-flash", "快速·思考默认"),
+            ModelInfo("deepseek-v4-pro", "思维链·旗舰"),
+            // type 必须精确写 "多模态" — AgentProviderModelPanel 的图标判定是全等比较
+            ModelInfo("deepseek-v4-flash-vision-exp", "多模态"),
+            ModelInfo("deepseek-flash", "V4.1 Flash (API 返回)"))),
     KIMI("Kimi (月之暗面)", "Kimi (Moonshot)", "https://api.moonshot.cn/v1/chat/completions", "kimi-k3", "sk-",
         listOf(ModelInfo("kimi-k3", "旗舰·1M上下文"), ModelInfo("kimi-k2.7-code", "Coding"),
             ModelInfo("kimi-k2.6", "通用"), ModelInfo("kimi-k2.7-code-highspeed", "高速Coding"))),
@@ -80,6 +93,11 @@ enum class LlmProviderPreset(
             ModelInfo("deepseek-v4-flash", "DeepSeek托管"), ModelInfo("deepseek-v4-pro", "DeepSeek托管·思维链"),
             ModelInfo("glm-5.3", "GLM托管"),
             ModelInfo("(需创建接入点 ep-xxx)", "提示"))),
+    // OpenModel 2026-09-10 核对 (docs.openmodel.ai/en/docs/sdks/openai-sdk): 官方原文明确
+    // "OpenModel does not provide the Chat Completions API or other OpenAI API endpoints" —
+    // 只提供 Responses (/v1/responses) 与 Messages (/v1/messages); 端点探针实测
+    // POST https://api.openmodel.ai/v1/chat/completions → 404。本项目内核目前只讲
+    // Chat Completions, 故该预置当前不可用 (待 Responses/Messages 适配后启用)。
     OPENMODEL("OpenModel", "OpenModel", "https://api.openmodel.ai/v1/chat/completions", "deepseek-v4-flash", "sk-",
         listOf(ModelInfo("deepseek-v4-pro", "思维链"), ModelInfo("deepseek-v4-flash", "快速"),
             ModelInfo("qwen3.7-max", "Qwen托管"), ModelInfo("gpt-5.4-mini", "OpenAI托管"),
@@ -121,8 +139,17 @@ data class SavedProvider(
     val apiKey: String,
     val endpoint: String,
     val model: String,
-    val balance: String = ""
-)
+    val balance: String = "",
+    /**
+     * 思考强度档位 (v0.46.2) — 官方 思考模式 文档四档 Max/High/Low/Off, 仅 DeepSeek 端点注入;
+     * 其余供应商保留该值但不发送 (内核 [com.mengpaw.kernel.llm.effectiveThinkingEffort] 过滤)。
+     */
+    val thinkingEffort: com.mengpaw.kernel.llm.ThinkingEffort = com.mengpaw.kernel.llm.ThinkingEffort.DEFAULT
+) {
+    /** 该 provider 是否支持思考强度档位 (官方仅 DeepSeek 记载 thinking/reasoning_effort)。 */
+    val supportsThinkingEffort: Boolean
+        get() = preset == LlmProviderPreset.DEEPSEEK || endpoint.contains("deepseek.com")
+}
 
 /** Agent language modes for controlling LLM output language. */
 enum class AgentLanguageMode(val labelKey: String) { FOLLOW_UI("followUi"), CHINESE("chinese"), ENGLISH("english") }
@@ -162,6 +189,8 @@ data class SettingsState(
     val apiEndpoint: String = LlmProviderPreset.OPENAI.endpoint,
     val apiKey: String = "",
     val modelName: String = LlmProviderPreset.OPENAI.defaultModel,
+    // 思考强度档位 (v0.46.2, 表单值) — 保存 provider 时随条目落盘, 仅 DeepSeek 端点注入
+    val thinkingEffort: com.mengpaw.kernel.llm.ThinkingEffort = com.mengpaw.kernel.llm.ThinkingEffort.DEFAULT,
     val remoteModels: List<String> = emptyList(),
     val remoteModelsFetched: Boolean = false,
     val maxSteps: Int = 50,

@@ -109,9 +109,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _state.value = _state.value.copy(
             selectedProvider = preset,
             apiEndpoint = preset.endpoint,
-            modelName = preset.defaultModel
+            modelName = preset.defaultModel,
+            // v0.46.2: 换预置即回到官方默认思考档 (DeepSeek = High), 避免上一个供应商的档位串味
+            thinkingEffort = com.mengpaw.kernel.llm.ThinkingEffort.DEFAULT
         )
         fetchRemoteModels()
+    }
+
+    /** 更新思考强度档位 (v0.46.2, 表单值; 仅 DeepSeek 端点注入)。 */
+    fun updateThinkingEffort(effort: com.mengpaw.kernel.llm.ThinkingEffort) {
+        _state.value = _state.value.copy(thinkingEffort = effort)
     }
 
     /** Debounce job for fetchRemoteModels — prevents rapid-fire on paste/keystroke. */
@@ -121,10 +128,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
      * Auto-fetch available models from the provider's GET /models endpoint.
      * Debounced: cancels previous request if re-invoked within 500ms.
      * Runs on IO dispatcher with short timeouts to avoid ANR.
+     *
+     * @param endpoint 目标端点 (默认取「新增 provider」表单值)
+     * @param key 目标 API key (同上)
+     * @param adoptFirst 模型不在返回列表时是否用列表首项回填表单模型 —
+     *        卡片刷新传 false: 卡片选中项只由用户点击决定, 刷新不得悄悄改写 (v0.46.2)
      */
-    fun fetchRemoteModels() {
-        val ep = _state.value.apiEndpoint
-        val key = _state.value.apiKey
+    fun fetchRemoteModels(
+        endpoint: String = _state.value.apiEndpoint,
+        key: String = _state.value.apiKey,
+        adoptFirst: Boolean = true
+    ) {
+        val ep = endpoint
         if (ep.isBlank() || key.isBlank()) return
 
         // Debounce: cancel pending fetch, restart after 500ms quiet period
@@ -139,7 +154,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     _state.value = _state.value.copy(
                         remoteModels = models,
                         remoteModelsFetched = true,
-                        modelName = if (currentInList) currentModel else models.first()
+                        modelName = if (!adoptFirst || currentInList) currentModel else models.first()
                     )
                 }
             } catch (_: kotlinx.coroutines.CancellationException) {
@@ -162,6 +177,34 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     /** Manually refresh model list from the provider's API. Called by UI button. */
     fun refreshModels() {
         fetchRemoteModels()
+    }
+
+    /**
+     * 刷新「已保存 provider 卡片」的模型列表 (v0.46.2 修复) —
+     * 此前卡片刷新按钮走 selectProvider(saved.preset): 把表单端点/模型重置为**预置默认值**
+     * (自定义端点被抹掉), 且模型缺失时用列表首项顶替 → 刷新一次就把用户的选择冲掉。
+     * 现直接按已保存条目的端点+密钥抓取, 不动表单、不回填模型。
+     */
+    fun refreshModelsFor(saved: SavedProvider) {
+        fetchRemoteModels(saved.endpoint, saved.apiKey, adoptFirst = false)
+    }
+
+    /**
+     * 把卡片内选中的模型写回已保存 provider 并落盘 (v0.46.2 修复) —
+     * 此前卡片模型行只调 updateModelName (改的是"新增 provider"表单值), 且
+     * onAgentSelectProvider 在 AppRoot 传的是空实现 → 已保存条目模型永不更新,
+     * radio 恒不选中 ("模型无法选中/选了不生效")。
+     */
+    fun updateSavedProvider(provider: SavedProvider) {
+        val updated = _state.value.savedProviders.map { if (it.preset == provider.preset) provider else it }
+        _state.value = _state.value.copy(savedProviders = updated)
+        providerStore.persistProviders(updated)
+        // 旧单键兼容 (DreamWorker 等仍读 api_key/api_endpoint/model_name)
+        try {
+            vault.store("api_endpoint", provider.endpoint)
+            vault.store("model_name", provider.model)
+            vault.store("thinking_effort", provider.thinkingEffort.name)
+        } catch (_: Exception) {}
     }
 
     fun updateModelName(model: String) {
@@ -283,7 +326,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             apiSectionExpanded = true, apiKey = "", balance = "",
             selectedProvider = LlmProviderPreset.OPENAI,
             apiEndpoint = LlmProviderPreset.OPENAI.endpoint,
-            modelName = LlmProviderPreset.OPENAI.defaultModel
+            modelName = LlmProviderPreset.OPENAI.defaultModel,
+            thinkingEffort = com.mengpaw.kernel.llm.ThinkingEffort.DEFAULT
         )
     }
 
@@ -294,7 +338,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             apiKey = _state.value.apiKey,
             endpoint = _state.value.apiEndpoint,
             model = _state.value.modelName,
-            balance = _state.value.balance
+            balance = _state.value.balance,
+            thinkingEffort = _state.value.thinkingEffort
         )
         existing.removeAll { it.preset == entry.preset }
         existing.add(entry)
@@ -304,6 +349,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         vault.store("api_key", _state.value.apiKey)
         vault.store("api_endpoint", _state.value.apiEndpoint)
         vault.store("model_name", _state.value.modelName)
+        vault.store("thinking_effort", _state.value.thinkingEffort.name)
         _state.value = _state.value.copy(savedProviders = existing, apiSectionExpanded = false)
     }
 
@@ -320,6 +366,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             apiEndpoint = saved.endpoint,
             modelName = saved.model,
             balance = saved.balance,
+            thinkingEffort = saved.thinkingEffort,
             apiSectionExpanded = true
         )
     }

@@ -63,7 +63,9 @@ class DreamWorker(
 
         val llmProvider = try {
             AdaptiveLlmProvider(endpoint, apiKey, model,
-                networkGate = NetworkConditionMonitor)
+                networkGate = NetworkConditionMonitor,
+                // v0.46.2: 沿用设置页所选思考强度 (旧配置无该键 → 回退官方默认 HIGH)
+                thinkingEffort = com.mengpaw.kernel.llm.ThinkingEffort.fromStorage(vault.retrieve("thinking_effort")))
         } catch (_: Exception) {
             return Result.failure()
         }

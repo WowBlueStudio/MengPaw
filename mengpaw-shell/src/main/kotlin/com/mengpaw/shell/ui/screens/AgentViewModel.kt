@@ -202,12 +202,15 @@ class AgentViewModel : ViewModel() {
         model: String,
         provider: LlmProvider,
         agentLang: PromptEngine.AgentLanguage = PromptEngine.AgentLanguage.CHINESE,
-        swarmRoles: Map<String, SavedProvider>? = null
+        swarmRoles: Map<String, SavedProvider>? = null,
+        /** 思考强度档位 (v0.46.2, 仅 DeepSeek 端点注入) — 供后续新建会话/切换 Agent 沿用。 */
+        thinkingEffort: com.mengpaw.kernel.llm.ThinkingEffort = com.mengpaw.kernel.llm.ThinkingEffort.DEFAULT
     ) {
         sessionFactory.globalEndpoint = endpoint
         sessionFactory.globalApiKey = apiKey
         sessionFactory.globalModel = model
         sessionFactory.globalAgentLang = agentLang
+        sessionFactory.globalThinkingEffort = thinkingEffort
         if (swarmRoles != null) sessionFactory.globalSwarmRoles = swarmRoles
 
         sessions.values.forEach { session ->

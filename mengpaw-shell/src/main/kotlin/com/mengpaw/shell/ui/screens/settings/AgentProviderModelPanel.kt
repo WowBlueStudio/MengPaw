@@ -124,10 +124,22 @@ internal fun AgentProviderModelPanel(
                                         modifier = Modifier.padding(start = ArcoSpacing.sm))
                                 }
                             }
+                            // 思考强度四档 (v0.46.2, 官方仅 DeepSeek 记载 thinking/reasoning_effort)
+                            if (saved.supportsThinkingEffort) {
+                                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                                ThinkingEffortSection(
+                                    strings = state.strings,
+                                    current = saved.thinkingEffort,
+                                    onSelect = { effort ->
+                                        viewModel.updateThinkingEffort(effort)
+                                        onSelectProvider?.invoke(saved.copy(thinkingEffort = effort))
+                                    }
+                                )
+                            }
                             TextButton(onClick = {
-                                viewModel.selectProvider(saved.preset)
-                                viewModel.updateApiKey(saved.apiKey)
-                                viewModel.refreshModels()
+                                // v0.46.2: 按已保存条目抓取 (此前 selectProvider(saved.preset) 会把
+                                // 端点/模型重置为预置默认值, 自定义端点被抹掉)
+                                viewModel.refreshModelsFor(saved)
                             }) {
                                 Icon(Icons.Outlined.Refresh, null, Modifier.size(14.dp))
                                 Spacer(Modifier.width(4.dp))

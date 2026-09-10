@@ -41,7 +41,9 @@ internal class SettingsProviderStore(private val vault: Vault) {
                     apiKey = p.apiKey,
                     endpoint = p.endpoint,
                     model = p.model,
-                    balance = p.balance
+                    balance = p.balance,
+                    // v0.46.2: 旧配置无该字段 → "" → 回退 HIGH (官方默认档)
+                    thinkingEffort = com.mengpaw.kernel.llm.ThinkingEffort.fromStorage(p.thinkingEffort)
                 )
             }
             // 角色模型路由配置（独立 Vault key，损坏则静默跳过）
@@ -53,7 +55,8 @@ internal class SettingsProviderStore(private val vault: Vault) {
                     roles = rolesJson.mapNotNull { (role, p) ->
                         val sp = SavedProvider(
                             preset = try { LlmProviderPreset.valueOf(p.preset) } catch (_: Exception) { LlmProviderPreset.CUSTOM },
-                            apiKey = p.apiKey, endpoint = p.endpoint, model = p.model, balance = p.balance
+                            apiKey = p.apiKey, endpoint = p.endpoint, model = p.model, balance = p.balance,
+                            thinkingEffort = com.mengpaw.kernel.llm.ThinkingEffort.fromStorage(p.thinkingEffort)
                         )
                         if (sp.endpoint.isBlank()) null else role to sp
                     }.toMap()
@@ -97,7 +100,8 @@ internal class SettingsProviderStore(private val vault: Vault) {
                 apiKey = p.apiKey,
                 endpoint = p.endpoint,
                 model = p.model,
-                balance = p.balance
+                balance = p.balance,
+                thinkingEffort = p.thinkingEffort.name
             )
         }
         vault.store(VAULT_KEY_PROVIDERS,  settingsAppJson.encodeToString(ListSerializer(SavedProviderJson.serializer()), jsonList))
@@ -109,7 +113,8 @@ internal class SettingsProviderStore(private val vault: Vault) {
         val jsonMap = roles.mapValues { (_, p) ->
             SavedProviderJson(
                 preset = p.preset.name, apiKey = p.apiKey,
-                endpoint = p.endpoint, model = p.model, balance = p.balance
+                endpoint = p.endpoint, model = p.model, balance = p.balance,
+                thinkingEffort = p.thinkingEffort.name
             )
         }
         vault.store(VAULT_KEY_SWARM_ROLES,
