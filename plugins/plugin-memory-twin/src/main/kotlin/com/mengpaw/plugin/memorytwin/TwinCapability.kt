@@ -76,8 +76,55 @@ data class ModelProfile(
     val contextWindowTokens: Int,
     val supportsVision: Boolean,
     val supportsTools: Boolean,
-    val estimatedQuality: ModelQuality
-)
+    val estimatedQuality: ModelQuality,
+    // ── 2026-09-10 进化: 每个判定都带上"来源", 让路由知道自己凭什么 ──
+    // 全字段带默认值 → 旧版对端能力卡 (无这些字段) 仍可解析, 协议向后兼容。
+    /** 档位来源 (LEARNED 实测 / EXTERNAL 外置规则 / BUILTIN 内置规则 / UNKNOWN 未知)。 */
+    val qualitySource: CapabilitySource = CapabilitySource.UNKNOWN,
+    /** 上下文来源; GUESS = 由档位推断的兜底 (TwinRouter 只给部分分)。 */
+    val ctxSource: CapabilitySource = CapabilitySource.UNKNOWN,
+    /** 视觉判定来源; UNKNOWN = 不知道 (路由中性处理 — 不因"不确定"就扣分)。 */
+    val visionSource: CapabilitySource = CapabilitySource.UNKNOWN,
+    /** 工具判定来源。 */
+    val toolsSource: CapabilitySource = CapabilitySource.UNKNOWN,
+    /** 本机实测证据条数 (0 = 这份画像纯靠声明, 未经实测)。 */
+    val evidenceCount: Int = 0,
+    /** 命中的规则 id — 可追溯"这条判定出自哪条规则"。 */
+    val matchedRuleId: String? = null
+) {
+    /** 未知能力不再被当作"弱": 路由据此中性处理 (见 [TwinRouter])。 */
+    val qualityKnown: Boolean get() = estimatedQuality != ModelQuality.UNKNOWN
+
+    /** 上下文是否已知 (GUESS 也算"猜到", 但已知数值)。 */
+    val ctxKnown: Boolean get() = contextWindowTokens > 0
+
+    /** 一句话摘要 — 供命令展示与能力卡对比表使用。 */
+    fun summary(): String = buildString {
+        append(modelName)
+        append(" | 档=").append(estimatedQuality)
+        if (qualitySource != CapabilitySource.UNKNOWN) append("(").append(qualitySource.shortLabel()).append(")")
+        append(" | 上下文=")
+        append(if (ctxKnown) "${contextWindowTokens / 1000}K(${ctxSource.shortLabel()})" else "未知")
+        append(" | 视觉=")
+        append(
+            when {
+                visionSource == CapabilitySource.UNKNOWN -> "未知"
+                supportsVision -> "支持(${visionSource.shortLabel()})"
+                else -> "不支持(${visionSource.shortLabel()})"
+            }
+        )
+        if (evidenceCount > 0) append(" | 实测证据=").append(evidenceCount).append("条")
+    }
+}
+
+/** 能力来源的中文短标 (命令输出用)。 */
+fun CapabilitySource.shortLabel(): String = when (this) {
+    CapabilitySource.LEARNED -> "实测"
+    CapabilitySource.EXTERNAL -> "外置规则"
+    CapabilitySource.BUILTIN -> "内置规则"
+    CapabilitySource.GUESS -> "推断"
+    CapabilitySource.UNKNOWN -> "未知"
+}
 
 @Serializable
 enum class ModelQuality { HIGH, MEDIUM, BASIC, UNKNOWN }
@@ -113,7 +160,12 @@ class TwinCapabilityCollector(
     private val deviceId: String,
     private val deviceName: String,
     /** P0.4/P3.5: Version sourced from AgentEngine.CORE_VERSION at construction time. */
-    private val mengpawVersion: String = "unknown"
+    private val mengpawVersion: String = "unknown",
+    /**
+     * 工作区 Agent 名 (2026-09-10) — 用于定位该 Agent 的外置模型能力规则文件
+     * `{agent}/twin-model-rules.json`。留空则只用内置规则 + 本机实测证据。
+     */
+    private val agentName: String = ""
 ) {
     private val startTime = System.currentTimeMillis()
 
@@ -233,51 +285,15 @@ class TwinCapabilityCollector(
 
     // ── Model collection ──────────────────────────────────────────
 
-    private fun collectModel(llmProvider: LlmProvider?): ModelProfile {
-        if (llmProvider == null) {
-            return ModelProfile("unknown", "unknown", "UNKNOWN", 0, false, false, ModelQuality.UNKNOWN)
-        }
-        val info = llmProvider.info()
-        // Estimate quality based on model name heuristics
-        val quality = when {
-            info.model.contains("pro", ignoreCase = true) -> ModelQuality.HIGH
-            info.model.contains("flash", ignoreCase = true) -> ModelQuality.MEDIUM
-            info.model.contains("turbo", ignoreCase = true) -> ModelQuality.MEDIUM
-            info.model.contains("mini", ignoreCase = true) -> ModelQuality.BASIC
-            info.model.contains("gpt-5", ignoreCase = true) -> ModelQuality.HIGH
-            info.model.contains("gpt-4", ignoreCase = true) -> ModelQuality.HIGH
-            info.model.contains("claude", ignoreCase = true) -> ModelQuality.HIGH
-            info.model.contains("deepseek-v4", ignoreCase = true) -> ModelQuality.HIGH
-            info.model.contains("deepseek-v3", ignoreCase = true) -> ModelQuality.HIGH
-            info.model.contains("qwen", ignoreCase = true) -> ModelQuality.MEDIUM
-            else -> ModelQuality.BASIC
-        }
-        // Estimate context window
-        val ctxWindow = when {
-            info.model.contains("128k", ignoreCase = true) || info.model.contains("128K") -> 128_000
-            info.model.contains("32k", ignoreCase = true) || info.model.contains("32K") -> 32_000
-            info.model.contains("1m", ignoreCase = true) || info.model.contains("1M") -> 1_000_000
-            quality == ModelQuality.HIGH -> 128_000
-            quality == ModelQuality.MEDIUM -> 32_000
-            else -> 8_000
-        }
-        return ModelProfile(
-            providerName = info.name,
-            modelName = info.model,
-            providerType = info.providerType.name,
-            contextWindowTokens = ctxWindow,
-            // 2026-09-10: 官方 图像理解 指南原文「deepseek-flash 模型支持在文本之外输入图片」—
-            // V4.1 Flash 原生多模态。旧 id `deepseek-v4-flash-vision-exp` 已下线 (其名恰含
-            // "vision" 才会命中旧判定), 规范 id 必须显式登记, 否则孪生误判 DeepSeek 无视觉能力。
-            supportsVision = info.model.contains("vision", ignoreCase = true) ||
-                info.model.contains("vl", ignoreCase = true) ||
-                info.model.contains("deepseek-flash", ignoreCase = true) ||
-                info.model.contains("gpt-4o", ignoreCase = true) ||
-                info.model.contains("gpt-5", ignoreCase = true),
-            supportsTools = quality != ModelQuality.BASIC,
-            estimatedQuality = quality
-        )
-    }
+    /**
+     * 模型能力画像 — 2026-09-10 进化: 判定逻辑整体迁到 [ModelProfileResolver]
+     * (实测证据 > 外置规则 > 内置族级规则 > 档位推断 > 中性未知)。
+     *
+     * 这里曾是一串"名字里有没有 pro/flash/mini/gpt-5"的硬编码猜测, 型号一换代就静默判错,
+     * 且判错直接改变 [TwinRouter] 的路由结论 (DeepSeek 更换规范 id 后视觉能力误判即实例)。
+     */
+    private fun collectModel(llmProvider: LlmProvider?): ModelProfile =
+        ModelProfileResolver.resolve(llmProvider, agentName)
 
     // ── Software collection ───────────────────────────────────────
 
@@ -361,7 +377,8 @@ class TwinCapabilityCollector(
                         val deviceId = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() }
                             catch (_: Exception) { "device-${System.currentTimeMillis()}" }
                         val deviceName = try { android.os.Build.MODEL } catch (_: Exception) { "Android" }
-                        val collector = TwinCapabilityCollector(ctx, deviceId, deviceName)
+                        val collector = TwinCapabilityCollector(ctx, deviceId, deviceName,
+                            agentName = MemoryTwinPlugin.agentName)
                         val card = collector.collect()
                         onCardChange(card)
                     } catch (e: Exception) {

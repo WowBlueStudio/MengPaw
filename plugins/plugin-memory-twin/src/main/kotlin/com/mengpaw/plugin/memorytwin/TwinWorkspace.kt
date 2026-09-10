@@ -15,6 +15,7 @@ import java.security.MessageDigest
  * 同步单元 = 工作区文档文件 (整个 {agent}/ 目录, 排除 CLI.md/inbox/dialog/backup):
  * - 根文档: soul.md profile.md agents.md boost.md trigger.md heartbeat.md trumanshow.md {date}_dream.md
  * - memory/: memory.md (长期) + memory_{date}.md (中期) + project_*_memory.md + archive.md
+ * - 非 .md 白名单 (2026-09-10): twin-model-rules.json (模型能力规则, 见 [SHARED_EXTRA_FILES])
  * - 排除: CLI.md (Android 操作指南, 无需跨设备) / inbox/ (本地任务队列) /
  *         dialog/ (本地对话流) / memory/backup/ (本机安全副本) / *.tmp / *.conflict.*
  *
@@ -28,6 +29,16 @@ object TwinWorkspace {
 
     /** 不同步的文件名 (工作区根)。 */
     private val EXCLUDED_FILES = setOf("CLI.md")
+
+    /**
+     * 工作区根**允许同步的非 .md 文件** (2026-09-10 新增 `twin-model-rules.json`)。
+     *
+     * 为什么破例同步一个 JSON: 模型能力规则要保持"跟上 LLM 迭代", 就必须能在任意一台设备上
+     * 登记并自动扩散 — Agent 在 A 设备学到 `deepseek-flash` 支持图像理解, 同步后 B/C 设备
+     * 的路由立即跟着修正 (**一处学到, 全网共享**)。规则文件本身很小且解析有上限
+     * (见 [ModelCapabilityRules.parseExternal]: 条数/正则长度/文件体积三重限制)。
+     */
+    private val SHARED_EXTRA_FILES = setOf(ModelCapabilityRules.RULES_FILE_NAME)
 
     /** 清单条目: 相对路径 → 哈希 + 修改时间。 */
     data class ManifestEntry(val hash: String, val mtime: Long)
@@ -52,7 +63,8 @@ object TwinWorkspace {
                 if (f.name in EXCLUDED_FILES) continue
                 if (f.name.endsWith(".tmp")) continue
                 if (f.name.contains(".conflict.")) continue
-                if (!f.name.endsWith(".md")) continue
+                // 默认只同步 .md 文档; 根目录白名单文件 (模型能力规则) 例外
+                if (!f.name.endsWith(".md") && f.name !in SHARED_EXTRA_FILES) continue
                 out[rel] = ManifestEntry(sha256(f), f.lastModified())
             }
         }

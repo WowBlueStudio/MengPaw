@@ -9,6 +9,17 @@ package com.mengpaw.plugin.memorytwin
  *
  * The router scores each available twin peer against the task's inferred
  * requirements and returns a ranked recommendation.
+ *
+ * ## 2026-09-10 进化: 能力来自证据, 未知保持中性
+ * 打分依据从"名字猜测"改为 [ModelProfile] 的来源标记 ([CapabilitySource]):
+ * 实测(LEARNED) > 外置规则(EXTERNAL) > 内置规则(BUILTIN) > 档位推断(GUESS) > 未知(UNKNOWN)。
+ * 三条规则:
+ * 1. **只有确实知道的才加减分** — 视觉/上下文/档位未知时中性处理 (0 分), 而不是当作"弱";
+ * 2. **推断值只给部分分** — 由档位猜出来的上下文 (+8) 不如实测/声明的 (+20) 可靠;
+ * 3. **结论可追溯** — 优势/不足文案里带上来源标注, Agent 能看出"这是测出来的还是猜的"。
+ *
+ * 第 1 条是关键: LLM 迭代速度已远超发版节奏, 新模型出现时路由不认识它 —— 旧实现把
+ * "不认识"兜底成 BASIC 并扣分, 于是最新最强的模型永远排在旧型号之后。
  */
 object TwinRouter {
 
@@ -133,8 +144,17 @@ object TwinRouter {
                     else { score -= 10; weaknesses.add("无摄像头") }
                 }
                 req == "model:vision" -> {
-                    if (card.model.supportsVision) { score += 15; strengths.add("视觉模型:${card.model.modelName}") }
-                    else { score -= 5; weaknesses.add("模型不支持视觉") }
+                    // 2026-09-10: 判定带来源 — 只有"确实知道"才加减分;
+                    // 未知能力中性处理 (旧实现把"不知道"当"不支持", 直接 -5)
+                    when {
+                        card.model.visionSource == CapabilitySource.UNKNOWN ->
+                            strengths.add("视觉能力未标注:${card.model.modelName}(实测一次即可自动修正)")
+                        card.model.supportsVision -> {
+                            score += 15
+                            strengths.add("视觉模型:${card.model.modelName}(${card.model.visionSource.shortLabel()})")
+                        }
+                        else -> { score -= 5; weaknesses.add("模型不支持视觉(${card.model.visionSource.shortLabel()})") }
+                    }
                 }
                 req == "hardware:audio" -> {
                     score += 5; strengths.add("音频支持")
@@ -143,14 +163,31 @@ object TwinRouter {
                     score += 5; strengths.add("GPS定位")
                 }
                 req == "context:large" -> {
-                    if (card.model.contextWindowTokens >= 64_000) { score += 20; strengths.add("大上下文:${card.model.contextWindowTokens / 1000}K") }
-                    else { score -= 10; weaknesses.add("上下文较小:${card.model.contextWindowTokens / 1000}K") }
+                    // 上下文按来源分档给分: 实测/声明/外置规则 > 档位推断 (猜的) > 未知(中性)
+                    val m = card.model
+                    when {
+                        !m.ctxKnown ->
+                            strengths.add("上下文未知:${m.modelName}(实测一次即可自动修正)")
+                        m.ctxSource == CapabilitySource.GUESS && m.contextWindowTokens >= 64_000 -> {
+                            score += 8
+                            strengths.add("大上下文(推断):${m.contextWindowTokens / 1000}K")
+                        }
+                        m.contextWindowTokens >= 64_000 -> {
+                            score += 20
+                            strengths.add("大上下文:${m.contextWindowTokens / 1000}K(${m.ctxSource.shortLabel()})")
+                        }
+                        else -> { score -= 10; weaknesses.add("上下文较小:${m.contextWindowTokens / 1000}K") }
+                    }
                 }
                 req == "reasoning:high" -> {
-                    when (card.model.estimatedQuality) {
-                        ModelQuality.HIGH -> { score += 20; strengths.add("强推理模型:${card.model.modelName}") }
-                        ModelQuality.MEDIUM -> { score += 5; strengths.add("中等推理:${card.model.modelName}") }
-                        else -> { score -= 10; weaknesses.add("推理能力较弱") }
+                    val m = card.model
+                    when (m.estimatedQuality) {
+                        ModelQuality.HIGH -> { score += 20; strengths.add("强推理模型:${m.modelName}(${m.qualitySource.shortLabel()})") }
+                        ModelQuality.MEDIUM -> { score += 5; strengths.add("中等推理:${m.modelName}(${m.qualitySource.shortLabel()})") }
+                        ModelQuality.BASIC -> { score -= 10; weaknesses.add("推理能力较弱(${m.qualitySource.shortLabel()})") }
+                        // 未知档位中性处理 — 新模型往往正是最强的一档, "不认识"不该成为扣分理由
+                        // (旧实现兜底 BASIC, 于是任何新模型都会被老型号压住, 与 LLM 迭代节奏相悖)
+                        ModelQuality.UNKNOWN -> strengths.add("推理档位未知:${m.modelName}(实测后自动判定)")
                     }
                 }
                 req == "software:browser" -> {

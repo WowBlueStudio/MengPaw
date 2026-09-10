@@ -141,6 +141,25 @@ class TwinWorkspaceTest {
     }
 
     @Test
+    fun `模型能力规则文件纳入同步_其它非md仍排除`() {
+        // 2026-09-10: 规则文件按根目录白名单破例同步 —
+        // Agent 在一台设备登记/修正的模型能力必须能扩散到全部设备 (一处学到, 全网共享),
+        // 否则"跟上 LLM 迭代"只能停在单机。
+        val root = workspaceRoot()
+        root.mkdirs()
+        File(root, "soul.md").writeText("# soul")
+        File(root, ModelCapabilityRules.RULES_FILE_NAME).writeText("""{"version":1,"rules":[]}""")
+        File(root, "random.json").writeText("{}")   // 白名单外的非 md 仍不同步
+        File(root, "notes.txt").writeText("plain")
+
+        val manifest = TwinWorkspace.buildManifest(agentName)
+        assertEquals(
+            setOf("soul.md", ModelCapabilityRules.RULES_FILE_NAME),
+            manifest.keys.toSet()
+        )
+    }
+
+    @Test
     fun `相同工作区哈希一致 修改后不一致 (同步收敛判定依据)`() {
         val ws = File(DataPaths.AGENTS, "a")
         ws.mkdirs()
