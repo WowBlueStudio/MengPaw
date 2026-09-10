@@ -1603,6 +1603,15 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
    retired 正则; tag / release 条目 / CHANGELOG 历史原样保留。**删除前先确认 `plugins.json` 无引用**
    (本次 28 条 id / 12 条 downloadUrl 全部指向当前 `plugins-v*`, 无一条指向 v0.20.x), 否则会剪断在线安装链路。
 
+⑤ **"本地孤立 tag"的判定与清除**: 主仓库有一条本地 tag `plugins-v0.3.0` (2026-08-10 建, 远端两个平台都没有
+   ——当天在宿主仓库与 connectors 仓库各建了一次同名 tag, 只推了 connectors 那条)。判定**不能靠列表比对**:
+   Gitee `GET /tags` 单页上限 100 且排序与本地不同, 直接 Compare-Object 会误报 37 条"仅本地"; 权威判定是
+   单 tag 端点 —— GitHub `GET repos/{r}/git/ref/tags/{name}`(不存在即 404)、Gitee
+   `GET /v5/repos/{o}/{r}/tags/{name}`(不存在即 404)。确认从未推送过之后, `git tag -d <name>` 是**纯本地**
+   操作, 不构成"改写仓库历史"; 清完再用 `gh api .../tags?per_page=100 --paginate` 全量比对, 本地与远端
+   tag 集合应**逐个一致** (本次 136 = 136)。注解 tag 注意 `git tag -d` 回显的是 **tag 对象 sha**, 与
+   `git log -1 <tag>` 显示的 commit sha 不同, 不是删错了对象。
+
 
 
 
