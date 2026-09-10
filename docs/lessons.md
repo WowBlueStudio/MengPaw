@@ -1474,5 +1474,21 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
    `dataEvents/reasoningChunks/rawLen/jsonLike/anomalousContent`, ReAct 空响应记录
    `mode=reasoning_only|empty_stream` 与 `reasoning_chars`。
 
+⑬ **连通性/协议自检脚本 `scripts/check-deepseek.ps1` (v0.46.3 随仓库提供)**: 四步体检 —
+   ① `GET /models` 认证+连通, ② `GET /user/balance` 账户可用 (402 余额不足是另一种故障, 别与空响应混淆),
+   ③ 用**与 MengPaw 一致的请求体** (thinking+reasoning_effort+stream_options+stream) 打一次流式对话并统计
+   `data` 行/正文/思维链/finish_reason, ④ **上游协议体检**: 行尾是否 LF 分帧、分片是否携带 `"usage": null`、
+   是否完全没有 `data:` 行 (中转站未流式)。密钥按 环境变量(Process→User→Machine) → DSH 凭据文件 顺序解析,
+   **脚本不打印/不落盘密钥**; 结论行直接给出"服务端正常 → 问题在客户端"或异常项。
+   2026-09-10 实测: `/models` 200 (列出 `deepseek-flash`, `deepseek-v4-pro`), 余额 ¥65 可用,
+   流式对话 200/2.5s 正文 31 字符 + 思维链 611 字符 finish=stop, **分片 307 处 `"usage": null`** — 正是
+   v0.46.2 及更早版本"全线空响应"的触发条件, 脚本已把它标成 `[!]` 提示行。
+   注意: **`DEEPSEEK_API_KEY` 并不在环境变量里** — 它存放在 `%DSH_HOME%\.credentials.yaml` 的
+   `DEEPSEEK_API_KEY` 字段 (reasonix.toml 的 `api_key_env` 只是约定名); 脚本两条来源都兜。
+   同期观察: `GET /models` 现已**只列** `deepseek-flash` 与 `deepseek-v4-pro` (旧 id
+   `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 仍可调用但不再出现在列表里) — 预置表按官方
+   文档保留三 id, 待官方文档同步后再定默认型号 (见 §46 ①)。
+
+
 
 
