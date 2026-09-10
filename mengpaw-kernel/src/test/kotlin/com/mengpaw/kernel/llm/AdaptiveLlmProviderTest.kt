@@ -133,6 +133,34 @@ class AdaptiveLlmProviderTest {
     }
 
     @Test
+    fun `思考型端点默认输出上限提高到16K_其余保持4096`() {
+        // 官方 思考模式 文档: DeepSeek V4 思考模式默认开启且 effort 默认 high,
+        // 思维链与正文共享 max_tokens — 4096 常被思考吃满导致 content 为空 (空响应)
+        val deepseek = AdaptiveLlmProvider.AdaptiveConfig.forEndpoint("https://api.deepseek.com/chat/completions")
+        assertEquals(AdaptiveLlmProvider.AdaptiveConfig.THINKING_ENDPOINT_MAX_TOKENS, deepseek.maxTokens)
+        assertEquals(16384, deepseek.maxTokens)
+
+        val openai = AdaptiveLlmProvider.AdaptiveConfig.forEndpoint("https://api.openai.com/v1/chat/completions")
+        assertEquals(4096, openai.maxTokens)
+        val kimi = AdaptiveLlmProvider.AdaptiveConfig.forEndpoint("https://api.moonshot.cn/v1/chat/completions")
+        assertEquals(4096, kimi.maxTokens)
+    }
+
+    @Test
+    fun `provider构造默认配置随端点自适应_deepseek更高`() {
+        val ds = AdaptiveLlmProvider("https://api.deepseek.com/chat/completions", "sk-x", "deepseek-v4-flash")
+        assertEquals(16384, ds.config.maxTokens)
+        val oa = AdaptiveLlmProvider("https://api.openai.com/v1/chat/completions", "sk-x", "gpt-5.6")
+        assertEquals(4096, oa.config.maxTokens)
+        // 显式传入的配置不被覆盖 (调用方自定上限优先)
+        val explicit = AdaptiveLlmProvider(
+            "https://api.deepseek.com/chat/completions", "sk-x", "deepseek-v4-flash",
+            config = AdaptiveLlmProvider.AdaptiveConfig(maxTokens = 2048)
+        )
+        assertEquals(2048, explicit.config.maxTokens)
+    }
+
+    @Test
     fun `llm fallback exhausted exception message`() {
         val cause = RuntimeException("Connection refused")
         val ex = LlmFallbackExhaustedException("LLM exhausted: Connection refused", cause)

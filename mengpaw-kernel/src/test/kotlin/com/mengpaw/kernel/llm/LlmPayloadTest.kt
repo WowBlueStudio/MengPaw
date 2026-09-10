@@ -114,6 +114,64 @@ class LlmPayloadTest {
         assertNull(parsed.usage)
     }
 
+    // ── 思考强度四档 (v0.46.2, 官方 思考模式 文档原文) ─────────────────────
+
+    @Test
+    fun `思考强度Max_High_Low_注入thinking与reasoning_effort`() {
+        for (effort in listOf(ThinkingEffort.MAX, ThinkingEffort.HIGH, ThinkingEffort.LOW)) {
+            val body = buildRequestBody(
+                model = "deepseek-v4-flash",
+                config = AdaptiveLlmProvider.AdaptiveConfig(),
+                messages = listOf(mapOf("role" to "user", "content" to "hi")),
+                stream = true,
+                thinkingEffort = effort
+            )
+            assertTrue("$effort 应开启思考: $body", body.contains("\"thinking\":{\"type\":\"enabled\"}"))
+            assertTrue("$effort 应带强度: $body", body.contains("\"reasoning_effort\":\"${effort.wire}\""))
+        }
+    }
+
+    @Test
+    fun `思考强度Off_只发disabled不带强度`() {
+        val body = buildRequestBody(
+            model = "deepseek-v4-flash",
+            config = AdaptiveLlmProvider.AdaptiveConfig(),
+            messages = listOf(mapOf("role" to "user", "content" to "hi")),
+            thinkingEffort = ThinkingEffort.OFF
+        )
+        assertTrue("Off 档走官方 disabled: $body", body.contains("\"thinking\":{\"type\":\"disabled\"}"))
+        assertFalse("关闭思考时不得带 reasoning_effort: $body", body.contains("reasoning_effort"))
+    }
+
+    @Test
+    fun `不传档位时请求体不含thinking字段_保持既有行为`() {
+        val body = buildRequestBody(
+            model = "deepseek-v4-flash",
+            config = AdaptiveLlmProvider.AdaptiveConfig(),
+            messages = listOf(mapOf("role" to "user", "content" to "hi"))
+        )
+        assertFalse(body.contains("thinking"))
+        assertFalse(body.contains("reasoning_effort"))
+    }
+
+    @Test
+    fun `思考档位仅DeepSeek端点注入_其它端点返回null`() {
+        assertEquals(ThinkingEffort.OFF, effectiveThinkingEffort("deepseek", ThinkingEffort.OFF))
+        assertNull("OpenAI 官方未记载该字段, 不得注入", effectiveThinkingEffort("openai", ThinkingEffort.HIGH))
+        assertNull(effectiveThinkingEffort("kimi", ThinkingEffort.MAX))
+        assertNull(effectiveThinkingEffort("glm", ThinkingEffort.LOW))
+    }
+
+    @Test
+    fun `思考档位默认High_未知持久化值回退默认`() {
+        assertEquals(ThinkingEffort.HIGH, ThinkingEffort.DEFAULT)
+        assertEquals(ThinkingEffort.OFF, ThinkingEffort.fromStorage("off"))
+        assertEquals(ThinkingEffort.MAX, ThinkingEffort.fromStorage("MAX"))
+        assertEquals(ThinkingEffort.HIGH, ThinkingEffort.fromStorage(null))
+        assertEquals(ThinkingEffort.HIGH, ThinkingEffort.fromStorage(""))
+        assertEquals(ThinkingEffort.HIGH, ThinkingEffort.fromStorage("legacy-value"))
+    }
+
     @Test
     fun `请求体不回显思维链_保持role和content线形`() {
         val body = buildRequestBody(

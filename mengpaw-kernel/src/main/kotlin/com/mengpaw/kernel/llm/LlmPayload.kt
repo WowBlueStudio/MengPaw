@@ -70,7 +70,14 @@ internal fun buildRequestBody(
      * thinking mode must be passed back to the API")。仅 DeepSeek 端点启用 —
      * OpenAI 等其它兼容端点不接受该字段, 传了会 400。
      */
-    includeReasoning: Boolean = false
+    includeReasoning: Boolean = false,
+    /**
+     * 思考强度档位 (v0.46.2, 仅 DeepSeek 端点 — 调用方经 [effectiveThinkingEffort] 过滤):
+     * 官方 思考模式 文档原文 `{"thinking":{"type":"enabled/disabled"}}` +
+     * `{"reasoning_effort":"low/high/max"}` 为顶层字段 (OpenAI 格式即请求体顶层)。
+     * null = 不注入 (保持既有行为)。
+     */
+    thinkingEffort: ThinkingEffort? = null
 ): String {
     // 前缀形状监测 — system prompt 变化即告警
     val firstMsg = messages.firstOrNull()
@@ -84,6 +91,12 @@ internal fun buildRequestBody(
         // v0.46.0 P0: 流式必须请求 include_usage — 否则 OpenAI 兼容系(DeepSeek 等)流式响应
         // 默认不带 usage, SseStreamParser.onUsage 永不触发 → lastUsage 恒 null → 用量统计(调用/输入输出Token)恒 0
         if (stream) putJsonObject("stream_options") { put("include_usage", true) }
+        // DeepSeek 思考强度 (v0.46.2): 四档 Max/High/Low/Off — 官方 思考模式 文档原文
+        // 顶层 `thinking.type` 开关 + `reasoning_effort` 强度; Off 档只发 disabled (不发强度)。
+        thinkingEffort?.let { effort ->
+            putJsonObject("thinking") { put("type", if (effort.thinkEnabled) "enabled" else "disabled") }
+            if (effort.thinkEnabled) put("reasoning_effort", effort.wire)
+        }
         putJsonArray("messages") {
             messages.forEach { msg ->
                 addJsonObject {

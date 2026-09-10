@@ -25,7 +25,13 @@ class AdaptiveLlmProvider(
     private val apiEndpoint: String,
     private val apiKey: String,
     private val model: String = "gpt-4.1",
-    private val config: AdaptiveConfig = AdaptiveConfig(),
+    // 默认配置按端点自适应 (DeepSeek 思考模式默认开启 → 需更大的输出上限, 见 forEndpoint)
+    internal val config: AdaptiveConfig = AdaptiveConfig.forEndpoint(apiEndpoint),
+    /**
+     * 思考强度档位 (v0.46.2, DeepSeek Max/High/Low/Off 四档) — 仅 DeepSeek 端点生效
+     * (经 [effectiveThinkingEffort] 过滤); 默认 [ThinkingEffort.DEFAULT] = 官方默认 high。
+     */
+    private val thinkingEffort: ThinkingEffort = ThinkingEffort.DEFAULT,
     /** v0.29.2: 网络状况门卫 (shell 注入) — 断网快返 + 弱网放慢退避; null = 不启用 */
     private val networkGate: NetworkConditionGate? = null
 ) : LlmProvider {
@@ -41,7 +47,29 @@ class AdaptiveLlmProvider(
         val maxRetries: Int = 5,         // 6 total attempts (0..5)
         val retryDelayMs: Long = 500,
         val fallbacks: List<FallbackEntry> = emptyList()
-    )
+    ) {
+        companion object {
+            /**
+             * 思考模式默认开启的端点输出上限 (v0.46.2) — 2026-09-10 用户实测「空响应」根因修复。
+             *
+             * 官方依据 (api-docs.deepseek.com/zh-cn/guides/thinking_mode): DeepSeek V4 系列
+             * 「思考模式默认打开，且 effort 默认为 high」, 思维链经 `reasoning_content` 返回 —
+             * 思维链与正文**共享** `max_tokens` 输出预算。预设默认 4096 在新版 V4.1 Flash
+             * (2026-09-10 上线, flash 线路统一由它承接) 下常被思考阶段吃满 → 响应只有
+             * `reasoning_content`、`content` 为空 → 内核空响应防御报「模型未返回任何内容（空响应）」。
+             *
+             * DeepSeek 官方最大输出 384K, 提高上限只放宽上限、不改变实际用量与计费
+             * (费用按实际生成 token 计), 故把思考型端点默认上限提到 16K。
+             * 本项目定案「不注入任何思考参数」保持不变 — 仅调输出预算。
+             */
+            const val THINKING_ENDPOINT_MAX_TOKENS = 16384
+
+            /** 端点自适应默认配置: DeepSeek (思考默认开启) 用更大输出上限, 其余保持默认。 */
+            fun forEndpoint(endpoint: String): AdaptiveConfig =
+                if (endpoint.contains("deepseek.com")) AdaptiveConfig(maxTokens = THINKING_ENDPOINT_MAX_TOKENS)
+                else AdaptiveConfig()
+        }
+    }
 
     // v0.29.2: 共享客户端 (LlmHttpClient) — 连接池/超时/keep-alive 集中配置,
     // 会话/角色切换不再重建连接池重新握手 (Reasonix 对照 #2)
@@ -215,7 +243,9 @@ class AdaptiveLlmProvider(
         // OpenAI 等端点不接受该字段, 传了会 400 (官方 Copilot CLI 集成页明示)。
         val requestBody = buildRequestBody(
             model, config, messages, stream,
-            includeReasoning = providerType == "deepseek"
+            includeReasoning = providerType == "deepseek",
+            // 思考强度仅注入 DeepSeek (v0.46.2, 官方 思考模式 文档)
+            thinkingEffort = effectiveThinkingEffort(providerType, thinkingEffort)
         )
         KernelLog.d("MengPawLatency", "S-OPEN ${apiEndpoint.take(48)}")
         val response = client.post(apiEndpoint) {
