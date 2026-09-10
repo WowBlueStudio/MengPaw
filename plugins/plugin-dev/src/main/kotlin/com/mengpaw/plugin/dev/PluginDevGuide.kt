@@ -101,7 +101,7 @@ dev-plugin（插件开发工具）是随 APK 内置的插件，让 **Agent 与�
 - `dev.plugin.examples` — 内嵌文件/网络插件参考模板
 - `plugin.marketplace` / `plugin.search` — 浏览与安装插件
 - `self.ports` — 端口一览
-- `.claude/skills/plugin-dev.md` — 发布流程 skill（开发机侧）
+- 技能 `mengpaw-plugin-dev`（开发机侧, `~/.agents/skills/`）— 发布流程 skill
 """.trimIndent()
 
     /** 确保文档已写入用户可读路径, 返回文件路径. */

@@ -492,7 +492,8 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 ### 15.8 版本规则（用户定案）
 
 - X (0.X.0) 发布正式版递增；Y (0.0.Y) 变更底层逻辑递增；Z (0.0.Z) 修复漏洞/UI 递增
-- 提交指令自动化（版本号→CHANGELOG→Tag→Push→APK 上传）已由 .claude/skills/release.md 接管
+- 提交指令自动化（版本号→CHANGELOG→Tag→Push→APK 上传）现由技能 `mengpaw-release` 承担
+  （历史路径 `.claude/skills/release.md` 已于 2026-09-10 退役，git 历史可溯）
 
 ### 15.9 OEM 速查（国产 ROM 保活）
 

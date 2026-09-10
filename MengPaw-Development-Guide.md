@@ -1445,7 +1445,7 @@ interface Plugin {
 仓库工具链（见 [PLUGIN_DEV_GUIDE.md](PLUGIN_DEV_GUIDE.md) §5.3）：
 - `scripts/build-plugins.ps1` — 批量构建主仓库内置插件 AAR（16 模块），自动回写 plugins.json 的 checksum/size/changelog（remote 条目不动）
 - `scripts/validate-plugins.ps1` — 校验 plugins.json（字段/命名空间/checksum 与 AAR 一致性）
-- 插件 AAR 发布用独立 tag `plugins-vX.Y.Z`；`.claude/skills/plugin-dev.md` 为插件开发/发布 skill
+- 插件 AAR 发布用独立 tag `plugins-vX.Y.Z`；插件开发/发布走技能 `mengpaw-plugin-dev`（`~/.agents/skills/`）
 
 **远程插件产物必须是 dex 容器（v0.35.6 铁律）**：`PluginRuntimeLoader` 用
 `DexClassLoader` 加载下载产物，只接受含 `classes.dex` 的 JAR——标准 Android

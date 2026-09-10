@@ -1,6 +1,6 @@
-# MengPaw MCP Server — stdio-based MCP server for Claude Code integration
+# MengPaw MCP Server — stdio-based MCP server (任一带 MCP 的 agent 客户端均可接入)
 # Reads JSON-RPC from stdin, forwards to MengPaw Agent via ACP, writes response to stdout.
-# Configure in .claude/mcp.json:
+# 客户端配置示例 (Claude Code / Codex / DSH 等 MCP 客户端的 mcpServers 段):
 # {
 #   "mcpServers": {
 #     "mengpaw": {
@@ -9,6 +9,7 @@
 #     }
 #   }
 # }
+# 注: 历史上写的是 `.claude/mcp.json` (Claude Code 专用路径) — 已于 2026-09-10 去工具化。
 
 $ErrorActionPreference = "SilentlyContinue"
 $uri = "http://localhost:9876/acp"

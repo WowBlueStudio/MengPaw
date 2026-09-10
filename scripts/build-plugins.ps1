@@ -134,4 +134,4 @@ Write-Host "Next steps:" -ForegroundColor White
 Write-Host "  1. .\scripts\validate-plugins.ps1        # validate plugins.json" -ForegroundColor Gray
 Write-Host "  2. git add plugins.json && git commit" -ForegroundColor Gray
 Write-Host "  3. gh release create plugins-v$Version $ReleaseDir\*.aar --title 'Plugin AARs v$Version'" -ForegroundColor Gray
-Write-Host "  4. push both remotes (see .claude/skills/plugin-dev.md)" -ForegroundColor Gray
+Write-Host "  4. push both remotes (see skill mengpaw-plugin-dev / mengpaw-release)" -ForegroundColor Gray

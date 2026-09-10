@@ -244,7 +244,7 @@ typealias CommandHandler = suspend (List<String>, ExecutionContext) -> Execution
    - `scripts/build-plugins.ps1` — 批量构建插件 AAR，自动回写 checksum/size/changelog 到 plugins.json
    - `scripts/validate-plugins.ps1` — 校验 plugins.json（字段/命名空间/checksum 与 AAR 一致性）
    - 产物上传 GitHub Release：独立 tag `plugins-vX.Y.Z`
-   - 详见 `.claude/skills/plugin-dev.md`（插件开发/发布 skill）
+   - 详见技能 `mengpaw-plugin-dev`（`~/.agents/skills/`；项目内 `.claude/skills/plugin-dev.md` 副本已于 2026-09-10 退役）
 
 ---
 
