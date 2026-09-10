@@ -20,6 +20,20 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 /**
+ * JsonNull 安全的对象取值 (v0.46.3 P0) — kotlinx 的 `JsonElement.jsonObject` 在元素是
+ * **JsonNull** 时抛 IllegalArgumentException (`?.` 只挡 Kotlin null, 挡不住 JsonNull)。
+ *
+ * 该缺陷 2026-09-10 造成 DeepSeek 全线"模型未返回任何内容（空响应）":
+ * V4.1 Flash 起**每个 SSE 分片都带 `"usage": null`**, 旧实现 `json["usage"]?.jsonObject`
+ * 逐片抛异常, 又被 SSE 循环的 `catch (_: Exception)` 连整条事件一起吞掉 →
+ * 正文/思维链增量恒为 0, 只有末尾那个带真实 usage 的分片能解析 (所以用量统计反而正常)。
+ */
+internal fun JsonElement?.objOrNull(): JsonObject? = this as? JsonObject
+
+/** JsonNull 安全的数组取值 (同 [objOrNull])。 */
+internal fun JsonElement?.arrOrNull(): JsonArray? = this as? JsonArray
+
+/**
  * 取 OpenAI 兼容正文增量 (v0.46.3 加固) — 官方形态是纯字符串, 但部分网关/多模态型号把
  * `content` 下发为**内容块数组** `[{"type":"text","text":"…"}]`。旧实现直接 `jsonPrimitive`
  * 取值, 遇数组抛 IllegalArgumentException, 又被 SSE 循环的 `catch (_: Exception)` 连**整条事件**
@@ -50,9 +64,9 @@ internal fun shapeOf(element: JsonElement?): String = when (element) {
  * 会被上层误判为「模型未返回任何内容」。解析失败返回 null (绝不把原始报文当回答)。
  */
 internal fun extractMessageContentOrNull(body: String): String? = try {
-    val root = Json.parseToJsonElement(body).jsonObject
-    val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject
-    val carrier = choice?.get("message")?.jsonObject ?: choice?.get("delta")?.jsonObject
+    val root = Json.parseToJsonElement(body).objOrNull() ?: return null
+    val choice = root["choices"].arrOrNull()?.firstOrNull().objOrNull()
+    val carrier = choice?.get("message").objOrNull() ?: choice?.get("delta").objOrNull()
     carrier?.get("content")?.let { extractTextDelta(it) }
 } catch (_: Exception) {
     null
@@ -210,9 +224,9 @@ internal fun buildRequestBody(
 internal fun parseBody(body: String, maxFallbackLength: Int? = null): ParsedLlmBody {
     val fallback = maxFallbackLength?.let { body.take(it) } ?: body
     return try {
-        val root = Json.parseToJsonElement(body).jsonObject
-        // 1. 提取 usage
-        val usage = root["usage"]?.jsonObject?.let { u ->
+        val root = Json.parseToJsonElement(body).objOrNull() ?: return ParsedLlmBody(fallback, null, null)
+        // 1. 提取 usage (v0.46.3: objOrNull — "usage":null 时不得抛异常, 否则整包解析失败回退原文)
+        val usage = root["usage"].objOrNull()?.let { u ->
             val pt = u["prompt_tokens"]?.jsonPrimitive?.int ?: 0
             val ct = u["completion_tokens"]?.jsonPrimitive?.int ?: 0
             val tt = u["total_tokens"]?.jsonPrimitive?.int ?: (pt + ct)
@@ -221,14 +235,14 @@ internal fun parseBody(body: String, maxFallbackLength: Int? = null): ParsedLlmB
             TokenUsage(pt, ct, tt, ch, cm)
         }
         // 2. 提取 content / reasoning (OpenAI / GLM 等 OpenAI 兼容格式)
-        // v0.46.3: content 支持"内容块数组"形态 (extractTextDelta) — 直接 jsonPrimitive
-        // 取值遇数组会抛异常并静默丢事件, 表现为永久空响应
-        val choice = root["choices"]?.jsonArray?.firstOrNull()?.jsonObject
-        val message = choice?.get("message")?.jsonObject
-        val delta = choice?.get("delta")?.jsonObject
+        // v0.46.3: content 支持"内容块数组"形态 (extractTextDelta); 全部取值走 objOrNull/arrOrNull
+        // — "usage":null / "message":null 之类合法 JSON 空值不得让整包解析抛异常
+        val choice = root["choices"].arrOrNull()?.firstOrNull().objOrNull()
+        val message = choice?.get("message").objOrNull()
+        val delta = choice?.get("delta").objOrNull()
         val rawContent = extractTextDelta(message?.get("content"))
             ?: extractTextDelta(delta?.get("content"))
-            ?: extractTextDelta(root["data"]?.jsonArray?.firstOrNull()?.jsonObject?.get("content"))
+            ?: extractTextDelta(root["data"].arrOrNull()?.firstOrNull().objOrNull()?.get("content"))
         // MiniMax 默认格式: thinking 内联在 content 的 <think>...</think> 标签内 (官方原文:
         // "content 字段会包含 <think> 标签内容") — 响应侧剥离到 reasoning, 绝不混入正文
         val (content, inlineThink) = rawContent?.let(ReasoningExtractor::stripThinkTags) ?: (null to null)

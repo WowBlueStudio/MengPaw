@@ -51,6 +51,7 @@ internal suspend fun consumeSseStream(
     var dataEvents = 0
     var reasoningChunks = 0
     var anomalousShapes = 0
+    var malformedEvents = 0
     // v0.41.0: MiniMax 默认格式 thinking 内联在 content 的 <think>...</think> 标签内 —
     // 剥离后思维链走 onReasoning, 正文走 onToken, 标签本身丢弃
     val thinkSplitter = ThinkTagSplitter(
@@ -88,13 +89,13 @@ internal suspend fun consumeSseStream(
         if (data == "[DONE]") break
 
         try {
-            val json = Json.parseToJsonElement(data).jsonObject
+            val json = Json.parseToJsonElement(data).objOrNull() ?: continue
 
             // ── 流内错误 (v0.46.3 修复) ──
             // 上游用 HTTP 200 + `data: {"error":{...}}` 报错时, 旧实现把该事件当"无 content 的行"
             // 静默跳过, 上层只见零增量 → 一律误报「模型未返回任何内容（空响应）」, 真实原因被完全掩盖。
             // 现解析出原始报错文案并上抛: 限流/过载保留可重试语义, 其余按 400 直通用户可见。
-            json["error"]?.jsonObject?.let { err ->
+            json["error"].objOrNull()?.let { err ->
                 val msg = err["message"]?.jsonPrimitive?.contentOrNull ?: err.toString().take(200)
                 val status = streamErrorStatus(msg)
                 KernelLog.w("SseStreamParser", "流内错误 (status=$status): ${msg.take(160)}")
@@ -103,8 +104,12 @@ internal suspend fun consumeSseStream(
 
             dataEvents++
 
+            // ⚠ v0.46.3 P0 修复: 必须用 objOrNull (JsonNull 安全) ——
+            // DeepSeek V4.1 Flash 起每个分片都带 `"usage": null`, 旧写法 `json["usage"]?.jsonObject`
+            // 遇 JsonNull 抛 IllegalArgumentException, 又被下方 catch 连整条事件吞掉 →
+            // 所有正文/思维链增量归零, 上层报「模型未返回任何内容（空响应）」。
             // Capture usage from inline usage event (some APIs include it in last chunk)
-            json["usage"]?.jsonObject?.let { u ->
+            json["usage"].objOrNull()?.let { u ->
                 onUsage(TokenUsage(
                     promptTokens = u["prompt_tokens"]?.jsonPrimitive?.int ?: 0,
                     completionTokens = u["completion_tokens"]?.jsonPrimitive?.int ?: 0,
@@ -118,9 +123,9 @@ internal suspend fun consumeSseStream(
             // OpenAI 兼容: {choices:[{delta:{content|reasoning_content}}]}
             // Anthropic 兼容: {type:"content_block_delta", delta:{type:"text_delta", text}}
             //   (api.deepseek.com/anthropic 等 Anthropic Messages SSE 格式)
-            val openAiDelta = json["choices"]?.jsonArray
-                ?.firstOrNull()?.jsonObject
-                ?.get("delta")?.jsonObject
+            val openAiDelta = json["choices"].arrOrNull()
+                ?.firstOrNull().objOrNull()
+                ?.get("delta").objOrNull()
 
             if (openAiDelta != null) {
                 // Visible text delta (OpenAI standard) — 先经 <think> 剥离器分流
@@ -157,7 +162,7 @@ internal suspend fun consumeSseStream(
                 // - delta.type == "thinking_delta" → delta.thinking (思维链, v0.40.4)
                 // - delta.type == "text_delta" → delta.text (正文)
                 // - signature_delta / message_start / message_delta / ping 等自然跳过 (签名不回放)
-                val deltaObj = json["delta"]?.jsonObject
+                val deltaObj = json["delta"].objOrNull()
                 if (deltaObj != null) {
                     val thinking = ReasoningExtractor.anthropicThinkingDelta(deltaObj)
                     val text = thinking
@@ -176,8 +181,14 @@ internal suspend fun consumeSseStream(
             }
         } catch (e: LlmApiException) {
             throw e   // 流内错误必须上抛 — 不得落进下面的"跳过畸形行"分支
-        } catch (_: Exception) {
-            // Skip malformed SSE lines (same resilience as Reasonix readStream)
+        } catch (e: Exception) {
+            // 畸形行容错 (同 Reasonix readStream): 保留跳过语义, 但**必须留痕** —
+            // v0.46.3 的 P0 正是"事件内异常被静默吞掉"导致正文全丢却毫无线索 (每次流最多记 3 条)
+            if (malformedEvents < 3) {
+                malformedEvents++
+                KernelLog.w("SseStreamParser",
+                    "跳过畸形事件 #$malformedEvents: ${e::class.simpleName}: ${e.message?.take(140)}")
+            }
         }
     }
 

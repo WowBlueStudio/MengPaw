@@ -188,6 +188,24 @@ class LlmPayloadTest {
     }
 
     @Test
+    fun `usage为null或字段缺失_不得整包解析失败回退原文`() {
+        // v0.46.3: DeepSeek V4.1 Flash 起响应可能带 "usage": null —
+        // 旧实现 json["usage"]?.jsonObject 抛异常 → 整包回退原始报文当回答 (更严重的错)
+        val nullUsage = parseBody("""{"choices":[{"message":{"content":"正文"}}],"usage":null}""")
+        assertEquals("正文", nullUsage.content)
+        assertNull(nullUsage.usage)
+
+        val nullMessage = parseBody("""{"choices":[{"message":null,"delta":{"content":"增量正文"}}],"usage":null}""")
+        assertEquals("增量正文", nullMessage.content)
+
+        // 无正文时按既定契约回退原始报文 (maxFallbackLength=null 即全文; RemoteApi 传 500 截断) —
+        // 这里只钉住"usage:null 不会让整包解析抛异常"这一修复点, 不改回退语义
+        val emptyChoices = parseBody("""{"choices":[],"usage":null}""")
+        assertEquals("""{"choices":[],"usage":null}""", emptyChoices.content)
+        assertNull(emptyChoices.usage)
+    }
+
+    @Test
     fun `整包JSON兜底_合法取正文_垃圾返回null`() {
         assertEquals("整包正文", extractMessageContentOrNull("""{"choices":[{"message":{"content":"整包正文"}}]}"""))
         assertEquals("增量正文", extractMessageContentOrNull("""{"choices":[{"delta":{"content":"增量正文"}}]}"""))

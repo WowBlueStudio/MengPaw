@@ -162,6 +162,49 @@ class SseStreamParserTest {
     // ── v0.46.3 空响应加固 (用户实测「换了三个 DeepSeek id 仍报空响应」后的链路加固) ──
 
     @Test
+    fun `每个分片带usage_null_正文仍须正常分流`() = runTest {
+        // ⚠ 2026-09-10 DeepSeek V4.1 Flash 上线后, 每个 SSE 分片都带 "usage": null。
+        // 旧实现 `json["usage"]?.jsonObject` 遇 JsonNull 抛 IllegalArgumentException,
+        // 被整事件 catch 吞掉 → 正文/思维链增量恒 0, 上层报「模型未返回任何内容（空响应）」。
+        // 本用例即该事故的真实线格式回归。
+        val r = runSse(
+            """
+            data: {"id":"1","model":"deepseek-flash","choices":[{"index":0,"delta":{"role":"assistant","content":"","reasoning_content":"想想"},"finish_reason":null}],"usage":null}
+
+            data: {"id":"1","model":"deepseek-flash","choices":[{"index":0,"delta":{"content":"你好","reasoning_content":"继续想"},"finish_reason":null}],"usage":null}
+
+            data: {"id":"1","model":"deepseek-flash","choices":[{"index":0,"delta":{"content":"，世界"},"finish_reason":"stop"}],"usage":null}
+
+            data: {"id":"1","model":"deepseek-flash","choices":[],"usage":{"prompt_tokens":55,"completion_tokens":36,"total_tokens":91}}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("你好，世界", r.content)
+        assertEquals(listOf("你好", "，世界"), r.tokens)
+        assertEquals(listOf("想想", "继续想"), r.reasoning)
+        assertEquals(1, r.usages.size)
+        assertEquals(36, r.usages[0].completionTokens)
+    }
+
+    @Test
+    fun `字段为null或空数组_不得抛异常丢事件`() = runTest {
+        val r = runSse(
+            """
+            data: {"choices":[],"usage":null,"error":null}
+
+            data: {"choices":[{"delta":null,"finish_reason":"stop"}],"usage":null}
+
+            data: {"choices":[{"delta":{"content":"正文","reasoning_content":null}}],"usage":null}
+
+            data: [DONE]
+            """.trimIndent()
+        )
+        assertEquals("正文", r.content)
+        assertEquals(listOf("正文"), r.tokens)
+    }
+
+    @Test
     fun `content为内容块数组_不得整事件丢弃`() = runTest {
         // 部分网关/多模态型号把 content 下发为 [{type:text,text:…}] —
         // 旧实现 jsonPrimitive 取数组抛异常 → 整条事件被 catch 吞掉 → 正文永久零增量
