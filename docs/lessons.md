@@ -1495,6 +1495,68 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
    `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 仍可调用但不再出现在列表里) — 预置表按官方
    文档保留三 id, 待官方文档同步后再定默认型号 (见 §46 ①)。
 
+## 47. MengPaw-Browser v0.10.0 发布实操 (PDF 预览) + GitHub HTTPS 阻断兜底 (2026-09-10)
+
+① **browser 独立仓库的 versionCode 是手写的, 不像主仓库自动算**: 主仓库 shell 的 versionCode 由
+   `build.gradle.kts` 按 `Y*1000+Z` 自动生成, 而 `mengpaw-browser/build.gradle.kts` 里是**字面量**
+   (`versionCode = 15`)。本次 v0.9.0→v0.10.0 必须手动 15→16, 漏改会导致**同 versionCode 覆盖安装失败 /
+   自动更新链路不识别**。发布前固定核对四处: `gradle.properties` 的 `mengpaw.browser.version` +
+   `build.gradle.kts` 的 `.orElse("<ver>")` 兜底值 + `versionCode` + 产物复核
+   (`aapt2 dump badging` → `versionCode='16' versionName='0.10.0'`)。
+
+② **GitHub HTTPS 阻断的判定顺序 (本次实证)**: 症状为 `git push`/`ls-remote` 报
+   `Recv failure: Connection was reset` 或 `Failed to connect to github.com:443`(21s 超时), 但三条探针全通 —
+   `Test-NetConnection github.com:443` = True、`gh api user` 正常、`ssh -T -p 443 git@ssh.github.com` 能走到
+   publickey 阶段 → **TCP / API / SSH 都通, 只有 github.com 的 git 端点被重置 (SNI 级拦截)**。
+   教训: "连不上" ≠ 断网; 先用这三条探针把范围切到"仅 git over HTTPS", 再决定走重试还是兜底。
+
+③ **重试参数与恢复先例**: 本轮首次连续 10 次 (每次 21s 超时 + 60s 间隔) 全败 → 转兜底通道完成发布;
+   收尾复验时再试 **45s 间隔, 第 6 次恢复** (`ls-remote` 成功), 随后 `git push` 返回
+   `Everything up-to-date` 属正常 (远端已由兜底通道推好)。→ 重试用 **45s 间隔 × 5~8 次** 即可判定
+   "暂时不通"; 与 §26/§20 的 GitHub 断网同族, 但**恢复概率与间隔长度相关**, 别用 60s+ 的长间隔硬耗。
+
+④ **SSH-over-443 兜底完整流程 (可复用, 全程自动无需用户操作)**:
+   ① 生成临时密钥 → ② `gh api -X POST /user/keys` 登记 → ③
+   `GIT_SSH_COMMAND="ssh -i <key> -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p 443"`
+   配合 `git push ssh://git@ssh.github.com:443/<owner>/<repo>.git master` (tag 同) → ④ **用完立即
+   `gh api -X DELETE /user/keys/<id>` 删除密钥 + 清临时目录** (本次发布后复核账号下只剩原有密钥)。
+   两个坑: (a) **`ssh-keygen -N` 的空口令在 PowerShell 里会写成字面量 `""`** — `-N '""'` 生成的密钥带口令,
+   之后 ssh 会**交互式等密码直到命令超时** (本次实测挂死 180s, 误判成"SSH 也被墙"); 必须经
+   `cmd /c "ssh-keygen -t ed25519 -N `"`" -f <path>"` 传真正的空口令, 并用 `ssh-keygen -y -f <key>`
+   (BatchMode) 先验无口令再登记。 (b) **`gh release create` 不能替代 push**: release 的 tag 必须指向远端
+   已存在的 commit, 远端没这个 commit 时 `--target <sha>` 直接失败 → **必须先推 git 对象再建 release**。
+
+⑤ **"清理与项目无关的参考文件"的判定标准 = 双向 grep 零引用**: 本次删除 browser 仓库根的
+   `extension-manifest.json` (早期"浏览器作为扩展"时代的残留: 内容是 Chromium 扩展 + `maxCoreVersion 0.8.1`)。
+   删除前在本仓库 `git grep -n "extension-manifest"` **且**在主仓库 grep
+   `minCoreVersion|maxCoreVersion|extension-manifest` 双向证伪 — kernel 的 `ManifestParser` 只解析
+   "传进来的 JSON"、无文件名约定, 故无消费方。清理口径同时定死: **不 clean 构建缓存**
+   (`.gradle`/`.kotlin`/`build/` 一律不动)、`git status --porcelain` 为空、全树匹配
+   `*.tmp|*.bak|*.tgz|node_modules` 为空。
+
+⑥ **大体积前端库入 assets 的正确取法 (pdf.js 实测)**: 单文件 CDN 只够 `pdf.min.js`(285KB) /
+   `pdf.worker.min.js`(1.04MB); 而 **CMap 有 168 个 `.bcmap`**, 逐个 CDN 下载不现实 → 直接取 **npm tarball**
+   `https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-<ver>.tgz` 再 `tar -xzf` 拷贝 `package/cmaps/`
+   (assets 合计约 2.4MB)。注意: 中文 PDF 若未内嵌 ToUnicode, **文字抽取依赖外部 CMap**, 省掉 cmaps
+   就会"能看不能选"; 且**下载中断会产出截断 tar**(本次首下 7.7MB 报 `Truncated tar archive`),
+   必须按最终体积复核 (完整 tgz 9.86MB) 后重下。
+
+⑦ **WebView 承载 PDF 预览的落地要点 (与 §14.9 的 md 预览同族)**: 预览页经 `loadUrl(file://cache)` 宿主后
+   **模板内相对路径全部失效** → 把 `viewer.css`/`pdf.min.js`/`viewer.js` 改写为 `file:///android_asset/...`
+   绝对路径 (Markdown 大内容回退同法); pdf.js 的 worker 与 cmaps 走 file:// 上的 XHR/Worker,
+   **必须开 `allowFileAccessFromFileURLs` + `allowUniversalAccessFromFileURLs`** (API30+ 仅 deprecation 告警,
+   功能未失效), 否则 worker 静默降级、CMap 拉不到。文档数据用 **base64 内联 + 写缓存 html 后 loadUrl**
+   规避 `loadDataWithBaseURL` 的 data: 大内容截断, 代价约 1.33x 内存 → 因此设 30MB 单文件上限。
+   **红线未做真机自测时, 交付物必须显式标注**: CHANGELOG 写明"真机自测待做 (pdf.js 渲染/文字层/中文 CMap
+   需人工验证)", 不把未验证项写成已完成。
+
+⑧ **本轮发布口径**: browser 独立仓库 0.9.0→**0.10.0** (versionCode 16); 门禁
+   `:mengpaw-browser:testDebugUnitTest` **26 用例全绿** (AdBlocker 8 + SmartNavigate 13 + PdfUtil 5) +
+   `assembleRelease --build-cache --console=plain`(**未 clean**) + apksigner 验签
+   `CN=MengPaw, OU=Studio, O=WowBlue`; 双平台 release 均附 `mengpaw-browser-v0.10.0-release.apk`
+   (11,354,677 B), Gitee 侧 `releases/latest` 复核 = v0.10.0; **plugins.json 无变更** (browser 仓库不含
+   插件市场, 跳过 §2.5); 设备交付走自动更新链路, 未做 ADB 推送。
+
 
 
 
