@@ -40,7 +40,6 @@ internal object PluginClassRegistry {
         "error-report-plugin" to "com.mengpaw.plugin.errorreport.ErrorReportPlugin",
         "browser-push-plugin" to "com.mengpaw.plugin.browserpush.BrowserPushPlugin",
         "browser-search-plugin" to "com.mengpaw.plugin.browsersearch.BrowserSearchPlugin",
-        "browser-mcp-plugin" to "com.mengpaw.plugin.browsermcp.BrowserMcpPlugin",
         "update-plugin" to "com.mengpaw.plugin.update.UpdatePlugin",
         "office-plugin" to "com.mengpaw.plugin.office.OfficePlugin",
         "memory-twin-plugin" to "com.mengpaw.plugin.memorytwin.MemoryTwinPlugin",

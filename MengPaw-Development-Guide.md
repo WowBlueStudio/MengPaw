@@ -85,7 +85,7 @@ MengPaw（檬爪）— 微内核 + 插件架构的 Agent 框架。当前运行�
 
 > `sys` 命名空间 (84 命令) 在 `mengpaw-core` 中实现；`framework` 由 `plugin-framework` 捆绑插件提供。均通过 `additionalNamespaces` 注入 AgentEngine，与其他插件同级。`evolution` 命名空间在内核注册 (PipelineManager)，默认实现由同捆插件 plugin-evolution 注册为 EvolutionProvider SPI。
 
-**插件命名空间权威推导 (v0.31.0 起, `pluginNamespaceFor` 全内核唯一来源)**: 插件 id 去 `-plugin`/`-ext` 后缀；`memory-*` 前缀插件取剩余部分 (memory-twin→`twin`)；特例 — `browser-mcp-plugin` 命令键自带 `mcp.` 前缀 → ns=`browser` (拼出 `browser.mcp.*`)，`browser-search-plugin` 命令键为短名 → ns=`search`。注册 (PluginManager/PipelineManager)、搜索索引、CLI.md 插件表、MCP 桥工具解析 (McpServer) 全部经此推导，严禁在别处再写 `removeSuffix` 特例。配套 `scripts/validate-plugins.ps1` 6c 交叉校验同规则。
+**插件命名空间权威推导 (v0.31.0 起, `pluginNamespaceFor` 全内核唯一来源)**: 插件 id 去 `-plugin`/`-ext` 后缀；`memory-*` 前缀插件取剩余部分 (memory-twin→`twin`)；特例 — `browser-search-plugin` 命令键为短名 → ns=`search`（`browser-mcp-plugin` 的 ns=`browser` 特例已随该插件退役于 2026-09-10 删除）。注册 (PluginManager/PipelineManager)、搜索索引、CLI.md 插件表、MCP 桥工具解析 (McpServer) 全部经此推导，严禁在别处再写 `removeSuffix` 特例。配套 `scripts/validate-plugins.ps1` 6c 交叉校验同规则。
 
 **命令搜索索引 (BM25) 机制 (v0.31.0 修复脱节)**: `CommandSearch` 索引 = `BuiltinCommandIndex` 静态种子 (~150 条精编中英同义词) + `PluginManager.registerSearchIndex` 动态条目 (插件激活) + `SysExecutor` 初始化补种 (84 条 sys.* 命令带中文同义词表, kernel 种子无法覆盖 Android 反射实现)。**可用性由 self.search 按真实注册表 (CommandRegistry.has) 过滤** — 种子命中但执行器不存在的命令 (插件未安装/停用) 不外泄, 过滤后不足时从候选中补足; 插件激活即恢复可搜, 无需动索引本身 (避免 removeByNamespace 破坏精编种子)。**中文整词组查询** (v0.31.0): 中文无空格分词, 自然语言词组 ("批量验证"/"添加日历事件") 整词作 token 此前 score=0 完全漏配 (自检报告 "日历/屏幕/录音" 搜不到 sys.* 的深层根因), 现对 3+ 字 CJK token 追加字符级双字滑动窗口 ("校验插件"→校验/验插/插件) — 词内任意双字独立命中, 英文与 2 字词不动 (原评分格局不变)。
 
@@ -341,7 +341,11 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 |------|---------|------|
 | plugin-browser-push | browser.push | push, push.pending, push.accept, push.reject (4) |
 | plugin-browser-search | search | extract, summary, engines, clean, md, outputs, clear (7) |
-| plugin-browser-mcp | browser | browser.mcp.tools/status/invoke (命令键自带 mcp. 前缀, ns=browser) |
+
+> `plugin-browser-mcp`（browser.mcp.tools/status/invoke）已于 2026-09-10 **彻底退役** —
+> 其依赖的 `127.0.0.1:9880` HTTP 桥在浏览器 v0.9.0 退役（`McpHttpServer`/`BrowserMcpTools` 已删），
+> 模块、市场登记（plugins.json）、宿主映射（PluginClassRegistry/PluginRegistrar/AppRootTwin 反射注册）、
+> 命名空间特例与端口常量 `Ports.BROWSER_MCP` 全部同步移除。
 
 #### 工具链 (3)
 
@@ -406,7 +410,6 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | plugin-comfy | comfy | nodes, workflow, run, preview, export (5) | 0.3.0 |
 | plugin-browser-push | browser.push | push, push.pending, push.accept, push.reject (4) | 0.3.0 |
 | plugin-browser-search | search | extract, summary, engines, clean, md, outputs, clear (7) | 0.3.0 |
-| plugin-browser-mcp | browser | browser.mcp.tools/status/invoke (3) | 0.3.0 |
 
 **连接器（6 + 共享库）**
 
@@ -860,7 +863,6 @@ MCP 协议极其简单——JSON-RPC + 三个原语（tool / resource / prompt�
 | 端口 | 绑定 | 用途 | 认证 |
 |---|---|---|---|
 | `9876` (ACP) | **0.0.0.0 全部接口** (设备间通道, 故意) | 设备↔设备直连: 会话同步/工作区/委托/REVOKE/MCP-over-ACP | peerId↔来源 IP 绑定 (`AcpServer.bindPeerIp`); 敏感类型额外要求 IP 匹配; 设备级认证靠 `sharedSecret` (pairing 派生, 未设置启动即告警) |
-| `9880` (BROWSER_MCP) | `127.0.0.1` 回环 | Shell ↔ 浏览器进程 HTTP 桥 — **已退役 (v0.9.0)**, 浏览器控制统一 am 桥单通道 | Bearer token (`McpHttpServer` 无 token 一律 401, fail-closed) |
 | `9881` (MCP_LOCAL) | `127.0.0.1` 回环 | 本机 MCP 网关 (plugin-framework) | Bearer token (`McpGatewayAuth`, v0.34.3 — 无/错 token 一律 401 fail-closed; token 持久化 `配置/mcp_gateway_token`, `self.mcp token` 获取) |
 
 安全要点: 唯一暴露到局域网的是 ACP `9876` — 这是设备间通道的设计意图 (对端设备必须能直连)。防护层级: ① msg.from 不可信, 所有 peerId 绑定到实际来源 socket IP; ② 敏感消息类型 (会话/工作区/REVOKE/MCP) 额外要求来源 IP 与该 peerId 历史通信 IP 匹配, 防局域网冒充; ③ 生产配对必须传 `AcpServer(profile, port, derivedSecret)` 派生密钥, 不要使用 `AcpHolder` 默认占位值。其余两端口回环绑定, 仅本机进程可达。
@@ -1130,8 +1132,11 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 #### search — 搜索分析 (3)（外置插件，mengpaw-connectors）
 `extract <url>` | `summary <url>` | `engines`
 
-#### browser.mcp — 浏览器 MCP (3)（外置插件，mengpaw-connectors）
-`tools` | `status` | `invoke`
+#### browser.mcp — 浏览器 MCP（**已退役，2026-09-10 移除**）
+
+> 原外置插件 `plugin-browser-mcp`（`browser.mcp.tools/status/invoke`）依赖 `127.0.0.1:9880` HTTP 桥，
+> 该桥已于浏览器 v0.9.0 退役（决策 #7，`McpHttpServer`/`BrowserMcpTools` 删除，控制统一走 am 桥）。
+> 现浏览器控制走内置 `page.*` / `browser.*` 命令（43 条，经 am 桥），本节不再有对应插件命令。
 
 ### 5.2.1 Linux 命令通道（v0.36.x）
 
@@ -1352,7 +1357,11 @@ Fail-secure 完整性守护：启动时校验 APK 签名，检测篡改→安全
 - **QoS 自适应**: WiFi 全量同步 60s / 移动网络仅关键记忆 300s / 按流量计费暂停自动同步
 - **手动 IP 容错**: mDNS 不可用时可通过 `twin.peer.add <ip>` 手动添加节点, 绕过多播隔离
 
-### 6.8 设备内 MCP 桥认证 (P0 修复, v0.32.1+)
+### 6.8 设备内 MCP 桥认证 (P0 修复, v0.32.1+；**该桥与插件已于 2026-09-10 彻底退役**)
+
+> 退役说明: 本节所述 `127.0.0.1:9880` HTTP 桥及外置插件 `plugin-browser-mcp` 已随浏览器 v0.9.0
+> 决策 #7（控制统一 am 桥单通道）整体移除 — 模块/市场登记/宿主映射/命名空间特例/端口常量全部删净。
+> 保留本节作为"回环端口也必须有认证"的历史经验（同类错误不得重犯）。
 
 Shell ↔ 浏览器进程的 127.0.0.1:9880 HTTP 桥 (`McpHttpServer`/`BrowserMcpPlugin`) 此前**零认证** — 设备上任意 app 可连接回环端口完全控制浏览器。现修复为 Bearer token 认证：
 

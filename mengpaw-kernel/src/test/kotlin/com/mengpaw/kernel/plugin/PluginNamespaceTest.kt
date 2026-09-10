@@ -8,18 +8,11 @@ import org.junit.Test
 
 /**
  * 命名空间权威推导测试 — FIX(自检报告 P0-1):
- * browser-mcp-plugin 命令键自带 "mcp." 前缀 → ns 取 "browser" 拼出 browser.mcp.*;
  * browser-search-plugin 命令键为短名 → ns 取 "search" 拼出 search.clean/md/...;
  * memory-twin-plugin → "twin"; 普通插件去 "-plugin"/"-ext" 后缀。
+ * (browser-mcp-plugin 的 ns=browser 特例已随插件退役于 2026-09-10 删除 — 不再有该断言。)
  */
 class PluginNamespaceTest {
-
-    @Test
-    fun `browser-mcp plugin maps to browser namespace`() {
-        assertEquals("browser", pluginNamespaceFor("browser-mcp-plugin"))
-        // 验证拼接语义: browser + "." + "mcp.tools" = browser.mcp.tools
-        assertEquals("browser.mcp.tools", "browser" + "." + "mcp.tools")
-    }
 
     @Test
     fun `browser-search plugin maps to search namespace`() {

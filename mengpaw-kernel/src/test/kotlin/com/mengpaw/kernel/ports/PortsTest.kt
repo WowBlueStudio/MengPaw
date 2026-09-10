@@ -9,16 +9,17 @@ import org.junit.Test
 class PortsTest {
 
     @Test
-    fun `ALL contains all 9 ports with unique values`() {
-        assertEquals(9, Ports.ALL.size)
+    fun `ALL contains all 8 ports with unique values`() {
+        // 9880 (BROWSER_MCP) 随 browser-mcp 插件退役于 2026-09-10 从端口表移除
+        assertEquals(8, Ports.ALL.size)
         val values = Ports.ALL.map { it.port }
         assertTrue("端口必须唯一: $values", values.distinct().size == values.size)
     }
 
     @Test
-    fun `ACP BROWSER_MCP and MCP_LOCAL are inbound`() {
+    fun `ACP and MCP_LOCAL are inbound`() {
         val inbound = Ports.ALL.filter { it.direction == Ports.Direction.INBOUND }
-        assertEquals(listOf(Ports.ACP, Ports.BROWSER_MCP, Ports.MCP_LOCAL), inbound.map { it.port })
+        assertEquals(listOf(Ports.ACP, Ports.MCP_LOCAL), inbound.map { it.port })
     }
 
     @Test

@@ -436,26 +436,6 @@
       "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）\n### 发行\n- **全部外置插件迁移至独立仓库 mengpaw-connectors (MIT)**: 源码随仓库发布, 重新打包上传, 下载指向 plugins-v0.4.0。"
     },
     {
-      "id": "browser-mcp-plugin",
-      "name": "浏览器 MCP",
-      "version": "0.3.0",
-      "type": "native",
-      "author": "MengPaw",
-      "description": "将 MP 浏览器能力暴露为 MCP 工具：导航/截图/点击/输入/提取/调用（MP浏览器专用）",
-      "status": "remote",
-      "downloadUrl": "https://github.com/WowBlueStudio/mengpaw-connectors/releases/download/plugins-v0.5.0/plugin-browser-mcp-release.jar",
-      "mirrorUrl": "https://gitee.com/wowbluestudio/mengpaw-connectors/releases/download/plugins-v0.5.0/plugin-browser-mcp-release.jar",
-      "minCoreVersion": "0.8.0",
-      "commands": [
-        "browser.mcp.tools",
-        "browser.mcp.status",
-        "browser.mcp.invoke"
-      ],
-      "checksum": "sha256:85fb648f023bff2c35cf4b008df99efddb5d03433765ae421a40e764065a7fdb",
-      "size": 12509,
-      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）\n### 发行\n- **全部外置插件迁移至独立仓库 mengpaw-connectors (MIT)**: 源码随仓库发布, 重新打包上传, 下载指向 plugins-v0.4.0。"
-    },
-    {
       "id": "root-plugin",
       "name": "Root 权限",
       "version": "",

@@ -44,8 +44,9 @@ include(":plugin-update")
 include(":plugin-office")
 
 // plugin-agent-loop and plugin-agent-mission removed — modes now built into AgentEngine
-// Remote plugins (update/translate/error-report/render/comfy/browser-push/browser-search/browser-mcp)
+// Remote plugins (update/translate/error-report/render/comfy/browser-push/browser-search)
 // and connectors moved to standalone repo mengpaw-connectors (MIT) — see COMMERCIAL-LICENSE.md §11.4
+// (browser-mcp 已于 2026-09-10 彻底退役: 依赖的 9880 桥在浏览器 v0.9.0 退役)
 
 // Map plugin modules to their directory under plugins/
 project(":plugin-framework").projectDir = File(rootDir, "plugins/plugin-framework")

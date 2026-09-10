@@ -145,12 +145,14 @@ override suspend fun onUninstall() {
 | 框架 | 类型 | 通道 | 连接器 | 状态 |
 |---|---|---|---|---|
 | MengPaw | ACP | HTTP :9876 | 内置 (内核) | ✅ |
-| MP 浏览器 | MCP | HTTP :9880 | 外置 remote (plugin-browser-mcp, mengpaw-connectors) | 📦 已发布 |
 | 任意 MCP 客户端 | MCP | HTTP :9881 | 内置 (plugin-framework 网关) | ✅ |
 | OpenClaw / Qclaw | WS | :18789 | connector-openclaw | 📦 已发布 |
 | QwenPaw / Coze | REST | :8080 | connector-qwenpaw | 📦 已发布 |
 | Claude Code / Claude Desktop | MCP | 本机 :9881 | 直连 (零插件) | ✅ |
 | Hermes / Trea / Cursor / OpenCode / Codex / Kimi... | ? | 待验证 | 待接入 (按 §3 SPI) | ⏳ |
+
+> **已退役**: 「MP 浏览器 | MCP | HTTP :9880」（外置 `plugin-browser-mcp`）已于 2026-09-10 摘除 —
+> 9880 桥随浏览器 v0.9.0 退役，浏览器控制现由浏览器内置 `page.*`/`browser.*` 命令经 am 桥提供。
 
 ---
 

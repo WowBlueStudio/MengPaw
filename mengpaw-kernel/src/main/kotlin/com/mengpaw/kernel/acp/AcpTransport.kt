@@ -158,7 +158,7 @@ class AcpHttpTransport(
                 // 安全机制: AcpServer.bindPeerIp 将 peerId 绑定到来源 socket IP (防 msg.from 伪造),
                 // 敏感消息类型 (会话/工作区/REVOKE/MCP) 额外要求 IP 绑定匹配;
                 // 设备级认证依赖 AcpServer sharedSecret (pairing 时派生), 未设置时启动即告警。
-                // 对比: 本机专用端口 (BROWSER_MCP 9880 / MCP_LOCAL 9881) 显式绑定 127.0.0.1。
+                // 对比: 本机专用端口 (MCP_LOCAL 9881) 显式绑定 127.0.0.1。
                 serverSocket = ServerSocket(port, 50, InetAddress.getByName("0.0.0.0"))
                 while (running && isActive) {
                     try {

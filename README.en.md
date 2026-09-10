@@ -84,8 +84,8 @@ mengpaw/
 
 > ⭐ = bundled in the Shell APK · 💎 = WowBlue original (leading similar frameworks, see below)
 >
-> The 13 external plugins (update / translate / error-report / render / comfy / browser-push /
-> browser-search / browser-mcp + 5 connectors) live in the standalone repo
+> The 12 external plugins (update / translate / error-report / render / comfy / browser-push /
+> browser-search + 6 connectors) live in the standalone repo
 > [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors) (MIT) and are
 > installed from the plugin marketplace via `plugin.install`.
 

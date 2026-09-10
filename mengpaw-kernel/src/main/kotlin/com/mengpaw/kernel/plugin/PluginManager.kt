@@ -13,15 +13,16 @@ import java.io.File
  * 插件 id → CLI 命名空间 — 全内核唯一权威推导。
  * 所有 removeSuffix 特例收敛于此, 注册/搜索索引/CLI.md/MCP 桥显示名天然一致。
  * 特例来源 (插件源码命令键):
- * - browser-mcp-plugin 命令键自带 "mcp." 前缀 → ns 取 "browser" 拼出 browser.mcp.*
  * - browser-search-plugin 命令键为短名 → ns 取 "search" 拼出 search.clean/md/...
  * - memory-twin-plugin 命令键为短名 → ns 取 "twin"
+ *
+ * 注: browser-mcp-plugin 的 ns 特例 (ns=browser → browser.mcp.*) 已随该插件退役 (2026-09-10,
+ * 9880 HTTP 桥退役) 删除 — 命令面无生产者, 保留特例只会误导后续维护。
  */
 fun pluginNamespaceFor(id: String): String {
     val base = id.removeSuffix("-plugin").removeSuffix("-ext")
     if (base.startsWith("memory-")) return base.removePrefix("memory-")
     return when (base) {
-        "browser-mcp" -> "browser"
         "browser-search" -> "search"
         else -> base
     }
@@ -291,7 +292,7 @@ class PluginManager(
     /**
      * Derive namespace from plugin id. E.g. "fs-plugin" → "fs",
      * "memory-twin-plugin" → "twin". (memory-plugin 已融入内核 agent.memory.*)
-     * 委托 [pluginNamespaceFor] 权威推导 (browser-mcp/browser-search 特例在共享函数内)。
+     * 委托 [pluginNamespaceFor] 权威推导 (browser-search 短名特例在共享函数内)。
      */
     private fun namespaceFor(id: String): String = pluginNamespaceFor(id)
 

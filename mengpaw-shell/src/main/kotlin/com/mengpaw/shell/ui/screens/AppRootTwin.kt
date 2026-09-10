@@ -99,13 +99,8 @@ internal suspend fun startAcpForTwin(ctx: android.content.Context, agentName: St
         try {
             val pm = com.mengpaw.kernel.plugin.PluginManager.globalInstance
             val mcpServer = com.mengpaw.kernel.mcp.McpServer(pm)
-            // 反射注册 browser-mcp provider (remote 插件, 未安装时跳过) — 暴露 6 个浏览器 MCP 工具
-            try {
-                val pluginCls = Class.forName("com.mengpaw.plugin.browsermcp.BrowserMcpPlugin")
-                val provider = pluginCls.getDeclaredConstructor().newInstance()
-                    as com.mengpaw.kernel.mcp.McpToolProvider
-                mcpServer.registerToolProvider(provider)
-            } catch (_: Exception) {}
+            // browser-mcp 插件 (9880 桥) 已于 2026-09-10 彻底退役 — 原先在此反射注册其
+            // McpToolProvider, 现移除 (浏览器控制统一走 am 桥, 不再经 MCP-over-ACP)。
             server.enableMcpBridge(mcpServer)
             android.util.Log.i("MengPawTwin", "MCP-over-ACP 桥已启用")
         } catch (e: Exception) {
