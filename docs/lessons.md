@@ -770,8 +770,11 @@ AppStrings 305 字段 data class → 构造参数 305 > ART 255 寄存器上限 
 更新 plugins.json（URL + checksum + size，version 不动）→ 双仓库提交 →
 tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个 URL 全 200 →
 推送主仓库让 plugins.json 上线。发布前查 `gh auth status` + `GITEE_TOKEN` 三作用域，
-缺令牌先补再动手；Gitee release 用 `scripts/gitee-release.ps1`
-（mengpaw-connectors 分支是 main，须传 `-TargetBranch main`）。
+缺令牌先补再动手；Gitee release 现行做法见 `mengpaw-release` 技能 §5.3 —
+`Invoke-RestMethod` 建 release（`target_commitish` 必填）+ `curl.exe -F` 上传 APK
+（`access_token` 必须放 URL query，放 form 返回 401）。
+> 旧脚本 `scripts/gitee-release.ps1`（v0.3.0 时代，hardcode `releases\plugins-dex\*.jar`）
+> 已于 2026-09-10 删除：当前发布流程不再依赖任何本地 Gitee 脚本。
 
 ### 18. Linux 命令通道 + 命令去重发布经验 (2026-08-11)
 
@@ -873,7 +876,8 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
   browser-mcp/search/push，仅重新打包上传这 3 个 (tag plugins-v0.5.0)，其余 10 个保持
   plugins-v0.4.0 的 URL/checksum 不动；plugins.json 也只更新改动的条目
   (downloadUrl/mirrorUrl → 新 tag + 新 checksum/size)。增量发布避免无效产物与噪音。
-- **gitee-release.ps1 数组参数坑**: `powershell -File script.ps1 -Assets a,b,c` 会把数组
+- **PowerShell 数组参数坑 (原 `gitee-release.ps1` 教训, 脚本已删除, 坑仍适用于同类脚本)**:
+  `powershell -File script.ps1 -Assets a,b,c` 会把数组
   当单字符串 (带逗号)，引号包裹则残留 `"D` 前缀 (DriveNotFound) — 必须用
   `powershell -Command "& 'script.ps1' -Assets @('a','b','c')"` 内联调用才能正确绑定数组。
 - **GitHub 连接不稳定 (国内网络)**: 本次发布多次 `Failed to connect to github.com:443` /
@@ -1380,6 +1384,8 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
 - **PowerShell `-P` 参数**: `-Pmengpaw.useLocal=true` 被 PS 当开关解析 → "Task not found" 或解析错。用 `--` 或引号 `"-Pkey=value"` 包裹。
 - **git commit 粒度污染**: 用 `git rm` 删除 browser 模块后, 若暂存区残留删除记录, 后续 `git add` 特定文件时**不会**清掉已暂存的删除 → 第一个 commit 会混入 browser 删除。**提交前先 `git status` 核对暂存区**, 或用 `git add -p` 精确控制。
 - **gitee-upload.sh 过时脚本**: 含硬编码 token (红线违规) + v0.6.1 旧 browser APK 路径, 已被 gitee-release.ps1 取代 → 直接删除。
+  gitee-release.ps1 自身亦于 2026-09-10 删除 (v0.3.0 时代尾部, 引用 `releases\plugins-dex\*.jar`) —
+  发布流程现统一走 `mengpaw-release` 技能 (GitHub 用 gh CLI, Gitee 用 API, 见 §46 与技能 §5)。
 
 ### 验收口径
 - 主仓库: kernel 80 套件 641 用例 0 失败; `:mengpaw-shell:compileDebugKotlin` 通过; `:plugin-update:testDebugUnitTest` 31 用例通过。
