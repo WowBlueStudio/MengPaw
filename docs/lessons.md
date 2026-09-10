@@ -1440,20 +1440,39 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
    → 教训: 报错"看起来像服务端问题"时, 先用最小复现脚本把**请求体逐项对照**打一遍 (去变量法),
    再回头查客户端; 别在服务端假设上继续堆修改。
 
-⑩ **客户端"零正文"的四条静默路径 (v0.46.3 全部堵住)**: ① **流内错误被静默跳过** — 上游用
-   HTTP 200 + `data: {"error":{...}}` 报错时, 旧实现当"无 content 的行"忽略, 上层一律误报
-   「模型未返回任何内容」, 真实原因 (参数/额度/上下文超限) 完全不可见 → 现解析并上抛
-   `LlmApiException` (限流/过载保留可重试语义, 其余按 400 直通用户, 不白重试 6 次);
-   ② **content 为内容块数组** `[{"type":"text","text":…}]` → 旧 `jsonPrimitive` 抛异常, 被
-   `catch (_: Exception)` 连**整条事件**一起吞掉 → 现 `extractTextDelta` 兼容数组形态, 且 content
-   解析异常不再连带丢弃同事件的 reasoning; ③ **网关忽略 `stream=true` 回整包 JSON** (中转站常见) →
-   无 `data:` 行, 逐行解析零增量 → 现用原始报文采样做非流式兜底 (`extractMessageContentOrNull`,
-   非法 JSON 绝不回退原文当回答); ④ **零诊断线索** → 现零正文流打印
-   `dataEvents/reasoningChunks/rawLen/jsonLike/anomalousContent`, ReAct 空响应记录
-   `mode=reasoning_only|empty_stream` 与 `reasoning_chars`, 下次排查不必靠猜。
+⑩ **真凶: JsonNull 取值抛异常 + 静默吞异常 (v0.46.3 P0, 2026-09-10)**: DeepSeek V4.1 Flash
+   上线后**每个 SSE 分片都带 `"usage": null`**。内核旧写法 `json["usage"]?.jsonObject` 里 `?.`
+   只挡 Kotlin null, **挡不住 kotlinx 的 `JsonNull`** — `JsonNull.jsonObject` 抛
+   IllegalArgumentException, 又被 SSE 循环的 `catch (_: Exception)` 连**整条事件**一起吞掉 →
+   所有正文/思维链增量归零, 上层只能报「模型未返回任何内容（空响应）」; 而末尾那个带真实
+   usage 的分片能正常解析, 所以**用量统计反而正常** (这正是一条极有价值的旁证)。
+   → 教训 (两条, 都属于"静默失败"家族):
+   1. **kotlinx JSON 里 `?.jsonObject` / `?.jsonArray` 是陷阱**: 合法 JSON 空值 (`null`) 会抛异常,
+      必须用 `as? JsonObject` / `as? JsonArray` (本次抽成 `objOrNull()` / `arrOrNull()`); 全仓
+      同类取点已全部替换。
+   2. **兜底 catch 必须留痕**: `catch (_: Exception)` 让一条上游协议演进 (多了个 `"usage":null`)
+      变成全线黑屏且零线索。现每流最多记 3 条 `跳过畸形事件` 警告。
+   实证: 修复前用应用真实栈 (Ktor+OkHttp) 直连官方 API — 178 个事件严格解析 0 失败, 但
+   contentDeltas=0/reasoningDeltas=0 而 usage 有值; 修复后三个 id 分别拿到 21/37/72 字符正文
+   (12/17/37 个增量)。
 
-⑪ **诊断日志只记形状不记内容**: 形态诊断经 `shapeOf()` 输出类型与键名
+⑪ **「换模型也无效」= 客户端问题的强信号 (排查方法论)**: 用户报"切到 deepseek-v4-flash-vision-exp /
+   deepseek-flash 仍报空响应"后, 先直连官方 `/chat/completions` 做 18 次逐项复现 (请求体各变量
+   组合 × 四个模型 id × Agent 式 ReAct 提示词 × max_tokens 4096/16384) — **全部 HTTP 200 且
+   content 非空**, 于是判定"服务端与请求体都正常, 问题在客户端链路"; 随后用**应用真实 HTTP 栈**
+   (临时实弹测试: AdaptiveLlmProvider + 共享 Ktor/OkHttp 客户端 + 同一 SSE 解析器) 复现成功,
+   才定位到 JsonNull。若当时继续在服务端假设上堆修改 (改 max_tokens/改提示词/换模型), 只会
+   一错再错。**排查顺序应是: 官方文档原文 → 最小复现脚本去变量 → 应用真实栈复现 → 才动代码。**
+   临时实弹测试的凭据从 `%DSH_HOME%/.credentials.yaml` 运行时读取, 源码/日志/提交都不含密钥,
+   用后删除该测试文件 (不入库)。
+
+⑫ **诊断日志只记形状不记内容**: 形态诊断经 `shapeOf()` 输出类型与键名
    (`object(keys=content,role)` / `array(size=2)`), 既能定位线上线格式, 又不把模型正文/用户数据写进日志;
-   测试专门断言形态串不含内容值 (`形态描述只含键名与类型_不含内容值`)。
+   测试专门断言形态串不含内容值 (`形态描述只含键名与类型_不含内容值`)。同时补齐: 流内错误
+   (`data: {"error":…}`) 现解析并上抛 (限流/过载保留可重试, 其余 400 直通用户), content 为内容块
+   数组时不再整事件丢弃, 网关忽略 `stream=true` 回整包 JSON 时用原始报文采样兜底, 零正文流打印
+   `dataEvents/reasoningChunks/rawLen/jsonLike/anomalousContent`, ReAct 空响应记录
+   `mode=reasoning_only|empty_stream` 与 `reasoning_chars`。
+
 
 

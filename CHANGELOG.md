@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.46.3 (2026-09-10) — 根治 DeepSeek「模型未返回任何内容（空响应）」+ 流式解析加固
+
+### 修复
+- **DeepSeek 全线「模型未返回任何内容（空响应）」(P0, 用户实测复现)**: 真凶 = DeepSeek V4.1 Flash（2026-09-10 上线）起**每个 SSE 分片都带 `"usage": null`**，而内核旧写法 `json["usage"]?.jsonObject` 的 `?.` 只挡 Kotlin null、**挡不住 kotlinx 的 `JsonNull`**（`JsonNull.jsonObject` 抛 IllegalArgumentException），异常又被 SSE 循环的 `catch (_: Exception)` 连**整条事件**一起吞掉 → 正文/思维链增量全部归零；只有末尾带真实 usage 的分片能解析，所以**用量统计反而正常**。三个 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-flash`）全线受影响，新会话发「你好」一样失败。修复：新增 JsonNull 安全取值 `objOrNull()/arrOrNull()`，`parseBody` / `consumeSseStream` 所有取点替换；SSE 事件内异常不再静默吞掉（每流最多记 3 条 `跳过畸形事件` 警告）。**实弹验证**（应用真实栈 Ktor+OkHttp 直连官方 API）：修复前 contentDeltas=0（178 个事件严格解析 0 失败但零增量），修复后三个 id 分别返回 21 / 37 / 72 字符正文（12 / 17 / 37 个增量）。
+- **流内错误被静默跳过 (P1)**: 上游用 HTTP 200 + `data: {"error":{…}}` 报错时，旧实现当普通行忽略，一律误报「空响应」，真实报错完全不可见。现解析并上抛 `LlmApiException`：限流/过载保留可重试语义，其余按 400 直通用户（不再白重试 6 次）。
+- **content 为内容块数组时整事件被丢弃 (P1)**: `[{"type":"text","text":…}]` 形态在旧实现里 `jsonPrimitive` 抛异常 → 整条事件被吞。现 `extractTextDelta` 兼容数组形态，且 content 异常不再连带丢弃同事件的 reasoning。
+- **网关忽略 `stream=true` 回整包 JSON (P1)**: 此类响应无 `data:` 行，逐行解析得到零增量 → 上层误报空响应。现用原始报文采样做非流式兜底（`extractMessageContentOrNull`，非法 JSON 绝不回退原文当回答）。
+- **零正文缺诊断线索 (P2)**: 零正文流打印 `dataEvents/reasoningChunks/rawLen/jsonLike/anomalousContent`；ReAct 空响应记录 `mode=reasoning_only|empty_stream` 与 `reasoning_chars`；形态诊断经 `shapeOf()` 只输出键名/类型，不含任何模型正文或用户数据。
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.46.3-release.apk` (versionCode 46003)
+- Browser APK: 本轮无变更，不构建；浏览器独立版本线保持不变
+- 插件: 本轮 `plugins/` 与 `plugins.json` 无变更，不打 `plugins-v0.46.3` tag
+- 测试: 全量 **1572 用例 0 failures** (kernel 662 + core 116 + shell 248 + 插件 546)
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
+
 ## v0.46.2 (2026-09-10) — DeepSeek 思考强度四档 + 空响应根因修复 + 模型选择链路修复
 
 ### 新增
