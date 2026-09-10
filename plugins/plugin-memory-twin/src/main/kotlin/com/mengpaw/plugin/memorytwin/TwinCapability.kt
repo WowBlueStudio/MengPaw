@@ -266,8 +266,12 @@ class TwinCapabilityCollector(
             modelName = info.model,
             providerType = info.providerType.name,
             contextWindowTokens = ctxWindow,
+            // 2026-09-10: 官方 图像理解 指南原文「deepseek-flash 模型支持在文本之外输入图片」—
+            // V4.1 Flash 原生多模态。旧 id `deepseek-v4-flash-vision-exp` 已下线 (其名恰含
+            // "vision" 才会命中旧判定), 规范 id 必须显式登记, 否则孪生误判 DeepSeek 无视觉能力。
             supportsVision = info.model.contains("vision", ignoreCase = true) ||
                 info.model.contains("vl", ignoreCase = true) ||
+                info.model.contains("deepseek-flash", ignoreCase = true) ||
                 info.model.contains("gpt-4o", ignoreCase = true) ||
                 info.model.contains("gpt-5", ignoreCase = true),
             supportsTools = quality != ModelQuality.BASIC,
