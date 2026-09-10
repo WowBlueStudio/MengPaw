@@ -185,7 +185,7 @@ This project is developed with AI assistance. Since 2026-08-07 it is maintained 
 | Provider | Endpoint | Default model |
 |----------|----------|--------------|
 | OpenAI | api.openai.com | gpt-4o |
-| DeepSeek | api.deepseek.com | deepseek-v4-flash |
+| DeepSeek | api.deepseek.com | deepseek-flash |
 | Kimi (Moonshot) | api.moonshot.cn | moonshot-v1-8k |
 | GLM (Zhipu) | open.bigmodel.cn | glm-4-plus |
 | Qwen (Tongyi Qianwen) | dashscope.aliyuncs.com | qwen-plus |

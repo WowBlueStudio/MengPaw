@@ -67,7 +67,7 @@ class LlmPayloadTest {
         // v0.41.1 未发布: DeepSeek 思考模式官方要求多轮工具调用时 reasoning_content
         // 必须原样回传, 否则 API 400 — 仅 deepseek 端点 includeReasoning=true
         val body = buildRequestBody(
-            model = "deepseek-v4-pro",
+            model = "deepseek-flash",
             config = AdaptiveLlmProvider.AdaptiveConfig(),
             messages = listOf(
                 mapOf("role" to "system", "content" to "sys"),
@@ -97,7 +97,7 @@ class LlmPayloadTest {
     @Test
     fun `deepseek端点_assistant无思维链时不带reasoning_content键`() {
         val body = buildRequestBody(
-            model = "deepseek-v4-pro",
+            model = "deepseek-flash",
             config = AdaptiveLlmProvider.AdaptiveConfig(),
             messages = listOf(
                 mapOf("role" to "assistant", "content" to "普通回复")
@@ -121,7 +121,7 @@ class LlmPayloadTest {
     fun `思考强度Max_High_Low_注入thinking与reasoning_effort`() {
         for (effort in listOf(ThinkingEffort.MAX, ThinkingEffort.HIGH, ThinkingEffort.LOW)) {
             val body = buildRequestBody(
-                model = "deepseek-v4-flash",
+                model = "deepseek-flash",
                 config = AdaptiveLlmProvider.AdaptiveConfig(),
                 messages = listOf(mapOf("role" to "user", "content" to "hi")),
                 stream = true,
@@ -135,7 +135,7 @@ class LlmPayloadTest {
     @Test
     fun `思考强度Off_只发disabled不带强度`() {
         val body = buildRequestBody(
-            model = "deepseek-v4-flash",
+            model = "deepseek-flash",
             config = AdaptiveLlmProvider.AdaptiveConfig(),
             messages = listOf(mapOf("role" to "user", "content" to "hi")),
             thinkingEffort = ThinkingEffort.OFF
@@ -147,7 +147,7 @@ class LlmPayloadTest {
     @Test
     fun `不传档位时请求体不含thinking字段_保持既有行为`() {
         val body = buildRequestBody(
-            model = "deepseek-v4-flash",
+            model = "deepseek-flash",
             config = AdaptiveLlmProvider.AdaptiveConfig(),
             messages = listOf(mapOf("role" to "user", "content" to "hi"))
         )

@@ -185,7 +185,7 @@ Agent 通过 CLI 命令操控设备：
 | 服务商 | Endpoint | 默认模型 |
 |--------|----------|---------|
 | OpenAI | api.openai.com | gpt-4o |
-| DeepSeek | api.deepseek.com | deepseek-v4-flash |
+| DeepSeek | api.deepseek.com | deepseek-flash |
 | Kimi (月之暗面) | api.moonshot.cn | moonshot-v1-8k |
 | GLM (智谱) | open.bigmodel.cn | glm-4-plus |
 | Qwen (通义千问) | dashscope.aliyuncs.com | qwen-plus |

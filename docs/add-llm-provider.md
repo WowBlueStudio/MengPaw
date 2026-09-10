@@ -32,7 +32,7 @@
 
 | 厂商 | 官方文档原文 | 核对要点 |
 |------|-------------|---------|
-| DeepSeek | [首次调用 API](https://api-docs.deepseek.com/zh-cn/) + [模型 & 价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) + [思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode) + [获取模型列表](https://api-docs.deepseek.com/zh-cn/api/list-models/) | **端点路径 (2026-09-10 复核)**: base_url(OpenAI) = `https://api.deepseek.com`, 官方 curl 为 `POST https://api.deepseek.com/chat/completions` — **无 `/v1` 段、无多余路径段**, 预置端点与官方示例逐字一致; 模型列表为 `GET /models` (即 `https://api.deepseek.com/models`)。思考模式: **默认打开且 effort 默认 high**, 开关 `{"thinking":{"type":"enabled/disabled"}}`, 强度 `{"reasoning_effort":"low/high/max"}` (请求 low→low, medium/high/xhigh→high, max→max); 思考模式下 `temperature`/`top_p` 官方忽略。`reasoning_content` 与 `content` 同级, 流式 delta 与 message 均含; 携带 `tools` 时必须原样回传否则 400 (无 `tools` 时官方忽略该字段)。2026-09-10 V4.1 Flash 上线: `flash` 线路统一由 V4.1 Flash 承接, `GET /models` 新增 `deepseek-flash`; 平台公告 2026-09-14 12:00 起下线 V4 Pro 并路由到 V4.1 Flash |
+| DeepSeek | [首次调用 API](https://api-docs.deepseek.com/zh-cn/) + [模型 & 价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) + [思考模式](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode) + [获取模型列表](https://api-docs.deepseek.com/zh-cn/api/list-models/) | **端点路径 (2026-09-10 复核)**: base_url(OpenAI) = `https://api.deepseek.com`, 官方 curl 为 `POST https://api.deepseek.com/chat/completions` — **无 `/v1` 段、无多余路径段**, 预置端点与官方示例逐字一致; 模型列表为 `GET /models` (即 `https://api.deepseek.com/models`)。思考模式: **默认打开且 effort 默认 high**, 开关 `{"thinking":{"type":"enabled/disabled"}}`, 强度 `{"reasoning_effort":"low/high/max"}` (请求 low→low, medium/high/xhigh→high, max→max); 思考模式下 `temperature`/`top_p` 官方忽略。`reasoning_content` 与 `content` 同级, 流式 delta 与 message 均含; 携带 `tools` 时必须原样回传否则 400 (无 `tools` 时官方忽略该字段)。2026-09-10 V4.1 Flash 发布并单一化: 官方新闻原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」; 「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。价格页脚注「模型名请使用 deepseek-flash」。图像理解 (guides/vision): 「deepseek-flash 模型支持在文本之外输入图片」— JPEG/PNG/GIF/WebP 三种传入方式 (base64 data URL / 外部 URL ≤8192 字符且 60s 内下载 / Files API file_id), detail = low(512×512) / high(等价 original) / original, 单图 ≤32 MiB、内联请求体 ≤48 MiB |
 | Kimi | [思考模型](https://platform.kimi.com/docs/guide/use-thinking-models) | `delta.reasoning_content` / `message.reasoning_content`；kimi-k3/k2.7-code 始终思考；保留式思考官方要求多轮回传（本项目不回传, 请求侧定案） |
 | GLM/Z.AI | [Migrate to GLM-5.2](https://docs.z.ai/guides/overview/migrate-to-glm-new) | 流式须处理 `delta.reasoning_content` 与 `delta.content`；`thinking` 参数 |
 | Qwen/DashScope | [模型大全](https://help.aliyun.com/zh/model-studio/getting-started/models) + [Responses 兼容](https://help.aliyun.com/zh/model-studio/compatibility-with-openai-responses-api) + [Thinking](https://docs.qwencloud.com/developer-guides/text-generation/thinking) | 两阶段流式：先 `reasoning_content` 后 `content`；2026-08-17 核对：qwen3.8-max 已转正为旗舰（preview 退役自动路由），均衡/快速档为 qwen3.7-plus / qwen3.7-flash |
@@ -54,18 +54,19 @@
 > **同步铁律**: 改代码必改本表、改本表必改代码；核对日期随每次更新刷新。
 > 思考强度档位 (v0.46.2, 仅 DeepSeek 生效): Max / High / Low / Off, 默认 High (官方默认) —
 > 存于 `SavedProvider.thinkingEffort`。
-> **DeepSeek 三 id 同源说明 (2026-09-10 实测)**: `deepseek-v4-flash` /
-> `deepseek-v4-flash-vision-exp` / `deepseek-flash` 三个 id 目前由**同一份后端模型**承接 —
-> 模型指纹监测显示 09-10 凌晨 V4.1 Flash 上线后三者 serving 指纹一致 (aeb5640…)、响应内
-> `model` 字段均回 `deepseek-flash`; 09-08 时 flash 与 vision-exp 指纹不同 (a26a795… vs
-> aa8d6ca…) 说明**原先确是两份模型**。仍并列保留: 官方文档/价格页按三个模型并列 (模型版本、
-> FIM 支持、并发限制、图片计费各异), 且 `vision-exp` 是官方"图像理解"入口 id、
-> `deepseek-flash` 是 `GET /models` 返回的规范 id (09-14 12:00 后 V4 Pro 路由到它)。
+> **DeepSeek 模型单一化说明 (2026-09-10 官方原文)**: 官方价格页脚注「模型名请使用
+> `deepseek-flash`」— 预置表只保留这一条规范 id。旧三 id 的处置: `deepseek-v4-flash` /
+> `deepseek-v4-flash-vision-exp` 官方「现已下线」, 仅"出于兼容考虑"被暂时路由到 V4.1 Flash;
+> `deepseek-v4-pro` 于北京时间 2026-09-14 12:00 后请求全部路由到 V4.1 Flash 并按 Flash 单价计费。
+> 官方 图像理解 指南原文「`deepseek-flash` 模型支持在文本之外输入图片」— V4.1 Flash 原生多模态,
+> 原 vision-exp 的图像理解入口由本 id 承接 (故预置 type 标 `多模态`)。
+> 存量配置由 `normalizeRetiredModelId(endpoint, model)` 加载时静默归一 — **仅限 DeepSeek
+> 官方端点**, 火山方舟/OpenModel 等平台存在同名托管条目 (平台自有命名, 官方公告不覆盖), 不得改写。
 
 | 预置 | 端点 | 默认型号 | 型号清单（type 标注） |
 |------|------|---------|---------------------|
 | OpenAI | https://api.openai.com/v1/chat/completions | gpt-5.6 | gpt-5.6(旗舰·1.05M上下文) / gpt-5.6-terra(均衡) / gpt-5.6-luna(轻量) / gpt-5.5(前代) / gpt-5.4(前代) |
-| DeepSeek | https://api.deepseek.com/chat/completions | deepseek-v4-flash | deepseek-v4-flash(快速·思考默认) / **deepseek-v4-pro(思维链·旗舰)** / deepseek-v4-flash-vision-exp(**多模态**, 官方图像理解入口) / deepseek-flash(V4.1 Flash, API 返回; 与上两者当前同源) |
+| DeepSeek | https://api.deepseek.com/chat/completions | deepseek-flash | deepseek-flash(**多模态** — V4.1 Flash 官方「原生支持多模态视觉理解」, 官方 图像理解 指南载明本 id 支持图片输入; 旧 id `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 官方已下线、`deepseek-v4-pro` 于 09-14 12:00 后路由到本 id, 三者均从预置表移除, 存量配置加载时归一) |
 | Kimi | https://api.moonshot.cn/v1/chat/completions | kimi-k3 | kimi-k3(旗舰·1M上下文) / kimi-k2.7-code(Coding) / kimi-k2.6(通用) / kimi-k2.7-code-highspeed(高速Coding) |
 | GLM | https://open.bigmodel.cn/api/paas/v4/chat/completions | glm-5.2 | glm-5.2(旗舰·1M上下文) / glm-5.1(Coding) / glm-5(前代) / glm-5-turbo(高速) / glm-5v-turbo(多模态) |
 | DashScope | https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions | qwen3.8-max | qwen3.8-max(旗舰·视觉+推理) / qwen3.7-max(前代) / qwen3.7-plus(均衡·视觉) / qwen3.7-flash(快速·视觉) / qwen3.6-35b-a3b(开源MoE) / qwen3-coder-plus(Coding) / **qwq-plus(思维链)** / qwen3-vl-plus(多模态) / qwen3-omni-flash(全模态) |

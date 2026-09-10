@@ -1,37 +1,32 @@
-default_model = "deepseek/deepseek-v4-flash"
+default_model = "deepseek/deepseek-flash"
 [permissions]
 allow = ["Bash(echo \"=== Checking Java ===\" && (java -version 2>&1 || echo \"Java not found\") && echo \"=== Checking JAVAC ===\" && (javac -version 2>&1 || echo \"javac not found\") && echo \"=== Checking Gradle ===\" && (gradle --version 2>&1 || echo \"Gradle not found\") && echo \"=== Checking ADB ===\" && (adb --version 2>&1 || echo \"adb not found\") && echo \"=== Checking ANDROID_HOME ===\" && (echo \"ANDROID_HOME=${ANDROID_HOME:-<not set>}\" && echo \"ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-<not set>}\" && echo \"JAVA_HOME=${JAVA_HOME:-<not set>}\"))"]
 
 
 [[providers]]
+# DeepSeek 2026-09-10 官方 模型 & 价格: 在列模型仅 deepseek-flash (V4.1 Flash, 1M 上下文,
+# 最大输出 384K, 并发 2500, 支持图像理解) 与过渡期的 deepseek-v4-pro (09-14 12:00 后请求
+# 全部路由到 V4.1 Flash 并按 Flash 单价计费); 官方脚注「模型名请使用 deepseek-flash」。
+# 价格按新价校准 (空闲时段: 缓存命中 0.02 / 输入 1 / 输出 4 元每百万 tokens, 高峰为两倍;
+# 原 output = 2 为 V4 Flash 旧价)。
 name        = "deepseek-flash"
 kind        = "openai"
 base_url    = "https://api.deepseek.com"
-model       = "deepseek-v4-flash"
+model       = "deepseek-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 balance_url = "https://api.deepseek.com/user/balance"
 context_window = 1000000
-price       = { cache_hit = 0.02, input = 1, output = 2, currency = "¥" }
-
-[[providers]]
-name        = "deepseek-pro"
-kind        = "openai"
-base_url    = "https://api.deepseek.com"
-model       = "deepseek-v4-pro"
-api_key_env = "DEEPSEEK_API_KEY"
-balance_url = "https://api.deepseek.com/user/balance"
-context_window = 1000000
-price       = { cache_hit = 0.025, input = 3, output = 6, currency = "¥" }
+price       = { cache_hit = 0.02, input = 1, output = 4, currency = "¥" }
 
 [[providers]]
 name        = "deepseek"
 kind        = "openai"
 base_url    = "https://api.deepseek.com"
-models      = ["deepseek-v4-flash", "deepseek-v4-pro"]
-default     = "deepseek-v4-flash"
+models      = ["deepseek-flash"]
+default     = "deepseek-flash"
 api_key_env = "DEEPSEEK_API_KEY"
 balance_url = "https://api.deepseek.com/user/balance"
 context_window = 1000000
-price       = { cache_hit = 0.02, input = 1, output = 2, currency = "¥" }
-prices      = { "deepseek-v4-flash" = { cache_hit = 0.02, input = 1, output = 2, currency = "¥" }, "deepseek-v4-pro" = { cache_hit = 0.025, input = 3, output = 6, currency = "¥" } }
+price       = { cache_hit = 0.02, input = 1, output = 4, currency = "¥" }
+prices      = { "deepseek-flash" = { cache_hit = 0.02, input = 1, output = 4, currency = "¥" } }
 

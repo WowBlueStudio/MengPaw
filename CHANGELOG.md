@@ -1,5 +1,20 @@
 # Changelog
 
+## 未发布 (2026-09-10) — DeepSeek V4.1 Flash 单一化（版本号待定案，未发版）
+
+### 变更
+- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pro`），`defaultModel` 改为 `deepseek-flash`，型号标 `多模态`（官方 图像理解 指南载明「deepseek-flash 模型支持在文本之外输入图片」，原 vision-exp 的图像理解入口由本 id 承接）。
+- **存量配置归一**: 新增 `normalizeRetiredModelId(endpoint, model)`（`SettingsModels.kt`），接入 `SettingsProviderStore.restore()` 的 provider 与角色路由两条加载路径 — 设备上已保存的停用 id 静默改写为 `deepseek-flash`，UI/审计/请求体不再出现停用模型名。**仅 DeepSeek 官方端点生效**: 火山方舟/OpenModel 存在同名托管条目（平台自有命名，官方下线公告不覆盖），改写会在该平台直接失效，故不改。
+- **孪生能力画像补偿**: `plugin-memory-twin` 的 `collectModel` 原本靠模型名含 `vision` 判定视觉能力，规范 id 不含该词会误判 DeepSeek 无视觉能力（`TwinRouter` 的 `model:vision` 需求命中 +15 分）— 现显式登记 `deepseek-flash` → `supportsVision`。
+- **配套同步**: `scripts/check-deepseek.ps1` 默认模型改 `deepseek-flash`；`reasonix.toml` 删除走 `deepseek-v4-pro` 的 `deepseek-pro` provider、默认模型改 `deepseek-flash`，并按官方新价校准（空闲时段 缓存命中 0.02 / 输入 1 / 输出 4 元每百万 tokens，原 `output = 2` 为 V4 Flash 旧价）；开发指南 §4.2、`docs/add-llm-provider.md` §1/§2 登记表、README 中英双语默认模型同步（DeepSeek 端点路径与 `/chat/completions` 无 `/v1` 的结论不变）。
+
+### 验证
+- `:mengpaw-kernel:test` **663 用例 0 failures**（测试数据中的旧 id 同步为规范 id）；`:mengpaw-shell:testDebugUnitTest` **125 用例 0 failures**（`SettingsModelsPresetTest` 7 → 8 用例：预置单一化 + 存量归一/列表过滤）；`:plugin-memory-twin:testDebugUnitTest` **34 用例 0 failures**。
+- 官方口径取证：`GET https://api.deepseek.com/models` 返回 `deepseek-flash, deepseek-v4-pro`，与官方 list-models 示例逐字一致；官方 更新日志 / 模型 & 价格 脚注 / 图像理解 指南原文均已打开核对（`references` 见 `docs/add-llm-provider.md` §1 表格）。
+
+### 发行
+- 本轮**不发布**（版本号待定案）— 无 APK 构建、无 tag、无远程推送。
+
 ## v0.46.3 (2026-09-10) — 根治 DeepSeek「模型未返回任何内容（空响应）」+ 流式解析加固
 
 ### 修复

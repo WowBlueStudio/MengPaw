@@ -148,13 +148,13 @@ class AdaptiveLlmProviderTest {
 
     @Test
     fun `provider构造默认配置随端点自适应_deepseek更高`() {
-        val ds = AdaptiveLlmProvider("https://api.deepseek.com/chat/completions", "sk-x", "deepseek-v4-flash")
+        val ds = AdaptiveLlmProvider("https://api.deepseek.com/chat/completions", "sk-x", "deepseek-flash")
         assertEquals(16384, ds.config.maxTokens)
         val oa = AdaptiveLlmProvider("https://api.openai.com/v1/chat/completions", "sk-x", "gpt-5.6")
         assertEquals(4096, oa.config.maxTokens)
         // 显式传入的配置不被覆盖 (调用方自定上限优先)
         val explicit = AdaptiveLlmProvider(
-            "https://api.deepseek.com/chat/completions", "sk-x", "deepseek-v4-flash",
+            "https://api.deepseek.com/chat/completions", "sk-x", "deepseek-flash",
             config = AdaptiveLlmProvider.AdaptiveConfig(maxTokens = 2048)
         )
         assertEquals(2048, explicit.config.maxTokens)

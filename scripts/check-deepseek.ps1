@@ -14,11 +14,11 @@
 #
 # 用法:
 #   pwsh -File scripts/check-deepseek.ps1                     # 连通性 + 非流式 + 流式体检
-#   pwsh -File scripts/check-deepseek.ps1 -Model deepseek-v4-pro
+#   pwsh -File scripts/check-deepseek.ps1 -Model deepseek-flash
 #   pwsh -File scripts/check-deepseek.ps1 -SkipChat           # 只查密钥/模型列表/余额
 
 param(
-    [string]$Model = "deepseek-v4-flash",
+    [string]$Model = "deepseek-flash",
     [string]$Endpoint = "https://api.deepseek.com",
     [switch]$SkipChat
 )

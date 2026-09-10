@@ -713,7 +713,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 | 服务商 | Endpoint | 默认模型 | 缓存策略 |
 |--------|----------|----------|----------|
 | OpenAI | api.openai.com | gpt-4o | CACHE_CONTROL |
-| DeepSeek | api.deepseek.com | deepseek-v4-flash | PREFIX_STABLE |
+| DeepSeek | api.deepseek.com | deepseek-flash | PREFIX_STABLE |
 | Kimi | api.moonshot.cn | moonshot-v1-8k | CACHE_CONTROL |
 | GLM | open.bigmodel.cn | glm-4-plus | CACHE_CONTROL |
 | Qwen | dashscope.aliyuncs.com | qwen-plus | CACHE_CONTROL |
@@ -747,6 +747,25 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 DashScope `.../compatible-mode/v1/models`、GLM `.../api/paas/v4/models`），已带版本段的端点
 不再补 `/v1`。修复前 DashScope 被裁成裸域名导致刷新恒空、且所有 `/v1` 端点白试一次
 `.../v1/v1/models`。连通性探测 (`testConnectionResult`) 走同一条派生。
+
+**DeepSeek 模型单一化 — 预置只保留 `deepseek-flash` (2026-09-10 官方原文)**: 官方新闻与
+更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为
+`deepseek-flash` 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp
+现已下线，出于兼容考虑，模型名 `deepseek-v4-flash`、`deepseek-v4-flash-vision-exp` 将被暂时
+路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 `deepseek-v4-pro`
+的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「模型名请使用
+`deepseek-flash`」，在列模型仅 `deepseek-flash` 与过渡期的 `deepseek-v4-pro`。三处落地：
+
+- **预置表**: `DEEPSEEK` 的 `models` 只保留 `deepseek-flash`（`defaultModel` 同步），
+  type 标 `多模态` —— 官方 图像理解 指南载明「`deepseek-flash` 模型支持在文本之外输入图片」，
+  原 vision-exp 的图像理解入口由本 id 承接（type 必须精确全等，图标判定见 §4.2 卡片）。
+- **存量配置归一**: `normalizeRetiredModelId(endpoint, model)`（`SettingsModels.kt`）把三个
+  停用 id 改写为规范 id，接入 `SettingsProviderStore.restore()` 的 provider 与角色路由两条
+  加载路径。**只在 `deepseek.com` 端点生效** —— 火山方舟/OpenModel 存在同名托管条目，那是
+  平台自有命名，改写会在该平台直接失效。
+- **孪生能力画像补偿**: `plugin-memory-twin` 的 `collectModel` 原靠模型名含 `vision` 判定视觉
+  能力；规范 id 不含该词，故显式登记 `deepseek-flash` → `supportsVision`，否则孪生路由
+  （`TwinRouter` 的 `model:vision` 需求，命中 +15 分）会误判 DeepSeek 无视觉能力。
 
 ### 4.3 对话压缩
 
