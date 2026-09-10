@@ -96,26 +96,6 @@
       "changelog": "### 修复\n- **多模式 token 用量统计缺失 (swarm/fleet/plan/goal)**: 用量记录从「shell 事后读共享 lastUsage」下沉到**内核 `onUsage` 回调统一广播** (`TokenUsageRegistry`)。`AdaptiveLlmProvider` 每次调用完成 (流式 onUsage / 非流式 parseResponse) 直接经注册器记录, 根治角色独立 provider 读不到、PLAN 不传 onStep、GOAL rubric 覆盖 lastUsage 串味等问题; `TaskExecutionPipeline.onStep` 不再读共享 lastUsage。\n- **TokenStatsCollector 并发安全**: 用量记录改在 LLM 网络线程回调后, `records` (`mutableListOf` 非线程安全) 在 UI 线程遍历时可能被写致 `ConcurrentModificationException`/不一致 — 全部操作 `records` 的方法加 `@Synchronized` (o"
     },
     {
-      "id": "fs-plugin",
-      "name": "文件系统",
-      "version": "",
-      "type": "native",
-      "author": "MengPaw",
-      "description": "文件系统增量操作：cp, mv, stat, grep, glob (读写用内核 agent.read/write/ls/rm/mkdir)",
-      "status": "builtin",
-      "minCoreVersion": "0.2.0",
-      "commands": [
-        "fs.cp",
-        "fs.mv",
-        "fs.stat",
-        "fs.grep",
-        "fs.glob"
-      ],
-      "checksum": "sha256:045a11a35c8201eb7d845afbc57a671c4d8c89db894af72dc25e36962c878e0a",
-      "size": 25854,
-      "changelog": "### 新增\n- **dev.plugin.guide 能力边界文档**: 插件开发工具（dev-plugin）能力边界总结为 md 随插件分发——命令清单/插件类型/开发流程/命名规范/审计规则/端口说明/能力边界（不能做什么）/发布链路 9 节\n- **Agent 可读**: `dev.plugin.guide` 命令输出全文（dev-plugin 命令 5→6 条）\n- **用户可读**: 自动落盘 `插件文档/plugin-dev-guide.md`（文件管理器可打开），安装/升级插件即写入\n- **onInstall 联动**: 安装 dev-plugin 时自动确保文档落盘\n\n### 修复\n- Kotlin 三引号字符串不能用于 const val（编译错误）→ 普通 val\n\n### 发行\n- Shell APK v0.20.2（versionCode 20002）\n- plugins.json dev-plugin 命令 5→6 条\n- 测试：plugin-dev 6/6 全绿（新增 guide 测试：内容 + 落盘校验）"
-    },
-    {
       "id": "net-plugin",
       "name": "网络请求",
       "version": "",

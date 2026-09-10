@@ -60,10 +60,10 @@ dev-plugin（插件开发工具）是随 APK 内置的插件，让 **Agent 与�
 
 ## 命名规范
 
-- 插件 ID: `<命名空间>-plugin`（如 fs-plugin）
+- 插件 ID: `<命名空间>-plugin`（如 clipboard-plugin）
 - 命令注册: `<命名空间>.<短名>` — 短名由插件声明，命名空间按 ID 自动派生：
-  - `fs-plugin` → `fs`；`memory-twin-plugin` → `twin`；`dev-plugin` → `dev`
-- 官方已占用命名空间: self / plugin / agent / sys（内核）+ framework / fs / net / memory / skill / clipboard / notification / dev / root / twin / tools / browser / tribe 等
+  - `clipboard-plugin` → `clipboard`；`memory-twin-plugin` → `twin`；`dev-plugin` → `dev`
+- 官方已占用命名空间: self / plugin / agent / sys（内核）+ framework / net / skill / clipboard / tavily / dev / root / termux / office / twin / dream / evolution / concise / update / hermes，以及外置插件的 search / browser.push / translate / error / render / comfy / connector-*（fs 与 browser.mcp 命名空间随对应插件退役，现为空闲）
 
 ## 审计规则（dev.plugin.audit）
 

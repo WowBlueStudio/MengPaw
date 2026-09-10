@@ -15,7 +15,7 @@ internal suspend fun examplesCommand(args: List<String>, ctx: ExecutionContext):
     return ExecutionResult.ok("""
 === MengPaw 插件开发参考 ===
 
-【文件操作插件模板】(参考 fs-plugin)
+【文件操作插件模板】(自定义文件命令 — 内核 Linux 命令通道之外的自有命令)
 
 import com.mengpaw.kernel.cli.*
 import com.mengpaw.kernel.plugin.*
