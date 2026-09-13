@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.47.0 | **更新**: 2026-09-10 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(124文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 13外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
+> **版本**: 0.47.0 | **更新**: 2026-09-13 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(124文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
 
 ---
 
@@ -113,7 +113,7 @@ mengpaw-browser (独立仓库 MengPaw-Browser, 经 JitPack 依赖)
   ├── com.github.WowBlueStudio.MengPaw:mengpaw-core
   └── com.github.WowBlueStudio.MengPaw:mengpaw-design-system
 
-plugins/ (16 模块, 全部内置捆绑; 13 个外置插件见独立仓库 mengpaw-connectors)
+plugins/ (16 模块, 全部内置捆绑; 12 个外置插件见独立仓库 mengpaw-connectors)
   └── mengpaw-kernel  ← 所有插件只依赖微内核（同级）
 ```
 
@@ -285,9 +285,9 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 **近全屏预览**: 对话框 Surface `fillMaxSize().padding(5.dp)` 圆角 16dp (边缘间隙 5dp); 内容区限宽 `@media (min-width: 840px) .md-body { max-width: 720px }` 居中——md-reader `.centered` 电脑 1200px 换算 (1200/1660 触发阈值 ≈72%, 平板 853dp×72% ≈ 617dp, 取 720dp 兼 12-13 寸大平板)。
 
 
-### 3.5 插件模块（21 个，plugins/ 目录，按 settings.gradle.kts 为准）
+### 3.5 插件模块（16 个，plugins/ 目录，按 settings.gradle.kts 为准）
 
-> 插件数统一口径（v0.35.6 迁移后；v0.36.3 增 termux；v0.37.3 增 update）：**主仓库 16 模块**（settings.gradle.kts，全部内置捆绑 Shell APK）| **16 内置**（BUILTIN_PLUGIN_IDS，含 v0.29.0 内置的 tavily 与 v0.36.3 新增的 termux 与 v0.37.3 迁入的 update）| **plugins.json 29 条目**（16 builtin + 13 remote；embedded 条目已于 v0.36 移除——Mission 并入 Swarm、Loop 模式入内核，mission.*/loop.* 命令不再存在）| **13 外置插件**（独立仓库 mengpaw-connectors：7 普通 + 6 连接器，MIT，见下）
+> 插件数统一口径（v0.35.6 迁移后；v0.36.3 增 termux；v0.37.3 增 update；2026-09-10 外置退役 2 个后校正）：**主仓库 16 模块**（settings.gradle.kts，全部内置捆绑 Shell APK）| **16 内置**（BUILTIN_PLUGIN_IDS，含 v0.29.0 内置的 tavily 与 v0.36.3 新增的 termux 与 v0.37.3 迁入的 update）| **plugins.json 28 条目**（16 builtin + 12 remote；embedded 条目已于 v0.36 移除——Mission 并入 Swarm、Loop 模式入内核，mission.*/loop.* 命令不再存在）| **12 外置插件**（独立仓库 mengpaw-connectors：6 普通 + 6 连接器，MIT，见下；browser-mcp 与外部 plugin-update 已退役）
 
 > **内置插件无版本号原则（设计定案）**：内置插件随 shell APK 一起发布，版本跟随 shell，不会陈旧、不会单独更新——因此内置插件**不维护、不展示、不对照版本号**（PluginMetadata.version 对内置插件无语义；巡检/审查若报「内置插件版本不一致」为伪问题）。版本号仅对远程插件（plugins.json 条目 + tag `plugins-v*`）有意义，见连接器一致性铁律。
 >
@@ -297,7 +297,6 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 | 模块 | 命名空间 | 命令 | 捆绑 |
 |------|---------|------|:--:|
-| plugin-fs | fs | cp, mv, stat, grep, glob (5) | ⭐ |
 | plugin-net | net | curl, get, post, proxy (4) | ⭐ |
 | plugin-skill | skill | ls, run, info, search, create, rm, pull, push, enable, disable, from.project, request, import (13) | ⭐ |
 | plugin-clipboard | clipboard | copy, paste, clear (3) | ⭐ |
@@ -333,9 +332,9 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | **火种 (Swarm)** | `AgentEngine.runWithSwarm()` | 规划器拆解 → 并行 Worker（`roles` 按角色混合模型，零待命 Session）→ Verifier 验证 + Andon 决策 → 合成器。JIT 看板三闸门: `maxTotalSteps` 总预算 + `maxParallel` WIP + `maxStepsPerSubtask` 单任务。设计文档见 [docs/swarm-design.md](docs/swarm-design.md) |
 | **Fleet+** | `runWithFleet()` + ACP | 步坦协同 + 跨 ACP 框架/设备协调 |
 
-#### 浏览器扩展 (3)
+#### 浏览器扩展 (2)
 
-> 三个模块均为外置插件（remote 分发），源码在 mengpaw-connectors。
+> 两个模块均为外置插件（remote 分发），源码在 mengpaw-connectors。
 
 | 模块 | 命名空间 | 命令 |
 |------|---------|------|
@@ -355,7 +354,7 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 |------|---------|------|:--:|
 | plugin-dev | dev.plugin | create, audit, share, examples, keywords, guide (6) | ⭐ |
 | plugin-error-report | error | list, show, clear, export, status, upload (6) | 外置 |
-| plugin-update | update | check, download, install, auto (4) | 外置 |
+| plugin-update | update | check, download, install, auto (4) | ⭐ |
 
 #### 系统权限 (1)
 
@@ -385,25 +384,24 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 
 > **plugin-evolution 是内置默认实现, 不能直接移除** (UNINSTALLABLE 白名单锁定)。作用: 把进化实现显式注册为 EvolutionProvider SPI — 第三方插件可实现 `kernel.evolution.EvolutionProvider` 接口, onInstall 注册自己的实现 (后注册者胜, 失败记录/省察引导/处置命令可整体定制), 卸载后回退内核默认。evolution.* 命令本身在内核命名空间注册 (PipelineManager)，与梦境模式 agent.dream 同模式。
 
-> ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载（14 个内置：framework/fs/net/skill/clipboard/dev/root/hermes(tribe)/memory-twin/agent-tools/dream/evolution/concise/tavily；self 与 memory 已融入内核 agent.* 命名空间）
+> ⭐ = 捆绑在 Shell APK 中，随主应用安装，无需手动下载（16 个内置：framework/net/skill/clipboard/office/dev/root/hermes(tribe)/memory-twin/agent-tools/termux/update/dream/evolution/concise/tavily；self 与 memory 已融入内核 agent.* 命名空间，fs 已移入内核命名空间）
 >
 > **外置** = plugins.json status=remote，用户手动 `plugin.install` 从市场下载，源码在独立仓库 mengpaw-connectors。
 >
 > plugin-hermes 模块实际实现为 `TribePlugin`（id=tribe-plugin，注册 tribe.* 22 条 + hermes.* 兼容命令），plugins.json 中对应 `tribe-plugin` 条目。
 
-#### 外置插件仓库（mengpaw-connectors，7 普通 + 6 连接器）
+#### 外置插件仓库（mengpaw-connectors，6 普通 + 6 连接器）
 
-> **v0.23.0 起连接器拆分；v0.35.6 起 8 个普通 remote 插件一并迁入；v0.37.3 update 迁回内置**：全部 13 个外置插件源码位于独立仓库
+> **v0.23.0 起连接器拆分；v0.35.6 起普通 remote 插件一并迁入；v0.37.3 update 迁回内置；2026-09-10 browser-mcp 退役**：全部 12 个外置插件源码位于独立仓库
 > **[mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)**（**MIT 许可，社区开放贡献**）。
 > 主仓库不再包含外置插件源码，仅经插件市场分发其 dex JAR（plugins.json status=remote, 用户手动 plugin.install）。
 > 外置插件构建依赖主仓库内核构件（JitPack: `com.github.WowBlueStudio.MengPaw:mengpaw-kernel:<tag>`，版本由该仓库 `kernelVersion` 统一控制），
-> 打包脚本 `scripts/package-plugins.ps1` 统一产出 14 个宿主可加载 jar。
+> 打包脚本 `scripts/package-plugins.ps1` 统一产出 12 个宿主可加载 jar。
 
-**普通外置插件（8）**
+**普通外置插件（6）**
 
 | 模块 | 命名空间 | 命令 | 版本 |
 |------|---------|------|------|
-| plugin-update | update | check, download, install, auto (4) | 0.3.0 |
 | plugin-translate | translate | text, auto, langs, setup (4) | 0.3.0 |
 | plugin-error-report | error | list, show, clear, export, status, upload (6) | 0.3.0 |
 | plugin-render | render | models, generate, status, preview (4) | 0.3.0 |
@@ -1500,7 +1498,7 @@ interface Plugin {
 library AAR（内含 `classes.jar` JVM 字节码）**无法在真机激活**，安装后只会注册
 占位元数据（假安装）。发布 remote 插件必须：
 1. 用 d8 把 `classes.jar`（含第三方依赖，如 jsch/okhttp）合并为 `classes.dex`，
-   打包成 `<id>.jar`（外置插件仓库 mengpaw-connectors 已提供 `scripts/package-plugins.ps1` 统一实现，覆盖 7 普通 + 6 连接器）；
+   打包成 `<id>.jar`（外置插件仓库 mengpaw-connectors 已提供 `scripts/package-plugins.ps1` 统一实现，覆盖 6 普通 + 6 连接器）；
 2. JAR 内写 `META-INF/plugin-class` 声明主类全限定名（支持任意包名/类名，
    含连字符命名空间的连接器不再依赖候选类名规则）；
 3. plugins.json 的 downloadUrl/mirrorUrl 指向 `.jar` 产物并回写 checksum/size。
@@ -1528,7 +1526,7 @@ library AAR（内含 `classes.jar` JVM 字节码）**无法在真机激活**，�
 - `scripts/update-plugins-json.py` — JSON 写回（规避 PowerShell 5.1 的 ConvertTo-Json 中文转义缺陷）
 - `scripts/update-plugins-json.py` 只回写 checksum/size/changelog，**不回写 version**（非内置版本由源码统一定义，内置随壳保持空）
 - `scripts/validate-plugins.ps1` — 只读校验：结构/id 唯一/字段完整/SemVer/URL 与 checksum 一致性/与代码交叉校验（namespaceFor 派生规则、shell 捆绑 vs plugins.json builtin 对应）
-- `mengpaw-connectors/scripts/package-plugins.ps1` — 外置插件仓库统一打包脚本：把 7 普通 + 6 连接器 AAR 打包为宿主可加载的 dex JAR（含 `META-INF/plugin-class` 主类清单），产物输出 `releases/plugins/*-release.jar` / `*-plugin.jar`，发布 remote 插件前必须运行
+- `mengpaw-connectors/scripts/package-plugins.ps1` — 外置插件仓库统一打包脚本：把 6 普通 + 6 连接器 AAR 打包为宿主可加载的 dex JAR（含 `META-INF/plugin-class` 主类清单），产物输出 `releases/plugins/*-release.jar` / `*-plugin.jar`，发布 remote 插件前必须运行
 - 插件 AAR 发布 tag：`plugins-vX.Y.Z`（独立于版本 tag `vX.Y.Z`）
 
 ---

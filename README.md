@@ -69,24 +69,28 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS 双向桥)
 │   └── plugin/                 # 浏览器内置插件 (22 命令)
 │
-└── plugins/                    # 13 个内置插件 (同级，均只依赖 kernel，随 APK 捆绑)
+└── plugins/                    # 16 个内置插件 (同级，均只依赖 kernel，随 APK 捆绑)
     ├── plugin-net/             # HTTP 网络 (4 命令)
     ├── plugin-skill/           # 双层技能系统 (10 命令) ⭐💎
     ├── plugin-clipboard/       # 剪贴板 (3 命令)
+    ├── plugin-office/          # Office 文档 Word/Excel/PPT (3 命令)
     ├── plugin-framework/       # 框架通信协议 (15 命令) ⭐💎
     ├── plugin-memory-twin/     # 记忆孪生 (17 命令) ⭐💎
     ├── plugin-agent-tools/     # Agent 命令集 (4 命令) ⭐💎
     ├── plugin-root/            # Root 权限 (19 命令)
     ├── plugin-hermes/          # 部落协作 Tribe 💎
+    ├── plugin-termux/          # Termux 桥 (3 命令)
     ├── plugin-dream/           # 梦境模式 (内置不可移除, SPI 可替换) ⭐
+    ├── plugin-evolution/       # 智能体进化 (内置不可移除, SPI 可替换) ⭐
     ├── plugin-dev/             # 插件开发工具链 ⭐💎
     ├── plugin-tavily/          # AI 搜索
+    ├── plugin-update/          # 应用内更新 (4 命令) ⭐
     └── plugin-concise/         # 言简意赅 (停用即恢复原提示词) ⭐
 ```
 
 > ⭐ = 捆绑在 Shell APK 中 · 💎 = WowBlue 原创（领先同类框架，见下节）
 >
-> 13 个外置插件（翻译/上报/生图/ComfyUI/推送/转档/MCP/印象笔记 + 6 连接器）源码与分发均在独立仓库
+> 12 个外置插件（翻译/错误上报/生图/ComfyUI/浏览器推送/网页搜索 + 6 个连接器）源码与分发均在独立仓库
 > [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors)（MIT），经插件市场 `plugin.install` 安装。
 
 ## 架构

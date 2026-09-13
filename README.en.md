@@ -67,24 +67,28 @@ mengpaw/
 │   ├── bridge/                 # BrowserBridge (Java↔JS bidirectional bridge)
 │   └── plugin/                 # In-browser plugins (22 commands)
 │
-└── plugins/                    # 13 built-in plugins (siblings, all depend only on kernel, bundled in APK)
+└── plugins/                    # 16 built-in plugins (siblings, all depend only on kernel, bundled in APK)
     ├── plugin-net/             # HTTP network (4 commands)
     ├── plugin-skill/           # Two-tier skill system (10 commands) ⭐💎
     ├── plugin-clipboard/       # Clipboard (3 commands)
+    ├── plugin-office/          # Office documents Word/Excel/PPT (3 commands)
     ├── plugin-framework/       # Framework communication protocol (15 commands) ⭐💎
     ├── plugin-memory-twin/     # Memory Twin (17 commands) ⭐💎
     ├── plugin-agent-tools/     # Agent toolset import (4 commands) ⭐💎
     ├── plugin-root/            # Root access (19 commands)
     ├── plugin-hermes/          # Tribe collaboration 💎
+    ├── plugin-termux/          # Termux bridge (3 commands)
     ├── plugin-dream/           # Dream mode (built-in, SPI-replaceable) ⭐
+    ├── plugin-evolution/       # Agent evolution (built-in, SPI-replaceable) ⭐
     ├── plugin-dev/             # Plugin dev toolchain ⭐💎
     ├── plugin-tavily/          # AI search
+    ├── plugin-update/          # In-app update (4 commands) ⭐
     └── plugin-concise/         # Concise mode (disable to restore original prompt) ⭐
 ```
 
 > ⭐ = bundled in the Shell APK · 💎 = WowBlue original (leading similar frameworks, see below)
 >
-> The 12 external plugins (update / translate / error-report / render / comfy / browser-push /
+> The 12 external plugins (translate / error-report / render / comfy / browser-push /
 > browser-search + 6 connectors) live in the standalone repo
 > [mengpaw-connectors](https://github.com/WowBlueStudio/mengpaw-connectors) (MIT) and are
 > installed from the plugin marketplace via `plugin.install`.
@@ -100,7 +104,7 @@ mengpaw/
 │  mengpaw-kernel (124 files)    │  ← Microkernel (pure Kotlin/JVM)
 │  zero Android deps · JVM-tested │
 ├────────────────────────────────┤
-│  14 built-in plugins (siblings · kernel only) │  ← Plugin layer
+│  16 built-in plugins (siblings · kernel only) │  ← Plugin layer
 └────────────────────────────────┘
 ```
 
