@@ -33,7 +33,7 @@ internal suspend fun runRiskGuarded(
     agent: String,
     context: ExecutionContext
 ): ExecutionResult {
-    val riskError = RiskGate.evaluate(gate, agent, allowUserConfirm = true)
+    val riskError = RiskGate.evaluate(gate, agent, allowUserConfirm = true, confirmGate = engine.harnessEnv.confirmGate)
     if (riskError != null) {
         return ExecutionResult.fail(riskError, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
     }
