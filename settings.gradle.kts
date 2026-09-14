@@ -19,6 +19,17 @@ dependencyResolutionManagement {
 
 rootProject.name = "MengPaw"
 
+// ── 跨平台 Harness 核心 (独立仓库, 复合构建共享源码) ──────────────────
+// harness 是 ReAct 核心与平台抽象层的归属地 (独立 git 仓库, 已列入 .gitignore)。
+// 用 includeBuild 而非发布产物依赖的原因: **单一事实源** — 两边共享同一份源码,
+// kernel/shell 的改动与 harness 的改动在同一构建内即时互相可见, 天然共同进化,
+// 不存在"两份副本各自漂移"的风险。
+includeBuild("harness") {
+    dependencySubstitution {
+        substitute(module("com.mengpaw.harness:harness")).using(project(":"))
+    }
+}
+
 include(":mengpaw-kernel")
 include(":mengpaw-core")
 include(":mengpaw-design-system")

@@ -153,9 +153,12 @@ class PlanModeExecutor(
             sessionManager.addMessage(stepSession.id, com.mengpaw.kernel.session.Message("assistant", sanitized))
             val parsed = promptEngine.parse(sanitized)
             if (parsed.isFinal) return parsed.thought
-            if (parsed.action != null) {
-                val cmd = "${parsed.action.name} ${parsed.action.parameters.values.joinToString(" ")}"
-                val result = parsed.action.paramFormatError()?.let {
+            // 跨模块 smart cast: ReActResponse 现由 harness 模块提供, Kotlin 不允许跨模块
+            // 对 public API 属性做智能转换 — 先取局部变量再判空
+            val action = parsed.action
+            if (action != null) {
+                val cmd = "${action.name} ${action.parameters.values.joinToString(" ")}"
+                val result = action.paramFormatError()?.let {
                     ExecutionResult.fail(it, errorCode = ErrorCodes.PARAM_FORMAT_ERROR)
                 } ?: pipelineManager.buildPipeline().execute(cmd, context)
                 val observation = if (result.success) result.output

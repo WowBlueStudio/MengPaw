@@ -49,6 +49,12 @@ val genVersionTask = tasks.register("generateVersion") {
 tasks.named("compileKotlin") { dependsOn(genVersionTask) }
 
 dependencies {
+    // ── 跨平台 Harness 核心 (独立仓库, 经 settings.gradle.kts 的 includeBuild 共享源码) ──
+    // 提供: 平台抽象层 (com.mengpaw.harness.*) + LLM 模型层与 ReAct 解析层
+    // (com.mengpaw.kernel.llm.* / .session.* / KernelLog)。
+    // 这些类此前内联在本模块, 现归属 harness 仓库 — 单一事实源, 不再双份维护。
+    implementation("com.mengpaw.harness:harness")
+
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
