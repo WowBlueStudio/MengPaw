@@ -11,6 +11,10 @@ import com.mengpaw.kernel.agent.PostCallMiddleware
 import com.mengpaw.kernel.agent.ScrollContextManager
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.harness.HarnessEnv
+import com.mengpaw.kernel.harness.HarnessToolInvoker
+import com.mengpaw.kernel.harness.HarnessToolRequest
+import com.mengpaw.kernel.harness.HarnessToolResult
 import com.mengpaw.kernel.llm.*
 import com.mengpaw.kernel.plugin.PluginExecutor
 import com.mengpaw.kernel.plugin.PluginManager
@@ -41,7 +45,21 @@ class AgentEngine(
     val scrollContext: ScrollContextManager? = null,
     internal val checkpointManager: CheckpointManager = CheckpointManager(),
     /** Additional namespaces to register alongside built-ins (e.g. "sys" → SysExecutor.commands). */
-    private val additionalNamespaces: Map<String, Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult>> = emptyMap()
+    private val additionalNamespaces: Map<String, Map<String, suspend (List<String>, ExecutionContext) -> ExecutionResult>> = emptyMap(),
+    /**
+     * 平台环境 (A 阶段, 2026-08-21) — 路径/文件系统/时钟/日志/确认门的统一注入点。
+     *
+     * 默认值 [HarnessEnv.fromKernelGlobals] 由既有全局单例组装, 因此**未显式注入时
+     * 行为与改造前逐字等价**; 跨平台宿主 (harness 独立仓库消费方) 应显式构造
+     * [HarnessEnv] 注入, 从而不再依赖 [DataPaths] / [KernelLog] / UserConfirmBus 三个全局单例。
+     */
+    val harnessEnv: HarnessEnv = HarnessEnv.fromKernelGlobals(),
+    /**
+     * 工具执行器 — 模型 Action 的落地方式。null 表示沿用 kernel 原生 CLI Pipeline
+     * (MengPaw 单机壳行为不变); 跨平台宿主可注入 [HarnessToolInvoker] 以接入
+     * function-calling / MCP / 沙箱进程等其它执行形态。
+     */
+    toolInvoker: HarnessToolInvoker? = null
 ) {
     // ── Sub-managers and executors (declared before init for initialization order) ──
     private val marketplaceClient = PluginMarketplaceClient()
@@ -153,6 +171,14 @@ class AgentEngine(
 
     /** Expose sub-managers for delegation to sub-executors (swarm/plan). */
     internal fun getSessionManager(): SessionManager = sessionManager
+
+    /**
+     * 生效的工具执行器 (A 阶段, 2026-08-21)。
+     * 未注入时回落到 kernel 原生 CLI Pipeline 实现 [CliPipelineToolInvoker] —
+     * 即"工具即 CLI 命令"的既有语义, 行为零变化。
+     */
+    internal val harnessToolInvoker: HarnessToolInvoker =
+        toolInvoker ?: CliPipelineToolInvoker(pipelineManager)
 
     internal fun getPipelineManager(): PipelineManager = pipelineManager
 

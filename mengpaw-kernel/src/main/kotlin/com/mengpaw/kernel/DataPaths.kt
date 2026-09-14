@@ -3,8 +3,22 @@
 
 package com.mengpaw.kernel
 
+import com.mengpaw.kernel.harness.BaseDirPathResolver
+import com.mengpaw.kernel.harness.HarnessFileSystem
+import com.mengpaw.kernel.harness.HarnessPathResolver
+import com.mengpaw.kernel.harness.JvmHarnessFileSystem
+
 /**
- * Unified data directory paths — platform-independent constants.
+ * Unified data directory paths — 过渡期双 API 门面。
+ *
+ * **架构地位 (A 阶段改造, 2026-08-21)**: 本对象是 ReAct 核心平台上抽象的**旧入口**,
+ * 现已成为 [HarnessPathResolver] 的门面。真实路径解析逻辑在
+ * [com.mengpaw.kernel.harness.BaseDirPathResolver] — 该实现无任何平台类型,
+ * 可整体搬入 harness 独立仓库。
+ *
+ * 双 API 并存的原因: 现有 152 个调用点使用上方常量/函数形态, 一次性改签名风险过高;
+ * 故保留旧形态 (委托到 [resolver]), 新代码一律走 [resolver] / [fs]。
+ * 待 ReAct 主链路完成注入式改造后, 旧常量形态可逐个下线。
  *
  * All data is stored under BASE, which must be initialized at app startup.
  * Android: DataPaths.initialize(context.filesDir.absolutePath)
@@ -25,31 +39,52 @@ package com.mengpaw.kernel
  *   └── mengpaw.sock           ← Unix Socket (Termux IPC)
  */
 object DataPaths {
-    /** Set by the app on startup. Falls back to `/sdcard/MengPaw` if not initialized. */
+
+    /** 数据根目录。Set by the app on startup. Falls back to `/sdcard/MengPaw` if not initialized. */
     @Volatile
     var BASE: String = "/sdcard/MengPaw"
         private set
 
+    /** 宿主可写输出目录 (外部可访问) — Android 传 getExternalFilesDir("output")。 */
+    @Volatile
+    var OUTPUT: String = "$BASE/输出"
+        private set
+
+    /**
+     * 逻辑路径提供者 — A 阶段新增的**唯一推荐入口**。
+     * 与 [BASE] 同步重建: BASE 仅在启动时 initialize 一次, 之后的实例保持有效。
+     */
+    @Volatile
+    var resolver: HarnessPathResolver = BaseDirPathResolver(BASE)
+        private set
+
+    /** 文件系统抽象 — 新代码访问磁盘一律走此 (旧代码的 java.io.File 逐步迁移)。 */
+    val fs: HarnessFileSystem get() = JvmHarnessFileSystem
+
     /** Must be called at app startup with the platform-specific base path. */
     fun initialize(basePath: String) {
         BASE = basePath
+        resolver = BaseDirPathResolver(basePath)
+        OUTPUT = resolver.outputDir
     }
 
-    val CONFIG get() = "$BASE/配置"
-    val SKILLS get() = "$BASE/技能剧本"
-    val CHECKPOINTS get() = "$BASE/会话检查点"
+    // ── 旧常量形态 (委托 resolver, 行为与改造前逐字一致) ──────────────
+
+    val CONFIG get() = resolver.configDir
+    val SKILLS get() = resolver.skillsDir
+    val CHECKPOINTS get() = resolver.checkpointDir
     val SCREENSHOTS get() = "$BASE/截图存档"
-    val PLUGIN_CACHE get() = "$BASE/插件仓库"
-    val AGENTS get() = "$BASE/Agent文档"
+    val PLUGIN_CACHE get() = resolver.pluginDir
+    val AGENTS get() = resolver.agentsDir
     /** 无主进化档案目录 (agentName=null 时 EvolutionStore 写入处) —
      *  与 Agent文档 分离, 防被 Agent 发现逻辑误判为 Agent (v0.34.x 修复)。 */
-    val EVOLUTION get() = "$BASE/进化档案"
+    val EVOLUTION get() = resolver.evolutionDir
     // ── 语音录制 (v0.33.0+) ──
-    val RECORDINGS get() = "$BASE/录音"
+    val RECORDINGS get() = resolver.recordingDir
     /** Fleet 局域网互传共享目录 (v0.36) — 所有格式文件可互传, 非孪生同步范围。 */
-    val FLEET_SHARE get() = "$BASE/Fleet共享"
-    val AGENT_TEMPLATES get() = "$BASE/agent-templates"
-    val SOCKET get() = "$BASE/mengpaw.sock"
+    val FLEET_SHARE get() = resolver.fleetShareDir
+    val AGENT_TEMPLATES get() = resolver.agentTemplatesDir
+    val SOCKET get() = resolver.socketPath
     val AGENT_INBOX get() = "$AGENTS/inbox"
     val TEAM get() = "$AGENTS/team"
     val TEAM_INBOX get() = "$TEAM/inbox"
@@ -62,60 +97,47 @@ object DataPaths {
     val SEARCH_OUTPUTS get() = "$PLUGIN_CACHE/search/outputs"
     val WORKFLOW_DIR get() = "$PLUGIN_CACHE/workflows"
     val WORKFLOW_OUTPUTS get() = "$PLUGIN_CACHE/workflows/outputs"
-    val ERROR_LOG get() = "$BASE/错误报告"
+    val ERROR_LOG get() = resolver.errorDir
     val ERROR_QUEUE get() = "$ERROR_LOG/queue"
-
-    // ── User-facing output — accessible via system file manager ──────
-    /** User-facing output directory — HTML/MD/PDF exports.
-     *  Initialized separately via [initializeOutput] with getExternalFilesDir("output"). */
-    @Volatile
-    var OUTPUT: String = "$BASE/输出"
-        private set
-
-    // ── Conversation context archive (QwenPaw-style no-data-loss) ──
-    /** Sanitize agent name for filesystem use — prevent path traversal. */
-    private fun safeAgentDir(agentName: String): String =
-        "$AGENTS/${agentName.replace(Regex("[/\\\\]"), "_")}"
-
-    /** Archived raw dialog before compaction. Agent can read_file to recall. */
-    fun dialogArchiveDir(agentName: String) = "${safeAgentDir(agentName)}/dialog"
-    /** Long tool outputs offloaded to disk. Agent references snippet + path. */
-    fun toolResultsDir(agentName: String) = "${safeAgentDir(agentName)}/tool_results"
 
     fun initializeOutput(outputPath: String) {
         OUTPUT = outputPath
-        java.io.File(OUTPUT).mkdirs()
+        fs.mkdirs(OUTPUT)
     }
+
+    // ── Conversation context archive (QwenPaw-style no-data-loss) ──
+    /** Sanitize agent name for filesystem use — prevent path traversal. */
+    private fun safeAgentDir(agentName: String): String = resolver.agentDir(agentName)
+
+    /** Archived raw dialog before compaction. Agent can read_file to recall. */
+    fun dialogArchiveDir(agentName: String) = resolver.dialogArchiveDir(agentName)
+    /** Long tool outputs offloaded to disk. Agent references snippet + path. */
+    fun toolResultsDir(agentName: String) = resolver.toolResultsDir(agentName)
 
     // ── Memory Twin (v0.22.0: 工作区文件同步, 账本与独立梦境目录已移除) ──
     val TWIN_AUDIT get() = "$AGENTS/twin/audit.log"
 
     // ── Per-agent Skills & Tools partitions ─────────────────────────
     /** Agent's local skills directory — pulled from global pool or created locally. */
-    fun agentSkillsDir(agentName: String) = "${safeAgentDir(agentName)}/skills"
+    fun agentSkillsDir(agentName: String) = resolver.agentSkillsDir(agentName)
     /** Agent's local tools directory — agent-specific CLI commands. */
-    fun agentToolsDir(agentName: String) = "${safeAgentDir(agentName)}/tools"
+    fun agentToolsDir(agentName: String) = resolver.agentToolsDir(agentName)
 
     // ── Two-tier memory ────────────────────────────────────────────
     /** Long-term memory file — injected into system prompt. Curated content only. */
     // P1 修复: agentName 可能含路径分隔符/穿越段 — 统一走 safeAgentDir 消毒
     fun longTermMemoryFile(agentName: String) = "${safeAgentDir(agentName)}/memory/memory.md"
     /** Mid-term memory dir — dated files, NOT injected into prompt. */
-    fun midTermMemoryDir(agentName: String) = "${safeAgentDir(agentName)}/memory"
+    fun midTermMemoryDir(agentName: String) = resolver.memoryDir(agentName)
     /** Mid-term memory file for a specific date. */
     fun midTermMemoryFile(agentName: String, date: String) = "${midTermMemoryDir(agentName)}/memory_$date.md"
     /** Project memory file — reusable project completion patterns. */
     fun projectMemoryFile(agentName: String, projectName: String) = "${midTermMemoryDir(agentName)}/project_${projectName}_memory.md"
     /** List all project memory files for an agent. */
-    fun projectMemoryFiles(agentName: String): List<String> {
-        val dir = java.io.File(midTermMemoryDir(agentName))
-        if (!dir.exists()) return emptyList()
-        return dir.listFiles()
-            ?.filter { it.name.startsWith("project_") && it.name.endsWith("_memory.md") }
-            ?.map { it.name.removePrefix("project_").removeSuffix("_memory.md") }
-            ?.sorted()
-            ?: emptyList()
-    }
+    fun projectMemoryFiles(agentName: String): List<String> =
+        fs.listFiltered(midTermMemoryDir(agentName), prefix = "project_", suffix = "_memory.md")
+            .map { it.removePrefix("project_").removeSuffix("_memory.md") }
+            .sorted()
 
     // ── Evolution (Agent 进化系统) ─────────────────────────────────
     /**
@@ -124,9 +146,7 @@ object DataPaths {
      * 绝不落 Agent文档/ 下 — 否则被 Agent 发现逻辑识别为假 Agent (v0.34.x 教训)。
      * "default" (EvolutionStore.DEFAULT_AGENT 保留字, 非真 Agent) 同样归进化档案/。
      */
-    fun evolutionDir(agentName: String?) =
-        if (agentName.isNullOrBlank() || agentName == "default") EVOLUTION
-        else "${safeAgentDir(agentName)}/evolution"
+    fun evolutionDir(agentName: String?) = resolver.agentEvolutionDir(agentName)
     /** Failure pattern store (JSON-lines). */
     fun evolutionFailuresFile(agentName: String?) = "${evolutionDir(agentName)}/failures.jsonl"
     /** 会话幻觉率统计文件 (P0, 2026-08-08): 每行一条会话记录, 与 failures.jsonl 同模式。 */
@@ -152,7 +172,7 @@ object DataPaths {
 
     // ── Plugin-specific storage ───────────────────────────────────
 
-    fun pluginDir(pluginId: String): String = "${PLUGIN_CACHE}/${pluginFolderName(pluginId)}"
+    fun pluginDir(pluginId: String): String = "$PLUGIN_CACHE/${pluginFolderName(pluginId)}"
 
     /** Human-readable folder name from plugin ID. */
     fun pluginFolderName(pluginId: String): String = when (pluginId) {
