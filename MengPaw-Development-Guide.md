@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.47.0 | **更新**: 2026-09-13 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(124文件) + AgentRuntime + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
+> **版本**: 0.47.0 | **更新**: 2026-08-21 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(154文件) + AgentRuntime + **Harness平台抽象层(harness/ 6接口 + 独立仓库 D:\MengPaw\harness)** + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.8.1
 
 ---
 
@@ -190,12 +190,47 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | **鸿蒙** | kernel 可用；鸿蒙分布式设备管理是 Android 米家 App 的超集——同一个 IoT 控制需求在鸿蒙上更干净；同一个能力在不同平台只是碎片形态不同 | UI 需 ArkUI 全部重写；分发模型不同（AppGallery，不能 sideload APK）；碎片生态还在生长 | 技术可行但等待碎片成熟更重要 |
 | **iOS** | kernel 能编译（Kotlin/Native + ktor Darwin engine） | ProcessBuilder 不可用（CLI 执行是 Agent 核心循环）；文件系统隔离（fs.* 无意义）；动态代码加载禁止（插件系统废掉）；后台限制极严 | 能编译≠产品有意义。这是哲学问题，不是技术问题 |
 
+### 2.9 Harness 核心抽离与平台抽象层 (A 阶段已落位, 2026-08-21)
+
+**动机**: §2.8 的"kernel 零 Android 依赖"解决的是**不崩溃**, 不等于**可跨平台编译** —
+kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类型, 且 152 处
+路径依赖 `DataPaths` 可变全局单例。把 ReAct 核心抽为跨平台 Harness 必须先立抽象层。
+
+**抽象层位置**: `mengpaw-kernel/src/main/kotlin/com/mengpaw/kernel/harness/` —
+6 个接口文件, **签名零平台类型** (不出现 `java.*`/`android.*`):
+
+| 接口 | 职责 |
+|---|---|
+| `HarnessEnv` | 平台能力聚合根 (data class, 可整体替换) |
+| `HarnessFileSystem` | 磁盘读写唯一边界 (替代散落的 `java.io.File`) |
+| `HarnessPathResolver` | 逻辑路径 → 物理路径 (替代 `DataPaths` 全局单例语义) |
+| `HarnessClock` | 时间源 (可注入假时钟, 超时逻辑可秒级测) |
+| `HarnessLogger` | 日志出口 |
+| `HarnessConfirmGate` | 高危操作确认门 (**fail-closed**) |
+| `HarnessToolInvoker` | 工具执行协议 (工具即 CLI 命令 → 可替换形态) |
+
+**两轴分离铁律**: 平台能力 (宿主提供什么) 走 `HarnessEnv`; 领域决策 (工具是什么) 走
+`HarnessToolInvoker`。混在一起会导致"换个工具形态就得改平台实现"。
+
+**kernel 侧接入点 (改造期过渡设计)**:
+- `DataPaths` 转为抽象层门面 — 旧常量 API 保留 (152 个调用点零改动), 新增 `resolver` / `fs`
+- `AgentEngine` 新增 `harnessEnv` / `toolInvoker` 构造参数 (均有默认值)
+- `AgentToolRunner` 工具执行改经 `HarnessToolInvoker`; Linux shell 兜底留在原位 (宿主特定能力)
+- `HarnessKernelAdapters.kt` — `KernelLogBridge` / `KernelConfirmGate` / `CliPipelineToolInvoker`
+  桥接既有单例, 保证**未显式注入 = 改造前行为逐字等价** (663 内核用例验证)
+
+**独立仓库**: `D:\MengPaw\harness` (独立 git, 已列入主仓库 `.gitignore`) —
+`docs/interface-guide.md` 接口契约权威, `docs/migration-roadmap.md` B 阶段按包搬运清单。
+仓库内配置构建门禁 `verifyNoPlatformTypes`: 核心源码出现平台类型引用即构建失败,
+防止抽象层被逐步腐蚀回平台绑定。
+
+**接口说明 Skill**: `mengpaw-harness` (用户说"Harness 核心/接新宿主/平台抽象层"时加载)。
 
 ---
 
 ## 3. 模块详解
 
-### 3.1 mengpaw-kernel（微内核，124 文件）
+### 3.1 mengpaw-kernel（微内核，154 文件）
 
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|

@@ -15,6 +15,7 @@
 | `browser-autopilot-plan.md` | 14 KB | MP 浏览器「半自动武器」升级方案 — **已移至独立仓库** `WowBlueStudio/MengPaw-Browser` (mengpaw-browser/docs/)：Playwright 语义命令面 (page.*)、Termux 式 am 桥调用、page.load 分段截图+按段坐标系统、browser.* 去重清单（2026-08-11 拍板，Phase 1-3 已实施） | 升级浏览器能力、做浏览器自动化时, 去 browser 独立仓库 |
 | `MengPaw-Browser 仓库` | — | **浏览器已拆分独立仓库** `WowBlueStudio/MengPaw-Browser`（v0.8.x 独立版本线，经 JitPack 依赖主仓库共享地基）。浏览器源码/文档/版本节奏均以该仓库为准；本仓库仅保留架构参考（见开发指南 §3.4） | 改浏览器代码/命令面/桥/MCP、发浏览器版本时，去独立仓库 |
 | `llm-multistage-dataflow.md` | 8 KB | LLM 多阶段输出数据流：ReAct 每回合 LLM/框架/UI 各环节实际收到的内容（parse 规则/Observation 组装/历史累积/边界防御） | 理解 Agent 循环、排查工具调用链路、调试 LLM 输出时 |
+| **Harness 核心**（独立仓库 `D:\MengPaw\harness`） | — | **跨平台 Harness 核心**（ReAct 抽离目标仓库，独立 git，已在主仓库 .gitignore 排除）。`docs/interface-guide.md` = 接口契约权威（HarnessEnv/HarnessFileSystem/HarnessPathResolver/HarnessClock/HarnessConfirmGate/HarnessToolInvoker 逐条契约 + 接入 5 步 + 硬约束）；`docs/migration-roadmap.md` = B 阶段按包搬运清单（规模/障碍/优先级已实测）。kernel 内联副本在 `mengpaw-kernel/.../harness/` + `HarnessKernelAdapters.kt`（适配器不搬入独立仓库） | 为新宿主接入 ReAct 内核、搬移核心模块、改抽象层时 |
 | `add-llm-provider.md` | 10 KB | 新增 LLM 供应商接入指南：官方文档原文核对表（9 家, 含核对日期）+ 当前支持厂商/模型名单登记表（10 预置, 与 SettingsModels.kt 同步铁律）+ 6 个代码改动点 + 官方格式测试（v0.41.0 基线） | 新增/审计 LLM 供应商、核对思考字段、查当前支持名单时 |
 | `audit-methodology.md` | 7 KB | **三层十二问 · 功能闭环审计**：Agent 认知层(6问) + 软件逻辑层(6问) + 服务基础设施层(6问)，逐条过"Agent 能否自主完成功能闭环"（v0.24.0 清理后恢复 + 通用化抽象） | 审查新功能/子系统/插件是否闭环，或复盘"代码存在但 Agent 无法触达"类缺陷时 |
 | `code-review-9-dimensions.md` | 8 KB | **九维代码审查法**：机器门禁先行 + 可维护性/可读性/可扩展性/灵活性/简洁性/可复用性/可测试性/健壮性/兼容性 九维逐维过（含搜索模式），输出 P0-P2 分级（v0.24.0 清理后恢复 + 通用化抽象） | 做 PR 评审、大文件重构、模块交接、技术债盘点时 |
@@ -38,6 +39,7 @@
 | `mengpaw-pr-review` | 用户说"评审这个 PR" | PR 机器门禁 + 九维审查 + 分级输出 |
 | `closure-audit-12q` | 功能闭环审计/12问 | 三层十二问功能闭环审计 |
 | `code-review-9d` | 九维审查/代码质量 | 九维代码审查法 |
+| `mengpaw-harness` | Harness 核心/接新宿主/平台抽象层 | 跨平台 Harness 接口说明：HarnessEnv(文件系统/路径/时钟/日志/确认门)与 HarnessToolInvoker 契约、接入 5 步、零平台类型门禁、fail-closed 确认门、B 阶段搬运清单 |
 
 > 已归档（git 历史可溯）：九维审查总结→Codex skill `mengpaw-pr-review`；审计方法论→记忆 `bug-audit-methodology`；编译问题速查→`lessons.md` §15；流式调查记录→主文档 §4.1.1 定论；审校记录→`CHANGELOG.md`；make-skill 对比→`CHANGELOG.md` v0.26.2；根发布流程 RELEASE.md→Codex skill `mengpaw-release`（2026-08-07 由 `.claude/skills/release.md` 迁移）。
 
