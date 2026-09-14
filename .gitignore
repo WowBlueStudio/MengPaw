@@ -46,3 +46,8 @@ mengpaw-plugins/
 
 # Build artifacts (plugin AARs collected by build-plugins.ps1)
 releases/
+
+# ── 独立 git 仓库 (嵌套在项目内, 各自独立版本控制) ──
+# harness/ = 跨平台 Harness 核心 (ReAct 抽离目标仓库)
+harness/
+mengpaw-connectors/
