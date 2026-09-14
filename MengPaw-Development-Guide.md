@@ -216,8 +216,12 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 - `DataPaths` 转为抽象层门面 — 旧常量 API 保留 (152 个调用点零改动), 新增 `resolver` / `fs`
 - `AgentEngine` 新增 `harnessEnv` / `toolInvoker` 构造参数 (均有默认值)
 - `AgentToolRunner` 工具执行改经 `HarnessToolInvoker`; Linux shell 兜底留在原位 (宿主特定能力)
+- `RiskGate.evaluate` 高危确认改经 `HarnessConfirmGate` (由 `AgentToolRunner` 传入
+  `engine.harnessEnv.confirmGate`) — 注入时走抽象门, 未注入回落 `UserConfirmBus` 单例;
+  `NO_LISTENER`/`TIMEOUT` 与 `DENIED` 同等拒绝 (安全默认不变)
 - `HarnessKernelAdapters.kt` — `KernelLogBridge` / `KernelConfirmGate` / `CliPipelineToolInvoker`
-  桥接既有单例, 保证**未显式注入 = 改造前行为逐字等价** (663 内核用例验证)
+  桥接既有单例, 保证**未显式注入 = 改造前行为逐字等价** (665 内核用例验证, 含 2 个
+  确认门接线证明用例: ALLOWED 放行 / NO_LISTENER 拒绝且工具不执行)
 
 **独立仓库**: `D:\MengPaw\harness` (独立 git, 已列入主仓库 `.gitignore`) —
 `docs/interface-guide.md` 接口契约权威, `docs/migration-roadmap.md` B 阶段按包搬运清单。
