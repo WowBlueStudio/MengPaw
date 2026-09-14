@@ -236,6 +236,11 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 
 ### 3.1 mengpaw-kernel（微内核，154 文件）
 
+> **测试文件拆分 (2026-08-21)**: `AgentEngineTest.kt` 曾达 926 行 (超 400 行红线, 改造前已 816 行),
+> 按职责拆为 5 个类 + 1 个共用桩 (`TestSupport.kt`), 用例总数不变 (33):
+> `PlanModeTest` 9 / `ReActEngineTest` 5 / `CommandGateTest` 6 / `InjectionDefenseTest` 3 /
+> `TerminationEvolutionTest` 10。新增测试一律落对应职责类, 不得再往单文件堆 (上限 400 行)。
+
 | 包 | 文件数 | 关键类 |
 |----|--------|--------|
 | `agent/` | 31 | AgentExecutor (+ AgentFileCommands/AgentStorageCommands/AgentSessionCommands), AgentEngineTypes, GoalModeExecutor, PlanModeExecutor, SwarmModeExecutor (v0.34.4 起为唯一并行拆解执行器 — Mission 并入), DreamEngine, ToolResultManager, AgentProfile, AgentDocManager, AgentDocs (+ AgentDocsMemory/AgentDocsBootstrap/AgentDocsReaders/AgentDocsListeners), AgentMemoryExecutor (+ AgentMemoryReadCommands/AgentMemoryMutateCommands) 等 |
