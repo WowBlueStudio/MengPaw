@@ -45,6 +45,17 @@
   `implementation(project(":mengpaw-kernel"))` 的插件编译报 `Unresolved reference 'LlmProvider'`
   (plugin-skill/plugin-framework 实测中断, 插件测试无法运行)。**解法**: 需要跨模块暴露的类型,
   kernel 侧依赖必须用 `api`, 而不是让每个插件各自声明。
+- **`ProcessHandle` 的 Kotlin 类型映射与 Java 不一致 (proc.* 实现踩坑)**: `ph.info()` 在 Kotlin
+  映射为**可空平台类型** `Info?` (不是 `Optional<Info>`), 而 `info.command()/arguments()/user()/startInstant()`
+  仍是 `Optional<T>`, `ph.parent()` 返回 `Optional<ProcessHandle>`、`ph.children()` 返回 `Stream<ProcessHandle>`。
+  混用 `runCatching { ph.parent()?.pid() }` 会报 "Cannot infer type for this parameter" /
+  "Unresolved reference 'pid'"。**解法**: 逐项显式标注类型 (`val cmd: String = info?.command()?.orElse("") ?: ""`),
+  `parent()` 用 `isPresent`/`get()` 判空, `children()` 用 `.map { child: ProcessHandle -> child.pid() }.collect(Collectors.toList())`。
+- **判定表登记了命令但没有实现 = 双重伤害**: `proc.exec/proc.system/proc.kill` 同时存在于风险分级表、
+  高危 reason 表、Guest 名单、`SecurityPolicy.blockList` 四处, 但实现早随微内核拆分删除 —
+  既让"在册性"检查失去意义, 也让 blockList 的"永不可绕过"指向空气。**处理原则**:
+  ① 要实现的能力补齐实现 (proc.ps/info/kill); ② 刻意不开放的能力保留为**保留位** —
+  不注册但在表里, 并让守护测试断言"保留位必须真的被策略拒绝", 使"表项 vs 实现"始终一一对应。
 
 ---
 
