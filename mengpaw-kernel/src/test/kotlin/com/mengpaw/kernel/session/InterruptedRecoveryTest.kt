@@ -119,11 +119,27 @@ class InterruptedRecoveryTest {
 
     @Test
     fun `extractToolSummary extracts file path from write command`() {
-        val content = "Command: fs.write src/main.kt\nResult: done"
+        // v0.36.x 去重后真实写命令是重定向写 (echo/printf), 样本必须用真实命令,
+        // 否则断言只能靠已删命令的死分支通过, 制造"文件提取有覆盖"的假象。
+        val content = "Command: echo 'hello' > src/main.kt\nResult: done"
         val result = extractToolSummary(content)
         assertNotNull(result)
-        assertEquals("fs.write", result!!.name)
-        assertTrue(result.files.contains("src/main.kt"))
+        assertEquals("echo", result!!.name)
+        assertTrue("重定向写应提取出落地文件: ${result.files}", result.files.contains("src/main.kt"))
+    }
+
+    @Test
+    fun `extractToolSummary extracts file path from cat`() {
+        val result = extractToolSummary("Command: cat profile.md\nResult: 内容")
+        assertNotNull(result)
+        assertTrue("cat 应提取出读取的文件: ${result!!.files}", result.files.contains("profile.md"))
+    }
+
+    @Test
+    fun `extractToolSummary extracts path from grep last arg`() {
+        val result = extractToolSummary("Command: grep -n 关键词 notes.md\nResult: 12:命中")
+        assertNotNull(result)
+        assertTrue("grep 应提取末参路径: ${result!!.files}", result.files.contains("notes.md"))
     }
 
     @Test

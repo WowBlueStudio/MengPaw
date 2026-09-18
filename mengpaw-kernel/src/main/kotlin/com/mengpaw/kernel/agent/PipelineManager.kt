@@ -99,6 +99,11 @@ class PipelineManager(
 
     /** Integrity provider for path-level file protection; set after construction for Android. */
     var integrityProvider: IntegrityProvider = NoOpIntegrityProvider
+        set(value) {
+            field = value
+            // Linux 命令通道与 Pipeline 共用同一保护判定 (v0.47.x: 此前 Linux 通道无路径保护)
+            com.mengpaw.kernel.security.SecurityGate.register(value)
+        }
 
     /**
      * Cached pipeline, rebuilt only when plugins change (via [invalidatePipeline]).

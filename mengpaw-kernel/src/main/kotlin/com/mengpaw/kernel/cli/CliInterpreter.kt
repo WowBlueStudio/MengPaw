@@ -41,17 +41,12 @@ class CliInterpreter {
                         i += 1
                     }
                 }
-                part.startsWith("-") && part.length == 2 -> {
-                    val flagName = part.removePrefix("-")
-                    if (i + 1 < parts.size && !parts[i + 1].startsWith("-")) {
-                        flags[flagName] = parts[i + 1]
-                        i += 2
-                    } else {
-                        flags[flagName] = "true"
-                        i += 1
-                    }
-                }
                 else -> {
+                    // P0 修复 (Linux 原生选项): 单横线选项 (-n/-c/-i 等) 原样留在 args,
+                    // 不再归入 flags。此前 -x 被当作"带值 flag"并吞掉下一个 token
+                    // (grep -n 关键词 文件 → args=[文件] flags={n=关键词}), 且 Pipeline 还原
+                    // flags 时只认双横线、一律加一个 '-' 并追加到所有位置参数之后, 结果
+                    // 文件参数被推到选项之后、-n 变 --n —— grep/wc 的选项语义被静默破坏。
                     args.add(part)
                     i += 1
                 }

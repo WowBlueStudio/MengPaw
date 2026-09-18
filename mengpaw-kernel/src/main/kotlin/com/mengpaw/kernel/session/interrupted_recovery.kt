@@ -91,16 +91,12 @@ internal fun extractToolSummary(content: String): InterruptedToolSummary? {
             line.startsWith("-") && !line.startsWith("---") -> removed++
         }
         // Extract file paths from common tool outputs
-        if (name == "read_file" || name == "fs.cat" || name == "write_file" || name == "fs.write") {
-            val filePath = cmdLine.removePrefix(name).trim().removeSurrounding("\"").removeSurrounding("'")
-            if (filePath.isNotBlank() && filePath.contains(".")) {
-                if (files.isEmpty()) files.add(filePath)
-            }
-        }
-        if (name == "grep" || name == "fs.grep") {
-            val pathArg = cmdLine.substringAfterLast(" ").trim().removeSurrounding("\"").removeSurrounding("'")
-            if (pathArg.isNotBlank() && pathArg.contains(".")) {
-                if (files.isEmpty()) files.add(pathArg)
+        // v0.36.x 去重后文件操作走 Linux 通道 — 判定集必须是真实命令名,
+        // 否则中断恢复摘要的 files 字段对现有命令恒为空 (功能静默失效)。
+        // 路径提取: 剥掉重定向符号 (echo ... > f) 与引号后, 取路径样式的 token。
+        if (name in FILE_ARG_COMMANDS || name in PATH_LAST_ARG_COMMANDS) {
+            pathCandidates(cmdLine.removePrefix(name)).firstOrNull()?.let { path ->
+                if (files.isEmpty()) files.add(path)
             }
         }
     }
@@ -111,6 +107,30 @@ internal fun extractToolSummary(content: String): InterruptedToolSummary? {
         added = added,
         removed = removed
     )
+}
+
+/** 首参即文件的命令 (Linux 通道 + root 通道) — 中断恢复摘要从中提取涉及文件。 */
+private val FILE_ARG_COMMANDS = setOf(
+    "cat", "echo", "tee", "printf", "sed", "touch", "rm", "head", "tail",
+    "root.fs.cat", "root.fs.write", "root.fs.stat"
+)
+
+/** 末参为路径的命令 (表达式在前, 路径在后)。 */
+private val PATH_LAST_ARG_COMMANDS = setOf("grep", "find", "wc", "sort", "uniq", "cut", "tr")
+
+/**
+ * 从命令参数串中提取候选文件路径 — 剥掉重定向符号的影响:
+ * `echo '内容' > src/main.kt` → 取 `src/main.kt` (而不是引号内容或整串)。
+ * 返回按"像路径"程度排序的候选 (含 `.` 的 token 优先, 后者为末 token)。
+ */
+private fun pathCandidates(rawArgs: String): List<String> {
+    val cleaned = rawArgs
+        .replace(Regex("\\d*>>?"), " ")   // 重定向符号 (含 2> 形态)
+        .replace("\"", " ").replace("'", " ")
+    val tokens = cleaned.split(Regex("\\s+"))
+        .map { it.trim() }
+        .filter { it.isNotBlank() && it != ">" && it != ">>" }
+    return tokens.filter { it.contains(".") && !it.startsWith("-") }
 }
 
 // ── Event-driven Recovery Decision Tree (matching OpenClaw recovery decision tree) ──

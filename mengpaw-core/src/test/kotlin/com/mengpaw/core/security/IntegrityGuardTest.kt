@@ -41,7 +41,9 @@ class IntegrityGuardTest {
         coreDir = Files.createTempDirectory("ig-core-").toFile()
         agentsDir = Files.createTempDirectory("ig-agents-").toFile()
         outsideDir = Files.createTempDirectory("ig-outside-").toFile()
-        guard = IntegrityGuard(coreDir = coreDir.absolutePath, agentsDir = agentsDir.absolutePath)
+        // 注: agentsDir 生产不再受路径保护 (Agent 工作区是可写区) — 测试显式经
+        // extraProtectedDir 接入, 以覆盖"额外保护目录"这条路径。
+        guard = IntegrityGuard(coreDir = coreDir.absolutePath, extraProtectedDir = agentsDir.absolutePath)
     }
 
     @After
@@ -179,5 +181,23 @@ class IntegrityGuardTest {
     fun 非文件命令不受保护检查() {
         assertNull(guard.validateCommand("llm.chat", listOf("你好")))
         assertNull(guard.validateCommand("echo", emptyList()))
+    }
+
+    @Test
+    fun 命令行形态与参数形态判定一致() {
+        // Linux 通道传整行 (args 空), Pipeline 传 (命令名, 参数) — 两条通道必须同一判定
+        val dest = "${coreDir.absolutePath}${File.separator}Vault.kt"
+        assertNotNull("整行形态须拦截", guard.validateCommand("cp /tmp/a.txt $dest", emptyList()))
+        assertNotNull("参数形态须拦截", guard.validateCommand("cp", listOf("/tmp/a.txt", dest)))
+        assertNull("整行形态放行工作区路径", guard.validateCommand("cp /tmp/a.txt /tmp/b.txt", emptyList()))
+    }
+
+    @Test
+    fun 相对路径与文件名不被误伤() {
+        // 工作区内的相对路径是合法可写区 — 不得因保护判定而拦截
+        assertNull(guard.validateCommand("cat", listOf("profile.md")))
+        assertNull(guard.validateCommand("echo '内容' > notes.md", emptyList()))
+        assertNull(guard.validateCommand("rm", listOf("old.md")))
+        assertNull(guard.validateCommand("mkdir", listOf("newdir")))
     }
 }

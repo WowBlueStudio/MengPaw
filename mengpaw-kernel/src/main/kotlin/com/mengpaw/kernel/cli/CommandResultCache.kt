@@ -54,7 +54,7 @@ class CommandResultCache(
          * 可缓存白名单 — 纯查询/无副作用命令。
          * 恒定类（无参）：self.status/config/version/ports/search.stats/acp fingerprint、
          *   sys.device/camera/sensors/permission.list/notification.id/calendar.calendars
-         * 有参查询：self.tools/search、sys.app.info/permission.check、agent.read/ls/sessions/audit
+         * 有参查询：self.tools/search、sys.app.info/permission.check、agent.sessions/audit
          * 写命令/时变昂贵命令（sys.battery 等）不入列 — 宁缺毋滥。
          */
         val CACHEABLE = setOf(

@@ -42,11 +42,37 @@ class CliInterpreterTest {
     }
 
     @Test
-    fun `parse command with short flags`() {
-        val result = interpreter.parse("net.curl https://example.com -v")
-        assertEquals("net.curl", result.command)
+    fun `single dash option stays in args in order`() {
+        // P0 回归: 单横线选项是 Linux 原生语义 (-n/-c/-i), 必须原样、原位留在 args。
+        // 此前被当作"带值 flag"归入 flags 并吞掉下一个 token — Pipeline 还原时只认双横线,
+        // 结果 grep -n 关键词 文件 变成 args=[文件] + flags={n=关键词},
+        // 实际执行参数 [文件, --n, 关键词] (选项错位 + 值被吞)。
+        val result = interpreter.parse("grep -n 关键词 文件.md")
+        assertEquals("grep", result.command)
+        assertEquals(listOf("-n", "关键词", "文件.md"), result.args)
+        assertTrue("单横线选项不得进 flags", result.flags.isEmpty())
+    }
+
+    @Test
+    fun `wc -c keeps file argument after option`() {
+        val result = interpreter.parse("wc -c article.md")
+        assertEquals(listOf("-c", "article.md"), result.args)
+        assertTrue(result.flags.isEmpty())
+    }
+
+    @Test
+    fun `double dash flag still parsed as flag`() {
+        // 双横线保持框架 flag 语义 (Pipeline 会原样还原为 --key value)
+        val result = interpreter.parse("net.curl https://example.com --mode 644")
         assertEquals(listOf("https://example.com"), result.args)
-        assertEquals(mapOf("v" to "true"), result.flags)
+        assertEquals(mapOf("mode" to "644"), result.flags)
+    }
+
+    @Test
+    fun `double dash flag without value parsed as true`() {
+        val result = interpreter.parse("plugin.verify --all")
+        assertTrue(result.args.isEmpty())
+        assertEquals(mapOf("all" to "true"), result.flags)
     }
 
     @Test

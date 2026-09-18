@@ -261,4 +261,38 @@ class PipelineTest {
         val result = pipeline.execute("self.search", ExecutionContext(sessionId = "test"))
         assertTrue("无签名命令 (self.search 无参=统计) 不得被拦", result.success)
     }
+
+    // ── P0 回归: 单横线选项参数保形 (grep -n / wc -c) ─────────────────
+
+    @Test
+    fun `single dash options reach handler in original order`() = runTest {
+        val registry = CommandRegistry()
+        var seen: List<String> = emptyList()
+        registry.register("probe") { args, _ -> seen = args; ExecutionResult.ok("ok") }
+        val pipeline = Pipeline(registry = registry)
+        val result = pipeline.execute("probe -n 关键词 文件.md", ExecutionContext(sessionId = "test"))
+        assertTrue("应正常执行", result.success)
+        assertEquals("单横线选项须原样原位到达 handler", listOf("-n", "关键词", "文件.md"), seen)
+    }
+
+    @Test
+    fun `single dash option value is not swallowed`() = runTest {
+        val registry = CommandRegistry()
+        var seen: List<String> = emptyList()
+        registry.register("probe") { args, _ -> seen = args; ExecutionResult.ok("ok") }
+        val pipeline = Pipeline(registry = registry)
+        pipeline.execute("probe -c article.md", ExecutionContext(sessionId = "test"))
+        assertEquals("文件参数不得被选项吞掉", listOf("-c", "article.md"), seen)
+    }
+
+    @Test
+    fun `double dash flags still restored for handler`() = runTest {
+        val registry = CommandRegistry()
+        var seen: List<String> = emptyList()
+        registry.register("probe") { args, _ -> seen = args; ExecutionResult.ok("ok") }
+        val pipeline = Pipeline(registry = registry)
+        pipeline.execute("probe dir --mode 644", ExecutionContext(sessionId = "test"))
+        assertTrue("双横线 flag 须还原为 --key value 形态: $seen", seen.contains("--mode") && seen.contains("644"))
+        assertTrue("位置参数保留", seen.contains("dir"))
+    }
 }

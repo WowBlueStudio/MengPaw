@@ -19,27 +19,38 @@ import java.util.Locale
  * 3. Manifest: provides integrity manifest for debugging and audit
  *
  * PROTECTED PATH PREFIXES (any write/delete to these is blocked):
- *   /Android/data/com.mengpaw/Agent文档/ — Agent document directory
- *   /Android/data/com.mengpaw/插件仓库/   — plugin manifests & cache
+ *   核心目录 (Desktop .kt 源)        — coreDir
+ *   Vault (API Key 加密存储)         — shared_prefs/mengpaw_vault*
+ *   插件仓库/                        — DataPaths.PLUGIN_CACHE
+ *   配置/                            — DataPaths.CONFIG
+ *
+ * 注: Agent 工作区 (Agent文档/) 与输出目录是**设计上的可写区** (v0.36.x 命令去重后
+ * Agent 直接用 Linux 命令读写工作区), 不在保护列表内 —— 工作区边界由 Linux 通道
+ * 的默认 cwd 与写入路径规则约束, 而非路径级拦截。
  *
  * NOTE: File-level SHA256 verification (verify()) only works on Desktop/JVM
  * where core source files are accessible on disk. On Android, core classes are
  * inside the APK dex — use APK signature verification (PackageManager) instead.
- *
- * Vault (API Key) is separately protected at the Android sandbox level
- * and is never accessible via CLI commands.
  */
 class IntegrityGuard(
     private val coreDir: String = "/data/data/com.mengpaw/core",
-    private val agentsDir: String = DataPaths.AGENTS
+    /** 额外保护目录 (可选) — 生产不传 (工作区可写); 测试/特殊宿主可显式传入。 */
+    private val extraProtectedDir: String? = null
 ) : IntegrityProvider {
+
+    /** Vault 加密存储的真实前缀 (init 前用默认包名兜底)。 */
+    @Volatile
+    private var vaultPrefix: String = "/data/data/com.mengpaw/shared_prefs/mengpaw_vault"
+
     /** Directories whose contents cannot be modified by Agent CLI commands. */
-    val protectedPrefixes = listOf(
-        coreDir,
-        agentsDir,
-        "/data/data/com.mengpaw/shared_prefs/mengpaw_vault",
-        DataPaths.PLUGIN_CACHE
-    )
+    val protectedPrefixes: List<String>
+        get() = buildList {
+            add(coreDir)
+            add(vaultPrefix)
+            add(DataPaths.PLUGIN_CACHE)
+            add(DataPaths.CONFIG)
+            extraProtectedDir?.let { add(it) }
+        }.filter { it.isNotBlank() }
 
     /** Core files whose SHA256 is tracked for integrity verification. */
     private val trackedFiles = listOf(
@@ -80,6 +91,7 @@ class IntegrityGuard(
     fun init(context: android.content.Context? = null) {
         baselineHashes.clear()
         appContext = context
+        resolveVaultPrefix(context)
 
         // Desktop path: hash .kt source files
         trackedFiles.forEach { name ->
@@ -195,49 +207,65 @@ class IntegrityGuard(
     }
 
     /**
-     * Check if a given absolute path is under protection.
-     * Used by Pipeline to block write/delete operations.
+     * Check if a given path is under protection.
+     * 相对路径不参与判定 (工作区/输出目录内的相对路径都是合法可写区);
+     * 仅绝对路径按前缀匹配, 且要求命中边界 (前缀后是 `/` 或路径结尾), 防相似前缀误伤。
      */
     fun isProtectedPath(path: String): Boolean {
-        val normalized = File(path).absolutePath
-        return protectedPrefixes.any { normalized.startsWith(it) }
+        val normalized = try { File(path).absolutePath } catch (_: Exception) { return false }
+        return protectedPrefixes.any { prefix ->
+            // 前缀同样要规范化 — DataPaths 里的相对路径前缀 (配置/插件仓库) 未经
+            // absolutePath 时永远匹配不上绝对路径入参 (原实现用裸字符串比较)。
+            val absolutePrefix = try { File(prefix).absolutePath } catch (_: Exception) { prefix }
+            normalized == absolutePrefix || normalized.startsWith("$absolutePrefix${File.separator}")
+        }
     }
 
     /**
      * Validate a command against protected paths.
-     * For write commands (fs.write/cp/mv), checks the destination path.
-     * For delete commands (fs.rm), checks the target path.
+     *
+     * 判定改为**按路径参数**通用化 (不再依赖命令名白名单): 命令名只用于定位参数起点
+     * (首参不是绝对路径时视为命令名, 相对路径参数因此天然豁免)。这样两条通道共用同一判定 —
+     * 注册命令经 [com.mengpaw.kernel.cli.Pipeline], Linux 命令经
+     * [com.mengpaw.kernel.cli.LinuxCommandExecutor] → [com.mengpaw.kernel.security.SecurityGate]。
+     * 历史上只认写命令白名单 + 仅经 Pipeline, 导致 Linux 通道的 `cp/mv/tee` 写核心目录无拦截。
      *
      * @return null if allowed, or an error message if blocked.
      */
     override fun validateCommand(command: String, args: List<String>): String? {
-        val commandName = command.lowercase()
-
-        // Write operations — check destination path
-        if (commandName in WRITE_COMMANDS && args.isNotEmpty()) {
-            val destPath = File(args[0]).absolutePath
-            if (isProtectedPath(destPath)) {
-                return "Protected path: cannot write to $destPath (core integrity)"
-            }
+        val absolutePaths = extractAbsolutePaths(command, args)
+        if (absolutePaths.isEmpty()) return null
+        absolutePaths.firstOrNull { isProtectedPath(it) }?.let { hit ->
+            return "受保护路径: $hit 属于核心区/Vault(API Key)/插件仓库/配置目录, 不允许经命令读写"
         }
+        return null
+    }
 
-        // Delete operations — check target path
-        if (commandName in DELETE_COMMANDS && args.isNotEmpty()) {
-            val targetPath = File(args[0]).absolutePath
-            if (isProtectedPath(targetPath)) {
-                return "Protected path: cannot delete $targetPath (core integrity)"
+    /** 参数中的绝对路径 token。internal 供测试可见性。
+     *  args 非空时只用 args; 否则按空格切整行并去掉命令名 (Linux 通道传整行形态)。
+     *  绝对路径判定同时接受 `/` 开头 (Android/Linux) 与平台绝对路径 (Windows 测试环境)。 */
+    internal fun extractAbsolutePaths(command: String, args: List<String>): List<String> {
+        val tokens = if (args.isNotEmpty()) args
+        else command.trim().split(Regex("\\s+")).drop(1)
+        return tokens.filter { looksLikeAbsolutePath(it) }
+    }
+
+    /** 绝对路径判定 — `/x` 形态或平台绝对路径; 相对路径 (工作区内) 一律豁免。 */
+    private fun looksLikeAbsolutePath(token: String): Boolean =
+        token.startsWith("/") || token.startsWith("\\") || runCatching { File(token).isAbsolute }.getOrDefault(false)
+
+    /** 把 Vault 前缀解析为真实 applicationId 下的 shared_prefs 路径。 */
+    private fun resolveVaultPrefix(context: android.content.Context?) {
+        vaultPrefix = try {
+            val dataDir = context?.filesDir?.parentFile
+            if (dataDir != null) {
+                File(File(dataDir, "shared_prefs"), "mengpaw_vault").absolutePath
+            } else {
+                vaultPrefix
             }
+        } catch (_: Exception) {
+            vaultPrefix
         }
-
-        // Move/copy — check both source and destination
-        if (commandName in MOVE_COMMANDS && args.size >= 2) {
-            val destPath = File(args[1]).absolutePath
-            if (isProtectedPath(destPath)) {
-                return "Protected path: cannot write to $destPath (core integrity)"
-            }
-        }
-
-        return null // allowed
     }
 
     /**
@@ -270,12 +298,5 @@ class IntegrityGuard(
         @Volatile
         var globalInstance: IntegrityGuard = IntegrityGuard()
             private set
-
-        /** CLI commands that write/create files. v0.36.x 去重: fs.* 已移除 — Linux 写命令的路径保护由 CommandMonitor 承接. */
-        private val WRITE_COMMANDS = setOf("echo", "tee", "printf", "cp", "mv", "rm", "mkdir", "touch")
-        /** CLI commands that delete files. */
-        private val DELETE_COMMANDS = setOf("rm")
-        /** CLI commands that move/rename files. */
-        private val MOVE_COMMANDS = setOf("mv", "cp")
     }
 }

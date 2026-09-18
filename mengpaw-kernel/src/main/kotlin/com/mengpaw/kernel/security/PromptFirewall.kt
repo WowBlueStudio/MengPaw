@@ -14,10 +14,10 @@ import java.io.File
  * - **TRUSTED (已配对)**: 自己的设备，无限制。通过设备指纹/共享密钥配对。
  * - **GUEST (未配对)**: 其他用户的设备，受限模式。
  *   - ✅ 对话记录 (agent.memory.record)
- *   - ✅ 读取查询 (fs.cat, fs.ls, self.status, self.stats, sys.*)
+ *   - ✅ 读取查询 (cat/ls/head/tail/grep, self.status, self.stats, sys.*)
  *   - ✅ 简单生成 (render.generate — 仅 API 调用，不写本地文件)
- *   - ✅ 信息交换 (hermes.memo — 仅团队共享记忆)
- *   - ❌ 文件写入 (fs.write/rm/mkdir/mv/cp)
+ *   - ✅ 信息交换 (tribe.hermes.memo — 仅团队共享记忆)
+ *   - ❌ 文件写入 (echo/tee 重定向写, rm, mkdir, mv, cp)
  *   - ❌ 进程执行 (proc.exec)
  *   - ❌ 插件安装 (plugin.install/uninstall)
  *   - ❌ UI 操控 (ui.*)
@@ -67,7 +67,7 @@ object PromptFirewall {
     /**
      * Check if a command is allowed from [peerId].
      * @param peerId The source device's Agent ID.
-     * @param command The full CLI command string (e.g. "fs.write /tmp/test.txt hello").
+     * @param command The full CLI command string (e.g. "echo 'hello' > /tmp/test.txt").
      * @return null if allowed, or an error message if blocked.
      */
     fun check(peerId: String, command: String): String? {

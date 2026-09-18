@@ -90,7 +90,7 @@ internal class AgentConversation(private val engine: AgentEngine) {
         if (integrityFailed) {
             KernelLog.w("AgentEngine", "Integrity latch active — blocking LLM call")
             return listOf(mapOf("role" to "system", "content" to "Session data integrity issue detected. " +
-                "Please use agent.repair or start a new conversation to continue."))
+                "Start a new conversation to continue — this session's history is not trustworthy."))
         }
         // v0.28.6: 后台预压缩 (≥42 提前压, 不在请求前同步插 LLM 调用) + 同步兜底
         engine.getSessionManager().scheduleCompressionIfNeeded(sessionId, compressionScope, engine.getLlmProvider())

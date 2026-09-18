@@ -60,12 +60,19 @@ object LinuxCommandExecutor {
             )
         }
 
-        // 1. CommandMonitor — 统一安全监控 (规则 + 弹窗 + 元字符 + 无参保护 + 再解释递归)
+        // 1. 完整性路径保护 (与 Pipeline 同一套判定) — 核心目录/Vault(API Key)/插件仓库/配置
+        // 注: v0.47.x 补接入 — 此前路径保护只挂在 Pipeline (仅注册命令), Linux 通道的
+        // cp/mv/tee/sed -i 等写操作对受保护目录无任何拦截。
+        com.mengpaw.kernel.security.SecurityGate.validate(trimmed, emptyList())?.let {
+            return ExecutionResult.fail(it, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
+        }
+
+        // 2. CommandMonitor — 统一安全监控 (规则 + 弹窗 + 元字符 + 无参保护 + 再解释递归)
         CommandMonitor.evaluate(trimmed, allowUserConfirm, workDir = ctx.workDir)?.let {
             return ExecutionResult.fail(it, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
         }
 
-        // 2. SecurityPolicy — restrictedPatterns 兜底 (与 Pipeline 同一共享策略)
+        // 3. SecurityPolicy — restrictedPatterns 兜底 (与 Pipeline 同一共享策略)
         if (!PolicyStore.sharedPolicy().isAllowed(trimmed)) {
             return ExecutionResult.fail(
                 "Command '$cmdName' is blocked by security policy",
@@ -73,7 +80,7 @@ object LinuxCommandExecutor {
             )
         }
 
-        // 3. DefaultCommandExecutor — 前缀黑名单 + 结构化元字符 + 会话池执行
+        // 4. DefaultCommandExecutor — 前缀黑名单 + 结构化元字符 + 会话池执行
         val result = DefaultCommandExecutor().execute(trimmed, ctx)
         // 验证功能拉回 (v0.36.x): 重定向写操作成功后附读回验证引导 —
         // 替代已移除 agent.write 的框架自动读回验证 (裁判从框架降为提示引导)
