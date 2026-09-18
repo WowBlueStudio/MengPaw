@@ -14,6 +14,11 @@ package com.mengpaw.kernel.security
  * 本对象把宿主注入的 [IntegrityProvider] 提升为 kernel 级共享实例:
  * Pipeline 与 Linux 命令通道同一来源, 两条通道共用同一套保护判定。
  * 未注入时保持 [NoOpIntegrityProvider] (纯 JVM 测试/桌面场景零影响)。
+ *
+ * **能力边界 (如实标注)**: 判定基于**绝对路径参数** — 相对路径参数不参与判定
+ * (工作区内的相对路径是合法可写区)。因此 `cd <受保护目录>` 后再用相对路径写入,
+ * 不构成路径级拦截 (仍受 Android 应用沙箱约束, 不越出应用私有目录之外)。
+ * 若后续需要覆盖, 应在 Linux 通道按 `ctx.workDir` 解析相对路径后再判定。
  */
 object SecurityGate {
 
