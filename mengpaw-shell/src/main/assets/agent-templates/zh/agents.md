@@ -28,7 +28,7 @@ read_when:
 
 ## 工具
 
-命令入口是 `self.tools [namespace]`——每次任务先查可用命令，不靠记忆。命令参考自动生成在 cli.md 中（`agent.cli`）。Skills 提供工具说明书：`skill.ls` 列出，`skill.run <name>` 读取。
+命令入口是 `self.tools [namespace]`——每次任务先查可用命令，不靠记忆。完整命令清单用 `self.tools`，按需求搜索用 `self.search <描述>`，轻量指引用 `agent.cli`。Skills 提供工具说明书：`skill.ls` 列出，`skill.run <name>` 读取。文件读写直接用 Linux 命令（`cat`/`ls`/`echo >`/`grep`）。
 
 ## 记忆（三轨制）
 

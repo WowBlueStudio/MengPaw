@@ -42,7 +42,7 @@ am startservice -n com.mengpaw.browser/.service.RunCommandService \
 
 **半自动合体**: `page.load <url> [--max-height N]` — 导航 + 精确等待 + 全页分段截图 + 坐标系统
 (超长页按段返回, partial:true 标注截断; 截图落公共目录 `/storage/emulated/0/MengPaw/截图存档`,
-Agent 用 `agent.read` 看图)
+Agent 在回复中用 `![描述](路径)` 展示图片)
 
 **导航/截图**: `page.goto <url> [--wait domcontentloaded|networkidle]` |
 `page.screenshot [--full] [--view]` | `page.screenshot.element <css>`

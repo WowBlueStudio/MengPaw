@@ -19,10 +19,10 @@ source: core
 
 | 关键词 | 文档/记忆 | 源码路径 |
 |--------|----------|---------|
-| CLI、命令、解析、执行 | CLI.md | `mengpaw-kernel/.../cli/CliInterpreter.kt` |
-| LLM、模型、API、Provider | CLI.md | `mengpaw-kernel/.../llm/AdaptiveLlmProvider.kt` |
+| CLI、命令、解析、执行 | `self.tools` / `agent.cli` | `mengpaw-kernel/.../cli/CliInterpreter.kt` |
+| LLM、模型、API、Provider | — | `mengpaw-kernel/.../llm/AdaptiveLlmProvider.kt` |
 | 安全、权限、拦截、防火墙 | — | `mengpaw-kernel/.../security/SecurityPolicy.kt` |
-| 插件、plugin、安装、市场 | CLI.md | `mengpaw-kernel/.../plugin/PluginExecutor.kt` |
+| 插件、plugin、安装、市场 | `skill.run plugin-system` | `mengpaw-kernel/.../plugin/PluginExecutor.kt` |
 | 会话、记忆、压缩、历史 | — | `mengpaw-kernel/.../session/SessionManager.kt` |
 | MCP、工具、tool | — | `mengpaw-kernel/.../mcp/McpServer.kt` |
 | ACP、设备通信、配对 | — | `mengpaw-kernel/.../acp/AcpServer.kt` |
@@ -49,8 +49,8 @@ source: core
 
 ## 约定
 
-- 先读文档（`agent.memory search`），再读源码（Linux 命令通道 `cat`/`grep`，内置）
-- `agent.cli` 返回完整 CLI 参考
-- `agent.memory search <关键词>` 全文搜索所有记忆文档
+- 先读文档（`agent.memory.search`），再读源码（Linux 命令通道 `cat`/`grep`，内置）
+- 命令发现：`self.tools [命名空间]`（完整枚举）/ `self.search <描述>`（按需求搜索；`agent.cli` 为轻量指引）
+- `agent.memory.search <关键词>` 全文搜索所有记忆文档
 - 不确定时先 `ls` 看看当前有什么，不要盲目猜测路径
 - 文件读写用 Linux 命令通道（`cat` / `sed` / 重定向），如需批量网络请求用 net 插件 `net.*` 命令

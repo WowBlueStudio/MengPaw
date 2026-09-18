@@ -38,7 +38,7 @@ tavily.extract <url>
 1. 先search找页面 → 再extract读内容
 2. 中文问题用中文搜索词，结果更精准
 3. 搜索结果可存memory: `agent.memory.record <摘要>`
-4. 文档可保存到工作区: `agent.write <路径> <内容>`（内置）
+4. 文档可保存到工作区: `printf '内容\n' > <路径>`（Linux 命令直通，无需插件）
 
 ## 故障排查
 - 搜索失败 → 检查TAVILY_API_KEY: `self.config`

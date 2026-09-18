@@ -32,13 +32,14 @@ Talk to the user about:
 Once agreed, save it:
 
 ```
-agent.write profile.md "---
+printf '---
 name: <your name>
 role: <your role>
 style: <your speaking style>
 userName: <the user's name>
 notes: <important info the user told you>
----"
+---
+' > profile.md && cat profile.md
 ```
 
 Your name appears in the sidebar, chat header, and system prompt. Tell the user "I've set my identity" — it will persist across sessions.
@@ -103,7 +104,7 @@ Confirm these things:
 - What are your boundaries and preferences?
 - Should you be proactive or reactive?
 
-Save with `agent.write soul.md "..."`.
+Save with a redirect write: `printf 'content\n' > soul.md` (then `cat soul.md` to verify).
 
 ---
 

@@ -28,7 +28,7 @@ read_when:
 
 ## Tools
 
-Commands are listed via `self.tools [namespace]` — always check available commands before a task, don't rely on memory. The full command reference is auto-generated in cli.md (`agent.cli`). Skills provide manuals: `skill.ls` to list, `skill.run <name>` to read.
+Commands are listed via `self.tools [namespace]` — always check available commands before a task, don't rely on memory. Full listing with `self.tools`, on-demand lookup with `self.search <description>`, light guide with `agent.cli`. Skills provide manuals: `skill.ls` to list, `skill.run <name>` to read. Use Linux commands directly for file I/O (`cat`/`ls`/`echo >`/`grep`).
 
 ## Memory (three tracks)
 

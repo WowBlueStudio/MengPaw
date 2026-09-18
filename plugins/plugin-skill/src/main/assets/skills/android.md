@@ -129,8 +129,7 @@ MengPaw 数据目录 (`{BASE}` = `Context.filesDir`):
 ```
 
 ```
-agent.ls / agent.read / agent.write / agent.rm / agent.mkdir  ← 工作区内操作
-fs.ls / fs.cat ← 插件文件命令 (需安装 plugin-fs)
+ls / cat / printf '内容' > 文件 / rm / mkdir -p  ← 工作区内操作 (Linux 命令直通, 手册 skill.run filesystem)
 ```
 
 ## 后台限制
@@ -270,7 +269,7 @@ sys.wifi.scan                       # 扫描附近 WiFi (需定位权限+定位�
 skill.run termux    # 获取完整使用指南
 ```
 - 通过 `am startservice` 调用 Termux RUN_COMMAND Intent
-- 没有脚本运行时？用 > 文件重定向获取输出，然后 agent.read
+- 没有脚本运行时？用 > 文件重定向获取输出，然后 cat 读回
 - 不需要 root，不需要 APK 改动
 
 ## 常见问题排查
@@ -298,7 +297,7 @@ if (Build.VERSION.SDK_INT >= 33) {
 
 **应用闪退 → 日志获取**:
 ```
-agent.read /sdcard/Download/crash.log    # 崩溃日志
+cat /sdcard/Download/crash.log          # 崩溃日志
 sys.permission.list                      # 检查权限
 agent.storage                            # 检查磁盘空间
 ```

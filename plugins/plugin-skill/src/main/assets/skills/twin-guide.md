@@ -33,7 +33,7 @@ source: plugin
 - **根文档**: soul.md / profile.md / agents.md / boost.md / trigger.md / heartbeat.md / trumanshow.md / {date}_dream.md
 - **memory/**: memory.md (长期) / memory_{date}.md (中期) / project_*_memory.md / archive.md
 - **模型能力规则**: `twin-model-rules.json` (非 .md 破例同步 — 见下)
-- **不同步**: CLI.md / inbox/ / dialog/ / memory/backup/ (本地文件)
+- **不同步**: inbox/ / dialog/ / memory/backup/ (本地文件)
 - **冲突**: 本地较新且内容不同 → 保存 `.conflict` 备份, 不覆盖
 
 ## 模型能力判定（进化版，2026-09-10）

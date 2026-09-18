@@ -52,7 +52,7 @@ source: core
 
 ### Phase B：创建（用户确认后）
 1. `skill.create <name> --category meta --description "<一句话触发描述>"`（本地池建骨架）
-2. `agent.write` 完善正文（见下方三类模板；触发词写进 description；进化目标写进 `## 进化目标` 段）
+2. 用重定向写完善正文（`printf '内容\n' > 技能文件路径`，路径见 skill.info；见下方三类模板；触发词写进 description；进化目标写进 `## 进化目标` 段）
 3. `skill.ls` 验证已创建 → `skill.run <name>` 自测一遍
 4. 需要共享给所有 Agent：`skill.push <name>` 上传全局池
 5. 汇报：技能名 / 类型 / 触发方式 / 进化目标 / 已验证
@@ -105,7 +105,7 @@ source: core
 - 稳定锚点: <核心流程与输入输出契约>
 - 收敛原则: 升级朝目标收敛; 新自动化需求开新技能
 ```
-约定：脚本段代码先用 `agent.write` 落地到工作区/临时文件再执行；脚本必须处理错误输出与边界情况（空输入、缺文件）。
+约定：脚本段代码先用重定向写（`printf '...' > 文件`）落地到工作区/临时文件再执行；脚本必须处理错误输出与边界情况（空输入、缺文件）。
 
 ### 流程 Flow 类
 ```markdown
@@ -169,7 +169,7 @@ source: core
    - 脚本报错 → 修脚本、补边界情况（空输入/缺文件/超时）
    - 约束被绕过 → 强化 Flow 类的 `## 禁止` 段
    - 触发词不灵 → 改进 description 让技能更易被自然触发
-3. **更新技能**：`agent.write` 修改技能文件 → `skill.push <name>` 同步全局池
+3. **更新技能**：重定向写修改技能文件（`printf '...' > 技能文件`，路径见 `skill.info <name>`）→ `skill.push <name>` 同步全局池
 4. **标记已修正**：`evolution.mark-corrected`（防止同一失败模式反复引导）
 5. **沉淀教训**：`agent.memory.keep` 记录「技能 <name> 失败模式：…，已修正为：…」
 

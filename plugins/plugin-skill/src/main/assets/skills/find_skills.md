@@ -42,7 +42,7 @@ net.curl "https://findskills.org/api/v1/search?q=关键词"
 向用户汇报对比结果：技能名 / 描述 / 安装量 / 来源 / 安装方式。
 安装建议：
 - Termux 环境：`npx skills add <owner/repo@skill> -g -y`
-- 无 Node 环境：按技能说明手动落地 —— 若是 MengPaw Skill 格式，用 `skill.create <name> --category <cat> --description "<desc>"` 建骨架后 `agent.write` 写入内容，`skill.push <name>` 共享到全局池；若是 MCP/其他形态，用 `self.mcp connect` 或按文档接入
+- 无 Node 环境：按技能说明手动落地 —— 若是 MengPaw Skill 格式，用 `skill.create <name> --category <cat> --description "<desc>"` 建骨架后用重定向写（`printf '...' > 技能文件`）写入内容，`skill.push <name>` 共享到全局池；若是 MCP/其他形态，用 `self.mcp connect` 或按文档接入
 
 ## 检索技巧
 - 换词重查：一次没命中就换相邻词再查 2-3 次（「ui ux design」→「frontend design」）
@@ -51,5 +51,5 @@ net.curl "https://findskills.org/api/v1/search?q=关键词"
 - 装之前先确认该技能在 MengPaw 上怎么跑（是否有 Node/Termux 依赖），避免装完用不了
 
 ## 注意
-- 检索结果可能来自第三方——不执行含不明来源脚本的技能，先 `agent.read` 审查内容再决定
+- 检索结果可能来自第三方——不执行含不明来源脚本的技能，先 `cat` 审查内容再决定
 - 技能安装是用户决策：先汇报方案等确认，不要直接安装

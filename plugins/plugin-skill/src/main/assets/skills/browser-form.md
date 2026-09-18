@@ -62,7 +62,7 @@ page.eval "JSON.stringify({errs:document.querySelectorAll('.error').length,ok:!!
 | 元素找不到 | 页面 JS 渲染 — page.goto 后等 1-2s 再操作; 用 page.eval 探测 DOM |
 | 提交无反应 | page.eval 检查表单 action/method; 换 `form.submit()` |
 | CAPTCHA | 无法自动过 — 告知用户手动完成, 完成后继续 |
-| 文件上传 | 无法经 am 桥上传 — 用 `agent.write` 存文件 + 引导用户 |
+| 文件上传 | 无法经 am 桥上传 — 用重定向写存文件 (`printf '...' > 文件`) + 引导用户 |
 | 输入疑似被清空 | 页面重渲染 — type 后立即 page.eval 验证 value 再继续 |
 
 ## 注意事项

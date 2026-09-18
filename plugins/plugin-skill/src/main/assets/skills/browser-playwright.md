@@ -32,7 +32,7 @@ source: core
 | `page.keyboard.press()` | `page.key <key>` | 按键 (Enter/Tab/ArrowDown/单字符) |
 | `page.mouse.wheel()` | `page.scroll_by <dy>` | 相对滚动 |
 | `page.locator.scrollIntoView()` | `page.scroll <x> <y>` | 绝对滚动 |
-| `page.content()` | `page.content [--grep P] [--regex] [-i] [--head N] [--tail N]` | 正文 + 内置过滤 (参照 fs.grep) |
+| `page.content()` | `page.content [--grep P] [--regex] [-i] [--head N] [--tail N]` | 正文 + 内置过滤 (参照 grep -n) |
 | `locator.check()/uncheck()` | `page.check` / `page.uncheck` | 勾选/取消 |
 | `page.locator('form').evaluate(f=>f.submit())` | `page.submit <css>` | 提交表单 |
 
@@ -43,7 +43,7 @@ source: core
   `page.click <seg> <x> <y>`; 单张图时 `<x> <y>` 即可 (段号默认 1)
 - **坐标还原**: 段图坐标 → 页面坐标由浏览器自动换算 (缩放比/段偏移), Agent 直接用图坐标
 - **截图只回路径**: 落盘公共目录 `/storage/emulated/0/MengPaw/截图存档` (需「所有文件访问」
-  授权, 首启弹窗; 拒绝后每次 page.load 提示重授), Agent 用 `agent.read` 看图
+  授权, 首启弹窗; 拒绝后每次 page.load 提示重授), Agent 在回复中用 `![描述](路径)` 展示图片
 - **等待语义**: `--wait networkidle` 为近似实现 (加载完成后 300ms 无新活动), 非精确网络空闲
 - **选择器仅 CSS**: 无 XPath/Playwright 专属语法
 
