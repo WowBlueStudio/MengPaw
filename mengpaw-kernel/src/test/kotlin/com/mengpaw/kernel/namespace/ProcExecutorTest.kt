@@ -22,7 +22,7 @@ import org.junit.Test
 class ProcExecutorTest {
 
     private val ctx = ExecutionContext(sessionId = "test", agentName = "MengPaw")
-    private val selfPid = ProcessHandle.current().pid()
+    private val selfPid = ProcApi.currentPid()
 
     private fun run(cmd: String, args: List<String>) = runBlocking {
         ProcExecutor.commands.getValue(cmd).invoke(args, ctx)

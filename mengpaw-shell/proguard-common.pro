@@ -45,6 +45,10 @@
 -dontwarn com.google.crypto.tink.**
 -dontwarn javax.annotation.**
 -dontwarn org.conscrypt.**
+# java.lang.ProcessHandle 是 Java 9 API, Android 全平台没有 —
+# proc.* 经反射访问 (ProcApi), 平台缺类时降级; 此处仅消除 R8 的 Missing classes 报错
+-dontwarn java.lang.ProcessHandle
+-dontwarn java.lang.ProcessHandle$Info
 
 # ── Common: Tink crypto (required by EncryptedSharedPreferences) ──
 -keep class com.google.crypto.tink.** { *; }

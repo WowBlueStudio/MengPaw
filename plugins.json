@@ -1,7 +1,7 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
   "version": 9,
-  "updated": "2026-09-11",
+  "updated": "2026-09-19",
   "plugins": [
     {
       "id": "concise-plugin",
@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "dream-plugin",
@@ -31,7 +31,7 @@
       "commands": [],
       "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
       "size": 3129,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "tavily-plugin",
@@ -63,7 +63,7 @@
       ],
       "checksum": "sha256:ab121f541be212f54a85949a8df59fadf1ab181baadd0019bb8fa3e175a601e9",
       "size": 21596,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "framework-plugin",
@@ -93,7 +93,7 @@
       ],
       "checksum": "sha256:0574d358452bc9d3eb0f3b5bb8df75f7df427dea62b741d11f82fc5a31440067",
       "size": 110950,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "net-plugin",
@@ -109,9 +109,9 @@
         "net.post",
         "net.proxy"
       ],
-      "checksum": "sha256:a78b37dc205343cb0c08f18ff77566c3b6edca5d62e6006814d656fefe5ba213",
-      "size": 17951,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "checksum": "sha256:3693f599011abec46f9921afb2a39e00a5defc65ade373914ed3ba7c82cd3cd4",
+      "size": 17467,
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "memory-twin-plugin",
@@ -142,7 +142,7 @@
       ],
       "checksum": "sha256:f1842d5066ba8608c99a4deaebe9c3c26d7749664f62fbfbebf795e528deda33",
       "size": 302592,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "skill-plugin",
@@ -165,9 +165,9 @@
         "skill.enable",
         "skill.disable"
       ],
-      "checksum": "sha256:baec8bcfab674aa598063c75f884e28ec6490db710866a57fe5f87d194dca35c",
-      "size": 103735,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "checksum": "sha256:e04d58ef5f5ec844c3f9d9a039c37f6acf7e6605fc37dbaf8d47dfef1827319a",
+      "size": 105541,
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "clipboard-plugin",
@@ -185,7 +185,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "dev-plugin",
@@ -206,7 +206,7 @@
       ],
       "checksum": "sha256:dc9e4cc80d320aff8aae8edc0d2c6451ed62d0e3e113dc37d05f694de92234d5",
       "size": 35529,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "update-plugin",
@@ -230,7 +230,7 @@
       ],
       "checksum": "sha256:2fcb14e1b0d5eac9ff32d8bcc9ccad36c10121a41b4e75cbb129501164151159",
       "size": 56173,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "translate-plugin",
@@ -340,9 +340,9 @@
         "tribe.hermes.memo",
         "tribe.hermes.role"
       ],
-      "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
-      "size": 282877,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "checksum": "sha256:2f65c8cfd8348f6f16cbfbfdfe153c163fd9ee0bde1e3019c99091ae54d358c8",
+      "size": 282874,
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "comfy-plugin",
@@ -445,9 +445,9 @@
         "root.backup.restore",
         "root.audit"
       ],
-      "checksum": "sha256:32c402304b4190083c209773186368460ab813a757bc4a356d61ba03d5fdf21b",
-      "size": 46842,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "checksum": "sha256:033500b7ebbddc58039b46dc62bd73e88799713a7baf34bf4358379cea65d6c2",
+      "size": 46834,
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "termux-plugin",
@@ -466,7 +466,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "tools-plugin",
@@ -483,9 +483,9 @@
         "tools.remove",
         "tools.search"
       ],
-      "checksum": "sha256:fd6cf25efe806029cda88f3c47e40eec4b31cfee1128df50b28af5fe77ea0da2",
-      "size": 36752,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "checksum": "sha256:72f1ad537fd62c0ff1b91dbb65fd5524d71c753c424e88be3aa4cc6b0c48c177",
+      "size": 36739,
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "office-plugin",
@@ -503,7 +503,7 @@
       ],
       "checksum": "sha256:91b333fc9bdfe6cf74e06d60fec4f6e9e532dc9462677f1cb0be101f9578c7f6",
       "size": 21466,
-      "changelog": "### 变更\n- **DeepSeek 预置只保留 `deepseek-flash`**: 官方 2026-09-10 新闻与更新日志原文「DeepSeek V4.1 Flash 已同步上线 DeepSeek API，原生支持多模态，将模型名称更改为 deepseek-flash 即可调用最新的 V4.1 Flash 模型。旧版本模型 V4 Flash 与 V4 Flash Vision Exp 现已下线，出于兼容考虑，模型名 deepseek-v4-flash、deepseek-v4-flash-vision-exp 将被暂时路由到 V4.1 Flash」；「北京时间 2026 年 9 月 14 日 12:00 之后 … 用户访问 deepseek-v4-pro 的请求将全部路由到 V4.1 Flash，并按 V4.1 Flash 单价计费」。模型 & 价格页脚注「**模型名请使用 deepseek-flash**」— 预置表移除三个停用 id（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` / `deepseek-v4-pr"
+      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
     },
     {
       "id": "connector-openclaw-plugin",

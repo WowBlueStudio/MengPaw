@@ -28,7 +28,7 @@ includeBuild("harness") {
     dependencySubstitution {
         // artifactId 由 harness 仓库的目录名推导 (mengpaw-harness);
         // 与 harness/build.gradle.kts 的发布坐标保持一致, 避免 substitution 静默失效。
-        substitute(module("com.github.WowBlueStudio.MengPaw-Harness:mengpaw-harness")).using(project(":"))
+        substitute(module("com.github.WowBlueStudio.MengPaw-harness:mengpaw-harness")).using(project(":"))
     }
 }
 

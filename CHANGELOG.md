@@ -41,9 +41,15 @@
 `proc.exec`/`proc.system`/`proc.kill` 登记在风险分级表、高危 reason 表、Guest 名单、`SecurityPolicy.blockList`
 四处, 但实现早随微内核拆分删除 (v0.2.0 时代仅有桩: `ps` 假数据 / `kill` 假成功 / `exec` 直接拒绝)。
 按「进程管理」定位补齐: `proc.ps` (列进程, 支持 `--limit`/`--filter`) / `proc.info <pid>` /
-`proc.kill <pid> [--force]` (HIGH, 需 reason; 纯 JVM `ProcessHandle` 信号调用不拼接 shell 命令,
-拒绝终止自身, 失败引导 `root.exec`)。`proc.exec`/`proc.system` 为**保留位** (不注册, blockList 恒拒绝,
-索引保留供 Agent 搜到"此路不通")。
+`proc.kill <pid> [--force]` (HIGH, 需 reason; 拒绝终止自身, 失败引导 `root.exec`)。
+
+**平台兼容 (发布前构建暴露)**: `ProcessHandle` 是 **Java 9 API, Android 全平台没有** —
+直接静态引用会让 R8 release 构建报 `Missing classes: java.lang.ProcessHandle` 而中断,
+且运行时类验证 `NoClassDefFoundError`。改为经 kernel `ProcApi` **反射访问**
+(零静态引用 — 单测文件除外), 平台缺类时自动降级: `proc.ps`/`proc.info` 走 `/proc` 扫描,
+`proc.kill` 如实报告不可用并引导 root 通道。`proguard-common.pro` 加 `-dontwarn` 消除 R8 报错。
+
+`proc.exec`/`proc.system` 为**保留位** (不注册, blockList 恒拒绝, 索引保留供 Agent 搜到"此路不通")。
 
 ### 新增 — 幽灵引用守护测试 (防复发)
 - `RetiredReferenceScanTest` (kernel): 全生产源码 + 资产 + `plugins.json` 静态扫描已删命令/
@@ -63,6 +69,13 @@
 
 ### 测试
 全量 **1717 用例 / 0 failures** (kernel 676 + core 116 + shell 250 + 插件 617)。
+
+### 发行
+- Shell APK: `mengpaw-shell-v0.48.0-release.apk` (versionCode 48000)
+- Browser APK: 本轮无变更（`mengpaw-browser/` 无提交），不构建；浏览器独立版本线保持不变
+- 插件: 本轮 `plugins/` 有变更（plugin-net 退役 net.get 别名 + 关键词、plugin-skill 技能文档去幽灵引用与守护测试、plugin-root/plugin-agent-tools/plugin-hermes 文案修正）→ 打 `plugins-v0.48.0` tag 并上传全部 AAR（§2.5 强制）
+- 测试: 全量 **1729 用例 0 failures**（kernel 691 + core 128 + shell 250 + plugin 616 + harness 44；双套合并口径）
+- 设备交付走自动更新链路 (check → download → install, 不再 ADB 推送)
 
 ## v0.47.0 (2026-09-10) — DeepSeek V4.1 Flash 单一化 + 孪生能力判定进化
 

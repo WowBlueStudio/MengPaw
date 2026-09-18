@@ -56,6 +56,32 @@
   既让"在册性"检查失去意义, 也让 blockList 的"永不可绕过"指向空气。**处理原则**:
   ① 要实现的能力补齐实现 (proc.ps/info/kill); ② 刻意不开放的能力保留为**保留位** —
   不注册但在表里, 并让守护测试断言"保留位必须真的被策略拒绝", 使"表项 vs 实现"始终一一对应。
+- **Gradle 的 test 任务会 UP-TO-DATE 复用旧 test-results (验证守护时的最大陷阱)**: 改了源码但
+  `:module:test` 判定输入未变时直接复用上次结果并报 `BUILD SUCCESSFUL` — 于是"注入违规验证守护"
+  会得到假的绿。**铁律**: 验证守护是否真的能拦, 必须加 `--rerun-tasks`; 或先改被测输入使
+  Gradle 判定失效。本次排查绕了数轮才定位, 代价高。
+- **注入"假数据"验证守护时, 形态必须模仿真实故障**: 我用 `tribe.bogus.command` 验证
+  plugins.json 命名空间守护, 它**以 `tribe.` 开头本来就该通过**检查 —— 于是守护"绿得理所当然",
+  我误以为守护失效; 换成真实故障形态 (`hermes.team` 缺 `tribe.` 前缀) 后立即变红。
+  **教训**: 造测试注入前先问"这条数据按规则该通过还是该被拦"。
+- **静态扫描器的覆盖范围就是它的能力上限**: `RetiredReferenceScanTest` 只扫各模块 `src/main`,
+  于是仓库根的 `plugins.json` (Agent 经 `plugin.marketplace` 读到的命令清单) 成了盲区 —
+  `hermes.*` 旧名在里面存活到发布前自查才被发现。**新增扫描器时, 先枚举"Agent 能读到的一切来源"
+  再定范围**, 不要从"代码在哪"出发。
+- **路径保护的 `..` 陷阱**: `File.absolutePath` **不解析** `..` (`.../files/../../x` 原样保留),
+  用它做前缀匹配会让"绝对路径 + `..` 穿越"全部绕过; 且相对路径参数若直接跳过判定,
+  `cd` 进受保护目录再写相对路径也是绕过。**正确姿势**: `canonicalPath` 规范化 + 按执行
+  `workDir` 解析相对路径 + 无基准时不判定 (保守)。另外**"资源需保护"与"工作区可写"是相反语义**,
+  测试里把工作区设成保护目录会误伤全部工作区操作 (本次测试夹具踩过)。
+- **`java.lang.ProcessHandle` 是 Java 9 API — Android 全平台没有 (proc.* release 构建中断)**:
+  直接静态引用 (`ProcessHandle.current()` / 类型字段) 会 ① R8 release 构建报
+  `Missing classes detected` 并中断 (`mengpaw-shell:minifyReleaseWithR8 FAILED`);
+  ② 即使构建过, 运行时类验证 `NoClassDefFoundError` (低版本 Android 无该类)。
+  **解法**: 单独一层 `ProcApi` 用 `Class.forName` + `Method.invoke` **全反射**访问,
+  类不存在时 `available=false` 并降级 (`/proc` 扫描 / 如实报告不可用);
+  另加 `-dontwarn java.lang.ProcessHandle` 消除 R8 报错。**判据**: 写 Android 代码时,
+  凡 Java 9+ API (`ProcessHandle`/`Optional.isEmpty`/`List.of`/`Stream.toList` 等) 都先问
+  "Android 有这个类吗", 不确定就走反射或换实现。
 
 ---
 
