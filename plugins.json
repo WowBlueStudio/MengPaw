@@ -106,7 +106,6 @@
       "minCoreVersion": "0.2.0",
       "commands": [
         "net.curl",
-        "net.get",
         "net.post",
         "net.proxy"
       ],

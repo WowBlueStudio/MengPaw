@@ -34,15 +34,30 @@ class NetPlugin : Plugin {
         version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "HTTP 网络请求：curl, get, post。中国大陆访问 GitHub 失败时用 net.proxy 获取代理 URL",
+        description = "HTTP 网络请求：curl, post。中国大陆访问 GitHub 失败时用 net.proxy 获取代理 URL",
         permissions = listOf("INTERNET"),
         minCoreVersion = "0.2.0",
-        commands = listOf("net.curl", "net.get", "net.post", "net.proxy")
+        commands = listOf("net.curl", "net.post", "net.proxy"),
+        // 检索同义词: net.get 别名已删除 (两个同描述命令并列会让 Agent 误判"只存在一个"),
+        // 原 get 语义并入 curl 关键词, 保证搜 get/fetch 仍命中。
+        commandKeywords = mapOf(
+            "curl" to com.mengpaw.kernel.plugin.CommandKeywords(
+                zh = listOf("网络请求", "抓取", "下载", "获取网页", "HTTP", "GET"),
+                en = listOf("http", "get", "fetch", "download", "curl", "request")
+            ),
+            "post" to com.mengpaw.kernel.plugin.CommandKeywords(
+                zh = listOf("网络请求", "提交", "上传", "POST"),
+                en = listOf("http", "post", "submit", "upload", "request")
+            ),
+            "proxy" to com.mengpaw.kernel.plugin.CommandKeywords(
+                zh = listOf("代理", "GitHub 加速", "镜像"),
+                en = listOf("proxy", "mirror", "github accelerator")
+            )
+        )
     )
 
     override val commands: Map<String, com.mengpaw.kernel.plugin.CommandHandler> = mapOf(
         "curl" to ::curl,
-        "get" to ::curl,    // alias
         "post" to ::post,
         "proxy" to ::proxy
     )
@@ -168,6 +183,6 @@ class NetPlugin : Plugin {
             return ExecutionResult.ok("$url 不是 GitHub 资源，无需代理。可直接访问。")
         }
         val proxyUrl = "https://ghproxy.com/$url"
-        return ExecutionResult.ok("代理地址: $proxyUrl\n使用 net.curl $proxyUrl 或 net.get $proxyUrl 通过代理访问。")
+        return ExecutionResult.ok("代理地址: $proxyUrl\n使用 net.curl $proxyUrl 通过代理访问。")
     }
 }

@@ -755,11 +755,11 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 **已知成本与 P2** (v0.32.1+ 已修复首项): ~~每轮请求重发全部历史图片/音频 base64~~ → **仅最后一条带附件的 user 消息挂二进制键** (`History.getStructuredHistory` latest-only — 历史附件每轮全量 base64 会击穿上下文窗口: 2MB 图 ≈ 50 万 token/step; 更早消息视觉认知依赖 LLM 文本转述); 同一附件多 step 经指纹缓存 (path|size|mtime, 128 条/64MB 上限, `AttachmentPayload`); 恢复轮注入保留二进制键 (AgentEngine recovery 不再重建 map 丢 `_image`); 上行图片不缩图 (kernel 零 Android 依赖无 BitmapFactory, 靠 8MB 上限) — 后续 P2: shell 选图时预生成 thumb; 进程被杀恢复会话附件降级路径文本; 旧会话 `📎 path` 文本不迁移为卡片。
 
-**下行媒体**: 气泡层 `AttachmentBubbles.extractMedia` 提取规则 — ① `![alt](path)` 图片 (data:/javascript: 前缀排除) ② `[name](path)` 且扩展名命中 image/audio/video/document (file:// 前缀容错) ③ 交付行 — 交付动词组 (`Saved to`/`已保存到`/`文件在`/`文件位于`/`输出到`/`生成于`/`文件为` 等, 大小写不敏感, 冒号半角/全角可选, 路径可引号包裹含空格) + 媒体/文档扩展名白名单收尾, 或独立成行的纯路径 (无空格且含 /) (本地路径须 exists)。提取后文本交 MarkdownText, 卡片垂直堆叠 maxWidth 260dp。**提示词联动 (v0.34.0)**: 响应格式节含「交付文件给用户」指引 (图片/音频/视频 → `![描述](绝对路径)`, 其他文件 → `[文件名](绝对路径)` 或独立行 `已保存到 <绝对路径>`, 路径须 agent.ls 验证存在) — 聊天内交付格式与提取器白名单对齐, 防自然语言漂移静默丢失 (与 XML 工具调用同类)。渲染: 图片 `inJustDecodeBounds` 采样 ≤2048px + 全屏 Dialog; 音频 `AudioPlayerHolder` 单实例 MediaPlayer (同刻只播一条, 静态装饰波形, 进度轮询); 视频 MediaMetadataRetriever 封面帧 + VideoView Dialog; 文件扩展名图标 + MIME 配色, ACTION_VIEW FileProvider (对齐 ClipboardIntentExecutor); http(s) URL HttpURLConnection 下载 cacheDir/media_cache sha1 缓存。
+**下行媒体**: 气泡层 `AttachmentBubbles.extractMedia` 提取规则 — ① `![alt](path)` 图片 (data:/javascript: 前缀排除) ② `[name](path)` 且扩展名命中 image/audio/video/document (file:// 前缀容错) ③ 交付行 — 交付动词组 (`Saved to`/`已保存到`/`文件在`/`文件位于`/`输出到`/`生成于`/`文件为` 等, 大小写不敏感, 冒号半角/全角可选, 路径可引号包裹含空格) + 媒体/文档扩展名白名单收尾, 或独立成行的纯路径 (无空格且含 /) (本地路径须 exists)。提取后文本交 MarkdownText, 卡片垂直堆叠 maxWidth 260dp。**提示词联动 (v0.34.0)**: 响应格式节含「交付文件给用户」指引 (图片/音频/视频 → `![描述](绝对路径)`, 其他文件 → `[文件名](绝对路径)` 或独立行 `已保存到 <绝对路径>`, 路径须 `ls`/`cat` 验证存在) — 聊天内交付格式与提取器白名单对齐, 防自然语言漂移静默丢失 (与 XML 工具调用同类)。渲染: 图片 `inJustDecodeBounds` 采样 ≤2048px + 全屏 Dialog; 音频 `AudioPlayerHolder` 单实例 MediaPlayer (同刻只播一条, 静态装饰波形, 进度轮询); 视频 MediaMetadataRetriever 封面帧 + VideoView Dialog; 文件扩展名图标 + MIME 配色, ACTION_VIEW FileProvider (对齐 ClipboardIntentExecutor); http(s) URL HttpURLConnection 下载 cacheDir/media_cache sha1 缓存。
 
 **链接点击安全 (v0.34.3, 平板 0.34.2 实锤 FileUriExposedException 闪退)**: MarkdownText 内 `[name](path)` 链接不再用 `LinkAnnotation.Url` (Compose 默认经 LocalUriHandler 直接对 file:// 起 ACTION_VIEW → 崩溃), 改用 `LinkAnnotation.Clickable` 自定义处理 — http(s) 直接 ACTION_VIEW; 本地路径去 file:// 前缀, 经 FileProvider 转 content:// 再抛系统选择器 (用户自选打开方式); 目标不存在/打开失败 Toast。`file_paths.xml` 映射 `output/` (外部私有) 与 `MengPaw/` (公共) 两处输出目录。
 
-**输出目录 (v0.34.3 迁移 + v0.35.1 授权引导/独立区块)**: 由 `/Android/data/com.mengpaw.shell/files/output/` 迁移到公共 `/storage/emulated/0/MengPaw/` — Android 11+ 文件管理器隐藏 Android/data 是「路径下没有文件」的根源之一。**v0.35.1 (用户反馈)**: 未授予 MANAGE_EXTERNAL_STORAGE 时探测写失败静默回退私有目录, 系统设置仍显示旧路径 — 修复: ① 启动时公共目录不可写 → `OutputPermissionPrompt` 弹『所有文件访问』授权引导 (AppRoot 顶层, 授权返回自动消失); ② `MainActivity.onResume` 调 `DataPathsInitializer.refreshOutput` 重新探测, 授权后输出目录实时切公共; ③ 系统设置**输出目录拆独立区块**, 点击整块经 `ACTION_OPEN_DOCUMENT_TREE` + `EXTRA_INITIAL_URI` (公共存储 primary: 文档 URI) 用系统文件管理器定位打开目录, 不可写时点击跳授权页。Agent 交付纪律同步强化: 先 `agent.output` 查路径 → `agent.write` 真实落盘 → `agent.ls` 验证 → 才输出链接, 禁止输出未落盘路径。`agent.write` 路径解析: 非系统挂载点前缀 (data/storage/system 等) 的前导 `/` 一律按工作区回退 — 原实现仅「已存在」才回退, Unix 风格 `/Agent文档/x.md` 写新文件会落根目录失败。
+**输出目录 (v0.34.3 迁移 + v0.35.1 授权引导/独立区块)**: 由 `/Android/data/com.mengpaw.shell/files/output/` 迁移到公共 `/storage/emulated/0/MengPaw/` — Android 11+ 文件管理器隐藏 Android/data 是「路径下没有文件」的根源之一。**v0.35.1 (用户反馈)**: 未授予 MANAGE_EXTERNAL_STORAGE 时探测写失败静默回退私有目录, 系统设置仍显示旧路径 — 修复: ① 启动时公共目录不可写 → `OutputPermissionPrompt` 弹『所有文件访问』授权引导 (AppRoot 顶层, 授权返回自动消失); ② `MainActivity.onResume` 调 `DataPathsInitializer.refreshOutput` 重新探测, 授权后输出目录实时切公共; ③ 系统设置**输出目录拆独立区块**, 点击整块经 `ACTION_OPEN_DOCUMENT_TREE` + `EXTRA_INITIAL_URI` (公共存储 primary: 文档 URI) 用系统文件管理器定位打开目录, 不可写时点击跳授权页。Agent 交付纪律同步强化: 先 `agent.output` 查路径 → 重定向写 (`printf '...' > 文件`) 真实落盘 → `ls`/`cat` 验证 → 才输出链接, 禁止输出未落盘路径。
 
 **语音输入**: `VoiceInputButton` 按住录音松手直发 (input_audio 通道), 上滑/左滑取消, <300ms 丢弃, RECORD_AUDIO 运行时权限 (Manifest 已声明)。显隐判定 `VoiceCapability` (shell, 纯 UI 策略): 内置前缀 gpt-5/gpt-4o/qwen3-omni/qwen2.5-omni/qwen-omni/glm-4.5v/glm-5v/doubao-1.5-audio/doubao-audio + 关键词 omni/audio/voice/whisper/speech 兜底, 刻意排除 gemini (代理翻译 input_audio 不可靠会 400), `type=="全模态"` 兜底。不支持语音的模型不显示按钮 — 用户用 Android 输入法自带语音转译, 不做 ASR。
 
@@ -769,11 +769,11 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 | 类别 | 文件 | 方式 | 理由 |
 |------|------|------|------|
-| **常驻约束** | memory/memory.md | **明文全文注入** (compactDoc: ≤12K 字符全量, 超长前 6K + `agent.read` 外链) | 长期记忆是动态价值内容, 每轮可见 (v0.34.3 后唯一全文注入的工作区文档) |
-| **brief 注入** | profile.md / agents.md / soul.md | **frontmatter summary + `agent.read` 外链** (v0.34.3 P1-4 方案A, 用户拍板; 无 summary 的旧文档取首行 300 字符) | 模板占位符全文不产生约束价值, 每轮白烧 token; 核心行为准则由系统提示词安全节兜底, 文档全文按需读取 |
+| **常驻约束** | memory/memory.md | **明文全文注入** (compactDoc: ≤12K 字符全量, 超长前 6K + `cat` 外链) | 长期记忆是动态价值内容, 每轮可见 (v0.34.3 后唯一全文注入的工作区文档) |
+| **brief 注入** | profile.md / agents.md / soul.md | **frontmatter summary + `cat` 外链** (v0.34.3 P1-4 方案A, 用户拍板; 无 summary 的旧文档取首行 300 字符) | 模板占位符全文不产生约束价值, 每轮白烧 token; 核心行为准则由系统提示词安全节兜底, 文档全文按需读取 |
 | **场景触发** | boost.md / heartbeat.md / trumanshow.md | **链接式** — 仅注入"工作区有该文件, 触发时去读"的引导语, 不注入全文 | 只在触发器到来时需要, 不常驻不占权重; 触发时读一次 (首次引导/CRON/伪人模式) |
 
-**反模式警告 (v0.34.3 修订)**: 原定案"常驻约束必须全文注入"经自检报告 P1-4 与用户拍板修订 — 模板占位符全文 (名字空/用户资料空) 有效信息≈0 却每轮白烧 token; 但**已填充的身份/灵魂/操作手册仍是行为约束**, 系统提示词安全节承担核心底线 (API Key 禁区/先问再破坏/trash>rm/信任边界), 文档经 `agent.read` 按需取。链接式文件的读取是 LLM 自由裁量 — brief 注入把"有什么、去哪读"固定进每轮, 降低漏读概率。前缀缓存 (DeepSeek 50×) 对两类都正常命中。附件路径行同理 (user 消息正文, 见 §4.1.3)。
+**反模式警告 (v0.34.3 修订)**: 原定案"常驻约束必须全文注入"经自检报告 P1-4 与用户拍板修订 — 模板占位符全文 (名字空/用户资料空) 有效信息≈0 却每轮白烧 token; 但**已填充的身份/灵魂/操作手册仍是行为约束**, 系统提示词安全节承担核心底线 (API Key 禁区/先问再破坏/trash>rm/信任边界), 文档经 `cat` 按需取。链接式文件的读取是 LLM 自由裁量 — brief 注入把"有什么、去哪读"固定进每轮, 降低漏读概率。前缀缓存 (DeepSeek 50×) 对两类都正常命中。附件路径行同理 (user 消息正文, 见 §4.1.3)。
 
 **静态参考数据分层（v0.32.1+, 自检报告 P0-1; v0.34.3 修订）**: 与反模式警告的边界 — 行为约束（soul/agents/profile/记忆）**必须**常驻明文, 纯参考数据（端口表）**不**常驻。v0.32.1 起整张网络端口表移出提示词, 改为一行指针: `端口/网络接口一览: self.ports`（`__PORTS_TABLE__` 占位符与注入逻辑删除, `self.ports` 成为端口单一事实源; CLI.md 随 v0.34.3 移除）。同批压缩: Tribe 节（默认未安装, 4 行→1 行指针 `self.tools tribe`）、浏览器协作节（5 行→3 行, browser-mcp 默认未安装不展开 9880 细节）。TEMPLATE_HASH 自动失效缓存, 生产前缀缓存一次性失效。判断标准: 该内容 Agent 是否在每轮都需要它才能正确行动 — 参考数据按需取, 约束每轮给。
 
@@ -894,7 +894,7 @@ Agent 通过内核命令按需加载文档：
 **技能闭环: 派生 / 索取 / 进化 (2026-08-16, 功能开发中)** — 对齐 make_skills 三要素线性进化定义, 三条链路:
 - **派生**: `skill.from.project <项目名>` — 读项目记忆 (`project_{name}_memory.md`) → LLM 提炼 (可流程化判定 + **description 语义查重**, 命中中止) → 写入 Agent 本地技能池。产物自带 `## 适用场景` / `## 执行步骤` / `## 验证规则` / `## 来源` / `## 进化目标` 三要素; 生成规范: 完善/中性/通用 (`{{占位符}}` 抽象)/无敏感 (不含 Key/令牌/真实路径/个人信息)。`agent.memory.project.save` 返回文本提示该命令 (提示词闭环, 不强制)。LLM 经 `SkillPlugin.llmProvider` 注入 (shell 会话创建/切换时赋值, 与 TribePlugin 同模式)。
 - **索取**: `skill.ls --agent <Agent名>` 浏览他人本地技能; `skill.request <技能名> <来源Agent>` 复制到本地并补 `## 来源` 标记。冲突以 **description 标准化相同**为准 (同名文件或简介相同均中止, 不覆盖)。**跨设备**: 本机无来源 Agent 时 `skill.request` 返回指引 (fleet.peers 确认信任 → fleet.delegate 请对端发送 → `skill.import <技能名> [来源Agent]` 从 Fleet共享 导入本地, 复用同一冲突/校验/来源标记逻辑)。全局分享仍走显式 `skill.push`。`skill.enable/disable` 按 `skill.run` 查找顺序**先本地后全局** (本地索取产物可直接启停), 未找到技能返回错误。
-- **进化**: 技能使用失败 → 系统提示词引导走 `skill.run make_skills` 进化升级循环 (对照 `## 进化目标` 收敛 → `agent.write` 修订 → `skill.push` → `evolution.mark-corrected` → `agent.memory.keep`)。新命令按 CommandRiskLevels 中危分级 (需 reason)。
+- **进化**: 技能使用失败 → 系统提示词引导走 `skill.run make_skills` 进化升级循环 (对照 `## 进化目标` 收敛 → 重定向写修订技能文件 → `skill.push` → `evolution.mark-corrected` → `agent.memory.keep`)。新命令按 CommandRiskLevels 中危分级 (需 reason)。
 
 **@ 指定机制（PinnedSkills）**：设置页技能行 Pin 按钮写入 `{BASE}/技能剧本/.pinned`（行格式清单，每行一个技能名，原子写 tmp+rename，路径消毒）。指定后 PromptSystemBuilder 在文档块末尾追加「用户指定技能」指针段（只注入名称+描述一行，**不注入全文**——LLM 直接 `skill.run <name>` 按需读取，维持前缀缓存纪律）。缓存指纹含 `.pinned` mtime + 各指定技能文件 mtime（PromptEngineTest 覆盖：注入/移除/缺失技能优雅降级）。
 
@@ -1029,7 +1029,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **三轨检索收敛 (v0.32.1+, 自检报告 P2-10)**: `self.search` (BM25) 对 memory.* 20 子命令的分轨去重——`CommandSearch.search()` 按 `CommandIndex.searchGroup` 同组只留得分最高一条 (稳定排序保先注册的轨道根命令胜出)。分组: `memory.long`(keep/write/edit/rm/read) / `memory.mid`(record/mid*) / `memory.project`(project*) / `memory.core`(agent.memory + agent.dream); `memory.search/stats` 不分组作独立入口。`self.search 记忆` 从 ~19 条收敛到恰好 6 条 (agent.memory / memory.keep / memory.mid / memory.project / memory.search / memory.stats), 精确查询不破坏 ("删除记忆"仍命中 agent.memory.rm)。关键词微调: project 族补"记忆" (根命令同分胜出), framework.trust 描述 "记忆共享"→"数据共享" (唯一漏网 +5 desc 命中)。
 
-**Notes 笔记目录 (v0.30.0+)**: `{agent}/Notes/` 存放记忆之外的笔记——如其他 Agent 发来的知识信息。`AgentDocs.bootstrap` 预建目录, 设置页工作区文件树在 memory 节点下方固定显示 Notes 节点 (仅收 .md 子行), Agent 通过工作区文件命令 (`agent.write/read/ls/rm`) 读写, 不注入系统提示词。设计意图: 记忆 (memory/) 是需提炼保真的结构化知识, Notes 是低约束随手笔记区。
+**Notes 笔记目录 (v0.30.0+)**: `{agent}/Notes/` 存放记忆之外的笔记——如其他 Agent 发来的知识信息。`AgentDocs.bootstrap` 预建目录, 设置页工作区文件树在 memory 节点下方固定显示 Notes 节点 (仅收 .md 子行), Agent 通过 Linux 命令 (`cat`/`printf` 重定向/`ls`/`rm`) 读写, 不注入系统提示词。设计意图: 记忆 (memory/) 是需提炼保真的结构化知识, Notes 是低约束随手笔记区。
 
 **工作区文档重置 (v0.30.0+)**: 设置页工作区文件树中, 8 份预置文档 (agents.md / heartbeat.md / modes.md / profile.md / soul.md / trigger.md / trumanshow.md / memory/memory.md) 的按钮为「重置」——`AgentDocs.resetDoc` 从 APK 模板 (`{BASE}/agent-templates/{lang}/`, 缺失回退 zh) 原子覆盖写回预置版; 名单外文档 (中期/项目记忆、梦境文档 {date}_dream.md、boost.md 等) 保持可删除。
 
@@ -1063,13 +1063,13 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 #### evolution — 进化系统 (5, 内核注册, 提供者由同捆插件 plugin-evolution 提供)
 `audit` | `report <描述>` | `learn.command <命令> <描述> [--keywords 词,词]` | `reactions` | `mark-corrected <id>`
-> 失败钩子归系统 (ErrorCollector.onReport): 命令失败/循环/崩溃自动写入失败模式库 (`{AGENTS}/{agent}/evolution/failures.jsonl`), 下次 LLM 调用注入金字塔省察引导 (L1 事实→L2 归因→L3 用户视角→L4 进化)。用户纠正 (shell 层识别) 写入用户反应档案 `reactions.md`。处置: 指令错→`learn.command`/`self.search`, 常识错→`agent.memory.keep`, 行为错→`agent.write soul.md`, 框架错→`report`。实现经 EvolutionProvider SPI 可替换 (同捆插件 plugin-evolution 注册内核默认, 第三方覆盖后卸载回退)。
+> 失败钩子归系统 (ErrorCollector.onReport): 命令失败/循环/崩溃自动写入失败模式库 (`{AGENTS}/{agent}/evolution/failures.jsonl`), 下次 LLM 调用注入金字塔省察引导 (L1 事实→L2 归因→L3 用户视角→L4 进化)。用户纠正 (shell 层识别) 写入用户反应档案 `reactions.md`。处置: 指令错→`learn.command`/`self.search`, 常识错→`agent.memory.keep`, 行为错→重定向写 soul.md, 框架错→`report`。实现经 EvolutionProvider SPI 可替换 (同捆插件 plugin-evolution 注册内核默认, 第三方覆盖后卸载回退)。
 
 > **内置预防种子 (v0.32.1+, 自检报告 P1-4)**: `EvolutionStore.SEED_PATTERNS` 7 条新手错误种子 (自然语言当路径 agent.read/agent.ls、写后不验证 agent.write、缺 Action Input agent.memory.keep、JSON 当 Action Input、shell 原生命令 ls/dir/cat、agent.rm 删除前不确认) — `recordFailure` 命中时失败记录 message 附 `[种子] 命中内置种子模式 #N` 标注, `evolution.audit` 输出"常见错误预防清单"。**复现检测**: `detectRecurrenceDefect()` — 同 agent 同命令前缀 + 同错误码 ≥2 次, 且存在同前缀 `markCorrected=true` 教训 → 自动升级框架缺陷: 写 `{AGENTS}/{agent}/evolution/feedback/YYYYMMDD_HHmmss.md` (与 evolution.report 同通道) + NotifyBus 推送, message 附 `[缺陷] 沉淀修正后同型错误仍复发 N 次`, `autoFeedbackKeys` 每进程每 key 只写一次防刷屏。
 
 > **闭环强制 (v0.34.1+ 自检 P1, 2026-08-08)**: 失败模式复现 ≥2 次且未沉淀修正时, `recurrenceReminder()` 生成强制处理提醒, 由 AgentReActLoop 注入失败 Observation (prune 之后追加, 防被裁剪): 当场二选一 `evolution.learn.command` 登记 or `agent.memory.keep` 沉淀; 已修正 (`markCorrected`) 不再强制。`stats()` 对"有失败但 0 沉淀"显示 ⚠️ 红灯, 不等 Agent 主动发现。
 
-> **会话幻觉率 + Final Answer 门禁 (v0.34.1+ 自检 P0, 2026-08-08)**: `recordSessionOutcome()` 在 ReAct 循环收到 Final Answer 时对比本轮失败命令与最终回答 (含错误码或任一失败词 = 如实提及; 词表覆盖"没成功/未成功/报错/没能"等口语表述), **持久化到 `evolution/veracity.jsonl` 跨进程累计**, audit 展示"会话失败如实提及: X/Y"。**实质干预 (非仅统计)**: ① **Final Answer 门禁 (静默)** — 本轮有失败但最终回答未如实提及 (`unmentionedFailures`) → 框架**拒绝接受**该 Final Answer, 反馈**只注入下一轮 LLM 请求** (buildConversation 末尾追加 system, 不写入会话历史 — UI/持久化/后续上下文零污染), 引导 Agent 优先静默纠正 (重试/换命令, 成功则正常收尾) 或自然语言如实说明, 不再强制堆内部错误码。**拒绝不设次数上限** — 幻觉答案绝不放行; 每次拒绝消耗一步步数预算, LLM 顽固反复输出幻觉 Final Answer 时由循环上限 (effectiveMax) 终止返回 max_steps, 而非放行假成功。**失败已弥补豁免**: 同命令同参数重试成功 → 从"待如实提及"清单移除, 门禁不拦截"先失败后成功" (换参数 = 不同操作, 不豁免)。② **写操作自动读回验证** — `agent.write` 成功后框架自动读回比对 (≤200KB 全量比对, 大文件验证存在+字节数), Result 直接标注"读回验证: 内容一致 ✓ / ⚠️ 不一致", 成功断言由框架完成不依赖 Agent 声称; ③ 写操作内容预览 + `[校验锚点]` 供引用。**UI 呈现**: 设置页 evolution 节点摘要附加幻觉率 + ⚠️ 未沉淀红灯。
+> **会话幻觉率 + Final Answer 门禁 (v0.34.1+ 自检 P0, 2026-08-08)**: `recordSessionOutcome()` 在 ReAct 循环收到 Final Answer 时对比本轮失败命令与最终回答 (含错误码或任一失败词 = 如实提及; 词表覆盖"没成功/未成功/报错/没能"等口语表述), **持久化到 `evolution/veracity.jsonl` 跨进程累计**, audit 展示"会话失败如实提及: X/Y"。**实质干预 (非仅统计)**: ① **Final Answer 门禁 (静默)** — 本轮有失败但最终回答未如实提及 (`unmentionedFailures`) → 框架**拒绝接受**该 Final Answer, 反馈**只注入下一轮 LLM 请求** (buildConversation 末尾追加 system, 不写入会话历史 — UI/持久化/后续上下文零污染), 引导 Agent 优先静默纠正 (重试/换命令, 成功则正常收尾) 或自然语言如实说明, 不再强制堆内部错误码。**拒绝不设次数上限** — 幻觉答案绝不放行; 每次拒绝消耗一步步数预算, LLM 顽固反复输出幻觉 Final Answer 时由循环上限 (effectiveMax) 终止返回 max_steps, 而非放行假成功。**失败已弥补豁免**: 同命令同参数重试成功 → 从"待如实提及"清单移除, 门禁不拦截"先失败后成功" (换参数 = 不同操作, 不豁免)。② **写操作读回引导** — v0.36.x 命令去重后 `agent.write` 已移除, 写作通道为 Linux 重定向写: Linux 通道对重定向写成功后自动附「请 cat 读回验证」提示, 提示词「结果纪律」要求声称写入成功必须引用 `cat` 读回的真实文本 (框架自动读回比对已随之退役); ③ 高危写操作内容预览 + `[校验锚点]` 供引用。**UI 呈现**: 设置页 evolution 节点摘要附加幻觉率 + ⚠️ 未沉淀红灯。
 
 > **闭环强制升级 (v0.34.1+ 自检 P1, 2026-08-08)**: 复现 2 次注入二选一提醒; 复现 ≥3 次升级为 🚨 强制措辞 ("必须立即处理, 不得继续同类操作")。
 
@@ -1154,7 +1154,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **参数格式（v0.30.0+ 门卫）**: Action Input 一律 CLI 纯文本，多个参数空格分隔，**禁止 JSON**。PromptEngine 的 tolerant JSON 解析对 `{` 开头参数会丢弃 key 只取值——单 key 碰巧兼容，多 key 会参数错位；JSON 解析失败则整个串当参数。AgentEngine 组装命令行前设门卫：raw 键以 `{` 开头 或 JSON 多值（>1 key）→ 返回 `PARAM_FORMAT_ERROR`，不执行。
 
-**参数签名预校验（v0.32.1+, 自检报告 P0-3）**: `CommandRegistry` 支持按命令声明 `CommandSignature(usage, minArgs)`（必选位置参数数；CliInterpreter 把 `--flag` 归入 flags，故 flag 形态命令如 `plugin.verify --all` 不注册签名）。`Pipeline.execute` 在调用 handler 前统一校验，参数不足即返回 `参数错误: 期望用法「<usage>」，收到 N 个参数`（`ERR_INVALID_INPUT`）——模型得到"期望 vs 收到"对比，收敛重试不再盲猜。签名表在 `PipelineManager` companion（self 3 条 / plugin 8 条 / agent 20 条），只收录"必选参数不足必错"的命令；0 参合法命令（`self.search` 无参=统计、`agent.ls` 无参=工作区根、`agent.memory.mid` 无参=全部）与插件/sys 命令由 handler 自查，框架层不误拦。注册 API 兼容：`register(fullName, signature?, executor)` 签名参数放 executor 之前以保尾 lambda 语法。
+**参数签名预校验（v0.32.1+, 自检报告 P0-3）**: `CommandRegistry` 支持按命令声明 `CommandSignature(usage, minArgs)`（必选位置参数数；CliInterpreter 把 `--flag` 归入 flags，故 flag 形态命令如 `plugin.verify --all` 不注册签名）。`Pipeline.execute` 在调用 handler 前统一校验，参数不足即返回 `参数错误: 期望用法「<usage>」，收到 N 个参数`（`ERR_INVALID_INPUT`）——模型得到"期望 vs 收到"对比，收敛重试不再盲猜。签名表在 `PipelineManager` companion（self 3 条 / plugin 8 条 / agent 20 条），只收录"必选参数不足必错"的命令；0 参合法命令（`self.search` 无参=统计、`agent.memory.mid` 无参=全部）与插件/sys 命令由 handler 自查，框架层不误拦。注册 API 兼容：`register(fullName, signature?, executor)` 签名参数放 executor 之前以保尾 lambda 语法。
 
 **错误码体系** (`ErrorCodes`, 随 Observation 注入，模型可见 `Error [CODE]: ...`)：
 
@@ -1249,7 +1249,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **发现性**: Linux 命令不注册、不进 BuiltinCommandIndex（`IndexCoverageTest` 无幽灵条目）；发现靠系统提示词「命令双轨」节 + LLM 训练语料。点分未注册命令（如 `agent.rea`）不落 shell，报错附 `self.search` 引导；无参 stdin 命令（`grep`/`cat`/`head`/`tail`/`sed` 等）预检拒绝，防 30s 挂起。
 
-**命令去重 (v0.36.x)**: `agent.read/write/ls/rm/mkdir` 与 `fs.*`（plugin-fs 已整体移除）有 Android 等价命令（cat/echo/ls/rm/mkdir/cp/mv/stat/grep/find），不再重复定义——Agent 直接用 Linux 命令。原框架特有保障的承接: ① `agent.write` 自动读回验证 → Linux 通道对重定向写（`> 文件`）成功后自动附「请 cat 读回验证」提示 + 提示词「结果纪律」要求引用真实文本; ② `agent.rm` 系统路径保护 → CommandMonitor CONFIRM 弹窗 + overwrite-system/写保护路径 BLOCK 规则; ③ `agent.write` 路径沙箱 → 工作区/输出目录为 Linux 通道默认 cwd 与允许写区, 插件仓库/配置目录写保护 BLOCK。**注意**: Linux 命令不经 Pipeline IntegrityGuard, 插件仓库/配置等核心目录的写保护由 CommandMonitor 写保护路径检查承接。
+**命令去重 (v0.36.x)**: `agent.read/write/ls/rm/mkdir` 与 `fs.*`（plugin-fs 已整体移除）有 Android 等价命令（cat/echo/ls/rm/mkdir/cp/mv/stat/grep/find），不再重复定义——Agent 直接用 Linux 命令。原框架特有保障的承接: ① `agent.write` 自动读回验证 → Linux 通道对重定向写（`> 文件`）成功后自动附「请 cat 读回验证」提示 + 提示词「结果纪律」要求引用真实文本; ② `agent.rm` 系统路径保护 → CommandMonitor CONFIRM 弹窗 + overwrite-system/写保护路径 BLOCK 规则; ③ `agent.write` 路径沙箱 → 工作区/输出目录为 Linux 通道默认 cwd 与允许写区, 插件仓库/配置目录写保护 BLOCK。**注意**: Linux 命令不经 Pipeline IntegrityGuard — v0.47.x 起改由 kernel `SecurityGate` 在 Linux 通道入口接入同一套路径保护判定 (核心目录/Vault/插件仓库/配置), 与 CommandMonitor 写保护路径检查叠加。
 
 ### 5.3 浏览器内置命令 (page.* 22 + browser.* 21 = 43) — 半自动武器 (v0.9.0 am 桥单通道)
 
@@ -1297,13 +1297,13 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 **铲子检测 (v0.34.3, P0-2 用户采纳 ①②③④ 中的 ①③④)** — 第三方 LLM 供应商/中转代理在服务端植入恶意行为 (模型无用户意图时主动写/外联) 的三道检测:
 - ① 会话行为基线 `ProactiveBehaviorDetector`: 检测"无读取操作间隔的连续写/外联命令序列" (正常 Agent 读→判断→写; 铲子直接连写连外联) — 连续 ≥4 条触发告警注入 Observation, 每会话只告警一次; 只提示不阻断 (硬拦截由分级承担)。
 - ③ 提示词遵从探针: 系统提示词内置 `<!--mok-->` 探针指令, Final Answer 末尾标记在返回前剥离; 连续 5 次失配 → KernelLog 告警 (疑似服务端篡改/剥离系统提示词)。单轮失配不告警 (模型遵从性差异)。
-- ④ 写路径边界: `agent.write`/`agent.mkdir` 写入工作区 (Agent文档)/输出目录/录音/截图存档之外 (如 /sdcard 任意路径) → 降级中危, 标准权限拒绝, TRUSTED 放行; 相对路径按工作区基准视为安全。
+- ④ 写路径边界: Linux 写命令 (重定向写/`tee`) 写入工作区 (Agent文档)/输出目录/录音/截图存档之外 (如 /sdcard 任意路径) → 降级中危, 标准权限拒绝, TRUSTED 放行; 相对路径按工作区基准视为安全。v0.47.x 起核心目录/Vault 另有 `SecurityGate` 路径级保护 (写与读一律拒)。
 - 未采纳: 外联域名监控、供应商信誉清单 (用户判定无必要)。
 
-**命令参数污染防护 (v0.34.3)** — Agent 把描述文本 ("等待结果"/"看看") 拼进路径参数尾部 (如 `agent.ls / 等待结果`), `joinToString(" ")` 还原后路径含空格 → 解析失败且 Agent 原样复制重试循环复现。修复: ① 路径拼接类命令 (read/ls/rm/mkdir) 解析失败时附**污染提示** (指出疑似多余文本 + 纯净重发指引); ② 写类命令 (rm/mkdir) **前置拒绝**污染路径, 防错误落盘/误删; ③ 系统提示词响应格式节加**路径参数纯净规则** (路径参数只能含路径本身, 禁止附加描述文本, 失败重试不得原样复制)。agent.write 的路径是首 token 不参与拼接, 污染文本会进 content — 由读回验证兜底, 不做前置拒绝 (防误伤正常内容)。
+**命令参数污染防护 (v0.34.3, 历史记录 — 涉及的 agent.* 文件命令已于 v0.36.x 移除)** — Agent 把描述文本 ("等待结果"/"看看") 拼进路径参数尾部, `joinToString(" ")` 还原后路径含空格 → 解析失败且 Agent 原样复制重试循环复现。当时的修复: ① 路径拼接类命令解析失败时附**污染提示** (指出疑似多余文本 + 纯净重发指引); ② 写类命令 (rm/mkdir) **前置拒绝**污染路径, 防错误落盘/误删; ③ 系统提示词响应格式节加**路径参数纯净规则** (路径参数只能含路径本身, 禁止附加描述文本, 失败重试不得原样复制)。agent.write 的路径是首 token 不参与拼接, 污染文本会进 content — 由读回验证兜底, 不做前置拒绝 (防误伤正常内容)。
 
 **命令参数歧义全量审计 (v0.34.3)** — `ParamGuard` 通用化污染/多余参数检测 (词表: 等待结果/看看/输出等):
-- **全拼型 (joinToString)** — 污染进关键参数 → 解析失败循环: agent.read/ls/rm/mkdir (已修) + agent.memory.mid.rm/project.rm 时间戳拼接 (新增前置拒绝)
+- **全拼型 (joinToString)** — 污染进关键参数 → 解析失败循环: agent.memory.mid.rm/project.rm 时间戳拼接 (新增前置拒绝); v0.36.x 前还含 agent.read/ls/rm/mkdir (已随命令去重移除)
 - **单 token 位置参数型 (fs/root/skill/net)** — 多余 token 静默忽略 → 不失败但 Agent 不知情: fs.cp/mv/stat + net.curl 成功/失败结果附**多余参数提示** ("多余的「等待结果」已被忽略")
 - **自由文本型 (content/命令/搜索词)** — 污染即文本本身, 无害不防护
 - `agent.cli` 指引含**参数纯净规则**; 系统提示词已同步 (v0.34.3 路径参数纯净规则)
@@ -1368,7 +1368,7 @@ Prompt 注入检测防火墙（ACP GUEST 命令级黑白名单 + 信任管理）
 #### 6.4.1 高危命令 reason 门禁 + 攻击提醒与拉黑闭环 (v0.34.1, ④⑦)
 
 **④ 高危命令 reason 门禁** (`HighRiskCommandGate`, 纯函数无状态):
-- 高危集合（40+ 命令）: 写删文件 (`agent.write/rm/mkdir`, `fs.mv/cp`)、进程 (`proc.*`)、插件管理 (`plugin.*`)、通知 (`self.notify.*`)、剪贴板 (`clipboard.*`)、技能开关 (`skill.enable/disable`)、记忆写入 (`agent.memory.keep/write/rm/edit/mid.*/project.*`, `record` 除外—append-only)、`root.*` 全套。`agent.output`（只读）特意排除
+- 高危集合（40+ 命令）: 进程 (`proc.*`)、插件管理 (`plugin.*`)、通知 (`self.notify.*`)、剪贴板 (`clipboard.*`)、技能开关 (`skill.enable/disable`)、记忆写入 (`agent.memory.keep/write/rm/edit/mid.*/project.*`, `record` 除外—append-only)、`root.*` 全套。`agent.output`（只读）特意排除。注: Linux rm/mv/cp 等写删命令由 CommandMonitor CONFIRM 弹窗承接 (v0.36.x 去重后不在本表)
 - **JSON 豁免通道**: 高危命令豁免 `paramFormatError` 全局门卫（原漏洞: 单键 JSON size==1 无 raw 被放行 — 顺带补缝）; 必须携带结构化 `{"reason": ...}`。reason 缺失/空白 → `Error [REASON_REQUIRED]`（错误文本含按模板动态生成的 JSON 示例, 对齐 --force 自锁「拒绝+重发指令」先例）
 - **模板驱动展开**: 按模板键序展开 POSITIONAL/FLAG 参数, `reason` 与模板外键排除 — 防键序不稳定导致参数错位; 缺参数键 → `Error [PARAM_FORMAT_ERROR]` 列出缺失键
 - **双循环一致**: AgentReActLoop / SwarmWorkerRunner 共用同一纯函数门禁（swarm 不可绕过, v0.34.4 Mission 并入后无独立 worker 循环）; worker 无用户交互, 命中仅日志
@@ -1397,7 +1397,7 @@ Prompt 注入检测防火墙（ACP GUEST 命令级黑白名单 + 信任管理）
 - **无主档案改道**: `DataPaths.EVOLUTION = "{BASE}/进化档案"` 顶层目录; `evolutionDir/evolutionFailuresFile/evolutionReactionsFile/evolutionFeedbackDir` 接受 `String?`, null/空白/**保留字 "default"** 一律归进化档案/ — `Agent文档/` 只允许真 Agent 工作区。有主 Agent 的进化档案仍留各自工作区
 - **统一判定**: `DataPaths.isAgentWorkspaceDir(name)` 成为 Agent 列表唯一事实源（系统目录集合: inbox/team/acp/incubator/agent-001/default/twin + 点前缀）; 7 处扫描点全部替换散落名单
 - **启动迁移**: `EvolutionStore.migrateLegacyDefaultDir()` 在 MainActivity.onCreate（AppInitializer 之后、setContent 之前）执行 — 旧 `Agent文档/default/evolution/` → 进化档案/（不覆盖新数据）, 删除 default/ 下误生成的模板与目录; 幂等, 永不抛异常
-- **工作区文档可见性**: ① `agent.docs` 在存在进化档案时追加 `evolution/ — 进化档案` 行（失败模式库/用户反应/框架反馈）; ② 设置页工作区文件树与 memory/Notes 同款目录节点 — `isFolder=true` 节点 `evolution`, summary 统计「失败模式 %d · 用户反应 %d · 框架反馈 %d · 共 %d 个文件」（含 feedback/ 子目录文件）, 子行收全部文件（failures.jsonl 等非 md 档案也可读）; 目录节点只读（三处兜底 `return@SettingsScreen` 同 memory/Notes）。有档案才显示（防空目录噪音）; `agent.ls` 本就直接列出工作区目录。
+- **工作区文档可见性**: ① `agent.docs` 在存在进化档案时追加 `evolution/ — 进化档案` 行（失败模式库/用户反应/框架反馈）; ② 设置页工作区文件树与 memory/Notes 同款目录节点 — `isFolder=true` 节点 `evolution`, summary 统计「失败模式 %d · 用户反应 %d · 框架反馈 %d · 共 %d 个文件」（含 feedback/ 子目录文件）, 子行收全部文件（failures.jsonl 等非 md 档案也可读）; 目录节点只读（三处兜底 `return@SettingsScreen` 同 memory/Notes）。有档案才显示（防空目录噪音）; Linux `ls` 本就直接列出工作区目录。
 
 **铁律**: 今后新增「Agent文档/ 下所有目录 = Agent」的扫描逻辑一律复用 `DataPaths.isAgentWorkspaceDir`, 禁止自写排除名单; 无主系统数据（非 Agent 专属）绝不写入 Agent文档/ 下。
 

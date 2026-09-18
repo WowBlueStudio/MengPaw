@@ -4,6 +4,50 @@
 
 ---
 
+## 0.1 v0.47.x — 命令退役整改 (幽灵引用 / 参数保形 / 保护链断裂) 踩坑
+
+> 触发: 用户实测 Agent 查公众号文章连环失败 (tavily.extract 语法错 / 声称 net.curl 不存在 /
+> skill.run browser-spider 重试无效 / grep -n 参数被吞)。彻查后: 3 条是模型幻觉, 1 条是真缺陷,
+> 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂。
+
+- **删命令 = 删五处, 少一处就是"幽灵引用"**: 实现 / 系统提示词 / 技能文档 / 工作区模板 /
+  错误文案与安全判定表。实测 49 处 A 类幽灵引用, 其中 `PromptEngine.kt:252` 指向的
+  `skill.run filesystem` 整篇教已删的 `fs.*` 十条命令; 浏览器"提炼网页要点"任务脚本
+  (MainActivity.kt:157-161) 三步全用 `agent.read/write/rm` — **Agent 拿到的第一条指令就是必败命令**。
+  **铁律**: 删命令时把 retired 名单登记进守护测试, 不靠人肉记忆。
+- **没有守护测试的渠道必然腐化**: `IndexCoverageTest` 只覆盖内核注册表↔索引,
+  `PromptGhostReferenceTest` 只扫 `PromptEngine.kt` 一个文件 + 4 个命名空间 —
+  技能文档 (26 篇, 分发给 Agent 的运行时资产)、工作区模板、插件源码文案、UI/任务脚本文案
+  **全无守护**。补法: 每个渠道一个静态扫描测试 (源码含注释剥离 / 资产 / 模板 / 安全表在册性)。
+- **命名空间的"向后兼容键"是隐形陷阱**: `TribePlugin` 注册了 `"hermes.team"` 键想保留旧名,
+  但插件命令注册统一加命名空间前缀 (`$ns.$name`, ns=tribe) → 真实全名是 `tribe.hermes.team`,
+  `hermes.*` 根本不存在 — 而技能文档、Guest 白名单、测试全都在用它。**兼容键要么不带点,
+  要么在注册处显式豁免前缀**。
+- **两套解析规则 = 静默破坏**: 系统提示词教 Agent 用 `grep -n` / `sed -n` (Linux 习惯),
+  CommandMonitor 也放行, 但 `CliInterpreter` 把单横线当"带值 flag"吞掉下一个 token、
+  `Pipeline` 还原时只认双横线且把选项追加到位置参数之后:
+  `grep -n 关键词 文件` 实际执行 `[文件, --n, 关键词]`。**判据**: 安全层放行的语法,
+  执行层必须原样放行; 参数改写必须保形 (原位/原名), 不得静默。
+- **安全判定"写在表里"≠"接在链上"**: `IntegrityGuard` 的路径保护只挂在 `Pipeline` (仅注册命令),
+  Linux 通道的 `cp/mv/tee/sed -i` 完全绕过 → 保护恒不生效; 且 Vault 前缀写死
+  `com.mengpaw/mengpaw_vault`, 真实是 `com.mengpaw.shell/.../mengpaw_vault_encrypted`。**双重失效**。
+  修复: kernel 新增 `SecurityGate` (全局 IntegrityProvider 注册点), 两条通道共用同一判定;
+  路径前缀一律 `File(...).absolutePath` 规范化 (相对路径前缀永远匹配不上绝对路径入参)。
+- **测试样本用已删命令 = 假守护**: `interrupted_recovery` 只认 `fs.cat/fs.write` 等已删名,
+  真实命令 (`cat/echo/grep`) 恒不命中 (功能静默失效), 而唯一覆盖测试恰好用 `fs.write` 作样本 →
+  测试绿着但功能已死。**样本必须是当前真实命令**。
+- **对象方法 vs 命令前缀的误报**: 静态扫描 `fs.` 前缀时, `fs.mkdirs()` (java.io.File 调用)
+  会假命中 `fs.mkdir` 命令 — 用命令边界正则 `prefix(?![a-zA-Z])` + 方法名白名单区分。
+- **Kotlin 块注释内的 `/*` 会开嵌套注释**: 在 KDoc 里写 `assets/skills/*.md` 触发
+  "Unclosed comment" 且报错行是文件末尾 — 注释里避免 `/*` 序列 (教训 §10.1 同型)。
+- **`implementation` 依赖不传递, 插件拿不到 kernel 暴露的 LLM 类型**: harness 拆分后
+  `LlmProvider` 归 harness, kernel 用 `implementation` 引入 → 只声明
+  `implementation(project(":mengpaw-kernel"))` 的插件编译报 `Unresolved reference 'LlmProvider'`
+  (plugin-skill/plugin-framework 实测中断, 插件测试无法运行)。**解法**: 需要跨模块暴露的类型,
+  kernel 侧依赖必须用 `api`, 而不是让每个插件各自声明。
+
+---
+
 ## 0. v0.43.0 — 利用 DeepSeek Harness 开发 (ReAct/Loop 修补) 踩坑
 
 > 本轮参照 DeepSeek Harness 的 ReAct/Loop 设计修补 MengPaw (P1-1~P2-6), 新增 Kernel 能力时踩的 Kotlin/工程坑:
