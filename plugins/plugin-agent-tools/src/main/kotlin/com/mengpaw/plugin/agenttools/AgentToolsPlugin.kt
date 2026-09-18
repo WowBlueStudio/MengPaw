@@ -98,7 +98,7 @@ class AgentToolsPlugin : Plugin {
                 appendLine("| ${set.name} | ${set.commands.size} | ${set.source.take(40).ifBlank { "手动粘贴" }} | ${set.importedAt} |")
             }
             appendLine()
-            appendLine("细节: agent.read ${AgentToolsStore.toolsDir(agent).absolutePath}/<名称>.json")
+            appendLine("细节: cat ${AgentToolsStore.toolsDir(agent).absolutePath}/<名称>.json")
             appendLine("检索: tools.search <关键词>")
         }
         return ExecutionResult.ok(out)

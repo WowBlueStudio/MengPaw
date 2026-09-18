@@ -53,7 +53,10 @@ dependencies {
     // 提供: 平台抽象层 (com.mengpaw.harness.*) + LLM 模型层与 ReAct 解析层
     // (com.mengpaw.kernel.llm.* / .session.* / KernelLog)。
     // 这些类此前内联在本模块, 现归属 harness 仓库 — 单一事实源, 不再双份维护。
-    implementation("com.github.WowBlueStudio.MengPaw-Harness:mengpaw-harness")
+    // 用 api 而非 implementation: 插件只声明 `implementation(project(":mengpaw-kernel"))`,
+    // 而 SkillPlugin/MemoryTwinPlugin 等需要 LlmProvider 等类型 — implementation 不传递,
+    // 插件模块会 Unresolved reference 'LlmProvider' (plugin-skill 编译中断实测)。
+    api("com.github.WowBlueStudio.MengPaw-Harness:mengpaw-harness")
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))

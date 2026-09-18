@@ -77,7 +77,7 @@ internal class AgentTaskInbox(
         scope.launch {
             kotlinx.coroutines.delay(200)
             onSubmitTask(
-                "[浏览器网页提炼任务 · $taskId]\n任务脚本: agent.read ${com.mengpaw.kernel.DataPaths.AGENT_INBOX}/browser_extract_$taskId.md\n按脚本步骤执行, 完成后删除该任务文件。",
+                "[浏览器网页提炼任务 · $taskId]\n任务脚本: cat ${com.mengpaw.kernel.DataPaths.AGENT_INBOX}/browser_extract_$taskId.md\n按脚本步骤执行, 完成后删除该任务文件。",
                 20
             )
         }

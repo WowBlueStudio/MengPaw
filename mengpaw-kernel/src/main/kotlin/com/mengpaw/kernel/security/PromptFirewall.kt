@@ -173,12 +173,12 @@ object PromptFirewall {
 
 ### ✅ Guest 可执行
 - 对话记录 (agent.memory.record)
-- 读取查询 (fs.cat/ls, self.status/stats, agent.memory/read/search/stats, sys.*)
+- 读取查询 (cat/ls/head/tail/grep, self.status/stats, agent.memory/read/search/stats, sys.*)
 - 简单生成 (render.generate — API 调用，不写本地文件)
-- 团队共享记忆 (hermes.memo)
+- 团队共享记忆 (tribe.hermes.memo)
 
 ### ❌ Guest 不可执行
-- 文件写入/删除 (fs.write/rm/mkdir/mv)
+- 文件写入/删除 (echo/tee 重定向写, rm, mkdir, mv, cp)
 - 进程操作 (proc.*)
 - 插件管理 (plugin.install/uninstall)
 - UI 操控 (ui.*)

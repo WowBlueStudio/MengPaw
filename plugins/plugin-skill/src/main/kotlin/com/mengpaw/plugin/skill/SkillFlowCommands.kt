@@ -80,7 +80,7 @@ internal object SkillFlowCommands {
         } catch (e: Exception) {
             ErrorCollector.report(e, "SkillPlugin.from.project")
             return ExecutionResult.fail(
-                "技能提炼失败 (LLM 调用异常): ${e.message}\n可稍后重试, 或手动 skill.create 后用 agent.write 完善。",
+                "技能提炼失败 (LLM 调用异常): ${e.message}\n可稍后重试, 或手动 skill.create 后用重定向写 (echo '...' > 技能文件) 完善。",
                 errorCode = ErrorCodes.ERR_INTERNAL
             )
         }
@@ -237,7 +237,7 @@ internal object SkillFlowCommands {
         val target = plugin.skillFile(plugin.localDir(agent), name)
             ?: return ExecutionResult.fail("非法技能名: $name", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         if (target.exists()) {
-            return ExecutionResult.fail("本地已存在同名技能: $name\n可先 skill.info $name 查看; 确需覆盖请用 agent.write 手动处理。", errorCode = ErrorCodes.ERR_INTERNAL)
+            return ExecutionResult.fail("本地已存在同名技能: $name\n可先 skill.info $name 查看; 确需覆盖请用重定向写 (echo '...' > 技能文件) 手动处理。", errorCode = ErrorCodes.ERR_INTERNAL)
         }
         val finalText = if (category == parsed.category) skillText else normalizeCategory(skillText, category)
         return if (writeAtomic(target, finalText) && verifyWritten(target)) {

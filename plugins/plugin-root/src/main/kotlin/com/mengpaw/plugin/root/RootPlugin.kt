@@ -44,7 +44,7 @@ class RootPlugin : Plugin {
 ## 安全护栏（自动执行，你不需要操心）
 - 危险命令自动拦截: rm -rf /, dd to /dev, mkfs, 自毁
 - 所有命令记录在审计日志: root.audit 查看
-- 完整输出保存: agent.read /sdcard/root_out.txt
+- 完整输出保存: cat /sdcard/root_out.txt
 
 ## 你的责任
 - ⚠️ 执行任何 root 操作前，确认其安全性
@@ -121,13 +121,13 @@ class RootPlugin : Plugin {
         val command = args.joinToString(" ")
         val result = RootShell.execute(command)
         val extra = if (result.stdout.length > 4000)
-            "\n\n📄 完整输出: agent.read /sdcard/root_out.txt" else ""
+            "\n\n📄 完整输出: cat /sdcard/root_out.txt" else ""
         return ExecutionResult.ok(buildString {
             appendLine(result.summary)
             if (extra.isNotBlank()) appendLine(extra)
             appendLine()
             appendLine("📋 查看审计: root.audit --last 5")
-            appendLine("📄 完整输出: agent.read /sdcard/root_out.txt")
+            appendLine("📄 完整输出: cat /sdcard/root_out.txt")
             appendLine("📊 设备状态: root.status")
         })
     }

@@ -253,7 +253,7 @@ class PromptEngine {
             - **Screenshot/Record**: sys.screenshot / sys.screenrecord.start/stop. **Camera photo**: sys.camera.photo --confirm (⚠️tell user & get consent first).
             - **Accessibility screen control** (user must enable the accessibility service in system settings first; confirm with `sys.accessibility.status`): `sys.accessibility.dump` reads the UI tree; `sys.accessibility.click --text <text>|--id <viewId>|<x> <y>` / `swipe` / `input` / `back` / `home` / `recents` simulate actions (high-risk, requires confirmation).
             - **Device control** (overlay/calendar/Root/cross-app): `skill.run device-control`; Android reference `skill.run android`. **Scripts**: `skill.run termux`.
-            - **Built-in skill versions**: `/技能剧本/seed/` holds the APP-bundled skill versions (read-only, updates with each APP release). Before evolving a skill, `fs.cat` both versions and diff to decide whether to adopt the new bundled one.
+            - **Built-in skill versions**: `/技能剧本/seed/` holds the APP-bundled skill versions (read-only, updates with each APP release). Before evolving a skill, `cat` both versions and `diff` them to decide whether to adopt the new bundled one.
 
             ## Workspace Boundaries (yours vs the user's)
             - **Your home (user-invisible)**: `Agent文档/{name}/` — your docs/memory/skills/tools live here. soul.md/agents.md/memory/ are freely editable; `dialog/` and `tool_results/` are system archives — read-only.

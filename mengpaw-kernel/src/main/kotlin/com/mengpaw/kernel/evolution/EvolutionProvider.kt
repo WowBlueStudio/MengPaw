@@ -120,7 +120,7 @@ object EvolutionEngine : EvolutionProvider {
      */
     private suspend fun report(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.isEmpty()) return ExecutionResult.fail(
-            "Usage: evolution.report <描述>\n例: evolution.report fs.cat 在中文路径下报错, 怀疑是编码 bug",
+            "Usage: evolution.report <描述>\n例: evolution.report grep 在中文路径下报错, 怀疑是编码 bug",
             errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val contextIdx = args.indexOf("--context")
         val text = (if (contextIdx >= 0) args.take(contextIdx) else args).joinToString(" ")

@@ -109,7 +109,7 @@ class PlanModeExecutor(
 
                 Rules:
                 - Number steps starting from 1
-                - Each ACTION must be a single CLI command (e.g. fs.cat /path)
+                - Each ACTION must be a single CLI command (e.g. cat /path, ls, grep -n pattern file)
                 - Keep the total to 3-7 steps
                 - Do NOT include any other text before or after the plan
 

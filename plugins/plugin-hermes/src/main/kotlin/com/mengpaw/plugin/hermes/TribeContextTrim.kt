@@ -95,7 +95,7 @@ object TribeContextTrim {
     /** 将 [TrimResult] 格式化为任务附带的上下文段落。 */
     fun formatForTask(trim: TrimResult): String {
         if (trim.text.isBlank()) return ""
-        val refNote = trim.refPath?.let { "\n\n[完整上下文: $it — 需要时用 agent.read 查阅]" } ?: ""
+        val refNote = trim.refPath?.let { "\n\n[完整上下文: $it — 需要时用 cat 查阅]" } ?: ""
         return "\n\n## 委派参考上下文（${trim.originalChars} 字符裁剪而来）\n${trim.text}$refNote"
     }
 

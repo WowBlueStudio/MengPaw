@@ -105,10 +105,10 @@ internal object SkillManageCommands {
     internal fun buildSkillTemplate(name: String, category: String, description: String): String {
         val hints = when (category) {
             "dev" -> "## 执行步骤\n1. 分析代码结构\n2. 执行开发任务\n3. 验证结果\n4. 汇报完成情况"
-            "office" -> "## 执行步骤\n1. 确认需求\n2. 使用 agent.write 生成文档\n3. 检查输出质量\n4. 交付确认\n\n使用 {{param}} 占位符实现参数化。"
+            "office" -> "## 执行步骤\n1. 确认需求\n2. 使用 office.create 生成文档\n3. 检查输出质量\n4. 交付确认\n\n使用 {{param}} 占位符实现参数化。"
             "browser" -> "## 执行步骤\n1. 打开目标页面\n2. 数据采集/操作\n3. 整理结果\n4. 保存或汇报"
             "system" -> "## 执行步骤\n1. 使用 self.status 获取系统状态\n2. 分析诊断\n3. 执行维护\n4. 记录结果\n\n## 安全\n修改系统配置前需用户确认。"
-            "meta" -> "## 执行步骤\n1. 分析目标\n2. 制定 Skill 结构\n3. 使用 skill.create 或 agent.write 写入\n4. 使用 skill.info 验证"
+            "meta" -> "## 执行步骤\n1. 分析目标\n2. 制定 Skill 结构\n3. 使用 skill.create 或重定向写 (echo '...' > 技能文件) 写入\n4. 使用 skill.info 验证"
             else -> "## 执行步骤\n1. 确认任务目标\n2. 使用 self.tools 确认可用命令\n3. 逐步执行\n4. 汇报结果"
         }
         return "---\nname: $name\ndescription: $description\nenabled: true\ncategory: $category\n---\n# $name\n\n$hints\n"

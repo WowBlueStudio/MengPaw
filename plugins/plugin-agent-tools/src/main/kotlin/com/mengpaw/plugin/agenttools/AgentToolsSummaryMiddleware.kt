@@ -54,7 +54,7 @@ val AgentToolsSummaryMiddleware: AgentMiddleware = AgentMiddleware { prompt, age
     val summary = AgentToolsSummary.summaryFor(agentName)
     if (summary.isNotBlank() && "已注册命令集" !in prompt) {
         "$prompt\n\n## 已注册命令集（Agent Tools）\n$summary\n\n" +
-        "需要某条命令的完整参数时: tools.search <关键词> 或 agent.read ${DataPaths.agentToolsDir(agentName)}/<名称>.json"
+        "需要某条命令的完整参数时: tools.search <关键词> 或 cat ${DataPaths.agentToolsDir(agentName)}/<名称>.json"
     } else {
         prompt
     }
