@@ -36,7 +36,7 @@ class IntegrityGuard(
     private val coreDir: String = "/data/data/com.mengpaw/core",
     /** 额外保护目录 (可选) — 生产不传 (工作区可写); 测试/特殊宿主可显式传入。 */
     private val extraProtectedDir: String? = null
-) : IntegrityProvider {
+) : IntegrityProvider, com.mengpaw.kernel.security.ProtectedPathAware {
 
     /** Vault 加密存储的真实前缀 (init 前用默认包名兜底)。 */
     @Volatile
@@ -208,49 +208,85 @@ class IntegrityGuard(
 
     /**
      * Check if a given path is under protection.
-     * 相对路径不参与判定 (工作区/输出目录内的相对路径都是合法可写区);
-     * 仅绝对路径按前缀匹配, 且要求命中边界 (前缀后是 `/` 或路径结尾), 防相似前缀误伤。
+     *
+     * 判定纪律 (v0.47.1 加固):
+     * - **规范化必须用 canonicalPath**: `File.absolutePath` 不解析 `..`
+     *   (实测 `.../files/../../core/Vault.kt` 原样保留 `..`), 于是"绝对路径 + `..` 穿越"
+     *   永远匹配不上保护前缀 → 保护可被 `cat /x/../../shared_prefs/...` 绕过。
+     * - 前缀同样规范化 (DataPaths 里的相对路径前缀不经解析永远匹配不上绝对路径入参)。
+     * - 命中要求边界 (前缀后是分隔符或路径结尾), 防相似前缀误伤。
+     * - 相对路径由 [validateCommand] 先按 workDir 解析成绝对路径再进来。
      */
-    fun isProtectedPath(path: String): Boolean {
-        val normalized = try { File(path).absolutePath } catch (_: Exception) { return false }
+    fun isProtectedPath(path: String): Boolean = isProtectedPath(path, workDir = null)
+
+    /** 带基准目录的判定 — 相对路径按 [workDir] 解析 (Linux 通道的 cwd 语义)。 */
+    fun isProtectedPath(path: String, workDir: String?): Boolean {
+        val normalized = canonicalize(path, workDir) ?: return false
         return protectedPrefixes.any { prefix ->
-            // 前缀同样要规范化 — DataPaths 里的相对路径前缀 (配置/插件仓库) 未经
-            // absolutePath 时永远匹配不上绝对路径入参 (原实现用裸字符串比较)。
-            val absolutePrefix = try { File(prefix).absolutePath } catch (_: Exception) { prefix }
-            normalized == absolutePrefix || normalized.startsWith("$absolutePrefix${File.separator}")
+            val absPrefix = canonicalize(prefix, null) ?: return@any false
+            normalized == absPrefix || normalized.startsWith("$absPrefix${File.separator}")
         }
+    }
+
+    /**
+     * 规范化路径: 相对路径按 [workDir] 拼接 (缺失基准时保守返回 null — 不判定比误判安全)。
+     * `..` 由 canonicalPath 解析; 目录不存在时 canonicalPath 仍可解析 (不要求存在),
+     * 但极少数平台/路径会抛异常 → 退回 absolutePath (仅保证绝对化, 不解析 `..`)。
+     */
+    private fun canonicalize(path: String, workDir: String?): String? = try {
+        val raw = if (looksLikeAbsolutePath(path) || workDir.isNullOrBlank()) path
+        else File(workDir, path).path
+        val file = File(raw)
+        runCatching { file.canonicalPath }.getOrElse { file.absolutePath }
+    } catch (_: Exception) {
+        null
     }
 
     /**
      * Validate a command against protected paths.
      *
-     * 判定改为**按路径参数**通用化 (不再依赖命令名白名单): 命令名只用于定位参数起点
-     * (首参不是绝对路径时视为命令名, 相对路径参数因此天然豁免)。这样两条通道共用同一判定 —
-     * 注册命令经 [com.mengpaw.kernel.cli.Pipeline], Linux 命令经
-     * [com.mengpaw.kernel.cli.LinuxCommandExecutor] → [com.mengpaw.kernel.security.SecurityGate]。
-     * 历史上只认写命令白名单 + 仅经 Pipeline, 导致 Linux 通道的 `cp/mv/tee` 写核心目录无拦截。
+     * 判定按**路径参数**通用化 (不依赖命令名白名单): 命令名只用于定位参数起点。
+     * 相对路径参数按 [workDir] 解析后再判定 —— Linux 通道的 cwd 就是 ctx.workDir,
+     * 且 shell 里 `cd X && cat rel` 是单行合法形态, 若不解析则 `cd <受保护目录>` +
+     * 相对路径即可绕过 (v0.47.1 修复)。
      *
+     * @param workDir 命令执行时的工作目录 (Linux 通道传 ctx.workDir); null = 相对路径不判定
      * @return null if allowed, or an error message if blocked.
      */
-    override fun validateCommand(command: String, args: List<String>): String? {
-        val absolutePaths = extractAbsolutePaths(command, args)
-        if (absolutePaths.isEmpty()) return null
-        absolutePaths.firstOrNull { isProtectedPath(it) }?.let { hit ->
+    override fun validateCommand(command: String, args: List<String>): String? =
+        validateCommand(command, args, workDir = null)
+
+    /** 带工作目录的完整判定 (实现 [com.mengpaw.kernel.security.ProtectedPathAware])。 */
+    override fun validateCommand(command: String, args: List<String>, workDir: String?): String? {
+        val candidates = extractPaths(command, args, workDir)
+        if (candidates.isEmpty()) return null
+        candidates.firstOrNull { isProtectedPath(it, workDir) }?.let { hit ->
             return "受保护路径: $hit 属于核心区/Vault(API Key)/插件仓库/配置目录, 不允许经命令读写"
         }
         return null
     }
 
-    /** 参数中的绝对路径 token。internal 供测试可见性。
-     *  args 非空时只用 args; 否则按空格切整行并去掉命令名 (Linux 通道传整行形态)。
-     *  绝对路径判定同时接受 `/` 开头 (Android/Linux) 与平台绝对路径 (Windows 测试环境)。 */
-    internal fun extractAbsolutePaths(command: String, args: List<String>): List<String> {
+    /** 参数中的路径 token (绝对路径 + 可按 workDir 解析的相对路径)。internal 供测试可见性。
+     *  args 非空时只用 args; 否则按空格切整行并去掉命令名 (Linux 通道传整行形态)。 */
+    internal fun extractPaths(command: String, args: List<String>, workDir: String?): List<String> {
         val tokens = if (args.isNotEmpty()) args
         else command.trim().split(Regex("\\s+")).drop(1)
-        return tokens.filter { looksLikeAbsolutePath(it) }
+        return tokens.mapNotNull { token ->
+            when {
+                looksLikeAbsolutePath(token) -> token
+                // 相对路径: 仅在给了基准目录时参与判定 (无基准 = 无法解析, 不判定)
+                !workDir.isNullOrBlank() && token.isNotBlank() && !token.startsWith("-") &&
+                    !token.contains("://") && token != ">" && token != ">>" -> token
+                else -> null
+            }
+        }
     }
 
-    /** 绝对路径判定 — `/x` 形态或平台绝对路径; 相对路径 (工作区内) 一律豁免。 */
+    /** 保留旧名 (测试/调用方兼容) — 仅返回绝对路径 token。 */
+    internal fun extractAbsolutePaths(command: String, args: List<String>): List<String> =
+        extractPaths(command, args, workDir = null).filter { looksLikeAbsolutePath(it) }
+
+    /** 绝对路径判定 — `/x` 形态或平台绝对路径。 */
     private fun looksLikeAbsolutePath(token: String): Boolean =
         token.startsWith("/") || token.startsWith("\\") || runCatching { File(token).isAbsolute }.getOrDefault(false)
 

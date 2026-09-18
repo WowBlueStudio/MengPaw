@@ -34,16 +34,25 @@ class IntegrityGuardTest {
     private lateinit var coreDir: File
     private lateinit var agentsDir: File
     private lateinit var outsideDir: File
+
+    /** 独立保护目标 — 语义上"资源需保护" (生产为插件仓库/配置)。**必须与工作区分开**:
+     *  若把工作区 (agentsDir) 设成保护目录, 工作区内的相对路径会全部被误拦。
+     *  也用于验证 extraProtectedDir 参数确实生效。 */
+    private lateinit var extraDir: File
     private lateinit var guard: IntegrityGuard
+
+    /** 真实嵌套子目录 — 用于验证"相对路径 + .. 穿越" (Windows 临时目录层级与 Unix 不同,
+     *  用固定深度会算错上溯层数, 故建真实嵌套结构)。 */
+    private lateinit var workSubDir: File
 
     @Before
     fun setUp() {
         coreDir = Files.createTempDirectory("ig-core-").toFile()
         agentsDir = Files.createTempDirectory("ig-agents-").toFile()
         outsideDir = Files.createTempDirectory("ig-outside-").toFile()
-        // 注: agentsDir 生产不再受路径保护 (Agent 工作区是可写区) — 测试显式经
-        // extraProtectedDir 接入, 以覆盖"额外保护目录"这条路径。
-        guard = IntegrityGuard(coreDir = coreDir.absolutePath, extraProtectedDir = agentsDir.absolutePath)
+        extraDir = Files.createTempDirectory("ig-extra-").toFile()
+        workSubDir = File(File(agentsDir, "memory"), "sub").also { it.mkdirs() }
+        guard = IntegrityGuard(coreDir = coreDir.absolutePath, extraProtectedDir = extraDir.absolutePath)
     }
 
     @After
@@ -51,6 +60,7 @@ class IntegrityGuardTest {
         coreDir.deleteRecursively()
         agentsDir.deleteRecursively()
         outsideDir.deleteRecursively()
+        extraDir.deleteRecursively()
     }
 
     /** 写入全部受跟踪文件 (带固定内容, 保证哈希可复现)。 */
@@ -158,7 +168,7 @@ class IntegrityGuardTest {
 
     @Test
     fun 移动命令目标为受保护路径被拦截() {
-        val dest = "${agentsDir.absolutePath}${File.separator}x.txt"
+        val dest = "${extraDir.absolutePath}${File.separator}x.txt"
         assertNotNull(guard.validateCommand("mv", listOf("/tmp/src.txt", dest)))
         // cp 同时属于写命令与移动命令 — 目标受保护同样拦截
         assertNotNull(guard.validateCommand("cp", listOf("/tmp/src.txt", dest)))
@@ -199,5 +209,41 @@ class IntegrityGuardTest {
         assertNull(guard.validateCommand("echo '内容' > notes.md", emptyList()))
         assertNull(guard.validateCommand("rm", listOf("old.md")))
         assertNull(guard.validateCommand("mkdir", listOf("newdir")))
+    }
+
+    // ── v0.47.1: .. 穿越与相对路径绕过的封堵 ──────────────────────────
+
+    @Test
+    fun 绝对路径加点点穿越被拦截() {
+        // 修复前 File.absolutePath 不解析 `..` → 穿越路径匹配不上前缀而放行。
+        // 用真实存在的兄弟目录构造穿越: 从 workSubDir (agentsDir/memory/sub)
+        // 上溯 3 层正好回到 Temp, 再进 extraDir —— 深度精确可控。
+        val traversal = File(workSubDir, "../../../${extraDir.name}/Vault.kt").path
+        assertNotNull("绝对路径 + .. 穿越必须拦截", guard.validateCommand("cat $traversal", emptyList()))
+    }
+
+    @Test
+    fun 相对路径按工作目录解析后被拦截() {
+        // 池每次执行前把 cwd 重置为 workDir — 相对路径必须按它解析, 否则可绕过保护。
+        val traversal = File(workSubDir, "../../../${extraDir.name}/Vault.kt").path
+        assertNotNull(
+            "相对路径越过工作区到受保护目录必须拦截",
+            guard.validateCommand("cat $traversal", emptyList(), workSubDir.absolutePath)
+        )
+    }
+
+    @Test
+    fun 无工作目录基准时相对路径不判定() {
+        // 保守策略: 没有基准就无法解析, 宁可不判定也不误拦
+        assertNull(guard.validateCommand("cat ../../../anything/Vault.kt", emptyList(), null))
+    }
+
+    @Test
+    fun 工作目录内的相对路径不被误伤() {
+        val work = agentsDir.absolutePath
+        assertNull("白名单场景: 工作区文件", guard.validateCommand("cat notes.md", emptyList(), work))
+        assertNull("白名单场景: 工作区写入", guard.validateCommand("echo hi > notes.md", emptyList(), work))
+        assertNull("白名单场景: 工作区子目录", guard.validateCommand("cat memory/2026.md", emptyList(), work))
+        assertNull("白名单场景: 目录列举", guard.validateCommand("ls -l", emptyList(), work))
     }
 }

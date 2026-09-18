@@ -33,4 +33,27 @@ object SecurityGate {
     /** 校验一条命令是否触碰受保护路径; null = 放行, 非 null = 拦截原因。 */
     fun validate(commandName: String, args: List<String>): String? =
         integrityProvider.validateCommand(commandName, args)
+
+    /**
+     * 带工作目录的校验 — **Linux 通道必须用这个重载**。
+     * shell 里 `cd X && cat rel` 是单行合法形态, 且池每次执行前把 cwd 重置为 ctx.workDir;
+     * 不传 workDir 则相对路径参数无法解析, `cd <受保护目录>` + 相对路径即可绕过保护 (v0.47.1 修复)。
+     * 宿主未实现带 workDir 的判定 (接口只有两参重载) 时退回原判定。
+     */
+    fun validate(commandName: String, args: List<String>, workDir: String?): String? {
+        val provider = integrityProvider
+        return when {
+            provider is ProtectedPathAware -> provider.validateCommand(commandName, args, workDir)
+            else -> provider.validateCommand(commandName, args)
+        }
+    }
+}
+
+/**
+ * 支持按执行工作目录解析相对路径的完整性提供者 (可选能力)。
+ * Android 侧 [com.mengpaw.core.security.IntegrityGuard] 实现本接口;
+ * 未实现者由 [SecurityGate.validate] 退回两参判定 (相对路径不判定)。
+ */
+interface ProtectedPathAware {
+    fun validateCommand(commandName: String, args: List<String>, workDir: String?): String?
 }

@@ -63,7 +63,9 @@ object LinuxCommandExecutor {
         // 1. 完整性路径保护 (与 Pipeline 同一套判定) — 核心目录/Vault(API Key)/插件仓库/配置
         // 注: v0.47.x 补接入 — 此前路径保护只挂在 Pipeline (仅注册命令), Linux 通道的
         // cp/mv/tee/sed -i 等写操作对受保护目录无任何拦截。
-        com.mengpaw.kernel.security.SecurityGate.validate(trimmed, emptyList())?.let {
+        // 必须传 ctx.workDir: 池每次执行前把 cwd 重置为它, 相对路径参数要按它解析才能拦住
+        // `cd <受保护目录> && cat 相对路径` 这类绕过 (v0.47.1)。
+        com.mengpaw.kernel.security.SecurityGate.validate(trimmed, emptyList(), ctx.workDir)?.let {
             return ExecutionResult.fail(it, errorCode = ErrorCodes.ERR_PERMISSION_DENIED)
         }
 
