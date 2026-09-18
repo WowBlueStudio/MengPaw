@@ -56,6 +56,9 @@ class RetiredReferenceScanTest {
     private fun repoRoot(): File =
         listOf(File(".."), File(".")).firstOrNull { File(it, "settings.gradle.kts").exists() } ?: File("..")
 
+    /** 保留位命令 (不注册, 语义为"该能力永不开放") — SecurityPolicy.blockList 恒拒绝。 */
+    private val RESERVED_DISABLED = setOf("proc.exec", "proc.system")
+
     private fun productionSources(): List<File> {
         val root = repoRoot()
         val dirs = listOf("mengpaw-kernel/src/main", "mengpaw-core/src/main", "mengpaw-shell/src/main", "harness/src/main")
@@ -157,14 +160,16 @@ class RetiredReferenceScanTest {
         val registered = SelfExecutor.commandRegistry?.list()?.toSet() ?: emptySet()
         val indexed = CommandSearch.all().map { it.fullName }.toSet()
 
-        // sys.* (Android 适配层动态注册) + 插件命令 + proc.* (宿主进程能力, Android 侧插件提供)
-        // 不在本测试注册表内 — 按命名空间豁免。
+        // sys.* (Android 适配层动态注册) + 插件命名空间不在本测试注册表内 — 按命名空间豁免。
+        // 注意: proc.* **不再整体豁免** — ps/info/kill 已实现 (必须真在册),
+        // 只有保留位 (blockList 恒拒绝, 索引保留供 Agent 搜到"此路不通") 才豁免。
         val dynamicNamespaces = setOf(
             "sys", "net", "tavily", "skill", "framework", "twin", "tribe", "root",
             "clipboard", "office", "tools", "update", "search", "render", "translate",
-            "concise", "proc", "security", "swarm", "fleet", "evolution", "plugin", "agent", "self"
+            "concise", "security", "swarm", "fleet", "evolution", "plugin", "agent", "self"
         )
-        fun known(cmd: String) = cmd in registered || cmd in indexed || cmd.substringBefore(".") in dynamicNamespaces
+        fun known(cmd: String) = cmd in registered || cmd in indexed ||
+            cmd.substringBefore(".") in dynamicNamespaces || cmd in RESERVED_DISABLED
 
         val missing = (com.mengpaw.kernel.security.CommandRiskLevels.LEVELS.keys +
             com.mengpaw.kernel.security.HighRiskCommandGate.HIGH_RISK.keys)
@@ -173,5 +178,16 @@ class RetiredReferenceScanTest {
             "风险分级/高危表登记了不存在的命令 (判定恒不命中): ${missing.sorted()}",
             missing.isEmpty()
         )
+    }
+
+    @Test
+    fun `保留位命令必须真的恒拒绝`() {
+        // 保留位 (proc.exec / proc.system) 的语义是"能力永不开放": 不注册, 且 blockList 恒拒绝。
+        // 若哪天它们被注册, 本测试应失败并迫使同步移除 blockList 项 (表项与实现严格一致)。
+        val policy = com.mengpaw.kernel.security.PolicyStore.sharedPolicy()
+        RESERVED_DISABLED.forEach { cmd ->
+            assertTrue("保留位命令必须被策略恒拒绝: $cmd", !policy.isAllowed(cmd))
+            assertTrue("保留位命令必须被策略恒拒绝 (带参形态): $cmd foo", !policy.isAllowed("$cmd foo"))
+        }
     }
 }

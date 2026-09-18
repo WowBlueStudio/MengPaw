@@ -117,8 +117,6 @@ object CommandRiskLevels {
         "plugin.uninstall" to RiskLevel.HIGH,
         "agent.memory.mid.delete" to RiskLevel.HIGH,
         "agent.memory.project.delete" to RiskLevel.HIGH,
-        "proc.exec" to RiskLevel.HIGH,
-        "proc.system" to RiskLevel.HIGH,
         "proc.kill" to RiskLevel.HIGH,
         "root.exec" to RiskLevel.HIGH,
         "root.shell" to RiskLevel.HIGH,

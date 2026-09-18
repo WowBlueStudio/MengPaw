@@ -33,9 +33,7 @@ object HighRiskCommandGate {
      *  集合按真实注册表校准 (fs.write 已并入 agent.*, 不在此列)。 */
     val HIGH_RISK: Map<String, List<Param>> = mapOf(
         // ── 文件 (中危; agent.rm/fs.mv 已随 Linux 通道移除, Linux rm/mv 走 CommandMonitor CONFIRM) ──
-        // ── 进程 ──
-        "proc.exec" to listOf(Param("command")),
-        "proc.system" to listOf(Param("command")),
+        // ── 进程 (proc.ps/proc.info 为只读查询, 不入表; exec/system 为 blockList 保留位, 不注册) ──
         "proc.kill" to listOf(Param("pid")),
         // ── 插件管理 (install/enable/disable/update 中危, uninstall 高危) ──
         "plugin.install" to listOf(Param("id")),

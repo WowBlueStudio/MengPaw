@@ -228,6 +228,26 @@ object BuiltinCommandIndex {
             listOf("权限", "授权", "策略", "命令权限", "放行", "限制", "多Agent"),
             listOf("permission", "policy", "grant", "allow", "deny", "access"))
 
+        // ── proc: 进程管理 (v0.47.x 实现; exec/system 为 blockList 保留位, 不注册不索引) ──
+        idx("proc.ps", "列出进程 (PID/命令/用户; 可 --limit=N --filter=关键词)", "proc.ps [--limit=N] [--filter=关键词]",
+            listOf("进程", "进程列表", "任务", "运行中", "查看进程", "ps"),
+            listOf("process", "ps", "task", "running", "list"))
+        idx("proc.info", "查看单个进程详情 (命令行/用户/父子关系/启动时间)", "proc.info <pid>",
+            listOf("进程详情", "进程信息", "PID", "进程查询"),
+            listOf("process", "info", "detail", "pid"))
+        idx("proc.kill", "结束进程 (纯 JVM 信号, 系统进程需 root.exec; 需 reason)", "proc.kill <pid> [--force]",
+            listOf("结束进程", "终止进程", "杀进程", "杀掉", "kill"),
+            listOf("kill", "terminate", "process", "stop"))
+        // 保留位: 语义为"执行任意/系统级命令", 与 Linux 命令通道重复 → 不注册, 恒拒绝
+        // (SecurityPolicy.blockList)。索引保留是为了让 Agent 搜到后知道**此路不通**,
+        // 而不是反复猜命令名 (IndexCoverageTest 对此二条显式豁免)。
+        idx("proc.exec", "【保留位·恒拒绝】执行任意命令 — 请改用 Linux 命令通道直接执行 (如 ls/grep/echo)", "proc.exec <不开放>",
+            listOf("执行命令", "运行命令", "保留位", "禁用"),
+            listOf("exec", "run", "command", "disabled"))
+        idx("proc.system", "【保留位·恒拒绝】系统级命令执行 — 需 root 能力时用 root.exec", "proc.system <不开放>",
+            listOf("系统命令", "系统级", "保留位", "禁用"),
+            listOf("system", "root", "disabled"))
+
         // ── plugin: 插件管理 ──
         idx("plugin.marketplace", "浏览插件市场 (自动路由 GitHub/Gitee, 含描述)", "plugin.marketplace [--refresh]",
             listOf("市场", "商店", "插件", "浏览", "市场", "所有", "列表"),

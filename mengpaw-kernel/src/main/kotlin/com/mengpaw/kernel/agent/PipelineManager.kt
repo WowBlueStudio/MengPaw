@@ -162,6 +162,9 @@ class PipelineManager(
         // Built-in: fleet namespace (舰队指挥常驻内核, v0.36 平台化 — 平台能力经 FleetPlatform 注入)
         registry.registerNamespace("fleet", com.mengpaw.kernel.agent.FleetExecutor.commands)
 
+        // Built-in: proc namespace (进程管理 — ps/info/kill, v0.47.x 实现; exec/system 为 blockList 保留位)
+        registry.registerNamespace("proc", com.mengpaw.kernel.namespace.ProcExecutor.commands)
+
         // Additional namespaces (e.g. "sys" from Android adapter)
         additionalNamespaces.forEach { (ns, commands) ->
             registry.registerNamespace(ns, commands)

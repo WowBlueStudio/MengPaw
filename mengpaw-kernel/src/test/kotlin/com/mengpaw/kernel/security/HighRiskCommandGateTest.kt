@@ -162,7 +162,7 @@ class HighRiskCommandGateTest {
         // 普通 (LOW) 命令移出, 由 CommandRiskLevels 分级承载
         listOf(
             "agent.memory.rm", "agent.memory.edit",
-            "proc.exec", "proc.system", "plugin.install", "plugin.uninstall",
+            "proc.kill", "plugin.install", "plugin.uninstall",
             "plugin.enable", "plugin.disable",
             "clipboard.copy", "clipboard.paste", "clipboard.clear",
             "skill.enable", "skill.disable",
@@ -186,7 +186,13 @@ class HighRiskCommandGateTest {
             assertTrue("LOW 命令分级应为普通: $name", CommandRiskLevels.levelOf(name) == RiskLevel.LOW)
         }
         // 只读命令不在高危表
-        assertTrue("agent.read 不应在高危表", !HighRiskCommandGate.HIGH_RISK.containsKey("agent.read"))
-        assertTrue("agent.output (只读列表) 不应在高危表", !HighRiskCommandGate.HIGH_RISK.containsKey("agent.output"))
+        // (v0.47.x: 原断言用 agent.read — 该命令已删, 属恒真断言, 改验真实在册只读命令)
+        listOf("agent.output", "proc.ps", "proc.info").forEach { name ->
+            assertTrue("只读命令不应在 reason 表: $name", !HighRiskCommandGate.HIGH_RISK.containsKey(name))
+        }
+        // proc.exec / proc.system 是 blockList 保留位 — 不入 reason 表 (不注册, 恒拒绝)
+        listOf("proc.exec", "proc.system").forEach { name ->
+            assertTrue("保留位不应在 reason 表: $name", !HighRiskCommandGate.HIGH_RISK.containsKey(name))
+        }
     }
 }

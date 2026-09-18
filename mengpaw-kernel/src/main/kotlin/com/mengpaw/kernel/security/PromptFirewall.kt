@@ -38,7 +38,8 @@ object PromptFirewall {
         // v0.36.x 去重: fs.* 已移除, Linux 写/危险命令对 GUEST 显式拒绝 (默认拒绝兜底)
         "echo", "tee", "printf", "rm", "mv", "cp", "mkdir", "touch",
         "curl", "wget", "nc", "ncat", "telnet", "python", "perl", "sh", "bash", "su", "sudo",
-        "proc.exec", "proc.kill",
+        "proc.exec", "proc.system",  // 保留位 (恒拒绝): 不注册, 语义为"执行任意/系统级命令"
+        "proc.kill",                 // v0.47.x: 已实现, 对 GUEST 仍拒绝 (进程终止)
         "plugin.install", "plugin.uninstall", "plugin.enable", "plugin.disable",
         "ui.click", "ui.swipe", "ui.input", "ui.screenshot", "ui.back", "ui.home",
         "clipboard.copy", "clipboard.paste", "clipboard.clear",
@@ -53,11 +54,12 @@ object PromptFirewall {
     private val GUEST_ALLOWED = setOf(
         "agent.memory.record",       // 记录对话
         "agent.audit",               // 查看审计
-        "hermes.memo",               // 团队共享记忆
+        "tribe.hermes.memo",         // 团队共享记忆 (真实命名空间; hermes.memo 不存在)
         "render.generate",           // API生图 (不写本地)
         // Linux 只读命令 (v0.36.x 去重: agent.read/ls、fs.stat 已移除)
         "cat", "head", "tail", "grep", "sed", "find", "stat", "ls", "less", "more", "wc", "du", "df", "file",
         "self.status", "self.stats", "self.version", "sys.*",  // 只读系统信息
+        "proc.ps", "proc.info",      // v0.47.x: 进程只读查询 (GUEST 可看, 不可 kill)
         "agent.memory", "agent.memory.read", "agent.memory.search", "agent.memory.stats",
         "agent.memory.mid", "agent.memory.project",  // 只读记忆
         "skill.ls", "skill.run",     // 只读/运行技能

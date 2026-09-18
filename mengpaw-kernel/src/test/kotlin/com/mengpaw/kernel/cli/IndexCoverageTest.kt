@@ -55,9 +55,13 @@ class IndexCoverageTest {
         BuiltinCommandIndex.buildAll()
         val indexed = CommandSearch.all().map { it.fullName }.toSet()
         val registered = buildRegistry().list().toSet()
-        // 设计内动态机制: framework.* (捆绑插件) + sys.* (core 补种)
+        // 设计内动态机制: framework.* (捆绑插件) + sys.* (core 补种) + 保留位 (proc.exec/proc.system)
+        // 保留位是显式禁用占位 — 索引保留供 Agent 搜到"此路不通", 不注册 (SecurityPolicy blockList 恒拒绝)
+        val reservedDisabled = setOf("proc.exec", "proc.system")
         val ghosts = indexed - registered
-        val unexpected = ghosts.filter { !it.startsWith("framework.") && !it.startsWith("sys.") }
+        val unexpected = ghosts.filter {
+            !it.startsWith("framework.") && !it.startsWith("sys.") && it !in reservedDisabled
+        }
         assertTrue(
             "索引有但注册表无 (幽灵): ${unexpected.joinToString()}",
             unexpected.isEmpty()

@@ -650,9 +650,11 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > v0.46.3 发布实测（2026-09-10，根治 DeepSeek 空响应 P0 + 流式解析加固）：kernel 650 → 662（+12）+ core 116 + shell 248 + 插件 546 = **1572 用例**，0 failures。增量：SseStreamParserTest +8（**每分片带 `"usage":null` 时正文/思维链仍正常分流** — 事故真实线格式回归 / 字段 null 与空数组不抛异常丢事件 / content 内容块数组不整事件丢弃 / content 形态异常不连带丢 reasoning / 网关回整包 JSON 兜底 / 垃圾报文不回填 / 流内 error 上抛带原文 / 限流错误码映射）+ LlmPayloadTest +4（非流式数组 content / 整包 JSON 兜底与非法返回 null / `"usage":null` 不整包回退原文 / 形态描述不含内容值）。
 > v0.47.0 发布实测（2026-09-10，DeepSeek V4.1 Flash 单一化 + 孪生能力判定进化）：kernel 662 → 663 + core 116 + shell 248 → 250（+2 双套）+ 插件 546 → 606（+60 双套）= **1635 用例**，0 failures。增量：shell +2（`SettingsModelsPresetTest` 7 → 8：预置单一化为 `deepseek-flash` + 存量归一/列表过滤 × 双套）；plugin-memory-twin 34 → 64 单套（`ModelCapabilityRulesTest` 16 + `ModelEvidenceStoreTest` 7 + `TwinRouterEvolutionTest` 6 + `TwinWorkspaceTest` 规则文件同步白名单 1 × 双套 = +60）。kernel 未改逻辑，663 为实测口径复核。
 
+> v0.47.1 未发布实测（2026-09-18，命令退役整改 + proc.* 实现）：kernel 663 → 676（+13）+ core 116 + shell 250 + 插件 606 → 617（+11 双套）= **1713 用例**，0 failures。增量：kernel +13（`RetiredReferenceScanTest` 5：已删命令/已退役命名空间/已移除手册扫描 + 风险表在册性 + 保留位恒拒绝；`ProcExecutorTest` 9：命令面/ps 参数/info 边界/kill 安全边界；`CliInterpreterTest` 单横线选项保形 4 用例替换旧短 flag 用例，净 +3；`PipelineTest` 单横线端到端保形 +3；`InterruptedRecoveryTest` 真实命令样本 +2；`PromptGhostReferenceTest` 扫描面扩展 +2；`IndexCoverageTest` 保留位豁免 0；`HighRiskCommandGateTest` 恒真断言改真实样本 0）；插件 +11 双套（`SkillDocReferenceTest` 5 + `SkillDocReferenceTest` 技能索引死链检测等 × 双套；`plugin-skill` 96 → 101）。整改内容见 §5.2.1 与 `docs/lessons.md` §0.1。
+
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 663 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) + **SseStreamParserTest 17 + LlmPayloadTest 11 + RemoteApiTest 5（v0.40.4 全厂商思维链解析直测 + 2026-08-17 五家官方流式夹具）** + PromptEngineTest sys 权限前置 (v0.42.3, +1) + DeepSeek 思考模式回传 (v0.42.1, +5) + 对话需求跟踪 (v0.42.1, +6) + RiskGateTest 无障碍命令分级 (v0.42.2, +1) + **LoopDetector 三通道/AgentErrors/JSON 数组/GoalSessionStore/RalphRunner (v0.43.0, +17)** + **EvolutionQueue/G2 复现计数跨重启 (v0.44.0, +5)** + **思考强度四档注入/端点过滤/默认回退 (v0.46.2, +7)** + **流式空响应加固: JsonNull 安全取值/usage:null 回归/内容块数组/整包 JSON 兜底/流内错误上抛 (v0.46.3, +12)** |
+| mengpaw-kernel | 676 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) + **SseStreamParserTest 17 + LlmPayloadTest 11 + RemoteApiTest 5（v0.40.4 全厂商思维链解析直测 + 2026-08-17 五家官方流式夹具）** + PromptEngineTest sys 权限前置 (v0.42.3, +1) + DeepSeek 思考模式回传 (v0.42.1, +5) + 对话需求跟踪 (v0.42.1, +6) + RiskGateTest 无障碍命令分级 (v0.42.2, +1) + **LoopDetector 三通道/AgentErrors/JSON 数组/GoalSessionStore/RalphRunner (v0.43.0, +17)** + **EvolutionQueue/G2 复现计数跨重启 (v0.44.0, +5)** + **思考强度四档注入/端点过滤/默认回退 (v0.46.2, +7)** + **流式空响应加固: JsonNull 安全取值/usage:null 回归/内容块数组/整包 JSON 兜底/流内错误上抛 (v0.46.3, +12)** + **幽灵引用守护 RetiredReferenceScanTest/PromptGhostReferenceTest 扩展 + proc.* 实现 ProcExecutorTest + 单横线选项保形 (v0.47.1, +13)** |
 | mengpaw-core | 116 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表 (v0.42.2: 93 条含无障碍命令组)、SkillSeeds hex + AccessibilitySnapshotTest 6 + AccessibilityExecutorTest 7 (v0.42.2) |
 | mengpaw-shell | 250 | ComplexityDetector 分档、extractMedia 提取规则、会话 JSON 编解码 (含 v0.40.2 中断恢复归一化回归)、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 流式缓冲简化回归 (v0.40.2 重构 5) + BubbleStreamCoordinator 简化显示回归 (v0.40.1 6 → v0.40.2 8 → v0.40.3 11 思维链分流 → v0.40.4 12 交错到达完整显示；全量口径 debug+release 双套合并) + SettingsModelsPresetTest 预置名单/排序/最新旗舰/退役清理 (v0.41.0+，v0.47.0 更新为 DeepSeek 单一化 + 存量归一/列表过滤 8 用例) + ThinkingProcessWriter fail 停止收口 (v0.42.1, +2) + BangResultMessageTest 结果气泡规则 (v0.42.3, +4) + 思考气泡层级定案改回 (v0.42.4, UI 重构无新增用例) + TokenStatsCollectorTest 总调用/按模型聚合 (v0.45.0, +4) + **SettingsRemoteTest 模型列表探测 URL 派生 4 用例 + SettingsModelsPresetTest DeepSeek 预置/思考档位可见性 (v0.46.2, +6 双套)** |
 | mengpaw-browser | 56 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵、McpAuthPolicy 开放模式认证矩阵 (v0.41.0, 双套 +14) |
@@ -1088,7 +1090,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **其他 (6+)**：`audit` | `browser-tools` | `dream` | `cleanup` | `storage` | `policy`
 
-**权限策略 (v0.32.1+, 自检报告 P1-7)**：`policy`（列出全部授权）| `policy allow <前缀> [--to <agent>]`（放行受限命令, 默认目标为自己）| `policy deny <前缀> [--to <agent>]`（收回）。per-agent 授权表持久化 `{BASE}/配置/policy.json`（原子写）。优先级铁律: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。
+**权限策略 (v0.32.1+, 自检报告 P1-7)**：`policy`（列出全部授权）| `policy allow <前缀> [--to <agent>]`（放行受限命令, 默认目标为自己）| `policy deny <前缀> [--to <agent>]`（收回）。per-agent 授权表持久化 `{BASE}/配置/policy.json`（原子写）。优先级铁律: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` (保留位, 未注册的命令执行能力) 永不可绕过。
 
 **会话 (4)**：`sessions [keyword] [limit]` | `session.delete <id>` | `session.archive <id>` | `session.current`
 
@@ -1337,7 +1339,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 **安全规则-框架信任列表修复 (v0.34.3)**: 原列表只读 `PromptFirewall.listTrusted()` (ACP 配对信任), 与框架通讯录信任 (`FrameworkPeerStore.trusted`, 侧边栏/`framework.trust` 操作的真实信任源) 脱节 — 侧边栏信任的框架不显示、无操作按钮、进入页面不刷新。修复: 列表以框架通讯录信任为准 (名称/地址/短码), 支持**撤销信任**; ACP 已配对设备作为次级展示, 支持**解除配对**; 展开时实时刷新。**v0.35.4 修复 (用户反馈)**: 折叠时 `frameworkTrusted` 返回空列表导致计数恒 0 — 改为始终读真实信任列表, 折叠/展开计数一致 (展开仅控制列表显示)。
 
-**per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
+**per-agent 授权表 (v0.32.1+, 自检报告 P1-7)**: `SecurityPolicy` 新增 `agentGrants`（`grantAgent`/`revokeAgent`/`agentPolicies`/`replaceAgentGrants`），`isAllowed(command, agentName)` 重载优先级: **blockList 恒拒绝 > agent 级 grant > restrictedPatterns** — grant 只放开"受限但未硬禁"命令, `proc.exec/proc.system` (保留位) 永不可绕过。全局共享实例 `PolicyStore.sharedPolicy()`（Pipeline 默认参数 + `agent.policy` 命令共用, 授权即刻生效; 懒加载从 `{BASE}/配置/policy.json` 恢复, 原子持久化; `resetForTest` 供测试隔离）。
 
 
 ### 6.2 Vault
@@ -1368,7 +1370,13 @@ Prompt 注入检测防火墙（ACP GUEST 命令级黑白名单 + 信任管理）
 #### 6.4.1 高危命令 reason 门禁 + 攻击提醒与拉黑闭环 (v0.34.1, ④⑦)
 
 **④ 高危命令 reason 门禁** (`HighRiskCommandGate`, 纯函数无状态):
-- 高危集合（40+ 命令）: 进程 (`proc.*`)、插件管理 (`plugin.*`)、通知 (`self.notify.*`)、剪贴板 (`clipboard.*`)、技能开关 (`skill.enable/disable`)、记忆写入 (`agent.memory.keep/write/rm/edit/mid.*/project.*`, `record` 除外—append-only)、`root.*` 全套。`agent.output`（只读）特意排除。注: Linux rm/mv/cp 等写删命令由 CommandMonitor CONFIRM 弹窗承接 (v0.36.x 去重后不在本表)
+- 高危集合（40+ 命令）: 进程终止 (`proc.kill`)、插件管理 (`plugin.*`)、通知 (`self.notify.*`)、剪贴板 (`clipboard.*`)、技能开关 (`skill.enable/disable`)、记忆写入 (`agent.memory.keep/write/rm/edit/mid.*/project.*`, `record` 除外—append-only)、`root.*` 全套。`agent.output`（只读）特意排除; `proc.ps`/`proc.info` 为只读查询 (LOW)。注: Linux rm/mv/cp 等写删命令由 CommandMonitor CONFIRM 弹窗承接 (v0.36.x 去重后不在本表)
+
+**进程管理 `proc.*` (v0.47.x 实现)**: 补上历史表项与实现的缺口 — 此前 `proc.exec/proc.system/proc.kill` 登记在风险分级表/高危表/Guest 名单/`SecurityPolicy.blockList` 四处, 但**没有任何实现** (v0.2.0 时代仅有桩: `ps` 返回假数据/`kill` 假成功/`exec` 直接返回 "disabled in sandbox mode"), 微内核拆分时整体删除只留下表项。现按「进程管理」定位补齐:
+- `proc.ps` — 列进程 (Java `ProcessHandle` + `/proc/<pid>/cmdline` 补名, 不依赖 shell); 支持 `--limit=N` / `--filter=关键词`
+- `proc.info <pid>` — 进程详情 (命令行/用户/父子关系/启动时间)
+- `proc.kill <pid> [--force]` — 终止进程 (**HIGH**, 需 reason); 用 `ProcessHandle.destroy/destroyForcibly` 纯 JVM 调用, **不拼接 shell 命令** (无注入面, 也不绕过 CommandMonitor); 拒绝终止自身; 沙箱外/受保护进程失败时如实报告并引导 `root.exec`
+- **保留位** `proc.exec` / `proc.system`: 语义为"执行任意/系统级命令", 与 Linux 命令通道重复 → **不注册**, 但保留在 `SecurityPolicy.blockList` (恒拒绝, grant 亦不可绕过) 表达"这类能力永不开放"; 索引中保留条目并标注【保留位·恒拒绝】, 让 Agent 搜到后知道此路不通而非反复猜命令名。`IndexCoverageTest` 与 `RetiredReferenceScanTest` 对此二条显式登记 (保留位必须真的被策略拒绝)
 - **JSON 豁免通道**: 高危命令豁免 `paramFormatError` 全局门卫（原漏洞: 单键 JSON size==1 无 raw 被放行 — 顺带补缝）; 必须携带结构化 `{"reason": ...}`。reason 缺失/空白 → `Error [REASON_REQUIRED]`（错误文本含按模板动态生成的 JSON 示例, 对齐 --force 自锁「拒绝+重发指令」先例）
 - **模板驱动展开**: 按模板键序展开 POSITIONAL/FLAG 参数, `reason` 与模板外键排除 — 防键序不稳定导致参数错位; 缺参数键 → `Error [PARAM_FORMAT_ERROR]` 列出缺失键
 - **双循环一致**: AgentReActLoop / SwarmWorkerRunner 共用同一纯函数门禁（swarm 不可绕过, v0.34.4 Mission 并入后无独立 worker 循环）; worker 无用户交互, 命中仅日志
