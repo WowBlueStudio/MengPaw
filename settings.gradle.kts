@@ -26,9 +26,10 @@ rootProject.name = "MengPaw"
 // 不存在"两份副本各自漂移"的风险。
 includeBuild("harness") {
     dependencySubstitution {
-        // artifactId 由 harness 仓库的目录名推导 (mengpaw-harness);
-        // 与 harness/build.gradle.kts 的发布坐标保持一致, 避免 substitution 静默失效。
-        substitute(module("com.github.WowBlueStudio.MengPaw-harness:mengpaw-harness")).using(project(":"))
+        // 坐标与 harness 仓库的 group 保持一致 (com.github.WowBlueStudio),
+        // 且与 JitPack 对外坐标同形 — 本地复合构建与远端依赖用同一个坐标,
+        // 避免 substitution 逐字符匹配失效 (静默回落到远端依赖或解析失败)。
+        substitute(module("com.github.WowBlueStudio:MengPaw-harness")).using(project(":"))
     }
 }
 

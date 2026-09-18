@@ -56,7 +56,7 @@ dependencies {
     // 用 api 而非 implementation: 插件只声明 `implementation(project(":mengpaw-kernel"))`,
     // 而 SkillPlugin/MemoryTwinPlugin 等需要 LlmProvider 等类型 — implementation 不传递,
     // 插件模块会 Unresolved reference 'LlmProvider' (plugin-skill 编译中断实测)。
-    api("com.github.WowBlueStudio.MengPaw-harness:mengpaw-harness")
+    api("com.github.WowBlueStudio:MengPaw-harness")
 
     // Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:2.0.21"))
