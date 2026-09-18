@@ -9,7 +9,12 @@ import com.mengpaw.kernel.namespace.SelfExecutor
 import com.mengpaw.kernel.plugin.PluginExecutor
 import com.mengpaw.kernel.plugin.PluginManager
 import com.mengpaw.kernel.PipelineManager
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
@@ -59,17 +64,22 @@ class RetiredReferenceScanTest {
     /** 保留位命令 (不注册, 语义为"该能力永不开放") — SecurityPolicy.blockList 恒拒绝。 */
     private val RESERVED_DISABLED = setOf("proc.exec", "proc.system")
 
+    private val JSON = Json { ignoreUnknownKeys = true }
+
     private fun productionSources(): List<File> {
         val root = repoRoot()
         val dirs = listOf("mengpaw-kernel/src/main", "mengpaw-core/src/main", "mengpaw-shell/src/main", "harness/src/main")
             .map { File(root, it) }.filter { it.isDirectory }
         val pluginDirs = File(root, "plugins").listFiles { f -> f.isDirectory }
             ?.map { File(it, "src/main") }?.filter { it.isDirectory } ?: emptyList()
+        // 仓库根的文件也是 Agent 可读渠道: plugins.json 是插件市场索引 (Agent 经
+        // plugin.marketplace 读到命令清单), 曾漏扫导致 hermes.* 旧名残留 (v0.47.1 补)。
+        val rootFiles = listOf("plugins.json").map { File(root, it) }.filter { it.isFile }
         return (dirs + pluginDirs).flatMap { dir ->
             dir.walkTopDown().filter { it.isFile }
                 .filter { it.extension in setOf("kt", "kts", "md", "json") }
                 .toList()
-        }
+        } + rootFiles
     }
 
     /** 去掉注释部分 — 注释里的历史说明不算命中。 */
@@ -189,5 +199,61 @@ class RetiredReferenceScanTest {
             assertTrue("保留位命令必须被策略恒拒绝: $cmd", !policy.isAllowed(cmd))
             assertTrue("保留位命令必须被策略恒拒绝 (带参形态): $cmd foo", !policy.isAllowed("$cmd foo"))
         }
+    }
+
+    // ── 插件市场索引: 声明的命令命名空间必须与插件 id 推导一致 ────────
+    // 覆盖的失败模式: 命令名缺命名空间前缀 (实测 hermes.* 应为 tribe.hermes.* 却写成 hermes.*,
+    // Agent 经 plugin.marketplace 读到的名字不存在)。
+    // 未覆盖: "前缀正确但命令不存在" — 插件命令在运行时注册表 (非本模块可建), 需在 shell
+    // 模块用 PluginRegistrar 建全量注册表比对 (已记入 docs/lessons.md 待补)。
+
+    @Test
+    fun `plugins_json 内置插件命令命名空间必须与插件 id 一致`() {
+        val file = File(repoRoot(), "plugins.json")
+        assumeTrue("plugins.json 应存在", file.isFile)
+        println("SCAN plugins.json=${file.absolutePath} size=${file.length()}")
+
+        BuiltinCommandIndex.buildAll()
+        val indexed = CommandSearch.all().map { it.fullName }.toSet()
+        // 插件命令 (非内核命名空间) 不在 CommandSearch 索引里 — 用"必须以该插件命名空间开头"校验
+        val root = JSON.parseToJsonElement(file.readText()).jsonObject
+        val entries = root["plugins"]?.jsonArray ?: return
+        println("SCAN entries=${entries.size}")
+        val problems = mutableListOf<String>()
+        val diag = mutableListOf<String>()
+        entries.forEach { el ->
+            val obj = el.jsonObject
+            if (obj["status"]?.jsonPrimitive?.content != "builtin") return@forEach
+            val id = obj["id"]?.jsonPrimitive?.content ?: return@forEach
+            val ns = namespaceFor(id)
+            val cmds = obj["commands"]?.jsonArray ?: return@forEach
+            diag.add("id=$id ns=$ns cmds=${cmds.size}")
+            cmds.forEach { cmdEl ->
+                val full = cmdEl.jsonPrimitive.content
+                // 插件命令必须属于该插件命名空间 (排除内核命名空间的转发条目与保留位)
+                val foreign = full.substringBefore(".") in KERNEL_NAMESPACES &&
+                    full !in indexed && full !in RESERVED_DISABLED
+                if (!full.startsWith("$ns.") && !foreign) {
+                    problems.add("$id: $full (期望命名空间 '$ns.')")
+                }
+            }
+        }
+        assertTrue("扫描应覆盖 tribe-plugin 条目 (基准非空)", diag.any { it.startsWith("id=tribe-plugin") })
+        assertTrue(
+            "plugins.json 声明的命令命名空间与插件 id 推导不一致 (Agent 经 plugin.marketplace " +
+                "读到的命令名必败 —— 如 hermes.* 缺 tribe. 前缀):\n" + problems.joinToString("\n"),
+            problems.isEmpty()
+        )
+    }
+
+    /** 内核命名空间 — 插件条目里出现这些前缀属"转发条目"(如 evolution-plugin 注册 evolution.*)。 */
+    private val KERNEL_NAMESPACES = setOf(
+        "self", "agent", "plugin", "evolution", "security", "swarm", "fleet", "proc"
+    )
+
+    /** 插件 id → 命令命名空间 (与 PluginManager.pluginNamespaceFor 同规则)。 */
+    private fun namespaceFor(id: String): String = when {
+        id.startsWith("memory-") -> id.removePrefix("memory-").removeSuffix("-plugin").removeSuffix("-ext")
+        else -> id.removeSuffix("-plugin").removeSuffix("-ext")
     }
 }

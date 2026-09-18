@@ -1,5 +1,69 @@
 # Changelog
 
+## v0.48.0 (2026-09-18) — 命令退役整改 + proc.* 实现 + 路径保护加固
+
+> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /
+> skill.run browser-spider 重试无效 / grep -n 参数被"吞掉")。彻查后定性: 3 条是模型幻觉,
+> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。
+
+### 修复 — Agent 读到的指令必须是真的
+- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`
+  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`
+  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`
+- **浏览器"提炼网页要点"链路修复**: `MainActivity` 写入 inbox 的任务脚本原为 3 步已删命令
+  (`agent.read`/`agent.write`/`agent.rm`), 这是用户实测"skill 重试不奏效"的物理原因;
+  `AgentTaskInbox` 提交给 Agent 的任务消息同步
+- **技能文档与工作区模板去幽灵引用**: `filesystem.md` 整篇重写为 Linux 命令手册 (原为已删
+  `plugin-fs` 的 10 条命令, 而系统提示词正指向它); `hermes.md` 改真实 `tribe.*`; `plugin-index.md`
+  重建 (原 10 个 `skill.run` 死链清零); 另修 7 篇技能 + 4 个工作区模板
+- **连带修复真实幽灵**: `agent.repair` (会话损坏时引导 Agent 调用不存在的修复命令, 两处);
+  `hermes.*` 命名空间错位 (真实为 `tribe.hermes.*`); `plugins.json` 市场索引里的 `hermes.*` 旧名
+
+### 修复 — 单横线选项被静默改写 (实测复现)
+`grep -n 关键词 文件.md` 经 `CliInterpreter`+`Pipeline` 被改写为 `[文件, --n, 关键词]`
+(选项错位 + 值被吞), 而系统提示词正教 Agent 用 `grep -n`/`sed -n`、`CommandMonitor` 也放行 —
+属框架自相矛盾。修复: 单横线选项原样留在 args (原位不动) + `--key` 保持 flag 语义;
+新增解释器 4 用例 + Pipeline 端到端保形 3 用例。
+
+### 修复 — 路径保护链路断裂与穿越绕过 (安全)
+- **链路断裂**: `IntegrityGuard.validateCommand` 唯一调用点在 Pipeline (只处理注册表命令),
+  Linux 通道的 `cp/mv/tee/sed -i` 等写操作完全绕过 → 核心目录/Vault/插件仓库/配置写保护恒不生效。
+  新增 kernel `SecurityGate` (全局 IntegrityProvider 注册点), 两条通道共用同一判定。
+- **Vault 路径写死错误**: 前缀为 `com.mengpaw/mengpaw_vault`, 真实是
+  `com.mengpaw.shell/.../mengpaw_vault_encrypted` → 改运行时经 `context.filesDir` 解析。
+- **.. 穿越与相对路径绕过**: 规范化用 `File.absolutePath` 不解析 `..`, 且相对路径参数不进判定 —
+  实测 `cat /x/../../shared_prefs/mengpaw_vault_encrypted` 与相对路径形态均被放行。
+  改 `canonicalPath` 解析 + `SecurityGate.validate` 带 `workDir` 重载 (Linux 通道传 `ctx.workDir`),
+  工作区内相对路径不受影响 (专项白名单用例锁死)。
+- **中断恢复文件提取功能静默失效**: 判定集全是已删命令名 → `files` 字段恒空, 改真实命令集 + 路径提取。
+
+### 新增 — proc.* 进程管理 (补齐四处安全表项的实现缺口)
+`proc.exec`/`proc.system`/`proc.kill` 登记在风险分级表、高危 reason 表、Guest 名单、`SecurityPolicy.blockList`
+四处, 但实现早随微内核拆分删除 (v0.2.0 时代仅有桩: `ps` 假数据 / `kill` 假成功 / `exec` 直接拒绝)。
+按「进程管理」定位补齐: `proc.ps` (列进程, 支持 `--limit`/`--filter`) / `proc.info <pid>` /
+`proc.kill <pid> [--force]` (HIGH, 需 reason; 纯 JVM `ProcessHandle` 信号调用不拼接 shell 命令,
+拒绝终止自身, 失败引导 `root.exec`)。`proc.exec`/`proc.system` 为**保留位** (不注册, blockList 恒拒绝,
+索引保留供 Agent 搜到"此路不通")。
+
+### 新增 — 幽灵引用守护测试 (防复发)
+- `RetiredReferenceScanTest` (kernel): 全生产源码 + 资产 + `plugins.json` 静态扫描已删命令/
+  已退役命名空间/已移除手册 + 风险表在册性 + 保留位恒拒绝 + 插件索引命名空间一致性
+- `SkillDocReferenceTest` (plugin-skill): 技能文档 (分发给 Agent 的运行时资产) 幽灵引用 +
+  `skill.run` 目标存在性
+- `PromptGhostReferenceTest` 扩展: 扫描面从 `PromptEngine.kt` 1 个文件 → 8 个提示词/文案构建源
+
+### 其他
+- `net.get` 别名退役 (与 `net.curl` 同函数同描述, 搜索双命中曾致 Agent 误判"只存在一个");
+  原 get 语义并入 `net.curl` 关键词
+- **`kernel` 对 `harness` 的依赖 `implementation` → `api`**: 修复既有编译断链 —
+  plugin-skill/plugin-framework 报 `Unresolved reference 'LlmProvider'`, 插件测试无法运行
+- 方法论: 三层十二问扩展三问 (1.7 幽灵引用 / 2.7 双通道语法一致 / 3.7 保护链判定命中) + 第 4 个实战案例
+- 经验归档 `docs/lessons.md` §0.1 (五处同步法/守护空白/兼容键陷阱/双通道保形/判定表≠链路/
+  样本新鲜度/`ProcessHandle` Kotlin 映射/嵌套注释/`api` 依赖传递)
+
+### 测试
+全量 **1717 用例 / 0 failures** (kernel 676 + core 116 + shell 250 + 插件 617)。
+
 ## v0.47.0 (2026-09-10) — DeepSeek V4.1 Flash 单一化 + 孪生能力判定进化
 
 ### 变更

@@ -650,7 +650,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > v0.46.3 发布实测（2026-09-10，根治 DeepSeek 空响应 P0 + 流式解析加固）：kernel 650 → 662（+12）+ core 116 + shell 248 + 插件 546 = **1572 用例**，0 failures。增量：SseStreamParserTest +8（**每分片带 `"usage":null` 时正文/思维链仍正常分流** — 事故真实线格式回归 / 字段 null 与空数组不抛异常丢事件 / content 内容块数组不整事件丢弃 / content 形态异常不连带丢 reasoning / 网关回整包 JSON 兜底 / 垃圾报文不回填 / 流内 error 上抛带原文 / 限流错误码映射）+ LlmPayloadTest +4（非流式数组 content / 整包 JSON 兜底与非法返回 null / `"usage":null` 不整包回退原文 / 形态描述不含内容值）。
 > v0.47.0 发布实测（2026-09-10，DeepSeek V4.1 Flash 单一化 + 孪生能力判定进化）：kernel 662 → 663 + core 116 + shell 248 → 250（+2 双套）+ 插件 546 → 606（+60 双套）= **1635 用例**，0 failures。增量：shell +2（`SettingsModelsPresetTest` 7 → 8：预置单一化为 `deepseek-flash` + 存量归一/列表过滤 × 双套）；plugin-memory-twin 34 → 64 单套（`ModelCapabilityRulesTest` 16 + `ModelEvidenceStoreTest` 7 + `TwinRouterEvolutionTest` 6 + `TwinWorkspaceTest` 规则文件同步白名单 1 × 双套 = +60）。kernel 未改逻辑，663 为实测口径复核。
 
-> v0.47.1 未发布实测（2026-09-18，命令退役整改 + proc.* 实现）：kernel 663 → 676（+13）+ core 116 + shell 250 + 插件 606 → 617（+11 双套）= **1713 用例**，0 failures。增量：kernel +13（`RetiredReferenceScanTest` 5：已删命令/已退役命名空间/已移除手册扫描 + 风险表在册性 + 保留位恒拒绝；`ProcExecutorTest` 9：命令面/ps 参数/info 边界/kill 安全边界；`CliInterpreterTest` 单横线选项保形 4 用例替换旧短 flag 用例，净 +3；`PipelineTest` 单横线端到端保形 +3；`InterruptedRecoveryTest` 真实命令样本 +2；`PromptGhostReferenceTest` 扫描面扩展 +2；`IndexCoverageTest` 保留位豁免 0；`HighRiskCommandGateTest` 恒真断言改真实样本 0）；插件 +11 双套（`SkillDocReferenceTest` 5 + `SkillDocReferenceTest` 技能索引死链检测等 × 双套；`plugin-skill` 96 → 101）。整改内容见 §5.2.1 与 `docs/lessons.md` §0.1。
+> v0.48.0 未发布实测（2026-09-18，命令退役整改 + proc.* 实现 + 路径保护加固）：kernel 676 + core 116 + shell 250 + 插件 617 = **全量 1717 用例**，0 failures（分档实测后合并口径）。增量：kernel +13（`RetiredReferenceScanTest` 6：已删命令/已退役命名空间/已移除手册扫描 + 风险表在册性 + 保留位恒拒绝 + plugins.json 命名空间一致性；`ProcExecutorTest` 9：命令面/ps 参数/info 边界/kill 安全边界；`CliInterpreterTest` 单横线选项保形 +4；`PipelineTest` 单横线端到端保形 +3；`InterruptedRecoveryTest` 真实命令样本 +2；`PromptGhostReferenceTest` 扫描面扩展 +2）；core +6（`IntegrityGuardTest` 新增 4：.. 穿越拦截 / 相对路径按 workDir 解析 / 无基准不判定 / 工作区白名单防误伤）；插件 +11 双套（`SkillDocReferenceTest` 5 × 双套）。整改内容见 §5.2.1 与 `docs/lessons.md` §0.1。
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
@@ -1197,7 +1197,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 
 #### tribe — 多智能体 (28, 内置; 对应模块 plugin-hermes, 命令键 tribe.* + hermes.* 向后兼容)
 `start` | `stop` | `status` | `team` | `discover` | `delegate <agent> <task>` | `ask <agent> <question>` | `memo <content>` | `role <agent> <role>` | `template` | `route` | `fleet` | `chat` | `discuss` | `task.list` | `task.show` | `task.cancel` | `task.retry` | `task.done` | `peers` | `ping` | `cleanup`
-> 兼容键 `hermes.team/discover/delegate/ask/memo/role` 保留（TribeBackwardCompat）。
+> 兼容键 `hermes.*` 保留（TribeBackwardCompat）—— **注意真实全名带命名空间前缀**: 插件命令统一注册为 `$ns.$name`（ns=tribe），故上表"team/discover/…"的兼容入口实际是 `tribe.hermes.team` 等, 裸 `hermes.team` 不存在（2026-09-18 修正登记; `plugin-index.md`/技能文档已同步）。
 
 #### render — 图像生成 (4)（外置插件，mengpaw-connectors）
 `models` | `generate <prompt>` | `status <job-id>` | `preview <job-id>`

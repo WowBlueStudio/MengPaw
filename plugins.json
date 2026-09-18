@@ -307,7 +307,7 @@
       "version": "",
       "type": "native",
       "author": "MengPaw",
-      "description": "多 Agent 部落协作：LAN 自动组队、Kanban 委派（优先级+超时+嵌套链）、LLM 路由、任务模板、Fleet 并行、广播讨论、记忆去重压缩、上下文裁剪、ACP 实时、心跳。对应模块 plugin-hermes（随 APK 捆绑，含 hermes.* 兼容命令）",
+      "description": "多 Agent 部落协作：LAN 自动组队、Kanban 委派（优先级+超时+嵌套链）、LLM 路由、任务模板、Fleet 并行、广播讨论、记忆去重压缩、上下文裁剪、ACP 实时、心跳。对应模块 plugin-hermes（随 APK 捆绑，含 tribe.hermes.* 兼容命令）",
       "status": "builtin",
       "minCoreVersion": "0.8.0",
       "commands": [
@@ -333,12 +333,12 @@
         "tribe.peers",
         "tribe.ping",
         "tribe.cleanup",
-        "hermes.team",
-        "hermes.discover",
-        "hermes.delegate",
-        "hermes.ask",
-        "hermes.memo",
-        "hermes.role"
+        "tribe.hermes.team",
+        "tribe.hermes.discover",
+        "tribe.hermes.delegate",
+        "tribe.hermes.ask",
+        "tribe.hermes.memo",
+        "tribe.hermes.role"
       ],
       "checksum": "sha256:24ec7b9cdafd9a331ee15f905e0ab427c2076e8110ba270ee8be74855ad53f23",
       "size": 282877,
