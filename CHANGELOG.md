@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.48.1 (2026-09-18) — Harness 抽象层单一事实源 + 断点续跑
+
+> 触发: 三项 Harness 整改 —— 双份抽象层已**实测漂移** / 长任务中断无法续跑 / 接口文档落后于代码。
+
+### 变更 — Harness 抽象层单一事实源 (C 阶段)
+- **删除 kernel 内联副本** `com.mengpaw.kernel.harness` (7 文件): 宿主统一 import
+  `com.mengpaw.harness.*` (harness 独立仓库, 经 `includeBuild` 共享源码)。两副本此前已实测漂移 —
+  `HarnessToolRequest.ofRaw` 对空 raw 的处理 (kernel 存 `""`, 独立仓库返回 `null`)、
+  `DirectoryNames.socket` 目录名间接层只存在于一侧。
+- kernel 侧只保留 `HarnessKernelAdapters.kt`, 新增 `KernelHarnessEnv.default()` 承接原
+  `HarnessEnv.fromKernelGlobals()` (由 `DataPaths`/`KernelLog`/`UserConfirmBus` 既有单例组装) —
+  **未显式注入时行为与改造前逐字等价**。
+- 受影响: `AgentEngine` / `AgentToolRunner` / `DataPaths` / `RiskGate` / `ReActEngineTest`;
+  无对外 API 变化, 插件与壳零改动。
+
+### 新增 — 断点续跑 (harness v0.2.0)
+- `CheckpointStore` (接口 + `InMemoryCheckpointStore` / `FileCheckpointStore`) + `Checkpoint`
+  三态模型 (`RUNNING`/`COMPLETED`/`FAILED`), 经 `HarnessEnv.checkpoints` 注入。
+- `ReActEngine`: 每步落 `RUNNING` 检查点、终止落终态、`run(task, resume = true)` 续跑
+  (历史与步数取自检查点, 不重复追加任务)、`checkpoint()` / `clearCheckpoint()`;
+  **检查点写失败不中断主任务** (异常经 `onCheckpointError` 上报, 默认静默)。
+- 会话 id 落盘前消毒 (点号一并替换 → `..` 无法存活), 不会逃出检查点目录。
+- `verifyNoPlatformTypes` 门禁覆盖面从"顶层文件"扩到**核心全部子包** (`engine`/`tool`), 仅排除 `.jvm`。
+- MengPaw 主链路**尚未接线** (`AgentEngine` 仍自管 `CheckpointManager`), 待 ReAct 骨架搬入后统一。
+
+### 修复 — 幽灵引用守护对派生副本的误判
+`RetiredReferenceScanTest` 扫 `plugins.json` 时把 `changelog` 字段 (由 CHANGELOG.md 派生的历史叙述)
+当成 Agent 可读的命令引用, v0.48.0 重新生成 plugins.json 后该用例恒失败 (16 处) —— 而它的源头
+CHANGELOG.md 本就不在扫描面内, 属口径不一致。改为只在 JSON 上剥离 `changelog` 字段值,
+其余字段 (name/id/commands) 照旧严扫。
+
+### 文档
+- harness `docs/interface-guide.md`: **更正过期陈述** (曾写"`LlmProvider` 尚未搬入", 实际
+  `com.mengpaw.kernel.llm` 17 文件已在 harness 仓库) + 新增 §3.7 `CheckpointStore` 契约 +
+  门禁覆盖范围与已知边界 (只匹配 import, 全限定引用抓不到)。
+- harness `README.md` / `CHANGELOG.md` / `docs/migration-roadmap.md`: 断点续跑章节、阶段表更新
+  (A 完成 / C 进行中 / E 完成)、模块表补检查点。
+- 开发指南 §2.9 重写为收敛后状态; `docs/INDEX.md` 与 `mengpaw-harness` skill 同步。
+
+### 发行
+- APK: `mengpaw-shell-v0.48.1-release.apk` (browser 本轮无变更, 不构建)
+- plugins.json: 无变更 (本轮未动插件)
+- 测试: kernel 691 + core 128 + shell 250 + 插件 616 + harness 56 = **1741 用例, 0 failures**
+  (v0.48.0 为 1729; harness 44 → 56 系新增检查点 12 用例)
+- harness 独立版本线: **v0.2.0** (tag + JitPack, 坐标 `com.github.WowBlueStudio:MengPaw-harness:v0.2.0`)
+
 ## v0.48.0 (2026-09-18) — 命令退役整改 + proc.* 实现 + 路径保护加固
 
 > 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /

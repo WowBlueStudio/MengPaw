@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.48.0 | **更新**: 2026-09-18 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(154文件) + AgentRuntime + **Harness平台抽象层(harness/ 6接口 + 独立仓库 D:\MengPaw\harness)** + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + **进程管理(proc.ps/info/kill)** + **幽灵引用守护(RetiredReferenceScanTest/SkillDocReferenceTest)** + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.9.0
+> **版本**: 0.48.1 | **更新**: 2026-09-18 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(154文件) + AgentRuntime + **Harness平台抽象层(harness/ 8接口 + 独立仓库 D:\MengPaw\harness, kernel 内联副本已删 · v0.2.0 断点续跑)** + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + **进程管理(proc.ps/info/kill)** + **幽灵引用守护(RetiredReferenceScanTest/SkillDocReferenceTest)** + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.9.0
 
 ---
 
@@ -190,14 +190,19 @@ iOS                 🟢 编译  🟡 可行 🔴 <10个 🔴 无动态 🔴 全
 | **鸿蒙** | kernel 可用；鸿蒙分布式设备管理是 Android 米家 App 的超集——同一个 IoT 控制需求在鸿蒙上更干净；同一个能力在不同平台只是碎片形态不同 | UI 需 ArkUI 全部重写；分发模型不同（AppGallery，不能 sideload APK）；碎片生态还在生长 | 技术可行但等待碎片成熟更重要 |
 | **iOS** | kernel 能编译（Kotlin/Native + ktor Darwin engine） | ProcessBuilder 不可用（CLI 执行是 Agent 核心循环）；文件系统隔离（fs.* 无意义）；动态代码加载禁止（插件系统废掉）；后台限制极严 | 能编译≠产品有意义。这是哲学问题，不是技术问题 |
 
-### 2.9 Harness 核心抽离与平台抽象层 (A 阶段已落位, 2026-08-21)
+### 2.9 Harness 核心抽离与平台抽象层 (A 阶段落位 2026-08-21 · 抽象层收敛 2026-09-18)
 
 **动机**: §2.8 的"kernel 零 Android 依赖"解决的是**不崩溃**, 不等于**可跨平台编译** —
 kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类型, 且 152 处
 路径依赖 `DataPaths` 可变全局单例。把 ReAct 核心抽为跨平台 Harness 必须先立抽象层。
 
-**抽象层位置**: `mengpaw-kernel/src/main/kotlin/com/mengpaw/kernel/harness/` —
-6 个接口文件, **签名零平台类型** (不出现 `java.*`/`android.*`):
+**抽象层位置 (v0.2.0 起为单一事实源)**: 独立仓库 `D:\MengPaw\harness` 的
+`src/main/kotlin/com/mengpaw/harness/` — **签名零平台类型** (不出现 `java.*`/`android.*`)。
+
+> **收敛定案 (2026-09-18)**: kernel 内联副本 `com.mengpaw.kernel.harness` (7 文件) 已删除。
+> 两份副本各自演进已**实测漂移** — `HarnessToolRequest.ofRaw` 对空 raw 的处理
+> (kernel 存 `""`, 独立仓库返回 `null`)、`DirectoryNames.socket` 目录名间接层只存在于一侧。
+> 现在抽象层只此一处, kernel 统一 import `com.mengpaw.harness.*`。
 
 | 接口 | 职责 |
 |---|---|
@@ -208,6 +213,7 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 | `HarnessLogger` | 日志出口 |
 | `HarnessConfirmGate` | 高危操作确认门 (**fail-closed**) |
 | `HarnessToolInvoker` | 工具执行协议 (工具即 CLI 命令 → 可替换形态) |
+| `CheckpointStore` | 循环状态持久化 (**v0.2.0 新增, 断点续跑**) |
 
 **两轴分离铁律**: 平台能力 (宿主提供什么) 走 `HarnessEnv`; 领域决策 (工具是什么) 走
 `HarnessToolInvoker`。混在一起会导致"换个工具形态就得改平台实现"。
@@ -219,14 +225,19 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 - `RiskGate.evaluate` 高危确认改经 `HarnessConfirmGate` (由 `AgentToolRunner` 传入
   `engine.harnessEnv.confirmGate`) — 注入时走抽象门, 未注入回落 `UserConfirmBus` 单例;
   `NO_LISTENER`/`TIMEOUT` 与 `DENIED` 同等拒绝 (安全默认不变)
-- `HarnessKernelAdapters.kt` — `KernelLogBridge` / `KernelConfirmGate` / `CliPipelineToolInvoker`
-  桥接既有单例, 保证**未显式注入 = 改造前行为逐字等价** (665 内核用例验证, 含 2 个
-  确认门接线证明用例: ALLOWED 放行 / NO_LISTENER 拒绝且工具不执行)
+- `HarnessKernelAdapters.kt` — `KernelLogBridge` / `KernelConfirmGate` / `CliPipelineToolInvoker`,
+  以及 `KernelHarnessEnv.default()` (承接原 `HarnessEnv.fromKernelGlobals()`) —
+  桥接既有单例, 保证**未显式注入 = 改造前行为逐字等价**
+
+**v0.2.0 新增能力 — 断点续跑**: 独立仓库提供 `CheckpointStore` (接口 + 内存/文件两实现) 与
+`ReActEngine` 接线 (每步落 `RUNNING`, 终态落 `COMPLETED`/`FAILED`, `run(task, resume = true)` 续跑;
+检查点写失败不中断主任务)。**MengPaw 主链路尚未接线** — `AgentEngine` 仍自管
+`CheckpointManager`, 待 ReAct 骨架搬入后统一。
 
 **独立仓库**: `D:\MengPaw\harness` (独立 git, 已列入主仓库 `.gitignore`) —
-`docs/interface-guide.md` 接口契约权威, `docs/migration-roadmap.md` B 阶段按包搬运清单。
-仓库内配置构建门禁 `verifyNoPlatformTypes`: 核心源码出现平台类型引用即构建失败,
-防止抽象层被逐步腐蚀回平台绑定。
+`docs/interface-guide.md` 接口契约权威, `docs/migration-roadmap.md` 按包搬运清单。
+构建门禁 `verifyNoPlatformTypes`: 核心源码出现平台类型引用即构建失败 (覆盖核心**全部子包**,
+仅排除 `.jvm`), 防止抽象层被逐步腐蚀回平台绑定。
 
 **接口说明 Skill**: `mengpaw-harness` (用户说"Harness 核心/接新宿主/平台抽象层"时加载)。
 
@@ -652,9 +663,11 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 > v0.48.0 发布实测（2026-09-18，命令退役整改 + proc.* 实现 + 路径保护加固）：kernel 691 + core 128 + shell 250 + plugin 616 + harness 44 = **全量 1729 用例**，0 failures（`./gradlew test` 双套合并口径）。增量：kernel +15（`RetiredReferenceScanTest` 6：已删命令/已退役命名空间/已移除手册扫描 + 风险表在册性 + 保留位恒拒绝 + plugins.json 命名空间一致性；`ProcExecutorTest` 9：命令面/ps 参数/info 边界/kill 安全边界；`CliInterpreterTest` 单横线选项保形 +4；`PipelineTest` 单横线端到端保形 +3；`InterruptedRecoveryTest` 真实命令样本 +2；`PromptGhostReferenceTest` 扫描面扩展 +2；`HighRiskCommandGateTest` 恒真断言改真实样本 0）；core +6（`IntegrityGuardTest` 新增 4：.. 穿越拦截 / 相对路径按 workDir 解析 / 无基准不判定 / 工作区白名单防误伤）；插件 +11 双套（`SkillDocReferenceTest` 5 × 双套）。整改内容见 §5.2.1 与 `docs/lessons.md` §0.1。
 
+> v0.48.1 发布实测（2026-09-18，Harness 抽象层单一事实源 + 断点续跑）：kernel 691 + core 128 + shell 250 + plugin 616 + harness 56 = **全量 1741 用例**，0 failures（`./gradlew test` 双套合并口径）。增量：harness 44 → 56（`CheckpointStoreTest` 6：内存往返/文件跨实例恢复/会话 id 消毒防穿越/损坏档 fail-soft/Env 默认注入/消毒规则；`ReActCheckpointTest` 6：终态落盘/RUNNING 续跑恢复历史且不重复任务/终态不可续/未配置不写/落盘失败不中断任务/清理）；kernel 计数不变（抽象层收敛为纯 import 替换，行为逐字等价）。修复 `RetiredReferenceScanTest` 对 `plugins.json` 派生 `changelog` 字段的误判（v0.48.0 起恒失败的存量用例）。
+
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 676 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) + **SseStreamParserTest 17 + LlmPayloadTest 11 + RemoteApiTest 5（v0.40.4 全厂商思维链解析直测 + 2026-08-17 五家官方流式夹具）** + PromptEngineTest sys 权限前置 (v0.42.3, +1) + DeepSeek 思考模式回传 (v0.42.1, +5) + 对话需求跟踪 (v0.42.1, +6) + RiskGateTest 无障碍命令分级 (v0.42.2, +1) + **LoopDetector 三通道/AgentErrors/JSON 数组/GoalSessionStore/RalphRunner (v0.43.0, +17)** + **EvolutionQueue/G2 复现计数跨重启 (v0.44.0, +5)** + **思考强度四档注入/端点过滤/默认回退 (v0.46.2, +7)** + **流式空响应加固: JsonNull 安全取值/usage:null 回归/内容块数组/整包 JSON 兜底/流内错误上抛 (v0.46.3, +12)** + **幽灵引用守护 RetiredReferenceScanTest/PromptGhostReferenceTest 扩展 + proc.* 实现 ProcExecutorTest + 单横线选项保形 (v0.47.1, +13)** |
+| mengpaw-kernel | 691 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) + **SseStreamParserTest 17 + LlmPayloadTest 11 + RemoteApiTest 5（v0.40.4 全厂商思维链解析直测 + 2026-08-17 五家官方流式夹具）** + PromptEngineTest sys 权限前置 (v0.42.3, +1) + DeepSeek 思考模式回传 (v0.42.1, +5) + 对话需求跟踪 (v0.42.1, +6) + RiskGateTest 无障碍命令分级 (v0.42.2, +1) + **LoopDetector 三通道/AgentErrors/JSON 数组/GoalSessionStore/RalphRunner (v0.43.0, +17)** + **EvolutionQueue/G2 复现计数跨重启 (v0.44.0, +5)** + **思考强度四档注入/端点过滤/默认回退 (v0.46.2, +7)** + **流式空响应加固: JsonNull 安全取值/usage:null 回归/内容块数组/整包 JSON 兜底/流内错误上抛 (v0.46.3, +12)** + **幽灵引用守护 RetiredReferenceScanTest/PromptGhostReferenceTest 扩展 + proc.* 实现 ProcExecutorTest + 单横线选项保形 (v0.47.1, +13)** + **Harness 抽象层收敛为 import `com.mengpaw.harness.*` (v0.48.1, 行为逐字等价, 用例数不变)** |
 | mengpaw-core | 116 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表 (v0.42.2: 93 条含无障碍命令组)、SkillSeeds hex + AccessibilitySnapshotTest 6 + AccessibilityExecutorTest 7 (v0.42.2) |
 | mengpaw-shell | 250 | ComplexityDetector 分档、extractMedia 提取规则、会话 JSON 编解码 (含 v0.40.2 中断恢复归一化回归)、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 流式缓冲简化回归 (v0.40.2 重构 5) + BubbleStreamCoordinator 简化显示回归 (v0.40.1 6 → v0.40.2 8 → v0.40.3 11 思维链分流 → v0.40.4 12 交错到达完整显示；全量口径 debug+release 双套合并) + SettingsModelsPresetTest 预置名单/排序/最新旗舰/退役清理 (v0.41.0+，v0.47.0 更新为 DeepSeek 单一化 + 存量归一/列表过滤 8 用例) + ThinkingProcessWriter fail 停止收口 (v0.42.1, +2) + BangResultMessageTest 结果气泡规则 (v0.42.3, +4) + 思考气泡层级定案改回 (v0.42.4, UI 重构无新增用例) + TokenStatsCollectorTest 总调用/按模型聚合 (v0.45.0, +4) + **SettingsRemoteTest 模型列表探测 URL 派生 4 用例 + SettingsModelsPresetTest DeepSeek 预置/思考档位可见性 (v0.46.2, +6 双套)** |
 | mengpaw-browser | 56 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵、McpAuthPolicy 开放模式认证矩阵 (v0.41.0, 双套 +14) |
