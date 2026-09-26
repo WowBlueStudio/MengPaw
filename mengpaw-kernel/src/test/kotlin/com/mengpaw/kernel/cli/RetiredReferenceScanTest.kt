@@ -88,6 +88,19 @@ class RetiredReferenceScanTest {
         return line.substring(0, idx)
     }
 
+    /**
+     * JSON 的 `changelog` 字段是**历史叙述** (由 CHANGELOG.md 派生, 形如"本轮修了 X, 当时
+     * `skill.run browser-spider` 重试无效") — 与 CHANGELOG.md 同性质, 不是发给 Agent 的命令引用。
+     *
+     * v0.48.0 实测: 该字段把 CHANGELOG 原文复制进 plugins.json 后, 本扫描恒失败 (16 处) —
+     * 而它的源头 CHANGELOG.md 本就不在扫描面内, 只扫派生副本属口径不一致, 不是更严。
+     * 因此只在 JSON 上剥离该字段值; 其余字段 (name/id/commands/... 命令索引) 照旧严扫。
+     */
+    private val JSON_CHANGELOG_VALUE = Regex("\"changelog\"\\s*:\\s*\"(?:\\\\.|[^\"\\\\])*\"")
+
+    private fun stripJsonProse(text: String, file: File): String =
+        if (file.extension == "json") JSON_CHANGELOG_VALUE.replace(text, "\"changelog\":\"\"") else text
+
     private fun scan(predicate: (String, File) -> Boolean): List<String> {
         val hits = mutableListOf<String>()
         productionSources().forEach { file ->
@@ -95,7 +108,7 @@ class RetiredReferenceScanTest {
             try {
                 file.readLines().forEachIndexed { idx, raw ->
                     if (ALLOW_MARKERS.any { raw.contains(it, ignoreCase = true) }) return@forEachIndexed
-                    val text = if (isDoc) raw else stripComment(raw)
+                    val text = stripJsonProse(if (isDoc) raw else stripComment(raw), file)
                     if (text.isBlank()) return@forEachIndexed
                     if (predicate(text, file)) {
                         val rel = file.absolutePath.substringAfter("MengPaw").removePrefix(File.separator)

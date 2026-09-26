@@ -66,17 +66,17 @@ class ReActEngineTest {
             "MengPaw", com.mengpaw.kernel.security.AgentPermissionLevel.TRUSTED)
 
         var asked = 0
-        val gate = object : com.mengpaw.kernel.harness.HarnessConfirmGate {
+        val gate = object : com.mengpaw.harness.HarnessConfirmGate {
             override suspend fun request(
                 command: String, reason: String?, riskLabel: String, timeoutMs: Long
-            ): com.mengpaw.kernel.harness.ConfirmDecision {
+            ): com.mengpaw.harness.ConfirmDecision {
                 asked++
-                return com.mengpaw.kernel.harness.ConfirmDecision.ALLOWED
+                return com.mengpaw.harness.ConfirmDecision.ALLOWED
             }
         }
-        val env = com.mengpaw.kernel.harness.HarnessEnv(
-            fileSystem = com.mengpaw.kernel.harness.JvmHarnessFileSystem,
-            paths = com.mengpaw.kernel.harness.BaseDirPathResolver(tmp),
+        val env = com.mengpaw.harness.HarnessEnv(
+            fileSystem = com.mengpaw.harness.jvm.JvmHarnessFileSystem,
+            paths = com.mengpaw.harness.BaseDirPathResolver(tmp),
             confirmGate = gate
         )
 
@@ -119,17 +119,17 @@ class ReActEngineTest {
 
         // 计数式拒绝门 — 既验证"被调用"(接线生效), 又保持 fail-closed 语义
         var asked = 0
-        val countingDeny = object : com.mengpaw.kernel.harness.HarnessConfirmGate {
+        val countingDeny = object : com.mengpaw.harness.HarnessConfirmGate {
             override suspend fun request(
                 command: String, reason: String?, riskLabel: String, timeoutMs: Long
-            ): com.mengpaw.kernel.harness.ConfirmDecision {
+            ): com.mengpaw.harness.ConfirmDecision {
                 asked++
-                return com.mengpaw.kernel.harness.DenyAllConfirmGate.request(command, reason, riskLabel, timeoutMs)
+                return com.mengpaw.harness.DenyAllConfirmGate.request(command, reason, riskLabel, timeoutMs)
             }
         }
-        val env = com.mengpaw.kernel.harness.HarnessEnv(
-            fileSystem = com.mengpaw.kernel.harness.JvmHarnessFileSystem,
-            paths = com.mengpaw.kernel.harness.BaseDirPathResolver(tmp),
+        val env = com.mengpaw.harness.HarnessEnv(
+            fileSystem = com.mengpaw.harness.jvm.JvmHarnessFileSystem,
+            paths = com.mengpaw.harness.BaseDirPathResolver(tmp),
             // 无人可问 → 安全默认必须不放行
             confirmGate = countingDeny
         )
