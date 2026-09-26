@@ -3,8 +3,8 @@
 
 package com.mengpaw.kernel.security
 
-import com.mengpaw.kernel.harness.ConfirmDecision
-import com.mengpaw.kernel.harness.HarnessConfirmGate
+import com.mengpaw.harness.ConfirmDecision
+import com.mengpaw.harness.HarnessConfirmGate
 
 /**
  * 分级拦截求值 (v0.34.3) — 主循环 / Swarm worker 共用同一纯函数。

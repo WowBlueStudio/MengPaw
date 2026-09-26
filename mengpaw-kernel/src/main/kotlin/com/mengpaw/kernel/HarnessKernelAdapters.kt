@@ -3,24 +3,51 @@
 
 package com.mengpaw.kernel
 
+import com.mengpaw.harness.ConfirmDecision
+import com.mengpaw.harness.HarnessConfirmGate
+import com.mengpaw.harness.HarnessEnv
+import com.mengpaw.harness.HarnessFileSystem
+import com.mengpaw.harness.HarnessLogger
+import com.mengpaw.harness.HarnessToolInvoker
+import com.mengpaw.harness.HarnessToolRequest
+import com.mengpaw.harness.HarnessToolResult
+import com.mengpaw.harness.jvm.JvmHarnessClock
+import com.mengpaw.harness.jvm.JvmHarnessFileSystem
 import com.mengpaw.kernel.cli.ExecutionContext
-import com.mengpaw.kernel.harness.ConfirmDecision
-import com.mengpaw.kernel.harness.HarnessConfirmGate
-import com.mengpaw.kernel.harness.HarnessLogger
-import com.mengpaw.kernel.harness.HarnessToolInvoker
-import com.mengpaw.kernel.harness.HarnessToolRequest
-import com.mengpaw.kernel.harness.HarnessToolResult
 
 /**
- * Harness 抽象层 ↔ kernel 既有全局单例的适配器 (A 阶段, 2026-08-21)。
+ * Harness 抽象层 ↔ kernel 既有全局单例的适配器。
  *
- * 存在意义: 抽象层要求"注入", 而 kernel 现有实现是全局单例。改造期两者必须共存 —
- * 适配器把单例包成接口实现, 使「未显式注入」的路径行为与改造前**逐字等价**,
- * 既有 663 个内核测试无需重写。
+ * 存在意义: 抽象层要求"注入", 而 kernel 现有实现是全局单例。适配器把单例包成接口实现,
+ * 使「未显式注入」的路径行为与改造前**逐字等价**。
  *
- * 边界: 本文件属 MengPaw 壳层配套 (kernel 内), **不搬入 harness 独立仓库** —
+ * **收敛定案 (2026-09-18, C 阶段)**: kernel 内联的 `com.mengpaw.kernel.harness` 副本已删除,
+ * 抽象层唯一来源是 harness 独立仓库 (`com.mengpaw.harness.*`) — 双份副本曾各自演进,
+ * 必然漂移 (实测两侧 `ofRaw`/`PathResolver.socket` 语义已不一致)。本文件是两边唯一的桥。
+ *
+ * 边界: 本文件属 MengPaw 宿主侧配套 (kernel 内), **不搬入 harness 独立仓库** —
  * 独立仓库只保留纯接口 + 无平台默认实现, 由宿主各自提供适配器。
  */
+
+/**
+ * kernel 默认平台环境 — 由既有全局单例 (`DataPaths` / `KernelLog` / `UserConfirmBus`) 组装。
+ *
+ * 这是 [HarnessEnv.jvmDefault] 的 kernel 对应物: 后者用本地默认实现 (控制台日志 + 拒绝门),
+ * 本工厂则接回 kernel 既有行为, 保证「未显式注入」与改造前逐字等价。
+ * 跨平台宿主应自建 [HarnessEnv], 不再依赖这三个全局单例。
+ */
+object KernelHarnessEnv {
+    fun default(
+        fileSystem: HarnessFileSystem = JvmHarnessFileSystem,
+        confirmGate: HarnessConfirmGate = KernelConfirmGate
+    ): HarnessEnv = HarnessEnv(
+        fileSystem = fileSystem,
+        paths = DataPaths.resolver,
+        clock = JvmHarnessClock,
+        logger = KernelLogBridge,
+        confirmGate = confirmGate
+    )
+}
 
 /** 日志桥 — harness 抽象出口转发到 kernel 全局 [KernelLog] (保留 Android 日志适配器注入点)。 */
 object KernelLogBridge : HarnessLogger {

@@ -7,7 +7,7 @@ import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.cli.LinuxCommandExecutor
-import com.mengpaw.kernel.harness.HarnessToolRequest
+import com.mengpaw.harness.HarnessToolRequest
 import com.mengpaw.kernel.security.HighRiskCommandGate
 import com.mengpaw.kernel.security.RiskGate
 import com.mengpaw.kernel.security.SourceBlocklist
@@ -23,7 +23,7 @@ import kotlinx.coroutines.withTimeout
  *   严格限定"真命令不存在" (Unknown command) 才落 shell 兜底。
  *
  * **A 阶段改造 (2026-08-21)**: 注册表内命令的执行由直连 Pipeline 改为经
- * [com.mengpaw.kernel.harness.HarnessToolInvoker] 抽象 — MengPaw 壳注入的默认实现
+ * [com.mengpaw.harness.HarnessToolInvoker] 抽象 — MengPaw 壳注入的默认实现
  * ([CliPipelineToolInvoker]) 仍走原管线, 行为不变; 跨平台宿主可替换执行形态
  * (function-calling / MCP / 沙箱进程)。Linux shell 兜底属宿主特定能力, 不进抽象层。
  */
@@ -57,11 +57,11 @@ internal suspend fun runRiskGuarded(
 }
 
 /**
- * 把一条命令文本经 [com.mengpaw.kernel.harness.HarnessToolInvoker] 执行, 并还原为
+ * 把一条命令文本经 [com.mengpaw.harness.HarnessToolInvoker] 执行, 并还原为
  * kernel 内部 [ExecutionResult]。
  *
  * 还原约定: 命令名后的整段参数按"参数纯净规则"作为单条 raw 参数传递 (与旧路径把整行
- * 交给 Pipeline 解析等价); 失败时 [com.mengpaw.kernel.harness.HarnessToolResult.output]
+ * 交给 Pipeline 解析等价); 失败时 [com.mengpaw.harness.HarnessToolResult.output]
  * 承载错误正文, 使上层 `Unknown command` 判定与错误码语义得以保留。
  */
 private suspend fun invokeThroughHarness(

@@ -3,18 +3,18 @@
 
 package com.mengpaw.kernel
 
-import com.mengpaw.kernel.harness.BaseDirPathResolver
-import com.mengpaw.kernel.harness.HarnessFileSystem
-import com.mengpaw.kernel.harness.HarnessPathResolver
-import com.mengpaw.kernel.harness.JvmHarnessFileSystem
+import com.mengpaw.harness.BaseDirPathResolver
+import com.mengpaw.harness.HarnessFileSystem
+import com.mengpaw.harness.HarnessPathResolver
+import com.mengpaw.harness.jvm.JvmHarnessFileSystem
 
 /**
  * Unified data directory paths — 过渡期双 API 门面。
  *
  * **架构地位 (A 阶段改造, 2026-08-21)**: 本对象是 ReAct 核心平台上抽象的**旧入口**,
  * 现已成为 [HarnessPathResolver] 的门面。真实路径解析逻辑在
- * [com.mengpaw.kernel.harness.BaseDirPathResolver] — 该实现无任何平台类型,
- * 可整体搬入 harness 独立仓库。
+ * [com.mengpaw.harness.BaseDirPathResolver] — 实现归属 harness 独立仓库
+ * (kernel 内联副本已于 C 阶段删除, 抽象层单一来源)。
  *
  * 双 API 并存的原因: 现有 152 个调用点使用上方常量/函数形态, 一次性改签名风险过高;
  * 故保留旧形态 (委托到 [resolver]), 新代码一律走 [resolver] / [fs]。
