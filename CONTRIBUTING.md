@@ -1,11 +1,11 @@
 # 参与 MengPaw（反馈与贡献指南）
 
-> **主仓库开放 Pull Request**（插件 / 文档类优先；内核严格评审）。提交 PR 即代表同意版权让渡（见下文 [版权与许可](#版权与许可)）。
+> **主仓库开放 Pull Request**（插件 / 文档类优先；内核严格评审）。提交 PR 即代表同意版权让渡（见下文 [版权与许可](#%E7%89%88%E6%9D%83%E4%B8%8E%E8%AE%B8%E5%8F%AF)）。
 
 ## 反馈渠道
 
 | 场景 | 渠道 |
-|------|------|
+| --- | --- |
 | **Bug 报告** | GitHub [Issues](https://github.com/WowBlueStudio/MengPaw/issues) — 选择 Bug 模板，附设备/版本/复现步骤/日志 |
 | **功能请求** | GitHub [Issues](https://github.com/WowBlueStudio/MengPaw/issues) — 选择功能请求模板 |
 | **代码贡献** | GitHub [Pull Requests](https://github.com/WowBlueStudio/MengPaw/pulls) — 插件/文档优先；内核建议先在 issue 讨论 |
@@ -21,7 +21,7 @@ MengPaw 采用双许可（社区版 AGPL-3.0 + 商业授权，见 [COMMERCIAL-LI
 ## 贡献范围与评审流程
 
 | 范围 | 建议 | 评审严格度 |
-|------|------|-----------|
+| --- | --- | --- |
 | **插件类**（`plugins/` 新插件 / 改进） | 推荐首选 — 独立模块、只依赖 kernel、不改核心 | 常规 |
 | **文档 / 翻译 / 脚本** | 随时欢迎 | 常规 |
 | **内核 / 核心**（kernel / core） | 先开 issue 讨论方案再动手 | 严格（双许可合规 + 安全 + 兼容性） |
@@ -61,7 +61,7 @@ powershell -File scripts/validate-plugins.ps1
 ### 模块结构
 
 | 模块 | 职责 |
-|------|------|
+| --- | --- |
 | mengpaw-kernel | 纯 Kotlin/JVM 微内核，零 Android 依赖，JVM 可测试 |
 | mengpaw-core | Android 适配层：Vault 加密存储 / IntegrityGuard / SysExecutor |
 | mengpaw-shell | Compose UI + 前台服务 |
