@@ -11,7 +11,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 
 /**
@@ -19,17 +18,20 @@ import androidx.core.app.NotificationCompat
  * Uses foreground notification + WakeLock to prevent Android from killing
  * the process during long-running tasks.
  *
+ * 保活职责自 v0.47.x 起拆给 [KeepAliveController] — 本服务只做"前台化 + 通知渲染":
+ * WakeLock 由任务状态驱动 (任务活跃才持锁, 空闲 [KeepAlivePolicy.IDLE_RELEASE_MS] 后释放),
+ * 到期由 ticker/看门狗续租。见 KeepAliveController 的类注释。
+ *
  * Android 12+ (API 31+) restricts foreground service launch from background;
  * we handle this gracefully. On OEM devices (Xiaomi, Huawei, OPPO, vivo),
- * users should also disable battery optimization for MengPaw.
+ * users should also disable battery optimization for MengPaw
+ * (一次性引导见 [BatteryOptimizationGuide])。
  */
 class ShellService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "mengpaw_bg_v2"
         private const val NOTIFICATION_ID = 1001
-        private const val WAKELOCK_TAG = "mengpaw:shell-service"
-        private const val WAKELOCK_TIMEOUT_MS = 60 * 60 * 1000L // 1 hour max
 
         fun start(context: Context) {
             try {
@@ -37,6 +39,32 @@ class ShellService : Service() {
             } catch (e: Exception) {
                 android.util.Log.w("ShellService", "Cannot start from background: ${e.message}")
             }
+        }
+
+        /**
+         * 更新常驻前台通知文案 (任务进度/空闲降级) — 由 [KeepAliveController] 调用。
+         * 通知 ID 与 startForeground 一致, 因此只改内容, 不会产生第二条通知。
+         */
+        fun updateNotification(context: Context, title: String, text: String) {
+            try {
+                val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                    ?: return
+                manager.notify(NOTIFICATION_ID, buildNotification(context, title, text))
+            } catch (e: Exception) {
+                android.util.Log.w("ShellService", "Notification update failed: ${e.message}")
+            }
+        }
+
+        private fun buildNotification(context: Context, title: String, text: String): Notification {
+            return NotificationCompat.Builder(context, CHANNEL_ID)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setSmallIcon(com.mengpaw.shell.R.drawable.ic_wowblue_icon)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setOngoing(true)
+                .setShowWhen(false)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .build()
         }
 
         /** 通知可见性变更后重启服务以生效 */
@@ -51,7 +79,6 @@ class ShellService : Service() {
     }
 
     private var powerReceiver: android.content.BroadcastReceiver? = null
-    private var wakeLock: PowerManager.WakeLock? = null
 
     private var foregroundStarted = false
 
@@ -74,21 +101,9 @@ class ShellService : Service() {
         // Browser 回传监视 (幂等; UI 存活期间由 MainActivity 驱动, 服务兜底)
         try { BrowserReturnWatcher.start(this) } catch (_: Exception) {}
 
-        // Acquire partial WakeLock to keep CPU running during agent tasks.
-        // Released in onDestroy(). Timeout prevents battery drain if something goes wrong.
-        try {
-            val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
-            wakeLock = pm?.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                WAKELOCK_TAG
-            )?.apply {
-                setReferenceCounted(false)
-                acquire(WAKELOCK_TIMEOUT_MS)
-            }
-            android.util.Log.d("ShellService", "WakeLock acquired (partial, ${WAKELOCK_TIMEOUT_MS}ms timeout)")
-        } catch (e: Exception) {
-            android.util.Log.w("ShellService", "WakeLock acquisition failed: ${e.message}")
-        }
+        // 任务级保活接入: 冷启动不预持 WakeLock (无任务零耗电),
+        // 任务开始/活跃才补租 — 判定与续租全在 KeepAliveController。
+        try { KeepAliveController.attach(this) } catch (_: Exception) { }
 
         // Register dream mode charging trigger
         try { powerReceiver = PowerConnectionReceiver.register(this) } catch (_: Exception) { }
@@ -100,14 +115,13 @@ class ShellService : Service() {
     }
 
     override fun onDestroy() {
-        // Release WakeLock cleanly
+        // Release WakeLock / 撤销看门狗 / 停 ticker (任务状态保留, 服务重启后可续租)
         try {
-            wakeLock?.let { if (it.isHeld) it.release() }
-            android.util.Log.d("ShellService", "WakeLock released")
+            KeepAliveController.detach(this)
+            android.util.Log.d("ShellService", "KeepAlive detached (wakelock released)")
         } catch (e: Exception) {
-            android.util.Log.w("ShellService", "WakeLock release failed: ${e.message}")
+            android.util.Log.w("ShellService", "KeepAlive detach failed: ${e.message}")
         }
-        wakeLock = null
 
         BrowserReturnWatcher.stop()
         powerReceiver?.let { unregisterReceiver(it) }
@@ -122,24 +136,8 @@ class ShellService : Service() {
             try { stopSelf() } catch (_: Exception) {}
             return START_NOT_STICKY
         }
-        // Re-acquire existing WakeLock if it timed out; create one only if null
-        if (wakeLock?.isHeld != true) {
-            try {
-                if (wakeLock != null) {
-                    // Re-acquire the existing lock (timeout doesn't invalidate the object)
-                    wakeLock?.acquire(WAKELOCK_TIMEOUT_MS)
-                } else {
-                    val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
-                    wakeLock = pm?.newWakeLock(
-                        PowerManager.PARTIAL_WAKE_LOCK,
-                        WAKELOCK_TAG
-                    )?.apply {
-                        setReferenceCounted(false)
-                        acquire(WAKELOCK_TIMEOUT_MS)
-                    }
-                }
-            } catch (_: Exception) { }
-        }
+        // 再次被启动 (含 START_STICKY 重建): 按当前任务状态重新判定补租
+        try { KeepAliveController.attach(this) } catch (_: Exception) { }
         return START_STICKY
     }
 
@@ -176,14 +174,7 @@ class ShellService : Service() {
         }
     }
 
-    private fun createNotification(): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("MengPaw 智能助手")
-            .setContentText("后台运行中，智能体随时响应")
-            .setSmallIcon(com.mengpaw.shell.R.drawable.ic_wowblue_icon)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setOngoing(true)
-            .setShowWhen(false)
-            .build()
-    }
+    /** 启动时通知文案 = 空闲态 (任务开始后由 KeepAliveController 改为"执行中 + 步骤/耗时")。 */
+    private fun createNotification(): Notification =
+        buildNotification(this, KeepAlivePolicy.TITLE_IDLE, KeepAlivePolicy.TEXT_IDLE)
 }

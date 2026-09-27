@@ -154,6 +154,10 @@
             <!-- sys.alarm.set (core NotificationExecutor) 经显式 action 路由, 消除反射类名耦合 -->
             <intent-filter>
                 <action android:name="com.mengpaw.action.ALARM" />
+                <!-- 保活看门狗 (KeepAliveController: setExactAndAllowWhileIdle): 走显式组件 Intent,
+                     此处登记 action 仅为协议可检索; exported=false 不受外部伪造。
+                     不新增权限: SCHEDULE_EXACT_ALARM 与 WAKE_LOCK 早已声明。 -->
+                <action android:name="com.mengpaw.action.KEEPALIVE_WATCHDOG" />
             </intent-filter>
         </receiver>
 

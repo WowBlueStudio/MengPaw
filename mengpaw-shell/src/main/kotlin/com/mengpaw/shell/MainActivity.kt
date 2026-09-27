@@ -19,6 +19,7 @@ import com.mengpaw.shell.ui.screens.AgentViewModel
 import com.mengpaw.shell.ui.screens.SettingsViewModel
 import com.mengpaw.shell.ui.screens.startAcpForTwin
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -80,6 +81,53 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent { AppRoot(settingsViewModel) }
+
+        // ── 任务级保活接线 (v0.47.x) ──
+        // 钩子来源 = AgentViewModel 的公开 StateFlow (isRunning 由 SessionChatController 跟随
+        // AgentState 驱动, messages/pendingTasks 为进度源) — 因此**无需改动 ui/screens 或 kernel**,
+        // 保活实现本身是纯静态 API (KeepAliveController), 任何层都能调。
+        // 1) 用户在前台 → 给空闲宽限窗口 (冷启动不预持 WakeLock, 避免空转耗电)
+        try { com.mengpaw.shell.service.KeepAliveController.markUserActive(this) } catch (_: Exception) {}
+        // 2) 任务开始/结束 → 前台服务 + WakeLock 租约的起止
+        lifecycleScope.launch {
+            try {
+                agentViewModel.isRunning.collect { running ->
+                    try {
+                        if (running) {
+                            com.mengpaw.shell.service.KeepAliveController.onTaskActive(this@MainActivity)
+                        } else {
+                            com.mengpaw.shell.service.KeepAliveController.onTaskIdle(this@MainActivity)
+                        }
+                    } catch (_: Exception) {}
+                }
+            } catch (_: Exception) {}
+        }
+        // 3) 步骤数 / 待执行队列 → 通知进度 (只写内存, 通知由保活 ticker 节流刷新)
+        lifecycleScope.launch {
+            try {
+                combine(
+                    agentViewModel.isRunning, agentViewModel.messages, agentViewModel.pendingTasks
+                ) { running, messages, pending -> Triple(running, messages, pending) }
+                    .collect { (running, messages, pending) ->
+                        if (running) {
+                            try {
+                                com.mengpaw.shell.service.KeepAliveController.updateProgress(
+                                    com.mengpaw.shell.service.KeepAlivePolicy.currentStepCount(messages),
+                                    pending.size
+                                )
+                            } catch (_: Exception) {}
+                        }
+                    }
+            } catch (_: Exception) {}
+        }
+        // 4) 一次性电池优化白名单引导 (标记持久化于 CONFIG/battery_opt_prompted, 绝不每次启动都弹)。
+        //    延迟 4 秒: 让 Android 13+ 通知权限系统弹窗先完成, 避免两个系统弹窗互相覆盖。
+        android.os.Handler(mainLooper).postDelayed({
+            try {
+                com.mengpaw.shell.service.BatteryOptimizationGuide.maybePromptOnce(this@MainActivity)
+            } catch (_: Exception) {}
+        }, 4000L)
+
         // 延迟初始化: 非关键路径在 UI 渲染后异步执行
         val launchIntent = intent
         lifecycleScope.launch(Dispatchers.IO) { deferInit(launchIntent) }
