@@ -13,9 +13,12 @@ import com.mengpaw.kernel.llm.ReActParser
 import com.mengpaw.kernel.llm.ReActResponse
 import com.mengpaw.kernel.llm.ToolCall
 import com.mengpaw.kernel.security.HighRiskCommandGate
+import com.mengpaw.kernel.session.IntentState
 import com.mengpaw.kernel.session.Message
 import com.mengpaw.kernel.session.Session
 import com.mengpaw.kernel.session.SessionEventBus
+import com.mengpaw.kernel.session.ToolIntent
+import com.mengpaw.kernel.session.ToolIntentLog
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -38,6 +41,13 @@ internal class AgentReActStepProcessor(
 
     /** 最终答案退化检测解析器 — 复用单实例 (P2-6, 原每轮 new 一个)。 */
     private val reactParser = ReActParser()
+
+    /**
+     * 工具副作用意图日志 (WAL 写前记录, v0.45 断点续跑幂等)。
+     * 每 run 实例一份 (与 processor 同生命周期), 落盘目录默认 `{BASE}/会话检查点/intents`。
+     * 旁路设施: 内部全部 IO 已 try/catch, 其故障不改变 Agent 行为。
+     */
+    private val toolIntentLog = ToolIntentLog()
 
     /**
      * 单轮共享可变状态 — 由主循环创建, 本类与主循环共同读写 (均在同一协程串行, 无竞争)。
@@ -192,11 +202,32 @@ internal class AgentReActStepProcessor(
         // [MAX_PARALLEL_TOOL_CALLS] 条命令同时执行 (Semaphore), 防单次 LLM 输出大量
         // Action 瞬间并发击穿本地/上游 (对齐 DSH agent-loop 的有界滚动池)。
         val parallelSemaphore = Semaphore(MAX_PARALLEL_TOOL_CALLS)
+        // 工具意图钩子: 会话/步号在本批并行执行期恒定 (主协程要等 awaitAll 之后才 state.step++)
+        val intentSessionId = state.session.id
+        val intentStep = state.step
         val results = coroutineScope {
             formattedCalls.map { gate ->
                 async(KernelDispatchers.BACKGROUND) {
                     parallelSemaphore.withPermit {
-                        try {
+                        // ── WAL 写前记录 (v0.45 工具副作用幂等): 执行前落 PENDING, 执行后落终态 ──
+                        // 崩溃若落在"工具已执行、终态未落盘"之间, 恢复方可凭 PENDING 判定该步可能
+                        // 已产生副作用 (重复写文件/发消息/下单), 从而避免盲目重放。
+                        // 参数只落 SHA-256 摘要 (前 16 位), 原文永不落盘 (参数可能含 API Key)。
+                        val commandLineForIntent = gate.commandLine
+                        val intentToolName = commandLineForIntent.substringBefore(' ')
+                        val intentArgsDigest = ToolIntentLog.digestOf(commandLineForIntent.substringAfter(' ', ""))
+                        val intent = ToolIntent(
+                            sessionId = intentSessionId,
+                            step = intentStep,
+                            toolCallId = ToolIntentLog.toolCallIdOf(
+                                intentSessionId, intentStep, intentToolName, intentArgsDigest),
+                            toolName = intentToolName,
+                            argsDigest = intentArgsDigest,
+                            state = IntentState.PENDING,
+                            startedAt = System.currentTimeMillis()
+                        )
+                        toolIntentLog.begin(intent)
+                        val result = try {
                             when {
                                 // 门禁拒绝 (REASON_REQUIRED / PARAM_FORMAT_ERROR): 不执行, 直接反馈引导
                                 gate.error != null ->
@@ -207,6 +238,14 @@ internal class AgentReActStepProcessor(
                         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
                             ExecutionResult.fail("命令超时 (60s): ${gate.commandLine}。请检查网络连接或尝试其他方式。", errorCode = ErrorCodes.ERR_INTERNAL)
                         }
+                        // 终态: 成功 → DONE + 结果摘要; 失败/门禁拒绝/超时 → FAILED + 错误文案。
+                        // 错误文案先剔除参数原文 (框架超时提示会内嵌整条命令行) — 参数只以摘要入库。
+                        val outcomeDigest = if (result.success) ToolIntentLog.digestOf(result.output) else null
+                        val rawFailure = if (result.success) null
+                            else result.error ?: result.errorCode ?: "TOOL_CALL_FAILED"
+                        val failure = rawFailure?.let { ToolIntentLog.scrubError(it, commandLineForIntent) }
+                        toolIntentLog.finish(intentSessionId, intent.toolCallId, outcomeDigest, failure)
+                        result
                     }
                 }
             }.awaitAll()
