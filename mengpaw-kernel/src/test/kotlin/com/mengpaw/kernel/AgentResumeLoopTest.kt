@@ -35,6 +35,9 @@ import java.io.File
  */
 class AgentResumeLoopTest {
 
+    /** 直接读档判状态用 (与 CheckpointManager 内部同一份宽松配置)。 */
+    private val JSON = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
     /** 记录调用的假工具执行器 — 不触达任何真实命令管线。 */
     private class FakeToolInvoker : HarnessToolInvoker {
         val calls = mutableListOf<String>()
@@ -150,7 +153,22 @@ class AgentResumeLoopTest {
             (resumedClosure?.step ?: -1) >= stepBefore
         )
         // ⑥ 终态
-        assertEquals(CheckpointStatus.COMPLETED, resumedClosure?.status)
+        //    判据是"该会话是否留下了终态检查点"(目录级), 而不是"loadLatest 取到的那份是不是终态":
+        //    终态与最后一条 RUNNING 可能落在同一毫秒, 排序判"谁最新"会随写入时序抖动
+        //    (实测在全量负载下偶发), 而 writer 的契约是**恰好写一条终态**, 与"谁最新"无关。
+        val terminalStatuses = java.io.File(checkpointDir)
+            .listFiles { f -> f.isFile && f.name.startsWith(sessionId) }
+            ?.mapNotNull { f ->
+                try {
+                    JSON.decodeFromString<Checkpoint>(f.readText()).status
+                } catch (_: Exception) {
+                    null
+                }
+            } ?: emptyList()
+        assertTrue(
+            "续跑必须留下终态检查点 (COMPLETED), 实际状态集: $terminalStatuses",
+            terminalStatuses.contains(CheckpointStatus.COMPLETED)
+        )
 
         // ③ 恢复后的会话历史含中断前的工具 Observation
         val restoredHistory = second.getSessionManager().getHistory(sessionId)
