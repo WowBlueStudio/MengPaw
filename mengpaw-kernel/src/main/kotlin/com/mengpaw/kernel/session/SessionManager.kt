@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.session
 
 import kotlinx.serialization.Serializable
+import com.mengpaw.harness.CheckpointStatus
 
 /**
  * A single message in the conversation history.
@@ -78,6 +79,16 @@ data class Session(
 
 /**
  * A checkpoint for saving and restoring Agent progress.
+ *
+ * 状态与消息序列 (工作流 D 升级): 旧实现只有进度摘要, 无法"接着跑" —
+ * 恢复后既不知道上次是正常结束还是崩在半路 ([status]), 也没有可回灌的对话上下文
+ * ([messages])。三个新字段全部带默认值, 旧档 (无这些键) 零迁移可读, 源码级兼容。
+ *
+ * @property status 运行态; 缺失时按 [CheckpointStatus.RUNNING] 处理 (旧档语义: 未标记完成即视为进行中)
+ * @property messages 恢复所需的消息序列 (只存 role/content/reasoning; 落盘前由 CheckpointManager 截断)
+ * @property updatedAt 最后写入时间 — 保留策略的排序主判据 (默认回落 createdAt, 保持旧档语义)
+ * @property terminationReason 终止原因 (与 AgentResult.terminationReason 同源; 清除时写 "cleared")
+ * @property answer 最终答复 (正常完成时有值)
  */
 @Serializable
 data class Checkpoint(
@@ -85,5 +96,10 @@ data class Checkpoint(
     val step: Int,
     val remainingTask: String,
     val context: Map<String, String>,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val status: CheckpointStatus = CheckpointStatus.RUNNING,
+    val messages: List<Message> = emptyList(),
+    val updatedAt: Long = createdAt,
+    val terminationReason: String? = null,
+    val answer: String? = null
 )
