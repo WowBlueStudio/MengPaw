@@ -318,7 +318,18 @@ internal fun recoverInterruptedMessages(msgs: List<ChatMessageUi>): Pair<List<Ch
     return recovered to wasStuck
 }
 
-/** 消息列表 → 引擎对话历史 (user/assistant 对; 运行中的 trace 跳过)。 */
+/**
+ * 消息列表 → 引擎对话历史 (user/assistant/system 三元; 运行中的 trace 跳过)。
+ *
+ * P0-2 补全: [ChatMessageUi.CommandResult] (工具结果气泡) 必须进引擎历史 —
+ * 此前被 `else -> null` 丢弃, 恢复后模型看不到中断前的工具观察 (Observation 丢失),
+ * 会重复执行已完成的工具。工具结果在引擎侧本就是以 "system" 角色承载的观察文本,
+ * 故映射为 `"system" to content` (失败结果同样进历史: 模型需要知道"这一步失败过")。
+ *
+ * thinking_process / AgentStep 按既有语义处理: thinking_process 是流式过程的 UI 载体
+ * (其内容已由 AgentWithTrace.traces 与 assistant 消息承载), AgentStep 是同一轮过程的
+ * 中间态 — 二者都不独立映射, 避免同一段上下文在引擎历史里重复注入。
+ */
 internal fun toEngineConversation(msgs: List<ChatMessageUi>): List<Pair<String, String>> =
     msgs.mapNotNull { msg ->
         when (msg) {
@@ -328,6 +339,8 @@ internal fun toEngineConversation(msgs: List<ChatMessageUi>): List<Pair<String, 
                 if (msg.isRunning) null
                 else "assistant" to msg.finalContent
             }
+            // 工具结果气泡 → 引擎 system 观察 (恢复后不丢 Observation)
+            is ChatMessageUi.CommandResult -> "system" to msg.content
             else -> null
         }
     }

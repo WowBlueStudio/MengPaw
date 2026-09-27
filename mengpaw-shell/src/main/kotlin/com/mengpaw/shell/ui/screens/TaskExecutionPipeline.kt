@@ -23,11 +23,11 @@ import kotlinx.coroutines.launch
  * 落盘服务、标签管理器、聊天状态控制器、活动 Agent 名桥接。
  */
 internal class TaskExecutionPipeline(
-    private val scope: CoroutineScope,
+    internal val scope: CoroutineScope,
     private val sessionFactory: AgentSessionFactory,
-    private val sessionPersistence: SessionPersistenceService,
-    private val inputTagManager: InputTagManager,
-    private val chat: SessionChatController,
+    internal val sessionPersistence: SessionPersistenceService,
+    internal val inputTagManager: InputTagManager,
+    internal val chat: SessionChatController,
     private val getActiveAgentName: () -> String,
 ) {
 
@@ -47,6 +47,11 @@ internal class TaskExecutionPipeline(
     /**
      * Submit a task to the currently active agent.
      * Uses the active [inputTagManager.loopMode] to select engine execution strategy.
+     *
+     * @param resume 断点续跑 (P0-3): true 时**不追加用户气泡**, 走
+     *   `engine.resumeInterrupted` — 会话历史与步号由引擎按检查点复原 (见 ResumePlanner)。
+     *   其余编排 (思考容器/流式播放/最终答案定型/落盘/错误兜底) 与普通任务**同一套路径**,
+     *   不另起 UI 管道。
      */
     fun submitTask(
         task: String,
@@ -54,10 +59,11 @@ internal class TaskExecutionPipeline(
         maxSteps: Int = 50,
         executionMode: ExecutionMode? = null,
         agentRef: String? = null,
-        attachments: List<AttachmentData> = emptyList()
+        attachments: List<AttachmentData> = emptyList(),
+        resume: Boolean = false
     ) {
         // v0.33.0+: 纯附件消息（语音）task 为空但带附件 — 放行
-        if (task.isBlank() && attachments.isEmpty()) return
+        if (task.isBlank() && attachments.isEmpty() && !resume) return
         KernelLog.d("MengPawLatency", "T0 submitTask ${task.take(30)}")
         // ── Bang 命令: "!cmd" 绕过 Agent 直接执行 — 完整文本(含 ! 前缀)保留在用户消息 ──
         val trimmedTask = task.trimStart()
@@ -66,6 +72,11 @@ internal class TaskExecutionPipeline(
             return
         }
         val session = chat.activeSession()
+        // ── 续跑: 会话历史由引擎按检查点复原, 不追加用户气泡、不做纠正识别 ──
+        if (resume) {
+            runResumeTask(session, agentRef, maxSteps)
+            return
+        }
         // ── Evolution: 用户纠正识别 (钩子归系统 → 用户反应档案, 用户分身数据源) ──
         // v0.28.6: fire-and-forget 出 Main — reactions.md 文件读写不阻塞发送链
         scope.launch(Dispatchers.IO) {
@@ -334,7 +345,7 @@ internal class TaskExecutionPipeline(
         chat.pendingTasksFlow.value = emptyList()
     }
 
-    private fun processNextPending() {
+    internal fun processNextPending() {
         val pending = chat.pendingTasksFlow.value
         if (pending.isNotEmpty()) {
             val next = pending.first()

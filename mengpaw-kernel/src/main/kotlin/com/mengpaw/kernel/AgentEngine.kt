@@ -11,6 +11,7 @@ import com.mengpaw.kernel.agent.PostCallMiddleware
 import com.mengpaw.kernel.agent.ScrollContextManager
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.harness.CheckpointStatus
 import com.mengpaw.harness.HarnessEnv
 import com.mengpaw.harness.HarnessToolInvoker
 import com.mengpaw.harness.HarnessToolRequest
@@ -22,6 +23,10 @@ import com.mengpaw.kernel.plugin.PluginMarketplaceClient
 import com.mengpaw.kernel.security.IntegrityProvider
 import com.mengpaw.kernel.security.NoOpIntegrityProvider
 import com.mengpaw.kernel.session.*
+import com.mengpaw.kernel.session.CheckpointManager
+import com.mengpaw.kernel.session.ResumeLock
+import com.mengpaw.kernel.session.ResumePlan
+import com.mengpaw.kernel.session.ResumePlanner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -136,6 +141,23 @@ class AgentEngine(
     fun repairIntegrity(sessionId: String? = null): Boolean = runtime.conversation.repairIntegrity(sessionId)
 
     /**
+     * 该会话是否存在**可续跑** (RUNNING) 的检查点。
+     *
+     * 供 shell 侧恢复阶段判断"是否值得走续跑判定" — 检查点的落盘目录与解析规则属于内核实现,
+     * shell 不应自行拼路径或另建 CheckpointManager (读同一份磁盘虽安全, 但会把目录规则复制一遍)。
+     *
+     * @param sessionId 目标会话 (通常来自 current_session.json 的 engineSessionId); null = 当前会话
+     */
+    fun hasResumableCheckpoint(sessionId: String? = null): Boolean {
+        val id = sessionId ?: conversationSessionId ?: return false
+        return try {
+            checkpointManager.loadLatestSync(id)?.status == CheckpointStatus.RUNNING
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * Restore conversation state after process death.
      *
      * Android kills processes without notice (no cleanup, no finalizers).
@@ -234,6 +256,9 @@ class AgentEngine(
         /** Single source of truth: generated from gradle.properties mengpaw.version. */
         val CORE_VERSION: String get() = MengPawVersion.FRAMEWORK
 
+        /** 恢复判定读取的会话事件条数 (与 AgentReActLoop 内部一致)。 */
+        private const val RESUME_EVENTS_LIMIT = 50
+
         /** 零待命并行 worker 会话 scope — 不注入主循环省察引导。 */
         // v0.34.4 Mission 并入 Swarm — 保留 "mission" 仅为历史会话数据兼容
         // （旧版本 mission scope 的 worker 会话仍按零待命处理）
@@ -312,8 +337,62 @@ class AgentEngine(
         task: String, maxSteps: Int = 50, onStep: ((TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
         attachments: List<AttachmentData> = emptyList(),
+        onReasoning: ((String) -> Unit)? = null,
+        resume: Boolean = false
+    ): String = runtime.run(task, maxSteps, onStep, onDelta, attachments, onReasoning, resume)
+
+    /**
+     * 断点续跑 (P0-3 自动续跑入口) — 接着上一轮未完成的 RUNNING 检查点继续执行。
+     *
+     * 与 [run] 的区别: 不新建会话、不追加用户任务, 而是按检查点原 sessionId 重建会话
+     * (含中断前的工具 Observation), 步号从 `checkpoint.step` 接续; 恢复前经 [ResumePlanner]
+     * 判定 (auto_resume 开关 / 单会话锁 / RUNNING 态 / 事件分级恢复), 未确认完成的工具调用
+     * 只注入"先核对再重试"提示而不自动重放 (防重复副作用)。
+     *
+     * @param task 续跑任务文本 (仅在检查点无可解析任务时作为兜底)
+     * @return 本次运行的最终文本; **null = 未发生续跑** (无 RUNNING 检查点 / 锁被占 / 用户关掉开关
+     *   —— 此时调用方应保持原状, 不要当作"续跑已完成")
+     */
+    suspend fun resumeInterrupted(
+        task: String = "",
+        maxSteps: Int = 50,
+        onStep: ((TraceStep) -> Unit)? = null,
+        onDelta: ((String) -> Unit)? = null,
         onReasoning: ((String) -> Unit)? = null
-    ): String = runtime.run(task, maxSteps, onStep, onDelta, attachments, onReasoning)
+    ): String? {
+        // 先判定"是否真的会续跑" — 否则会把普通新任务跑成一次额外 run (用户没发消息却收到回答)
+        val plan = runtime.planResume(ResumeLock(), RESUME_EVENTS_LIMIT) ?: return null
+        val text = runtime.run(
+            task = plan.task.ifBlank { task },
+            maxSteps = maxSteps,
+            onStep = onStep,
+            onDelta = onDelta,
+            onReasoning = onReasoning,
+            resume = true
+        )
+        return text
+    }
+
+    /**
+     * 续跑判定 (供 shell 侧恢复阶段复用同一套判定, 避免 UI 自行拼装条件)。
+     *
+     * @param sessionId 目标会话 (current_session.json 里的 engineSessionId)
+     * @param lock 单会话锁 — 判定成功时由 planner 持有, 调用方后续应走 [resumeInterrupted]
+     *   (同一会话重入幂等放行, 不会自锁)
+     * @return [ResumePlan.AutoResume] / [ResumePlan.PromptUser] / null (不可续跑)
+     */
+    fun planResume(sessionId: String?, lock: ResumeLock): ResumePlan? {
+        val id = sessionId ?: conversationSessionId ?: return null
+        return try {
+            val checkpoint = checkpointManager.loadLatestSync(id) ?: return null
+            val events = sessionManager.listEventsSince(id, afterSeq = 0, limit = RESUME_EVENTS_LIMIT)
+            val messages = sessionManager.getHistory(id)
+            ResumePlanner(lock).plan(checkpoint, events, messages)
+        } catch (e: Exception) {
+            KernelLog.w("AgentEngine", "续跑判定失败: ${e.message}")
+            null
+        }
+    }
 
     // ── Goal Mode (delegated to GoalModeExecutor) ────────────────────
 
@@ -383,8 +462,9 @@ class AgentEngine(
         onStep: ((TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
         attachments: List<AttachmentData> = emptyList(),
-        onReasoning: ((String) -> Unit)? = null
-    ): String = runtime.runReActLoop(task, maxSteps, contextPrefix, onStep, onDelta, attachments, onReasoning)
+        onReasoning: ((String) -> Unit)? = null,
+        resume: Boolean = false
+    ): String = runtime.runReActLoop(task, maxSteps, contextPrefix, onStep, onDelta, attachments, onReasoning, resume)
 
     // ── 火种模式 (Swarm Mode) — 规划器拆解 → 并行 Worker → Verifier → 合成器 ──
 
@@ -407,10 +487,15 @@ class AgentEngine(
         maxTotalSteps: Int = maxSubtasks * maxStepsPerSubtask,
         onStep: ((TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
-        onReasoning: ((String) -> Unit)? = null
+        onReasoning: ((String) -> Unit)? = null,
+        /** 续跑进度档 (工作流 C): 传回上次的存档即从已完成 worker 接着跑; null = 不读档。 */
+        progressFile: java.io.File? = null,
+        /** true 时才读 [progressFile] 续跑 (默认 false, 既有调用点行为不变 — 防自动续跑截胡用户主动重跑)。 */
+        resume: Boolean = false
     ): String = swarmModeExecutor.runWithSwarm(
         task, roles, maxSubtasks, maxParallel, maxStepsPerSubtask,
-        maxRetriesPerSubtask, maxTotalSteps, onStep, onDelta, onReasoning
+        maxRetriesPerSubtask, maxTotalSteps, onStep, onDelta, onReasoning,
+        progressFile, resume
     )
 
     // ── Fleet Mode (转发到火种模式) ─────────────────────────────────

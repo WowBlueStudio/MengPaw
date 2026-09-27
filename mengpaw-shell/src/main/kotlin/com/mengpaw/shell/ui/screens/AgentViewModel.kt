@@ -123,7 +123,6 @@ class AgentViewModel : ViewModel() {
     )
 
     // ── Delegated state from helpers ──
-
     val activeTags: StateFlow<List<InputTag>> = inputTagManager.activeTags
 
     val sessionHistory: StateFlow<List<SessionPersistenceService.SessionRecord>>
@@ -192,10 +191,7 @@ class AgentViewModel : ViewModel() {
     /** Provider/model label for the active agent (shown under agent name). */
     fun activeSessionLabel(strings: AppStrings): String = activeSession().providerLabel(strings)
 
-    /**
-     * Apply a pre-created LLM provider to the active agent.
-     * Called by AgentRuntime on IO thread — lightweight, no network calls.
-     */
+    /** Apply a pre-created LLM provider to the active agent (called by AgentRuntime on IO thread). */
     fun applyConfiguration(
         endpoint: String,
         apiKey: String,
@@ -228,6 +224,8 @@ class AgentViewModel : ViewModel() {
         try { com.mengpaw.plugin.hermes.TribePlugin.llmProvider = provider } catch (_: Exception) {}
         try { com.mengpaw.plugin.skill.SkillPlugin.llmProvider = provider } catch (_: Exception) {}
         chatController.bind()
+        // ── 断点续跑触发点 (P0-3): provider 已就绪, 可安全接续上一轮未完成的任务 ──
+        sessionPersistence.firePendingResume()
     }
 
     /** Get the framework name for an agent, or null if local. */
@@ -282,15 +280,20 @@ class AgentViewModel : ViewModel() {
 
     // ── Delegated task entry points ──
 
+    /**
+     * 提交任务 (转发 [TaskExecutionPipeline.submitTask])。
+     * @param resume 断点续跑 (P0-3) — true 时不追加用户气泡, 由引擎按检查点复原历史与步号
+     */
     fun submitTask(
         task: String,
         pluginViewModel: PluginViewModel? = null,
         maxSteps: Int = 50,
         executionMode: ExecutionMode? = null,
         agentRef: String? = null,
-        attachments: List<AttachmentData> = emptyList()
+        attachments: List<AttachmentData> = emptyList(),
+        resume: Boolean = false
     ) {
-        pipeline.submitTask(task, pluginViewModel, maxSteps, executionMode, agentRef, attachments)
+        pipeline.submitTask(task, pluginViewModel, maxSteps, executionMode, agentRef, attachments, resume)
     }
 
     fun stopAgent() { messageCenter.stopAgent() }
@@ -345,6 +348,8 @@ class AgentViewModel : ViewModel() {
     init {
         sessionFactory.ensureDefaultSession()
         chatController.bind()
+        // 断点续跑 (P0-3): 计划在恢复期判定, provider 就绪后经既有管道执行 (resume = true)
+        sessionPersistence.onResumeRequested = pipeline.resumeRequestHandler()
         // Restore persisted session history
         sessionPersistence.loadSessionHistory()
         // ── Orphan cleanup: remove records whose session file no longer exists ──

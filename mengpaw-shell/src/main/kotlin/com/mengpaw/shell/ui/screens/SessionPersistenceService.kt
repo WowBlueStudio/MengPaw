@@ -4,6 +4,7 @@
 package com.mengpaw.shell.ui.screens
 
 import com.mengpaw.kernel.KernelLog
+import com.mengpaw.kernel.session.ResumePlan
 import com.mengpaw.shell.ui.screens.model.AgentSession
 import com.mengpaw.shell.ui.screens.model.ChatMessageUi
 import kotlinx.coroutines.CoroutineScope
@@ -106,76 +107,52 @@ class SessionPersistenceService(
     private fun saveSessionById(sessionId: String, msgs: List<ChatMessageUi>) =
         saveEngine.saveSessionById(sessionId, msgs)
 
-    // ── Load (读取/恢复辅助 → SessionPersistenceCodec.kt) ──
+    // ── Load (读取/恢复辅助 → SessionPersistenceCodec.kt / 编排 → SessionResumeCoordinator.kt) ──
+
+    /**
+     * 续跑执行器 — 由 [AgentViewModel] 在构造流水线后注入 (provider 尚未配置时不触发续跑,
+     * 故不在恢复阶段直接执行, 见 [ResumeRequest] 的两阶段说明)。返回 true = 已受理。
+     */
+    internal var onResumeRequested: ((ResumeRequest) -> Boolean)? = null
+
+    /** 待执行的自动续跑计划 (由 [restoreCurrentSession] 装载, [firePendingResume] 消费)。 */
+    internal var pendingResume: ResumePlan.AutoResume? = null
+
+    /** 已自动续跑的会话 — 防止 applyConfiguration 多次调用导致重复续跑。 */
+    private val autoResumedSessions = mutableSetOf<String>()
 
     /** Restore last session messages from disk. Returns true if restored. */
-    fun restoreCurrentSession(): Boolean {
+    fun restoreCurrentSession(): Boolean = restoreSessionFromDisk(
+        sessions = sessions,
+        activeAgentName = getActiveAgentName(),
+        history = _sessionHistory.value,
+        setHistory = { _sessionHistory.value = it },
+        persistHistory = { saveSessionHistoryToDisk(it) },
+        setCurrentSessionId = { currentSessionId = it },
+        markPendingResume = { pendingResume = it }
+    )
+
+    /**
+     * 触发待执行的续跑 (由 [AgentViewModel.applyConfiguration] 在 provider 就绪后调用)。
+     * 同一会话只触发一次; 无待执行计划 / 无执行器时返回 false。
+     */
+    fun firePendingResume(): Boolean {
+        val plan = pendingResume ?: return false
+        val executor = onResumeRequested ?: return false
+        if (plan.sessionId in autoResumedSessions) return false
+        autoResumedSessions.add(plan.sessionId)
+        pendingResume = null
         return try {
-            val file = File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json")
-            when (val read = readCurrentSessionFile()) {
-                is CurrentSessionRead.Missing -> false
-                is CurrentSessionRead.Corrupt -> {
-                    try { file.delete() } catch (_: Exception) {}
-                    false
-                }
-                is CurrentSessionRead.Ok -> {
-                    val msgs = read.msgs
-                    val lastMsg = msgs.lastOrNull()
-                    val endsWithError = lastMsg is ChatMessageUi.Agent && lastMsg.content.startsWith("执行出错")
-                    if (endsWithError) {
-                        try { file.delete() } catch (_: Exception) {}
-                        return false
-                    }
-                    val (recovered, wasStuck) = recoverInterruptedMessages(msgs)
-                    val session = sessions[getActiveAgentName()] ?: return false
-                    session.messages.value = recovered
-
-                    // ── Engine session restore after process death ──
-                    if (msgs.isNotEmpty()) {
-                        val engineMsgs = toEngineConversation(msgs)
-                        val (restoredId, prevEngineId) = readEngineSessionIds()
-                        val engineSessionId = restoredId ?: "sess_${System.currentTimeMillis()}"
-                        try {
-                            session.engine.restoreConversation(
-                                externalSessionId = engineSessionId,
-                                messages = engineMsgs,
-                                lastWasInterrupted = wasStuck,
-                                previousEngineSessionId = prevEngineId
-                            )
-                        } catch (_: Exception) { /* engine restore best-effort */ }
-                    }
-
-                    // Build sidebar record
-                    val preview = msgs.firstOrNull()?.let {
-                        when (it) {
-                            is ChatMessageUi.User -> it.content.take(40)
-                            is ChatMessageUi.Agent -> it.content.take(40)
-                            else -> ""
-                        }
-                    } ?: ""
-                    val sessionId = read.sessionId ?: "sess_restored"
-
-                    val existingIndex = _sessionHistory.value.indexOfFirst { it.id == sessionId }
-                    val record = SessionRecord(
-                        id = sessionId, title = preview.ifBlank { "会话" }, preview = preview,
-                        timestamp = file.lastModified(), messageCount = msgs.size,
-                        agentName = getActiveAgentName()
-                    )
-
-                    if (existingIndex >= 0) {
-                        val mutable = _sessionHistory.value.toMutableList()
-                        mutable[existingIndex] = record
-                        _sessionHistory.value = mutable
-                    } else {
-                        _sessionHistory.value = (_sessionHistory.value.filter { it.id != sessionId } + record).takeLast(100)
-                    }
-                    saveSessionHistoryToDisk(_sessionHistory.value)
-                    currentSessionId = sessionId
-                    true
-                }
-            }
-        } catch (_: Exception) {
-            try { File(com.mengpaw.kernel.DataPaths.BASE, "current_session.json").delete() } catch (_: Exception) {}
+            executor(
+                ResumeRequest(
+                    sessionId = plan.sessionId,
+                    step = plan.step,
+                    task = plan.task,
+                    pendingIntents = plan.pendingIntents
+                )
+            )
+        } catch (e: Exception) {
+            KernelLog.w("AgentViewModel", "自动续跑触发失败: ${e.message}")
             false
         }
     }
@@ -393,3 +370,4 @@ class SessionPersistenceService(
         .mapNotNull { it.framework }
         .distinct()
 }
+

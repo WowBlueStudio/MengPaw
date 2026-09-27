@@ -65,9 +65,19 @@ internal class AgentRuntime(private val engine: AgentEngine) {
         lastWasInterrupted: Boolean,
         previousEngineSessionId: String? = null
     ) {
-        // Create a new engine session (SessionManager is in-memory, always empty after restart)
-        val session = engine.getSessionManager().createSession(
+        // ★ 会话 id 判定顺序 (断点续跑关键): 检查点优先 → 外部给出的引擎 id → 兜底生成。
+        // 续跑按 sessionId 找检查点, 若这里另发随机 id (旧实现), 恢复出来的会话与检查点键就分叉了
+        // (后续 loadLatest 全部落空)。因此先看上一轮引擎 id 是否有检查点, 有就直接沿用该 id。
+        val checkpoint = previousEngineSessionId?.let { engine.checkpointManager.loadLatestSync(it) }
+        val sessionId = checkpoint?.sessionId
+            ?: previousEngineSessionId?.takeIf { it.isNotBlank() }
+            ?: externalSessionId.takeIf { it.isNotBlank() }
+            ?: "sess_${System.currentTimeMillis()}"
+        // Create the engine session (SessionManager is in-memory, always empty after restart)
+        val session = engine.getSessionManager().restoreSession(
+            id = sessionId,
             task = "restored after process death",
+            messages = emptyList(),
             agentId = engine.agentName
         )
         // Push all messages into the engine session so the LLM sees full history
@@ -78,21 +88,22 @@ internal class AgentRuntime(private val engine: AgentEngine) {
         engine.conversationSessionId = session.id
 
         // ── Checkpoint recovery ──
-        // If we have the previous engine session ID, try to find its last checkpoint.
-        // This gives us diagnostic context about where the interrupted run was.
+        // 上一轮引擎会话的最近检查点既提供诊断上下文, 也是 `run(resume = true)` 的续跑锚点。
         var checkpointStep = 0
-        if (previousEngineSessionId != null) {
-            val ckpt = engine.checkpointManager.loadLatestSync(previousEngineSessionId)
-            if (ckpt != null) {
-                checkpointStep = ckpt.step
-                engine.getSessionManager().recordSessionEvent(session.id, SessionEventBus.SessionEvent(
-                    kind = SessionEventBus.EventKind.SESSION_RECOVERED,
-                    sessionId = session.id,
-                    agentName = engine.agentName,
-                    summary = "Checkpoint found: step ${ckpt.step}, task: ${ckpt.remainingTask.take(60)}",
-                    payload = mapOf("prevSessionId" to previousEngineSessionId, "step" to ckpt.step.toString())
-                ))
-            }
+        if (checkpoint != null) {
+            checkpointStep = checkpoint.step
+            engine.getSessionManager().recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+                kind = SessionEventBus.EventKind.SESSION_RECOVERED,
+                sessionId = session.id,
+                agentName = engine.agentName,
+                summary = "Checkpoint found: step ${checkpoint.step}, status ${checkpoint.status}, " +
+                    "task: ${checkpoint.remainingTask.take(60)}",
+                payload = mapOf(
+                    "prevSessionId" to (previousEngineSessionId ?: ""),
+                    "step" to checkpoint.step.toString(),
+                    "status" to checkpoint.status.name
+                )
+            ))
         }
 
         // If the last run was interrupted, set up recovery for the next user message
@@ -183,16 +194,105 @@ internal class AgentRuntime(private val engine: AgentEngine) {
         consecutiveCompacts = 0; compactStuck = false
     }
 
+    /**
+     * 会话装配 (拆自 [AgentReActLoop.runReActLoop] 以守 400 行红线) — 解析本轮要用的会话。
+     *
+     * 两条路径:
+     * - **续跑** ([plan] 非空, 来自 [ResumePlanner] AutoResume): 按检查点原 sessionId
+     *   [SessionManager.restoreSession] 重建会话, 用 `checkpoint.messages` 复原历史
+     *   (工具 Observation 不再丢失), 步号从 `checkpoint.step` 接续, **不重复追加用户任务**;
+     *   续跑前对未确认完成的工具意图注入"先核对再重试"事实提示 (禁止自动重放, 防重复副作用)。
+     * - **新任务** (plan 为空): 沿用既有语义 — 复用 [AgentEngine.conversationSessionId]
+     *   指向的会话, 不存在才新建 (进程重启后 SessionManager 内存恒空)。
+     *
+     * @return 会话 + 已消耗步数 (新任务恒为 0)
+     */
+    internal fun resolveConversationSession(
+        plan: ResumePlan.AutoResume?,
+        task: String,
+        checkpointWriter: AgentCheckpointWriter
+    ): Pair<Session, Int> {
+        if (plan != null) {
+            val session = engine.getSessionManager().restoreSession(
+                id = plan.sessionId,
+                task = plan.task,
+                messages = plan.messages,
+                agentId = engine.agentName
+            )
+            engine.conversationSessionId = session.id
+            KernelLog.i("AgentEngine", "断点续跑: 会话 ${session.id} 从第 ${plan.step} 步接续 " +
+                "(messages=${plan.messages.size})")
+            engine.getSessionManager().recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+                kind = SessionEventBus.EventKind.SESSION_RECOVERED,
+                sessionId = session.id,
+                agentName = engine.agentName,
+                summary = "Resume from step ${plan.step}",
+                payload = mapOf("step" to plan.step.toString(), "source" to "checkpoint")
+            ))
+            val note = checkpointWriter.injectPendingIntentNote(session.id, engine.getSessionManager())
+            if (note != null) {
+                KernelLog.w("AgentEngine", "续跑发现未确认完成的工具调用 (会话 ${session.id}), 已注入核对提示")
+            }
+            return session to plan.step
+        }
+        // Snapshot volatile field to avoid TOCTOU race with newConversation()
+        val currentSessionId = engine.conversationSessionId
+        val existing = currentSessionId?.let { engine.getSessionManager().getSession(it) }
+        if (existing != null) return existing to 0
+        val created = engine.getSessionManager().createSession(task)
+        engine.conversationSessionId = created.id
+        return created to 0
+    }
+
+    /**
+     * 续跑判定 (P0-3) — 取事实 (检查点/事件/消息) 后交给 [ResumePlanner] 决策。
+     *
+     * 判定条件 (auto_resume 开关 / 单会话锁 / RUNNING 态) 与 P1-6 的既有事件分级恢复判定
+     * ([decideRecovery]) 都在 [ResumePlanner] 内; 本方法只负责"取事实 + 记账"。
+     * 返回 [ResumePlan.AutoResume] 以外的分支一律折算为 null (= 按新任务跑), 避免
+     * "判定为需用户确认却把任务静默跑掉"。
+     *
+     * 检查点按 [AgentEngine.conversationSessionId] 定位 — 进程死亡后由 [restoreConversation]
+     * 把上一轮引擎会话 id 复原到这里, 是唯一可用的锚点。任何读取/判定异常 fail-soft 返回 null,
+     * 恢复设施故障绝不阻断正常对话。
+     *
+     * @param eventsLimit 读取的会话事件条数 (覆盖"连续错误 ≥5"判据)
+     * @return 可续跑计划 (单会话锁已由 planner 获取) 或 null
+     */
+    internal fun planResume(lock: ResumeLock, eventsLimit: Int): ResumePlan.AutoResume? {
+        val sessionId = engine.conversationSessionId ?: return null
+        return try {
+            val checkpoint = engine.checkpointManager.loadLatestSync(sessionId)
+            val events = engine.getSessionManager().listEventsSince(sessionId, afterSeq = 0, limit = eventsLimit)
+            val messages = engine.getSessionManager().getHistory(sessionId)
+            when (val plan = ResumePlanner(lock).plan(checkpoint, events, messages)) {
+                is ResumePlan.AutoResume -> plan
+                is ResumePlan.PromptUser -> {
+                    KernelLog.i("AgentEngine", "断点续跑需用户确认 (${plan.reason.name}): ${plan.reason.userMessage}")
+                    null
+                }
+                is ResumePlan.Skip -> {
+                    KernelLog.i("AgentEngine", "断点续跑跳过 (${plan.reason.name})")
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            KernelLog.w("AgentEngine", "续跑判定失败, 按新任务处理: ${e.message}")
+            null
+        }
+    }
+
     suspend fun run(
         task: String, maxSteps: Int = 50, onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
         attachments: List<AttachmentData> = emptyList(),
-        onReasoning: ((String) -> Unit)? = null
+        onReasoning: ((String) -> Unit)? = null,
+        resume: Boolean = false
     ): String {
         // P0 注入防护: 任务入口静默剥离精确注入模式 (本地输入 + 远程委托 inbox 任务统一)
         val guardedTask = com.mengpaw.kernel.security.UntrustedContent.sanitizeForAgent(task)
         return engine.runReActLoop(task = guardedTask, maxSteps = maxSteps, onStep = onStep, onDelta = onDelta,
-            attachments = attachments, onReasoning = onReasoning)
+            attachments = attachments, onReasoning = onReasoning, resume = resume)
     }
 
     /**
@@ -206,8 +306,9 @@ internal class AgentRuntime(private val engine: AgentEngine) {
         onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
         attachments: List<AttachmentData> = emptyList(),
-        onReasoning: ((String) -> Unit)? = null
-    ): String = reactLoop.runReActLoop(task, maxSteps, contextPrefix, onStep, onDelta, attachments, onReasoning)
+        onReasoning: ((String) -> Unit)? = null,
+        resume: Boolean = false
+    ): String = reactLoop.runReActLoop(task, maxSteps, contextPrefix, onStep, onDelta, attachments, onReasoning, resume)
 
     internal fun recordTaskMemory(task: String, result: String) {
         // 单轨记忆 (v0.22.0): 任务记忆写入三轨中期 memory_{date}.md (梦境读中期的输入面)

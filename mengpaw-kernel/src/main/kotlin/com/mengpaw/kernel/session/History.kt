@@ -120,6 +120,49 @@ class SessionManager {
     }
 
     /**
+     * 按**指定 id** 恢复会话 (断点续跑专用, 与 [createSession] 的随机 id 相对)。
+     *
+     * 为什么必须有这个 API: 续跑的检查点按 `sessionId` 落盘与查找, 而恢复方接着要把
+     * [Checkpoint.messages] 灌回 SessionManager — 若这里另发一个随机 id, 恢复出来的会话
+     * 与检查点键就分叉了 (后续 `loadLatest` 全部落空, 每步又写出一批新 id 的孤儿档)。
+     * 因此本方法**沿用调用方给出的 [id]** (即检查点原 sessionId)。
+     *
+     * 语义与 [createSession] 对齐: 写入 `_sessions.value`、抢占 `_activeSessionId`
+     * (续跑是主链路, 必须抢占 — 否则折叠压缩会作用到别的会话)、发 `SESSION_CREATED` 事件。
+     * 已存在同 id 会话时直接覆盖重建 (Idempotent): 进程重启后 SessionManager 内存恒空,
+     * 覆盖路径只在"同进程重复恢复"时发生, 以最后一次恢复的消息快照为准。
+     *
+     * @param messages 重建用的消息快照 (来自检查点, 含中断前的工具 Observation)
+     * @param scope 生命周期域, 与 createSession 同义 ("agent"/"framework"/"swarm"…)
+     */
+    @Synchronized
+    fun restoreSession(
+        id: String,
+        task: String,
+        messages: List<Message>,
+        scope: String = "agent",
+        agentId: String? = null
+    ): Session {
+        val session = Session(
+            id = id,
+            task = task,
+            scope = scope,
+            agentId = agentId ?: agentName,
+            messages = messages.toMutableList()
+        )
+        _sessions.value = _sessions.value + (session.id to session)
+        _activeSessionId.value = session.id
+        eventLog.recordSessionEvent(session.id, SessionEventBus.SessionEvent(
+            kind = SessionEventBus.EventKind.SESSION_CREATED,
+            sessionId = session.id,
+            agentName = agentName,
+            summary = "restored: ${task.take(120)}",
+            payload = mapOf("restored" to "true", "messages" to messages.size.toString())
+        ))
+        return session
+    }
+
+    /**
      * Replace in-place messages matching [predicate] with [transform]'s result.
      * 与 addMessage/compressIfNeeded 同一监视器 — snipStaleToolResults 等
      * 就地改写不得绕过锁与并行 worker 的 addMessage/后台预压缩竞态。
