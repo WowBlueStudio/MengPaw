@@ -4,7 +4,10 @@
 package com.mengpaw.kernel
 
 import com.mengpaw.kernel.agent.SwarmBudget
+import com.mengpaw.kernel.agent.SwarmProgress
+import com.mengpaw.kernel.agent.SwarmProgressStore
 import com.mengpaw.kernel.agent.SwarmResultCard
+import com.mengpaw.kernel.agent.SwarmResumeHelper
 import com.mengpaw.kernel.agent.SwarmRoles
 import com.mengpaw.kernel.agent.SwarmRuntimeStore
 import com.mengpaw.kernel.agent.SwarmSubtask
@@ -55,6 +58,13 @@ class SwarmModeExecutor(
      *
      * @param roles 角色 → LLM Provider 映射 (planner/worker/verifier/synthesizer/worker.alt 可异模型)；
      *        缺省回退引擎主 provider
+     * @param progressFile 看板进度档 (工作流 C): 非 null 时每个 worker 出结论后原子落盘;
+     *   读侧路径缺省按 `agentEngine.agentName` 归位到 `{CONFIG}/模式进度/{agent}/swarm.json`。
+     *   进程被杀 (CancellationException) 不会清档, 供下次续跑。
+     * @param resume 是否续跑 (默认 false, **既有调用点行为不变**): true 时读 [progressFile]
+     *   (缺省按 agentName) 恢复预算与看板, 同任务才会命中。
+     *   **续跑粒度**: 已出结论卡片的 worker 直接跳过并复用卡片, 半途 (RUNNING) 的整只重跑 —
+     *   工具副作用不可回滚, 详见 [SwarmProgress] 的粒度表。
      */
     suspend fun runWithSwarm(
         task: String,
@@ -66,7 +76,9 @@ class SwarmModeExecutor(
         maxTotalSteps: Int = maxSubtasks * maxStepsPerSubtask,
         onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
         onDelta: ((String) -> Unit)? = null,
-        onReasoning: ((String) -> Unit)? = null
+        onReasoning: ((String) -> Unit)? = null,
+        progressFile: java.io.File? = null,
+        resume: Boolean = false
     ): String {
         // P0 注入防护: 任务入口静默剥离精确注入模式
         val guardedTask = com.mengpaw.kernel.security.UntrustedContent.sanitizeForAgent(task)
@@ -84,57 +96,100 @@ class SwarmModeExecutor(
                 return agentEngine.run(guardedTask, maxStepsPerSubtask * maxSubtasks, onStep, onDelta, onReasoning = onReasoning)
             }
 
-            val budget = SwarmBudget(maxTotalSteps)
+            // 工作流 C: 续跑 — 预算连续 (不重置已消耗步数) + 已完成 worker 复用卡片
+            // resume=false 时不读档 (既有调用点行为不变); progressFile 仍会持续写档供看板。
+            val progress = SwarmResumeHelper.load(progressFile, agentEngine.agentName, resume)
+                ?.takeIf { it.task == guardedTask }
+            val budget = SwarmResumeHelper.budgetFrom(progress, maxTotalSteps)
             val semaphore = Semaphore(maxParallel)
+            val plan = SwarmResumeHelper.planResume(subtasks, progress)
+            val restored = plan.restored
+            // 已完成 worker 的累计统计 (卡片 tokens 不落盘, 从进度档累计字段还原)
+            val restoredVerified = progress?.countByStatus(SwarmProgress.VERIFIED) ?: 0
+            val restoredDone = progress?.countByStatus(SwarmProgress.DONE) ?: 0
+            val restoredFailed = progress?.countByStatus(SwarmProgress.FAILED) ?: 0
+            val restoredSkipped = progress?.countByStatus(SwarmProgress.SKIPPED) ?: 0
+            val pending = plan.pending
+            val cards = restored.toMutableList()
             // v0.35.5: 运行时持久化 — swarm.status 可查进度; 进程被杀后残留可恢复查看
             val startedAt = System.currentTimeMillis()
-            val updateRuntime = { saveRuntime(guardedTask, startedAt, budget, subtasks) }
+            val updateRuntime = { saveRuntime(guardedTask, startedAt, budget, subtasks, cards) }
+            // 进度档更新闭包: 并行 worker 出结论后各自快照 (synchronized 原子写, 无竞争)
+            // 显式标注 `() -> Unit`: 闭包体末句是 `progressFile?.let { ... }` (返回 Unit?),
+            // 不标注会推断成 `() -> Unit?`, 传给要求 `() -> Unit` 的 worker 管线即编译失败。
+            val overwriteProgress: () -> Unit = {
+                progressFile?.let {
+                    SwarmProgressStore.saveTo(
+                        SwarmResumeHelper.build(guardedTask, budget, subtasks, cards), it
+                    )
+                }
+            }
             updateRuntime()
+            overwriteProgress()
             agentEngine.updateAgentState(AgentState.Running("火种: ${subtasks.size} 个子任务", 0, subtasks.size))
 
             // ── Phase 1+2: 并行 Worker 执行 + Verifier 验证 (每子任务一个协程, WIP 闸限流) ──
-            val cards = coroutineScope {
-                subtasks.map { sub ->
+            // 已完成 worker 不在 pending 内 → 恢复后不重复执行 (卡片直接复用)
+            val newCards = coroutineScope {
+                pending.map { sub ->
                     async(KernelDispatchers.BACKGROUND) {
                         semaphore.withPermit {
-                            runSubtaskPipeline(sub, roles, budget, maxStepsPerSubtask, maxRetriesPerSubtask, onStep, updateRuntime)
+                            runSubtaskPipeline(sub, roles, budget, maxStepsPerSubtask, maxRetriesPerSubtask, onStep, updateRuntime, overwriteProgress)
                         }
                     }
                 }.awaitAll()
             }
+            cards.addAll(newCards)
+            overwriteProgress()
 
             // ── Phase 3: 合成器汇总 (流式: 最终报告逐字输出) ──
-            val synthesis = synthesize(guardedTask, cards, providerFor(SwarmRoles.SYNTHESIZER, roles), onDelta)
-            val verified = cards.count { it.status == SwarmSubtaskStatus.VERIFIED }
-            val done = cards.count { it.status == SwarmSubtaskStatus.DONE }
-            val failed = cards.count { it.status == SwarmSubtaskStatus.FAILED }
-            val skipped = cards.count { it.status == SwarmSubtaskStatus.SKIPPED }
+            // 续跑时报告须覆盖全部子任务: 已完成卡片与本次新产出合并后再统计
+            val allCards = cards
+            val synthesis = synthesize(guardedTask, allCards, providerFor(SwarmRoles.SYNTHESIZER, roles), onDelta)
+            val verified = restoredVerified + allCards.count { it.status == SwarmSubtaskStatus.VERIFIED }
+            val done = restoredDone + allCards.count { it.status == SwarmSubtaskStatus.DONE }
+            val failed = restoredFailed + allCards.count { it.status == SwarmSubtaskStatus.FAILED }
+            val skipped = restoredSkipped + allCards.count { it.status == SwarmSubtaskStatus.SKIPPED }
 
             val report = buildString {
                 appendLine("## 火种模式: $guardedTask")
-                appendLine("子任务: ${cards.size} | ✅ $verified | 👍 $done | ❌ $failed | ⏭️ $skipped | 总步数: ${budget.consumedSteps}")
+                appendLine("子任务: ${allCards.size} | ✅ $verified | 👍 $done | ❌ $failed | ⏭️ $skipped | 总步数: ${budget.consumedSteps}")
                 appendLine()
-                cards.forEach { appendLine("${it.icon} ${it.subtaskId}: ${it.summary.take(300)}") }
+                allCards.forEach { appendLine("${it.icon} ${it.subtaskId}: ${it.summary.take(300)}") }
                 appendLine()
                 append(synthesis)
             }
             SwarmRuntimeStore.clear()
+            SwarmResumeHelper.clear(progressFile)
             agentEngine.updateAgentState(AgentState.Finished(report))
             return report
         } catch (e: CancellationException) {
             // 取消传播契约: 必须先 rethrow; P2 — 状态机复位, 否则 _state 残留 Running
             // 取消/进程被杀不清 runtime 残留 — swarm.status 可查看未完成任务 (2h 后自动清理)
+            // 工作流 C: 进度档同样保留 (半途 worker 下次整只重跑, 已完成的跳过)
             agentEngine.updateAgentState(AgentState.Idle)
             throw e
         }
     }
 
-    /** 持久化当前火种运行时快照 (v0.35.5)。 */
+    // ── 进度档 (工作流 C) — 实现见 [SwarmResumeHelper] (400 行文件约束) ──
+
+    /**
+     * 纯函数续跑决策 (可单测): 已完成 worker 复用卡片, 半途 worker 重做。
+     * 委托 [SwarmResumeHelper.planResume], 语义见 [SwarmProgress] 的粒度表。
+     */
+    internal fun planResume(
+        subtasks: List<SwarmSubtask>,
+        progress: SwarmProgress?
+    ): SwarmResumeHelper.ResumePlan = SwarmResumeHelper.planResume(subtasks, progress)
+
+    /** 持久化当前火种运行时快照 (v0.35.5)。卡片结论优先于子任务裸输出 (与看板一致)。 */
     private fun saveRuntime(
         task: String,
         startedAt: Long,
         budget: SwarmBudget,
-        subtasks: List<SwarmSubtask>
+        subtasks: List<SwarmSubtask>,
+        cards: List<SwarmResultCard> = emptyList()
     ) {
         SwarmRuntimeStore.save(
             SwarmRuntimeStore.Runtime(
@@ -143,12 +198,13 @@ class SwarmModeExecutor(
                 totalSteps = budget.maxSteps,
                 consumedSteps = budget.consumedSteps,
                 subtasks = subtasks.map {
+                    val card = cards.firstOrNull { c -> c.subtaskId == it.id }
                     SwarmRuntimeStore.SubtaskState(
                         id = it.id,
                         description = it.description,
-                        status = it.status.name,
+                        status = card?.status?.name ?: it.status.name,
                         retries = it.retryCount,
-                        summary = it.output.take(120)
+                        summary = (card?.summary ?: it.output).take(120)
                     )
                 },
                 updatedAt = System.currentTimeMillis()
@@ -166,7 +222,8 @@ class SwarmModeExecutor(
         maxSteps: Int,
         maxRetries: Int,
         onStep: ((AgentEngine.TraceStep) -> Unit)? = null,
-        updateRuntime: () -> Unit = {}
+        updateRuntime: () -> Unit = {},
+        overwriteProgress: () -> Unit = {}
     ): SwarmResultCard {
         // 闸1: 总预算提前跳过 (排队 worker 拿到许可后立即退化, 不空转)
         if (budget.exhausted) return SwarmResultCard.skipped(subtask.id)
@@ -179,6 +236,8 @@ class SwarmModeExecutor(
             val outcome = workerRunner.runWorker(subtask, provider, maxSteps, budget, feedback, onStep)
             // 进度快照: 每轮 worker 完成后更新 (并行 worker 各自持锁内串行, 原子写无竞争)
             updateRuntime()
+            // 工作流 C: 看板进度档同步 (进程被杀后已出结论的 worker 不再重跑)
+            overwriteProgress()
 
             // 预算耗尽: 不可重试, 直接终止该子任务
             if (outcome.budgetExhausted) {

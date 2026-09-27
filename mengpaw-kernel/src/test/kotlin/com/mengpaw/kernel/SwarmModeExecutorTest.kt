@@ -5,14 +5,22 @@ package com.mengpaw.kernel
 
 import com.mengpaw.kernel.agent.AgentMemoryExecutor
 import com.mengpaw.kernel.agent.SwarmBudget
+import com.mengpaw.kernel.agent.SwarmProgress
+import com.mengpaw.kernel.agent.SwarmProgressStore
+import com.mengpaw.kernel.agent.SwarmSubtask
+import com.mengpaw.kernel.agent.SwarmSubtaskStatus
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.llm.LlmProvider
 import com.mengpaw.kernel.llm.ProviderInfo
 import com.mengpaw.kernel.llm.ProviderType
 import com.mengpaw.kernel.session.SessionManager
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Test
+import java.io.File
+import java.util.UUID
 
 /**
  * 火种模式 (Swarm Mode) 测试。
@@ -24,6 +32,22 @@ class SwarmModeExecutorTest {
 
     private val DECOMPOSE_JSON =
         """[{"id":"a","desc":"子任务A","criteria":"完成A"},{"id":"b","desc":"子任务B","criteria":"完成B"}]"""
+
+    /** 工作流 C 用: 每个用例独立的 DataPaths 基目录 (进度档落盘隔离)。 */
+    private var baseDir: File? = null
+
+    @Before
+    fun initPaths() {
+        val dir = File(System.getProperty("java.io.tmpdir"), "mengpaw_swarm_case_${UUID.randomUUID()}")
+        dir.mkdirs()
+        baseDir = dir
+        DataPaths.initialize(dir.absolutePath)
+    }
+
+    @After
+    fun cleanPaths() {
+        baseDir?.let { try { it.deleteRecursively() } catch (_: Exception) {} }
+    }
 
     private fun engineWith(provider: LlmProvider) =
         AgentEngine(llmProvider = provider, sessionManager = SessionManager())
@@ -365,4 +389,118 @@ class SwarmModeExecutorTest {
         val projectSave = executor.commands["memory.project.save"]!!(listOf("项目", "总结"), swarmCtx)
         assertTrue("project.save 被屏蔽", projectSave.output.contains("不写记忆"))
     }
+
+    // ── 用例 12: 断点续跑 (工作流 C) — worker 级粒度 ──────────────────
+
+    @Test
+    fun `planResume reuses completed worker cards and redeems unfinished ones`() {
+        val executor = SwarmModeExecutor(engineWith(ScriptedLlmProvider(listOf("x"))))
+        val subtasks = listOf(
+            SwarmSubtask(id = "a", description = "子任务A"),
+            SwarmSubtask(id = "b", description = "子任务B"),
+            SwarmSubtask(id = "c", description = "子任务C"),
+            SwarmSubtask(id = "d", description = "子任务D"),
+            SwarmSubtask(id = "e", description = "子任务E")
+        )
+        val progress = SwarmProgress(
+            task = "任务",
+            totalSteps = 40,
+            consumedSteps = 12,
+            subtasks = listOf(
+                state("a", SwarmProgress.VERIFIED, "A 已完成"),
+                state("b", SwarmProgress.RUNNING, ""),
+                state("c", SwarmProgress.DONE, "C 降级通过"),
+                state("d", SwarmProgress.FAILED, "D 失败"),
+                state("e", SwarmProgress.PENDING, "")
+            )
+        )
+
+        val plan = executor.planResume(subtasks, progress)
+
+        assertEquals("已完成 (VERIFIED/DONE) 与终态失败必须跳过", setOf("a", "c", "d"), plan.restored.map { it.subtaskId }.toSet())
+        assertEquals(
+            "只有半途 (RUNNING) 与未执行 (PENDING) 需要重做",
+            listOf("b", "e"), plan.pending.map { it.id }
+        )
+        assertEquals(
+            "复用卡片必须保留原结论摘要",
+            "A 已完成", plan.restored.first { it.subtaskId == "a" }.summary
+        )
+        assertEquals(
+            "复用卡片状态不得改写",
+            SwarmSubtaskStatus.VERIFIED, plan.restored.first { it.subtaskId == "a" }.status
+        )
+    }
+
+    @Test
+    fun `planResume without progress executes everything`() {
+        val executor = SwarmModeExecutor(engineWith(ScriptedLlmProvider(listOf("x"))))
+        val subtasks = listOf(SwarmSubtask("a", "A"), SwarmSubtask("b", "B"))
+
+        val plan = executor.planResume(subtasks, null)
+
+        assertEquals("无进度档时应全部执行", listOf("a", "b"), plan.pending.map { it.id })
+        assertTrue("无进度档时不应复用任何卡片", plan.restored.isEmpty())
+    }
+
+    @Test
+    fun `resumed swarm skips completed worker and reuses its card`() = runBlocking {
+        val base = File(System.getProperty("java.io.tmpdir"), "mengpaw_swarm_resume_${UUID.randomUUID()}")
+        base.mkdirs()
+        DataPaths.initialize(base.absolutePath)
+        try {
+            val progressFile = File(System.getProperty("java.io.tmpdir"), "mengpaw_swarm_resume_${UUID.randomUUID()}.json")
+            SwarmProgressStore.saveTo(
+                SwarmProgress(
+                    task = "调研市场",
+                    totalSteps = 30,
+                    consumedSteps = 8,
+                    subtasks = listOf(
+                        state("a", SwarmProgress.VERIFIED, "已完成的 A 结论"),
+                        state("b", SwarmProgress.RUNNING, "")
+                    )
+                ),
+                progressFile
+            )
+            val planner = ScriptedLlmProvider(listOf(DECOMPOSE_JSON), "planner")
+            val worker = ScriptedLlmProvider(listOf("Final Answer: 子任务B完成"), "worker")
+            val verifier = ScriptedLlmProvider(listOf("VERDICT: PASS"), "verifier")
+            val synthesizer = ScriptedLlmProvider(listOf("## 综合报告"), "synthesizer")
+            val engine = engineWith(planner)
+
+            val report = engine.runWithSwarm(
+                task = "调研市场",
+                roles = mapOf(
+                    "planner" to planner, "worker" to worker,
+                    "verifier" to verifier, "synthesizer" to synthesizer
+                ),
+                progressFile = progressFile,
+                resume = true
+            )
+
+            assertTrue("已完成 worker 的卡片应进入报告", report.contains("已完成的 A 结论"))
+            assertTrue("半途 worker 应重跑并产出新结论", report.contains("子任务B完成"))
+            assertEquals("已完成 worker 不得再次调用 LLM", 1, worker.calls.size)
+            assertTrue(
+                "已完成 worker 的调用内容不得出现",
+                worker.calls.none { it.contains("子任务A") }
+            )
+            assertTrue("看板上下文保留 (子任务: 2)", report.contains("子任务: 2"))
+        } finally {
+            try { base.deleteRecursively() } catch (_: Exception) {}
+        }
+    }
+
+    @Test
+    fun `swarm budget restored from archive keeps consumed steps`() {
+        val restored = SwarmBudget.restore(30, 8)
+        assertEquals("已消耗步数应连续", 8, restored.consumedSteps)
+        assertEquals("剩余 = 总额 − 已消耗", 22, restored.remaining)
+        assertTrue("恢复后应仍可继续消耗", restored.tryConsume())
+        assertEquals(9, restored.consumedSteps)
+    }
+
+    private fun state(id: String, status: String, summary: String) = SwarmProgress.SubtaskState(
+        id = id, description = "子任务$id", role = "worker", status = status, summary = summary
+    )
 }

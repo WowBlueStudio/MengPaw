@@ -58,6 +58,9 @@ data class SwarmResultCard(
 /**
  * 看板总预算闸 — 累计实际 Worker 步数（每轮 LLM turn 计 1 步）。
  * AtomicInteger CAS 保证并行 Worker 间无锁安全。
+ *
+ * 断点续跑 (工作流 C): [restore] 用上次已消耗步数预热计数器, 使重启后的
+ * 剩余预算 = 总额 − 已消耗 (而非重置为总额, 否则重启即成本翻倍)。
  */
 class SwarmBudget(private val maxTotalSteps: Int) {
     private val consumed = AtomicInteger(0)
@@ -66,6 +69,21 @@ class SwarmBudget(private val maxTotalSteps: Int) {
     val maxSteps: Int get() = maxTotalSteps
     val consumedSteps: Int get() = consumed.get()
     val exhausted: Boolean get() = consumed.get() >= maxTotalSteps
+
+    /** 剩余步数预算 (派生值; 恢复后即"总额 − 已消耗")。 */
+    val remaining: Int get() = (maxTotalSteps - consumed.get()).coerceAtLeast(0)
+
+    companion object {
+        /**
+         * 恢复预算计数器。`consumedSteps` 超上限按上限钳制 (旧档被改写/预算被调小时不越界)。
+         * @param consumedSteps 上次运行已消耗的步数 (0 = 全新预算)
+         */
+        fun restore(maxTotalSteps: Int, consumedSteps: Int): SwarmBudget {
+            val budget = SwarmBudget(maxTotalSteps)
+            budget.consumed.set(consumedSteps.coerceIn(0, maxTotalSteps.coerceAtLeast(0)))
+            return budget
+        }
+    }
 
     /** 授予一个步进配额；总预算耗尽返回 false。 */
     fun tryConsume(): Boolean {
