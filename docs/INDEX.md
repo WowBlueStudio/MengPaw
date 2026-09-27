@@ -8,7 +8,7 @@
 
 | 文件 | 大小 | 内容 | 何时读 |
 |------|:----:|------|--------|
-| `lessons.md` | 38 KB | 经验教训库：§1-14 主题经验（v0.16~v0.29.2，含 Reasonix 对照/网络门卫 SPI）+ §15 历史教训浓缩（v0.2.2~v0.23.0 原 118 条要点化 + v0.34.1 NSD 事故） | 做架构决策、写插件、碰编译坑或性能优化时 |
+| `lessons.md` | 177 KB | 经验教训库：**最新在 §0.3**（手机端长任务断点续跑：档名/归属判据、文件系统时间戳排序陷阱、无 move 时的墓碑清除、意图 WAL 钩子顺序与"禁止自动重放"、锁的回读校验与 TTL 取舍、观测单例判据）+ §0.2/§0.1/§0. 近期踩坑 + §1-14 主题经验（v0.16~v0.29.2，含 Reasonix 对照/网络门卫 SPI）+ §15 历史教训浓缩（v0.2.2~v0.23.0 原 118 条要点化 + v0.34.1 NSD 事故） | 做架构决策、写插件、碰编译坑或性能优化时 |
 | `crash-prevention-guide.md` | 10 KB | 30+ 闪退案例：进程保活/空安全/文件 IO/生命周期/Compose 陷阱 | 遇到闪退或做稳定性修复时 |
 | `PROTOCOL.md` | 7 KB | 框架通信协议：双轨架构(本机 MCP 9881 / 远程 ACP 9876)、连接器 SPI 开发指南、消息格式、接入清单 | 对接外部框架、写连接器插件时 |
 | `swarm-design.md` | 7 KB | 火种 (Swarm) 模式设计：规划器/Worker/Verifier/合成器、JIT 三闸门、Andon 协议 | 改火种模式或写多 Agent 任务时 |
@@ -16,7 +16,7 @@
 | `MengPaw-Browser 仓库` | — | **浏览器已拆分独立仓库** `WowBlueStudio/MengPaw-Browser`（v0.8.x 独立版本线，经 JitPack 依赖主仓库共享地基）。浏览器源码/文档/版本节奏均以该仓库为准；本仓库仅保留架构参考（见开发指南 §3.4） | 改浏览器代码/命令面/桥/MCP、发浏览器版本时，去独立仓库 |
 | `llm-multistage-dataflow.md` | 8 KB | LLM 多阶段输出数据流：ReAct 每回合 LLM/框架/UI 各环节实际收到的内容（parse 规则/Observation 组装/历史累积/边界防御） | 理解 Agent 循环、排查工具调用链路、调试 LLM 输出时 |
 | `system-prompt-fixed-prefix.md` | 27 KB | **系统提示词固定前缀快照 + 一致性检查**（2026-09-22）：zh/en 真实注入文本逐字快照（非手抄）、固定前缀 vs 运行时变长段划分、提示词↔agents/soul/profile 逐条核对结论（含已消歧的 2 处隐藏矛盾、已知用词级重复） | 改系统提示词/工作区模板、怀疑提示词与文档打架、排查 Agent 行为口径不一致时 |
-| **Harness 核心**（独立仓库 `D:\MengPaw\harness`） | — | **跨平台 Harness 核心**（ReAct 抽离目标仓库，独立 git，已在主仓库 .gitignore 排除）。`docs/interface-guide.md` = 接口契约权威（HarnessEnv/HarnessFileSystem/HarnessPathResolver/HarnessClock/HarnessConfirmGate/HarnessToolInvoker/**CheckpointStore** 逐条契约 + 接入 5 步 + 硬约束）；`docs/migration-roadmap.md` = 按包搬运清单与阶段（A 落位 / C 抽象层收敛已做 / B 剩余 cli·session·ReAct 骨架）。**抽象层单一事实源**：kernel 内联副本 `mengpaw-kernel/.../harness/` 已删除（v0.2.0，2026-09-18），kernel 侧只留 `HarnessKernelAdapters.kt`（适配器不搬入独立仓库） | 为新宿主接入 ReAct 内核、搬移核心模块、改抽象层、接断点续跑时 |
+| **Harness 核心**（独立仓库 `D:\MengPaw\harness`） | — | **跨平台 Harness 核心**（ReAct 抽离目标仓库，独立 git，已在主仓库 .gitignore 排除）。`docs/interface-guide.md` = 接口契约权威（HarnessEnv/HarnessFileSystem/HarnessPathResolver/HarnessClock/HarnessConfirmGate/HarnessToolInvoker/**CheckpointStore** 逐条契约 + 接入 5 步 + 硬约束）；`docs/migration-roadmap.md` = 按包搬运清单与阶段（A 落位 / C 抽象层收敛已做 / E 续跑契约补齐 / B 剩余 cli·session·ReAct 骨架；并记"kernel 主链路未消费 harness `CheckpointStore`"这一真实边界）。**抽象层单一事实源**：kernel 内联副本 `mengpaw-kernel/.../harness/` 已删除（v0.2.0，2026-09-18），kernel 侧只留 `HarnessKernelAdapters.kt`（适配器不搬入独立仓库）。`FileCheckpointStore`（2026-09-27 更新）：每步一档 `{消毒 id}__step_{n}.json`、`load`/`listSessionIds` 精确解析（弃用 `removeSuffix`）、保留策略 `keep` 默认 **0 = 不清理**（向后兼容）、旧单档 `{id}.json` 仍可读 | 为新宿主接入 ReAct 内核、搬移核心模块、改抽象层、接断点续跑时 |
 | `add-llm-provider.md` | 10 KB | 新增 LLM 供应商接入指南：官方文档原文核对表（9 家, 含核对日期）+ 当前支持厂商/模型名单登记表（10 预置, 与 SettingsModels.kt 同步铁律）+ 6 个代码改动点 + 官方格式测试（v0.41.0 基线） | 新增/审计 LLM 供应商、核对思考字段、查当前支持名单时 |
 | `audit-methodology.md` | 7 KB | **三层十二问 · 功能闭环审计**：Agent 认知层(6问) + 软件逻辑层(6问) + 服务基础设施层(6问)，逐条过"Agent 能否自主完成功能闭环"（v0.24.0 清理后恢复 + 通用化抽象） | 审查新功能/子系统/插件是否闭环，或复盘"代码存在但 Agent 无法触达"类缺陷时 |
 | `code-review-9-dimensions.md` | 8 KB | **九维代码审查法**：机器门禁先行 + 可维护性/可读性/可扩展性/灵活性/简洁性/可复用性/可测试性/健壮性/兼容性 九维逐维过（含搜索模式），输出 P0-P2 分级（v0.24.0 清理后恢复 + 通用化抽象） | 做 PR 评审、大文件重构、模块交接、技术债盘点时 |
@@ -48,7 +48,7 @@
 
 | 文件 | 大小 | 内容 | 何时读 |
 |------|:----:|------|--------|
-| `MengPaw-Development-Guide.md` | 118 KB | 项目单一事实来源：架构总览、模块清单、CLI 参考、安全模型、插件开发、技能双层模型/来源标记、设置页面板设计（v0.34.0）（**在仓库根目录**，非 docs/） | 每次开发任务开始前 |
+| `MengPaw-Development-Guide.md` | 222 KB | 项目单一事实来源：架构总览、模块清单、CLI 参考、安全模型、插件开发、技能双层模型/来源标记、设置页面板设计（v0.34.0）、**§3.8 手机端长任务断点续跑（三层机制/判定表/参数取值/已知边界）**（**在仓库根目录**，非 docs/） | 每次开发任务开始前 |
 | `README.md` | 8 KB | 项目介绍、快速开始、架构、核心概念 | 新开发者入门 |
 | `CONTRIBUTING.md` | 3 KB | 贡献指南：反馈渠道、版权让渡、PR 评审流程 | 准备提交 Issue/PR 时 |
 

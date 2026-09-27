@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.48.1 | **更新**: 2026-09-18 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(154文件) + AgentRuntime + **Harness平台抽象层(harness/ 8接口 + 独立仓库 D:\MengPaw\harness, kernel 内联副本已删 · v0.2.0 断点续跑)** + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + **进程管理(proc.ps/info/kill)** + **幽灵引用守护(RetiredReferenceScanTest/SkillDocReferenceTest)** + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.9.0
+> **版本**: 0.48.1 | **更新**: 2026-09-27 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(154文件) + AgentRuntime + **Harness平台抽象层(harness/ 8接口 + 独立仓库 D:\MengPaw\harness, kernel 内联副本已删 · v0.2.0 断点续跑)** + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + **进程管理(proc.ps/info/kill)** + **幽灵引用守护(RetiredReferenceScanTest/SkillDocReferenceTest)** + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.9.0
 
 ---
 
@@ -218,6 +218,15 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 **两轴分离铁律**: 平台能力 (宿主提供什么) 走 `HarnessEnv`; 领域决策 (工具是什么) 走
 `HarnessToolInvoker`。混在一起会导致"换个工具形态就得改平台实现"。
 
+**`CheckpointStatus` 的唯一来源是 harness**: kernel 的检查点模型
+(`session/SessionManager.kt` 的 `Checkpoint`、`session/Checkpoint.kt`、`session/ResumePlanner.kt`)
+一律 `import com.mengpaw.harness.CheckpointStatus`, **不在 kernel 内另立同名枚举**。
+理由: 三态 (`RUNNING` / `COMPLETED` / `FAILED`) 是"循环状态"这一契约的一部分, 语义由核心定义;
+两边各留一套同名枚举, 就会重演本节"收敛定案"里那份内联副本的老路 —— 名字相同、语义漂移, 而编译器
+不会报错 (只在跨边界转换处静默错判)。复用同一枚举后, 落盘 JSON 里的状态字面量与
+"只有 RUNNING 可续跑"这条判据都只有一处定义; kernel 侧只负责**存储与恢复** (谁来写、写到哪),
+状态语义不重复实现。
+
 **kernel 侧接入点 (改造期过渡设计)**:
 - `DataPaths` 转为抽象层门面 — 旧常量 API 保留 (152 个调用点零改动), 新增 `resolver` / `fs`
 - `AgentEngine` 新增 `harnessEnv` / `toolInvoker` 构造参数 (均有默认值)
@@ -231,8 +240,13 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 
 **v0.2.0 新增能力 — 断点续跑**: 独立仓库提供 `CheckpointStore` (接口 + 内存/文件两实现) 与
 `ReActEngine` 接线 (每步落 `RUNNING`, 终态落 `COMPLETED`/`FAILED`, `run(task, resume = true)` 续跑;
-检查点写失败不中断主任务)。**MengPaw 主链路尚未接线** — `AgentEngine` 仍自管
-`CheckpointManager`, 待 ReAct 骨架搬入后统一。
+检查点写失败不中断主任务)。
+
+**MengPaw 主链路接线状态 (2026-09-27 更新)**: kernel **仍在用自管的 `CheckpointManager`**
+(`{会话检查点}/{消毒 id}__step_{n}.json`), 未改走 harness `CheckpointStore` —— 两者的落盘契约
+不同 (harness 侧每步一档且 `save` 可抛; kernel 侧多一层保留策略、写失败吞并上报), 强行统一会
+改变既有档的读法。本仓**复用**的只有状态枚举 `CheckpointStatus` (见上)。`AgentEngine` 主循环
+仍由 kernel 承担, `ReActEngine` 尚未接管主链路 (C 阶段后半场); 手机端三层续跑机制见 §3.8。
 
 **独立仓库**: `D:\MengPaw\harness` (独立 git, 已列入主仓库 `.gitignore`) —
 `docs/interface-guide.md` 接口契约权威, `docs/migration-roadmap.md` 按包搬运清单。
@@ -665,11 +679,13 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 > v0.48.1 发布实测（2026-09-18，Harness 抽象层单一事实源 + 断点续跑）：kernel 691 + core 128 + shell 250 + plugin 616 + harness 56 = **全量 1741 用例**，0 failures（`./gradlew test` 双套合并口径）。增量：harness 44 → 56（`CheckpointStoreTest` 6：内存往返/文件跨实例恢复/会话 id 消毒防穿越/损坏档 fail-soft/Env 默认注入/消毒规则；`ReActCheckpointTest` 6：终态落盘/RUNNING 续跑恢复历史且不重复任务/终态不可续/未配置不写/落盘失败不中断任务/清理）；kernel 计数不变（抽象层收敛为纯 import 替换，行为逐字等价）。修复 `RetiredReferenceScanTest` 对 `plugins.json` 派生 `changelog` 字段的误判（v0.48.0 起恒失败的存量用例）。
 
+> 手机端长任务断点续跑实测（2026-09-27，未发版，版本号仍为 0.48.1）：kernel 761 + core 128 + shell 312 + plugin 616 + harness 60 = **全量 1877 用例**，0 failures（`./gradlew test` 双套合并口径，连续两轮复跑均绿）。增量为本节三层机制（详见 §3.8）：kernel 691 → 761（检查点模型/存储层升级 + 工具意图日志 `ToolIntentLog` + 恢复判定 `ResumePlanner`/`ResumeLock` + 指标 `CheckpointMetrics` + 多模式续跑 + `ResumeChainIntegrationTest` 5 条契约链）、shell 250 → 312（保活判定 `KeepAlivePolicy` 等）、harness 56 → 60（`FileCheckpointStore` 保留策略 `keep` 与 `listSessionIds()` 精确解析）。
+
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
-| mengpaw-kernel | 691 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) + **SseStreamParserTest 17 + LlmPayloadTest 11 + RemoteApiTest 5（v0.40.4 全厂商思维链解析直测 + 2026-08-17 五家官方流式夹具）** + PromptEngineTest sys 权限前置 (v0.42.3, +1) + DeepSeek 思考模式回传 (v0.42.1, +5) + 对话需求跟踪 (v0.42.1, +6) + RiskGateTest 无障碍命令分级 (v0.42.2, +1) + **LoopDetector 三通道/AgentErrors/JSON 数组/GoalSessionStore/RalphRunner (v0.43.0, +17)** + **EvolutionQueue/G2 复现计数跨重启 (v0.44.0, +5)** + **思考强度四档注入/端点过滤/默认回退 (v0.46.2, +7)** + **流式空响应加固: JsonNull 安全取值/usage:null 回归/内容块数组/整包 JSON 兜底/流内错误上抛 (v0.46.3, +12)** + **幽灵引用守护 RetiredReferenceScanTest/PromptGhostReferenceTest 扩展 + proc.* 实现 ProcExecutorTest + 单横线选项保形 (v0.47.1, +13)** + **Harness 抽象层收敛为 import `com.mengpaw.harness.*` (v0.48.1, 行为逐字等价, 用例数不变)** |
+| mengpaw-kernel | 761 | ACP 信任/防火墙、PromptEngine 解析/循环检测、附件二进制挂载/指纹缓存 (多模态重发成本)、会话压缩/恢复、命令注册、swarm、PinnedSkills 清单、pinned 指针注入、高危门禁/进化闭环/幻觉门禁/Fleet 委派/能力收集 (v0.35.5) + **PluginRuntimeLoader dex 容器检查/plugin-class 清单 (v0.35.6 新增 4 用例)** + CommandMonitor/Linux 通道 (v0.36) + evaluateRulesOnly 规则审查 (v0.36.3 新增 4) + **SseStreamParserTest 17 + LlmPayloadTest 11 + RemoteApiTest 5（v0.40.4 全厂商思维链解析直测 + 2026-08-17 五家官方流式夹具）** + PromptEngineTest sys 权限前置 (v0.42.3, +1) + DeepSeek 思考模式回传 (v0.42.1, +5) + 对话需求跟踪 (v0.42.1, +6) + RiskGateTest 无障碍命令分级 (v0.42.2, +1) + **LoopDetector 三通道/AgentErrors/JSON 数组/GoalSessionStore/RalphRunner (v0.43.0, +17)** + **EvolutionQueue/G2 复现计数跨重启 (v0.44.0, +5)** + **思考强度四档注入/端点过滤/默认回退 (v0.46.2, +7)** + **流式空响应加固: JsonNull 安全取值/usage:null 回归/内容块数组/整包 JSON 兜底/流内错误上抛 (v0.46.3, +12)** + **幽灵引用守护 RetiredReferenceScanTest/PromptGhostReferenceTest 扩展 + proc.* 实现 ProcExecutorTest + 单横线选项保形 (v0.47.1, +13)** + **Harness 抽象层收敛为 import `com.mengpaw.harness.*` (v0.48.1, 行为逐字等价, 用例数不变)** + **手机端长任务断点续跑 (2026-09-27)：检查点模型/存储层升级 (新档名/精确读/墓碑清除/截断/保留策略) + `CheckpointMetrics` 8 指标 + `ToolIntentLog` 工具副作用幂等 + `ResumeLock`/`ResumePlanner` 恢复判定 + 多模式 (goal/ralph/swarm) 进度续跑 + `ResumeChainIntegrationTest` 5 条契约链 (见 §3.8)** |
 | mengpaw-core | 116 | InMemoryPreferences 语义、IntegrityGuard fail-secure/validateCommand、权限清单唯一源、SysExecutor 命令表 (v0.42.2: 93 条含无障碍命令组)、SkillSeeds hex + AccessibilitySnapshotTest 6 + AccessibilityExecutorTest 7 (v0.42.2) |
-| mengpaw-shell | 250 | ComplexityDetector 分档、extractMedia 提取规则、会话 JSON 编解码 (含 v0.40.2 中断恢复归一化回归)、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 流式缓冲简化回归 (v0.40.2 重构 5) + BubbleStreamCoordinator 简化显示回归 (v0.40.1 6 → v0.40.2 8 → v0.40.3 11 思维链分流 → v0.40.4 12 交错到达完整显示；全量口径 debug+release 双套合并) + SettingsModelsPresetTest 预置名单/排序/最新旗舰/退役清理 (v0.41.0+，v0.47.0 更新为 DeepSeek 单一化 + 存量归一/列表过滤 8 用例) + ThinkingProcessWriter fail 停止收口 (v0.42.1, +2) + BangResultMessageTest 结果气泡规则 (v0.42.3, +4) + 思考气泡层级定案改回 (v0.42.4, UI 重构无新增用例) + TokenStatsCollectorTest 总调用/按模型聚合 (v0.45.0, +4) + **SettingsRemoteTest 模型列表探测 URL 派生 4 用例 + SettingsModelsPresetTest DeepSeek 预置/思考档位可见性 (v0.46.2, +6 双套)** |
+| mengpaw-shell | 312 | ComplexityDetector 分档、extractMedia 提取规则、会话 JSON 编解码 (含 v0.40.2 中断恢复归一化回归)、newTriggerId 防碰撞、extractSkillSource frontmatter、toolSourceFor 来源分类、FrameworkCardDialog peerFromContact、ShortToolSummary 副标题精简、ThinkingProcessWriter 闭环回归 (v0.36.2 新增 4) + 流式缓冲简化回归 (v0.40.2 重构 5) + BubbleStreamCoordinator 简化显示回归 (v0.40.1 6 → v0.40.2 8 → v0.40.3 11 思维链分流 → v0.40.4 12 交错到达完整显示；全量口径 debug+release 双套合并) + SettingsModelsPresetTest 预置名单/排序/最新旗舰/退役清理 (v0.41.0+，v0.47.0 更新为 DeepSeek 单一化 + 存量归一/列表过滤 8 用例) + ThinkingProcessWriter fail 停止收口 (v0.42.1, +2) + BangResultMessageTest 结果气泡规则 (v0.42.3, +4) + 思考气泡层级定案改回 (v0.42.4, UI 重构无新增用例) + TokenStatsCollectorTest 总调用/按模型聚合 (v0.45.0, +4) + **SettingsRemoteTest 模型列表探测 URL 派生 4 用例 + SettingsModelsPresetTest DeepSeek 预置/思考档位可见性 (v0.46.2, +6 双套)** + **保活判定 `KeepAlivePolicy` 纯函数集 (2026-09-27)：空闲释放/续租阈值/看门狗重布/通知三态/会话事件映射 (见 §3.8)** |
 | mengpaw-browser | 56 | smartNavigate 智能导航 (含中文 URL/解码, v0.36.1)、AdBlocker 规则全矩阵、McpAuthPolicy 开放模式认证矩阵 (v0.41.0, 双套 +14) |
 | plugin-hermes (tribe) | 68 | TribeTask 状态机全矩阵、看板转换/持久化、ACP handler 信任门/DELEGATE 结构化解析 |
 | plugin-memory-twin | 68 | sanitizeRelPath 消毒矩阵、TwinWorkspace 原子写、WS_MANIFEST 哈希比对/穿越条目跳过、TWIN_DELEGATE 信任门 |
@@ -683,6 +699,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 | plugin-termux | 22 | am 参数构造 (payload 无逗号/timeout 包裹)、脚本生成、环境名白名单 (注入/穿越拒绝)、高危规则审查、结果标记解析、错误提示 |
 | plugin-dev | 12 | dev.plugin 审计/关键词链路 |
 | plugin-update | 48 | UpdateLogicTest 版本比较/下载源排序/安装 tag 提取/自动下载跳过 + 发布解析过滤 (v0.40.1: tag 校验/Shell APK 判定, +4) + 安装结果对账 (未发布: 过期 APK 清理, +3) |
+| harness (独立仓库) | 60 | `HarnessCoreTest` 平台抽象层 (路径/文件系统/时钟/确认门 fail-closed)；`CheckpointStoreTest` 检查点存储 (内存往返 / 文件跨实例恢复 / 会话 id 消毒防穿越 / 损坏档 fail-soft / 保留策略 keep / `listSessionIds()` 精确解析不靠 `removeSuffix` / 旧单档兼容 / Env 默认注入)；`ReActCheckpointTest` 引擎接线 (每步落 RUNNING / 终态 / 续跑不重复任务 / 未配置不写 / 落盘失败不中断任务 / 清理)；`PlatformSupportTest` 平台可用性实跑 |
 
 > 外置插件 (mengpaw-connectors, MIT): browser-search 54 等随连接器仓库独立测试。update 已迁回内置 (v0.37.3)，其 UpdateLogicTest 在 plugins/plugin-update（双套 42 用例）。
 
@@ -690,6 +707,90 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 > 测试补齐过程中修复 4 个生产缺陷：TwinAcpHandler TWIN_DELEGATE 信任门不可达
 > (requirements JsonArray 解析)、Vault.clear 静默失效、McpGateway 非法 Content-Length 应 413、
 > AttachmentBubbles 链接分支幻影卡片。
+
+---
+
+### 3.8 手机端长任务断点续跑 (三层机制)
+
+> 目标: 一个几十步的长任务 (批量调研 / 多轮部署核对) 不能因为"被系统杀掉"就从头再来。
+> 三层各管一段, 任一层单独存在都不够: 只做检查点会在进程被杀后再无入口接着跑; 只做保活挡不住
+> 低内存回收; 只做冷启动恢复则没有可恢复的进度档。
+
+| 层 | 位置 | 机制 |
+|---|---|---|
+| **① 循环内每步检查点** | kernel `session/Checkpoint.kt` (`CheckpointManager`) + `session/AgentCheckpointWriter.kt` + `session/CheckpointMetrics.kt`; 钩子 `AgentReActLoop.kt:270` | 每步 (工具批次执行完 + Observation 入库 + `state.step++` **之后**) 写一条 `RUNNING`, 携带当步 `Message` 快照; 同一步重复调用跳过。`finally` 统一收口**恰好一条**终态 (`COMPLETED`/`FAILED`), 覆盖正常答案 / 退化输出 / 空响应 / 步数耗尽 / 循环检测 / 连续失败 / 用户取消 / 任意异常 |
+| **② 进程级保活** | shell `service/KeepAlivePolicy.kt` / `KeepAliveController.kt` / `ShellService.kt` / `WakeReceiver.kt` / `BatteryOptimizationGuide.kt` | 任务活跃才持 `PARTIAL_WAKE_LOCK`, 空闲 `IDLE_RELEASE_MS` 后释放; 租期 `WAKELOCK_DURATION_MS`, 剩余低于 `RENEW_THRESHOLD_MS` 即续租; `AlarmManager` 看门狗兜底 Doze; 前台通知显示步骤/耗时; 电池白名单一次性引导 |
+| **③ 系统级重启恢复入口** | kernel `session/ResumePlanner.kt` / `session/ResumeLock.kt` / `session/History.kt:restoreSession` / `AgentRuntime.kt:planResume` / `resolveConversationSession`; shell `ui/screens/SessionResumeCoordinator.kt` / `TaskResumeRunner.kt` + `SessionPersistenceService.kt` | 冷启动/进程死亡后: **判定 → (自动续 \| 提示用户)**。shell 分两阶段 — 恢复期 `restoreCurrentSession` 只做判定与记账 (此刻 LLM provider 尚未注入, 直接续跑必然失败), provider 就绪后由 `TaskResumeRunner` 真正触发。续跑沿用检查点原 `sessionId` (`restoreSession`) 并用 `messages` 重建历史 (含工具 Observation), 步号接续, **不重复追加用户任务** |
+
+**恢复判定表** (`ResumePlanner.plan`, 先决条件优先, 后决者不参与):
+
+| # | 条件 | 结果 |
+|---|---|---|
+| 1 | 无检查点 | `Skip(NO_CHECKPOINT)` |
+| 2 | 检查点非 `RUNNING` (`COMPLETED`/`FAILED`) | `Skip(ALREADY_TERMINAL)` — 按新任务跑 |
+| 3 | `auto_resume` 开关为关 (缺省**开**: 文件不存在/读失败都按开) | `PromptUser(AUTO_RESUME_DISABLED)` |
+| 4 | `decideRecovery` 判 `SuggestCleanup` (连续错误 ≥5) | `PromptUser(RECOVERY_DECLINED)` — 错误态盲续跑只会放大成本 |
+| 5 | 单会话锁不可得 (他会话正在续跑) | `PromptUser(LOCK_UNAVAILABLE)` |
+| 6 | 其余 | `AutoResume` (**锁在此刻才真正持有**, 由调用方在续跑结束后 `release`) |
+
+**关键判据 (背离其中任何一条都会产生重复副作用或幽灵进度)**:
+
+- **只有 `RUNNING` 可续**: 终态续跑无意义; 该重跑还是丢弃由宿主策略决定。
+- **未完成的工具意图只警告、禁止自动重放**: `session/ToolIntentLog.kt` 是 append-only JSONL WAL —
+  `AgentReActStepProcessor.executeActions` 在工具**执行前**落 `PENDING` (含 `fsync`)、执行后落
+  `DONE`/`FAILED`。PENDING 的含义是"**副作用可能已经发生**", 自动重放会重复写文件/发消息/下单,
+  跳过又会让任务凭空少一步 —— 故 `AgentCheckpointWriter.injectPendingIntentNote` 只注入一条 system
+  事实提示 (先核对实际结果再决定是否重试), 判定权交回模型。参数**只落 SHA-256 摘要 (前 16 位)**,
+  原文永不落盘 (参数可能含 API Key); `begin` 对同一 `toolCallId` 幂等。
+- **worker 粒度复用 (SWARM)**: `VERIFIED`/`DONE` → 跳过并复用原卡片 (工具调用已完成且有结论, 重跑即重复副作用);
+  `RUNNING` → 整只重跑; `FAILED`/`SKIPPED` → 不自动重跑 (失败已是 Andon 决策过的终态; 预算是闸门结果)。
+- **预算连续语义**: 恢复后**剩余 = 总额 − 已消耗**, 绝不是重置为总额 (否则重启即成本翻倍)。
+  GOAL/Ralph 看 `GoalSession.tokensUsed`, SWARM 看 `SwarmBudget.consumedSteps`。
+
+**参数取值理由** (都可注入, 测试用假时钟, 无墙钟阈值断言):
+
+| 参数 | 取值 | 理由 |
+|---|---|---|
+| 空闲释放 `IDLE_RELEASE_MS` | 5 min | 覆盖任务收尾 (末步落盘 / 会话持久化) 与用户连续追问的间隔; 相比旧实现固定持锁 1 小时, 空闲耗电降到约 1/12 |
+| 租期 `WAKELOCK_DURATION_MS` | 30 min | 单次租期上限, 到期必须重新判定 — 绝不无限持锁到电池耗尽 |
+| 续租阈值 `RENEW_THRESHOLD_MS` | 15 min | 30 − 15 = 留 15 min 安全余量; 且 10 (看门狗) < 15 (阈值) 保证任何一次看门狗都能在租约到期前补租 |
+| 看门狗 `WATCHDOG_INTERVAL_MS` | 10 min | 与既有 `TriggerEngine` 系统唤醒同频 (`MainActivity` 里 `registerSystemWake(this, 10)`), 不额外增加唤醒次数; 优先 `setExactAndAllowWhileIdle` 穿透 Doze, 无精确闹钟权限 (`canScheduleExactAlarms() == false`) 时回退**免权限的 `setAndAllowWhileIdle`** (仍可穿透 Doze, 只是时间精度放宽) |
+| 续跑锁 TTL | 10 min | **不续租**, 故只能取"长到不打断正常续跑、短到不把用户锁在门外": 恢复后最坏一步 (60s 工具超时 + LLM 往返) 远小于 10 min, 而进程被系统杀死后鬼锁最多挡用户 10 min (Android 上 `release` 无 finalizer 保证) |
+| 单条 content 截断 | 8000 字符 | 约 2-4K token, 足够恢复一步上下文; 完整历史在本会话归档里有底 |
+| messages 条数上限 | 最近 200 条 | 把单档钉在 ~1.6M 字符量级, 避免长任务每次落盘全量重写造成的 IO 放大 |
+
+**落盘与并发细节 (为什么长这样)**:
+
+- **档名**: `{消毒 sessionId}__step_{n}.json` — **双下划线**让"分隔符"与"id 内下划线"可辨;
+  旧格式 `{id}_step_{n}.json` 仍可读 (只读不写)。读取按**文件名精确定位 + 档内 `sessionId` 权威**:
+  文件名只做定位 (消毒有损, `a.b` 与 `a_b` 同形, 逆推不可行), 归属以档内 JSON 为准 —
+  这同时消灭了旧实现 `startsWith(sessionId)` 的前缀歧义 (会话 `"a"` 不再误读 `"ab"` 的档)。
+- **原子性**: `HarnessFileSystem` 没有 move/rename, 故采用"**先写新档 → 再删旧档**":
+  任意时刻至少有一个完整档可读; 最坏情况是多留几份旧档, 由 `cleanup(sessionId, keep)` 下次收口。
+  保留排序主判据是档内 `updatedAt` → `step` → `modified` (文件系统时间戳精度有限, 同一秒内多次写入
+  无法区分, 旧实现按 `lastModified` 排序会留错档)。`clear()` 不是直接删, 而是写**墓碑档**
+  (`step = -1` / `FAILED` / `terminationReason = cleared`) 再删旧档 — 直接删会在读侧留下
+  "旧档还在 → 读回已失效进度"的窗口。
+- **跨进程互斥**: 续跑入口有三个 (冷启动自动续跑 / 用户点「继续」/ 保活触发的续跑), 可能落在不同进程,
+  进程内 `synchronized` 挡不住。故 `ResumeLock` 用**磁盘锁文件** `{CHECKPOINTS}/resume.lock`
+  (tmp + `Files.move` 原子替换 + **回读校验**): 未过期的同会话重入幂等放行、异会话拒绝、已过期放行抢占
+  (防崩溃残留的幽灵锁把用户永久挡住)。
+- **可观测性**: `CheckpointMetrics` 暴露 8 项进程内计数 (`save_count` / `save_fail_count` /
+  `save_millis_total` / `load_hit` / `load_miss` / `load_fail` / `last_message_count` / `last_bytes`)。
+  此前断点续跑是"全盲"子系统 —— 落盘慢不慢、恢复命中多少无从得知, 出问题只能翻日志猜。
+  它是 `object` 单例但不违反"不新增全局单例"的**精神**: 只累加计数器, 不持有任何宿主能力
+  (无文件系统/时钟/日志出口), 且提供 `reset()`。
+
+**已知边界 (别把"代码存在"当成"已闭环")**:
+
+1. **构建门禁只匹配 `import`**: harness 的 `verifyNoPlatformTypes` 抓不到全限定引用
+   (如 `System.currentTimeMillis()`); 新增平台调用要自觉走 `HarnessEnv` 注入。
+2. **FLEET 续跑未接线**: `FleetRuntimeStore` 是**委派台账** (SENT/DONE/FAILED 的收发记录), 语义与
+   "任务进度"不同, 故没有 `fleet.json` 进度档; 四种模式里只有 goal / ralph / swarm 有续跑。
+3. **`ToolIntentLog.clear` / `pruneOlderThan` 生产侧尚无调用点** (仅测试覆盖): JSONL 目前只增不减,
+   长期运行需宿主在会话收尾时接线清理, 否则单会话日志会一直增长。
+4. **续跑锁 TTL 不续租**: 单次续跑若真跑过 10 min, 锁会被判过期并可能被另一个执行体抢占
+   (同会话的 RUNNING 检查点会被接续, 不产生两条矛盾的终态, 但会出现两个执行体同时写检查点)。
 
 ---
 
