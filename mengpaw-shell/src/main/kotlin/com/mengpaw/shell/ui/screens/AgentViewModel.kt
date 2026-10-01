@@ -225,6 +225,15 @@ class AgentViewModel : ViewModel() {
         try { com.mengpaw.plugin.skill.SkillPlugin.llmProvider = provider } catch (_: Exception) {}
         chatController.bind()
         // ── 断点续跑触发点 (P0-3): provider 已就绪, 可安全接续上一轮未完成的任务 ──
+        sessionPersistence.markProviderReady()
+    }
+
+    /**
+     * 恢复链 — 历史落账 → 恢复上一会话 → 清理/去重，全程在 IO。
+     * 首帧不再等这条几十毫秒的磁盘读链；链尾补触发一次续跑，与 provider 就绪的先后顺序无关。
+     */
+    private suspend fun restoreSessionChain() {
+        sessionPersistence.restoreSessionOnIo()
         sessionPersistence.firePendingResume()
     }
 
@@ -350,17 +359,8 @@ class AgentViewModel : ViewModel() {
         chatController.bind()
         // 断点续跑 (P0-3): 计划在恢复期判定, provider 就绪后经既有管道执行 (resume = true)
         sessionPersistence.onResumeRequested = pipeline.resumeRequestHandler()
-        // Restore persisted session history
-        sessionPersistence.loadSessionHistory()
-        // ── Orphan cleanup: remove records whose session file no longer exists ──
-        sessionPersistence.cleanupOrphanSessions()
-        // ── Dedup: merge records with same title+agent that are likely duplicates ──
-        sessionPersistence.dedupSessionHistory()
-        // Restore last active session messages
-        if (!sessionPersistence.restoreCurrentSession()) {
-            // Only show welcome if no saved session
-        }
-        // 事件驱动落盘: 用户消息发出时 + 回复完成时 — 无定时器 (30s 定时已移除)
+        // 恢复链 (含 pendingResume 装载) 下沉 viewModelScope: 首帧线程不再做磁盘读
+        viewModelScope.launch { restoreSessionChain() }
 
         // ── Observe session lifecycle events for recovery hints ──
         viewModelScope.launch {

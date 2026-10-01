@@ -8,6 +8,8 @@ import com.mengpaw.kernel.session.ResumePlan
 import com.mengpaw.shell.ui.screens.model.AgentSession
 import com.mengpaw.shell.ui.screens.model.ChatMessageUi
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -121,22 +123,40 @@ class SessionPersistenceService(
     /** 已自动续跑的会话 — 防止 applyConfiguration 多次调用导致重复续跑。 */
     private val autoResumedSessions = mutableSetOf<String>()
 
+    /**
+     * Provider 就绪闩 — 恢复链与 [markProviderReady] 的先后顺序不确定, 未就绪时 [firePendingResume]
+     * 不消费计划 (留给恢复链末端), 否则冷启动会永久漏掉这次续跑。跨线程读写故 volatile。
+     */
+    @Volatile private var providerReady = false
+
     /** Restore last session messages from disk. Returns true if restored. */
-    fun restoreCurrentSession(): Boolean = restoreSessionFromDisk(
-        sessions = sessions,
-        activeAgentName = getActiveAgentName(),
-        history = _sessionHistory.value,
-        setHistory = { _sessionHistory.value = it },
-        persistHistory = { saveSessionHistoryToDisk(it) },
-        setCurrentSessionId = { currentSessionId = it },
-        markPendingResume = { pendingResume = it }
-    )
+    suspend fun restoreCurrentSession(): Boolean = withContext(Dispatchers.IO) {
+        restoreSessionFromDisk(
+            sessions = sessions,
+            activeAgentName = getActiveAgentName(),
+            history = _sessionHistory.value,
+            setHistory = { _sessionHistory.value = it },
+            persistHistory = { saveSessionHistoryToDisk(it) },
+            setCurrentSessionId = { currentSessionId = it },
+            markPendingResume = { pendingResume = it }
+        )
+    }
 
     /**
-     * 触发待执行的续跑 (由 [AgentViewModel.applyConfiguration] 在 provider 就绪后调用)。
-     * 同一会话只触发一次; 无待执行计划 / 无执行器时返回 false。
+     * 标记 provider 已就绪 (由 [AgentViewModel.applyConfiguration] 调用)。
+     * 计划已装载则立刻触发; 未装载则留给恢复链末端 — 两种顺序最终都恰好触发一次。
+     */
+    fun markProviderReady(): Boolean {
+        providerReady = true
+        return firePendingResume()
+    }
+
+    /**
+     * 触发待执行的续跑 (provider 就绪后由 [markProviderReady] 或恢复链末端调用)。
+     * 同一会话只触发一次; provider 未就绪 / 无待执行计划 / 无执行器时返回 false (不消费计划)。
      */
     fun firePendingResume(): Boolean {
+        if (!providerReady) return false
         val plan = pendingResume ?: return false
         val executor = onResumeRequested ?: return false
         if (plan.sessionId in autoResumedSessions) return false
@@ -159,11 +179,11 @@ class SessionPersistenceService(
 
     // ── Session history persistence (序列化/磁盘 I/O → SessionPersistenceCodec.kt) ──
 
-    fun loadSessionHistory() {
+    suspend fun loadSessionHistory() = withContext(Dispatchers.IO) {
         _sessionHistory.value = loadSessionHistoryFromDisk()
     }
 
-    fun cleanupOrphanSessions() {
+    suspend fun cleanupOrphanSessions() = withContext(Dispatchers.IO) {
         try {
             val sessionsDir = File(com.mengpaw.kernel.DataPaths.BASE, "sessions")
             val before = _sessionHistory.value.size
@@ -177,7 +197,7 @@ class SessionPersistenceService(
         } catch (_: Exception) {}
     }
 
-    fun dedupSessionHistory() {
+    suspend fun dedupSessionHistory() = withContext(Dispatchers.IO) {
         try {
             val (cleaned, removed) = dedupRecords(_sessionHistory.value)
             if (removed > 0) {

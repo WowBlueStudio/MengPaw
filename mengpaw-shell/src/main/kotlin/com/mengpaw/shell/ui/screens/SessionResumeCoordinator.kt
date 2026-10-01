@@ -191,3 +191,17 @@ internal fun restoreSessionFromDisk(
         false
     }
 }
+
+/**
+ * 冷启动恢复链 — 读盘 → 历史落账 → 去重 → 恢复上一会话, 顺序与旧 `init` 内联实现逐字一致。
+ *
+ * 为什么放这里而不是服务类: 它属"恢复编排", 与 [restoreSessionFromDisk] 同一职责; 放在
+ * [SessionPersistenceService] 里会把那个类顶过 400 行红线。调度器只加在四个真正读盘的入口
+ * 各一次, 本函数自身不再嵌套 `withContext` (嵌套调度白多一次线程切换), 所以它只表达顺序。
+ */
+internal suspend fun SessionPersistenceService.restoreSessionOnIo() {
+    loadSessionHistory()
+    restoreCurrentSession()
+    cleanupOrphanSessions()
+    dedupSessionHistory()
+}
