@@ -88,9 +88,10 @@ class CheckpointStoreUpgradeTest {
     fun `旧格式档案仍可读且按默认值补齐新字段`() = runBlocking {
         val dir = tempDir("ckpt_legacy")
         val manager = CheckpointManager(dir.absolutePath)
-        manager.save(Checkpoint("legacy_pin", 9, "新格式进度", emptyMap(), updatedAt = 9_000L))
 
         // 旧格式: 文件名 {sessionId}_step_{n}.json, JSON 只有升级前的 5 个字段
+        // (先写旧档、后写新档 —— 现实里旧档的 mtime 与档内 createdAt 必然同序,
+        //  构造"内容更旧但写入更晚"的相反信号只会测出排序口径的分歧, 不是真实场景)
         val legacyJson = """
             {
               "sessionId": "legacy_only",
@@ -106,7 +107,8 @@ class CheckpointStoreUpgradeTest {
             createParentDirs = true
         )
 
-        // 同会话两份档: 新格式 updatedAt 更新 → 应优先返回它 (旧档不得盖新)
+        // 同会话两份档: 新格式后写 (mtime 更新) 且步号更大 → 必须优先返回它 (旧档不得盖新)
+        manager.save(Checkpoint("legacy_pin", 9, "新格式进度", emptyMap(), updatedAt = 9_000L))
         assertEquals("新格式进度", manager.loadLatest("legacy_pin")?.remainingTask)
 
         // 只留旧档时, 缺失字段按默认值补齐 (status = RUNNING, updatedAt 回落 createdAt)
@@ -168,6 +170,37 @@ class CheckpointStoreUpgradeTest {
     }
 
     @Test
+    fun `分级截断保最近全文并丢弃更早思维链`() = runBlocking {
+        val dir = tempDir("ckpt_graded")
+        val manager = CheckpointManager(dir.absolutePath)
+
+        // 30 条 (未触发 200 条上限) → 分级边界: 压缩区 = 更早 10 条, 全文区 = 最近 20 条
+        val earlyAssistant = Message("assistant", "E".repeat(maxContentChars + 500), reasoning = "更早轮次的思维链")
+        val earlyFillers = (1..8).map { Message("system", "s$it") } +
+            Message("system", "z".repeat(300))          // 压缩区的最后一条 (边界)
+        val longRecent = Message("user", "y".repeat(maxContentChars + 500))   // 全文区的第一条 (边界)
+        val midFillers = (1..18).map { Message("system", "f$it") }
+        val lastAssistant = Message("assistant", "最后一轮", reasoning = "最后一个 assistant 的思维链")
+        val messages = listOf(earlyAssistant) + earlyFillers + listOf(longRecent) + midFillers + listOf(lastAssistant)
+        assertEquals("夹具必须是 30 条", 30, messages.size)
+
+        manager.save(Checkpoint("graded", 1, "分级", emptyMap(), messages = messages))
+        val actual = manager.loadLatest("graded")
+        assertNotNull(actual)
+        val loaded = actual ?: return@runBlocking
+
+        assertEquals("条数不因分级而变", 30, loaded.messages.size)
+        // 压缩区: role 保留、content 压到 200 字符、reasoning 丢弃
+        assertEquals("assistant", loaded.messages[0].role)
+        assertEquals("更早的消息压到 200 字符", 200, loaded.messages[0].content.length)
+        assertNull("压缩区的思维链必须丢弃", loaded.messages[0].reasoning)
+        assertEquals("压缩区边界同样压到 200 字符", 200, loaded.messages[9].content.length)
+        // 全文区: 单条上限仍是 8000 字符
+        assertEquals("最近 20 条保全文", maxContentChars, loaded.messages[10].content.length)
+        assertEquals("最后一个 assistant 的思维链必须留下 (否则 DeepSeek 端点 400)", "最后一个 assistant 的思维链", loaded.messages[29].reasoning)
+    }
+
+    @Test
     fun `指标单调递增且失败计数可观测`() = runBlocking {
         CheckpointMetrics.reset()
         val dir = tempDir("ckpt_metrics")
@@ -188,6 +221,12 @@ class CheckpointStoreUpgradeTest {
         assertEquals(1L, checkNotNull(snapshot["load_miss"]))
         assertEquals(0L, checkNotNull(snapshot["load_fail"]))
         assertTrue("落盘耗时应被累加 (>=0)", checkNotNull(snapshot["save_millis_total"]) >= 0L)
+        // 最坏值: 真机据此判断"每步落盘值不值得" — 只做关系断言, 不做墙钟阈值 (慢 CI 也能稳定通过)
+        assertTrue(
+            "历史最大单次落盘耗时不得小于最近一次",
+            checkNotNull(snapshot["save_millis_max"]) >= checkNotNull(snapshot["last_save_millis"])
+        )
+        assertTrue("两次落盘后最近一次耗时必须非负", checkNotNull(snapshot["last_save_millis"]) >= 0L)
         assertEquals("最后一次落盘只含 1 条消息", 1L, checkNotNull(snapshot["last_message_count"]))
         assertTrue("落盘字节数应 > 0", checkNotNull(snapshot["last_bytes"]) > 0L)
 

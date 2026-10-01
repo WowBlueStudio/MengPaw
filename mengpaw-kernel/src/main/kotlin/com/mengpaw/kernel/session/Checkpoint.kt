@@ -32,12 +32,13 @@ import com.mengpaw.kernel.error.ErrorCollector
  * **"先写新档 (writeText 覆盖) → 再删旧档"** 的顺序: 任何时刻至少有一个完整档可读;
  * 最坏情况是崩在删旧档之前 → 多留几份旧档, 由 [cleanup] 下次收口 (绝不出现"无档可读")。
  *
- * ## 上下文可控 (为什么要截断)
+ * ## 上下文可控 (为什么要截断 + 为什么要分级)
  * `messages` 只保留恢复所需字段 (role/content/reasoning, 见 [Message]);
- * 落盘前单条 content 截断至 [MAX_CONTENT_CHARS]、最多保留最近 [MAX_MESSAGES] 条。
- * 取值理由: 恢复只需要"最近一段可续跑的上下文", 完整历史在本会话归档里有底;
- * 8000 字符约 2-4K token, 200 条上限把单档钉在 ~1.6M 字符量级 — 既避免"一分钟一步"的
- * 长任务把检查点撑成几十 MB (每次落盘全量重写 → IO 放大), 又足够覆盖任何单步工具观察结果。
+ * 落盘前**分级截断**: 最多保留最近 [MAX_MESSAGES] 条, 其中最近 [FULL_CONTEXT_MESSAGES] 条保全文
+ * (单条上限仍是 [MAX_CONTENT_CHARS]), 更早的只留 `role + content.take([EARLY_CONTENT_CHARS])`
+ * 且丢弃 reasoning。分级理由: 续跑只用最近上下文, 更早历史在会话归档里有底 — 一刀切按 8000 字符
+ * 保留全部 200 条会把单档撑到 ~1.6M 字符 (每步全量重写 = IO 放大), 分级后只留尾部 20 条全文,
+ * 单档降到 ~0.2M 字符量级。
  * **凭据 (API Key 等) 严禁落盘**: [Message] 内容只来自对话与工具观察, 密钥从不进入消息体;
  * 本类也不接收任何凭据入参, 截断逻辑不做"看似要保存全部"的兜底。
  *
@@ -100,30 +101,25 @@ class CheckpointManager(private val storageDir: String = DataPaths.CHECKPOINTS) 
             ErrorCollector.report(e, "CheckpointManager.loadLatest")
             return null
         }
-        if (candidates.isEmpty()) {
-            CheckpointMetrics.recordLoadMiss()
-            return null
+        // 按"最后写入"降序逐个解码, 命中即早退 — 旧实现把全部候选档都 parse 一遍再取最大 (keep=3 → 每步 3 次)
+        for (file in candidates) {
+            // 档损坏 → 跳过继续: 更旧的可用档仍有机会 (损坏不等于"没有检查点")
+            val decoded = decode(file)?.decoded ?: continue
+            // 文件名只做定位, 档内 sessionId 才是归属权威 (消毒有损, 逆推不可行)
+            if (decoded.sessionId != sessionId) continue
+            CheckpointMetrics.recordLoadHit()
+            return decoded
         }
-        val decodable = candidates.mapNotNull { decode(it) }
-        if (decodable.isEmpty()) {
-            // 档存在但全部不可解析 = 视作无检查点 (fail-soft), 不抛异常
-            CheckpointMetrics.recordLoadMiss()
-            return null
-        }
-        val best = decodable.maxWithOrNull(
-            compareBy({ it.decoded?.updatedAt ?: 0L }, { it.step }, { it.modified })
-        )
-        val result = best?.decoded
-        if (result == null) CheckpointMetrics.recordLoadMiss() else CheckpointMetrics.recordLoadHit()
-        return result
+        // 无候选 / 全部不可解析 / 全不属本会话 → 一律视作无检查点 (fail-soft), 不抛异常
+        CheckpointMetrics.recordLoadMiss()
+        return null
     }
 
     /**
      * 保留某会话最近 [keep] 份检查点, 删除更旧的。
      *
-     * 排序主判据是档内 `updatedAt` / `step` 而非 `lastModified` — 文件系统时间戳精度有限,
-     * 同一秒内多次写入无法区分 (旧实现按 lastModified 排序在快速连续落盘时会留错档)。
-     * 目录不存在 / 无匹配档 / [keep] ≤ 0 → 无操作。
+     * 删除路径**不解析档内容** (为清理再 parse 一遍全部档不划算), 故按 (步号, mtime) 判新旧 ——
+     * 同一会话内步号单调递增, 与"写入先后"同序。目录不存在 / 无匹配档 / [keep] ≤ 0 → 无操作。
      */
     suspend fun cleanup(sessionId: String, keep: Int = DEFAULT_KEEP_COUNT) =
         withContext(Dispatchers.IO) {
@@ -188,12 +184,14 @@ class CheckpointManager(private val storageDir: String = DataPaths.CHECKPOINTS) 
 
     // ── 内部实现 ────────────────────────────────────────────────────────
 
-    /** 收集属于 [sessionId] 的候选档 (文件名精确定位 + JSON 内 sessionId 判归属)。 */
-    private fun collectFiles(sessionId: String): List<CheckpointFile> {
-        val sanitized = sanitizeSessionId(sessionId)
-        return scanBySanitized(sanitized).mapNotNull { decode(it) }
-            .filter { it.decoded?.sessionId == sessionId }
-    }
+    /**
+     * 收集 [sessionId] 的候选档 (只按文件名定位, 按步号降序)。
+     *
+     * 归属过滤推迟到解码之后逐个核对 (文件名只做定位), 排序让 [loadLatestSync] 能"从最可能
+     * 恢复的那份开始解码、命中即早退" — 这是它替代"全量解码后取最大"的前提。
+     */
+    private fun collectFiles(sessionId: String): List<CheckpointFile> =
+        scanBySanitized(sanitizeSessionId(sessionId)).sortedWith(NEWEST_WRITE_FIRST)
 
     /** 按消毒名收集全部候选档 (不做 JSON 归属过滤 — 删除路径只信文件名定位)。 */
     private fun scanBySanitized(sanitized: String): List<CheckpointFile> =
@@ -237,14 +235,27 @@ class CheckpointManager(private val storageDir: String = DataPaths.CHECKPOINTS) 
         }
     }
 
-    /** 落盘前截断: 只留恢复所需字段 + 限制条数与单条长度 (取值理由见类 KDoc)。 */
+    /**
+     * 落盘前截断: 只留恢复所需字段 + 限制条数与单条长度 (取值理由见类 KDoc)。
+     *
+     * **分级**而非一刀切: 续跑只用到最近一段上下文, 故最近 [FULL_CONTEXT_MESSAGES] 条保全文,
+     * 更早的 (窗口内最多 [MAX_MESSAGES] 条) 只留 `role + content.take([EARLY_CONTENT_CHARS])`
+     * 并丢弃 reasoning — 单档体积因此降一个数量级, 而恢复所需的最近上下文一条不少。
+     */
     private fun truncateForStorage(checkpoint: Checkpoint): Checkpoint {
         if (checkpoint.messages.isEmpty()) return checkpoint
-        val capped = checkpoint.messages.takeLast(MAX_MESSAGES).map { message ->
+        val window = checkpoint.messages.takeLast(MAX_MESSAGES)
+        val fullFrom = (window.size - FULL_CONTEXT_MESSAGES).coerceAtLeast(0)
+        // 最后一个 assistant 轮次的 reasoning 必须原样回传 (DeepSeek 思考模式硬要求, 丢了端点会 400),
+        // 故它即便落在压缩区也单独豁免
+        val lastAssistant = window.indexOfLast { it.role == "assistant" }
+        val capped = window.mapIndexed { index, message ->
+            val keepFull = index >= fullFrom
             // 只保留 role/content/reasoning 语义: 附件/本地标记/中断恢复元数据不参与续跑,
             // 落盘即丢 (减体积, 也避免把只读元数据写回磁盘造成二次污染)
             message.copy(
-                content = message.content.take(MAX_CONTENT_CHARS),
+                content = message.content.take(if (keepFull) MAX_CONTENT_CHARS else EARLY_CONTENT_CHARS),
+                reasoning = if (keepFull || index == lastAssistant) message.reasoning else null,
                 localOnly = false,
                 interruptedTurn = null,
                 attachments = emptyList()
@@ -267,14 +278,29 @@ class CheckpointManager(private val storageDir: String = DataPaths.CHECKPOINTS) 
          */
         const val MAX_MESSAGES = 200
 
+        /** 最近多少条保全文 — 续跑真正消费的就是最后这一段, 故不给它压缩余地。 */
+        const val FULL_CONTEXT_MESSAGES = 20
+
+        /** 更早条目只留前多少字符 — 它们只提供"谁说过什么话题"级的背景。 */
+        const val EARLY_CONTENT_CHARS = 200
+
         const val TMP_SUFFIX = ".tmp"
         const val CLEARED_STEP = -1
         const val CLEARED_REASON = "cleared"
 
-        /** 最旧优先 (删除时从头部取)。 */
-        val STALEST_FIRST: Comparator<CheckpointFile> = compareBy<CheckpointFile>(
-            { it.decoded?.updatedAt ?: 0L }, { it.step }, { it.modified }
-        )
+        /** 最旧优先 (删除时从头部取) — 删除路径只做文件名定位, 不解析档内容, 故按 (步号, mtime) 判新旧。 */
+        val STALEST_FIRST: Comparator<CheckpointFile> =
+            compareBy<CheckpointFile> { it.step }.thenBy { it.modified }
+
+        /**
+         * 最新写入优先 (读取时从头部取, 命中即早退)。
+         *
+         * 主判据是**文件系统 mtime** 而不是步号: mtime 不解析档内容就能拿到, 且它本身就是"最后写入"。
+         * 只按步号会选错档 —— 上一轮跑到第 N 步的旧档步号更高, 而新一轮从 1 步起跑时, 它的档才是
+         * 该续的进度 (按步号会误判终态或复活陈旧进度)。同毫秒写入再比步号 (同一轮内步号单调)。
+         */
+        val NEWEST_WRITE_FIRST: Comparator<CheckpointFile> =
+            compareByDescending<CheckpointFile> { it.modified }.thenByDescending { it.step }
     }
 }
 

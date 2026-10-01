@@ -4,6 +4,7 @@
 package com.mengpaw.kernel.session
 
 import com.mengpaw.harness.CheckpointStatus
+import com.mengpaw.harness.jvm.JvmHarnessFileSystem
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -144,6 +145,26 @@ class CheckpointManagerTest {
         assertEquals("task A", manager.loadLatest("session_a")?.remainingTask)
         assertEquals("task B", manager.loadLatest("session_b")?.remainingTask)
         assertNull(manager.loadLatest("session_c"))
+    }
+
+    @Test
+    fun `loadLatest skips corrupted newest file and returns older one`() = runBlocking {
+        val dir = createTempDir("checkpoint_corrupt_newest").apply { deleteOnExit() }
+        val manager = CheckpointManager(dir.absolutePath)
+        manager.save(Checkpoint("s2", 1, "step 1", emptyMap(), updatedAt = 1_000L))
+        manager.save(Checkpoint("s2", 2, "step 2", emptyMap(), updatedAt = 2_000L))
+
+        // 新档损坏: 读取必须跳过它继续看更旧的可用档 —— 否则"最新档坏一次"就等于丢失全部进度
+        JvmHarnessFileSystem.writeText(
+            path = "${dir.absolutePath}/s2__step_2.json",
+            content = "{ 这不是合法 JSON",
+            createParentDirs = true
+        )
+
+        val loaded = manager.loadLatestSync("s2")
+        assertNotNull("损坏的新档不得让旧档一起失效", loaded)
+        assertEquals("应回落到更旧的可用档", 1, loaded?.step)
+        assertEquals("step 1", loaded?.remainingTask)
     }
 
     private fun createTempDir(prefix: String): File {

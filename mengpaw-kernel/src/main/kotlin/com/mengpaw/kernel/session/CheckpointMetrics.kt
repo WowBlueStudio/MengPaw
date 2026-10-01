@@ -34,6 +34,8 @@ object CheckpointMetrics {
     private val saveCount = AtomicLong(0)
     private val saveFailCount = AtomicLong(0)
     private val saveMillisTotal = AtomicLong(0)
+    private val saveMillisMax = AtomicLong(0)
+    private val lastSaveMillis = AtomicLong(0)
     private val loadHit = AtomicLong(0)
     private val loadMiss = AtomicLong(0)
     private val loadFail = AtomicLong(0)
@@ -46,8 +48,22 @@ object CheckpointMetrics {
     /** 一次落盘失败 (异常路径)。 */
     fun recordSaveFail() { saveFailCount.incrementAndGet() }
 
-    /** 累加一次落盘耗时 (毫秒)。 */
-    fun recordSaveMillis(millis: Long) { saveMillisTotal.addAndGet(millis.coerceAtLeast(0)) }
+    /**
+     * 累加一次落盘耗时 (毫秒), 同时记录**历史最坏**与**最近一次**。
+     *
+     * 为什么不能只有累加值: 累加值会被"多数步很快"稀释, 答不了"最坏一步卡多久" —
+     * 真机上正是靠这两个值判断"每步落盘值不值得", 而不是靠猜 (均值好看但尾延迟爆表
+     * 的 IO 会拖慢每一步)。最大值用 CAS 循环更新: 埋点在每步热路径上, 不引入锁。
+     */
+    fun recordSaveMillis(millis: Long) {
+        val safe = millis.coerceAtLeast(0)
+        saveMillisTotal.addAndGet(safe)
+        lastSaveMillis.set(safe)
+        var seen = saveMillisMax.get()
+        while (safe > seen && !saveMillisMax.compareAndSet(seen, safe)) {
+            seen = saveMillisMax.get()
+        }
+    }
 
     /** 最近一次成功落盘的指标: 消息条数 + 落盘字节数 (UTF-8 口径, 与磁盘占用同源)。 */
     fun recordSavedShape(messageCount: Int, bytes: Long) {
@@ -69,6 +85,8 @@ object CheckpointMetrics {
         "save_count" to saveCount.get(),
         "save_fail_count" to saveFailCount.get(),
         "save_millis_total" to saveMillisTotal.get(),
+        "save_millis_max" to saveMillisMax.get(),
+        "last_save_millis" to lastSaveMillis.get(),
         "load_hit" to loadHit.get(),
         "load_miss" to loadMiss.get(),
         "load_fail" to loadFail.get(),
@@ -81,6 +99,8 @@ object CheckpointMetrics {
         saveCount.set(0)
         saveFailCount.set(0)
         saveMillisTotal.set(0)
+        saveMillisMax.set(0)
+        lastSaveMillis.set(0)
         loadHit.set(0)
         loadMiss.set(0)
         loadFail.set(0)
