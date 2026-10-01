@@ -1,5 +1,67 @@
 # Changelog
 
+## v0.48.2 (2026-09-27) — 手机端长任务断点续跑（三层机制）
+
+> 触发: Agent 长任务中途被杀/进程重启后只能从头再来 —— 检查点每 5 步一次且只存进度摘要,
+> 崩溃后丢最多 4 步上下文与**全部工具观察**; 恢复只是"告知模型上次中断", 真正的续跑要等用户再发一条消息。
+
+### 新增 — 循环内: 每步检查点 (P0-1 / P0-2)
+- 每步落 `RUNNING`(取代旧的"每 5 步")、终止落 `COMPLETED`/`FAILED`, 由 `finally` 恰好写一条终态;
+  落盘失败不中断主任务(异常经 `ErrorCollector` 上报)。
+- `resume = true` 时用检查点 `messages` **重建引擎会话**(工具 Observation 不再丢)、步号接续、
+  **不重复追加用户任务**。
+- 检查点模型升级: 三态 `CheckpointStatus`(取自 harness 单一来源) + 档名 `{id}__step_{n}.json`
+  (旧格式只读兼容) + "文件名精确定位、档内 sessionId 权威"的归属判定(根除 `startsWith` 前缀歧义)
+  + 先写新档再删旧档的原子性 + 墓碑式 `clear` + 落盘截断(单条 8000 字符/最近 200 条)。
+
+### 新增 — 副作用幂等 (P0-4)
+- `ToolIntentLog`: 工具**执行前**落 PENDING、执行后落 DONE/FAILED(每会话 append-only JSONL);
+  参数只落 SHA-256 摘要, 错误文案先剔除参数原文(凭据禁区)。
+- 恢复时对未完成意图**只注入"先核对再决定"提示, 禁止自动重放** —— "工具已执行、终态未落盘"
+  这一崩溃窗口不再产生重复副作用(重复写文件/发消息/下单)。
+
+### 新增 — 恢复入口与分级判定 (P0-3 / P1-6)
+- `ResumePlanner` 纯函数判定, 叠加既有 `decideRecovery`(连续错误 ≥5 交用户) + `ResumeLock`
+  单会话文件锁(TTL 10min, 过期可抢) + `auto_resume` 开关(缺省开, `{CONFIG}/auto_resume`)。
+- shell 两阶段: 恢复期只做判定(此时 LLM provider 尚未注入), provider 就绪后触发续跑;
+  复用既有气泡/思维链管道, 不重建流式 UI。
+
+### 新增 — 进程级保活 (P1-5)
+- 空闲 5min 释放 WakeLock、租期 30min + 续租阈值 15min、10min `setExactAndAllowWhileIdle` 看门狗
+  (无精确闹钟权限时回退非精确)、通知显示步骤与耗时、电池优化白名单一次性引导。
+  判定逻辑抽为纯函数(`KeepAlivePolicy`)以便负载无关地测。无新增依赖与权限。
+
+### 新增 — 多模式预算与进度续跑 (P1-7 / P1-8)
+- GOAL/SWARM/Ralph 进度统一落 `{CONFIG}/模式进度/{agent}/{mode}.json`; 预算连续
+  (剩余 = 总额 − 已消耗), 重启不再重置。
+- worker 粒度定案: `VERIFIED`/`DONE` 跳过并复用卡片、`RUNNING` 整只重跑(工具副作用不可回滚)、
+  `FAILED`/`SKIPPED` 不自动重跑(防恢复瞬间重复烧预算)。
+
+### 新增 — 观测与恢复体验 (P2-10)
+- `CheckpointMetrics` 8 项指标(写入次数/耗时/失败、命中/未命中/IO 失败、最近档的消息数与字节数),
+  供真机评估"每步落盘值不值"。
+- `toEngineConversation` 补上工具结果气泡 → 引擎历史(另一条"恢复丢 Observation"的路径)。
+
+### 修复
+- **终态被覆盖**: 主链路改造中终态分支由 `return` 改 `break` 后落入循环之后的 max_steps 收口块,
+  把已拿到的最终答案改写成"已达到最大步数"(既有 19 个用例暴露)。
+- **续跑读取侧不对称**: GOAL 续跑只认显式 `sessionFile`, 传 `agentName` 读不到自己的档 →
+  预算不恢复、已用满上限仍继续跑; Ralph 缺"预算已耗尽不再新开轮次"闸门。
+- **同毫秒落盘排序**: `loadLatest` 第二判据是文件 mtime, 同一毫秒连写可能选错档 →
+  改为 `updatedAt → step → modified`; 两个时序敏感用例改负载无关断言(目录级判定 / `>=` 语义)。
+- 两处过期注释(检查点频次"每 5 步" / harness `keep` 语义), 并修 `RetiredReferenceScanTest`
+  对 `plugins.json` 派生 `changelog` 字段的存量误判(见 v0.48.1)。
+
+### 发行
+- APK: `mengpaw-shell-v0.48.2-release.apk`(versionCode 48002; browser 本轮无变更, 不构建)
+- plugins.json: 无变更(未打 `plugins-v*` tag)
+- 测试: kernel 761 + core 128 + shell 312 + plugin 616 + harness 60 = **1877 用例, 0 failures**
+  (kernel 连续两轮 `--rerun-tasks` 复跑均绿)
+- harness 独立版本线: **v0.2.1**(`FileCheckpointStore` 保留策略 + 会话 id 精确解析;
+  坐标 `com.github.WowBlueStudio:MengPaw-harness:v0.2.1`)
+- 已知边界: FLEET 续跑未接线(`FleetRuntimeStore` 是委派台账, 语义不同);
+  `ToolIntentLog.clear/pruneOlderThan` 尚无生产调用点; 续跑锁 TTL 不续租; 真机 Doze 行为未验证(红线禁遥控真机)
+
 ## v0.48.1 (2026-09-18) — Harness 抽象层单一事实源 + 断点续跑
 
 > 触发: 三项 Harness 整改 —— 双份抽象层已**实测漂移** / 长任务中断无法续跑 / 接口文档落后于代码。

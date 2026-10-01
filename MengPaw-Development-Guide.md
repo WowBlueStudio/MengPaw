@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.48.1 | **更新**: 2026-09-27 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(154文件) + AgentRuntime + **Harness平台抽象层(harness/ 8接口 + 独立仓库 D:\MengPaw\harness, kernel 内联副本已删 · v0.2.0 断点续跑)** + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + **进程管理(proc.ps/info/kill)** + **幽灵引用守护(RetiredReferenceScanTest/SkillDocReferenceTest)** + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.9.0
+> **版本**: 0.48.2 | **更新**: 2026-09-27 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(154文件) + AgentRuntime + **Harness平台抽象层(harness/ 8接口 + 独立仓库 D:\MengPaw\harness, kernel 内联副本已删 · v0.2.1 检查点保留策略)** + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + **进程管理(proc.ps/info/kill)** + **幽灵引用守护(RetiredReferenceScanTest/SkillDocReferenceTest)** + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.9.0
 
 ---
 
@@ -679,7 +679,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 
 > v0.48.1 发布实测（2026-09-18，Harness 抽象层单一事实源 + 断点续跑）：kernel 691 + core 128 + shell 250 + plugin 616 + harness 56 = **全量 1741 用例**，0 failures（`./gradlew test` 双套合并口径）。增量：harness 44 → 56（`CheckpointStoreTest` 6：内存往返/文件跨实例恢复/会话 id 消毒防穿越/损坏档 fail-soft/Env 默认注入/消毒规则；`ReActCheckpointTest` 6：终态落盘/RUNNING 续跑恢复历史且不重复任务/终态不可续/未配置不写/落盘失败不中断任务/清理）；kernel 计数不变（抽象层收敛为纯 import 替换，行为逐字等价）。修复 `RetiredReferenceScanTest` 对 `plugins.json` 派生 `changelog` 字段的误判（v0.48.0 起恒失败的存量用例）。
 
-> 手机端长任务断点续跑实测（2026-09-27，未发版，版本号仍为 0.48.1）：kernel 761 + core 128 + shell 312 + plugin 616 + harness 60 = **全量 1877 用例**，0 failures（`./gradlew test` 双套合并口径，连续两轮复跑均绿）。增量为本节三层机制（详见 §3.8）：kernel 691 → 761（检查点模型/存储层升级 + 工具意图日志 `ToolIntentLog` + 恢复判定 `ResumePlanner`/`ResumeLock` + 指标 `CheckpointMetrics` + 多模式续跑 + `ResumeChainIntegrationTest` 5 条契约链）、shell 250 → 312（保活判定 `KeepAlivePolicy` 等）、harness 56 → 60（`FileCheckpointStore` 保留策略 `keep` 与 `listSessionIds()` 精确解析）。
+> v0.48.2 发布实测（2026-09-27，手机端长任务断点续跑）：kernel 761 + core 128 + shell 312 + plugin 616 + harness 60 = **全量 1877 用例**，0 failures（`./gradlew test` 双套合并口径，连续两轮复跑均绿）。增量为本节三层机制（详见 §3.8）：kernel 691 → 761（检查点模型/存储层升级 + 工具意图日志 `ToolIntentLog` + 恢复判定 `ResumePlanner`/`ResumeLock` + 指标 `CheckpointMetrics` + 多模式续跑 + `ResumeChainIntegrationTest` 5 条契约链）、shell 250 → 312（保活判定 `KeepAlivePolicy` 等）、harness 56 → 60（`FileCheckpointStore` 保留策略 `keep` 与 `listSessionIds()` 精确解析）。
 
 | 模块 | 测试数 | 覆盖 |
 |------|-------|------|
