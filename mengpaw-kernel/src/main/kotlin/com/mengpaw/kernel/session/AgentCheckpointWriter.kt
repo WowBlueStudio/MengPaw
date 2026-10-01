@@ -27,10 +27,17 @@ import com.mengpaw.kernel.error.ErrorType
  * ## 失败不得影响主任务
  * 检查点是可靠性增强, 不是新的失败点: 所有落盘/清理异常一律 try/catch 并
  * [ErrorCollector.report] 上报 (与 [CheckpointManager] 内部容错语义一致), 绝不向循环抛出。
+ *
+ * ## 顺带维护的两件事 (都不影响主任务)
+ * - **续跑锁续租** ([resumeLock] 非空时): 每步 RUNNING 落盘都是"本执行体还活着"的证据, 顺带刷新锁
+ *   的 `acquiredAt`, 否则超过 [ResumeLock.DEFAULT_TTL_MS] 的长任务会被第二个触发者当成过期锁抢占 (双跑)。
+ * - **WAL 终态清理**: 仅 [CheckpointStatus.COMPLETED] 时清 (理由见 [writeTerminal])。
  */
 internal class AgentCheckpointWriter(
     private val checkpointManager: CheckpointManager,
-    private val toolIntentLog: ToolIntentLog = ToolIntentLog()
+    private val toolIntentLog: ToolIntentLog = ToolIntentLog(),
+    /** 续跑锁 — 非空时在每次 RUNNING 落盘后顺带续租 (默认 null: 既有构造点零改动)。 */
+    private val resumeLock: ResumeLock? = null
 ) {
 
     /** 上次写 RUNNING 的步号 — 同一步重复调用跳过 (防同批多 Action 重复落盘)。 */
@@ -105,6 +112,13 @@ internal class AgentCheckpointWriter(
             ))
             lastWrittenStep = step
             checkpointManager.cleanup(sessionId, keep = DEFAULT_KEEP)
+            // 顺带续租: 每步落盘都是"本执行体还活着"的证据, 让 TTL 不因长任务被误判为过期而遭抢占。
+            // 失败不影响落盘 (续租是可靠性增强, 不是新的失败点)。
+            try {
+                resumeLock?.renewIfDue()
+            } catch (e: Exception) {
+                reportFailure("renewResumeLock", sessionId, e)
+            }
         } catch (e: Exception) {
             reportFailure("writeRunning", sessionId, e)
         }
@@ -141,6 +155,16 @@ internal class AgentCheckpointWriter(
                 answer = answer
             ))
             checkpointManager.cleanup(sessionId, keep = DEFAULT_KEEP)
+            // WAL 只在"任务还没收尾"时有价值: COMPLETED = 任务已收尾 → 清掉待核对清单;
+            // FAILED (max_steps / cancelled / agent_error) 恰恰是"用户可能继续跑"的场景, 必须保留
+            // 那些 PENDING 供续跑时核对 (清掉等于丢掉"这一步可能已产生副作用"的唯一线索)。
+            if (status == CheckpointStatus.COMPLETED) {
+                try {
+                    toolIntentLog.clear(sessionId)
+                } catch (e: Exception) {
+                    reportFailure("clearIntents", sessionId, e)
+                }
+            }
         } catch (e: Exception) {
             reportFailure("writeTerminal($terminationReason)", sessionId, e)
         }

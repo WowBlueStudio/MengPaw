@@ -52,15 +52,16 @@ internal class AgentReActLoop(
         // 不再注入主对话; 进化由失败/纠正入队后分支会话静默沉淀。
         com.mengpaw.kernel.evolution.EvolutionHook.install()
 
-        // 检查点写入器 (每步 RUNNING + 终态 COMPLETED/FAILED) — 落盘失败不影响主任务
-        val checkpointWriter = AgentCheckpointWriter(engine.checkpointManager)
-        checkpointWriter.bindContext(engine.agentName, engine.modelName)
-
         // ── 续跑前置检查 (P0-3): 查检查点 + 取单会话锁 ──
         // 计划为空 = 不满足自动续跑条件 (锁被占/无 RUNNING 检查点/用户关掉开关), 静默回落新任务路径
+        // 锁实例提前建立: 交给检查点写入器持有, 由它每步落盘后顺带续租 (长任务不会被误判过期而遭抢占)
         val resumeLock = ResumeLock()
         val resumePlan: ResumePlan.AutoResume? =
             if (resume) runtime.planResume(resumeLock, RESUME_EVENTS_LIMIT) else null
+
+        // 检查点写入器 (每步 RUNNING + 终态 COMPLETED/FAILED) — 落盘失败不影响主任务
+        val checkpointWriter = AgentCheckpointWriter(engine.checkpointManager, resumeLock = resumeLock)
+        checkpointWriter.bindContext(engine.agentName, engine.modelName)
 
         // ── Persistent conversation (Claude Code pattern / 续跑按检查点重建) ──
         // 续跑: 按检查点原 sessionId 重建会话并复原 messages (键一致才能让后续 loadLatest 命中同一份进度);

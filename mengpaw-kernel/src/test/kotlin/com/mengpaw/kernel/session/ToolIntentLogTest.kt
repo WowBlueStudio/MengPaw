@@ -19,7 +19,8 @@ import java.io.File
 /**
  * [ToolIntentLog] 单元测试 — 覆盖: ① begin/finish 生命周期; ② 损坏行/损坏文件容错;
  * ③ 重放判重语义 (同一 toolCallId 幂等, 不产生重复 PENDING); ④ 凭据安全 (参数原文不落盘);
- * ⑤ pruneOlderThan 只删过期项且保留活跃 PENDING; ⑥ 并行 begin/finish 线程安全且无粘连行。
+ * ⑤ pruneOlderThan 只删过期项且保留活跃 PENDING; ⑥ 并行 begin/finish 线程安全且无粘连行;
+ * ⑦ pruneIfDue 到期才压实 (显式 nowMs 断言周期, 不依赖墙钟)。
  * 全部断言基于状态/计数, 不依赖墙钟阈值。
  */
 class ToolIntentLogTest {
@@ -248,6 +249,48 @@ class ToolIntentLogTest {
 
         assertTrue(log.pending("s7").isEmpty())
         assertFalse(logFile(dir, "s7").exists())
+        // 终态清理必须把"待核对清单"一并清空: 清完的日志里不得再留下任何 PENDING 残留
+        assertTrue(ToolIntentLog(dir.absolutePath).pending("s7").isEmpty())
+    }
+
+    // ── ⑦ pruneIfDue (周期压实策略: 到期才压, 调用点无定时逻辑) ─────────
+
+    @Test
+    fun `pruneIfDue 到期才压实一次`() {
+        val dir = tempDir("intent_prune_if_due")
+        // now 取"记录完成后又过了一天多": pruneIfDue 走固定 24h 保留期 (MAX_AGE_MS),
+        // now 只比记录晚十几分钟时它根本不算过期, 断言就失去意义
+        val now = 1_000L + 25L * 60 * 60 * 1000
+        val staleDone = intent("s9", 1, "fs.write", "path=/old", startedAt = 1_000L)
+            .copy(state = IntentState.DONE, finishedAt = 2_000L)
+        writeLines(logFile(dir, "s9"), listOf(staleDone))
+
+        val log = ToolIntentLog(dir.absolutePath)
+        // 新实例首次判定必然"到期" (清掉历史遗留的巨型日志)
+        assertTrue("首次调用应在锁内执行一次压实", log.pruneIfDue(now))
+        assertEquals("过期 DONE 应被压实掉", 0, readAll(dir, "s9").size)
+
+        // 未到 [PRUNE_INTERVAL_MS] 的重复调用不得再压实
+        assertFalse("未到期不得重复压实", log.pruneIfDue(now + 1_000L))
+        // 跨过压实周期后重新到期
+        assertTrue("跨过一个周期后应再次压实", log.pruneIfDue(now + ToolIntentLog.PRUNE_INTERVAL_MS))
+    }
+
+    @Test
+    fun `pruneIfDue 不删未过期的 DONE 且保留活跃 PENDING`() {
+        val dir = tempDir("intent_prune_keep")
+        val now = 1_000_000L
+        val activePending = intent("s10", 1, "fs.write", "path=/pending", startedAt = 1_000L)
+        val freshDone = intent("s10", 2, "fs.write", "path=/new", startedAt = 999_000L)
+            .copy(state = IntentState.DONE, finishedAt = 999_500L)
+        writeLines(logFile(dir, "s10"), listOf(activePending, freshDone))
+
+        ToolIntentLog(dir.absolutePath).pruneIfDue(now)
+        val after = readAll(dir, "s10").map { it.toolCallId }
+        // 保留期 [MAX_AGE_MS] = 24 小时: 1 秒前完成的 DONE 远未过期
+        assertTrue("未过期的 DONE 不得被删", after.contains(freshDone.toolCallId))
+        // PENDING 无论多旧一律保留 (它是"这一步可能已产生副作用"的唯一线索)
+        assertTrue("活跃 PENDING 无论多旧都必须保留", after.contains(activePending.toolCallId))
     }
 
     // ── ⑥ 并发安全 (executeActions 会并行执行一批工具) ──────────────────

@@ -16,6 +16,7 @@ import com.mengpaw.kernel.session.ToolIntent
 import com.mengpaw.kernel.session.ToolIntentLog
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -235,6 +236,46 @@ class AgentResumeLoopTest {
         assertEquals(
             "不得自动重放未确认完成的工具",
             callsBeforeResume + 1, invoker.calls.size
+        )
+    }
+
+    @Test
+    fun `COMPLETED 收尾后清空该会话的意图日志`() = runBlocking {
+        val base = prepareBase("intent_clear")
+        val invoker = FakeToolInvoker()
+        // 同一引擎跑两次 = 同一会话 (conversationSessionId 复用); ScriptedLlm 首轮出动作, 之后给终答
+        val engine = engineWith(ScriptedLlm("收尾完成"), invoker)
+        assertEquals("收尾完成", engine.run("部署发布目标", maxSteps = 3, onStep = {}))
+        val sessionId = engine.currentConversationId()
+        assertNotNull("会话必须已建立", sessionId)
+
+        // 手工留一条"已声明将执行但未确认完成"的意图 (崩溃窗口的唯一危险态)
+        val stale = ToolIntent(
+            sessionId = sessionId!!, step = 1,
+            toolCallId = ToolIntentLog.toolCallIdOf(sessionId, 1, "deploy.apply", "abcd1234"),
+            toolName = "deploy.apply", argsDigest = "abcd1234",
+            state = IntentState.PENDING, startedAt = System.currentTimeMillis()
+        )
+        ToolIntentLog().begin(stale)
+        assertEquals("前置条件: 该会话应有 1 条待核对意图", 1, ToolIntentLog().pending(sessionId).size)
+
+        // 再跑一次正常完成的任务 (= 正常收尾写终态 COMPLETED) → WAL 无用, 必须被清掉
+        assertEquals("收尾完成", engine.run("部署发布目标", maxSteps = 3, onStep = {}))
+        assertEquals("两次运行必须落在同一会话", sessionId, engine.currentConversationId())
+        val latest = CheckpointManager(File(base, "会话检查点").absolutePath).loadLatest(sessionId)
+        assertEquals("终态必须是 COMPLETED", CheckpointStatus.COMPLETED, latest?.status)
+
+        // 新实例直读磁盘 — 绕开内存索引, 证明文件本身已被清理
+        assertTrue(
+            "COMPLETED 收尾后该会话的意图日志必须被清理",
+            ToolIntentLog().pending(sessionId).isEmpty()
+        )
+        assertFalse(
+            "清理应把日志文件本身删掉",
+            File(
+                File(base, "会话检查点/intents"),
+                ToolIntentLog.fileNameFor(sessionId)
+            ).exists()
         )
     }
 

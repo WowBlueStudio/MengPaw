@@ -25,14 +25,16 @@ import java.nio.file.StandardCopyOption
  *   有锁文件但**已过期** → 放行抢占 (覆盖), 防崩溃残留的幽灵锁把用户永久挡在门外。
  * - 释放: 仅当锁文件属于本会话时删除 (防误删他人锁)。
  *
- * ## TTL 取值理由 ([DEFAULT_TTL_MS] = 10 分钟)
- * 续跑期间不会续租, TTL 只能靠"长到不会打断正常续跑、短到不会把用户锁在门外"来定:
+ * ## TTL 取值理由 ([DEFAULT_TTL_MS] = 10 分钟) 与续租
+ * 续跑期间由调用方按需续租 ([renewIfDue], 每步落盘后顺带调用), 但**不依赖**续租 (它会跳过已过期的锁,
+ * 且调用方可能整段不落检查点), 故 TTL 仍需"长到不会打断正常续跑、短到不会把用户锁在门外":
  * - 太短 (如 1 分钟): 恢复后真正跑任务的一步 (LLM 往返 + 工具执行) 轻易超过 1 分钟, 用户点
  *   「继续」会把正在跑的续跑实例判为过期并抢锁 → 反而是最危险的重复执行。
  * - 太长 (如 1 小时): 进程被系统杀死 (Android 上无 finalizer 保证 [release] 一定执行) 后,
  *   用户重开 App 会被一把幽灵锁挡住 1 小时。
  * 10 分钟 ≈ 单次续跑"最坏一步"的量级 (60s 工具超时 + LLM 往返), 且用户重启 App 后最多等
  * 一个自然段即可重试; 真被挡住时走 [ResumePlanner] 的 `PromptUser` 分支给出明确提示, 不静默失败。
+ * 续租把"锁有效期"从单次续跑时长解耦为"两次落盘之间的间隔", 但不能替代上述量级判断。
  *
  * ## 可测性
  * [dir] 与 [clock] 均由构造器注入 — 测试用临时目录 + 假时钟, 不做墙钟阈值断言。
@@ -131,6 +133,39 @@ class ResumeLock(
         }
         heldSessionId = null
         false
+    }
+
+    /**
+     * 续租 — 仅当①本实例持有该锁且②距过期不足 [ttlMs] 的 1/3 时, 重写锁文件把 `acquiredAt` 推到当前
+     * 时刻; 其余情形 (未持锁 / 尚未临近过期 / 锁已被他人接管 / IO 失败) 一律立即返回 false, **不做任何 IO**。
+     *
+     * **为什么需要**: TTL 无续租时, 续跑超过 [DEFAULT_TTL_MS] 后锁会被第二个触发者判为"过期残留"而抢占,
+     * 形成双跑 (两个执行体同时执行工具副作用) — 这正是锁要防的事故。调用方 (每步落盘后) 顺带续租即可
+     * 把"锁的有效期"从"单次续跑时长"改成"两次落盘之间的间隔"。
+     *
+     * **为什么跳过已过期的锁**: 已过期意味着别的执行体可能已合法抢占; 此时再刷 `acquiredAt` 会把锁
+     * 从合法新持有者手里"偷"回来。保守放弃续租, 让后续 [tryAcquire] 按既有协议裁决。
+     *
+     * @return true = 本次真的刷新了锁文件
+     */
+    fun renewIfDue(): Boolean {
+        val mine = heldSessionId ?: return false
+        synchronized(IN_PROCESS_LOCK) {
+            return try {
+                val holder = readHolder() ?: return false
+                // 归属校验: 锁文件已被他人覆盖 (或已被删) → 不得续租, 否则等于抢别人的锁
+                if (holder.sessionId != mine) return false
+                val now = clock()
+                // 未临近过期 (剩余 >= TTL/3) 直接返回, 不产生 IO — 本方法是每步都调的热路径
+                if (isStale(holder, now) || now - holder.acquiredAt < ttlMs - ttlMs / 3) return false
+                writeHolder(Holder(mine, pid, now))
+                true
+            } catch (e: Exception) {
+                // 续租失败不得影响工具执行/落盘: 锁仍是既有 TTL 语义, 最坏情形退化为"不续租"
+                KernelLog.w(TAG, "renewIfDue 失败 (会话 $mine): ${e.message}")
+                false
+            }
+        }
     }
 
     /** 当前锁状态 (只读诊断 / 测试用)。 */
