@@ -756,8 +756,8 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 | 续租阈值 `RENEW_THRESHOLD_MS` | 15 min | 30 − 15 = 留 15 min 安全余量; 且 10 (看门狗) < 15 (阈值) 保证任何一次看门狗都能在租约到期前补租 |
 | 看门狗 `WATCHDOG_INTERVAL_MS` | 10 min | 与既有 `TriggerEngine` 系统唤醒同频 (`MainActivity` 里 `registerSystemWake(this, 10)`), 不额外增加唤醒次数; 优先 `setExactAndAllowWhileIdle` 穿透 Doze, 无精确闹钟权限 (`canScheduleExactAlarms() == false`) 时回退**免权限的 `setAndAllowWhileIdle`** (仍可穿透 Doze, 只是时间精度放宽) |
 | 续跑锁 TTL | 10 min | **不续租**, 故只能取"长到不打断正常续跑、短到不把用户锁在门外": 恢复后最坏一步 (60s 工具超时 + LLM 往返) 远小于 10 min, 而进程被系统杀死后鬼锁最多挡用户 10 min (Android 上 `release` 无 finalizer 保证) |
-| 单条 content 截断 | 8000 字符 | 约 2-4K token, 足够恢复一步上下文; 完整历史在本会话归档里有底 |
-| messages 条数上限 | 最近 200 条 | 把单档钉在 ~1.6M 字符量级, 避免长任务每次落盘全量重写造成的 IO 放大 |
+| 单条 content 截断 | 最近 20 条 8000 字符 / 更早 200 字符 | **分级**: 续跑只用最近上下文的全文 (8000 字符约 2-4K token); 更早的只留 `role + 200 字符` 且丢 `reasoning` (思维链只需最后一个 assistant 轮次回传, 丢了 DeepSeek 端点会 400), 完整历史在本会话归档里有底 |
+| messages 条数上限 | 最近 200 条 | 分级后单档从 ~1.6M 降到 ~0.2M 字符量级, 避免长任务每次落盘全量重写造成的 IO 放大 |
 
 **落盘与并发细节 (为什么长这样)**:
 
@@ -765,19 +765,26 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
   旧格式 `{id}_step_{n}.json` 仍可读 (只读不写)。读取按**文件名精确定位 + 档内 `sessionId` 权威**:
   文件名只做定位 (消毒有损, `a.b` 与 `a_b` 同形, 逆推不可行), 归属以档内 JSON 为准 —
   这同时消灭了旧实现 `startsWith(sessionId)` 的前缀歧义 (会话 `"a"` 不再误读 `"ab"` 的档)。
+  查找本身按**"最后写入"降序逐个解码、命中即早退** (不把全部候选档 parse 一遍): 排序主判据是
+  文件系统 `mtime` (不解析档内容就能拿到, 且它就是写入先后), 同毫秒再比步号 —— **不能只按步号**:
+  上一轮跑到第 N 步的旧档步号更高, 新一轮从第 1 步起跑时会选错档 (误判终态或复活陈旧进度)。
+  新档损坏则跳过继续看更旧的可用档, 全部不可解析 / 全不属本会话才判"无检查点"。
 - **原子性**: `HarnessFileSystem` 没有 move/rename, 故采用"**先写新档 → 再删旧档**":
   任意时刻至少有一个完整档可读; 最坏情况是多留几份旧档, 由 `cleanup(sessionId, keep)` 下次收口。
-  保留排序主判据是档内 `updatedAt` → `step` → `modified` (文件系统时间戳精度有限, 同一秒内多次写入
-  无法区分, 旧实现按 `lastModified` 排序会留错档)。`clear()` 不是直接删, 而是写**墓碑档**
+  保留 (删除) 排序按 **(步号, mtime)** —— 删除路径只做文件名定位、不解析档内容 (为清理再 parse 一遍
+  全部档不划算), 而同一会话内步号单调递增, 与"写入先后"同序。`clear()` 不是直接删, 而是写**墓碑档**
   (`step = -1` / `FAILED` / `terminationReason = cleared`) 再删旧档 — 直接删会在读侧留下
   "旧档还在 → 读回已失效进度"的窗口。
 - **跨进程互斥**: 续跑入口有三个 (冷启动自动续跑 / 用户点「继续」/ 保活触发的续跑), 可能落在不同进程,
   进程内 `synchronized` 挡不住。故 `ResumeLock` 用**磁盘锁文件** `{CHECKPOINTS}/resume.lock`
   (tmp + `Files.move` 原子替换 + **回读校验**): 未过期的同会话重入幂等放行、异会话拒绝、已过期放行抢占
   (防崩溃残留的幽灵锁把用户永久挡住)。
-- **可观测性**: `CheckpointMetrics` 暴露 8 项进程内计数 (`save_count` / `save_fail_count` /
-  `save_millis_total` / `load_hit` / `load_miss` / `load_fail` / `last_message_count` / `last_bytes`)。
+- **可观测性**: `CheckpointMetrics` 暴露 10 项进程内计数 (`save_count` / `save_fail_count` /
+  `save_millis_total` / `save_millis_max` / `last_save_millis` / `load_hit` / `load_miss` /
+  `load_fail` / `last_message_count` / `last_bytes`)。
   此前断点续跑是"全盲"子系统 —— 落盘慢不慢、恢复命中多少无从得知, 出问题只能翻日志猜。
+  累加值会被"多数步很快"稀释, 故另记**历史最坏**与**最近一次**: 真机上据此判断"每步落盘值不值得",
+  而不是靠猜 (均值好看但尾延迟爆表)。
   它是 `object` 单例但不违反"不新增全局单例"的**精神**: 只累加计数器, 不持有任何宿主能力
   (无文件系统/时钟/日志出口), 且提供 `reset()`。
 
