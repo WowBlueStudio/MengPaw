@@ -1923,6 +1923,46 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
    必须按版本号比大小。→ 教训: 验证脚本要复刻客户端的**真实选取逻辑** (同样的接口 + 同样的过滤 +
    同样的比较规则), 否则"验证"本身就会给出假结论; 发现文档与代码不一致时, 更新文档而不是改代码。
 
+## 50. MengPaw-Browser v0.10.2: 地址栏「转到没反应」根因链 + 六个通用坑 (2026-10-13)
+
+① **获焦不全选 = 地址栏自杀 (用户报障真身)**: 地址栏获焦只落光标, 用户新输入的网址被**拼进原 URL**
+   (`https://old.site/x` + 用户输入的 `github.com`), 拼出的怪地址必然 DNS 解析失败 → 几秒后落到
+   「页面加载失败」页。用户的描述是「转到按钮无法使用 / 完全没反应 / 过一会报加载失败 / 只能靠搜索
+   绕到目标站」, 极易误判成"点击事件没接上"。→ 规矩: 地址栏/搜索框这类**替换语义**的输入框
+   **获焦即全选** (浏览器惯例), 且编辑态(有焦点)期间**不得**被 `LaunchedEffect(pageUrl)` 回写覆盖
+   (页面重定向会吞掉正在输入的内容)。
+
+② **targetSdk 28+ 明文 http 全灭**: `usesCleartextTraffic` 默认 false, WebView 对**所有** http 站点
+   直接返回 `net::ERR_CLEARTEXT_NOT_PERMITTED` —「有些网站打不开」的真身 (如 `http://47.119.135.155/home`)。
+   浏览器类应用必须显式置 true (Chrome 同做法); 这不是安全加固点, 是功能性开关。
+
+③ **Kotlin 块注释可嵌套 → KDoc 写 `**http://**` 直接编译失败**: Kotlin 支持嵌套块注释
+   (`/* … /* … */ … */`), KDoc 正文里出现 `/*` 就再开一层, 报 `Syntax error: Unclosed comment` 且
+   错误行指向**文件末尾**, 元凶在几十行外 (连带把同模块其他文件报成一堆 Unresolved reference)。
+   → 注释里写 URL 不加 `/*` 序列 (写成 `补 http` 而不是 `**http://**`)。
+
+④ **静默 no-op 是"按钮没用"的常见真身**: `webViewMap[id]?.loadUrl()` 这类"前提是某个 View 已建好"
+   的命令式副作用, 在 Compose 里随时可能落空 (冷启动首帧/刚切标签) —— 状态已更新、页面毫无反应。
+   做法: 状态 + **待办请求** (带 seq 去重, 决定由构造期还是 update 期加载) 双通道, 由持有该 View 的层
+   在就绪帧消费。同理 `DisposableEffect(Unit)` 持有的回调必须用 **getter** 传状态
+   (`tabs: () -> List<TabState>`), 传快照值就是 stale 闭包。
+
+⑤ **只写不读的 pref = 假控件 (控件普查第一问)**: 排查"按钮没用"先 grep 该 pref/开关的**读取点**。
+   本轮查出 `quickClickEnabled`、`screenshotQuality` 两个开关全仓库无读取点 (截图固定 PNG, quality
+   参数被忽略), DesktopTabBar「静音标签」处理器只关菜单。→ 要么接线要么删除, 不留假控件; 顺带把
+   "只写不读"的 relabel (如 JPEG 质量) 也一并清理, 否则用户会报"调了没变化"。
+
+⑥ **WebView `onPause()` 不配对 `onResume()`**: `onTrimMemory(TRIM_MEMORY_MODERATE)` 对所有 WebView
+   `onPause()`, 而应用**从不** `onResume()` — 页面继续加载却可能不再渲染, 与"点了没反应"难分辨。
+   Activity `onResume` + 标签激活时都要 resume。
+
+⑦ **发布实操 (浏览器 v0.10.2)**: 四点同步 = `gradle.properties` + `build.gradle.kts` orElse 兜底 +
+   versionCode 字面量 (17→18) + `aapt2 dump badging` 复核; 验签用 `apksigner --print-certs`
+   (CN=MengPaw, OU=Studio, O=WowBlue)。双远端本轮 Gitee 与 GitHub **各一次成功** (无需重试);
+   Gitee Release 用 v5 API (`target_commitish` 必填 = tag 的 commit SHA) + `curl.exe -F` 传 APK,
+   校验口径仍是「列表接口筛 `^v\d+\.\d+\.\d+$` 取版本号最高 + 该 release 带 APK」。
+   keystore 路径/口令在 `~/.gradle/gradle.properties` (`keystore.file/…`), 不在仓库内 — 换机器必查。
+
 
 
 
