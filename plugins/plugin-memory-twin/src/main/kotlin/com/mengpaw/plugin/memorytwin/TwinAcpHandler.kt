@@ -87,14 +87,23 @@ class TwinAcpHandler(
         }
 
         // send: 本机有、对端缺失或不同的文件内容
+        // P0 fix: 载荷形态必须与接收端 (TwinSyncProtocol.parseManifestResponse) 一致 —
+        // 旧实现写扁平字符串, 接收端按 {content, mtime} 对象解析, 只要真有差异就抛异常。
+        // mtime 必须真传, 否则接收端 `target.lastModified() > fromTimestamp` 恒假, 冲突检测失效。
         val send = buildJsonObject {
             localManifest.forEach { (relPath, entry) ->
                 val peerHash = peerHashes[relPath]
-                if (peerHash == null || peerHash != TwinWorkspace.manifestHash(entry.hash)) {
+                // 兼容: 对端可能发 16 字符协议形态 (新版) 或完整 64 字符 (旧版)
+                val same = peerHash != null &&
+                    (peerHash == TwinWorkspace.manifestHash(entry.hash) || peerHash == entry.hash)
+                if (!same) {
                     val content = try {
                         File(DataPaths.AGENTS, "$agentName/$relPath").readText()
                     } catch (_: Exception) { return@forEach }
-                    put(relPath, JsonPrimitive(content))
+                    put(relPath, buildJsonObject {
+                        put("content", JsonPrimitive(content))
+                        put("mtime", JsonPrimitive(entry.mtime))
+                    })
                 }
             }
         }
@@ -219,18 +228,12 @@ class TwinAcpHandler(
     }
 
     /**
-     * P0 fix: 消毒对端提供的相对路径。
-     * 拒绝: 空白 / 绝对路径 / 含 `..` 段的路径 (反斜杠也防 — 双平台保险)。
-     * 未通过 → null, 调用方跳过该条目 (拒绝服务单文件, 不整包拒绝)。
+     * P0 fix: 消毒对端提供的相对路径 — 委托 [TwinWorkspace.sanitizeRelPath]。
+     * 实现下沉到存储层, 因为真正写盘的是 `TwinWorkspace.applyWorkspaceFile`;
+     * 这里保留同名方法供消息层过滤与既有测试使用 (单一事实源, 不存在两份规则)。
      */
     // internal 为测试可见性 — 纯函数, 无副作用
-    internal fun sanitizeRelPath(relPath: String): String? {
-        if (relPath.isBlank()) return null
-        if (relPath.startsWith("/") || relPath.startsWith("\\")) return null
-        if (relPath.contains(":")) return null  // Windows 盘符/URL scheme 保险
-        if (relPath.split('/', '\\').any { it == ".." }) return null
-        return relPath
-    }
+    internal fun sanitizeRelPath(relPath: String): String? = TwinWorkspace.sanitizeRelPath(relPath)
 
     private suspend fun handlePairConfirm(msg: AcpMessage): AcpResult {
         val payload = try { json.parseToJsonElement(msg.payload).jsonObject } catch (_: Exception) { null }

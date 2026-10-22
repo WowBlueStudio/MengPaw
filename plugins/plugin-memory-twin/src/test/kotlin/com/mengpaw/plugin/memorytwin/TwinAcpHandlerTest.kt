@@ -16,6 +16,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -142,7 +143,10 @@ class TwinAcpHandlerTest {
         val result = handler.handle(msg, server) as AcpResult
         assertTrue(result.success)
         val resp = Json.parseToJsonElement(result.data).jsonObject
-        assertEquals("文档内容 v1", resp["send"]!!.jsonObject["workspace/doc.md"]!!.jsonPrimitive.content)
+        // P0: send 载荷必须是 {content, mtime} 对象 — 与接收端 parseManifestResponse 同形态
+        val sentFile = resp["send"]!!.jsonObject["workspace/doc.md"]!!.jsonObject
+        assertEquals("文档内容 v1", sentFile["content"]!!.jsonPrimitive.content)
+        assertTrue("mtime 必须随内容下发 (冲突判定依赖它)", sentFile["mtime"]!!.jsonPrimitive.long > 0L)
         assertEquals(listOf("workspace/new.md"),
             resp["request"]!!.jsonArray.map { it.jsonPrimitive.content })
     }

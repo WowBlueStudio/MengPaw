@@ -97,6 +97,15 @@ object TwinPairingEngine {
         var nonceA: String = "",
         var nonceB: String = "",
         var peerFingerprint: String = "",
+        /**
+         * 对端在挑战阶段回带的真实设备 ID (指纹)。
+         *
+         * P0 fix: 发起方建会话时 `peerId` 是**通讯录里的联系人名**，而对端 PAIR_CHALLENGE
+         * 里带的是**设备指纹** —— 两者不一致会让 `handleChallenge` 按指纹查不到会话，
+         * 表现为"5 连击配对无验证码弹窗、无错误提示"。这里记下对端真实 ID，用于
+         * 密钥派生 / 信任落盘 / 回包寻址；`peerId`(联系人名) 继续作为命令层别名。
+         */
+        var remoteDeviceId: String = "",
         var phase: PairingPhase = PairingPhase.AWAITING_CHALLENGE,
         var verificationCode: String = "",
         val isInitiator: Boolean = true,

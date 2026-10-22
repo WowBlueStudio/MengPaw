@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.48.2 | **更新**: 2026-09-27 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(154文件) + AgentRuntime + **Harness平台抽象层(harness/ 8接口 + 独立仓库 D:\MengPaw\harness, kernel 内联副本已删 · v0.2.1 检查点保留策略)** + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + **进程管理(proc.ps/info/kill)** + **幽灵引用守护(RetiredReferenceScanTest/SkillDocReferenceTest)** + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.9.0
+> **版本**: 0.48.2 | **更新**: 2026-10-22 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(154文件) + AgentRuntime + **Harness平台抽象层(harness/ 8接口 + 独立仓库 D:\MengPaw\harness, kernel 内联副本已删 · v0.2.1 检查点保留策略)** + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + **进程管理(proc.ps/info/kill)** + **幽灵引用守护(RetiredReferenceScanTest/SkillDocReferenceTest)** + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.9.0
 
 ---
 
@@ -497,7 +497,7 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 > 凭据经 `<ns>.config` 命令配置 (SSH 用户/密码或 PEM 密钥, 原子写入 {CONFIG}/)。默认通道 SSH
 > (PC 需启用 Windows 自带 OpenSSH Server, 手机 → PC 零额外安装); QwenPaw 另支持 REST 直连。
 
-### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0)
+### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0 + P1 对象库 2026-10-22)
 
 25 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起, 哈希链账本已移除) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
 
@@ -614,6 +614,15 @@ twin.lost <peer> / twin.recover <peer>
 #### 系统提示词集成
 
 中英文系统提示词含完整的记忆孪生使用指南: 功能概述 / 状态检查 / 节点发现 / 手动同步 / 任务委派 / 能力对比 / 路由推荐 / 配对方式 / 启动前提 / 解绑方式。
+
+#### P1 对象库已落地 (2026-10-22, 框架 0.48.2 工作区)
+
+按 `docs/memory-git-sync-design.md` §3 落地**内容寻址对象库 + 单机快照历史**（纯 JVM, 不接协议, P2 才接传输）:
+
+- 新包 `mengpaw-kernel/src/main/kotlin/com/mengpaw/kernel/memory/`: `SnapshotTypes.kt`（模型）/ `SnapshotStore.kt`（对象读写 + refs + GC）/ `ObjectStore.kt`（zlib 编解码 + 原子落位）/ `TextDiff.kt`（Myers + unified）/ `WorkspaceSnapshotSource.kt`（工作区扫描）/ `MemoryHistoryCommands.kt`（6 条命令）。
+- 存储布局 `{AGENTS}/twin/store/{objects,refs/<ns>/{heads,local},tmp}`; `DataPaths` 增 `TWIN_DIR/TWIN_STORE/TWIN_DEVICES/TWIN_CLOCK`（`TWIN_AUDIT` 改为基于 `TWIN_DIR`, 值不变）。
+- 新命令 `memory.commit/log/show/diff/restore/gc`（`restore` 为 MID, 其余 LOW; namespace `ws-<agent>`）; 与 `agent.memory.*` 三轨记忆区分 —— 本组是**工作区文件的历史版本**, 不是记忆条目。
+- 工作区扫描排除 `inbox/` `dialog/` `backup/` `CLI.md` `*.tmp` `*.conflict.*`, 收录 `.md` + 根目录 `twin-model-rules.json`; P2 由 `plugin-memory-twin` 改为委托本实现以消除重复。
 
 ### 3.6 构建配置
 
@@ -1223,6 +1232,11 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 **会话 (4)**：`sessions [keyword] [limit]` | `session.delete <id>` | `session.archive <id>` | `session.current`
 
 **工作区文件 (1, v0.36.x 去重)**: `output` — read/write/ls/rm/mkdir 已移除 (Android 有等价命令 cat/echo/ls/rm/mkdir, 见 §5.2.1 Linux 命令通道); 写后读回验证由 Linux 通道重定向写提示 + 提示词「结果纪律」承接。
+
+
+#### memory — 工作区快照历史 (6, P1 对象库)
+`commit [-m 说明]` | `log [n]` | `show <path> [snapshot]` | `diff [--to <snapshot>]` | `restore <path> [snapshot]` | `gc [--keep 30d]`
+> 与 `agent.memory.*` 三轨记忆区分: 本组是**工作区文件的历史版本**（内容寻址对象库, `{AGENTS}/twin/store/`），不是记忆条目。`commit` 无变化不产生新快照；`show/diff` 缺省对比最近快照；`restore` 仅 `.md`（MID, 需 reason）；`gc` 从 heads+local 做可达性标记并按 30天/200快照取宽保留。
 
 
 #### plugin — 插件管理 (12 + 5)

@@ -169,14 +169,28 @@ internal class TwinPairingProtocol(
         nonceB: String,
         peerFingerprint: String
     ): TwinPairingEngine.PairingUiState {
-        val session = sessions.sessions.values.find {
+        // 正常路径: 会话里的 peerId 就是挑战携带的 ID
+        var session = sessions.sessions.values.find {
             it.peerId == peerId && it.isInitiator && it.phase == TwinPairingEngine.PairingPhase.AWAITING_CHALLENGE
+        }
+        // P0 fix: 发起方用联系人名建会话, 而对端回带的是设备指纹 —— 两者不同。
+        // 若按 ID 查不到且**恰有一个**待挑战的发起方会话, 认定它就是本次握手, 并记下对端真实 ID。
+        if (session == null) {
+            val pending = sessions.sessions.values.filter {
+                it.isInitiator && it.phase == TwinPairingEngine.PairingPhase.AWAITING_CHALLENGE
+            }
+            if (pending.size == 1) {
+                session = pending.first()
+                android.util.Log.i("MengPawTwin",
+                    "配对挑战: 联系人名与设备 ID 不一致, 采用唯一待挑战会话 (${session.peerId} → $peerId)")
+            }
         }
         if (session == null) {
             android.util.Log.w("MengPawTwin", "配对挑战: 未找到活跃会话 for $peerId")
             return TwinPairingEngine.PairingUiState(error = "未找到活跃的配对会话，请重新发起配对")
         }
 
+        session.remoteDeviceId = peerId
         session.nonceB = nonceB
         session.peerFingerprint = peerFingerprint
         val code = TwinPairingCrypto.computeVerificationCode(session.nonceA, nonceB)
@@ -212,16 +226,23 @@ internal class TwinPairingProtocol(
             return TwinPairingEngine.PairingUiState(error = "缺少对端设备指纹")
         }
 
-        // Derive AES-256 key from both device fingerprints
-        AcpCrypto.deriveKey(session.myFingerprint, session.peerFingerprint, session.peerId)
+        // P0 fix: 信任与密钥必须落在**对端真实设备 ID**上 (如果挑战阶段已得知),
+        // 同时保留联系人名别名 —— 命令层 (twin.delegate / twin.sync) 按名字查信任。
+        val remoteId = session.remoteDeviceId.ifBlank { session.peerId }
 
-        // Persist trust
-        PromptFirewall.trustWithKey(session.peerId, session.peerFingerprint)
+        // Derive AES-256 key from both device fingerprints
+        AcpCrypto.deriveKey(session.myFingerprint, session.peerFingerprint, remoteId)
+
+        // Persist trust (真实 ID + 联系人名别名)
+        PromptFirewall.trustWithKey(remoteId, session.peerFingerprint)
+        if (remoteId != session.peerId) {
+            PromptFirewall.trust(session.peerId, session.peerFingerprint)
+        }
 
         // Send PAIR_CONFIRM to peer
         if (session.isInitiator) {
             val confirmMsg = AcpMessage.pairConfirm(
-                session.myDeviceId, session.peerId,
+                session.myDeviceId, remoteId,
                 session.myDeviceId, session.verificationCode,
                 TwinPairingCrypto.computeSignature(session.myFingerprint, session.peerFingerprint)
             )

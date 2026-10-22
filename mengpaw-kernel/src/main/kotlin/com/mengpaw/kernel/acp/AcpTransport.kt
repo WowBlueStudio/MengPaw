@@ -215,11 +215,10 @@ class AcpHttpTransport(
             }
             // SECURITY (P0 fix): peer identity MUST be bound to the socket address —
             // msg.from is spoofable plaintext, so an attacker on the LAN could claim
-            // any paired peer's agentId and pass isTrusted(). All messages establish
-            // an IP binding; sensitive types additionally require the source IP to be
-            // one this peerId has previously communicated from.
-            server.bindPeerIp(msg.from, remoteAddr)
-            if (msg.type in SENSITIVE_ACP_TYPES && !server.isPeerFromBoundIp(msg.from, remoteAddr)) {
+            // any paired peer's agentId and pass isTrusted().
+            // P0 修复: **先校验后绑定** — 旧实现先 bindPeerIp 再 isPeerFromBoundIp,
+            // 判定恒为 true (保护链自失效)。非敏感消息 (HEARTBEAT/ANNOUNCE/DISCOVER) 负责建立绑定。
+            if (!authorizeAndBind(server, msg.type, msg.from, remoteAddr)) {
                 val err = """{"result":"auth_required: peer identity not bound to source address","success":false}"""
                 writer.write("HTTP/1.1 403 Forbidden\r\nContent-Length: ${err.length}\r\n\r\n$err")
                 writer.flush()
@@ -235,7 +234,9 @@ class AcpHttpTransport(
                 val escaped = result.data.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
                 ""","data":"$escaped""""
             } else ""
-            val respPlain = """{"result":"${result.message}","success":${result.success}$dataJson}"""
+            // P2 修复: result.message 也必须转义 — 错误文案带引号时会对端解析成 invalid_response (表现为"超时")
+            val escMsg = result.message.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
+            val respPlain = """{"result":"$escMsg","success":${result.success}$dataJson}"""
             val resp = if (isEncrypted && peerId.isNotBlank()) {
                 AcpCrypto.encrypt(peerId, respPlain)
             } else respPlain
@@ -271,6 +272,22 @@ internal fun readFully(reader: java.io.BufferedReader, length: Int): String {
     }
     return String(body, 0, read)
 }
+/**
+ * 敏感消息的 IP 绑定判定 (P0): **先校验后绑定**。
+ *
+ * 旧实现先 `bindPeerIp` 再 `isPeerFromBoundIp` — 判定恒为 true, 保护链自失效
+ * (局域网内任意人伪造已配对 agentId 即可读工作区)。现在:
+ * - 敏感类型 (工作区/会话/REVOKE/MCP) 必须来自该 peerId 已绑定过的来源 IP;
+ * - 非敏感类型 (HEARTBEAT / 能力公告 / DISCOVER / 配对) 负责建立绑定。
+ *
+ * @return false 表示应拒绝 (403)
+ */
+internal fun authorizeAndBind(server: AcpServer, messageType: String, from: String, remoteAddr: String): Boolean {
+    if (messageType in SENSITIVE_ACP_TYPES && !server.isPeerFromBoundIp(from, remoteAddr)) return false
+    server.bindPeerIp(from, remoteAddr)
+    return true
+}
+
 // 局域网节点发现 (mDNS/NSD) 由 plugin-framework 的 NsdManager 实现 (framework.discover),
 // ACP 传输层只负责已寻址 peer 的收发, 不重复实现 NSD。
 // 参考: https://developer.android.com/training/connect-devices-wirelessly/nsd

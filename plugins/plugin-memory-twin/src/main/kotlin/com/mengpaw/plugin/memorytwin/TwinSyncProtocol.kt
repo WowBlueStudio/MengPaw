@@ -12,13 +12,16 @@ import com.mengpaw.kernel.ports.Ports
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
 /**
@@ -63,18 +66,7 @@ internal class TwinSyncProtocol(
             ))
 
             // Step 1: 交换清单 — 请求-响应一轮完成 (响应体解析修复见 AcpTransport.sendForResult)
-            val myManifest = TwinWorkspace.buildManifest(agentName)
-            val manifestMsg = AcpMessage.wsManifest(deviceId, peerId, buildJsonObject {
-                put("files", buildJsonObject {
-                    myManifest.forEach { (relPath, entry) ->
-                        put(relPath, buildJsonObject {
-                            // 清单哈希走 TwinWorkspace.manifestHash — 与对端接收比较同一形态
-                            put("hash", JsonPrimitive(TwinWorkspace.manifestHash(entry.hash)))
-                            put("mtime", JsonPrimitive(entry.mtime))
-                        })
-                    }
-                })
-            }.toString())
+            val manifestMsg = AcpMessage.wsManifest(deviceId, peerId, buildManifestPayload(agentName))
             val manifestResp = transport.sendForResult(manifestMsg, peerId, 20_000)
             if (manifestResp == null) {
                 return TwinSyncResult(0, 0, 0, "同步超时 (20s)",
@@ -84,26 +76,26 @@ internal class TwinSyncProtocol(
                 return TwinSyncResult(0, 0, 0, manifestResp.message, null)
             }
 
-            val respObj = try { json.parseToJsonElement(manifestResp.data).jsonObject } catch (e: Exception) {
+            // P0 fix: 收发两端共用同一套载荷定义 (buildManifestPayload / parseManifestResponse),
+            // 形态漂移会在这里直接表现为解析失败, 而不是静默丢文件。
+            val manifest = try { parseManifestResponse(manifestResp.data) } catch (e: Exception) {
+                ErrorCollector.report(e, "TwinSyncEngine.wsManifest.parse")
                 return TwinSyncResult(0, 0, 0, "清单响应解析失败: ${e.message}", null)
             }
 
             // 接收对端文件 (对端 → 本机)
-            var received = 0; var conflicts = 0
-            respObj["send"]?.jsonObject?.forEach { (relPath, value) ->
-                val fileObj = value.jsonObject
-                val content = fileObj["content"]?.jsonPrimitive?.content ?: ""
-                val mtime = fileObj["mtime"]?.jsonPrimitive?.long ?: System.currentTimeMillis()
-                val r = TwinWorkspace.applyWorkspaceFile(agentName, relPath, content, peer.agentName, mtime)
-                when (r) {
+            var received = 0; var conflicts = 0; var writeErrors = 0
+            manifest.send.forEach { file ->
+                when (TwinWorkspace.applyWorkspaceFile(agentName, file.relPath, file.content, peer.agentName, file.mtime)) {
                     "applied" -> received++
                     "conflict" -> conflicts++
-                    // "same": 内容一致未落盘, 不计入 received/conflicts
+                    "error" -> writeErrors++
+                    // "same" / "rejected": 未落盘, 不计入统计
                 }
             }
 
             // Step 2: 拉取我们缺的文件 (本机 → 对端)
-            val requestPaths = respObj["request"]?.jsonArray?.mapNotNull { it.jsonPrimitive?.content } ?: emptyList()
+            val requestPaths = manifest.request
             if (requestPaths.isNotEmpty()) {
                 val pullMsg = AcpMessage.wsPull(deviceId, peerId, buildJsonObject {
                     put("paths", buildJsonArray { requestPaths.forEach { add(JsonPrimitive(it)) } })
@@ -111,13 +103,12 @@ internal class TwinSyncProtocol(
                 val pullResp = transport.sendForResult(pullMsg, peerId, 20_000)
                 if (pullResp != null && pullResp.success) {
                     try {
-                        val filesObj = json.parseToJsonElement(pullResp.data).jsonObject["files"]?.jsonObject
-                        filesObj?.forEach { (relPath, content) ->
-                            val r = TwinWorkspace.applyWorkspaceFile(agentName, relPath, content.jsonPrimitive.content,
-                                peer.agentName, System.currentTimeMillis())
-                            when (r) {
+                        parsePullResponse(pullResp.data).forEach { (relPath, content) ->
+                            when (TwinWorkspace.applyWorkspaceFile(agentName, relPath, content,
+                                peer.agentName, System.currentTimeMillis())) {
                                 "applied" -> received++
                                 "conflict" -> conflicts++
+                                "error" -> writeErrors++
                             }
                         }
                     } catch (e: Exception) {
@@ -136,7 +127,9 @@ internal class TwinSyncProtocol(
                 lastConflicts = conflicts,
                 lastSyncAt = System.currentTimeMillis()
             )
-            TwinSyncResult(received, requestPaths.size, conflicts, null, null)
+            // P1: 写入失败不再被静默吞掉 — 回传可读错误, 但不中断其余文件
+            TwinSyncResult(received, requestPaths.size, conflicts,
+                if (writeErrors > 0) "有 $writeErrors 个文件写入失败" else null, null)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -194,4 +187,61 @@ internal class TwinSyncProtocol(
             } catch (_: Exception) { /* best effort */ }
         }
     }
+}
+
+// ── v0.2 线协议载荷: 发送端与接收端共用的唯一事实源 ─────────────────────
+// P0 回归: 此前发送端写扁平字符串、接收端按对象解析, 只要真有差异就抛异常。
+// 两端都必须走下面这三个函数, 任何一端单独改形态都会被 TwinWireContractTest 抓住。
+
+/** 对端在清单响应里给我们的一个文件。 */
+internal data class ManifestFile(val relPath: String, val content: String, val mtime: Long)
+
+/** 清单响应: 对端给我们的文件 + 对端缺的路径。 */
+internal data class ManifestResponse(val send: List<ManifestFile>, val request: List<String>)
+
+private val wireJson = Json { ignoreUnknownKeys = true }
+
+/** 构造 WS_MANIFEST 载荷 (发送端唯一入口)。 */
+internal fun buildManifestPayload(agentName: String): String = buildJsonObject {
+    put("files", buildJsonObject {
+        TwinWorkspace.buildManifest(agentName).forEach { (relPath, entry) ->
+            put(relPath, buildJsonObject {
+                put("hash", JsonPrimitive(TwinWorkspace.manifestHash(entry.hash)))
+                put("mtime", JsonPrimitive(entry.mtime))
+            })
+        }
+    })
+}.toString()
+
+/**
+ * 解析 WS_MANIFEST 响应。路径逐条消毒, 坏条目跳过而非整包失败
+ * (但 `content` 缺失视为协议不兼容, 该条跳过并计数, 由调用方按 0 文件处理)。
+ */
+internal fun parseManifestResponse(data: String): ManifestResponse {
+    val obj = wireJson.parseToJsonElement(data).jsonObject
+    val send = mutableListOf<ManifestFile>()
+    obj["send"]?.jsonObject?.forEach { (relPath, value) ->
+        val safe = TwinWorkspace.sanitizeRelPath(relPath) ?: return@forEach
+        val fileObj = value as? JsonObject ?: return@forEach
+        val content = fileObj["content"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+        val mtime = fileObj["mtime"]?.jsonPrimitive?.longOrNull ?: 0L
+        send.add(ManifestFile(safe, content, mtime))
+    }
+    val request = obj["request"]?.jsonArray
+        ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+        ?.mapNotNull { TwinWorkspace.sanitizeRelPath(it) }
+        ?: emptyList()
+    return ManifestResponse(send, request)
+}
+
+/** 解析 WS_PULL 响应: 路径逐条消毒, 非字符串内容跳过。 */
+internal fun parsePullResponse(data: String): Map<String, String> {
+    val files = wireJson.parseToJsonElement(data).jsonObject["files"]?.jsonObject ?: return emptyMap()
+    val out = LinkedHashMap<String, String>()
+    files.forEach { (relPath, value) ->
+        val safe = TwinWorkspace.sanitizeRelPath(relPath) ?: return@forEach
+        val content = value.jsonPrimitive.contentOrNull ?: return@forEach
+        out[safe] = content
+    }
+    return out
 }

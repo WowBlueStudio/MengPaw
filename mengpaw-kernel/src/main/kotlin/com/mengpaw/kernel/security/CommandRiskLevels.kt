@@ -29,6 +29,12 @@ object CommandRiskLevels {
         "agent.memory.write" to RiskLevel.LOW,
         "agent.memory.record" to RiskLevel.LOW,
         "agent.memory.project.save" to RiskLevel.LOW,
+        // 工作区快照历史 (P1 对象库) — 只读/新增对象, 不改工作区文件
+        "memory.commit" to RiskLevel.LOW,
+        "memory.log" to RiskLevel.LOW,
+        "memory.show" to RiskLevel.LOW,
+        "memory.diff" to RiskLevel.LOW,
+        "memory.gc" to RiskLevel.LOW,
         "self.notify.message" to RiskLevel.LOW,
         "self.notify.banner" to RiskLevel.LOW,
         "sys.notification.send" to RiskLevel.LOW,
@@ -61,6 +67,8 @@ object CommandRiskLevels {
         "agent.memory.mid.edit" to RiskLevel.MID,
         "agent.memory.project.rm" to RiskLevel.MID,
         "agent.memory.project.edit" to RiskLevel.MID,
+        // 工作区回滚 = 覆盖现有文件 (含被删文件), 与记忆条目编辑同档; 需 reason 意图声明
+        "memory.restore" to RiskLevel.MID,
         "clipboard.copy" to RiskLevel.MID,
         "clipboard.paste" to RiskLevel.MID,
         "sys.clipboard" to RiskLevel.MID,

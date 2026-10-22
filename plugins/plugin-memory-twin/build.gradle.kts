@@ -23,6 +23,12 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    // JVM 单测默认调用 android.util.Log 会抛 "Stub!" — 开了之后 Log 变 no-op,
+    // 冲突分支与配对流程才能在 JVM 上被覆盖 (P0 回归所需)。
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {

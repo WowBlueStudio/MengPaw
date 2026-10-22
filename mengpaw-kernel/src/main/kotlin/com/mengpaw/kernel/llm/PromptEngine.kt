@@ -154,6 +154,7 @@ class PromptEngine {
             ## 常用命令 (权威来源: self.tools)
             - 不确定用什么 → self.search <描述>; 完整清单 → self.tools [ns]; 端口/网络 → self.ports
             - 记忆三轨: agent.memory.keep / agent.memory.record / agent.memory.project.save; 输出目录: agent.output
+            - 工作区历史: memory.commit 存档 / memory.log 看快照 / memory.diff 对比 / memory.restore 回滚 .md (中危需 reason)
             - 自动更新: update.check (详情 `skill.run self-update`)
 
             ## 插件
@@ -265,6 +266,7 @@ class PromptEngine {
             ## Common Commands (authority: self.tools)
             - Unsure which command? `self.search <desc>`; full listing `self.tools [ns]`; ports/network `self.ports`
             - Memory tracks: agent.memory.keep / agent.memory.record / agent.memory.project.save; output dir: agent.output
+            - Workspace history: memory.commit (snapshot) / memory.log / memory.diff / memory.restore (.md rollback, mid-risk needs reason)
             - Auto update: update.check (details `skill.run self-update`)
 
             ## Plugins

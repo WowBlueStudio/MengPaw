@@ -115,7 +115,15 @@ object DataPaths {
     fun toolResultsDir(agentName: String) = resolver.toolResultsDir(agentName)
 
     // ── Memory Twin (v0.22.0: 工作区文件同步, 账本与独立梦境目录已移除) ──
-    val TWIN_AUDIT get() = "$AGENTS/twin/audit.log"
+    /** 孪生根目录 — 对象库/库存/时钟/审计共用。 */
+    val TWIN_DIR get() = "$AGENTS/twin"
+    /** 内容寻址对象库根 (objects/refs/tmp, 见 docs/memory-git-sync-design.md §3.1)。 */
+    val TWIN_STORE get() = "$TWIN_DIR/store"
+    /** 设备库存目录 (`devices/<deviceId>.md`, P4 落地; P1 仅预留路径)。 */
+    val TWIN_DEVICES get() = "$TWIN_DIR/devices"
+    /** Lamport 时钟文件 (单行整数)。 */
+    val TWIN_CLOCK get() = "$TWIN_DIR/clock"
+    val TWIN_AUDIT get() = "$TWIN_DIR/audit.log"
 
     // ── Per-agent Skills & Tools partitions ─────────────────────────
     /** Agent's local skills directory — pulled from global pool or created locally. */

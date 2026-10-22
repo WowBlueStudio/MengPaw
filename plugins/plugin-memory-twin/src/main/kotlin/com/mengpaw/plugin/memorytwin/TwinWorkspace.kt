@@ -50,6 +50,21 @@ object TwinWorkspace {
     fun manifestHash(hash: String): String =
         if (hash.length <= MANIFEST_HASH_CHARS) hash else hash.take(MANIFEST_HASH_CHARS)
 
+    /**
+     * 相对路径消毒 — **写盘入口必经** (P0)。
+     *
+     * 入站 handler 与出站响应解析都会把对端给的 relPath 送进 [applyWorkspaceFile] /
+     * [removeWorkspaceFile]，所以消毒必须放在存储层而不是只放在消息处理层。
+     * 拒绝: 空白 / 绝对路径 / 盘符或 URL scheme / 任何 `..` 段。
+     */
+    internal fun sanitizeRelPath(relPath: String): String? {
+        if (relPath.isBlank()) return null
+        if (relPath.startsWith("/") || relPath.startsWith("\\")) return null
+        if (relPath.contains(":")) return null  // Windows 盘符/URL scheme 保险
+        if (relPath.split('/', '\\').any { it == ".." }) return null
+        return relPath
+    }
+
     /** 扫描工作区, 生成同步清单。 */
     fun buildManifest(agentName: String): Map<String, ManifestEntry> {
         val root = File(DataPaths.AGENTS, agentName)
@@ -78,21 +93,38 @@ object TwinWorkspace {
     }
 
     /**
-     * 写入一个同步文件: 内容比对 + 原子写 + 冲突检测 (.conflict 备份 + 审计 + inbox 提示)。
-     * 返回 "same" 表示内容一致未落盘 (调用方不必计数)。
+     * 写入一个同步文件: 路径消毒 + 内容比对 + 原子写 + 冲突检测。
+     *
+     * 返回:
+     * - `"applied"`  已写入
+     * - `"same"`     内容一致未落盘 (调用方不必计数)
+     * - `"conflict"` 本地较新且内容不同 → 已写 `.conflict` 备份, 未覆盖
+     * - `"rejected"` relPath 非法 (对端可控, 越界直接拒绝)
+     * - `"error"`    读/写失败 (含"目标存在但读不出来" — 不拿空内容去覆盖)
      */
     fun applyWorkspaceFile(agentName: String, relPath: String, content: String, fromDevice: String, fromTimestamp: Long): String {
-        val target = File(DataPaths.AGENTS, "$agentName/$relPath")
+        // P0: relPath 来自对端响应 (send / pull 的 key), 存储层再消毒一次, 不信任调用方
+        val safeRel = sanitizeRelPath(relPath) ?: run {
+            writeAudit("WORKSPACE_REJECT | from=$fromDevice | path=$relPath")
+            return "rejected"
+        }
+        val target = File(DataPaths.AGENTS, "$agentName/$safeRel")
         try {
             // P0: 目标存在时只读一次本地内容并复用 — 内容一致就立即返回,
             // 不写 tmp / 不 rename / 不 notifyDocChanged / 不写审计 (避免无意义写盘与提示词缓存失效)。
             val exists = target.exists()
             val localContent: String? = if (exists) try { target.readText() } catch (_: Exception) { null } else null
+            // P1: 目标存在却读不出来 (权限 / IO / 是目录) → 明确失败, 绝不拿空内容覆盖
+            if (exists && localContent == null) {
+                ErrorCollector.report(
+                    java.io.IOException("工作区文件不可读, 拒绝覆盖: $target"),
+                    "TwinWorkspace.applyWorkspaceFile($safeRel)")
+                return "error"
+            }
             if (localContent == content) return "same"
 
-            // 冲突检测 (同旧 applyIdentityUpdate 语义): 本地较新且内容不同 → .conflict 备份, 不覆盖
-            // 读取失败时按空内容处理 (= 旧行为), 不回退成"静默覆盖"
-            if (exists && target.lastModified() > fromTimestamp && (localContent ?: "") != content) {
+            // 冲突检测: 本地较新且内容不同 → .conflict 备份, 不覆盖
+            if (exists && target.lastModified() > fromTimestamp) {
                 val dateStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
                     .format(java.util.Date())
                 val conflictFile = File(target.parent, "${target.name}.conflict.$dateStamp.from_$fromDevice")
@@ -103,49 +135,64 @@ object TwinWorkspace {
                 return "conflict"
             }
 
-            // 原子写入 (P2 修复): 原实现先 delete 原文件再 renameTo —
-            // renameTo 失败时原文件已丢、tmp 又被后续清理 = 数据双失。
-            // 改为: ① 直接 renameTo (POSIX rename 原子替换已有目标, 不预删)
-            //       ② 失败才回退 delete+rename (跨文件系统等场景)
-            //       ③ 再失败保留 tmp 待恢复并报错, 不删任何数据
+            // 原子写入 (P2 修复 + P1 加固):
+            //   ① tmp 名带唯一后缀 — 两个同步协程同时写同一文件时不会互踩同一个 tmp;
+            //   ② 主路径直接 renameTo (POSIX rename 原子替换, 不预删目标);
+            //   ③ 回退改为 copyTo(overwrite) — 旧实现先 delete 目标, 并发下会删掉别人刚写入的唯一副本;
+            //   ④ 再失败保留 tmp 待恢复并报错, 不删任何数据。
             target.parentFile?.mkdirs()
-            val tmp = File(target.parent, "${target.name}.tmp")
+            val tmp = File(target.parent, "${target.name}.${System.nanoTime()}.tmp")
             tmp.writeText(content)
             var renamed = false
-            try { renamed = tmp.renameTo(target) } catch (e: Exception) { ErrorCollector.report(e, "TwinWorkspace.renameTo($relPath)") }
+            try { renamed = tmp.renameTo(target) } catch (e: Exception) { ErrorCollector.report(e, "TwinWorkspace.renameTo($safeRel)") }
             if (!renamed) {
-                if (target.exists()) target.delete()
-                renamed = try { tmp.renameTo(target) } catch (e: Exception) { false }
+                renamed = try {
+                    tmp.copyTo(target, overwrite = true)
+                    true
+                } catch (e: Exception) {
+                    ErrorCollector.report(e, "TwinWorkspace.copyTo($safeRel)")
+                    false
+                }
             }
             if (!renamed) {
                 ErrorCollector.report(
                     java.io.IOException("原子写失败 — 已保留 tmp 待恢复: $tmp -> $target"),
-                    "TwinWorkspace.applyWorkspaceFile($relPath)")
+                    "TwinWorkspace.applyWorkspaceFile($safeRel)")
                 return "error"
             }
             if (tmp.exists()) try { tmp.delete() } catch (_: Exception) {}
             // 触发 PromptEngine 缓存失效 (旧 rebuildMemoryDoc 缺失的关键钩子)
             AgentDocs.notifyDocChanged(agentName, target.absolutePath)
-            writeAudit("WORKSPACE_SYNC | from=$fromDevice | file=$relPath")
+            writeAudit("WORKSPACE_SYNC | from=$fromDevice | file=$safeRel")
             return "applied"
         } catch (e: Exception) {
-            ErrorCollector.report(e, "TwinWorkspace.applyWorkspaceFile($relPath)")
+            ErrorCollector.report(e, "TwinWorkspace.applyWorkspaceFile($safeRel)")
             return "error"
         }
     }
 
     /** 删除对端已不存在的同步文件 (本地保留 .deleted 备份, 防误删)。 */
     fun removeWorkspaceFile(agentName: String, relPath: String, fromDevice: String) {
-        val target = File(DataPaths.AGENTS, "$agentName/$relPath")
+        // 同 applyWorkspaceFile: 删除也走对端路径, 入口必须消毒
+        val safeRel = sanitizeRelPath(relPath) ?: run {
+            writeAudit("WORKSPACE_REJECT | from=$fromDevice | path=$relPath")
+            return
+        }
+        val target = File(DataPaths.AGENTS, "$agentName/$safeRel")
         if (!target.exists()) return
         try {
             val backup = File(target.parent, "${target.name}.deleted.${fromDevice}")
-            if (!backup.exists()) target.renameTo(backup)
-            else target.delete()
+            val moved = if (!backup.exists()) target.renameTo(backup) else { target.delete(); true }
+            if (!moved) {
+                ErrorCollector.report(
+                    java.io.IOException("删除失败: $target"),
+                    "TwinWorkspace.removeWorkspaceFile($safeRel)")
+                return
+            }
             AgentDocs.notifyDocChanged(agentName, target.absolutePath)
-            writeAudit("WORKSPACE_REMOVE | from=$fromDevice | file=$relPath")
+            writeAudit("WORKSPACE_REMOVE | from=$fromDevice | file=$safeRel")
         } catch (e: Exception) {
-            ErrorCollector.report(e, "TwinWorkspace.removeWorkspaceFile($relPath)")
+            ErrorCollector.report(e, "TwinWorkspace.removeWorkspaceFile($safeRel)")
         }
     }
 

@@ -227,7 +227,13 @@ object BuiltinCommandIndex {
         idx("agent.policy", "per-agent 命令前缀级授权 — 多 Agent 场景按 agent 放开受限命令 (blockList 恒优先)", "agent.policy [allow|deny <前缀> [--to <agent>]]",
             listOf("权限", "授权", "策略", "命令权限", "放行", "限制", "多Agent"),
             listOf("permission", "policy", "grant", "allow", "deny", "access"))
-
+        // ── memory: 工作区快照历史 (P1 对象库; 与 agent.memory.* 三轨记忆区分; 同组只留最高分, 防稀释通用 "memory" 检索) ──
+        idx("memory.commit", "对当前工作区打快照 (无变化时不产生新快照)", "memory.commit [-m 说明]", listOf("快照", "存档", "历史", "版本", "备份", "提交"), listOf("snapshot", "commit", "save", "workspace", "version", "backup"), group = "memory.history")
+        idx("memory.log", "查看工作区快照历史 (时间/来源设备/变更文件数/说明)", "memory.log [n]", listOf("快照", "历史", "版本", "记录", "日志", "列表"), listOf("log", "history", "snapshot", "list", "version", "record"), group = "memory.history")
+        idx("memory.show", "查看某文件在某个快照中的内容 (缺省最近快照)", "memory.show <path> [snapshot]", listOf("查看", "快照", "版本", "文件", "内容", "旧版"), listOf("show", "view", "file", "content", "snapshot", "version"), group = "memory.history")
+        idx("memory.diff", "对比当前工作区与快照的 unified diff (默认最近快照)", "memory.diff [--to <snapshot>]", listOf("差异", "对比", "快照", "变更", "比较", "修改"), listOf("diff", "compare", "snapshot", "change", "difference"), group = "memory.history")
+        idx("memory.restore", "把 .md 文件恢复成快照内容 (中危, 需 reason 意图声明)", "memory.restore <path> [snapshot]", listOf("恢复", "回滚", "还原", "快照", "旧版本", "撤销"), listOf("restore", "rollback", "revert", "undo", "snapshot"), group = "memory.history")
+        idx("memory.gc", "清理不可达对象并回报删除数与对象库体积", "memory.gc [--keep 30d]", listOf("清理", "垃圾", "回收", "对象库", "体积", "压缩"), listOf("gc", "garbage", "collect", "cleanup", "storage", "size"), group = "memory.history")
         // ── proc: 进程管理 (v0.47.x 实现; exec/system 为 blockList 保留位, 不注册不索引) ──
         idx("proc.ps", "列出进程 (PID/命令/用户; 可 --limit=N --filter=关键词)", "proc.ps [--limit=N] [--filter=关键词]",
             listOf("进程", "进程列表", "任务", "运行中", "查看进程", "ps"),

@@ -212,8 +212,36 @@ class TwinWorkspaceTest {
         val second = TwinWorkspace.buildManifest("a")
 
         assertNotEquals(first["doc.md"]!!.hash, second["doc.md"]!!.hash)
-        // 16 位截断 (传输用) 保持判别力
-        assertNotEquals(first["doc.md"]!!.hash.take(16), second["doc.md"]!!.hash.take(16))
-        assertEquals(first["doc.md"]!!.hash.take(16), first["doc.md"]!!.hash.take(16))  // 同内容同截断
+        // 协议形态 (manifestHash) 保持判别力 — 不再手写 take(16), 避免与常量脱节
+        assertNotEquals(
+            TwinWorkspace.manifestHash(first["doc.md"]!!.hash),
+            TwinWorkspace.manifestHash(second["doc.md"]!!.hash)
+        )
+    }
+
+    // ── 冲突分支 (P0 补测) ─────────────────────────────────────
+    // 此前该分支零 JVM 覆盖: android.util.Log 在单测里抛 "Stub!" 被外层 catch 吞成 "error"。
+    // build.gradle.kts 开 unitTests.isReturnDefaultValues 之后才能断言真实的冲突语义。
+
+    @Test
+    fun `本地较新且内容不同时落 conflict 备份且不覆盖本地`() {
+        TwinWorkspace.applyWorkspaceFile(agentName, "memory.md", "本地版本", "peer-1", 0L)
+        val target = File(workspaceRoot(), "memory.md")
+        assertTrue("预置本地较新的 mtime 失败", target.setLastModified(1_700_000_000_000L))
+
+        val r = TwinWorkspace.applyWorkspaceFile(agentName, "memory.md", "对端版本", "peer-2", 1_000L)
+
+        assertEquals("conflict", r)
+        assertEquals("本地内容不得被远端覆盖", "本地版本", target.readText())
+        val backups = target.parentFile!!.listFiles()!!.filter { it.name.contains(".conflict.") }
+        assertEquals("必须留下冲突备份", 1, backups.size)
+        assertEquals("备份内容应为对端版本", "对端版本", backups[0].readText())
+    }
+
+    @Test
+    fun `穿越路径在写盘入口被拒绝且不落文件`() {
+        assertEquals("rejected",
+            TwinWorkspace.applyWorkspaceFile(agentName, "../escape.md", "x", "peer-1", 0L))
+        assertFalse("工作区外不得出现文件", File(DataPaths.AGENTS, "escape.md").exists())
     }
 }
