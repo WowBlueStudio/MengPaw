@@ -36,4 +36,16 @@ internal object PromptFingerprints {
             "${fp(failures)}|${fp(commands)}"
         } catch (_: Exception) { "-" }
     }
+
+    /**
+     * 设备索引指纹 (P4, 设计 §8.2): `{AGENTS}/twin/devices/index.md` 在 agent 工作区**之外**,
+     * 因此不能靠 `AGENT_DOC_FILES` 的 mtime 快照 — 用独立的 mtime 指纹参与提示词缓存键。
+     * (另: 该文件也不随 `dev` 命名空间同步, 它是本机生成物, 见 DeviceIndexWriter。)
+     */
+    fun devices(): String {
+        return try {
+            val f = java.io.File(com.mengpaw.kernel.DataPaths.TWIN_DEVICES, "index.md")
+            if (f.isFile) "${f.length()}:${f.lastModified()}" else "-"
+        } catch (_: Exception) { "-" }
+    }
 }

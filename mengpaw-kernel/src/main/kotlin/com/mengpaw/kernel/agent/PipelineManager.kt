@@ -168,6 +168,9 @@ class PipelineManager(
         // Built-in: memory namespace (工作区快照历史/回滚 — P1 内容寻址对象库, 纯 JVM 不接协议)
         registry.registerNamespace("memory", com.mengpaw.kernel.memory.MemoryHistoryCommands.commands)
 
+        // Built-in: device namespace (设备/能力库存 — P4; 采集器经 DeviceCollectors 注入, 平台无关)
+        registry.registerNamespace("device", com.mengpaw.kernel.device.DeviceCommands.commands)
+
         // Additional namespaces (e.g. "sys" from Android adapter)
         additionalNamespaces.forEach { (ns, commands) ->
             registry.registerNamespace(ns, commands)

@@ -29,6 +29,8 @@ internal class PromptSystemBuilder {
     /** 触发器指纹快照 (v0.34.3 P1-5): heartbeat/trumanshow 引导按触发器注入 —
      *  触发器增删即失配 → 重建提示词, 否则引导块不随触发器变化。 */
     @Volatile private var cachedTriggerFingerprint: String? = null
+    /** 设备索引指纹快照 (P4, 设计 §8.2): `twin/devices/index.md` 在 agent 工作区外 → 独立 mtime 指纹。 */
+    @Volatile private var cachedDeviceFingerprint: String? = null
 
     /** 工作区文档 mtime 快照 — 任何文档删除/修改即失配, 强制重建提示词.
      *  (docCache.isNotEmpty() 只检查条目存在, 无法感知单个文件被删除 —
@@ -196,7 +198,8 @@ internal class PromptSystemBuilder {
             docMtimes == currentDocMtimes(agentName) && // 文件删除/修改即失配 → 重建
             pinnedFingerprint == PromptFingerprints.pinned() && // 用户指定技能清单/内容变化 → 重建
             cachedEvolutionFingerprint == PromptFingerprints.evolution(agentName) && // 进化数据变化 → 重建
-            cachedTriggerFingerprint == PromptFingerprints.trigger() // 触发器增删 → 重建 (P1-5)
+            cachedTriggerFingerprint == PromptFingerprints.trigger() && // 触发器增删 → 重建 (P1-5)
+            cachedDeviceFingerprint == PromptFingerprints.devices() // 设备库存索引变化 → 重建 (P4)
         ) {
             return cachedPrompt
         }
@@ -373,6 +376,7 @@ This reminder disappears automatically once the name is set.
         pinnedFingerprint = PromptFingerprints.pinned()
         cachedEvolutionFingerprint = PromptFingerprints.evolution(agentName)
         cachedTriggerFingerprint = PromptFingerprints.trigger()
+        cachedDeviceFingerprint = PromptFingerprints.devices()
         return prompt
     }
 

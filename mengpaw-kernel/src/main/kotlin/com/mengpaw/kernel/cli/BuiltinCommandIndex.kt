@@ -234,16 +234,16 @@ object BuiltinCommandIndex {
         idx("memory.diff", "对比当前工作区与快照的 unified diff (默认最近快照)", "memory.diff [--to <snapshot>]", listOf("差异", "对比", "快照", "变更", "比较", "修改"), listOf("diff", "compare", "snapshot", "change", "difference"), group = "memory.history")
         idx("memory.restore", "把 .md 文件恢复成快照内容 (中危, 需 reason 意图声明)", "memory.restore <path> [snapshot]", listOf("恢复", "回滚", "还原", "快照", "旧版本", "撤销"), listOf("restore", "rollback", "revert", "undo", "snapshot"), group = "memory.history")
         idx("memory.gc", "清理不可达对象并回报删除数与对象库体积", "memory.gc [--keep 30d]", listOf("清理", "垃圾", "回收", "对象库", "体积", "压缩"), listOf("gc", "garbage", "collect", "cleanup", "storage", "size"), group = "memory.history")
+        // ── device: 设备/能力库存 (P4 — 多端清单, 每端只写自己一行; 与 sys.device 单机信息区分) ──
+        idx("device.self", "查看本机库存行 (型号/形态/硬件/能力/时效) 与寄存声明", "device.self", listOf("本机", "设备", "库存", "硬件", "配置", "我寄存在哪"), listOf("self", "device", "inventory", "hardware", "local", "capability"), group = "device.inventory")
+        idx("device.list", "列出全部设备库存 (名称/形态/模型/时效/状态, 含离线端)", "device.list", listOf("设备", "设备列表", "多端", "端", "库存", "清单", "其他设备"), listOf("list", "devices", "inventory", "peers", "machines"), group = "device.inventory")
+        idx("device.info", "查看单端完整库存 (硬件/传感器/相机/Agent 能力/来源)", "device.info <名称>", listOf("设备详情", "设备信息", "那台设备", "硬件详情", "查询设备"), listOf("info", "detail", "device", "inventory", "spec"), group = "device.inventory")
+        idx("device.find", "按能力找端 (browser/vision/camera/gps/tablet) — 哪台设备能干这件事", "device.find <能力>", listOf("按能力找", "哪台设备", "哪个端", "具备能力", "找设备", "能力检索"), listOf("find", "capability", "which device", "has", "search", "device"), group = "device.inventory")
+        idx("device.refresh", "重测本机硬件与能力并登记库存 (有差异才写, 随 dev 命名空间同步)", "device.refresh", listOf("刷新设备", "重测", "更新库存", "采集硬件", "登记设备"), listOf("refresh", "collect", "rescan", "update", "inventory"), group = "device.inventory")
         // ── proc: 进程管理 (v0.47.x 实现; exec/system 为 blockList 保留位, 不注册不索引) ──
-        idx("proc.ps", "列出进程 (PID/命令/用户; 可 --limit=N --filter=关键词)", "proc.ps [--limit=N] [--filter=关键词]",
-            listOf("进程", "进程列表", "任务", "运行中", "查看进程", "ps"),
-            listOf("process", "ps", "task", "running", "list"))
-        idx("proc.info", "查看单个进程详情 (命令行/用户/父子关系/启动时间)", "proc.info <pid>",
-            listOf("进程详情", "进程信息", "PID", "进程查询"),
-            listOf("process", "info", "detail", "pid"))
-        idx("proc.kill", "结束进程 (纯 JVM 信号, 系统进程需 root.exec; 需 reason)", "proc.kill <pid> [--force]",
-            listOf("结束进程", "终止进程", "杀进程", "杀掉", "kill"),
-            listOf("kill", "terminate", "process", "stop"))
+        idx("proc.ps", "列出进程 (PID/命令/用户; 可 --limit=N --filter=关键词)", "proc.ps [--limit=N] [--filter=关键词]", listOf("进程", "进程列表", "任务", "运行中", "查看进程", "ps"), listOf("process", "ps", "task", "running", "list"))
+        idx("proc.info", "查看单个进程详情 (命令行/用户/父子关系/启动时间)", "proc.info <pid>", listOf("进程详情", "进程信息", "PID", "进程查询"), listOf("process", "info", "detail", "pid"))
+        idx("proc.kill", "结束进程 (纯 JVM 信号, 系统进程需 root.exec; 需 reason)", "proc.kill <pid> [--force]", listOf("结束进程", "终止进程", "杀进程", "杀掉", "kill"), listOf("kill", "terminate", "process", "stop"))
         // 保留位: 语义为"执行任意/系统级命令", 与 Linux 命令通道重复 → 不注册, 恒拒绝
         // (SecurityPolicy.blockList)。索引保留是为了让 Agent 搜到后知道**此路不通**,
         // 而不是反复猜命令名 (IndexCoverageTest 对此二条显式豁免)。

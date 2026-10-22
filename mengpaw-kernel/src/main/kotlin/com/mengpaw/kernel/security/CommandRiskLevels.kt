@@ -35,6 +35,12 @@ object CommandRiskLevels {
         "memory.show" to RiskLevel.LOW,
         "memory.diff" to RiskLevel.LOW,
         "memory.gc" to RiskLevel.LOW,
+        // 设备库存 (P4) — 只读查询 + 幂等重测本机 (单写者校验在 store 内, 不写别端)
+        "device.self" to RiskLevel.LOW,
+        "device.list" to RiskLevel.LOW,
+        "device.info" to RiskLevel.LOW,
+        "device.find" to RiskLevel.LOW,
+        "device.refresh" to RiskLevel.LOW,
         // 记忆孪生 (17 条, 2026-10-22 P0 补齐): 状态/同步/能力查询类只读或幂等拉取 → 普通;
         // 解绑与设备丢失广播会破坏既有信任关系 → 中危 (见下方 MID 段)。
         "twin.start" to RiskLevel.LOW,
