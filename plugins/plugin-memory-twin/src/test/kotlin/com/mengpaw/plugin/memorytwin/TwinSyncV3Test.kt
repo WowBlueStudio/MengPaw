@@ -226,9 +226,12 @@ class TwinSyncV3Test {
         // 合并结果落盘
         assertEquals("对端内容\n", File(workspace(), "soul.md").readText())
         assertEquals("新增文件\n", File(workspace(), "new.md").readText())
-        // 内容与对端树一致 → 快进采纳对端头 (不造新快照)
-        assertEquals("应采纳对端 head", listOf(remote.id), SnapshotStore.heads(ns))
-        assertEquals(remote.id, SnapshotStore.localRef(ns))
+        // 内容与对端树一致 → 收敛 heads: **并集**, 本地 head 不得被丢弃
+        // (单纯采纳对端 head 会让本地提交变成不可达对象, GC 一跑历史就没了)
+        val headsAfter = SnapshotStore.heads(ns)
+        assertTrue("应保留对端 head", headsAfter.contains(remote.id))
+        assertTrue("本地 head 不得被丢弃", headsAfter.contains(base))
+        assertEquals("local ref 必须指向某个现存 head", 1, headsAfter.count { it == SnapshotStore.localRef(ns) })
     }
 
     // ── dev 命名空间 ───────────────────────────────────────────────

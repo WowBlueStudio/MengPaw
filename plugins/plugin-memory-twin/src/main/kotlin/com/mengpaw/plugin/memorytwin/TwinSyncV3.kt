@@ -166,7 +166,7 @@ internal class TwinSyncV3(
         val oursFiles = space.scan()
         // 内容已一致 → 快进采纳对端头 (0 新增对象, 也是双方收敛的关键)
         if (space.snapshot() == theirs.files) {
-            adopt(space.namespace, theirHeads)
+            convergeHeads(space.namespace, theirHeads)
             return SpaceResult()
         }
 
@@ -185,7 +185,7 @@ internal class TwinSyncV3(
         val mergedIds = space.snapshot()
 
         if (mergedIds == theirs.files) {
-            adopt(ns, theirHeads)
+            convergeHeads(ns, theirHeads)
         } else {
             commitMerge(ns, mergedIds, localHeads + theirHeads, peer.agentName)
         }
@@ -336,12 +336,19 @@ internal class TwinSyncV3(
         SnapshotStore.setLocalRef(ns, id)
     }
 
-    /** 快进采纳对端 heads (内容已一致) — 不生成新快照, 避免双方互造合并提交。 */
-    private fun adopt(ns: String, theirHeads: List<String>) {
-        SnapshotStore.setHeads(ns, theirHeads)
-        val latest = theirHeads.mapNotNull { SnapshotStore.snapshot(ns, it) }
-            .maxByOrNull { it.lamport }?.id
-            ?: theirHeads.lastOrNull()
+    /**
+     * 收敛 heads (内容已一致时) — 取**并集**, 不直接采纳对端 heads。
+     *
+     * 为什么不是单纯采纳: 本地 head 可能不在对端历史里 (双方各自提交后首轮相遇),
+     * 直接丢弃会让本地提交变成不可达对象, GC 一跑历史就没了 (内容虽同, 审计链断)。
+     * 并集是幂等的: 双方各保留对方 head 后, 下一轮 HELLO 的 heads 集合相等,
+     * 自然收敛且不产生新快照 —— 这与"避免互造合并提交"的目标一致。
+     */
+    private fun convergeHeads(ns: String, theirHeads: List<String>) {
+        val union = (SnapshotStore.heads(ns) + theirHeads).distinct()
+        SnapshotStore.setHeads(ns, union)
+        val latest = union.mapNotNull { SnapshotStore.snapshot(ns, it) }
+            .maxByOrNull { it.lamport }?.id ?: union.lastOrNull()
         if (latest != null) SnapshotStore.setLocalRef(ns, latest)
     }
 
@@ -370,3 +377,4 @@ internal class TwinSyncV3(
         }
     }
 }
+
