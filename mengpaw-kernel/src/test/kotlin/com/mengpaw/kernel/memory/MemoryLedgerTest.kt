@@ -193,4 +193,30 @@ class MemoryLedgerTest {
         assertFalse(result.appended)
         assertTrue(result.error.orEmpty().contains("文件超限"))
     }
+
+    // ── 撤回语义 (P3 补测) ───────────────────────────────────────
+
+    @Test
+    fun `被撤回的原块不再进入未归纳 且撤回块本身不是知识`() {
+        val original = entry("## 08:00:00\n\n要走的路")
+        assertNull(MemoryLedger.append(original).error)
+        assertEquals(1, MemoryLedger.undigested(agent).size)
+
+        // 撤回 = 追加 revision 条目, supersedes 指向原块 blockHash
+        val tomb = MemoryLedger.appendNote(
+            agentName = agent,
+            track = MemoryLedger.TRACK_MID,
+            file = original.file,
+            block = "## 撤回 08:30:00 · 原 08:00:00\n\n> 已撤回",
+            kind = MemoryLedger.KIND_REVISION,
+            supersedes = listOf(original.blockHash),
+            wall = "2026-10-22T08:30:00+08:00"
+        )
+        assertNull(tomb.error)
+
+        val pending = MemoryLedger.undigested(agent)
+        assertTrue("原块已被 supersede, 不得再归纳", pending.none { it.entryId == original.entryId })
+        assertTrue("撤回块本身不是知识", pending.none { it.entryId == tomb.entryId })
+        assertTrue("query(undigestedOnly) 必须同规则", MemoryLedger.query(agent, undigestedOnly = true).isEmpty())
+    }
 }

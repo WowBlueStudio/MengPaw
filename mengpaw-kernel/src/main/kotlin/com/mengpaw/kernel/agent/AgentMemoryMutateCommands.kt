@@ -198,12 +198,24 @@ internal class AgentMemoryMutateCommands {
         }
         val agent = agentName(ctx)
         val path = DataPaths.projectMemoryFile(agent, projectName)
-        val deleted = AgentDocs.deleteEntry(agent, path, entryId)
-        return when (deleted) {
-            1 -> ExecutionResult.ok("已从项目记忆 ($projectName) 删除: $entryId")
-            0 -> ExecutionResult.fail(singleEntryFail(agent, path, entryId, "项目记忆 $projectName"))
-            else -> ExecutionResult.fail("内部错误")
-        }
+        // P3 补齐: 与中期的 mid.rm 语义对齐 — 追加 tombstone 条目, 不物理删除历史块。
+        // 账本记 revision, 且 supersedes 指向原块 → 该块不会再被归纳 (MemoryLedger.undigested)。
+        val outcome = AgentMemoryLedgerHook.appendRevision(
+            agentName = agent,
+            filePath = path,
+            originalId = entryId,
+            newContent = "",
+            track = com.mengpaw.kernel.memory.MemoryLedger.TRACK_PROJECT,
+            project = projectName,
+            meta = writeMeta(ctx),
+            revoked = true
+        )
+        return if (outcome != null) ExecutionResult.ok(buildString {
+            appendLine("已撤回项目记忆 ($projectName): $entryId")
+            appendLine("原块保留 (不物理删除); 新 revision 条目: ${outcome.entryId}")
+            if (outcome.ledgerError != null) appendLine("⚠️ 账本写入失败: ${outcome.ledgerError}")
+        })
+        else ExecutionResult.fail(singleEntryFail(agent, path, entryId, "项目记忆 $projectName"))
     }
 
     /** Edit a single entry in a project memory file. */

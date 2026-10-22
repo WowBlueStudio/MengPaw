@@ -315,12 +315,25 @@ object MemoryLedger {
     fun digestedIds(all: List<Entry>): Set<String> =
         all.filter { it.kind == KIND_DIGEST }.flatMap { it.sources }.toSet()
 
-    /** 未归纳 = 非 digest 且未被任何 digest 的 sources 收录。 */
+    /** 被某条 revision 的 `supersedes` 指向的原块 (blockHash) — 已撤回/已修订, 不得再归纳。 */
+    fun retiredBlockHashes(all: List<Entry>): Set<String> =
+        all.flatMap { it.supersedes }.toSet()
+
+    /**
+     * 未归纳 = **note** 条目, 且未被 digest 收录、未被 revision supersede。
+     *
+     * 为什么排除 revision/tombstone: 撤回块正文是"已撤回"标记、修订块是指向性说明,
+     * 都不是知识本体; 若参与归纳, 一条被撤回的记忆会被重新蒸馏进长期记忆 (复活)。
+     * 修订后的新内容目前不自动再归纳 (需要重新 record), 属已知取舍。
+     */
     fun undigested(agentName: String): List<Entry> = undigested(entries(agentName))
 
     fun undigested(all: List<Entry>): List<Entry> {
         val digested = digestedIds(all)
-        return all.filter { it.kind != KIND_DIGEST && it.entryId !in digested }
+        val retired = retiredBlockHashes(all)
+        return all.filter {
+            it.kind == KIND_NOTE && it.entryId !in digested && it.blockHash !in retired
+        }
     }
 
     /**
@@ -337,12 +350,15 @@ object MemoryLedger {
     ): List<Entry> {
         val all = entries(agentName)
         val digested = if (undigestedOnly) digestedIds(all) else emptySet()
+        val retired = if (undigestedOnly) retiredBlockHashes(all) else emptySet()
         return all.filter { entry ->
             (file == null || entry.file == file) &&
                 (project == null || entry.project == project) &&
                 (fromDate == null || entry.wall.take(10) >= fromDate) &&
                 (toDate == null || entry.wall.take(10) <= toDate) &&
-                (!undigestedOnly || (entry.kind != KIND_DIGEST && entry.entryId !in digested))
+                (!undigestedOnly ||
+                    (entry.kind == MemoryLedger.KIND_NOTE &&
+                        entry.entryId !in digested && entry.blockHash !in retired))
         }
     }
 
