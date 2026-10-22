@@ -134,6 +134,8 @@ class MemoryTwinPlugin : Plugin {
     // ── Lifecycle ─────────────────────────────────────────────────
 
     override suspend fun onInstall(ctx: PluginContext) {
+        // P4: 设备库存的 agent 能力事实注入 (模型/上下文/视觉/插件) — device.refresh 也靠它
+        TwinInventoryFacts.register()
         ctx.log("记忆孪生插件已安装 — 通过侧边栏 5 连击 MengPaw 框架图标激活")
     }
 

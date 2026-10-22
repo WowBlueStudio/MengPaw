@@ -58,6 +58,7 @@ internal class WorkspaceSpace(private val agentName: String) : SyncSpace {
  * `dev` 命名空间: `{AGENTS}/twin/devices/` 下的设备库存 md 文件 (P4 建库存文件, P2 先打通同步)。
  *
  * 单写者铁律: 本机只应写自己那一行; 写入目标由合并器 D 类策略保证 (同 deviceId 双写会告警)。
+ * `index.md` 是**本机生成物** (时效文案随时间变), 不参与同步 —— 否则各端争写同一路径会制造抖动。
  */
 internal class DevicesSpace : SyncSpace {
 
@@ -102,6 +103,12 @@ internal class DevicesSpace : SyncSpace {
             var renamed = tmp.renameTo(target)
             if (!renamed) renamed = try { tmp.copyTo(target, overwrite = true); true } catch (_: Exception) { false }
             if (tmp.exists()) try { tmp.delete() } catch (_: Exception) {}
+            if (renamed) {
+                // P4: 对端库存行落盘后重建本机索引 (索引是本机生成物, 不参与同步)
+                try { com.mengpaw.kernel.device.DeviceIndexWriter.rebuild() } catch (e: Exception) {
+                    ErrorCollector.report(e, "DevicesSpace.indexRebuild")
+                }
+            }
             if (renamed) SpaceWriteResult.APPLIED else SpaceWriteResult.FAILED
         } catch (e: Exception) {
             ErrorCollector.report(e, "DevicesSpace.write($safe)")
@@ -116,6 +123,10 @@ internal class DevicesSpace : SyncSpace {
         try {
             val backup = File(root, "$safe.deleted.${fromDevice}")
             if (!backup.exists()) target.renameTo(backup) else target.delete()
+            // P4: 删行后重建索引 (索引是本机生成物)
+            try { com.mengpaw.kernel.device.DeviceIndexWriter.rebuild() } catch (e: Exception) {
+                ErrorCollector.report(e, "DevicesSpace.indexRebuild")
+            }
         } catch (e: Exception) {
             ErrorCollector.report(e, "DevicesSpace.delete($safe)")
         }
@@ -133,6 +144,7 @@ internal class DevicesSpace : SyncSpace {
 
     private fun isInventoryName(name: String): Boolean =
         name.endsWith(".md") &&
+            name != com.mengpaw.kernel.device.DeviceIndexWriter.INDEX_NAME &&
             !name.contains(".deleted.") && !name.contains(".conflict.") &&
             !name.contains(".kept-") && !name.endsWith(".tmp")
 }

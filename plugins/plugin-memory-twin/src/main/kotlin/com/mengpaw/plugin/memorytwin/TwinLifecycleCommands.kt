@@ -54,7 +54,7 @@ internal class TwinLifecycleCommands(
             // P2: mDNS 自动发现 (TwinDiscovery) 已删除 — 节点发现由 plugin-framework 通讯录
             // + twin.peer.add 手动 IP 承担; 这里只保留能力卡的系统状态自动采集。
             // P1.4: Register auto-collect broadcast receivers
-            state.autoCollectReceiver = TwinCapabilityCollector.registerAutoCollect(context) { card ->
+            state.autoCollectReceiver = TwinCapabilityAutoCollect.register(context) { card ->
                 state.scope.launch {
                     android.util.Log.i("MengPawTwin", "系统状态变化,自动更新能力卡")
                     state.syncEngine.broadcastCapability(card.toJson())
@@ -63,6 +63,13 @@ internal class TwinLifecycleCommands(
         }
 
         state.isRunning = true
+        // ── P4: 设备库存 — 启动时登记本机那一行 (有差异才写; 随 dev 命名空间同步到达其他端) ──
+        TwinInventoryFacts.register()
+        try {
+            com.mengpaw.kernel.device.DeviceCommands.refreshLocal()
+        } catch (e: Exception) {
+            com.mengpaw.kernel.error.ErrorCollector.report(e, "TwinLifecycle.inventoryRefresh")
+        }
         // P1 修复: 不再用 `reused == null` 门控 — 复用既有 engine 时 (stop→start) 也要重启自动同步,
         // 否则心跳与 60s 同步静默停摆。startAutoSync 自身幂等 (已在跑则直接返回)。
         state.syncEngine.startAutoSync()

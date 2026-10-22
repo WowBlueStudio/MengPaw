@@ -34,6 +34,11 @@ internal class TwinCapabilityCommands(
                 ExecutionResult.ok(card.toJson())
             }
             "--all" -> {
+                // P4: 优先从库存清单渲染 (离线设备也在列; 无库存才回退内存能力卡)
+                val devices = TwinInventoryCards.all()
+                if (devices.isNotEmpty()) {
+                    return ExecutionResult.ok(inventoryTable(devices))
+                }
                 // P1 修复: isRunning 守卫 — 未启动时 syncEngine 未初始化
                 if (!state.isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
                 val collector = TwinCapabilityCollector(context, state.deviceId, state.deviceName,
@@ -82,6 +87,29 @@ internal class TwinCapabilityCommands(
         return "| ${card.deviceName} | ${card.formFactor.name} | ${card.model.modelName}$sourceTag | $ctx | $camera | $battery |"
     }
 
+    /** P4: 库存清单渲染 (离线端也在列; 时效列标出可能过时)。 */
+    private fun inventoryTable(devices: List<com.mengpaw.kernel.device.DeviceInventory>): String {
+        val now = System.currentTimeMillis()
+        val sb = StringBuilder()
+        sb.appendLine("## 设备能力对比 (来源: 设备库存)")
+        sb.appendLine()
+        sb.appendLine("| 设备 | 形态 | 模型 | 上下文 | 摄像头 | 时效 |")
+        sb.appendLine("|------|------|------|--------|--------|------|")
+        devices.sortedBy { it.displayName }.forEach { inv ->
+            val card = TwinInventoryCards.toCard(inv)
+            val stale = if (com.mengpaw.kernel.device.DeviceInventoryStore.isStale(inv, now)) " · ⚠️ 可能过时" else ""
+            val ctx = if (card.model.ctxKnown) "${card.model.contextWindowTokens / 1000}K" else "未知"
+            val camera = if (card.hardware.hasCamera) card.hardware.cameraFacing.joinToString() else "✗"
+            sb.appendLine(
+                "| ${inv.displayName} | ${inv.formFactor} | ${card.model.modelName} | $ctx | $camera | " +
+                    "${com.mengpaw.kernel.device.DeviceInventoryStore.ageText(inv, now)}$stale |"
+            )
+        }
+        sb.appendLine()
+        sb.appendLine("> 使用 twin.route <任务> 获取任务路由推荐 · device.info <名称> 看完整库存")
+        return sb.toString()
+    }
+
     suspend fun cmdDelegate(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         if (args.size < 2) return ExecutionResult.fail("用法: twin.delegate <peer-id> <task>")
         // P1 修复: isRunning 守卫 — 未启动时 syncEngine 未初始化
@@ -108,6 +136,11 @@ internal class TwinCapabilityCommands(
     suspend fun cmdRoute(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val task = args.joinToString(" ")
         if (task.isBlank()) return ExecutionResult.fail("用法: twin.route <任务描述>")
+        // P4: 库存优先 — 离线设备也参与评估, 且不需要孪生服务在跑 (纯本地库存文件)
+        val devices = TwinInventoryCards.all()
+        if (devices.isNotEmpty()) {
+            return ExecutionResult.ok(TwinRouter.routeFromInventory(task, devices).summary)
+        }
         // P1 修复: isRunning 守卫 — 未启动时 syncEngine 未初始化
         if (!state.isRunning) return ExecutionResult.fail("孪生服务未启动,请先执行 twin.start")
 

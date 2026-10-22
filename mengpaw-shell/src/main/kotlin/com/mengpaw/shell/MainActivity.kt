@@ -246,6 +246,12 @@ class MainActivity : ComponentActivity() {
             }
         } catch (_: Exception) {}
 
+        // ── P4 设备库存: Android 采集器注入 (kernel 零 Android 依赖, 与上面 FleetPlatform 同模式) ──
+        try {
+            com.mengpaw.kernel.device.DeviceCollectors.collector =
+                com.mengpaw.shell.DeviceCollectorImpl(this@MainActivity)
+        } catch (_: Exception) {}
+
         // ── Token 统计 ──
         try { com.mengpaw.shell.ui.components.TokenStatsCollector.load() } catch (_: Exception) {}
         // v0.46.1: 统一用量记录 — 内核 LLM 调用完成经 TokenUsageRegistry 广播到此记录器

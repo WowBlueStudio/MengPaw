@@ -3,6 +3,9 @@
 
 package com.mengpaw.plugin.memorytwin
 
+import com.mengpaw.kernel.device.DeviceInventory
+import com.mengpaw.kernel.device.DeviceInventoryStore
+
 /**
  * Capability-aware task router — helps the MengPaw Twin Agent decide
  * which device ("body" + "brain") is best suited for a given task.
@@ -32,7 +35,9 @@ object TwinRouter {
         val score: Int,
         val strengths: List<String>,
         val weaknesses: List<String>,
-        val verdict: String // one-line recommendation
+        val verdict: String, // one-line recommendation
+        /** 库存路由 (P4): 该端库存超过 30 天时标"可能过时" — **仍参与打分** (设计 §7.6)。 */
+        val staleness: String? = null
     )
 
     /** Result of a task route analysis. */
@@ -72,8 +77,40 @@ object TwinRouter {
         )
     }
 
-    // ── Requirement inference ──────────────────────────────────────
+    /**
+     * 库存路由 (P4, 设计 §7.5/§7.6) — 能力卡来源改为 `devices/<deviceId>.md`, **离线设备也参与评估**。
+     *
+     * 过期 (>30 天) 不排除, 只在"不足"里标"可能过时"并给出时效文本 (可配置为排除 = 后续项)。
+     * 库存为空时由调用方回退 [route] 的内存能力卡路径。
+     */
+    fun routeFromInventory(
+        task: String,
+        devices: List<DeviceInventory>,
+        now: Long = System.currentTimeMillis()
+    ): RouteAnalysis {
+        val requirements = inferRequirements(task)
+        val scored = devices.map { inv ->
+            val rec = scorePeer(TwinInventoryCards.toCard(inv), requirements)
+            if (DeviceInventoryStore.isStale(inv, now)) {
+                rec.copy(
+                    weaknesses = rec.weaknesses + "库存可能过时(${DeviceInventoryStore.ageText(inv, now)})",
+                    staleness = "可能过时"
+                )
+            } else {
+                rec
+            }
+        }.sortedByDescending { it.score }
+        val best = scored.firstOrNull()
+        return RouteAnalysis(
+            task = task,
+            inferredRequirements = requirements,
+            recommendations = scored,
+            bestPeerId = best?.peerId,
+            summary = buildSummary(scored, requirements)
+        )
+    }
 
+    // ── Requirement inference ──────────────────────────────────────
     /**
      * Infer task requirements from natural language description.
      *
@@ -278,6 +315,11 @@ object TwinRouter {
             if (best.weaknesses.isNotEmpty()) {
                 appendLine("- 不足: ${best.weaknesses.joinToString("; ")}")
             }
+        }
+        // P4: 库存路由的时效可见 — 过期仍参与, 但结论要标"可能过时"
+        if (recommendations.any { it.staleness != null }) {
+            appendLine()
+            appendLine("> ⚠️ 部分设备库存超过 30 天, 结论可能过时 — 可先 device.refresh 或让对端重新登记。")
         }
     }
 }

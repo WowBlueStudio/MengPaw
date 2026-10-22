@@ -497,9 +497,9 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 > 凭据经 `<ns>.config` 命令配置 (SSH 用户/密码或 PEM 密钥, 原子写入 {CONFIG}/)。默认通道 SSH
 > (PC 需启用 Windows 自带 OpenSSH Server, 手机 → PC 零额外安装); QwenPaw 另支持 REST 直连。
 
-### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0 + P1 对象库 + P2 协议 v0.3 + P3 记忆账本 2026-10-23)
+### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0 + P1 对象库 + P2 协议 v0.3 + P3 记忆账本 + P4 设备库存 2026-10-23)
 
-26 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起) + **协议 v0.3 三方合并** (P2) + **只增记忆账本/归纳视图** (P3) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
+29 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起) + **协议 v0.3 三方合并** (P2) + **只增记忆账本/归纳视图** (P3) + **设备/能力库存** (P4) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
 
 **设计**: 孪生 = 同步 `{agent}/` 工作区文档 + `{AGENTS}/twin/ledger/<agent>/entries.jsonl` (账本在工作区外, 单列命名空间)。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trumanshow.md/{date}_dream[.vN].md) + `memory/` 全部; **排除**: inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。(CLI.md 已随 v0.34.3 移除, 不再生成/同步)
 
@@ -518,7 +518,10 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 | `ModelCapabilityRules.kt` | 模型能力规则表 (2026-09-10 进化) — 内置厂商族级事实 + 工作区外置规则 `{agent}/twin-model-rules.json`, 逐维度合并 |
 | `ModelEvidenceStore.kt` | 模型实测证据库 `{AGENTS}/twin/model-evidence.json` — "用中学", 证据优先于声明 |
 | `ModelProfileResolver.kt` | 能力画像解析: 实测 > 外置规则 > 内置规则 > 档位推断 > 中性未知 |
-| `TwinRouter.kt` | 能力感知任务路由 (未知能力中性化 + 判定来源标注 + 可追溯结论) |
+| `TwinRouter.kt` | 能力感知任务路由 (未知能力中性化 + 判定来源标注 + 可追溯结论; P4 起优先读设备库存) |
+| `TwinCapabilityAutoCollect.kt` | 系统状态广播 (电池/网络/充电) 触发能力卡重采 — 自 `TwinCapability` 拆出 |
+| `TwinInventoryCards.kt` | 库存行 → `CapabilityCard` 适配 (P4 能力卡收敛为传输信封, 离线端也能路由) |
+| `TwinInventoryFacts.kt` | 设备库存的 agent 能力事实注入 (模型/上下文/视觉/插件 → kernel `DeviceCollectors`) |
 
 #### 模型能力判定进化 (2026-09-10, 用户定案"顺应 LLM 迭代节奏")
 
@@ -588,6 +591,19 @@ if-else 关键词链里, 型号一换代就静默判错, 且判错直接改变�
 - **归纳降级为视图** (`DreamEngine`): 输入改查账本 (未归纳/日期区间/项目) → 产物带强制 `sources:[entryId…]` (无法追溯标 `unsourced`) → 追加 `kind=digest` 条目标记已归纳; **不删除分片**, 重跑生成 `{date}_dream.v2.md`/`.v3…`, 旧产物保留。
 - **物化索引** `{agent}/memory/index.md` (`MemoryIndexWriter`): 项目分组 + 每组条目/未归纳计数 + 最近 3 条标题, 首行"自动生成，勿手改"; 内容只由账本决定 (跨端同文本, 可安全同步)。
 - **提示词注入** (`PromptSystemBuilder`): 长期记忆之后注入索引摘要 (≤200 token) + 常驻冲突裁决指引; `memory/index.md` 已加入 `AGENT_DOC_FILES` mtime 快照。
+
+#### 设备/能力库存 (P4, 2026-10-23 — `docs/memory-git-sync-design.md` §7/§8)
+
+- **库存行** `{AGENTS}/twin/devices/<deviceId>.md` (md + frontmatter, 键 = 现用 `deviceId` 指纹): 型号/形态/OS/CPU/RAM/磁盘/屏幕/传感器/相机 + `agents[]` (模型/上下文/视觉/工具/插件/来源) + `observedAt/schemaVersion/status`; 未知键保留、坏 frontmatter 返回 null。
+  TODO(P5): 身份改 UUID 需与配对迁移同批 (文件键/信任键/legacyFingerprint 三处一起换)。
+- **单写者** (`DeviceInventoryStore.write`): 只接受 `deviceId == 本机 deviceId` 的行, 其他端一律只读; `agents[]` 同 agent 取 `observedAt` 较新者。
+- **库存 vs 运行时切开** (§7.3): 电量/在线/忙闲**不进库存** (走心跳); `device.self` 展示的电量来自采集器实时读数, 不落盘 (否则每次刷新都产生差异)。
+- **采集器 SPI** (`kernel/device/DeviceCollector.kt`): 纯 JVM 接口 + `DeviceSnapshot`; Android 实现 `shell/DeviceCollectorImpl.kt` 在 `MainActivity.deferInit` 注册到 `DeviceCollectors.collector` (与 `FleetPlatform` 同注入模式); agent 能力事实由 `TwinInventoryFacts` 注入。
+- **索引** `{AGENTS}/twin/devices/index.md` (`DeviceIndexWriter`): 每设备一行 (名称·形态·模型·关键能力·时效·本机/已退役), **本机生成物不参与 `dev` 同步** (时效文案随时间变, 各端本地重算, 避免 D 类争写同一路径)。写入时机: 本机库存写入后 / 对端库存行同步落盘后。
+- **命令** `device.self/list/info/find/refresh` (kernel `PipelineManager` 注册 `device` 命名空间, 全部 LOW)。`device.refresh` **有差异才写** — 差异只比库存字段, 时间戳不算。
+- **路由** (`TwinRouter.routeFromInventory`): 能力卡来源改为库存, 离线端也参与; 过期 (>30 天) **仍参与**但标注"可能过时"; 无库存回退内存能力卡。
+- **能力卡收敛 (最小步)**: `CapabilityCard` 增 `schemaVersion` 并保留为传输信封; `twin.capabilities --all` / `twin.route` 优先读库存。
+- **提示词注入** (`PromptMemorySection` → `PromptDeviceSection`): 记忆索引之后注入 `## 你的设备与能力` (寄存设备一行 + 其余端每行 + 单写者/冲突裁决约束, ≤8 端 ≈150 token); `devices/index.md` 在 agent 工作区之外, 用**独立 mtime 指纹** `PromptFingerprints.devices()` 参与缓存键。
 
 #### 同步协议 v0.2 (冻结, 仅兼容未升级对端)
 
@@ -1293,6 +1309,11 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 #### memory — 工作区快照历史 (6, P1 对象库)
 `commit [-m 说明]` | `log [n]` | `show <path> [snapshot]` | `diff [--to <snapshot>]` | `restore <path> [snapshot]` | `gc [--keep 30d]`
 > 与 `agent.memory.*` 三轨记忆区分: 本组是**工作区文件的历史版本**（内容寻址对象库, `{AGENTS}/twin/store/`），不是记忆条目。`commit` 无变化不产生新快照；`show/diff` 缺省对比最近快照；`restore` 仅 `.md`（MID, 需 reason）；`gc` 从 heads+local 做可达性标记并按 30天/200快照取宽保留。
+
+
+#### device — 设备/能力库存 (5, P4 设备库存)
+`self` | `list` | `info <名称>` | `find <能力>` | `refresh`
+> 库存行 `{AGENTS}/twin/devices/<deviceId>.md`，每端只写自己那一行（`refresh` 有差异才写）；`find` 支持 browser/vision/camera/gps/tablet 与中文别名（浏览器/相机/定位…）；对端库存随孪生 `dev` 命名空间同步到达；全部 LOW。与 `sys.device`（单机静态信息）区分：本组是**多端清单 + 能力检索**。
 
 
 #### plugin — 插件管理 (12 + 5)

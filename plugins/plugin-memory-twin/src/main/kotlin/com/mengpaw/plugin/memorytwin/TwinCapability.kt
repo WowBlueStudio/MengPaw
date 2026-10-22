@@ -34,7 +34,12 @@ data class CapabilityCard(
     val software: SoftwareProfile,
     val runtime: RuntimeStatus,
     /** Memory Twin protocol version for compatibility negotiation. */
-    val protocolVersion: String = "0.2"
+    val protocolVersion: String = "0.2",
+    /**
+     * 库存 schema 版本 (P4, 设计 §7.2/§7.5) — 能力卡降级为**库存的传输信封**, 字段保持不变
+     * (旧对端仍可解析); 新对端用本字段判断库存行代次。
+     */
+    val schemaVersion: Int = 1
 ) {
     fun toJson(): String = Json.encodeToString(this)
 
@@ -353,48 +358,6 @@ class TwinCapabilityCollector(
                 if (widthDp >= 600 || heightDp >= 600) FormFactor.TABLET
                 else FormFactor.PHONE
             }
-        }
-    }
-
-    // ── P1.4: Auto-collect on system state changes ─────────────────
-
-    companion object {
-        /**
-         * Register Android system broadcast receivers for auto-recollection
-         * when battery, connectivity, or charging state changes.
-         *
-         * @param context Application context
-         * @param onCardChange Callback invoked with the new CapabilityCard on any change
-         * @return The registered receiver (caller should keep reference to unregister)
-         */
-        fun registerAutoCollect(
-            context: Context,
-            onCardChange: (CapabilityCard) -> Unit
-        ): android.content.BroadcastReceiver {
-            val receiver = object : android.content.BroadcastReceiver() {
-                override fun onReceive(ctx: Context, intent: android.content.Intent?) {
-                    // Re-collect and emit on any matching system event
-                    try {
-                        val deviceId = try { com.mengpaw.kernel.acp.AcpCrypto.myFingerprint() }
-                            catch (_: Exception) { "device-${System.currentTimeMillis()}" }
-                        val deviceName = try { android.os.Build.MODEL } catch (_: Exception) { "Android" }
-                        val collector = TwinCapabilityCollector(ctx, deviceId, deviceName,
-                            agentName = MemoryTwinPlugin.agentName)
-                        val card = collector.collect()
-                        onCardChange(card)
-                    } catch (e: Exception) {
-                        com.mengpaw.kernel.error.ErrorCollector.report(e, "TwinCapability.autoCollect")
-                    }
-                }
-            }
-            val filter = android.content.IntentFilter().apply {
-                addAction(android.content.Intent.ACTION_BATTERY_CHANGED)
-                addAction(android.net.ConnectivityManager.CONNECTIVITY_ACTION)
-                addAction(android.content.Intent.ACTION_POWER_CONNECTED)
-                addAction(android.content.Intent.ACTION_POWER_DISCONNECTED)
-            }
-            context.registerReceiver(receiver, filter)
-            return receiver
         }
     }
 }
