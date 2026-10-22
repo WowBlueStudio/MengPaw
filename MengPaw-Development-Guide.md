@@ -497,9 +497,9 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 > 凭据经 `<ns>.config` 命令配置 (SSH 用户/密码或 PEM 密钥, 原子写入 {CONFIG}/)。默认通道 SSH
 > (PC 需启用 Windows 自带 OpenSSH Server, 手机 → PC 零额外安装); QwenPaw 另支持 REST 直连。
 
-### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0 + P1 对象库 2026-10-22)
+### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0 + P1 对象库 + P2 协议 v0.3 2026-10-22)
 
-25 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起, 哈希链账本已移除) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
+26 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起, 哈希链账本已移除) + **协议 v0.3 三方合并** (P2) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
 
 **设计**: 孪生 = 同步整个 `{agent}/` 工作区文档, 保持跨设备一致。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trumanshow.md/{date}_dream.md) + `memory/` 全部; **排除**: inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。(CLI.md 已随 v0.34.3 移除, 不再生成/同步)
 
@@ -508,12 +508,13 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 | 文件 | 职责 |
 |------|------|
 | `MemoryTwinPlugin.kt` | 插件入口, 17 条 `twin.*` CLI 命令注册 |
-| `TwinWorkspace.kt` | 同步范围/清单 (SHA-256 + mtime)/冲突落盘 (LWW + .conflict 备份) |
-| `TwinSyncEngine.kt` | 同步流程 (WS_MANIFEST→WS_PULL) + 心跳保活 + QoS 自适应 |
-| `TwinAcpHandler.kt` | `AcpHandler` 实现 — 处理 8 种孪生 ACP 消息类型 |
-| `TwinDiscovery.kt` | Android NSD (mDNS) 局域网自动发现 |
+| `TwinWorkspace.kt` | 同步范围/清单 (SHA-256 + mtime)/L·M·D·S 分类/冲突落盘; 扫描委托 kernel `WorkspaceSnapshotSource` |
+| `TwinSyncEngine.kt` | 双栈调度 — v0.3 纯 pull (`TwinSyncV3`) / v0.2 冻结路径 (`WS_MANIFEST→WS_PULL`) + 心跳保活 + QoS 自适应 |
+| `TwinSyncV3.kt` | 协议 v0.3 纯 pull 驱动: HELLO→ACK→TREE_WALK→OBJ_GET→三方合并→提交/快进采纳头 |
+| `TwinSyncSpaces.kt` | 命名空间适配 (`ws-<agent>` 工作区 / `dev` 设备库存) — 同一套消息, 不同扫描/写入 |
+| `TwinAcpHandler.kt` | `AcpHandler` 实现 — 处理 12 种孪生 ACP 消息 (8 旧 + 4 个 v0.3) |
 | `TwinPairingEngine.kt` | 短码验证配对协议 (4 步: ANNOUNCE→CHALLENGE→VERIFY→CONFIRM) |
-| `TwinCapability.kt` | `CapabilityCard` + `TwinCapabilityCollector` — 设备能力采集与协议版本协商 (模型能力判定委托 `ModelProfileResolver`) |
+| `TwinCapability.kt` | `CapabilityCard` + `TwinCapabilityCollector` — 设备能力采集与协议版本协商 (P2 起宣告 0.3; 模型能力判定委托 `ModelProfileResolver`) |
 | `ModelCapabilityRules.kt` | 模型能力规则表 (2026-09-10 进化) — 内置厂商族级事实 + 工作区外置规则 `{agent}/twin-model-rules.json`, 逐维度合并 |
 | `ModelEvidenceStore.kt` | 模型实测证据库 `{AGENTS}/twin/model-evidence.json` — "用中学", 证据优先于声明 |
 | `ModelProfileResolver.kt` | 能力画像解析: 实测 > 外置规则 > 内置规则 > 档位推断 > 中性未知 |
@@ -556,7 +557,29 @@ if-else 关键词链里, 型号一换代就静默判错, 且判错直接改变�
   → 自动注入配对指引到工作区 inbox
 ```
 
-#### 同步协议 (工作区文件同步, 请求-响应)
+#### 同步协议 v0.3 (P2, 纯 pull + 三方合并 — 对端 `protocolVersion >= 0.3` 时启用)
+
+```
+设备 A (发起拉取)              设备 B
+  │  SYNC_HELLO {proto, deviceId, ns, heads[]} ──→ │  比对 heads
+  │ ←── SYNC_ACK {same, heads[], missingTrees[],   │  相同 → 只回 same:true (~200B)
+  │                missingBlobs[]}                  │
+  │  TREE_WALK {ns, sha} ─────────────────────────→ │  取快照头对应 tree + 快照元数据
+  │ ←── {snapshot, files:{relPath: blobSha}, raw}   │
+  │  OBJ_GET {ns, blobs[]} ───────────────────────→ │  批量取缺失 blob (base64)
+  │ ←── {blobs:{sha: base64}}                       │
+  │  TreeMerge(base=local ref, ours=磁盘, theirs) → 落盘 → 提交 / 快进采纳对端头
+```
+
+- `ws-<agent>` 与 `dev` 两个命名空间走**完全相同**的消息, 只换扫描/写入实现 (`TwinSyncSpaces.kt`)。
+- 合并策略 (§5.2): L 类 frontmatter 键级 + 正文 diff3 / M 类追加并集 / D 类单写者 / rules json 按 id 并集 /
+  删除-修改保留修改方为 `.kept-<device>.md` + inbox / 非 UTF-8 或 >256KB 取较新一方 + `.conflict` 备份。
+- 冲突不弹 UI: 写 `{agent}/inbox/merge_conflict_<ns>_<时间>.md`; 文件内冲突标记为
+  `<<<<<<< ours (设备名)` / `=======` / `>>>>>>> theirs (设备名)`。
+- 收敛: 合并后内容与对端树一致 → 直接采纳对端 heads (`setHeads` + `setLocalRef`), 不造新快照;
+  base 恒为 `refs/<ns>/local` (上次成功同步头), **不回退成"最近提交"**。
+
+#### 同步协议 v0.2 (冻结, 仅兼容未升级对端)
 
 ```
 设备 A                          设备 B
@@ -580,12 +603,15 @@ if-else 关键词链里, 型号一换代就静默判错, 且判错直接改变�
 | 移动网络 (非计费) | 300s | 全量工作区文档同步 (间隔更长) |
 | 按流量计费 | 暂停 | 仅 `twin.sync` 手动触发 |
 
-#### 发现机制 (双通道)
+#### 发现机制
 
 | 通道 | 方式 | 适用场景 |
 |------|------|---------|
-| mDNS 自动发现 | `TwinDiscovery` — `_mengpaw-twin._tcp` | 同 WiFi, 多播可达 |
+| framework 通讯录 | `framework.add <名称> <IP>` / 侧边栏"添加" | 已配对节点 |
 | 手动 IP 添加 | `twin.peer.add <ip> [port] [name]` | 多播隔离, 跨网段, 不同频段 |
+
+> P2 删除 `TwinDiscovery.kt` (mDNS `_mengpaw-twin._tcp`): `discoveredPeers` 无消费方, 节点发现统一由
+> plugin-framework 通讯录 + 手动 IP 承担。
 
 #### 核心 CLI 命令 (16 条)
 
@@ -623,6 +649,25 @@ twin.lost <peer> / twin.recover <peer>
 - 存储布局 `{AGENTS}/twin/store/{objects,refs/<ns>/{heads,local},tmp}`; `DataPaths` 增 `TWIN_DIR/TWIN_STORE/TWIN_DEVICES/TWIN_CLOCK`（`TWIN_AUDIT` 改为基于 `TWIN_DIR`, 值不变）。
 - 新命令 `memory.commit/log/show/diff/restore/gc`（`restore` 为 MID, 其余 LOW; namespace `ws-<agent>`）; 与 `agent.memory.*` 三轨记忆区分 —— 本组是**工作区文件的历史版本**, 不是记忆条目。
 - 工作区扫描排除 `inbox/` `dialog/` `backup/` `CLI.md` `*.tmp` `*.conflict.*`, 收录 `.md` + 根目录 `twin-model-rules.json`; P2 由 `plugin-memory-twin` 改为委托本实现以消除重复。
+
+#### P2 协议 v0.3 + 三方合并已落地 (2026-10-22)
+
+按 `docs/memory-git-sync-design.md` §2/§4/§5 落地**根 tree 比对 + 只拉缺失对象 + 三方合并**, 双栈兼容 v0.2:
+
+- **四消息** (`AcpProtocol.kt` + `SyncV3Messages.kt`): `SYNC_HELLO {proto, deviceId, ns, heads[]}` /
+  `SYNC_ACK {same, heads[], missingTrees[], missingBlobs[]}` / `TREE_WALK {ns, sha}` →
+  `{snapshot?, files, snapshotRaw?}` / `OBJ_GET {ns, blobs[]}` → `{blobs:{sha: base64}}`。
+- **鉴权**: 四类型并入 `AcpServer.processMessage` 的 `PromptFirewall.isTrusted` 分支, 同时加入
+  `AcpTransport.SENSITIVE_ACP_TYPES` (要求 peerId 与来源 IP 绑定) — 与 v0.2 工作区同步同档。
+- **合并器** (kernel 新文件 `memory/TreeMerge.kt` + `MergeText.kt`, 纯函数): `(base, ours, theirs) → MergeOutcome`,
+  按 §2.1 分类 (L/M/D/RULES/S) 执行 §5.2 策略表; base 恒取 `local ref`。
+- **同步驱动** (`TwinSyncV3.kt` + `TwinSyncSpaces.kt`): 纯 pull; 内容与对端树一致时**快进采纳对端头**,
+  避免双方每轮互造合并提交; 删除传播复用 `removeWorkspaceFile` (留 `.deleted` 备份)。
+- **文件分类** (`TwinWorkspace.kt`): `classifyWorkspace` 分出 L/M/D/RULES, S 类保持排除; 扫描委托 kernel。
+- **删除死代码** `TwinDiscovery.kt`; **风险分级** 17 条 `twin.*` 登记进 `CommandRiskLevels`
+  (`twin.lost`/`twin.unpair` = MID, 其余 LOW)。
+- **测试**: kernel 797 → **827** (+30: `TreeMergeTest` 15 / `SyncV3MessagesTest` 12 / `CommandRiskLevelsTest` 3);
+  plugin 79 → **92** (+13: `TwinSyncV3Test` 5 / `TwinWorkspaceTest` +2 / `TwinAcpHandlerTest` +6), 0 failures。
 
 ### 3.6 构建配置
 

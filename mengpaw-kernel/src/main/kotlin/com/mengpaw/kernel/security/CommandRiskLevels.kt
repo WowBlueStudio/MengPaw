@@ -35,6 +35,23 @@ object CommandRiskLevels {
         "memory.show" to RiskLevel.LOW,
         "memory.diff" to RiskLevel.LOW,
         "memory.gc" to RiskLevel.LOW,
+        // 记忆孪生 (17 条, 2026-10-22 P0 补齐): 状态/同步/能力查询类只读或幂等拉取 → 普通;
+        // 解绑与设备丢失广播会破坏既有信任关系 → 中危 (见下方 MID 段)。
+        "twin.start" to RiskLevel.LOW,
+        "twin.stop" to RiskLevel.LOW,
+        "twin.status" to RiskLevel.LOW,
+        "twin.peers" to RiskLevel.LOW,
+        "twin.peer.info" to RiskLevel.LOW,
+        "twin.peer.add" to RiskLevel.LOW,
+        "twin.pair" to RiskLevel.LOW,
+        "twin.sync" to RiskLevel.LOW,
+        "twin.sync.auto" to RiskLevel.LOW,
+        "twin.sync.qos" to RiskLevel.LOW,
+        "twin.capabilities" to RiskLevel.LOW,
+        "twin.model" to RiskLevel.LOW,
+        "twin.delegate" to RiskLevel.LOW,
+        "twin.route" to RiskLevel.LOW,
+        "twin.recover" to RiskLevel.LOW,
         "self.notify.message" to RiskLevel.LOW,
         "self.notify.banner" to RiskLevel.LOW,
         "sys.notification.send" to RiskLevel.LOW,
@@ -69,6 +86,9 @@ object CommandRiskLevels {
         "agent.memory.project.edit" to RiskLevel.MID,
         // 工作区回滚 = 覆盖现有文件 (含被删文件), 与记忆条目编辑同档; 需 reason 意图声明
         "memory.restore" to RiskLevel.MID,
+        // 孪生解绑/设备丢失 = 破坏既有配对信任与同步通道, 误触发需可追溯 → 中危
+        "twin.unpair" to RiskLevel.MID,
+        "twin.lost" to RiskLevel.MID,
         "clipboard.copy" to RiskLevel.MID,
         "clipboard.paste" to RiskLevel.MID,
         "sys.clipboard" to RiskLevel.MID,
