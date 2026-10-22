@@ -29,7 +29,9 @@ object TreeMerge {
 
     const val RULES_FILE = "twin-model-rules.json"
 
-    private val DREAM_FILE = Regex("^\\d{4}-\\d{2}-\\d{2}_dream\\.md$")
+    private val DREAM_FILE = Regex("^\\d{4}-\\d{2}-\\d{2}_dream(?:\\.v\\d+)?\\.md$")
+    /** 账本文件名 — 只增 JSONL, 合并 = 按 entryId 并集 (P3)。 */
+    private const val LEDGER_FILE = "entries.jsonl"
 
     /** L 类根文档 (memory/memory.md 单列, 其余 memory 目录文件按命名归类)。 */
     private val LONG_TERM_DOCS = setOf(
@@ -49,6 +51,7 @@ object TreeMerge {
             return TwinFileClass.S
         }
         if (path == RULES_FILE) return TwinFileClass.RULES
+        if (path == LEDGER_FILE) return TwinFileClass.JSONL
         if (path.startsWith("devices/")) return TwinFileClass.D
         if (path in LONG_TERM_DOCS) return TwinFileClass.L
         if (path == "memory/memory.md") return TwinFileClass.L
@@ -109,6 +112,8 @@ object TreeMerge {
     ): FileMerge {
         // ① 双方一致 (含双方都删)
         if (bytesEqual(ours, theirs)) return FileMerge(relPath, ours)
+        // ①.5 账本 JSONL: 只增 → 按 key 并集, 与删除语义/共同基准无关 (P3)
+        if (fileClass == TwinFileClass.JSONL) return mergeJsonl(relPath, ours, theirs)
         // ② 只有一方变更 → 直接取变更方 (含删除); 对端删除时留 inbox 提示 (删除传播可见)
         if (bytesEqual(ours, base)) {
             return if (theirs == null && ours != null) {
@@ -146,6 +151,8 @@ object TreeMerge {
         val oursWins = oursSide >= theirsSide
         return when (fileClass) {
             TwinFileClass.RULES -> mergeRules(relPath, baseText, oursText, theirsText, oursSide, theirsSide, oursWins)
+            // 通常已在 ①.5 提前返回; 保留分支只为穷尽 when (非 UTF-8 等极端路径)
+            TwinFileClass.JSONL -> mergeJsonl(relPath, ours, theirs)
             TwinFileClass.M -> {
                 val union = MergeText.appendUnion(baseText, oursText, theirsText, oursFirst = !oursWins)
                 if (union != null) {
@@ -177,6 +184,13 @@ object TreeMerge {
     }
 
     // ── 产物命名 ───────────────────────────────────────────────────
+    /** 账本 JSONL 只增: 任一侧缺失保留另一侧, 文本按 entryId 并集 (非 UTF-8 保留本机)。 */
+    private fun mergeJsonl(relPath: String, ours: ByteArray?, theirs: ByteArray?): FileMerge {
+        if (ours == null || theirs == null) return FileMerge(relPath, ours ?: theirs)
+        val oursText = MergeText.decode(ours) ?: return FileMerge(relPath, ours)
+        val theirsText = MergeText.decode(theirs) ?: return FileMerge(relPath, ours)
+        return FileMerge(relPath, MergeText.unionJsonl(oursText, theirsText).text.toByteArray(Charsets.UTF_8))
+    }
 
     /** 删除-修改冲突的保留文件: `{name}.kept-<device>.md` (§5.2)。 */
     fun keptPath(relPath: String, device: String): String {
@@ -298,6 +312,8 @@ enum class TwinFileClass {
     L,
     /** 中期账本: 只增, 追加并集。 */
     M,
+    /** 只增 JSONL 账本 (`entries.jsonl`): 按 entryId 并集 (P3)。 */
+    JSONL,
     /** 设备库存: 单写者。 */
     D,
     /** `twin-model-rules.json`: 按 rule.id 并集。 */

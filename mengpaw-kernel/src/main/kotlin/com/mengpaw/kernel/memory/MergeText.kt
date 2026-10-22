@@ -34,6 +34,8 @@ internal object MergeText {
     private const val SEPARATOR = "======="
     private val JSON = Json { ignoreUnknownKeys = true }
     private val KEY = Regex("^([A-Za-z0-9_.-]+):.*$")
+    /** JSONL 单行内的字符串字段 (`"name":"value"`, 支持转义)。 */
+    private val JSONL_FIELD = Regex("\"([A-Za-z0-9_.-]+)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
 
     /** 严格 UTF-8 校验 (非 UTF-8 → 走兜底分支, 不猜编码)。 */
     fun isUtf8(bytes: ByteArray): Boolean = decode(bytes) != null
@@ -289,6 +291,41 @@ internal object MergeText {
         for (k in prefix.indices) if (lines[k] != prefix[k]) return false
         return true
     }
+
+    // ── JSONL 按 key 并集 (账本类, P3) ─────────────────────────────
+
+    /**
+     * JSONL 行并集 (账本 `entries.jsonl` 用): 按 `keyField` 去重, 同 key 取字典序较小行
+     * (交换律 → 合并方向无关), 输出按 `(sortField, key)` 排序。
+     * 解析不出 key 的行按整行去重并原样保留 (不丢数据)。
+     */
+    fun unionJsonl(
+        ours: String,
+        theirs: String,
+        keyField: String = "entryId",
+        sortField: String = "wall"
+    ): TextMerge {
+        val chosen = LinkedHashMap<String, String>()
+        fun add(raw: String) {
+            val line = raw.trim()
+            if (line.isEmpty()) return
+            val key = field(line, keyField) ?: line
+            val prev = chosen[key]
+            if (prev == null || line < prev) chosen[key] = line
+        }
+        TextDiff.splitLines(ours).forEach(::add)
+        TextDiff.splitLines(theirs).forEach(::add)
+        val lines = chosen.entries
+            .sortedWith(compareBy({ field(it.value, sortField) ?: "" }, { it.key }))
+            .map { it.value }
+        val text = if (lines.isEmpty()) "" else lines.joinToString("\n") + "\n"
+        return TextMerge(text, 0, 0)
+    }
+
+    private fun field(line: String, name: String): String? =
+        JSONL_FIELD.findAll(line)
+            .firstOrNull { it.groupValues[1] == name }
+            ?.groupValues?.get(2)
 
     // ── twin-model-rules.json ──────────────────────────────────────
 

@@ -114,16 +114,27 @@ object DataPaths {
     /** Long tool outputs offloaded to disk. Agent references snippet + path. */
     fun toolResultsDir(agentName: String) = resolver.toolResultsDir(agentName)
 
-    // ── Memory Twin (v0.22.0: 工作区文件同步, 账本与独立梦境目录已移除) ──
-    /** 孪生根目录 — 对象库/库存/时钟/审计共用。 */
+    // ── Memory Twin (v0.22.0: 工作区文件同步; P3 恢复只增账本目录) ──
+    /** 孪生根目录 — 对象库/账本/库存/时钟/审计共用。 */
     val TWIN_DIR get() = "$AGENTS/twin"
     /** 内容寻址对象库根 (objects/refs/tmp, 见 docs/memory-git-sync-design.md §3.1)。 */
     val TWIN_STORE get() = "$TWIN_DIR/store"
+    /** 记忆账本根 (`ledger/<agent>/entries.jsonl`, 见设计 §6.1; 不在 agent 工作区内)。 */
+    val TWIN_LEDGER get() = "$TWIN_DIR/ledger"
     /** 设备库存目录 (`devices/<deviceId>.md`, P4 落地; P1 仅预留路径)。 */
     val TWIN_DEVICES get() = "$TWIN_DIR/devices"
     /** Lamport 时钟文件 (单行整数)。 */
     val TWIN_CLOCK get() = "$TWIN_DIR/clock"
     val TWIN_AUDIT get() = "$TWIN_DIR/audit.log"
+
+    /**
+     * 账本文件 `{AGENTS}/twin/ledger/<agent>/entries.jsonl` (设计 §6.1)。
+     * agentName 经 `agentDir` 消毒后取末段, 防路径穿越写到别的 agent 目录。
+     */
+    fun ledgerFile(agentName: String): String {
+        val safe = safeAgentDir(agentName).replace('\\', '/').substringAfterLast('/')
+        return "$TWIN_LEDGER/$safe/entries.jsonl"
+    }
 
     // ── Per-agent Skills & Tools partitions ─────────────────────────
     /** Agent's local skills directory — pulled from global pool or created locally. */
