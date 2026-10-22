@@ -497,11 +497,11 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 > 凭据经 `<ns>.config` 命令配置 (SSH 用户/密码或 PEM 密钥, 原子写入 {CONFIG}/)。默认通道 SSH
 > (PC 需启用 Windows 自带 OpenSSH Server, 手机 → PC 零额外安装); QwenPaw 另支持 REST 直连。
 
-### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0 + P1 对象库 + P2 协议 v0.3 2026-10-22)
+### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0 + P1 对象库 + P2 协议 v0.3 + P3 记忆账本 2026-10-23)
 
-26 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起, 哈希链账本已移除) + **协议 v0.3 三方合并** (P2) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
+26 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起) + **协议 v0.3 三方合并** (P2) + **只增记忆账本/归纳视图** (P3) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
 
-**设计**: 孪生 = 同步整个 `{agent}/` 工作区文档, 保持跨设备一致。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trumanshow.md/{date}_dream.md) + `memory/` 全部; **排除**: inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。(CLI.md 已随 v0.34.3 移除, 不再生成/同步)
+**设计**: 孪生 = 同步 `{agent}/` 工作区文档 + `{AGENTS}/twin/ledger/<agent>/entries.jsonl` (账本在工作区外, 单列命名空间)。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trumanshow.md/{date}_dream[.vN].md) + `memory/` 全部; **排除**: inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。(CLI.md 已随 v0.34.3 移除, 不再生成/同步)
 
 #### 组件
 
@@ -511,7 +511,7 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 | `TwinWorkspace.kt` | 同步范围/清单 (SHA-256 + mtime)/L·M·D·S 分类/冲突落盘; 扫描委托 kernel `WorkspaceSnapshotSource` |
 | `TwinSyncEngine.kt` | 双栈调度 — v0.3 纯 pull (`TwinSyncV3`) / v0.2 冻结路径 (`WS_MANIFEST→WS_PULL`) + 心跳保活 + QoS 自适应 |
 | `TwinSyncV3.kt` | 协议 v0.3 纯 pull 驱动: HELLO→ACK→TREE_WALK→OBJ_GET→三方合并→提交/快进采纳头 |
-| `TwinSyncSpaces.kt` | 命名空间适配 (`ws-<agent>` 工作区 / `dev` 设备库存) — 同一套消息, 不同扫描/写入 |
+| `TwinSyncSpaces.kt` | 命名空间适配 (`ws-<agent>` 工作区 / `dev` 设备库存 / `ledger-<agent>` 记忆账本) — 同一套消息, 不同扫描/写入 |
 | `TwinAcpHandler.kt` | `AcpHandler` 实现 — 处理 12 种孪生 ACP 消息 (8 旧 + 4 个 v0.3) |
 | `TwinPairingEngine.kt` | 短码验证配对协议 (4 步: ANNOUNCE→CHALLENGE→VERIFY→CONFIRM) |
 | `TwinCapability.kt` | `CapabilityCard` + `TwinCapabilityCollector` — 设备能力采集与协议版本协商 (P2 起宣告 0.3; 模型能力判定委托 `ModelProfileResolver`) |
@@ -571,13 +571,23 @@ if-else 关键词链里, 型号一换代就静默判错, 且判错直接改变�
   │  TreeMerge(base=local ref, ours=磁盘, theirs) → 落盘 → 提交 / 快进采纳对端头
 ```
 
-- `ws-<agent>` 与 `dev` 两个命名空间走**完全相同**的消息, 只换扫描/写入实现 (`TwinSyncSpaces.kt`)。
-- 合并策略 (§5.2): L 类 frontmatter 键级 + 正文 diff3 / M 类追加并集 / D 类单写者 / rules json 按 id 并集 /
+- `ws-<agent>`、`dev`、`ledger-<agent>` 三个命名空间走**完全相同**的消息, 只换扫描/写入实现 (`TwinSyncSpaces.kt`)。
+- 合并策略 (§5.2): L 类 frontmatter 键级 + 正文 diff3 / M 类追加并集 / D 类单写者 / rules json 按 id 并集 / JSONL 账本按 `entryId` 并集 /
   删除-修改保留修改方为 `.kept-<device>.md` + inbox / 非 UTF-8 或 >256KB 取较新一方 + `.conflict` 备份。
 - 冲突不弹 UI: 写 `{agent}/inbox/merge_conflict_<ns>_<时间>.md`; 文件内冲突标记为
   `<<<<<<< ours (设备名)` / `=======` / `>>>>>>> theirs (设备名)`。
 - 收敛: 合并后内容与对端树一致 → 直接采纳对端 heads (`setHeads` + `setLocalRef`), 不造新快照;
   base 恒为 `refs/<ns>/local` (上次成功同步头), **不回退成"最近提交"**。
+
+#### 记忆账本与归纳视图 (P3, 2026-10-23 — `docs/memory-git-sync-design.md` §6)
+
+- **只增账本** `{AGENTS}/twin/ledger/<agent>/entries.jsonl` (工作区外): 一行一条, 字段 `entryId/track/file/blockHash/project/agent/device/lamport/wall/session/supersedes/kind/sources`; 只存块哈希, 正文仍在 `memory/` 文件里。三重上限 (条数 2 万 / 单行 8KB / 文件 8MB) 超限拒绝并报错, 不静默截断; 坏行跳过并记 ErrorCollector。
+- **写入挂钩**: `agent.memory.record` / `project.save` 落盘后生成 `kind=note` 条目 (blockHash = 新增块 SHA-256); meta 从 ExecutionContext 取 session/device(环境 `deviceId`)。
+- **编辑语义**: `mid.edit` / `project.edit` / `mid.rm` 改为**追加** `kind=revision` 块与条目, `supersedes` 指向原块, 不物理覆盖/删除历史块。
+- **同步**: 第三命名空间 `ledger-<agent>` 复用 v0.3 四消息; `entries.jsonl` = `TwinFileClass.JSONL`, 按 `entryId` 并集 (`MergeText.unionJsonl`, 排序 `(wall, entryId)`, 合并方向无关)。
+- **归纳降级为视图** (`DreamEngine`): 输入改查账本 (未归纳/日期区间/项目) → 产物带强制 `sources:[entryId…]` (无法追溯标 `unsourced`) → 追加 `kind=digest` 条目标记已归纳; **不删除分片**, 重跑生成 `{date}_dream.v2.md`/`.v3…`, 旧产物保留。
+- **物化索引** `{agent}/memory/index.md` (`MemoryIndexWriter`): 项目分组 + 每组条目/未归纳计数 + 最近 3 条标题, 首行"自动生成，勿手改"; 内容只由账本决定 (跨端同文本, 可安全同步)。
+- **提示词注入** (`PromptSystemBuilder`): 长期记忆之后注入索引摘要 (≤200 token) + 常驻冲突裁决指引; `memory/index.md` 已加入 `AGENT_DOC_FILES` mtime 快照。
 
 #### 同步协议 v0.2 (冻结, 仅兼容未升级对端)
 
@@ -1269,6 +1279,7 @@ MengPaw 使用三层记忆架构 (单轨, v0.22.0 起)。`{agent}/memory/` 目�
 > `agent.docs` 展示 frontmatter 元数据 (v0.32.1+, 自检报告 P2-8): 逐文档读文件头 2KB 内 `---` 块提取模板同款 `summary`/`read_when`（缩进列表），输出 `name — summary [read_when]`；无 frontmatter 退化为纯文件名。
 
 **记忆三轨 (18)**：`memory` (看长期) | `memory.keep <内容>` (写长期) | `memory.write <id> <内容>` (指定 ID 写/更新) | `memory.read <id>` (按 ID 读单条) | `memory.search <关键词> [--track long|mid|project]` (跨轨搜索) | `memory.stats` (统计) | `memory.rm <时间戳>` | `memory.edit <时间戳> <内容>` | `memory.mid [日期]` (看中期) | `memory.record <内容>` (写中期) | `memory.mid.delete <日期>` | `memory.mid.rm <日期> <时间戳>` | `memory.mid.edit <日期> <时间戳> <内容>` | `memory.project [名称]` (看项目) | `memory.project.save <名称> <内容>` | `memory.project.rm <名称> <时间戳>` | `memory.project.edit <名称> <时间戳> <内容>` | `memory.project.delete <名称>`
+> **P3 语义变更 (2026-10-23, 命令名/返回格式不变)**: `memory.record` / `memory.project.save` 落盘后追加账本条目; `memory.mid.edit` / `memory.project.edit` 改为**追加 `kind=revision` 块 + 条目** (supersedes 原块), `memory.mid.rm` 改为追加 tombstone 块 + revision 条目 — 三者都不再物理覆盖/删除历史块。账本 `{AGENTS}/twin/ledger/<agent>/entries.jsonl` 只增, 归纳视图与 `memory/index.md` 由账本重建。
 
 **其他 (6+)**：`audit` | `browser-tools` | `dream` | `cleanup` | `storage` | `policy`
 

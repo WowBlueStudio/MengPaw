@@ -134,7 +134,8 @@ class TwinSyncV3Test {
         assertEquals("头相同 → 0 文件", 0, result.filesReceived)
         assertNull(result.error)
         assertTrue("只应有 HELLO: ${typesSent()}", typesSent().all { it == AcpMessageType.SYNC_HELLO.name })
-        assertEquals("ws + dev 各一轮 HELLO", 2, transport.sent.count { it.type == AcpMessageType.SYNC_HELLO.name })
+        // P3 起账本 (ledger-<agent>) 也是常驻命名空间 → ws/dev/ledger 各一轮 (断言更严, 非放宽)
+        assertEquals("ws + dev + ledger 各一轮 HELLO", 3, transport.sent.count { it.type == AcpMessageType.SYNC_HELLO.name })
         assertTrue("不得请求 TREE_WALK", AcpMessageType.TREE_WALK.name !in typesSent())
         assertTrue("不得请求 OBJ_GET", AcpMessageType.OBJ_GET.name !in typesSent())
     }

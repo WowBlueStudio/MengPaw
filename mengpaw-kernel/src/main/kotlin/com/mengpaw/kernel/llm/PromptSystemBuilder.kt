@@ -41,19 +41,6 @@ internal class PromptSystemBuilder {
     // 只在 .pinned 清单或其指向技能文件的 mtime 变化时重建 — 清单为行格式零 JSON 依赖。
     private var pinnedFingerprint: String? = null
 
-    /** 当前 pinned 指纹 — .pinned mtime + 每个 pinned 技能文件 mtime 拼接。 */
-    private fun currentPinnedFingerprint(): String {
-        val pinned = com.mengpaw.kernel.skill.PinnedSkills.list()
-        if (pinned.isEmpty()) return ".pinned:0"
-        val sb = StringBuilder()
-        sb.append(".pinned:").append(java.io.File(com.mengpaw.kernel.DataPaths.SKILLS, ".pinned").lastModified())
-        for (name in pinned) {
-            val f = java.io.File(com.mengpaw.kernel.DataPaths.SKILLS, "$name.md")
-            sb.append('|').append(name).append(':').append(if (f.exists()) f.lastModified() else -1L)
-        }
-        return sb.toString()
-    }
-
     /** 读取技能 frontmatter 的 name/description (轻量解析, 不引入插件依赖)。 */
     private fun skillBrief(file: java.io.File): Pair<String, String>? {
         val text = try { file.readText() } catch (_: Exception) { return null }
@@ -207,9 +194,9 @@ internal class PromptSystemBuilder {
             framework == cachedPromptFramework && modelName == cachedPromptModel &&
             cachedTemplateHash == PromptEngine.TEMPLATE_HASH &&
             docMtimes == currentDocMtimes(agentName) && // 文件删除/修改即失配 → 重建
-            pinnedFingerprint == currentPinnedFingerprint() && // 用户指定技能清单/内容变化 → 重建
-            cachedEvolutionFingerprint == currentEvolutionFingerprint(agentName) && // 进化数据变化 → 重建
-            cachedTriggerFingerprint == currentTriggerFingerprint() // 触发器增删 → 重建 (P1-5)
+            pinnedFingerprint == PromptFingerprints.pinned() && // 用户指定技能清单/内容变化 → 重建
+            cachedEvolutionFingerprint == PromptFingerprints.evolution(agentName) && // 进化数据变化 → 重建
+            cachedTriggerFingerprint == PromptFingerprints.trigger() // 触发器增删 → 重建 (P1-5)
         ) {
             return cachedPrompt
         }
@@ -220,6 +207,10 @@ internal class PromptSystemBuilder {
         val soulDoc = cachedRead(agentName, "soul.md") { AgentDocs.readSoulDoc(it) }
         // Only LONG-TERM memory goes into system prompt
         val memoryDoc = cachedRead(agentName, "memory/memory.md") { AgentDocs.readLongTermMemory(it) }
+        // P3: 记忆索引 (生成物) — 项目分组/计数摘要, 完整内容 cat 按需取
+        val memoryIndexDoc = cachedRead(agentName, "memory/index.md") {
+            com.mengpaw.kernel.memory.MemoryIndexWriter.read(it)
+        }
         // Read boost.md — if present, Agent hasn't completed first-run setup
         val boostDoc = cachedRead(agentName, "boost.md") { AgentDocs.readBoostDoc(it) }
         // Read heartbeat.md — CRON task rules. Non-empty = scheduled tasks configured.
@@ -358,6 +349,8 @@ This reminder disappears automatically once the name is set.
                 append("\n\n## 你的长期记忆（长期积累的重要知识）\n\n")
                 append(compactDoc(memoryDoc, "${com.mengpaw.kernel.DataPaths.AGENTS}/$agentName/memory/memory.md"))
             }
+            // ── P3: 记忆索引摘要 (≤200 token) + 冲突裁决常驻指引 ──
+            append(PromptMemorySection.block(lang, agentName, memoryIndexDoc))
             // ── 用户指定技能指针段 — 末尾追加 (前插击穿前缀缓存, 铁律见 docs/llm-multistage-dataflow.md) ──
             append(pinnedSkillsBlock(lang))
         }
@@ -377,25 +370,10 @@ This reminder disappears automatically once the name is set.
         cachedPromptModel = modelName
         cachedTemplateHash = PromptEngine.TEMPLATE_HASH
         docMtimes = currentDocMtimes(agentName)
-        pinnedFingerprint = currentPinnedFingerprint()
-        cachedEvolutionFingerprint = currentEvolutionFingerprint(agentName)
-        cachedTriggerFingerprint = currentTriggerFingerprint()
+        pinnedFingerprint = PromptFingerprints.pinned()
+        cachedEvolutionFingerprint = PromptFingerprints.evolution(agentName)
+        cachedTriggerFingerprint = PromptFingerprints.trigger()
         return prompt
-    }
-
-    /** 触发器指纹 — 全部触发器的 (id:type:enabled) 拼接, 增删/启停即变化。 */
-    private fun currentTriggerFingerprint(): String =
-        com.mengpaw.kernel.trigger.TriggerEngine.list()
-            .joinToString("|") { "${it.id}:${it.type}:${it.enabled}" }
-
-    /** 进化数据指纹: failures.jsonl + commands.json 的 (大小:修改时间) — 任一写入/清理即变化。 */
-    private fun currentEvolutionFingerprint(agentName: String): String {
-        return try {
-            fun fp(f: java.io.File): String = if (f.exists()) "${f.length()}:${f.lastModified()}" else "-"
-            val failures = java.io.File(com.mengpaw.kernel.DataPaths.evolutionFailuresFile(agentName))
-            val commands = java.io.File(com.mengpaw.kernel.DataPaths.evolutionCommandsFile())
-            "${fp(failures)}|${fp(commands)}"
-        } catch (_: Exception) { "-" }
     }
 
     companion object {
@@ -407,7 +385,7 @@ This reminder disappears automatically once the name is set.
     private const val DOC_BRIEF_FALLBACK_CHARS = 300
         /** 注入提示词的工作区文档清单 — mtime 快照比对用（与 buildSystemPrompt 读取顺序一致）。 */
         private val AGENT_DOC_FILES = listOf(
-            "profile.md", "agents.md", "soul.md", "memory/memory.md",
+            "profile.md", "agents.md", "soul.md", "memory/memory.md", "memory/index.md",
             "boost.md", "heartbeat.md", "trumanshow.md"
         )
     }

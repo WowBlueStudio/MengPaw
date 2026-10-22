@@ -29,7 +29,7 @@ class DreamPlugin : Plugin {
         version = "", // 内置插件, 随 Shell APK 版本更新
         type = PluginType.NATIVE,
         author = "MengPaw",
-        description = "梦境模式内置默认实现 — 记忆整理管道 (读→备份→{date}_dream.md→到期删除)。不可移除; 第三方可实现 DreamProvider 覆盖",
+        description = "梦境模式内置默认实现 — 记忆整理管道 (查账本→带 sources 的 {date}_dream[.vN].md→标记已归纳, 不删分片)。不可移除; 第三方可实现 DreamProvider 覆盖",
         minCoreVersion = "0.2.0",
         commands = emptyList() // agent.dream 命令在内核命名空间, 本插件只注册提供者
     )

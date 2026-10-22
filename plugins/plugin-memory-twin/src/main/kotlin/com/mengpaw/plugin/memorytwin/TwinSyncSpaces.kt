@@ -6,6 +6,8 @@ package com.mengpaw.plugin.memorytwin
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.acp.SyncV3Messages
 import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.memory.MemoryIndexWriter
+import com.mengpaw.kernel.memory.MemoryLedger
 import com.mengpaw.kernel.memory.SnapshotStore
 import com.mengpaw.kernel.memory.TreeMerge
 import com.mengpaw.kernel.memory.TwinFileClass
@@ -133,4 +135,53 @@ internal class DevicesSpace : SyncSpace {
         name.endsWith(".md") &&
             !name.contains(".deleted.") && !name.contains(".conflict.") &&
             !name.contains(".kept-") && !name.endsWith(".tmp")
+}
+
+/**
+ * `ledger-<agent>` 命名空间 (P3, 设计 §6.1): `{AGENTS}/twin/ledger/<agent>/entries.jsonl`。
+ *
+ * 账本目录在 agent 工作区之外, 因此单列一个命名空间; 复用 v0.3 四消息。
+ * 合并策略 = `TwinFileClass.JSONL` (按 entryId 并集, 与合并方向无关)。
+ * 删除不生效 —— 账本只增, 历史条目由 supersedes/revision 表达。
+ */
+internal class LedgerSpace(private val agentName: String) : SyncSpace {
+
+    private companion object {
+        const val FILE_NAME = "entries.jsonl"
+    }
+
+    override val namespace: String = SyncV3Messages.ledgerNamespace(agentName)
+
+    private val root: File get() = File(DataPaths.ledgerFile(agentName)).parentFile ?: File(DataPaths.TWIN_LEDGER)
+
+    override fun scan(): Map<String, ByteArray> {
+        val file = File(root, FILE_NAME)
+        if (!file.isFile) return emptyMap()
+        return try {
+            mapOf(FILE_NAME to file.readBytes())
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "LedgerSpace.scan")
+            emptyMap()
+        }
+    }
+
+    override fun snapshot(): Map<String, String> =
+        scan().mapValues { SnapshotStore.writeBlob(it.value) }
+
+    override fun write(relPath: String, bytes: ByteArray, fromDevice: String): SpaceWriteResult {
+        if (relPath != FILE_NAME) return SpaceWriteResult.FAILED
+        val target = File(root, FILE_NAME)
+        val existing = try { if (target.isFile) target.readBytes() else null } catch (_: Exception) { null }
+        if (existing != null && existing.contentEquals(bytes)) return SpaceWriteResult.SAME
+        if (!MemoryLedger.replaceFromSync(agentName, bytes)) return SpaceWriteResult.FAILED
+        try { MemoryIndexWriter.rebuild(agentName) } catch (e: Exception) {
+            ErrorCollector.report(e, "LedgerSpace.indexRebuild")
+        }
+        return SpaceWriteResult.APPLIED
+    }
+
+    /** 账本只增: 对端删除不传播 (历史条目靠 revision 表达, 不靠删行)。 */
+    override fun delete(relPath: String, fromDevice: String) = Unit
+
+    override fun classOf(relPath: String): TwinFileClass = TwinFileClass.JSONL
 }

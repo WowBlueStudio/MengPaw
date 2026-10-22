@@ -139,7 +139,16 @@ internal class TwinSyncV3(
         )
     }
 
-    private fun spaces(): List<SyncSpace> = listOf(WorkspaceSpace(agentName), DevicesSpace())
+    /**
+     * 命名空间清单: `ws-<agent>` + `dev` + `ledger-<agent>`。
+     * 账本必须无条件参与 — 新设备即使自己没写过记忆, 也要把对端账本拉下来
+     * (否则账本是"半份", 归纳/索引会漏历史)。
+     */
+    private fun spaces(): List<SyncSpace> = listOf(
+        WorkspaceSpace(agentName),
+        DevicesSpace(),
+        LedgerSpace(agentName)
+    )
 
     // ── 单命名空间时序 ─────────────────────────────────────────────
 

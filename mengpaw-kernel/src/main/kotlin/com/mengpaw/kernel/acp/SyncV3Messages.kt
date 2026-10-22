@@ -44,9 +44,12 @@ object SyncV3Messages {
     /** 工作区命名空间 (`ws-<agentName>`)。 */
     fun workspaceNamespace(agentName: String): String = "ws-$agentName"
 
-    /** 命名空间是否本机可服务 (只认 `ws-<本机 agent>` 与 `dev`, 不暴露任意前缀)。 */
+    /** 记忆账本命名空间 (`ledger-<agentName>`, 根 `{AGENTS}/twin/ledger/<agent>/`; 设计 §6.1)。 */
+    fun ledgerNamespace(agentName: String): String = "ledger-$agentName"
+
+    /** 命名空间是否本机可服务 (只认 `ws-<本机 agent>` / `dev` / `ledger-<本机 agent>`, 不暴露任意前缀)。 */
     fun isAllowedNamespace(ns: String, agentName: String): Boolean =
-        ns == NS_DEVICES || ns == workspaceNamespace(agentName)
+        ns == NS_DEVICES || ns == workspaceNamespace(agentName) || ns == ledgerNamespace(agentName)
 
     private val json = Json { ignoreUnknownKeys = true }
     private val HEX64 = Regex("[0-9a-f]{64}")
