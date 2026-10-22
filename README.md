@@ -65,7 +65,7 @@ Agent层：MengPaw 微内核 + 插件网格 + 记忆孪生    ← 轮毂，只�
 - **短期对话不参与**（`dialog/` 保持排除）。
 - **可回溯**：`memory.log / show / diff / restore / gc` 与 `device.self / list / info / find`；被删文件也能从对象库取回。
 
-> 实施状态：P0（清单哈希收发形态统一 + 内容相同不落盘）已落地；P1–P4（对象库 / 协议 v0.3 / 记忆账本 / 设备库存）按设计文档推进，本节即其终态。
+> 实施状态：P0–P4 已全部落地（对象库 / 协议 v0.3 / 记忆账本 / 设备库存），本节即当前实现。
 
 设计文档：[`docs/memory-git-sync-design.md`](docs/memory-git-sync-design.md)
 
