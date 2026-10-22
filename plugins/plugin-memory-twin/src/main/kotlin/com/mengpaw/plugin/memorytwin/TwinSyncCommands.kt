@@ -74,7 +74,8 @@ internal class TwinSyncCommands(
     }
 
     private fun autoSyncActive(): Boolean {
-        return try { state.syncEngine.syncState.value.phase != SyncPhase.IDLE || true } catch (_: Exception) { false }
+        // P1 修复: 原实现 `phase != IDLE || true` 恒为 true, Agent 无法验证自动同步是否真在跑
+        return try { state.syncEngine.isAutoSyncActive } catch (_: Exception) { false }
     }
 
     private fun syncIntervalDisplay(): Long = when (state.syncEngine.qosLevel) {

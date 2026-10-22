@@ -71,6 +71,9 @@ class SnapshotStoreTest {
         val tree = SnapshotStore.writeTree(mapOf("soul.md" to blob))
         val first = SnapshotStore.commit(ns, mapOf("soul.md" to blob), "第一版", "agent", "dev-A")
         assertEquals(listOf(first), SnapshotStore.heads(ns))
+        // 本地提交**不得**前进 local (语义 = 上次成功同步头 = 合并 base)
+        assertNull("本地提交不应写 local ref", SnapshotStore.localRef(ns))
+        SnapshotStore.setLocalRef(ns, first)
         assertEquals(first, SnapshotStore.localRef(ns))
 
         val second = SnapshotStore.commit(ns, mapOf("soul.md" to blob), "第二版", "agent", "dev-A")

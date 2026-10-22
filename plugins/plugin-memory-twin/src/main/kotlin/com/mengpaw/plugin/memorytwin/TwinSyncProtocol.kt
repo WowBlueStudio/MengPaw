@@ -128,7 +128,8 @@ internal class TwinSyncProtocol(
                 lastSyncAt = System.currentTimeMillis()
             )
             // P1: 写入失败不再被静默吞掉 — 回传可读错误, 但不中断其余文件
-            TwinSyncResult(received, requestPaths.size, conflicts,
+            // P1 修正: filesSent 应为**实际发出的文件数** (send 载荷条目), 旧实现填的是"我们待拉取的路径数"
+            TwinSyncResult(received, manifest.send.size, conflicts,
                 if (writeErrors > 0) "有 $writeErrors 个文件写入失败" else null, null)
         } catch (e: CancellationException) {
             throw e

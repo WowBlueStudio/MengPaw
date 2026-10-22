@@ -115,4 +115,15 @@ class TwinSyncEngineTest {
         ))
         assertEquals(3, engine.syncState.value.totalPeers)
     }
+
+    @Test
+    fun `自动同步的启停状态可查询且重复启动幂等`() {
+        assertFalse("初始不应在跑", engine.isAutoSyncActive)
+        engine.startAutoSync()
+        assertTrue("启动后必须为真", engine.isAutoSyncActive)
+        engine.startAutoSync()   // 幂等: 不得起第二个循环
+        assertTrue(engine.isAutoSyncActive)
+        engine.stopAutoSync()
+        assertFalse("停止后必须为假 (`twin.sync.auto` 查询依赖它)", engine.isAutoSyncActive)
+    }
 }

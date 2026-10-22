@@ -50,6 +50,9 @@ class TwinSyncEngine(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var autoSyncJob: Job? = null
 
+    /** 自动同步是否在跑 (供 `twin.sync.auto` 查询与测试断言)。 */
+    val isAutoSyncActive: Boolean get() = autoSyncJob?.isActive == true
+
     /** Known peers. P1 修复: 并发集合 — 心跳/同步协程与 ACP handler 线程共享。 */
     private val peers = java.util.concurrent.ConcurrentHashMap<String, TwinPeerInfo>()
 

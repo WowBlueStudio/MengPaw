@@ -134,14 +134,23 @@ object SnapshotStore {
         newHeads.removeAll(effectiveParents.toSet())
         newHeads.add(id)
         writeRef(namespace, "heads", newHeads.toList())
-        writeRef(namespace, "local", listOf(id))
+        // 注意: **不要**在这里前进 local — local 的语义是"上次成功同步头" (= 三方合并 base)。
+        // 本地提交若写了它, 下一次同步会拿一个对端没有的快照当 base, 合并会误判成
+        // "对端删掉了我本地的改动"。local 只由同步层在真正对齐后通过 [setLocalRef] 写入。
         return id
+    }
+
+    /** 显式设置合并 base — 仅同步层使用 (双方对齐后写入)。 */
+    @Synchronized
+    fun setLocalRef(namespace: String, id: String) {
+        if (!ObjectStore.isObjectId(id)) return
+        writeRef(namespace, "local", listOf(id))
     }
 
     /** 当前 heads (一行一个 sha; 缺失/损坏 → 空列表)。 */
     fun heads(namespace: String): List<String> = readRef(namespace, "heads")
 
-    /** 本机上次提交/同步头 (合并 base); 无 → null。 */
+    /** 本机上次**成功同步**头 (= 合并 base); 本地提交不前进, 无 → null。 */
     fun localRef(namespace: String): String? = readRef(namespace, "local").firstOrNull()
 
     /** 读取快照元数据; 缺失/损坏 → null。 */

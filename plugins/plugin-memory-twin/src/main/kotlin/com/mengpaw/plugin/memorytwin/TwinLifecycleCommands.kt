@@ -64,7 +64,9 @@ internal class TwinLifecycleCommands(
         }
 
         state.isRunning = true
-        if (reused == null) state.syncEngine.startAutoSync()
+        // P1 修复: 不再用 `reused == null` 门控 — 复用既有 engine 时 (stop→start) 也要重启自动同步,
+        // 否则心跳与 60s 同步静默停摆。startAutoSync 自身幂等 (已在跑则直接返回)。
+        state.syncEngine.startAutoSync()
 
         return ExecutionResult.ok(buildString {
             appendLine("孪生服务已启动")
