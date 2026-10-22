@@ -85,7 +85,7 @@ object TextDiff {
             trace.add(v.copyOf())
         }
         if (!found) return emptyList()
-        trace.add(v.copyOf()) // 收尾: 补上命中 d 的 v 快照 (循环内 break 跳过了) 
+        trace.add(v.copyOf()) // 收尾: 补上命中 d 的 v 快照 (循环内 break 跳过了)
 
         if (foundD == 0) return emptyList()
 
