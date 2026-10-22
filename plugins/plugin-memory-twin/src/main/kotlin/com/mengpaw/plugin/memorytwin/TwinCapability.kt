@@ -194,10 +194,11 @@ class TwinCapabilityCollector(
             hardware = hw,
             model = model,
             software = sw,
-            runtime = runtime
+            runtime = runtime,
+            // P2: 本机支持 v0.3 同步 (HELLO/ACK/TREE_WALK/OBJ_GET), 旧对端忽略该字段
+            protocolVersion = TwinSyncV3.PROTOCOL_VERSION
         )
     }
-
     // ── Hardware collection ───────────────────────────────────────
 
     private fun collectHardware(): HardwareProfile {

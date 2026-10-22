@@ -6,39 +6,23 @@ package com.mengpaw.plugin.memorytwin
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.agent.AgentDocs
 import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.memory.TreeMerge
+import com.mengpaw.kernel.memory.TwinFileClass
+import com.mengpaw.kernel.memory.WorkspaceSnapshotSource
 import java.io.File
 import java.security.MessageDigest
 
 /**
- * 孪生工作区同步 (v0.22.0) — 替代哈希链账本。
+ * 孪生工作区同步 (v0.22.0 → P2 分类化)。
  *
- * 同步单元 = 工作区文档文件 (整个 {agent}/ 目录, 排除 CLI.md/inbox/dialog/backup):
- * - 根文档: soul.md profile.md agents.md boost.md trigger.md heartbeat.md trumanshow.md {date}_dream.md
- * - memory/: memory.md (长期) + memory_{date}.md (中期) + project_*_memory.md + archive.md
- * - 非 .md 白名单 (2026-09-10): twin-model-rules.json (模型能力规则, 见 [SHARED_EXTRA_FILES])
- * - 排除: CLI.md (Android 操作指南, 无需跨设备) / inbox/ (本地任务队列) /
- *         dialog/ (本地对话流) / memory/backup/ (本机安全副本) / *.tmp / *.conflict.*
+ * 同步范围来自内核 [WorkspaceSnapshotSource] (P1 唯一实现, 本对象不再重复扫描):
+ * - 收录: 任意层级 `.md` + 根目录 `twin-model-rules.json`;
+ * - 排除: `inbox/` `dialog/` `memory/backup/`、`CLI.md`、`*.tmp`、`*.conflict.*` (S 类)。
  *
- * 收敛机制: manifest (相对路径 + SHA-256 + mtime) 交换 → 哈希比对 → 差异传输 →
- * LWW 冲突检测 (.conflict 备份, 同旧 applyIdentityUpdate 样板)。
+ * P2 起按设计 §2.1 把收录文件分成 L / M / D / S 四类 ([classify], 委托 kernel [TreeMerge]),
+ * `twin-model-rules.json` 单列 RULES。分类决定 v0.3 合并策略 (见 `TreeMerge`)。
  */
 object TwinWorkspace {
-
-    /** 不同步的目录名 (相对工作区根)。 */
-    private val EXCLUDED_DIRS = setOf("inbox", "dialog", "backup")
-
-    /** 不同步的文件名 (工作区根)。 */
-    private val EXCLUDED_FILES = setOf("CLI.md")
-
-    /**
-     * 工作区根**允许同步的非 .md 文件** (2026-09-10 新增 `twin-model-rules.json`)。
-     *
-     * 为什么破例同步一个 JSON: 模型能力规则要保持"跟上 LLM 迭代", 就必须能在任意一台设备上
-     * 登记并自动扩散 — Agent 在 A 设备学到 `deepseek-flash` 支持图像理解, 同步后 B/C 设备
-     * 的路由立即跟着修正 (**一处学到, 全网共享**)。规则文件本身很小且解析有上限
-     * (见 [ModelCapabilityRules.parseExternal]: 条数/正则长度/文件体积三重限制)。
-     */
-    private val SHARED_EXTRA_FILES = setOf(ModelCapabilityRules.RULES_FILE_NAME)
 
     /** 清单条目: 相对路径 → 哈希 + 修改时间。 */
     data class ManifestEntry(val hash: String, val mtime: Long)
@@ -53,7 +37,7 @@ object TwinWorkspace {
     /**
      * 相对路径消毒 — **写盘入口必经** (P0)。
      *
-     * 入站 handler 与出站响应解析都会把对端给的 relPath 送进 [applyWorkspaceFile] /
+     * 入站 handler 与出站响应解析都会把对端给的 relPath 送进 [applyWorkspaceBytes] /
      * [removeWorkspaceFile]，所以消毒必须放在存储层而不是只放在消息处理层。
      * 拒绝: 空白 / 绝对路径 / 盘符或 URL scheme / 任何 `..` 段。
      */
@@ -65,35 +49,34 @@ object TwinWorkspace {
         return relPath
     }
 
-    /** 扫描工作区, 生成同步清单。 */
+    /** 扫描工作区, 生成 v0.2 协议清单 (扫描委托 kernel 实现, 消除重复)。
+     *  条目哈希为**完整 SHA-256**; 线上形态由 [manifestHash] 归一 (接收端两种形态都认)。 */
     fun buildManifest(agentName: String): Map<String, ManifestEntry> {
-        val root = File(DataPaths.AGENTS, agentName)
-        if (!root.exists()) return emptyMap()
         val result = LinkedHashMap<String, ManifestEntry>()
-        scanDir(root, "", result)
+        WorkspaceSnapshotSource.scan(agentName).forEach { file ->
+            result[file.relPath] = ManifestEntry(sha256(file.bytes), file.mtime)
+        }
         return result
     }
 
-    private fun scanDir(dir: File, relDir: String, out: MutableMap<String, ManifestEntry>) {
-        val files: List<File> = try { dir.listFiles()?.sortedBy { it.name } ?: emptyList() } catch (_: Exception) { emptyList() }
-        for (f in files) {
-            val rel = if (relDir.isEmpty()) f.name else "$relDir/${f.name}"
-            if (f.isDirectory) {
-                if (f.name in EXCLUDED_DIRS) continue
-                scanDir(f, rel, out)
-            } else {
-                if (f.name in EXCLUDED_FILES) continue
-                if (f.name.endsWith(".tmp")) continue
-                if (f.name.contains(".conflict.")) continue
-                // 默认只同步 .md 文档; 根目录白名单文件 (模型能力规则) 例外
-                if (!f.name.endsWith(".md") && f.name !in SHARED_EXTRA_FILES) continue
-                out[rel] = ManifestEntry(sha256(f), f.lastModified())
-            }
+    /** 文件类别 (§2.1) — L 长驻 / M 中期 / D 设备库存 / RULES 规则 / S 短期。 */
+    fun classify(relPath: String): TwinFileClass = TreeMerge.classify(relPath)
+
+    /** 按类别分组的当前工作区文件 (S 类已被扫描排除, 不会出现)。 */
+    fun classifyWorkspace(agentName: String): Map<TwinFileClass, List<String>> {
+        val grouped = LinkedHashMap<TwinFileClass, MutableList<String>>()
+        buildManifest(agentName).keys.sorted().forEach { relPath ->
+            grouped.getOrPut(classify(relPath)) { mutableListOf() }.add(relPath)
         }
+        return grouped
     }
 
+    /** 文本写入口 (v0.2 路径与既有调用方) — 委托字节版本。 */
+    fun applyWorkspaceFile(agentName: String, relPath: String, content: String, fromDevice: String, fromTimestamp: Long): String =
+        applyWorkspaceBytes(agentName, relPath, content.toByteArray(Charsets.UTF_8), fromDevice, fromTimestamp)
+
     /**
-     * 写入一个同步文件: 路径消毒 + 内容比对 + 原子写 + 冲突检测。
+     * 写入一个同步文件 (字节): 路径消毒 + 内容比对 + 原子写 + 冲突检测。
      *
      * 返回:
      * - `"applied"`  已写入
@@ -102,7 +85,13 @@ object TwinWorkspace {
      * - `"rejected"` relPath 非法 (对端可控, 越界直接拒绝)
      * - `"error"`    读/写失败 (含"目标存在但读不出来" — 不拿空内容去覆盖)
      */
-    fun applyWorkspaceFile(agentName: String, relPath: String, content: String, fromDevice: String, fromTimestamp: Long): String {
+    fun applyWorkspaceBytes(
+        agentName: String,
+        relPath: String,
+        content: ByteArray,
+        fromDevice: String,
+        fromTimestamp: Long
+    ): String {
         // P0: relPath 来自对端响应 (send / pull 的 key), 存储层再消毒一次, 不信任调用方
         val safeRel = sanitizeRelPath(relPath) ?: run {
             writeAudit("WORKSPACE_REJECT | from=$fromDevice | path=$relPath")
@@ -113,22 +102,22 @@ object TwinWorkspace {
             // P0: 目标存在时只读一次本地内容并复用 — 内容一致就立即返回,
             // 不写 tmp / 不 rename / 不 notifyDocChanged / 不写审计 (避免无意义写盘与提示词缓存失效)。
             val exists = target.exists()
-            val localContent: String? = if (exists) try { target.readText() } catch (_: Exception) { null } else null
+            val local: ByteArray? = if (exists) try { target.readBytes() } catch (_: Exception) { null } else null
             // P1: 目标存在却读不出来 (权限 / IO / 是目录) → 明确失败, 绝不拿空内容覆盖
-            if (exists && localContent == null) {
+            if (exists && local == null) {
                 ErrorCollector.report(
                     java.io.IOException("工作区文件不可读, 拒绝覆盖: $target"),
-                    "TwinWorkspace.applyWorkspaceFile($safeRel)")
+                    "TwinWorkspace.applyWorkspaceBytes($safeRel)")
                 return "error"
             }
-            if (localContent == content) return "same"
+            if (local != null && local.contentEquals(content)) return "same"
 
             // 冲突检测: 本地较新且内容不同 → .conflict 备份, 不覆盖
             if (exists && target.lastModified() > fromTimestamp) {
                 val dateStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
                     .format(java.util.Date())
                 val conflictFile = File(target.parent, "${target.name}.conflict.$dateStamp.from_$fromDevice")
-                conflictFile.writeText(content)
+                conflictFile.writeBytes(content)
                 android.util.Log.w("MengPawTwin",
                     "工作区文件冲突: $relPath — 本地更新晚于 $fromDevice 的同步,已保存 .conflict 备份")
                 writeAudit("WORKSPACE_CONFLICT | from=$fromDevice | file=$relPath | saved=${conflictFile.name}")
@@ -142,7 +131,7 @@ object TwinWorkspace {
             //   ④ 再失败保留 tmp 待恢复并报错, 不删任何数据。
             target.parentFile?.mkdirs()
             val tmp = File(target.parent, "${target.name}.${System.nanoTime()}.tmp")
-            tmp.writeText(content)
+            tmp.writeBytes(content)
             var renamed = false
             try { renamed = tmp.renameTo(target) } catch (e: Exception) { ErrorCollector.report(e, "TwinWorkspace.renameTo($safeRel)") }
             if (!renamed) {
@@ -157,7 +146,7 @@ object TwinWorkspace {
             if (!renamed) {
                 ErrorCollector.report(
                     java.io.IOException("原子写失败 — 已保留 tmp 待恢复: $tmp -> $target"),
-                    "TwinWorkspace.applyWorkspaceFile($safeRel)")
+                    "TwinWorkspace.applyWorkspaceBytes($safeRel)")
                 return "error"
             }
             if (tmp.exists()) try { tmp.delete() } catch (_: Exception) {}
@@ -166,7 +155,7 @@ object TwinWorkspace {
             writeAudit("WORKSPACE_SYNC | from=$fromDevice | file=$safeRel")
             return "applied"
         } catch (e: Exception) {
-            ErrorCollector.report(e, "TwinWorkspace.applyWorkspaceFile($safeRel)")
+            ErrorCollector.report(e, "TwinWorkspace.applyWorkspaceBytes($safeRel)")
             return "error"
         }
     }
@@ -207,23 +196,13 @@ object TwinWorkspace {
     }
 
     /** SHA-256 文件哈希。 */
-    fun fileHash(file: File): String = sha256(file)
-
-    private fun sha256(file: File): String {
-        return try {
-            val digest = MessageDigest.getInstance("SHA-256")
-            file.inputStream().use { input ->
-                val buf = ByteArray(8192)
-                while (true) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    digest.update(buf, 0, n)
-                }
-            }
-            digest.digest().joinToString("") { "%02x".format(it) }
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "TwinWorkspace.sha256(${file.name})")
-            "0"
-        }
+    fun fileHash(file: File): String = try {
+        sha256(file.readBytes())
+    } catch (e: Exception) {
+        ErrorCollector.report(e, "TwinWorkspace.sha256(${file.name})")
+        "0"
     }
+
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 }

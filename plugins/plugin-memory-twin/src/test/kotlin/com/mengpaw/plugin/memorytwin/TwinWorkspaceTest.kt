@@ -4,10 +4,12 @@
 package com.mengpaw.plugin.memorytwin
 
 import com.mengpaw.kernel.DataPaths
+import com.mengpaw.kernel.memory.TwinFileClass
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -243,5 +245,44 @@ class TwinWorkspaceTest {
         assertEquals("rejected",
             TwinWorkspace.applyWorkspaceFile(agentName, "../escape.md", "x", "peer-1", 0L))
         assertFalse("工作区外不得出现文件", File(DataPaths.AGENTS, "escape.md").exists())
+    }
+
+    @Test
+    fun `classifyWorkspace 按 2_1 分出 L M D 且不含 S`() {
+        val root = workspaceRoot()
+        File(root, "inbox").mkdirs()
+        File(root, "dialog").mkdirs()
+        File(root, "devices").mkdirs()
+        File(root, "soul.md").writeText("# soul")
+        File(root, "memory").mkdirs()
+        File(root, "memory/memory.md").writeText("# 长期")
+        File(root, "memory/memory_2026-10-22.md").writeText("# 中期")
+        File(root, "memory/project_mengpaw_memory.md").writeText("# 项目")
+        File(root, "2026-10-22_dream.md").writeText("# 梦境")
+        File(root, "devices/dev-a.md").writeText("---\ndeviceId: dev-a\n---\n")
+        File(root, ModelCapabilityRules.RULES_FILE_NAME).writeText("""{"version":1,"rules":[]}""")
+        File(root, "inbox/task.md").writeText("# 短期")
+        File(root, "dialog/chat.md").writeText("# 短期")
+
+        val grouped = TwinWorkspace.classifyWorkspace(agentName)
+
+        assertEquals(setOf("soul.md", "memory/memory.md"), grouped[TwinFileClass.L]?.toSet())
+        assertEquals(
+            setOf("memory/memory_2026-10-22.md", "memory/project_mengpaw_memory.md", "2026-10-22_dream.md"),
+            grouped[TwinFileClass.M]?.toSet()
+        )
+        assertEquals(setOf("devices/dev-a.md"), grouped[TwinFileClass.D]?.toSet())
+        assertEquals(setOf(ModelCapabilityRules.RULES_FILE_NAME), grouped[TwinFileClass.RULES]?.toSet())
+        assertNull("S 类必须保持排除", grouped[TwinFileClass.S])
+    }
+
+    @Test
+    fun `buildManifest 委托 kernel 扫描 mtime 有值`() {
+        val root = workspaceRoot()
+        root.mkdirs()
+        File(root, "soul.md").writeText("# soul")
+        val manifest = TwinWorkspace.buildManifest(agentName)
+        assertEquals(setOf("soul.md"), manifest.keys)
+        assertTrue("mtime 必须来自真实文件", manifest.getValue("soul.md").mtime > 0L)
     }
 }

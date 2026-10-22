@@ -20,9 +20,9 @@ import kotlinx.coroutines.delay
  *
  * ## Architecture
  * - [TwinWorkspace] — 同步范围/清单/冲突落盘 (替代账本)
- * - [TwinSyncEngine] — sync state machine (WS_MANIFEST→WS_PULL) + heartbeat + QoS
+ * - [TwinSyncEngine] — sync state machine (v0.3 HELLO→TREE_WALK→OBJ_GET / v0.2 冻结路径) + heartbeat + QoS
+ * - [TwinSyncV3] — 协议 v0.3 纯 pull 驱动 (三方合并 + 删除传播)
  * - [TwinAcpHandler] — ACP message handler (first AcpHandler implementation)
- * - [TwinDiscovery] — Android NSD LAN peer discovery
  * - [TwinPairingEngine] — short-code verification pairing protocol
  * - [TwinCapabilityCollector] — device capability card generation
  * - [TwinRouter] — capability-aware task routing

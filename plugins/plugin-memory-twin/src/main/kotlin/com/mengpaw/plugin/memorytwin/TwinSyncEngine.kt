@@ -17,11 +17,10 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Memory Twin sync engine — the central orchestrator for twin synchronization.
  *
- * Manages the full sync lifecycle (v0.22.0, 账本 → 工作区文件同步):
- *   1. Discovery (via TwinDiscovery, which feeds peer addresses)
- *   2. WS_MANIFEST exchange (工作区文件清单 {relPath: hash})
- *   3. Diff → WS_PULL (差异文件内容)
- *   4. LWW apply with .conflict backup (TwinWorkspace)
+ * Manages the full sync lifecycle (v0.22.0 工作区文件同步 + P2 协议 v0.3):
+ *   1. Peer registry (framework 通讯录 + 手动 IP; mDNS 自动发现已随 TwinDiscovery 删除)
+ *   2. v0.3 (对端 protocolVersion >= 0.3): SYNC_HELLO → TREE_WALK → OBJ_GET → 三方合并
+ *   3. v0.2 (冻结): WS_MANIFEST 清单交换 → WS_PULL 差异拉取 → LWW 落盘
  *
  * Also handles: heartbeat monitoring, QoS enforcement, capability card
  * updates, and task delegation intake.
@@ -73,6 +72,8 @@ class TwinSyncEngine(
     private val peerRegistry = TwinSyncPeerRegistry(scope, peers, _syncState, agentName, ::syncIntervalMs)
     private val protocol = TwinSyncProtocol(serverSupplier, transportSupplier, peers, _syncState, deviceId, agentName) { qosLevel }
     private val security = TwinSyncSecurity(peers, _syncState, transportSupplier, deviceId)
+    /** v0.3 纯 pull 驱动 (双栈: 卡片 protocolVersion >= 0.3 才走) */
+    private val protocolV3 = TwinSyncV3(serverSupplier, transportSupplier, peers, _syncState, deviceId, agentName, deviceName)
 
     // ── Public API ──────────────────────────────────────────────────
 
@@ -159,15 +160,22 @@ class TwinSyncEngine(
     // ── Sync protocol (delegated) ──────────────────────────────────
 
     /**
-     * Execute a full sync cycle with a specific peer (v0.22.0 工作区文件同步):
-     * 1. WS_MANIFEST: 发本机清单, 响应 = 对端给我们的文件 (send) + 对端缺的文件列表 (request)
-     * 2. WS_PULL: 请求我们缺的文件内容
-     * 3. TwinWorkspace LWW 落盘 (冲突 → .conflict 备份)
+     * Execute a full sync cycle with a specific peer:
+     * - 对端能力卡 `protocolVersion >= 0.3` → v0.3 纯 pull ([TwinSyncV3]);
+     * - 否则 → 冻结的 v0.2 路径 (`WS_MANIFEST`/`WS_PULL`)。
      */
-    suspend fun syncWithPeer(peerId: String): TwinSyncResult = protocol.syncWithPeer(peerId)
+    suspend fun syncWithPeer(peerId: String): TwinSyncResult {
+        val peer = peers[peerId]
+        return if (peer != null && TwinSyncV3.supportsV3(peer.capabilityCard)) {
+            protocolV3.syncWithPeer(peerId)
+        } else {
+            protocol.syncWithPeer(peerId)
+        }
+    }
 
-    /** Sync with all known online peers. */
-    suspend fun syncWithAllPeers(): List<TwinSyncResult> = protocol.syncWithAllPeers()
+    /** Sync with all known online peers (逐节点走 [syncWithPeer] 的双栈判定). */
+    suspend fun syncWithAllPeers(): List<TwinSyncResult> =
+        protocol.syncWithAllPeers { peerId -> syncWithPeer(peerId) }
 
     /** Announce our capability card to a peer. */
     suspend fun announceCapability(peerId: String, card: String): Boolean = protocol.announceCapability(peerId, card)

@@ -6,6 +6,7 @@ package com.mengpaw.plugin.memorytwin
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.acp.*
 import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.memory.SnapshotStore
 import kotlinx.serialization.json.*
 import java.io.File
 
@@ -23,6 +24,11 @@ class TwinAcpHandler(
     override val supportedTypes: List<AcpMessageType> = listOf(
         AcpMessageType.WS_MANIFEST,
         AcpMessageType.WS_PULL,
+        // v0.3 同步协议 (P2) — 四个类型都要求已配对 (AcpServer) + IP 绑定 (AcpTransport)
+        AcpMessageType.SYNC_HELLO,
+        AcpMessageType.SYNC_ACK,
+        AcpMessageType.TREE_WALK,
+        AcpMessageType.OBJ_GET,
         AcpMessageType.CAPABILITY_ANNOUNCE,
         AcpMessageType.TWIN_DELEGATE,
         AcpMessageType.PAIR_CHALLENGE,
@@ -46,6 +52,10 @@ class TwinAcpHandler(
             when (type) {
                 AcpMessageType.WS_MANIFEST -> handleWsManifest(message, server)
                 AcpMessageType.WS_PULL -> handleWsPull(message, server)
+                AcpMessageType.SYNC_HELLO -> handleSyncHello(message)
+                AcpMessageType.SYNC_ACK -> AcpResult(true, "ack")
+                AcpMessageType.TREE_WALK -> handleTreeWalk(message)
+                AcpMessageType.OBJ_GET -> handleObjGet(message)
                 AcpMessageType.CAPABILITY_ANNOUNCE -> handleCapabilityAnnounce(message)
                 AcpMessageType.TWIN_DELEGATE -> handleTwinDelegate(message)
                 AcpMessageType.PAIR_CHALLENGE -> handlePairChallenge(message)
@@ -141,6 +151,94 @@ class TwinAcpHandler(
         return AcpResult(true, "ws_pull_${paths.size}", buildJsonObject {
             put("files", files)
         }.toString())
+    }
+
+    // ── v0.3 同步协议 (P2, docs/memory-git-sync-design.md §4.1/§4.2) ──
+
+    /** 可达对象集合 — 按"快照 → tree → blob"逐层展开, 用于算对端缺什么。 */
+    private class Reachable {
+        val trees = LinkedHashSet<String>()
+        val blobs = LinkedHashSet<String>()
+    }
+
+    private fun reachable(ns: String, seeds: List<String>): Reachable {
+        val reach = Reachable()
+        val seen = HashSet<String>()
+        val queue = ArrayDeque<String>()
+        seeds.filter { SyncV3Messages.isObjectId(it) }.forEach { queue.add(it) }
+        while (queue.isNotEmpty()) {
+            val id = queue.removeFirst()
+            if (!seen.add(id)) continue
+            val snapshot = SnapshotStore.snapshot(ns, id) ?: continue
+            reach.trees.add(snapshot.tree)
+            SnapshotStore.readTree(snapshot.tree)?.values?.forEach { reach.blobs.add(it) }
+            snapshot.parents.forEach { queue.add(it) }
+        }
+        return reach
+    }
+
+    /**
+     * SYNC_HELLO: 比对 heads。
+     * - 相同 → `{same:true}` (1 RTT, 不传任何对象);
+     * - 不同 → `{same:false, heads, missingTrees, missingBlobs}` — 只列**本机可达但请求方不可达**的对象;
+     *   请求方无法解析的 head 视为"什么都不缺", 由请求方本地再过滤一次 (只拉真缺的)。
+     */
+    private suspend fun handleSyncHello(msg: AcpMessage): AcpResult {
+        val hello = SyncV3Messages.parseHello(msg.payload)
+            ?: return AcpResult(false, "invalid_hello")
+        if (!SyncV3Messages.isAllowedNamespace(hello.ns, syncEngine.agentName)) {
+            return AcpResult(false, "unknown_ns")
+        }
+        val myHeads = SnapshotStore.heads(hello.ns)
+        if (myHeads.toSet() == hello.heads.toSet()) {
+            return AcpResult(true, "same",
+                SyncV3Messages.ackPayload(true, myHeads, emptyList(), emptyList()))
+        }
+        val mine = reachable(hello.ns, myHeads)
+        val requesters = reachable(hello.ns, hello.heads)
+        val missingTrees = (mine.trees - requesters.trees).filter { SnapshotStore.readTree(it) != null }
+        val missingBlobs = (mine.blobs - requesters.blobs).filter { SnapshotStore.readBlob(it) != null }
+        return AcpResult(true, "diff",
+            SyncV3Messages.ackPayload(false, myHeads, missingTrees, missingBlobs))
+    }
+
+    /** TREE_WALK: 按快照头 (或 tree id) 返回清单 + 快照元数据 + 快照原始字节。 */
+    private suspend fun handleTreeWalk(msg: AcpMessage): AcpResult {
+        val request = SyncV3Messages.parseTreeWalk(msg.payload)
+            ?: return AcpResult(false, "invalid_tree_walk")
+        if (!SyncV3Messages.isAllowedNamespace(request.ns, syncEngine.agentName)) {
+            return AcpResult(false, "unknown_ns")
+        }
+        if (!SyncV3Messages.isObjectId(request.sha)) return AcpResult(false, "invalid_sha")
+        val snapshot = SnapshotStore.snapshot(request.ns, request.sha)
+        val treeId = snapshot?.tree ?: request.sha
+        val files = SnapshotStore.readTree(treeId) ?: return AcpResult(false, "tree_missing")
+        val meta = snapshot?.let {
+            SyncV3Messages.SnapshotMeta(
+                id = it.id, tree = it.tree, parents = it.parents, lamport = it.lamport,
+                wall = it.wall, device = it.device, author = it.author, message = it.message
+            )
+        }
+        val raw = snapshot?.let { SnapshotStore.exportObject(it.id) }
+        return AcpResult(true, "tree_walk",
+            SyncV3Messages.treeWalkResponsePayload(meta, treeId, files, raw))
+    }
+
+    /** OBJ_GET: 批量返回 blob (base64); 缺失对象静默跳过 (请求方据此判定失败重试)。 */
+    private suspend fun handleObjGet(msg: AcpMessage): AcpResult {
+        val request = SyncV3Messages.parseObjGet(msg.payload)
+            ?: return AcpResult(false, "invalid_obj_get")
+        if (!SyncV3Messages.isAllowedNamespace(request.ns, syncEngine.agentName)) {
+            return AcpResult(false, "unknown_ns")
+        }
+        if (request.blobs.size > SyncV3Messages.MAX_BLOBS_PER_GET) {
+            return AcpResult(false, "too_many_blobs")
+        }
+        val blobs = LinkedHashMap<String, ByteArray>()
+        for (id in request.blobs.distinct()) {
+            SnapshotStore.readBlob(id)?.let { blobs[id] = it }
+        }
+        return AcpResult(true, "obj_get_${blobs.size}", SyncV3Messages.objGetResponsePayload(blobs))
     }
 
     private suspend fun handleCapabilityAnnounce(msg: AcpMessage): AcpResult {

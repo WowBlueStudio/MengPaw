@@ -30,7 +30,6 @@ internal class TwinRuntimeState {
     lateinit var acpHandler: TwinAcpHandler
     /** P1 修复: handler 绑定的 engine — 引擎切换时需重建 handler 并重新注册。 */
     var handlerEngine: TwinSyncEngine? = null
-    var discovery: TwinDiscovery? = null
     var isRunning = false
     /** P1.4: Auto-collect broadcast receiver (registered in cmdStart, unregistered in stopTwinService). */
     var autoCollectReceiver: BroadcastReceiver? = null

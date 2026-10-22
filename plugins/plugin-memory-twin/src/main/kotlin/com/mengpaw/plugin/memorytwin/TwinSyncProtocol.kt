@@ -139,8 +139,15 @@ internal class TwinSyncProtocol(
         }
     }
 
-    /** Sync with all known online peers. */
-    suspend fun syncWithAllPeers(): List<TwinSyncResult> {
+    /**
+     * Sync with all known online peers.
+     *
+     * @param syncOne 单节点同步实现 (引擎注入 → 逐节点做 v0.2/v0.3 双栈判定);
+     *                缺省走本对象的 v0.2 实现, 保持旧调用方行为不变。
+     */
+    suspend fun syncWithAllPeers(
+        syncOne: suspend (String) -> TwinSyncResult = ::syncWithPeer
+    ): List<TwinSyncResult> {
         if (qosLevel() == TwinSyncEngine.QosLevel.METERED) {
             return listOf(TwinSyncResult(0, 0, 0, "按流量计费模式下已暂停自动同步", "使用 twin.sync 手动触发"))
         }
@@ -150,7 +157,7 @@ internal class TwinSyncProtocol(
         )
         val results = mutableListOf<TwinSyncResult>()
         online.forEach { peer ->
-            val result = syncWithPeer(peer.peerId)
+            val result = syncOne(peer.peerId)
             results.add(result)
             if (result.filesReceived > 0 || result.conflicts > 0) {
                 syncState.value = syncState.value.copy(

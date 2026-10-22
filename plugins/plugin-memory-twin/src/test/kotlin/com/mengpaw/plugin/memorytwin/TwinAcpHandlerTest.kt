@@ -8,7 +8,9 @@ import com.mengpaw.kernel.acp.AcpMessage
 import com.mengpaw.kernel.acp.AcpMessageType
 import com.mengpaw.kernel.acp.AcpResult
 import com.mengpaw.kernel.acp.AcpServer
+import com.mengpaw.kernel.acp.SyncV3Messages
 import com.mengpaw.kernel.agent.AgentProfile
+import com.mengpaw.kernel.memory.SnapshotStore
 import com.mengpaw.kernel.security.PromptFirewall
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -253,5 +255,81 @@ class TwinAcpHandlerTest {
     fun `未知消息类型返回 null`() = runTest {
         val msg = AcpMessage("peer-1", "agent", AcpMessageType.DISCOVER.name, "")
         assertNull(handler.handle(msg, server))
+    }
+
+    // ── v0.3 同步消息 (P2) ─────────────────────────────────────
+
+    private fun seedSnapshot(): Pair<String, String> {
+        val blob = SnapshotStore.writeBlob("文档内容 v1".toByteArray(Charsets.UTF_8))
+        val id = SnapshotStore.commit("ws-agent", mapOf("workspace/doc.md" to blob), "test", "agent", "dev-1")
+        return id to blob
+    }
+
+    @Test
+    fun `SYNC-HELLO 头相同返回 same true`() = runTest {
+        val (id, _) = seedSnapshot()
+        val msg = AcpMessage.syncHello("peer-1", "agent", "ws-agent", "peer-1", listOf(id), "0.3")
+        val result = handler.handle(msg, server) as AcpResult
+        assertTrue(result.success)
+        val ack = SyncV3Messages.parseAck(result.data)
+        assertEquals(true, ack?.same)
+        assertEquals(listOf(id), ack?.heads)
+    }
+
+    @Test
+    fun `SYNC-HELLO 头不同返回对端缺的 tree 与 blob`() = runTest {
+        val (id, blob) = seedSnapshot()
+        val tree = requireNotNull(SnapshotStore.snapshot("ws-agent", id)?.tree)
+        // 请求方 heads 为空 → 本机可达对象全部算缺失
+        val msg = AcpMessage.syncHello("peer-1", "agent", "ws-agent", "peer-1", emptyList(), "0.3")
+        val result = handler.handle(msg, server) as AcpResult
+        val ack = SyncV3Messages.parseAck(result.data)
+        assertEquals(false, ack?.same)
+        assertEquals(listOf(id), ack?.heads)
+        assertTrue("应列出 tree: ${ack?.missingTrees}", ack?.missingTrees?.contains(tree) == true)
+        assertTrue("应列出 blob: ${ack?.missingBlobs}", ack?.missingBlobs?.contains(blob) == true)
+    }
+
+    @Test
+    fun `TREE-WALK 返回清单与快照原始字节`() = runTest {
+        val (id, blob) = seedSnapshot()
+        val msg = AcpMessage.treeWalk("peer-1", "agent", "ws-agent", id)
+        val result = handler.handle(msg, server) as AcpResult
+        assertTrue(result.success)
+        val parsed = SyncV3Messages.parseTreeWalkResponse(result.data)
+        assertEquals(mapOf("workspace/doc.md" to blob), parsed?.files)
+        assertEquals(id, parsed?.snapshot?.id)
+        assertNotNull("快照原始字节必须随响应下发", parsed?.snapshotRaw)
+    }
+
+    @Test
+    fun `OBJ-GET 返回 base64 blob 内容`() = runTest {
+        val (_, blob) = seedSnapshot()
+        val msg = AcpMessage.objGet("peer-1", "agent", "ws-agent", listOf(blob))
+        val result = handler.handle(msg, server) as AcpResult
+        assertTrue(result.success)
+        val blobs = SyncV3Messages.parseObjGetResponse(result.data)
+        assertEquals("文档内容 v1", String(blobs[blob] ?: ByteArray(0), Charsets.UTF_8))
+    }
+
+    @Test
+    fun `v0_3 消息拒绝非本机命名空间`() = runTest {
+        val msg = AcpMessage.syncHello("peer-1", "agent", "ws-other", "peer-1", emptyList(), "0.3")
+        val result = handler.handle(msg, server) as AcpResult
+        assertFalse(result.success)
+        assertEquals("unknown_ns", result.message)
+    }
+
+    @Test
+    fun `v0_3 消息坏载荷返回失败`() = runTest {
+        val hello = handler.handle(AcpMessage("peer-1", "agent", AcpMessageType.SYNC_HELLO.name, "bad"), server) as AcpResult
+        assertFalse(hello.success)
+        assertEquals("invalid_hello", hello.message)
+        val tree = handler.handle(AcpMessage("peer-1", "agent", AcpMessageType.TREE_WALK.name, "bad"), server) as AcpResult
+        assertFalse(tree.success)
+        assertEquals("invalid_tree_walk", tree.message)
+        val obj = handler.handle(AcpMessage("peer-1", "agent", AcpMessageType.OBJ_GET.name, "bad"), server) as AcpResult
+        assertFalse(obj.success)
+        assertEquals("invalid_obj_get", obj.message)
     }
 }

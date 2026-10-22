@@ -50,10 +50,9 @@ internal class TwinLifecycleCommands(
         }
 
         val context = MemoryTwinPlugin.appContext
-        if (context != null && state.discovery == null) {
-            state.discovery = TwinDiscovery(context, state.deviceId, MemoryTwinPlugin.agentName)
-            state.discovery?.start()
-
+        if (context != null && state.autoCollectReceiver == null) {
+            // P2: mDNS 自动发现 (TwinDiscovery) 已删除 — 节点发现由 plugin-framework 通讯录
+            // + twin.peer.add 手动 IP 承担; 这里只保留能力卡的系统状态自动采集。
             // P1.4: Register auto-collect broadcast receivers
             state.autoCollectReceiver = TwinCapabilityCollector.registerAutoCollect(context) { card ->
                 state.scope.launch {
@@ -91,7 +90,6 @@ internal class TwinLifecycleCommands(
     fun stopTwinService(): Boolean {
         if (!state.isRunning) return false
         state.syncEngine.stopAutoSync()
-        state.discovery?.stop()
         // P1.4: Unregister auto-collect
         state.autoCollectReceiver?.let {
             try { MemoryTwinPlugin.appContext?.unregisterReceiver(it) } catch (_: Exception) {}
@@ -110,7 +108,7 @@ internal class TwinLifecycleCommands(
             appendLine("- 服务: 运行中")
             appendLine("- 设备: ${state.deviceName}")
             appendLine("- 指纹: ${state.deviceId.take(16)}...")
-            appendLine("- 协议版本: 0.2 (工作区文件同步)")
+            appendLine("- 协议版本: 0.3 (v0.2 双栈兼容)")
             appendLine("- 同步阶段: ${stateFlow.phase}")
             appendLine("- 在线节点: ${stateFlow.onlinePeers}/${stateFlow.totalPeers}")
             appendLine("- QoS: ${state.syncEngine.qosLevel.name}")
