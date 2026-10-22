@@ -130,6 +130,43 @@ class HighRiskCommandGateTest {
         assertEquals("agent.memory.edit \"2026-08-09 10:00\" 正文", result.commandLine)
     }
 
+    // ── P1-2 (2026-10-23): memory.restore 的 reason 真的被校验 ──
+    // 审计结论: 它此前只有 CommandRiskLevels 的 MID (权限等级), 未登记进 HIGH_RISK 表,
+    // 于是"需 reason"只是文案。以下三条锁定"登记 + 可选快照号"的语义。
+
+    @Test
+    fun memoryrestore缺reason被拒() {
+        val result = HighRiskCommandGate.evaluate(ToolCall("memory.restore", mapOf("path" to "soul.md")))
+        assertEquals(ErrorCodes.REASON_REQUIRED, result.errorCode)
+        assertTrue("错误文本应含命令名", result.error.orEmpty().contains("memory.restore"))
+        assertTrue("错误文本应含 reason 引导", result.error.orEmpty().contains("reason"))
+        // 风险级语义不变: MID = 需 TRUSTED 权限; reason 是另一条通道, 两者叠加
+        assertEquals(RiskLevel.MID, CommandRiskLevels.levelOf("memory.restore"))
+    }
+
+    @Test
+    fun memoryrestore带reason通过且快照号保留() {
+        val result = HighRiskCommandGate.evaluate(
+            ToolCall(
+                "memory.restore",
+                mapOf("path" to "soul.md", "snapshot" to "abc123", "reason" to "用户要求回滚")
+            )
+        )
+        assertNull(result.error)
+        assertEquals("memory.restore soul.md abc123", result.commandLine)
+        assertTrue("reason 不得进入命令文本", !result.commandLine.contains("用户要求回滚"))
+        assertEquals("reason 供审计", "用户要求回滚", result.reason)
+    }
+
+    @Test
+    fun memoryrestore省略快照号仍可展开() {
+        val result = HighRiskCommandGate.evaluate(
+            ToolCall("memory.restore", mapOf("path" to "soul.md", "reason" to "回滚到最近快照"))
+        )
+        assertNull(result.error)
+        assertEquals("memory.restore soul.md", result.commandLine)
+    }
+
     // ── 非高危: 原门卫行为零变化 ──
 
     @Test
@@ -170,6 +207,7 @@ class HighRiskCommandGateTest {
             "agent.memory.mid.delete", "agent.memory.mid.rm",
             "agent.memory.mid.edit",
             "agent.memory.project.delete", "agent.memory.project.rm", "agent.memory.project.edit",
+            "memory.restore",
             "root.exec", "root.shell", "root.fs.write", "root.system.setprop",
             "root.system.hosts", "root.backup.restore",
             "root.apps.uninstall", "root.apps.freeze", "root.apps.unfreeze"

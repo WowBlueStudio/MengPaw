@@ -12,7 +12,9 @@ package com.mengpaw.kernel.security
  * - HIGH 高危: 清空/卸载/系统级 (root/proc)、整片记忆删除、拍照 — 弹窗询问用户,
  *   用户拒绝即阻挡 (worker/无 UI 环境默认拒绝)
  *
- * reason 门禁 (HighRiskCommandGate) 只对 MID/HIGH 生效 — LOW 命令维持纯文本调用。
+ * **reason 门禁与本文分级是两条独立通道**: reason 只对显式登记在
+ * [HighRiskCommandGate.HIGH_RISK] 的中危/高危命令强制 — MID 本身只表示"需 TRUSTED 权限",
+ * HIGH 本身只表示"弹窗确认", 两者都不会自动附带 reason 校验。LOW 命令维持纯文本调用。
  */
 enum class RiskLevel(val label: String) {
     LOW("普通"),
@@ -90,7 +92,8 @@ object CommandRiskLevels {
         "agent.memory.mid.edit" to RiskLevel.MID,
         "agent.memory.project.rm" to RiskLevel.MID,
         "agent.memory.project.edit" to RiskLevel.MID,
-        // 工作区回滚 = 覆盖现有文件 (含被删文件), 与记忆条目编辑同档; 需 reason 意图声明
+        // 工作区回滚 = 覆盖现有文件 (含被删文件), 与记忆条目编辑同档;
+        // reason 意图声明由 HighRiskCommandGate.HIGH_RISK 登记生效 (2026-10-23 补, 此前只声明未校验)
         "memory.restore" to RiskLevel.MID,
         // 孪生解绑/设备丢失 = 破坏既有配对信任与同步通道, 误触发需可追溯 → 中危
         "twin.unpair" to RiskLevel.MID,

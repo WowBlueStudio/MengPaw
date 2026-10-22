@@ -9,15 +9,22 @@ import com.mengpaw.kernel.llm.ToolCall
 /**
  * 中危/高危命令 reason 门禁 (P0 注入防护 v0.34.1, 分级化 v0.34.3)。
  *
- * Agent 自主调用中危/高危命令（删除/修改、proc、插件管理、剪贴板、记忆删改、
+ * **判定关系 (勿混淆)**: reason 是否强制 **只取决于命令是否登记在本表 [HIGH_RISK]**,
+ * 与 [CommandRiskLevels] 的 MID/HIGH 分级是两条独立通道 —— MID 决定"需 TRUSTED 权限"
+ * ([RiskGate]), HIGH 决定"弹窗确认"; 两者都不自动附带 reason 校验。所以"声明需 reason"
+ * 的命令必须在本表登记, 否则 reason 永远不被检查 (v0.34.3 遗留脱钩, 2026-10-23 补
+ * `memory.restore`)。
+ *
+ * Agent 自主调用中危/高危命令（删除/修改、proc、插件管理、剪贴板、记忆删改、工作区回滚、
  * root.*、sys 破坏性）必须附意图声明 (reason)。形态 = **JSON 豁免通道**:
  * 高危命令豁免 [ToolCall.paramFormatError] 全局门卫, 允许结构化 `{"reason": ...}` 参数;
  * 非高危命令维持原门卫 (行为零变化)。普通 (LOW) 命令已移出本表 — 不再强制 reason,
  * 由 CommandRiskLevels 分级决定是否拦截 (LOW 放行 / MID 权限 / HIGH 弹窗)。
  *
  * 模板驱动展开: 参数按模板键序拼接 (reason 及模板外键一律排除), 消除 JSON 键序
- * 不稳定导致的参数错位。豁免条件 = 名在高危表 **且** reason 非空 — 模板漏配 =
- * 该命令不可 JSON 调用, 维持 paramFormatError (默认安全)。
+ * 不稳定导致的参数错位; [Param.optional] 为真的键缺省时不占位 (如 `memory.restore` 的快照号)。
+ * 豁免条件 = 名在高危表 **且** reason 非空 — 模板漏配 = 该命令不可 JSON 调用,
+ * 维持 paramFormatError (默认安全)。
  *
  * reason 是意图声明 (软信息, 模型自述), 硬层只保证存在性; 真实性靠系统提示词
  * 信任边界教学。reason 不进入执行命令文本, 由调用方写入审计。
@@ -26,8 +33,9 @@ object HighRiskCommandGate {
 
     enum class Kind { POSITIONAL, FLAG }
 
-    /** 参数模板条目: POSITIONAL 按序拼接为位置参数; FLAG 值为 "true" 时拼 "--key"。 */
-    data class Param(val key: String, val kind: Kind = Kind.POSITIONAL)
+    /** 参数模板条目: POSITIONAL 按序拼接为位置参数; FLAG 值为 "true" 时拼 "--key";
+     *  [optional] = 该键可缺省 (缺省不占位, 提供时按模板键序展开)。 */
+    data class Param(val key: String, val kind: Kind = Kind.POSITIONAL, val optional: Boolean = false)
 
     /** 中危/高危命令 → 参数模板 (v0.34.3: LOW 命令移出 — 普通写操作不再强制 reason)。
      *  集合按真实注册表校准 (fs.write 已并入 agent.*, 不在此列)。 */
@@ -63,6 +71,9 @@ object HighRiskCommandGate {
         "agent.memory.project.delete" to listOf(Param("project")),
         "agent.memory.project.rm" to listOf(Param("project"), Param("timestamp")),
         "agent.memory.project.edit" to listOf(Param("project"), Param("timestamp"), Param("content")),
+        // ── 工作区历史回滚 (中危: 覆盖现有 .md; 快照号可选, 缺省=最近快照) ──
+        // reason 门禁在此登记才真正生效 (CommandRiskLevels 的 MID 只管权限等级, 不管 reason)
+        "memory.restore" to listOf(Param("path"), Param("snapshot", optional = true)),
         // ── root-plugin (安装后可用) ──
         "root.exec" to listOf(Param("command")),
         "root.shell" to listOf(Param("command")),
@@ -113,20 +124,23 @@ object HighRiskCommandGate {
                 errorCode = ErrorCodes.REASON_REQUIRED
             )
         }
-        // ── 模板展开 (键序稳定, 防错位) ──
+        // ── 模板展开 (键序稳定, 防错位; 可选键缺省不占位) ──
         val positional = mutableListOf<String>()
         val flags = mutableListOf<String>()
         for (param in template) {
             val value = call.parameters[param.key]
-            when {
-                value == null -> return GateResult(
+            if (value == null) {
+                if (param.optional) continue
+                return GateResult(
                     commandLine = "${call.name} ${call.parameters.values.joinToString(" ")}",
                     error = "参数格式错误: 命令 '${call.name}' 缺少参数 \"${param.key}\"。期望键: ${templateKeys(template)}。\n" +
                         "示例: ${jsonExample(call.name)}",
                     errorCode = ErrorCodes.PARAM_FORMAT_ERROR
                 )
-                param.kind == Kind.FLAG -> if (value == "true") flags.add("--${param.key}")
-                else -> positional.add(quoteIfNeeded(value))
+            }
+            when (param.kind) {
+                Kind.FLAG -> if (value == "true") flags.add("--${param.key}")
+                Kind.POSITIONAL -> positional.add(quoteIfNeeded(value))
             }
         }
         return GateResult(commandLine = buildString {
@@ -159,5 +173,6 @@ object HighRiskCommandGate {
     }
 
     private fun templateKeys(template: List<Param>): String =
-        (template.map { "\"${it.key}\"" } + "\"reason\"").joinToString(", ")
+        (template.map { "\"${it.key}\"" + if (it.optional) "(可选)" else "" } + "\"reason\"")
+            .joinToString(", ")
 }
