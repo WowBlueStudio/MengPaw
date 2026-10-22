@@ -497,7 +497,7 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 > 凭据经 `<ns>.config` 命令配置 (SSH 用户/密码或 PEM 密钥, 原子写入 {CONFIG}/)。默认通道 SSH
 > (PC 需启用 Windows 自带 OpenSSH Server, 手机 → PC 零额外安装); QwenPaw 另支持 REST 直连。
 
-### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0 + P1 对象库 + P2 协议 v0.3 + P3 记忆账本 + P4 设备库存 2026-10-23)
+### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0 + P1 对象库 + P2 协议 v0.3 + P3 记忆账本 + P4 设备库存 + P4.5 能力卡收敛 2026-10-23)
 
 29 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起) + **协议 v0.3 三方合并** (P2) + **只增记忆账本/归纳视图** (P3) + **设备/能力库存** (P4) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
 
@@ -602,7 +602,7 @@ if-else 关键词链里, 型号一换代就静默判错, 且判错直接改变�
 - **索引** `{AGENTS}/twin/devices/index.md` (`DeviceIndexWriter`): 每设备一行 (名称·形态·模型·关键能力·时效·本机/已退役), **本机生成物不参与 `dev` 同步** (时效文案随时间变, 各端本地重算, 避免 D 类争写同一路径)。写入时机: 本机库存写入后 / 对端库存行同步落盘后。
 - **命令** `device.self/list/info/find/refresh` (kernel `PipelineManager` 注册 `device` 命名空间, 全部 LOW)。`device.refresh` **有差异才写** — 差异只比库存字段, 时间戳不算。
 - **路由** (`TwinRouter.routeFromInventory`): 能力卡来源改为库存, 离线端也参与; 过期 (>30 天) **仍参与**但标注"可能过时"; 无库存回退内存能力卡。
-- **能力卡收敛 (最小步)**: `CapabilityCard` 增 `schemaVersion` 并保留为传输信封; `twin.capabilities --all` / `twin.route` 优先读库存。
+- **能力卡收敛 (最小步)**: `CapabilityCard` 增 `schemaVersion` 并保留为传输信封; `twin.capabilities --all` / `twin.route` 优先读库存。P4.5 收尾: `fleet.scan` 的 Notes 改为从库存渲染 (离线端也在列, 库存为空回退内存能力卡); `twin.model` 优先读本机库存 `agents[].model` 段 (上下文/视觉/工具/证据, 缺失回退 `ModelProfileResolver`); 内核 `getActiveNamespaces()` 补齐 `memory`/`device`/`swarm`/`fleet`/`proc`。
 - **提示词注入** (`PromptMemorySection` → `PromptDeviceSection`): 记忆索引之后注入 `## 你的设备与能力` (寄存设备一行 + 其余端每行 + 单写者/冲突裁决约束, ≤8 端 ≈150 token); `devices/index.md` 在 agent 工作区之外, 用**独立 mtime 指纹** `PromptFingerprints.devices()` 参与缓存键。
 
 #### 同步协议 v0.2 (冻结, 仅兼容未升级对端)

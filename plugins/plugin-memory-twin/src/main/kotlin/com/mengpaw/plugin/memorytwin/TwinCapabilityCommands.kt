@@ -5,6 +5,8 @@ package com.mengpaw.plugin.memorytwin
 
 import com.mengpaw.kernel.cli.ExecutionContext
 import com.mengpaw.kernel.cli.ExecutionResult
+import com.mengpaw.kernel.error.ErrorCollector
+import com.mengpaw.kernel.llm.LlmProvider
 
 /**
  * 孪生能力命令组 — 从 MemoryTwinPlugin 拆分。
@@ -189,10 +191,25 @@ internal class TwinCapabilityCommands(
         }
     }
 
+    /**
+     * 模型画像渲染 (P4.5, 设计 §7.5): **本机库存 `agents[].model` 段优先**,
+     * 缺段/无本机行才回退 [ModelProfileResolver] 现场解析。输出模板不变。
+     */
     private fun renderProfile(agentName: String): String {
         val provider = MemoryTwinPlugin.llmProvider
-            ?: return "未配置 LLM provider — 无法生成模型画像。"
-        val profile = ModelProfileResolver.resolve(provider, agentName)
+        val providerMeta = providerMetaOf(provider)
+        val inventoryProfile = TwinInventoryCards.localModelProfile(agentName, providerMeta?.first.orEmpty())
+        if (provider == null && inventoryProfile == null) {
+            return "未配置 LLM provider — 无法生成模型画像。"
+        }
+        val profile = if (inventoryProfile != null) {
+            inventoryProfile.copy(
+                providerName = providerMeta?.first ?: "库存",
+                providerType = providerMeta?.second ?: "INVENTORY"
+            )
+        } else {
+            ModelProfileResolver.resolve(provider, agentName)
+        }
         val file = ModelCapabilityRules.rulesFilePath(agentName)
         return buildString {
             appendLine("## 模型能力画像")
@@ -208,6 +225,21 @@ internal class TwinCapabilityCommands(
             appendLine()
             appendLine("> 判定优先级: 实测证据 > 外置规则 > 内置族级规则 > 档位推断 > 未知(中性不扣分)")
             appendLine("> 用 `twin.model observe <fact>` 把一次真实使用结果记成证据, 判定立即跟着修正。")
+        }
+    }
+
+    /**
+     * 实时 provider 元数据 (名称/类型) — 库存行不存这两项, 有 provider 时补上;
+     * 取不到返回 null, 由调用方标"库存"。
+     */
+    private fun providerMetaOf(provider: LlmProvider?): Pair<String, String>? {
+        if (provider == null) return null
+        return try {
+            val info = provider.info()
+            info.name to info.providerType.name
+        } catch (e: Exception) {
+            ErrorCollector.report(e, "TwinCapabilityCommands.model.providerInfo")
+            null
         }
     }
 

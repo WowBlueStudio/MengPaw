@@ -22,6 +22,44 @@ internal object TwinInventoryCards {
     /** 全部库存行 (读不到 → 空表, 调用方回退内存能力卡)。 */
     fun all(): List<DeviceInventory> = DeviceInventoryStore.readAll()
 
+    /**
+     * 本机库存 `agents[].model` 段 → 模型画像 (P4.5, 设计 §7.5)。
+     *
+     * 优先取本 agent 的登记, 否则取第一条有模型的登记; **无本机行/无 model 字段 → null**
+     * (调用方回退 [ModelProfileResolver], 保持旧行为)。上下文/视觉/工具/证据只搬库存
+     * 里已记录的值, 不做二次推断; 来源标注按 `sources` 映射, 让 `twin.model` 的
+     * "[实测]/[内置规则]" 仍可追溯。
+     *
+     * @param providerName 证据库按 provider 隔离 — 传实时 provider 名才能找回同一模型的
+     *   实测条数 (设计 §7.5: "读库存 `agents[].model` 段 + 证据库")。
+     */
+    fun localModelProfile(agentName: String, providerName: String = ""): ModelProfile? {
+        val inv = DeviceInventoryStore.readLocal() ?: return null
+        val agent = inv.agents.firstOrNull { it.name == agentName && it.model.isNotBlank() }
+            ?: inv.agents.firstOrNull { it.model.isNotBlank() }
+            ?: return null
+        val base = modelOf(agent)
+        return base.copy(
+            ctxSource = sourceOf(agent.sources["context"], base.ctxSource),
+            visionSource = sourceOf(agent.sources["vision"], base.visionSource),
+            toolsSource = sourceOf(agent.sources["tools"], base.toolsSource),
+            evidenceCount = agent.sources["evidence"]?.trim()?.toIntOrNull()
+                ?: ModelEvidenceStore.evidenceFor(agent.model, providerName)?.factCount
+                ?: 0
+        )
+    }
+
+    /** `sources` 字符串 → 能力来源 (兼容 measured/declared 旧写法); 缺失 → [fallback]。 */
+    private fun sourceOf(raw: String?, fallback: CapabilitySource): CapabilitySource =
+        when (raw?.trim()?.lowercase()) {
+            "learned", "measured" -> CapabilitySource.LEARNED
+            "external" -> CapabilitySource.EXTERNAL
+            "builtin", "declared" -> CapabilitySource.BUILTIN
+            "guess" -> CapabilitySource.GUESS
+            "unknown", "" -> CapabilitySource.UNKNOWN
+            else -> fallback
+        }
+
     fun toCard(inv: DeviceInventory): CapabilityCard {
         val agent = pickAgent(inv)
         return CapabilityCard(

@@ -192,7 +192,9 @@ object FleetExecutor {
         }
         kotlinx.coroutines.delay(3000)
         val caps = FleetCapability.cache.toMap()
-        val notes = FleetCapability.formatNotes(caps)
+        // P4.5: 库存优先渲染 (离线端也在列); 库存为空时 formatNotes 回退内存能力卡。
+        val inventory = com.mengpaw.kernel.device.DeviceInventoryStore.readAll()
+        val notes = FleetCapability.formatNotes(caps, inventory)
         val agent = ctx.agentName ?: "MengPaw"
         val notesFile = File(com.mengpaw.kernel.DataPaths.AGENTS, "$agent/Notes/fleet_capabilities.md")
         try {

@@ -194,9 +194,17 @@ class PipelineManager(
     /** 本引擎注册表的命令名列表（! 命令补全用 — 读本引擎 registry, 不依赖全局指针）。 */
     fun listCommands(): List<String> = registry?.list() ?: emptyList()
 
-    /** List all active CLI namespaces (built-in + plugins) for settings display. */
+    /**
+     * List all active CLI namespaces (built-in + plugins) for settings display.
+     *
+     * 必须与 [buildPipelineUnlocked] 的注册点同步 — 漏登记会让 `self.tools`/设置页
+     * 看不到该命名空间的命令 (P3 `memory` 与 P4 `device` 曾因此缺失)。
+     */
     fun getActiveNamespaces(): List<String> {
-        val namespaces = mutableSetOf("self", "evolution", "agent", "plugin", "security")
+        val namespaces = mutableSetOf(
+            "self", "evolution", "agent", "plugin", "security",
+            "swarm", "fleet", "proc", "memory", "device"
+        )
         additionalNamespaces.keys.forEach { namespaces.add(it) }
         pluginManager.getActivePlugins().forEach { plugin ->
             namespaces.add(pluginNamespaceFor(plugin.metadata.id))
