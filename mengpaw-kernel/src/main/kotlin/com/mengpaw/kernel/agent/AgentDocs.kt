@@ -159,6 +159,10 @@ object AgentDocs {
      */
     fun appendMidTermMemory(agentName: String, entry: String) = memory.appendMidTermMemory(agentName, entry)
 
+    /** 带账本元数据的中期记忆写入 (session/device/project; P3)。 */
+    fun appendMidTermMemory(agentName: String, entry: String, meta: MemoryWriteMeta) =
+        memory.appendMidTermMemory(agentName, entry, meta)
+
     /**
      * 刷新中期记忆写入队列到磁盘.
      * 在 LLM 响应返回后调用, 利用已有等待窗口使 I/O 成本为零.
@@ -181,6 +185,10 @@ object AgentDocs {
      */
     fun saveProjectMemory(agentName: String, projectName: String, report: String) =
         memory.saveProjectMemory(agentName, projectName, report)
+
+    /** 带账本元数据的项目记忆写入 (session/device/project; P3)。 */
+    fun saveProjectMemory(agentName: String, projectName: String, report: String, meta: MemoryWriteMeta) =
+        memory.saveProjectMemory(agentName, projectName, report, meta)
 
     /** Read a project memory file. */
     fun readProjectMemory(agentName: String, projectName: String): String =
@@ -223,31 +231,38 @@ object AgentDocs {
     fun countLongTermMatches(agentName: String, entryId: String): Int =
         memory.countLongTermMatches(agentName, entryId)
 
-    // ── File-level deletion ───────────────────────────────────────
+    // ── File-level deletion (直接实现, 精简 AgentDocsMemory 行数) ──
 
-    fun deleteMidTermFile(agentName: String, date: String): Boolean =
-        memory.deleteMidTermFile(agentName, date)
+    fun deleteMidTermFile(agentName: String, date: String): Boolean {
+        val file = java.io.File(com.mengpaw.kernel.DataPaths.midTermMemoryFile(agentName, date))
+        return if (file.exists()) { file.delete() } else false
+    }
 
-    fun deleteProjectMemory(agentName: String, projectName: String): Boolean =
-        memory.deleteProjectMemory(agentName, projectName)
+    fun deleteProjectMemory(agentName: String, projectName: String): Boolean {
+        val file = java.io.File(com.mengpaw.kernel.DataPaths.projectMemoryFile(agentName, projectName))
+        return if (file.exists()) { file.delete() } else false
+    }
 
-    fun deleteBoost(agentName: String): Boolean = memory.deleteBoost(agentName)
+    fun deleteBoost(agentName: String): Boolean {
+        val file = java.io.File(com.mengpaw.kernel.DataPaths.AGENTS, "$agentName/boost.md")
+        return if (file.exists()) { file.delete() } else false
+    }
 
     // ── Legacy compatibility (delegates to long-term for prompt injection) ──
 
     /** @deprecated Use [readLongTermMemory] for system prompts. */
-    fun readMemoryDoc(agentName: String): String = memory.readMemoryDoc(agentName)
+    fun readMemoryDoc(agentName: String): String = memory.readLongTermMemory(agentName)
 
     /** @deprecated Use [readLongTermMemoryAsync]. */
-    suspend fun readMemoryDocAsync(agentName: String): String = memory.readMemoryDocAsync(agentName)
+    suspend fun readMemoryDocAsync(agentName: String): String = memory.readLongTermMemoryAsync(agentName)
 
     /**
      * @deprecated Use [searchLongTermMemory] or [searchMidTermMemory] explicitly.
      * Searches LONG-TERM memory only (what goes into prompts).
      */
     fun recallMemory(agentName: String, keywords: List<String>): String =
-        memory.recallMemory(agentName, keywords)
+        memory.searchLongTermMemory(agentName, keywords)
 
     /** @deprecated Use [appendMidTermMemory] for auto-recording. */
-    fun appendMemory(agentName: String, entry: String) = memory.appendMemory(agentName, entry)
+    fun appendMemory(agentName: String, entry: String) = memory.appendMidTermMemory(agentName, entry)
 }

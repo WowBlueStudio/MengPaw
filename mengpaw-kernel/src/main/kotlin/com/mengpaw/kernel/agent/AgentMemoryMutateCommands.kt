@@ -20,12 +20,19 @@ internal class AgentMemoryMutateCommands {
         if (swarmWriteBlocked(ctx)) return ExecutionResult.ok("⛔ 火种模式 worker 不写记忆 (零待命临时执行体, 结果由协调器汇总)")
         if (args.isEmpty()) return ExecutionResult.fail("用法: agent.memory.record <内容>\n记录到中期记忆 (按日分片), 不会注入系统提示词。用 agent.memory.keep 升级到长期记忆。", errorCode = ErrorCodes.ERR_INVALID_INPUT)
         val content = args.joinToString(" ")
-        AgentDocs.appendMidTermMemory(agentName(ctx), content)
+        AgentDocs.appendMidTermMemory(agentName(ctx), content, writeMeta(ctx))
         return ExecutionResult.ok(buildString {
             appendLine("已记录到中期记忆 (今日分片)")
             appendLine("提示: 如果这是重要的/可复用的经验, 用 agent.memory.keep 升级到长期记忆")
         })
     }
+
+    /** 账本元数据: session/device/project 从执行上下文取 (device 取环境 `deviceId`)。 */
+    private fun writeMeta(ctx: ExecutionContext, project: String = ""): MemoryWriteMeta = MemoryWriteMeta(
+        session = ctx.sessionId,
+        device = ctx.environment["deviceId"]?.trim()?.takeIf { it.isNotEmpty() } ?: "local",
+        project = project
+    )
 
     /** Promote important info from mid-term to long-term memory. */
     internal suspend fun memoryKeep(args: List<String>, ctx: ExecutionContext): ExecutionResult {
@@ -87,7 +94,7 @@ internal class AgentMemoryMutateCommands {
         val projectName = args[0]
         val report = args.drop(1).joinToString(" ")
         val agent = agentName(ctx)
-        AgentDocs.saveProjectMemory(agent, projectName, report)
+        AgentDocs.saveProjectMemory(agent, projectName, report, writeMeta(ctx, projectName))
         return ExecutionResult.ok(buildString {
             appendLine("项目记忆已保存: $projectName ✅")
             appendLine()
@@ -129,12 +136,23 @@ internal class AgentMemoryMutateCommands {
         }
         val agent = agentName(ctx)
         val path = DataPaths.midTermMemoryFile(agent, date)
-        val deleted = AgentDocs.deleteEntry(agent, path, entryId)
-        return when (deleted) {
-            1 -> ExecutionResult.ok("已从中期记忆 ($date) 删除: $entryId")
-            0 -> ExecutionResult.fail(singleEntryFail(agent, path, entryId, "中期记忆 $date"))
-            else -> ExecutionResult.fail("内部错误")
-        }
+        // P3: 不物理删除历史块 — 追加 tombstone (kind=revision) 并由账本 supersedes 指向原块
+        val outcome = AgentMemoryLedgerHook.appendRevision(
+            agentName = agent,
+            filePath = path,
+            originalId = entryId,
+            newContent = "",
+            track = com.mengpaw.kernel.memory.MemoryLedger.TRACK_MID,
+            project = "",
+            meta = writeMeta(ctx),
+            revoked = true
+        )
+        return if (outcome != null) ExecutionResult.ok(buildString {
+            appendLine("已撤回中期记忆 ($date): $entryId")
+            appendLine("原块保留 (不物理删除); 新 revision 条目: ${outcome.entryId}")
+            if (outcome.ledgerError != null) appendLine("⚠️ 账本写入失败: ${outcome.ledgerError}")
+        })
+        else ExecutionResult.fail(singleEntryFail(agent, path, entryId, "中期记忆 $date"))
     }
 
     /** Edit a single entry in a mid-term date file. */
@@ -148,12 +166,23 @@ internal class AgentMemoryMutateCommands {
         if (entryId.length < 6) return ExecutionResult.fail("时间戳太短。")
         val agent = agentName(ctx)
         val path = DataPaths.midTermMemoryFile(agent, date)
-        val edited = AgentDocs.editEntry(agent, path, entryId, newContent)
-        return when (edited) {
-            1 -> ExecutionResult.ok("已修改中期记忆 ($date): $entryId")
-            0 -> ExecutionResult.fail(singleEntryFail(agent, path, entryId, "中期记忆 $date"))
-            else -> ExecutionResult.fail("内部错误")
-        }
+        // P3: 修订 = 追加 revision 块 + 账本条目 (supersedes 原块), 不覆盖原块
+        val outcome = AgentMemoryLedgerHook.appendRevision(
+            agentName = agent,
+            filePath = path,
+            originalId = entryId,
+            newContent = newContent,
+            track = com.mengpaw.kernel.memory.MemoryLedger.TRACK_MID,
+            project = "",
+            meta = writeMeta(ctx),
+            revoked = false
+        )
+        return if (outcome != null) ExecutionResult.ok(buildString {
+            appendLine("已修订中期记忆 ($date): $entryId")
+            appendLine("原块保留; 新 revision 条目: ${outcome.entryId}")
+            if (outcome.ledgerError != null) appendLine("⚠️ 账本写入失败: ${outcome.ledgerError}")
+        })
+        else ExecutionResult.fail(singleEntryFail(agent, path, entryId, "中期记忆 $date"))
     }
 
     /** Delete a single entry from a project memory file. */
@@ -188,12 +217,23 @@ internal class AgentMemoryMutateCommands {
         if (entryId.length < 10) return ExecutionResult.fail("时间戳太短。")
         val agent = agentName(ctx)
         val path = DataPaths.projectMemoryFile(agent, projectName)
-        val edited = AgentDocs.editEntry(agent, path, entryId, newContent)
-        return when (edited) {
-            1 -> ExecutionResult.ok("已修改项目记忆 ($projectName): $entryId")
-            0 -> ExecutionResult.fail(singleEntryFail(agent, path, entryId, "项目记忆 $projectName"))
-            else -> ExecutionResult.fail("内部错误")
-        }
+        // P3: 项目记忆修订同样追加 revision 块 (supersedes 原块)
+        val outcome = AgentMemoryLedgerHook.appendRevision(
+            agentName = agent,
+            filePath = path,
+            originalId = entryId,
+            newContent = newContent,
+            track = com.mengpaw.kernel.memory.MemoryLedger.TRACK_PROJECT,
+            project = projectName,
+            meta = writeMeta(ctx, projectName),
+            revoked = false
+        )
+        return if (outcome != null) ExecutionResult.ok(buildString {
+            appendLine("已修订项目记忆 ($projectName): $entryId")
+            appendLine("原块保留; 新 revision 条目: ${outcome.entryId}")
+            if (outcome.ledgerError != null) appendLine("⚠️ 账本写入失败: ${outcome.ledgerError}")
+        })
+        else ExecutionResult.fail(singleEntryFail(agent, path, entryId, "项目记忆 $projectName"))
     }
 
     /** Build a precise failure message for single-entry operations. */

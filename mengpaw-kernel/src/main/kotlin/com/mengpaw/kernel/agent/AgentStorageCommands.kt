@@ -134,9 +134,9 @@ internal class AgentStorageCommands {
         val cleanup = com.mengpaw.kernel.agent.DreamEngine.cleanupWorkspace()
         return ExecutionResult.ok("""
 梦境完成:
-- 翻阅记忆: ${result.memoriesReviewed} 个中期分片
-- 已备份: ${result.archived} 个 → memory/backup/ (30天后自动清理)
-- 提炼产物: {date}_dream.md (工作区根)
+- 归纳条目: ${result.memoriesReviewed} 条
+- ${result.message}
+- 分片保留: 账本只增, 已归纳条目标记在 digest 条目; 重跑生成 .v2/.v3 不覆盖旧产物
 - 清理临时文件: ${cleanup.filesDeleted} 个, 释放 ${cleanup.bytesFreed / 1024}KB
 """.trimIndent())
     }

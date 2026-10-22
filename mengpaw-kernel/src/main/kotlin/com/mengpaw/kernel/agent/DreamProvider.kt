@@ -24,7 +24,7 @@ interface DreamProvider {
     /** LLM 提炼梦境: 上下文 → 洞察, 写入 {date}_dream.md。返回写入内容或 null。 */
     suspend fun refine(agentName: String, llmProvider: LlmProvider, scroll: ScrollContextManager?): String?
 
-    /** 文件整理 (无 LLM): 备份 memory/backup/ → 摘录 → 到期删除。 */
+    /** 文件整理 (无 LLM): 查账本未归纳条目 → 带 sources 的视图 → 标记已归纳; 不删除分片。 */
     fun organize(agentName: String): DreamResult
 
     /** 梦境统计 (日志行数)。 */

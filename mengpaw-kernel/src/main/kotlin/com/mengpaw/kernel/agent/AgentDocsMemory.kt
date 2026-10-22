@@ -106,7 +106,14 @@ internal class AgentDocsMemory {
     // ── Mid-term memory (dated files, auto-recording, not in prompt) ──
 
     /** 中期记忆写入队列 — 批量刷盘, 利用 LLM 等待窗口消除 I/O 延迟 */
-    private data class QueuedWrite(val agentName: String, val line: String)
+    private data class QueuedWrite(
+        val agentName: String,
+        val timestamp: String,
+        val body: String,
+        val meta: MemoryWriteMeta
+    ) {
+        val line: String get() = "\n## $timestamp\n\n$body\n"
+    }
     private val midTermQueue = ConcurrentLinkedQueue<QueuedWrite>()
 
     /** Today's date for mid-term file naming. */
@@ -143,36 +150,41 @@ internal class AgentDocsMemory {
      * 实际落盘由 flushMidTermMemoryQueue() 在 LLM 响应返回后执行,
      * 利用 2-5 秒网络等待窗口消除 I/O 感知延迟.
      */
-    internal fun appendMidTermMemory(agentName: String, entry: String) {
+    internal fun appendMidTermMemory(
+        agentName: String,
+        entry: String,
+        meta: MemoryWriteMeta = MemoryWriteMeta()
+    ) {
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-        val line = "\n## $timestamp\n\n$entry\n"
-        midTermQueue.add(QueuedWrite(agentName, line))
+        midTermQueue.add(QueuedWrite(agentName, timestamp, entry, meta))
         // 中期记忆不注入系统提示词, 不需要触发缓存失效
     }
 
     /**
      * 刷新中期记忆写入队列到磁盘.
      * 在 LLM 响应返回后调用, 利用已有等待窗口使 I/O 成本为零.
+     * 落盘成功后按块生成账本条目 (P3); 索引每 agent 只重建一次。
      * @return 成功落盘的条目数
      */
     internal fun flushMidTermMemoryQueue(): Int {
         if (midTermQueue.isEmpty()) return 0
         // 按 agentName 分组, 合并每个 agent 的写入
-        val grouped = mutableMapOf<String, StringBuilder>()
+        val grouped = mutableMapOf<String, MutableList<QueuedWrite>>()
         var count = 0
         while (true) {
             val item = midTermQueue.poll() ?: break
-            grouped.getOrPut(item.agentName) { StringBuilder() }.append(item.line)
+            grouped.getOrPut(item.agentName) { mutableListOf() }.add(item)
             count++
         }
         if (grouped.isEmpty()) return 0
-        for ((agent, lines) in grouped) {
+        val date = today()
+        for ((agent, items) in grouped) {
             try {
-                val file = File(DataPaths.midTermMemoryFile(agent, today()))
+                val file = File(DataPaths.midTermMemoryFile(agent, date))
                 file.parentFile?.mkdirs()
                 val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { KernelLog.w("AgentDocs", "readExisting: ${e.message}"); "" } else ""
                 val tmp = File(file.parentFile, "memory.tmp")
-                tmp.writeText(existing + lines.toString())
+                tmp.writeText(existing + items.joinToString("") { it.line })
                 // 标准原子写: Files.move 覆盖 (renameTo 在 Windows 上无法覆盖已存在目标)
                 try {
                     java.nio.file.Files.move(
@@ -181,6 +193,10 @@ internal class AgentDocsMemory {
                     )
                 } finally {
                     if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
+                }
+                items.forEach { AgentMemoryLedgerHook.onMidWritten(agent, date, it.timestamp, it.body, it.meta) }
+                try { com.mengpaw.kernel.memory.MemoryIndexWriter.rebuild(agent) } catch (e: Exception) {
+                    KernelLog.w("AgentDocs", "indexRebuild: ${e.message}")
                 }
             } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup2: ${e.message}") }
         }
@@ -225,7 +241,12 @@ internal class AgentDocsMemory {
      * Save a project completion report.
      * Called at milestones or project closure to capture reusable methodology.
      */
-    internal fun saveProjectMemory(agentName: String, projectName: String, report: String) {
+    internal fun saveProjectMemory(
+        agentName: String,
+        projectName: String,
+        report: String,
+        meta: MemoryWriteMeta = MemoryWriteMeta(project = projectName)
+    ) {
         try {
             val file = File(DataPaths.projectMemoryFile(agentName, projectName))
             file.parentFile?.mkdirs()
@@ -251,6 +272,10 @@ internal class AgentDocsMemory {
                 )
             } finally {
                 if (tmp.exists()) { try { tmp.delete() } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup: ${e.message}") } }
+            }
+            AgentMemoryLedgerHook.onProjectWritten(agentName, projectName, timestamp, report, meta)
+            try { com.mengpaw.kernel.memory.MemoryIndexWriter.rebuild(agentName) } catch (e: Exception) {
+                KernelLog.w("AgentDocs", "indexRebuild: ${e.message}")
             }
         } catch (e: Exception) { KernelLog.w("AgentDocs", "tmpCleanup2: ${e.message}") }
     }
@@ -368,32 +393,4 @@ internal class AgentDocsMemory {
 
     internal fun countLongTermMatches(agentName: String, entryId: String): Int =
         countMatchingEntries(DataPaths.longTermMemoryFile(agentName), entryId)
-
-    // ── File-level deletion ───────────────────────────────────────
-
-    internal fun deleteMidTermFile(agentName: String, date: String): Boolean {
-        val file = File(DataPaths.midTermMemoryFile(agentName, date))
-        return if (file.exists()) { file.delete() } else false
-    }
-
-    internal fun deleteProjectMemory(agentName: String, projectName: String): Boolean {
-        val file = File(DataPaths.projectMemoryFile(agentName, projectName))
-        return if (file.exists()) { file.delete() } else false
-    }
-
-    internal fun deleteBoost(agentName: String): Boolean {
-        val file = File(DataPaths.AGENTS, "$agentName/boost.md")
-        return if (file.exists()) { file.delete() } else false
-    }
-
-    // ── Legacy compatibility (delegates to long-term for prompt injection) ──
-
-    internal fun readMemoryDoc(agentName: String): String = readLongTermMemory(agentName)
-
-    internal suspend fun readMemoryDocAsync(agentName: String): String = readLongTermMemoryAsync(agentName)
-
-    internal fun recallMemory(agentName: String, keywords: List<String>): String =
-        searchLongTermMemory(agentName, keywords)
-
-    internal fun appendMemory(agentName: String, entry: String) = appendMidTermMemory(agentName, entry)
 }

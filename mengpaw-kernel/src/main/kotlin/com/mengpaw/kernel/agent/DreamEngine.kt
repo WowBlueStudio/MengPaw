@@ -7,14 +7,18 @@ import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.KernelLog
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.llm.LlmProvider
+import com.mengpaw.kernel.memory.MemoryIndexWriter
+import com.mengpaw.kernel.memory.MemoryLedger
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * Dream mode engine — two concerns:
- * 1. **Dream pass** (LLM): analyze Scroll headlines + memory + profile → terse {date}_dream.md findings
- * 2. **Dream organize** (file-only): 读 memory/ → 备份 memory/backup/ → 提炼 {date}_dream.md → 到期删除已整理分片
+ * Dream mode engine — P3: 归纳从"读取并删除中期分片"降级为**账本视图**。
+ *
+ * 1. **Dream pass** (LLM): 查账本未归纳条目 + 对话摘要 + 长期记忆/档案 → `{date}_dream.md`
+ * 2. **Dream organize** (file-only): 查账本 (未归纳/日期/项目) → 生成带 `sources[]` 的视图
+ *    → 追加 digest 条目标记已归纳; **不删除分片**; 重跑生成 `.v2/.v3…` 不覆盖旧产物
  * 3. **Workspace cleanup** (file-only): trim screenshots, prune temp files
  *
  * Inspired by QwenPaw's proactive mode (Apache 2.0), adapted for Android.
@@ -25,16 +29,20 @@ object DreamEngine : DreamProvider {
     private val agentsDir: File get() = File(DataPaths.AGENTS)
     private val dreamLog: File get() = File(agentsDir, "dream.log")
     private val DATE_FMT = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    private val DAY_FMT = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val DREAM_NAME = Regex("^\\d{4}-\\d{2}-\\d{2}_dream(?:\\.v(\\d+))?\\.md$")
 
     // ── LLM-based Dream Pass ────────────────────────────────────────
 
     private const val MAX_CONTEXT_CHARS = 4000
     private const val MAX_OUTPUT_CHARS = 500
+    private const val MAX_LEDGER_ENTRIES = 40
+    private const val MAX_LEDGER_CONTEXT_CHARS = 1200
 
     private val PASS_PROMPT = """
         分析用户最近活动，生成简短定期摘要。设备空闲充电中——后台维护。
 
-        根据上下文（对话标题、记忆、档案），输出（≤${MAX_OUTPUT_CHARS}字）：
+        根据上下文（对话标题、记忆条目、档案），输出（≤${MAX_OUTPUT_CHARS}字）：
 
         # Dream · [日期]
 
@@ -48,13 +56,14 @@ object DreamEngine : DreamProvider {
         要具体。跳过已解决的。无问候语和元评论。中文输出。
     """.trimIndent()
 
-    /** LLM 提炼梦境 (DreamProvider SPI): 上下文 → 洞察 → 写入 {date}_dream.md。 */
+    /** LLM 提炼梦境 (DreamProvider SPI): 上下文 → 洞察 → 写入 {date}_dream[.vN].md。 */
     override suspend fun refine(
         agentName: String,
         llmProvider: LlmProvider,
         scroll: ScrollContextManager?
     ): String? {
-        val ctx = buildContext(agentName, scroll) ?: return null
+        val built = buildContextWithSources(agentName, scroll)
+        val ctx = built.first ?: return null
         val messages = listOf(
             mapOf("role" to "system", "content" to PASS_PROMPT),
             mapOf("role" to "user", "content" to ctx)
@@ -63,7 +72,11 @@ object DreamEngine : DreamProvider {
             val response = llmProvider.completeWithMessages(messages)
             val trimmed = response.take(MAX_OUTPUT_CHARS).trim()
             if (trimmed.isNotEmpty()) {
-                writeDreamMd(agentName, trimmed)
+                val file = writeDreamMd(agentName, trimmed, built.second)
+                if (file != null && built.second.isNotEmpty()) {
+                    MemoryLedger.appendDigest(agentName, file.name, built.second, trimmed)
+                    MemoryIndexWriter.rebuild(agentName)
+                }
                 trimmed
             } else null
         } catch (e: Exception) {
@@ -72,46 +85,98 @@ object DreamEngine : DreamProvider {
         }
     }
 
-    /** 梦境输入组装 (DreamProvider SPI): 对话摘要 + 三轨记忆 + 档案 → LLM 上下文。 */
-    override suspend fun buildContext(agentName: String, scroll: ScrollContextManager?): String? {
+    /** 梦境输入组装 (DreamProvider SPI): 对话摘要 + 账本未归纳条目 + 档案 → LLM 上下文。 */
+    override suspend fun buildContext(agentName: String, scroll: ScrollContextManager?): String? =
+        buildContextWithSources(agentName, scroll).first
+
+    /** 返回 (上下文, 本次引用的 entryId 列表) — `sources[]` 强制字段的数据来源。 */
+    private fun buildContextWithSources(
+        agentName: String,
+        scroll: ScrollContextManager?
+    ): Pair<String?, List<String>> {
         val parts = mutableListOf<String>()
+        val sources = mutableListOf<String>()
         scroll?.let { s ->
             val headlines = s.listIndex().take(20)
             if (headlines.isNotEmpty()) parts.add("## 近期对话\n" + headlines.joinToString("\n") { "  - [${it.id}] ${it.headline}" })
         }
-        // Dream analyzes mid-term memory to produce long-term insights
-        // 单轨 (v0.22.0): 任务记忆已并入中期 (recordTaskMemory → appendMidTermMemory), 无需旁轨段
-        val midTerm = AgentDocs.readMidTermMemory(agentName)
-        if (midTerm.isNotBlank()) parts.add("## 中期记忆 (今日)\n${midTerm.take(800)}")
+        // P3: 输入改为"查账本未归纳条目", 不再读全部中期分片; 旧分片仅作 unsourced 兜底
+        val pending = MemoryLedger.undigested(agentName).take(MAX_LEDGER_ENTRIES)
+        val rendered = mutableListOf<String>()
+        var usedChars = 0
+        for (entry in pending) {
+            val block = MemoryLedger.resolveBlock(agentName, entry) ?: continue
+            val section = "### ${entry.entryId} (${entry.file})\n$block"
+            if (rendered.isNotEmpty() && usedChars + section.length > MAX_LEDGER_CONTEXT_CHARS) break
+            rendered.add(section)
+            sources.add(entry.entryId)
+            usedChars += section.length
+        }
+        if (rendered.isNotEmpty()) {
+            parts.add("## 中期记忆（账本未归纳 ${rendered.size} 条）\n" + rendered.joinToString("\n\n").take(1200))
+        } else {
+            val legacy = AgentDocs.readMidTermMemory(agentName)
+            if (legacy.isNotBlank()) parts.add("## 中期记忆 (今日分片, 未入账本 · unsourced)\n${legacy.take(800)}")
+        }
         val longTerm = AgentDocs.readLongTermMemory(agentName)
         if (longTerm.isNotBlank()) parts.add("## 长期记忆 (已有)\n${longTerm.take(400)}")
         // FIX: Use lowercase "profile.md" consistent with AgentDocManager/AgentDocs
         val profile = File(agentsDir, "$agentName/profile.md")
         if (profile.exists()) parts.add("## 档案\n${try { profile.readText().take(600) } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.buildContext"); "" }}")
-        if (parts.isEmpty()) return null
+        if (parts.isEmpty()) return null to emptyList()
         val combined = parts.joinToString("\n\n")
-        return if (combined.length > MAX_CONTEXT_CHARS) combined.take(MAX_CONTEXT_CHARS) else combined
+        val context = if (combined.length > MAX_CONTEXT_CHARS) combined.take(MAX_CONTEXT_CHARS) else combined
+        return context to sources.distinct()
     }
 
-    /** 梦境产物文件名: {date}_dream.md (工作区根, 随孪生工作区同步传播) */
-    private fun dreamFileName(): String = "${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())}_dream.md"
+    private fun today(): String = DAY_FMT.format(Date())
 
-    /** 写入 {agent}/{date}_dream.md — 新条目前置, 同日多次梦境追加到同一文件 */
-    private fun writeDreamMd(agentName: String, content: String) {
-        try {
-            val dir = File(agentsDir, agentName); if (!dir.exists()) dir.mkdirs()
-            val entry = "\n---\n## ${DATE_FMT.format(Date())}\n\n$content\n"
-            val file = File(dir, dreamFileName())
-            val existing = if (file.exists()) try { file.readText() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.writeDreamMd"); "" } else "# $agentName · 梦境记录\n"
-            file.writeText(entry + existing)
+    /**
+     * 写入新梦境产物 — 重跑不覆盖: 首版 `{date}_dream.md`, 之后 `.v2.md`, `.v3.md`…
+     * @return 写入的文件; IO 失败 → null
+     */
+    private fun writeDreamMd(agentName: String, content: String, sources: List<String>): File? {
+        return try {
+            val dir = File(agentsDir, agentName).also { if (!it.exists()) it.mkdirs() }
+            val file = nextDreamFile(dir)
+            val body = buildString {
+                appendLine("# $agentName · 梦境记录")
+                appendLine()
+                appendLine("## ${DATE_FMT.format(Date())}")
+                appendLine()
+                appendLine(content.trim())
+                appendLine()
+                appendLine(sourcesLine(sources))
+                if (sources.isEmpty()) appendLine("- unsourced: 本条为 LLM 归纳, 无法逐条追溯 entryId")
+            }
+            file.writeText(body)
+            file
         } catch (e: Exception) {
             ErrorCollector.report(e, "DreamEngine.writeDreamMd")
+            null
         }
     }
 
-    /** 梦境产物是否已存在 (DreamWorker 节流检查用) */
-    fun hasTodayDream(agentName: String): Boolean =
-        File(agentsDir, "$agentName/${dreamFileName()}").exists()
+    /** 强制来源声明: 无来源 → `sources: [unsourced]` (§6.3)。 */
+    private fun sourcesLine(sources: List<String>): String =
+        "sources: [" + (if (sources.isEmpty()) "unsourced" else sources.distinct().joinToString(", ")) + "]"
+
+    /** 当天下一版产物: `{date}_dream.md` → `.v2.md` → `.v3.md`… */
+    private fun nextDreamFile(dir: File): File {
+        val base = "${today()}_dream"
+        val first = File(dir, "$base.md")
+        if (!first.exists()) return first
+        var version = 2
+        while (File(dir, "$base.v$version.md").exists()) version++
+        return File(dir, "$base.v$version.md")
+    }
+
+    /** 梦境产物是否已存在 (DreamWorker 节流检查用; 任一版本都算)。 */
+    fun hasTodayDream(agentName: String): Boolean {
+        val dir = File(agentsDir, agentName)
+        val files = try { dir.listFiles() } catch (_: Exception) { null } ?: return false
+        return files.any { it.isFile && DREAM_NAME.matches(it.name) && it.name.startsWith(today()) }
+    }
 
     // ── Workspace Cleanup (existing) ─────────────────────────────────
 
@@ -162,67 +227,80 @@ object DreamEngine : DreamProvider {
     data class MemResult(val memoriesReviewed: Int, val tagsAdded: Int,
                          val linksFound: Int, val archived: Int, val summarized: Int)
 
-    /** 备份保留期限: 30 天 */
-    private const val BACKUP_RETENTION_DAYS = 30L
-
     /**
-     * 梦境整理 (单轨 v0.22.0) — 四步管道:
-     * 1. 读取 memory/ 全部中期分片 (memory_{date}.md)
-     * 2. 备份到 memory/backup/
-     * 3. 提炼 → 产出 {agent}/{date}_dream.md
-     * 4. 到期删除: 已整理分片从 memory/ 移除; backup/ 中 30 天前的备份删除
+     * 梦境整理 (P3) — 查账本未归纳条目 (重跑时回退到全部条目) → 生成带 sources 的视图
+     * → 追加 digest 条目标记已归纳。**不删除分片**; 旧产物保留, 新产物版本化。
      */
-    /** 文件整理 (DreamProvider SPI): 备份 → 摘录 → 到期删除。 */
+    /** 文件整理 (DreamProvider SPI): 查账本 → 视图 (带 sources) → 标记已归纳。 */
     override fun organize(agentName: String): DreamResult {
-        val midDir = File(DataPaths.midTermMemoryDir(agentName))
-        if (!midDir.exists()) return DreamResult(0, 0, "无中期记忆目录")
-        val dateFiles = midDir.listFiles()
-            ?.filter { it.name.startsWith("memory_") && it.name.endsWith(".md") }
-            ?.sorted()
-            ?: emptyList()
-        if (dateFiles.isEmpty()) return DreamResult(0, 0, "无待整理分片")
+        val all = MemoryLedger.entries(agentName)
+        val pending = MemoryLedger.undigested(all)
+        // 重跑 (无新条目) 用全部非 digest 条目 → 产出 .v2, 旧产物保留
+        val candidates = if (pending.isEmpty()) all.filter { it.kind != MemoryLedger.KIND_DIGEST } else pending
+        val ledgerFiles = all.map { it.file }.toSet()
+        val legacyFiles = legacyFragments(agentName, ledgerFiles)
+        if (candidates.isEmpty() && legacyFiles.isEmpty()) return DreamResult(0, 0, "无待归纳条目")
+        val sources = candidates.map { it.entryId }.distinct()
 
-        val backupDir = File(midDir, "backup")
-        try { backupDir.mkdirs() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream.mkdir") }
-        val reviewed = dateFiles.size
-        var archived = 0
-
-        // 1+2+3: 读分片 → 备份 → 汇总提炼内容
         val digest = buildString {
             appendLine("# 梦境整理 · ${DATE_FMT.format(Date())}")
             appendLine()
-            appendLine("> 来源: ${dateFiles.size} 个中期分片 | 已备份到 memory/backup/")
+            appendLine("> 来源: 账本 ${candidates.size} 条 (${candidates.map { it.file }.distinct().size} 个文件), 旧分片 ${legacyFiles.size} 个")
+            appendLine("> 账本只增: 分片不删除; 已归纳条目标记在 digest 条目")
             appendLine()
-            dateFiles.forEach { f ->
-                val content = try { f.readText() } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream.read"); "" }
-                if (content.isBlank()) { f.delete(); return@forEach }
-                // 备份
-                try { f.copyTo(File(backupDir, f.name), overwrite = true) } catch (e: Exception) { ErrorCollector.report(e, "DreamEngine.dream.backup") }
-                archived++
-                // 提炼: 分片摘录进梦境文档
-                appendLine("## ${f.name}")
+            candidates.groupBy { it.file }.toSortedMap().forEach { (file, entries) ->
+                appendLine("## $file")
+                appendLine()
+                entries.sortedWith(compareBy({ it.wall }, { it.entryId })).forEach { entry ->
+                    val block = MemoryLedger.resolveBlock(agentName, entry)
+                    appendLine("### ${entry.entryId}")
+                    if (block != null) {
+                        appendLine(block)
+                    } else {
+                        appendLine("(正文不可解析: blockHash ${entry.blockHash})")
+                    }
+                    appendLine()
+                    appendLine(sourcesLine(listOf(entry.entryId)))
+                    appendLine()
+                }
+            }
+            legacyFiles.forEach { (relPath, content) ->
+                appendLine("## $relPath (未入账本)")
                 appendLine()
                 appendLine(content.trim().take(2000))
                 appendLine()
-                // 4a: 已整理分片从 memory/ 删除
-                f.delete()
+                appendLine(sourcesLine(emptyList()))
+                appendLine()
             }
         }
 
-        if (digest.isNotBlank()) writeDreamMd(agentName, digest)
-
-        // 4b: backup/ 中 30 天前的备份到期删除
-        val cutoff = System.currentTimeMillis() - BACKUP_RETENTION_DAYS * 24 * 3600 * 1000
-        try {
-            backupDir.listFiles()?.forEach { if (it.lastModified() < cutoff) it.delete() }
-        } catch (_: Exception) { /* best-effort */ }
-
-        val result = DreamResult(reviewed, archived, "备份 ${archived} 个分片到 memory/backup/")
+        val file = writeDreamMd(agentName, digest, sources) ?: return DreamResult(candidates.size, 0, "梦境视图写入失败")
+        if (sources.isNotEmpty()) {
+            MemoryLedger.appendDigest(agentName, file.name, sources, digest)
+            MemoryIndexWriter.rebuild(agentName)
+        }
         try {
             if (!dreamLog.exists()) dreamLog.parentFile?.mkdirs()
-            dreamLog.appendText("${DATE_FMT.format(Date())} | agent=$agentName | reviewed=$reviewed archived=$archived (→ memory/backup/)\n")
+            dreamLog.appendText("${DATE_FMT.format(Date())} | agent=$agentName | entries=${candidates.size} legacy=${legacyFiles.size} (→ ${file.name}, 分片保留)\n")
         } catch (_: Exception) { /* best-effort log */ }
-        return result
+        return DreamResult(candidates.size + legacyFiles.size, 0, "已归纳 ${candidates.size} 条 → ${file.name}; 分片保留")
+    }
+
+    /** 未进账本的旧中期分片 (升级前数据): 相对路径 → 正文。 */
+    private fun legacyFragments(agentName: String, ledgerFiles: Set<String>): List<Pair<String, String>> {
+        val dir = File(DataPaths.midTermMemoryDir(agentName))
+        if (!dir.isDirectory) return emptyList()
+        val files = try { dir.listFiles()?.filter { it.isFile && it.name.startsWith("memory_") && it.name.endsWith(".md") } }
+            catch (_: Exception) { null } ?: return emptyList()
+        return files.sortedBy { it.name }.mapNotNull { f ->
+            val rel = "memory/${f.name}"
+            if (rel in ledgerFiles) return@mapNotNull null
+            val text = try { f.readText() } catch (e: Exception) {
+                ErrorCollector.report(e, "DreamEngine.legacyFragments")
+                return@mapNotNull null
+            }
+            if (text.isBlank()) null else rel to text
+        }
     }
 
     /** 梦境统计 (DreamProvider SPI)。 */
