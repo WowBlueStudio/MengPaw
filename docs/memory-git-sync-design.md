@@ -315,7 +315,7 @@ theirs = 对端 head 的 tree
 ```markdown
 ---
 deviceId: 7f3a-…            # 安装期 UUID
-legacyFingerprint: 92c1…    # 兼容期信任兜底
+legacyFingerprint: 92c1…    # 仅诊断/审计展示，不用于信任迁移
 deviceName: 荣耀平板
 formFactor: TABLET
 os: Android 15 (API 35)
@@ -455,7 +455,7 @@ agents:
 ### 10.1 依赖关系
 
 ```
-P0 止血（哈希/落盘/deviceId）── 无依赖，当天可做
+P0 止血（哈希/落盘）── 无依赖，已完成
    │
    ├── P1 对象库 + 快照（纯 JVM，可单测，不接协议）
    │      ├── P2 协议 v0.3 + 合并（接传输，双栈）
