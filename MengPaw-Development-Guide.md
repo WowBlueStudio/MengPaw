@@ -602,7 +602,7 @@ if-else 关键词链里, 型号一换代就静默判错, 且判错直接改变�
 
 - **库存行** `{AGENTS}/twin/devices/<deviceId>.md` (md + frontmatter, 键 = 现用 `deviceId` 指纹): 型号/形态/OS/CPU/RAM/磁盘/屏幕/传感器/相机 + `agents[]` (模型/上下文/视觉/工具/插件/来源) + `observedAt/schemaVersion/status`; 未知键保留、坏 frontmatter 返回 null。
   TODO(P5): 身份改 UUID 需与配对迁移同批 (文件键/信任键/legacyFingerprint 三处一起换)。
-- **单写者** (`DeviceInventoryStore.write`): 只接受 `deviceId == 本机 deviceId` 的行, 其他端一律只读; `agents[]` 同 agent 取 `observedAt` 较新者。
+- **单写者** (`DeviceInventoryStore.write` + `TwinSyncSpaces.DevicesSpace`): 本机写入口只接受 `deviceId == 本机 deviceId` 的行, 其他端一律只读; `agents[]` 同 agent 取 `observedAt` 较新者。**同步落盘路径同规则** (2026-10-23 P1 修复): `dev` 命名空间落盘时按**文件行归属**判权 (`<deviceId>.md` 只允许其所属端改写/删除), 对端快照里改写或删除本机行 → 跳过 + inbox 提示 + `ErrorCollector`, 不因对端 lamport 更高而覆盖; 第三方行正常中继落盘。
 - **库存 vs 运行时切开** (§7.3): 电量/在线/忙闲**不进库存** (走心跳); `device.self` 展示的电量来自采集器实时读数, 不落盘 (否则每次刷新都产生差异)。
 - **采集器 SPI** (`kernel/device/DeviceCollector.kt`): 纯 JVM 接口 + `DeviceSnapshot`; Android 实现 `shell/DeviceCollectorImpl.kt` 在 `MainActivity.deferInit` 注册到 `DeviceCollectors.collector` (与 `FleetPlatform` 同注入模式); agent 能力事实由 `TwinInventoryFacts` 注入。
 - **索引** `{AGENTS}/twin/devices/index.md` (`DeviceIndexWriter`): 每设备一行 (名称·形态·模型·关键能力·时效·本机/已退役), **本机生成物不参与 `dev` 同步** (时效文案随时间变, 各端本地重算, 避免 D 类争写同一路径)。写入时机: 本机库存写入后 / 对端库存行同步落盘后。

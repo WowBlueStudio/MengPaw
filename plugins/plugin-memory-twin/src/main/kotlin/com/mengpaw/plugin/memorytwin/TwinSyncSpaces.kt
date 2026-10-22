@@ -14,8 +14,11 @@ import com.mengpaw.kernel.memory.TwinFileClass
 import com.mengpaw.kernel.memory.WorkspaceSnapshotSource
 import java.io.File
 
-/** 一次空间写入的结果 (计数用: 只有 [APPLIED] 才算真正落盘)。 */
-internal enum class SpaceWriteResult { APPLIED, SAME, FAILED }
+/** 一次空间写入的结果 (计数用: 只有 [APPLIED] 才算真正落盘; [REJECTED] = 单写者策略拒绝)。 */
+internal enum class SpaceWriteResult { APPLIED, SAME, FAILED, REJECTED }
+
+/** 一次空间删除的结果 — [REJECTED] 表示单写者策略拒绝 (调用方须记录, 不得静默)。 */
+internal enum class SpaceDeleteResult { DONE, FAILED, REJECTED }
 
 /**
  * v0.3 同步的"命名空间适配件" — 同一套 HELLO/ACK/TREE_WALK/OBJ_GET 消息,
@@ -27,7 +30,7 @@ internal interface SyncSpace {
     /** 当前内容写入对象库后的 `relPath → blobId` (可直接交给 SnapshotStore.commit)。 */
     fun snapshot(): Map<String, String>
     fun write(relPath: String, bytes: ByteArray, fromDevice: String): SpaceWriteResult
-    fun delete(relPath: String, fromDevice: String)
+    fun delete(relPath: String, fromDevice: String): SpaceDeleteResult
     fun classOf(relPath: String): TwinFileClass
 }
 
@@ -48,8 +51,10 @@ internal class WorkspaceSpace(private val agentName: String) : SyncSpace {
             else -> SpaceWriteResult.FAILED
         }
 
-    override fun delete(relPath: String, fromDevice: String) =
+    override fun delete(relPath: String, fromDevice: String): SpaceDeleteResult {
         TwinWorkspace.removeWorkspaceFile(agentName, relPath, fromDevice)
+        return SpaceDeleteResult.DONE
+    }
 
     override fun classOf(relPath: String): TwinFileClass = TreeMerge.classify(relPath)
 }
@@ -57,10 +62,17 @@ internal class WorkspaceSpace(private val agentName: String) : SyncSpace {
 /**
  * `dev` 命名空间: `{AGENTS}/twin/devices/` 下的设备库存 md 文件 (P4 建库存文件, P2 先打通同步)。
  *
- * 单写者铁律: 本机只应写自己那一行; 写入目标由合并器 D 类策略保证 (同 deviceId 双写会告警)。
+ * 单写者铁律 (§7.2): 文件名即归属 —— `<deviceId>.md` 只允许其所属端改写/删除。
+ * 落盘层硬校验: 对端快照里出现**本机行**且内容不同 (或对端删了本机行) → 跳过并记录,
+ * 绝不覆盖本机库存 (lamport 更高也不行); 第三方行是正常中继 (任一端都可能先带来别端的行),
+ * 按合并结果落盘, 不误杀。该条与 D 类合并策略的关系: 合并决定"取哪一侧"，
+ * 本类决定"有没有权限落盘" —— 权限判据是**文件行归属**, 不是传输侧身份。
  * `index.md` 是**本机生成物** (时效文案随时间变), 不参与同步 —— 否则各端争写同一路径会制造抖动。
  */
-internal class DevicesSpace : SyncSpace {
+internal class DevicesSpace(
+    /** 本机 deviceId (= 同步身份; 生产与 `DeviceInventoryStore.localDeviceId()` 同源)。 */
+    private val localDeviceId: String
+) : SyncSpace {
 
     override val namespace: String = SyncV3Messages.NS_DEVICES
 
@@ -98,6 +110,8 @@ internal class DevicesSpace : SyncSpace {
             val target = File(dir, safe)
             val existing = if (target.isFile) target.readBytes() else null
             if (existing != null && existing.contentEquals(bytes)) return SpaceWriteResult.SAME
+            // 单写者 (§7.2): 本机行内容已被对端改写 → 拒绝落盘 (调用方写 inbox + ErrorCollector)
+            if (isLocalRow(safe)) return SpaceWriteResult.REJECTED
             val tmp = File(dir, ".$safe.${System.nanoTime()}.tmp")
             tmp.writeBytes(bytes)
             var renamed = tmp.renameTo(target)
@@ -116,23 +130,30 @@ internal class DevicesSpace : SyncSpace {
         }
     }
 
-    override fun delete(relPath: String, fromDevice: String) {
-        val safe = safeName(relPath) ?: return
+    override fun delete(relPath: String, fromDevice: String): SpaceDeleteResult {
+        val safe = safeName(relPath) ?: return SpaceDeleteResult.DONE
         val target = File(root, safe)
-        if (!target.exists()) return
-        try {
+        if (!target.exists()) return SpaceDeleteResult.DONE
+        // 单写者 (§7.2): 本机行只能由本机删 (退役 = 本机改 status), 对端删除主张一律拒绝
+        if (isLocalRow(safe)) return SpaceDeleteResult.REJECTED
+        return try {
             val backup = File(root, "$safe.deleted.${fromDevice}")
             if (!backup.exists()) target.renameTo(backup) else target.delete()
             // P4: 删行后重建索引 (索引是本机生成物)
             try { com.mengpaw.kernel.device.DeviceIndexWriter.rebuild() } catch (e: Exception) {
                 ErrorCollector.report(e, "DevicesSpace.indexRebuild")
             }
+            SpaceDeleteResult.DONE
         } catch (e: Exception) {
             ErrorCollector.report(e, "DevicesSpace.delete($safe)")
+            SpaceDeleteResult.FAILED
         }
     }
 
     override fun classOf(relPath: String): TwinFileClass = TwinFileClass.D
+
+    /** `<deviceId>.md` 的行归属是否为本机 (单写者唯一判据)。 */
+    private fun isLocalRow(name: String): Boolean = name.removeSuffix(".md") == localDeviceId
 
     /** 只接受单层 `.md` 文件名 — 设备库存没有子目录, 拒绝对端用路径穿越写别处。 */
     private fun safeName(relPath: String): String? {
@@ -193,7 +214,7 @@ internal class LedgerSpace(private val agentName: String) : SyncSpace {
     }
 
     /** 账本只增: 对端删除不传播 (历史条目靠 revision 表达, 不靠删行)。 */
-    override fun delete(relPath: String, fromDevice: String) = Unit
+    override fun delete(relPath: String, fromDevice: String): SpaceDeleteResult = SpaceDeleteResult.DONE
 
     override fun classOf(relPath: String): TwinFileClass = TwinFileClass.JSONL
 }

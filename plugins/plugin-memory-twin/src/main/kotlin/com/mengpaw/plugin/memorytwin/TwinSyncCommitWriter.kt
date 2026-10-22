@@ -28,21 +28,38 @@ internal class TwinSyncCommitWriter(
     /** 落盘合并结果; 返回 (收到内容数, 冲突数)。 */
     fun applyOutcome(space: SyncSpace, outcome: MergeOutcome, fromDevice: String): TwinSyncV3.SpaceResult {
         var received = 0
+        val rejectedNotes = mutableListOf<String>()
         for (write in outcome.writes) {
             when (space.write(write.relPath, write.bytes, fromDevice)) {
                 SpaceWriteResult.APPLIED -> if (write.kind == MergeWriteKind.CONTENT) received++
                 SpaceWriteResult.SAME -> Unit
+                // 单写者 (§7.2): 归属本机的行拒绝被对端改写 — 记录, 不得静默覆盖
+                SpaceWriteResult.REJECTED -> {
+                    rejectedNotes.add("- ${write.relPath} — 对端 $fromDevice 试图改写单写者行, 已跳过 (本机行不变)")
+                    ErrorCollector.report(
+                        java.io.IOException("单写者拒绝写入: ${space.namespace}/${write.relPath}"),
+                        "TwinSyncV3.apply"
+                    )
+                }
                 SpaceWriteResult.FAILED -> ErrorCollector.report(
                     java.io.IOException("合并落盘失败: ${space.namespace}/${write.relPath}"),
                     "TwinSyncV3.apply"
                 )
             }
         }
-        outcome.deletes.forEach { space.delete(it, fromDevice) }
+        for (path in outcome.deletes) {
+            if (space.delete(path, fromDevice) == SpaceDeleteResult.REJECTED) {
+                rejectedNotes.add("- $path — 对端 $fromDevice 试图删除单写者行, 已跳过 (本机行保留)")
+                ErrorCollector.report(
+                    java.io.IOException("单写者拒绝删除: ${space.namespace}/$path"),
+                    "TwinSyncV3.apply"
+                )
+            }
+        }
         if (outcome.inboxNotes.isNotEmpty() || outcome.warnings.isNotEmpty() ||
-            outcome.conflicts.isNotEmpty()
+            outcome.conflicts.isNotEmpty() || rejectedNotes.isNotEmpty()
         ) {
-            writeInbox(outcome, fromDevice, space.namespace)
+            writeInbox(outcome, fromDevice, space.namespace, rejectedNotes)
         }
         return TwinSyncV3.SpaceResult(received, outcome.conflicts.size)
     }
@@ -122,8 +139,13 @@ internal class TwinSyncCommitWriter(
         if (base != null) SnapshotStore.setBaseRef(ns, peerKey, base)
     }
 
-    /** 冲突/删除提示写 inbox (§5.3) — Agent 直接编辑文件消除冲突标记即可。 */
-    private fun writeInbox(outcome: MergeOutcome, peerName: String, ns: String) {
+    /** 冲突/删除/单写者拒绝提示写 inbox (§5.3) — Agent 直接编辑文件消除冲突标记即可。 */
+    private fun writeInbox(
+        outcome: MergeOutcome,
+        peerName: String,
+        ns: String,
+        rejectedNotes: List<String> = emptyList()
+    ) {
         try {
             val dir = File(DataPaths.AGENTS, "$agentName/inbox")
             dir.mkdirs()
@@ -137,6 +159,7 @@ internal class TwinSyncCommitWriter(
                 appendLine("> 来自: $peerName")
                 appendLine("> 时间: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}")
                 appendLine()
+                rejectedNotes.forEach { appendLine(it) }
                 outcome.inboxNotes.forEach { appendLine(it) }
                 outcome.warnings.forEach { appendLine("- 告警: $it") }
                 appendLine()

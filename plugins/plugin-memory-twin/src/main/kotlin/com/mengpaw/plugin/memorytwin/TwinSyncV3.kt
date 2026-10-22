@@ -149,7 +149,7 @@ internal class TwinSyncV3(
      */
     private fun spaces(): List<SyncSpace> = listOf(
         WorkspaceSpace(agentName),
-        DevicesSpace(),
+        DevicesSpace(deviceId),
         LedgerSpace(agentName)
     )
 
