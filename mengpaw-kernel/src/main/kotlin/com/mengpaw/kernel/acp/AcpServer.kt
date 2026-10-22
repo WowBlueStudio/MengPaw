@@ -280,7 +280,10 @@ class AcpServer(
                 customResult ?: AcpResult(true, "ack", msg.type)
             }
             // Memory Twin workspace sync — requires trusted peer (P0 fix: auth check)
+            // v0.3 协议 (§4.3): HELLO/ACK/TREE_WALK/OBJ_GET 同为工作区读取面, 与 v0.2 同档
             AcpMessageType.WS_MANIFEST, AcpMessageType.WS_PULL,
+            AcpMessageType.SYNC_HELLO, AcpMessageType.SYNC_ACK,
+            AcpMessageType.TREE_WALK, AcpMessageType.OBJ_GET,
             AcpMessageType.REVOKE -> {
                 // SECURITY: Only trusted (paired) devices can access workspace data
                 if (!PromptFirewall.isTrusted(msg.from)) {

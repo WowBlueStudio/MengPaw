@@ -31,8 +31,8 @@ object WorkspaceSnapshotSource {
     /** 根目录额外收录的非 .md 文件。 */
     const val ROOT_RULES_FILE = "twin-model-rules.json"
 
-    /** 一个待快照文件: 工作区相对路径 (正斜杠) + 原始字节。 */
-    data class ScannedFile(val relPath: String, val bytes: ByteArray) {
+    /** 一个待快照文件: 工作区相对路径 (正斜杠) + 原始字节 + 修改时间。 */
+    data class ScannedFile(val relPath: String, val bytes: ByteArray, val mtime: Long = 0L) {
         /** UTF-8 文本视图 (工作区同步范围只有 md/json, 不会丢字节)。 */
         val text: String get() = String(bytes, Charsets.UTF_8)
     }
@@ -79,7 +79,7 @@ object WorkspaceSnapshotSource {
                 ErrorCollector.report(e, "WorkspaceSnapshotSource.read($rel)")
                 continue
             }
-            out.add(ScannedFile(rel, bytes))
+            out.add(ScannedFile(rel, bytes, try { file.lastModified() } catch (_: Exception) { 0L }))
         }
     }
 

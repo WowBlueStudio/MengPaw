@@ -60,6 +60,50 @@ object TextDiff {
         return if (lines.lastOrNull()?.isEmpty() == true) lines.dropLast(1) else lines
     }
 
+    /**
+     * 行级变更块 (P2 三方合并用): `base[baseStart, baseEnd)` 被替换为 `other[otherStart, otherEnd)`。
+     *
+     * 纯插入 = `baseStart == baseEnd`; 纯删除 = `otherStart == otherEnd`。
+     * 与 [diff] 共用同一套 Myers 编辑脚本, 不引入第二套 diff 语义。
+     */
+    data class LineChange(
+        val baseStart: Int,
+        val baseEnd: Int,
+        val otherStart: Int,
+        val otherEnd: Int
+    )
+
+    /** 计算 base → other 的变更块 (base 坐标, 按起点升序, 互不重叠)。 */
+    fun lineChanges(baseText: String, otherText: String): List<LineChange> {
+        val edits = myers(splitLines(baseText), splitLines(otherText))
+        val changes = mutableListOf<LineChange>()
+        var baseNo = 0
+        var otherNo = 0
+        var current: LineChange? = null
+        for (edit in edits) {
+            when (edit.kind) {
+                ' ' -> {
+                    current?.let { changes.add(it) }
+                    current = null
+                    baseNo++
+                    otherNo++
+                }
+                '-' -> {
+                    val c = current ?: LineChange(baseNo, baseNo, otherNo, otherNo)
+                    baseNo++
+                    current = c.copy(baseEnd = baseNo)
+                }
+                '+' -> {
+                    val c = current ?: LineChange(baseNo, baseNo, otherNo, otherNo)
+                    otherNo++
+                    current = c.copy(otherEnd = otherNo)
+                }
+            }
+        }
+        current?.let { changes.add(it) }
+        return changes
+    }
+
     // ── Myers 最短编辑脚本 ─────────────────────────────────────────
 
     private fun myers(a: List<String>, b: List<String>): List<Edit> {

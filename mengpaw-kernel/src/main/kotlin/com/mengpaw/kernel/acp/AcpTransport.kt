@@ -296,6 +296,8 @@ internal fun authorizeAndBind(server: AcpServer, messageType: String, from: Stri
  * 与 AcpServer.processMessage 中的 isTrusted 分支一一对应, 此处补 IP 绑定校验。 */
 private val SENSITIVE_ACP_TYPES = setOf(
     "WS_MANIFEST", "WS_PULL", "REVOKE",
+    // v0.3 同步协议 (docs/memory-git-sync-design.md §4.3) — 同为工作区读取面
+    "SYNC_HELLO", "SYNC_ACK", "TREE_WALK", "OBJ_GET",
     "SESSION_HEAD", "SESSION_PULL", "SESSION_DELTA", "SESSION_ACK",
     "MCP_REQUEST"
 )

@@ -52,7 +52,12 @@ enum class AcpMessageType {
     SESSION_DELTA,          // 传输会话事件增量
     SESSION_ACK,            // 确认接收会话事件
     // ── Memory Twin lifecycle ──
-    REVOKE                  // 孪生撤销/解绑（设备丢失/手动解绑）
+    REVOKE,                 // 孪生撤销/解绑（设备丢失/手动解绑）
+    // ── Memory Twin sync protocol v0.3 (docs/memory-git-sync-design.md §4) ──
+    SYNC_HELLO,             // 同步探测: {proto, deviceId, ns, heads[]}
+    SYNC_ACK,               // 探测响应: {same, heads[], missingTrees[], missingBlobs[]}
+    TREE_WALK,              // 取快照头对应的 tree + 快照元数据
+    OBJ_GET                 // 批量取缺失 blob (base64)
 }
 
 /** ACP 消息。 */
@@ -273,6 +278,32 @@ data class AcpMessage(
                     put("revokedPeerId", JsonPrimitive(revokedPeerId))
                     put("timestamp", JsonPrimitive(System.currentTimeMillis()))
                 }.toString())
+
+        // ── Memory Twin sync v0.3 (纯 pull, 载荷见 SyncV3Messages) ──────
+
+        /** SYNC_HELLO: 单轮探测 — 本机 heads 与协议版本 (§4.1)。 */
+        fun syncHello(
+            from: String, to: String, ns: String, deviceId: String,
+            heads: List<String>, proto: String = SyncV3Messages.PROTOCOL_VERSION
+        ) = AcpMessage(from, to, AcpMessageType.SYNC_HELLO.name,
+            SyncV3Messages.helloPayload(proto, deviceId, ns, heads))
+
+        /** SYNC_ACK: 对端响应 — 头是否相同 + 本机缺的对象列表 (§4.1)。 */
+        fun syncAck(
+            from: String, to: String, same: Boolean, heads: List<String>,
+            missingTrees: List<String>, missingBlobs: List<String>
+        ) = AcpMessage(from, to, AcpMessageType.SYNC_ACK.name,
+            SyncV3Messages.ackPayload(same, heads, missingTrees, missingBlobs))
+
+        /** TREE_WALK: 按快照头/tree id 取清单 (§4.1)。 */
+        fun treeWalk(from: String, to: String, ns: String, sha: String) =
+            AcpMessage(from, to, AcpMessageType.TREE_WALK.name,
+                SyncV3Messages.treeWalkPayload(ns, sha))
+
+        /** OBJ_GET: 批量取缺失 blob (§4.1, 响应 data 为 {blobs:{sha:base64}})。 */
+        fun objGet(from: String, to: String, ns: String, blobs: List<String>) =
+            AcpMessage(from, to, AcpMessageType.OBJ_GET.name,
+                SyncV3Messages.objGetPayload(ns, blobs))
     }
 }
 

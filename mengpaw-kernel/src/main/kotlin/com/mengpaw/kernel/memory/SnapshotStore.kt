@@ -147,6 +147,29 @@ object SnapshotStore {
         writeRef(namespace, "local", listOf(id))
     }
 
+    /**
+     * 显式设置 heads — 仅同步层在**快进采纳对端头**时使用 (不产生新快照, 避免合并提交互刷)。
+     * 非法 id 被过滤; 空列表 = 清空 heads。
+     */
+    @Synchronized
+    fun setHeads(namespace: String, ids: List<String>) {
+        writeRef(namespace, "heads", ids.filter { ObjectStore.isObjectId(it) }.distinct())
+    }
+
+    /** 读取对象原始字节 (P2 拉取对端快照/清单对象用); 缺失/损坏 → null。 */
+    fun exportObject(id: String): ByteArray? = ObjectStore.read(id)
+
+    /**
+     * 写入对端对象原始字节 (内容寻址, 幂等) — 返回对象 id; 非 64 位十六进制 → null。
+     * 仅同步层使用: 对端快照必须原样落库, 否则本地历史无法回溯父快照。
+     */
+    fun importObject(bytes: ByteArray): String? = try {
+        ObjectStore.write(bytes).takeIf { ObjectStore.isObjectId(it) }
+    } catch (e: Exception) {
+        ErrorCollector.report(e, "SnapshotStore.importObject")
+        null
+    }
+
     /** 当前 heads (一行一个 sha; 缺失/损坏 → 空列表)。 */
     fun heads(namespace: String): List<String> = readRef(namespace, "heads")
 
