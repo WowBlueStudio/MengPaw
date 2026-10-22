@@ -43,6 +43,13 @@ object TwinWorkspace {
     /** 清单条目: 相对路径 → 哈希 + 修改时间。 */
     data class ManifestEntry(val hash: String, val mtime: Long)
 
+    /** 清单哈希在协议中的比较形态 (16 字符) — 发送端与接收端必须走同一函数。 */
+    const val MANIFEST_HASH_CHARS = 16
+
+    /** 把完整 SHA-256 归一为清单比较形态; 短于上限时原样返回。 */
+    fun manifestHash(hash: String): String =
+        if (hash.length <= MANIFEST_HASH_CHARS) hash else hash.take(MANIFEST_HASH_CHARS)
+
     /** 扫描工作区, 生成同步清单。 */
     fun buildManifest(agentName: String): Map<String, ManifestEntry> {
         val root = File(DataPaths.AGENTS, agentName)
@@ -70,23 +77,30 @@ object TwinWorkspace {
         }
     }
 
-    /** 写入一个同步文件: 原子写 + 冲突检测 (.conflict 备份 + 审计 + inbox 提示)。 */
+    /**
+     * 写入一个同步文件: 内容比对 + 原子写 + 冲突检测 (.conflict 备份 + 审计 + inbox 提示)。
+     * 返回 "same" 表示内容一致未落盘 (调用方不必计数)。
+     */
     fun applyWorkspaceFile(agentName: String, relPath: String, content: String, fromDevice: String, fromTimestamp: Long): String {
         val target = File(DataPaths.AGENTS, "$agentName/$relPath")
         try {
+            // P0: 目标存在时只读一次本地内容并复用 — 内容一致就立即返回,
+            // 不写 tmp / 不 rename / 不 notifyDocChanged / 不写审计 (避免无意义写盘与提示词缓存失效)。
+            val exists = target.exists()
+            val localContent: String? = if (exists) try { target.readText() } catch (_: Exception) { null } else null
+            if (localContent == content) return "same"
+
             // 冲突检测 (同旧 applyIdentityUpdate 语义): 本地较新且内容不同 → .conflict 备份, 不覆盖
-            if (target.exists() && target.lastModified() > fromTimestamp) {
-                val localContent = try { target.readText() } catch (_: Exception) { "" }
-                if (localContent != content) {
-                    val dateStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
-                        .format(java.util.Date())
-                    val conflictFile = File(target.parent, "${target.name}.conflict.$dateStamp.from_$fromDevice")
-                    conflictFile.writeText(content)
-                    android.util.Log.w("MengPawTwin",
-                        "工作区文件冲突: $relPath — 本地更新晚于 $fromDevice 的同步,已保存 .conflict 备份")
-                    writeAudit("WORKSPACE_CONFLICT | from=$fromDevice | file=$relPath | saved=${conflictFile.name}")
-                    return "conflict"
-                }
+            // 读取失败时按空内容处理 (= 旧行为), 不回退成"静默覆盖"
+            if (exists && target.lastModified() > fromTimestamp && (localContent ?: "") != content) {
+                val dateStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
+                    .format(java.util.Date())
+                val conflictFile = File(target.parent, "${target.name}.conflict.$dateStamp.from_$fromDevice")
+                conflictFile.writeText(content)
+                android.util.Log.w("MengPawTwin",
+                    "工作区文件冲突: $relPath — 本地更新晚于 $fromDevice 的同步,已保存 .conflict 备份")
+                writeAudit("WORKSPACE_CONFLICT | from=$fromDevice | file=$relPath | saved=${conflictFile.name}")
+                return "conflict"
             }
 
             // 原子写入 (P2 修复): 原实现先 delete 原文件再 renameTo —

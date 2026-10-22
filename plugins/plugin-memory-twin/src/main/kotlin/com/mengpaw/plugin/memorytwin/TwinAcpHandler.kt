@@ -76,7 +76,8 @@ class TwinAcpHandler(
         val agentName = syncEngine.agentName
         val localManifest = TwinWorkspace.buildManifest(agentName)
 
-        // 解析对端清单 (哈希截断为 16 字符防超长 payload)
+        // 解析对端清单。哈希是 16 字符的**协议形态** (TwinWorkspace.manifestHash), 不是随手截断的
+        // 省流量优化 — 发送端截断、接收端必须用同一函数比较, 否则永不相等 → 每轮全量重推。
         // P0 fix: relPath 必须消毒 — 对端可控, "../" 穿越可让本机读任意文件并回传
         val peerHashes = mutableMapOf<String, String>()
         for ((relPath, meta) in peerFiles.entries) {
@@ -89,7 +90,7 @@ class TwinAcpHandler(
         val send = buildJsonObject {
             localManifest.forEach { (relPath, entry) ->
                 val peerHash = peerHashes[relPath]
-                if (peerHash == null || peerHash != entry.hash) {
+                if (peerHash == null || peerHash != TwinWorkspace.manifestHash(entry.hash)) {
                     val content = try {
                         File(DataPaths.AGENTS, "$agentName/$relPath").readText()
                     } catch (_: Exception) { return@forEach }

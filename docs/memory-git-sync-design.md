@@ -306,7 +306,8 @@ theirs = 对端 head 的 tree
 ### 7.1 先修 deviceId
 
 - 首次启动生成随机 UUID，持久化 `{AGENTS}/twin/device-id.json`：`{"uuid":"…","legacyFingerprint":"…"}`。
-- 信任查找顺序：`uuid` → `legacyFingerprint` 兜底（**避免升级即需重新配对**）。
+- 信任查找只看 `uuid`；`legacyFingerprint` **仅保留用于诊断/审计展示，不用于自动信任迁移**（自报的 legacy id 可被冒用，不能拿它换信任）。
+- 升级到 UUID 身份需要**重新配对一次**（既有信任文件按 peerId 存，身份一变即失效）；因此必须与协议 v0.3 双栈升级同批做，见 §10.4。
 - 硬件信息降级为字段，**不再参与身份**。
 
 ### 7.2 文件格式（`devices/<deviceId>.md`）
@@ -471,7 +472,6 @@ P1 与 P3（单机版）可并行；P2 是唯一动协议的点，风险集中�
 |---|---|---|
 | 统一 64 位哈希（发/收同一 `shortHash()`，或全 64） | `TwinSyncProtocol.kt`、`TwinAcpHandler.kt` | 两轮同步中，第二轮 `send` 为空 |
 | 内容相同不落盘（先比对再写，不写 tmp、不 `notifyDocChanged`） | `TwinWorkspace.kt` | 空闲 10 分钟，落盘 0 次 |
-| deviceId 改安装期 UUID + legacy 兜底 | `AcpCrypto`、`AppRootTwin.kt`、新 `device-id.json` | 同型号两机 id 不同；旧配对仍可用 |
 
 **量化收益**：空闲期 wire 从"每 60s 一个工作区"降到"每 60s 约 200B"；提示词缓存从"每分钟失效"降到"仅真变更时失效"。
 
@@ -502,6 +502,10 @@ P1 与 P3（单机版）可并行；P2 是唯一动协议的点，风险集中�
 | 文件分类（L/M/D/S） | `TwinWorkspace.kt` |
 | 删除传播 + 冲突 inbox | `TwinSyncEngine.kt` / `TwinWorkspace.kt` |
 | 删除死代码 `TwinDiscovery`（发现只保留 framework 通讯录 + 手动 IP） | 删 `TwinDiscovery.kt` |
+| deviceId 改安装期 UUID + legacy 兜底（从 P0 移入） | `AcpCrypto`、`AppRootTwin.kt`、新 `device-id.json` |
+
+> **为什么从 P0 移到 P2**：身份从指纹改成 UUID 会让所有既有配对即时失效（信任文件按 peerId 存），
+> 必须与协议 v0.3 双栈升级同批做，一次重配；单独在 P0 改等于把所有在线设备打到未配对。
 
 验收：三端网状（A↔B↔C，A 不直连 C）24h 后工作区逐字节一致；断网 7 天回来只产生预期冲突；同型号两机不互相覆盖。
 
@@ -572,7 +576,7 @@ P1 与 P3（单机版）可并行；P2 是唯一动协议的点，风险集中�
 | 场景 | 处理 |
 |---|---|
 | 对端仍是 v0.2 | 按卡片 `protocolVersion` 走冻结的全量路径 |
-| 本机升级已有配对 | `device-id.json` 带 `legacyFingerprint`，信任查找兜底，**无需重配** |
+| 本机升级已有配对 | 身份改 UUID 后既有信任失效，**需重新配对一次**；`legacyFingerprint` 仅用于诊断/审计展示，不用于自动信任迁移（自报 id 可被冒用） |
 | 旧 `.conflict` 备份 | 保留不清理；新模型不再产生（除兜底分支） |
 | 旧 `memory/backup/` | 保持排除，不迁移、不删除 |
 

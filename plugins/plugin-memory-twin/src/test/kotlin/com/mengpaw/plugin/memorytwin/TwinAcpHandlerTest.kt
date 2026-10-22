@@ -31,6 +31,8 @@ import java.io.File
  * TwinAcpHandler 消息处理测试 (插件零测试补齐)。
  *
  * - WS_MANIFEST 哈希比对: 对端哈希与本地一致 → 不重发; 缺失/不同 → 重发 (P1 截断比较回归)
+ * - WS_MANIFEST 收发哈希形态统一: 对端清单用 16 字符 (TwinWorkspace.manifestHash) 构造,
+ *   相同内容时 send 为空 (P0 回归 — 修复前每 60s 全量重推)
  * - WS_MANIFEST/WS_PULL 穿越路径消毒: ../ 条目被跳过 (P0 修复回归)
  * - TWIN_DELEGATE 信任门: 未配对拒绝, 配对后放行
  *
@@ -76,7 +78,8 @@ class TwinAcpHandlerTest {
         val peerManifest = buildJsonObject {
             put("files", buildJsonObject {
                 put("workspace/doc.md", buildJsonObject {
-                    put("hash", localHashOf("workspace/doc.md"))   // 完整 64 位哈希 — 一致
+                    // 线上形态: 发送端已归一为 16 字符 (TwinWorkspace.manifestHash)
+                    put("hash", TwinWorkspace.manifestHash(localHashOf("workspace/doc.md")))
                     put("mtime", Json.parseToJsonElement("0"))
                 })
             })
@@ -93,17 +96,43 @@ class TwinAcpHandlerTest {
     }
 
     @Test
+    fun `WS-MANIFEST 对端清单携带相同内容的截断哈希时 send 为空 (P0 回归)`() = runTest {
+        // P0 缺陷: 发送端把哈希截成 16 字符, 接收端却比完整 64 字符 → 永不相等,
+        // 每个同步周期 (60s) 全量重推整个工作区。本用例按线上形态构造对端清单。
+        val fullHash = localHashOf("workspace/doc.md")
+        assertEquals("本地哈希应为完整 SHA-256", 64, fullHash.length)
+        val peerHash = TwinWorkspace.manifestHash(fullHash)
+        assertEquals(16, peerHash.length)
+
+        val peerManifest = buildJsonObject {
+            put("files", buildJsonObject {
+                put("workspace/doc.md", buildJsonObject {
+                    put("hash", peerHash)
+                    put("mtime", Json.parseToJsonElement("0"))
+                })
+            })
+        }.toString()
+        val msg = AcpMessage.wsManifest("peer-1", "agent", peerManifest)
+
+        val result = handler.handle(msg, server) as AcpResult
+        assertTrue(result.success)
+        val resp = Json.parseToJsonElement(result.data).jsonObject
+        assertTrue("相同内容的截断哈希不得重推: ${resp["send"]}", resp["send"]!!.jsonObject.isEmpty())
+        assertTrue(resp["request"]!!.jsonArray.isEmpty())
+    }
+
+    @Test
     fun `WS-MANIFEST 对端哈希不同或缺失的文件重发`() = runTest {
         val peerManifest = buildJsonObject {
             put("files", buildJsonObject {
-                // doc.md: 对端哈希与本地不同 → 重发
+                // doc.md: 对端哈希与本地不同 → 重发 (线上形态为 16 字符)
                 put("workspace/doc.md", buildJsonObject {
-                    put("hash", "0".repeat(64))
+                    put("hash", "0".repeat(TwinWorkspace.MANIFEST_HASH_CHARS))
                     put("mtime", Json.parseToJsonElement("0"))
                 })
                 // new.md: 对端有、本地无 → 进入 request
                 put("workspace/new.md", buildJsonObject {
-                    put("hash", "a".repeat(64))
+                    put("hash", "a".repeat(TwinWorkspace.MANIFEST_HASH_CHARS))
                     put("mtime", Json.parseToJsonElement("0"))
                 })
             })
@@ -124,7 +153,7 @@ class TwinAcpHandlerTest {
         val peerManifest = buildJsonObject {
             put("files", buildJsonObject {
                 put("../../secret.md", buildJsonObject {
-                    put("hash", "b".repeat(64))
+                    put("hash", "b".repeat(TwinWorkspace.MANIFEST_HASH_CHARS))
                     put("mtime", Json.parseToJsonElement("0"))
                 })
             })

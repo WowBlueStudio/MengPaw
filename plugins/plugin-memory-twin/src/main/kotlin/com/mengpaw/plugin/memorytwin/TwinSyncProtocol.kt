@@ -68,7 +68,8 @@ internal class TwinSyncProtocol(
                 put("files", buildJsonObject {
                     myManifest.forEach { (relPath, entry) ->
                         put(relPath, buildJsonObject {
-                            put("hash", JsonPrimitive(entry.hash.take(16)))
+                            // 清单哈希走 TwinWorkspace.manifestHash — 与对端接收比较同一形态
+                            put("hash", JsonPrimitive(TwinWorkspace.manifestHash(entry.hash)))
                             put("mtime", JsonPrimitive(entry.mtime))
                         })
                     }
@@ -97,6 +98,7 @@ internal class TwinSyncProtocol(
                 when (r) {
                     "applied" -> received++
                     "conflict" -> conflicts++
+                    // "same": 内容一致未落盘, 不计入 received/conflicts
                 }
             }
 

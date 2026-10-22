@@ -94,6 +94,48 @@ class TwinWorkspaceTest {
         assertEquals("待删除", backups[0].readText())
     }
 
+    // ── 清单哈希形态 (P0: 发送端与接收端必须同一函数) ──────────
+
+    @Test
+    fun `manifestHash 输出恒为 16 字符且同一输入稳定`() {
+        val full = "a".repeat(64)
+        val short = TwinWorkspace.manifestHash(full)
+        assertEquals("协议比较形态固定 16 字符", 16, short.length)
+        assertEquals("a".repeat(16), short)
+        assertEquals("同一输入必须稳定", short, TwinWorkspace.manifestHash(full))
+        assertNotEquals("不同内容仍可区分",
+            short, TwinWorkspace.manifestHash("b".repeat(64)))
+    }
+
+    @Test
+    fun `manifestHash 短输入原样返回`() {
+        assertEquals("abc", TwinWorkspace.manifestHash("abc"))
+        assertEquals("", TwinWorkspace.manifestHash(""))
+        val exact = "c".repeat(TwinWorkspace.MANIFEST_HASH_CHARS)
+        assertEquals("恰好达到上限时原样返回", exact, TwinWorkspace.manifestHash(exact))
+    }
+
+    // ── 内容相同不落盘 (P0) ───────────────────────────────────
+
+    @Test
+    fun `applyWorkspaceFile 内容相同时返回 same 且不重写文件`() {
+        TwinWorkspace.applyWorkspaceFile(agentName, "soul.md", "稳定内容", "peer-1", future)
+        val target = File(workspaceRoot(), "soul.md")
+        val fixedOld = 1_600_000_000_000L   // 2020 年 — 任何重写都会得到当前时间
+        assertTrue("预置旧时间戳失败", target.setLastModified(fixedOld))
+        val before = target.lastModified()
+        val audit = File(DataPaths.TWIN_AUDIT)
+        val auditBefore = if (audit.exists()) audit.readText() else ""
+
+        val r = TwinWorkspace.applyWorkspaceFile(agentName, "soul.md", "稳定内容", "peer-2", future)
+
+        assertEquals("same", r)
+        assertEquals("内容一致不得重写文件", before, target.lastModified())
+        assertFalse("内容一致不得留 tmp", File(target.parentFile, "soul.md.tmp").exists())
+        val auditAfter = if (audit.exists()) audit.readText() else ""
+        assertEquals("内容一致不得写审计", auditBefore, auditAfter)
+    }
+
     // ── buildManifest 哈希比对 (P1 截断比较回归) ────────────────
 
     @Test
