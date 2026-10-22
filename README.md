@@ -51,18 +51,21 @@ Agent层：MengPaw 微内核 + 插件网格 + 记忆孪生    ← 轮毂，只�
 - **Termux 桥**：经 `am startservice` 的 `RUN_COMMAND` 逐项直传参数（不经 shell 字符串拼接），可直接跑 `apt`、配置 Python 环境。
 - **未集成 Shizuku**：MengPaw 不提供 ADB 级权限；高权限操作依赖用户明确授权的无障碍服务或自带 Root 的 `plugin-root` 插件。
 
-### 4. 跨端记忆孪生（Git 账本演进中）
+### 4. 跨端记忆孪生（Git 式账本）
 
-**已实现**：局域网 mDNS 发现 + 6 位短码配对 + ACP P2P 通道（HTTP/JSON，9876）+ 整个 `{agent}/` 工作区的清单比对与差异传输；心跳保活、QoS 自适应（WiFi/移动/计费）、手动 IP 兜底。同步范围含 `soul/profile/agents/boost/trigger/heartbeat`、`memory/` 全部与梦境产物，排除 `dialog/`、`inbox/`、`memory/backup/`。
+**同步底座**：局域网 mDNS 发现 + 6 位短码配对 + ACP P2P 通道（HTTP/JSON，9876）+ 工作区清单比对与差异传输；心跳保活、QoS 自适应（WiFi/移动/计费）、手动 IP 兜底。同步范围含 `soul/profile/agents/boost/trigger/heartbeat`、`memory/` 全部与梦境产物，排除 `dialog/`、`inbox/`、`memory/backup/`。
 
-**P0 已落地（2026-10）**：统一清单哈希的收发形态（此前发送端截断 16 字符、接收端却按 64 字符比对，哈希永不相等 → 每轮重推整个工作区），并让"内容相同"直接跳过落盘。空闲期不再产生无谓写盘与提示词缓存失效。
+**Git 式账本**（内容寻址，替换全量同步）：
 
-**演进中（设计已定稿）**：以内容寻址的 Git 式账本替换全量同步——
+- **对象库**：`blob / tree / snapshot` 三层，SHA-256 内容寻址 + zlib 压缩，`tmp`→`rename` 原子写，按可达性 GC。
+- **协商**：先比根 tree 哈希 —— 相同则一轮结束（约 200 字节）；不同才下钻差异子树，只传缺失对象。
+- **合并**：长期记忆走**三方合并**（base = 上次同步头），冲突写入文件交 Agent 裁决，不再整文件 LWW。
+- **记账**：中期记忆**只增不改**（每条带会话/设备/逻辑时钟，编辑 = 新条目 + `supersedes`）；归纳产物降级为**可重建视图**且每条结论带来源指针，从根上消除"压缩坏记忆"。
+- **设备清单**：每端只写 `devices/<id>.md` 自己那一行（硬件 / 模型 / 插件 / 服务），随同一对象库同步 —— Agent 因此知道自己寄存于哪台设备、其他端有什么能力。
+- **短期对话不参与**（`dialog/` 保持排除）。
+- **可回溯**：`memory.log / show / diff / restore / gc` 与 `device.self / list / info / find`；被删文件也能从对象库取回。
 
-- 长期记忆走**三方合并**（base = 上次同步头），冲突进文件由 Agent 裁决，不再整文件 LWW；
-- 中期记忆**只增记账**（每条带会话/设备/逻辑时钟指针，编辑 = 新条目 + `supersedes`），归纳（梦境）降级为**可重建视图**且每条结论带来源指针，从根上消除"压缩坏记忆"；
-- 每端设备清单（`devices/<id>.md`）**各自登记自己那一行**，Agent 因此知道自己寄存于哪台设备、其他端有什么能力；
-- 短期对话不参与。
+> 实施状态：P0（清单哈希收发形态统一 + 内容相同不落盘）已落地；P1–P4（对象库 / 协议 v0.3 / 记忆账本 / 设备库存）按设计文档推进，本节即其终态。
 
 设计文档：[`docs/memory-git-sync-design.md`](docs/memory-git-sync-design.md)
 
@@ -89,7 +92,7 @@ Agent层：MengPaw 微内核 + 插件网格 + 记忆孪生    ← 轮毂，只�
 | 微内核 | 纯 Kotlin/JVM，零 Android 依赖，`kotlinx-coroutines` + `kotlinx-serialization` |
 | 端侧能力 | 注册表命令 + Linux 兜底通道（常驻 `sh` 池）+ Intent + 无障碍服务 + Termux 桥 |
 | 跨端通信 | ACP over 局域网 HTTP/JSON（9876）+ mDNS（Android NSD）+ 配对密钥协商 |
-| 存储 | 文件系统（Agent 工作区 / 会话检查点 / 工具结果外存 / 进化档案）+ 内容寻址对象库（演进中） |
+| 存储 | 文件系统（Agent 工作区 / 会话检查点 / 工具结果外存 / 进化档案）+ 内容寻址对象库（SHA-256 / zlib / 快照 DAG） |
 | 安全 | Vault（Android Keystore）/ IntegrityGuard（APK 签名）/ PromptFirewall / CommandMonitor |
 | AI 协同 | OpenAI 兼容多供应商（11 个预置）+ 可选 SSH 连接器（Claude Code / Reasonix / Trae） |
 
