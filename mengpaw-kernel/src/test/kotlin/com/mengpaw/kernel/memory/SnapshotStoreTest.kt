@@ -128,4 +128,46 @@ class SnapshotStoreTest {
         assertFalse("refs 应可读", SnapshotStore.heads("ws-tmp").isEmpty())
         assertTrue("库体积应大于 0", SnapshotStore.storeSizeBytes() > 0)
     }
+
+    // ── P0: 按对端的合并基准 (TwinThirdPeerMergeTest 的内核侧回归) ─────────
+
+    @Test
+    fun `对端基准按 peer 隔离且可持久化`() {
+        val ns = "ws-base"
+        val first = SnapshotStore.commit(ns, mapOf("a.md" to SnapshotStore.writeBlob("a".toByteArray())), "1", "agent", "dev")
+        val second = SnapshotStore.commit(ns, mapOf("b.md" to SnapshotStore.writeBlob("b".toByteArray())), "2", "agent", "dev")
+        assertNull("未同步过的对端没有基准", SnapshotStore.baseRef(ns, "peer-x"))
+
+        SnapshotStore.setBaseRef(ns, "peer-x", first)
+        SnapshotStore.setBaseRef(ns, "peer-y", second)
+        assertEquals("每个对端各有自己的基准", first, SnapshotStore.baseRef(ns, "peer-x"))
+        assertEquals(second, SnapshotStore.baseRef(ns, "peer-y"))
+        assertEquals("两个对端基准都是 GC 种子", setOf(first, second), SnapshotStore.baseRefs(ns).toSet())
+        // 同一对端再次同步 → 覆盖为最新基准 (不是新增)
+        SnapshotStore.setBaseRef(ns, "peer-x", second)
+        assertEquals(second, SnapshotStore.baseRef(ns, "peer-x"))
+        assertEquals("同一快照被两个对端引用时按 id 去重", listOf(second), SnapshotStore.baseRefs(ns))
+        // 非法 peer 名不得穿越到别的命名空间/目录
+        assertNull(SnapshotStore.baseRef(ns, "../../escape"))
+        SnapshotStore.setBaseRef(ns, "../../escape", first)
+        assertNull("非法对端名不得写出基准", SnapshotStore.baseRef(ns, "../escape"))
+    }
+
+    @Test
+    fun `GC 保留对端基准快照`() {
+        val ns = "ws-base-gc"
+        val blob = SnapshotStore.writeBlob("基准内容".toByteArray())
+        val baseSnap = SnapshotStore.commit(ns, mapOf("soul.md" to blob), "基准", "agent", "dev")
+        SnapshotStore.setBaseRef(ns, "peer-x", baseSnap)
+        // 故意把 heads 清空: 只剩"对端基准"这一个种子, 基准快照仍必须保活
+        SnapshotStore.setHeads(ns, emptyList())
+
+        SnapshotStore.gc(ns, keepDays = 0, keepCount = 0)
+
+        assertNotNull(
+            "对端基准对应的快照不得被 GC 清掉 (否则下一轮退化成无基准合并)",
+            SnapshotStore.snapshot(ns, baseSnap)
+        )
+        assertNotNull("基准引用的 blob 也必须在", SnapshotStore.readBlob(blob))
+    }
 }

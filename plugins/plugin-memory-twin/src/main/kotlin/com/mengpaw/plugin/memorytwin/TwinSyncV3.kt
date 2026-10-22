@@ -3,16 +3,13 @@
 
 package com.mengpaw.plugin.memorytwin
 
-import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.acp.AcpMessage
 import com.mengpaw.kernel.acp.AcpServer
 import com.mengpaw.kernel.acp.AcpTransport
 import com.mengpaw.kernel.acp.PeerAgent
 import com.mengpaw.kernel.acp.SyncV3Messages
 import com.mengpaw.kernel.error.ErrorCollector
-import com.mengpaw.kernel.memory.MergeOutcome
 import com.mengpaw.kernel.memory.MergeSide
-import com.mengpaw.kernel.memory.MergeWriteKind
 import com.mengpaw.kernel.memory.SnapshotStore
 import com.mengpaw.kernel.memory.TreeMerge
 import kotlinx.coroutines.CancellationException
@@ -21,10 +18,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -84,8 +77,18 @@ internal class TwinSyncV3(
         }
     }
 
-    private data class SpaceResult(val received: Int = 0, val conflicts: Int = 0, val error: String? = null)
-    private data class Theirs(val files: Map<String, String>, val lamport: Long, val device: String)
+    /** 单命名空间结果 (internal: 落盘层 [TwinSyncCommitWriter] 也要构造)。 */
+    internal data class SpaceResult(val received: Int = 0, val conflicts: Int = 0, val error: String? = null)
+    /** 对端产物: 最佳候选头的快照 id + 清单 + (lamport, device)。 */
+    private data class Theirs(
+        val id: String,
+        val files: Map<String, String>,
+        val lamport: Long,
+        val device: String
+    )
+
+    /** 落盘/提交层 (合并结果写工作区 + 提交快照 + 推进 refs)。 */
+    private val commitWriter = TwinSyncCommitWriter(deviceId, agentName)
 
     // ── 对外入口 ───────────────────────────────────────────────────
 
@@ -175,12 +178,12 @@ internal class TwinSyncV3(
         val oursFiles = space.scan()
         // 内容已一致 → 快进采纳对端头 (0 新增对象, 也是双方收敛的关键)
         if (space.snapshot() == theirs.files) {
-            convergeHeads(space.namespace, theirHeads)
+            commitWriter.converge(ns, theirHeads, peerKey(peer), theirs.id, SnapshotStore.writeTree(theirs.files))
             return SpaceResult()
         }
 
-        val baseFiles = baseFiles(ns)
-        val oursSide = MergeSide(deviceId, headLamport(ns), deviceName)
+        val baseFiles = commitWriter.baseFiles(ns, peerKey(peer))
+        val oursSide = MergeSide(deviceId, commitWriter.headLamport(ns), deviceName)
         val theirsSide = MergeSide(theirs.device.ifBlank { peer.peerId }, theirs.lamport, peer.agentName)
         val outcome = TreeMerge.merge(
             base = baseFiles,
@@ -190,13 +193,24 @@ internal class TwinSyncV3(
             theirsSide = theirsSide,
             classOf = space::classOf
         )
-        val applied = applyOutcome(space, outcome, peer.agentName)
+        val applied = commitWriter.applyOutcome(space, outcome, peer.agentName)
         val mergedIds = space.snapshot()
-
-        if (mergedIds == theirs.files) {
-            convergeHeads(ns, theirHeads)
-        } else {
-            commitMerge(ns, mergedIds, localHeads + theirHeads, peer.agentName)
+        val mergedTree = SnapshotStore.writeTree(mergedIds)
+        val headTrees = SnapshotStore.heads(ns).mapNotNull { head ->
+            SnapshotStore.snapshot(ns, head)?.tree
+        }.toSet()
+        // 基准 = 本轮对端候选头 (它是**双方共同祖先**: 本机合并提交以它为父, 对端也持有它)。
+        // 绝不用本次合并结果当基准 —— 对端还没拉到它时, 下一轮会把"对端从未有过的文件"
+        // 判成"对端删除", 于是删掉本机真实记忆文件 (TwinThirdPeerMergeTest 回归)。
+        when {
+            // ① 内容与对端一致 → 收敛 heads
+            mergedIds == theirs.files ->
+                commitWriter.converge(ns, theirHeads, peerKey(peer), theirs.id, mergedTree)
+            // ② 合并结果与本机既有 head 内容相同 (例如对端尚未拉到本机的删除) →
+            //    不造新快照, 只收敛 heads 与基准; 否则每轮都会新增一个合并提交互相追
+            mergedTree in headTrees ->
+                commitWriter.converge(ns, theirHeads, peerKey(peer), theirs.id, mergedTree)
+            else -> commitWriter.commitMerge(ns, mergedIds, localHeads + theirHeads, peer.agentName, peerKey(peer), theirs.id)
         }
         return applied
     }
@@ -245,6 +259,7 @@ internal class TwinSyncV3(
         }
         if (candidates.isEmpty()) return null
         val best = candidates.maxWithOrNull(compareBy({ it.first }, { it.second })) ?: return null
+        val bestId = bestCandidateId(ns, theirHeads, fetched, best.third) ?: return null
 
         // 批量取缺失 blob: 只请求本地没有的 (ack.missingBlobs 也可能包含已存在对象)
         val needed = LinkedHashSet<String>()
@@ -264,7 +279,27 @@ internal class TwinSyncV3(
             }
         }
         if (needed.any { SnapshotStore.readBlob(it) == null }) return null
-        return Theirs(best.third, best.first, best.second)
+        return Theirs(bestId, best.third, best.first, best.second)
+    }
+
+    /**
+     * 找"最佳候选"对应的快照 id — 该 id 会成为与对端的合并基准,
+     * 所以优先取**树与 files 完全一致**的那个快照 (退一步取 heads 里任一已知快照)。
+     */
+    private fun bestCandidateId(
+        ns: String,
+        theirHeads: List<String>,
+        fetched: List<SyncV3Messages.TreeWalkResponse>,
+        files: Map<String, String>
+    ): String? {
+        val known = LinkedHashSet<String>()
+        theirHeads.forEach { head -> if (SnapshotStore.snapshot(ns, head) != null) known.add(head) }
+        fetched.forEach { response -> response.snapshot?.let { known.add(it.id) } }
+        known.firstOrNull { id ->
+            val snapshot = SnapshotStore.snapshot(ns, id)
+            snapshot != null && SnapshotStore.readTree(snapshot.tree) == files
+        }?.let { return it }
+        return known.firstOrNull()
     }
 
     /** 取一个 tree/快照: 快照原始字节原样入库 (本地历史/GC 才能回溯父快照), tree 按内容寻址重写。 */
@@ -295,95 +330,6 @@ internal class TwinSyncV3(
 
     // ── 合并 base / 元数据 ─────────────────────────────────────────
 
-    /** base = local ref 对应快照的 tree (§4.5 — 绝不回退成"最近提交")。 */
-    private fun baseFiles(ns: String): Map<String, ByteArray> {
-        val local = SnapshotStore.localRef(ns) ?: return emptyMap()
-        val snapshot = SnapshotStore.snapshot(ns, local) ?: return emptyMap()
-        val tree = SnapshotStore.readTree(snapshot.tree) ?: return emptyMap()
-        val out = LinkedHashMap<String, ByteArray>()
-        tree.forEach { (path, sha) ->
-            SnapshotStore.readBlob(sha)?.let { out[path] = it }
-        }
-        return out
-    }
-
-    private fun headLamport(ns: String): Long =
-        SnapshotStore.heads(ns).mapNotNull { SnapshotStore.snapshot(ns, it)?.lamport }.maxOrNull() ?: 0L
-
-    // ── 落盘 ───────────────────────────────────────────────────────
-
-    private fun applyOutcome(space: SyncSpace, outcome: MergeOutcome, fromDevice: String): SpaceResult {
-        var received = 0
-        for (write in outcome.writes) {
-            when (space.write(write.relPath, write.bytes, fromDevice)) {
-                SpaceWriteResult.APPLIED -> if (write.kind == MergeWriteKind.CONTENT) received++
-                SpaceWriteResult.SAME -> Unit
-                SpaceWriteResult.FAILED -> ErrorCollector.report(
-                    java.io.IOException("合并落盘失败: ${space.namespace}/${write.relPath}"),
-                    "TwinSyncV3.apply"
-                )
-            }
-        }
-        outcome.deletes.forEach { space.delete(it, fromDevice) }
-        if (outcome.inboxNotes.isNotEmpty() || outcome.warnings.isNotEmpty() ||
-            outcome.conflicts.isNotEmpty()
-        ) {
-            writeInbox(outcome, fromDevice, space.namespace)
-        }
-        return SpaceResult(received, outcome.conflicts.size)
-    }
-
-    private fun commitMerge(ns: String, files: Map<String, String>, parents: List<String>, peerName: String) {
-        val id = SnapshotStore.commit(
-            namespace = ns,
-            files = files,
-            message = "合并 $peerName",
-            agent = agentName,
-            device = deviceId,
-            parents = parents
-        )
-        SnapshotStore.setLocalRef(ns, id)
-    }
-
-    /**
-     * 收敛 heads (内容已一致时) — 取**并集**, 不直接采纳对端 heads。
-     *
-     * 为什么不是单纯采纳: 本地 head 可能不在对端历史里 (双方各自提交后首轮相遇),
-     * 直接丢弃会让本地提交变成不可达对象, GC 一跑历史就没了 (内容虽同, 审计链断)。
-     * 并集是幂等的: 双方各保留对方 head 后, 下一轮 HELLO 的 heads 集合相等,
-     * 自然收敛且不产生新快照 —— 这与"避免互造合并提交"的目标一致。
-     */
-    private fun convergeHeads(ns: String, theirHeads: List<String>) {
-        val union = (SnapshotStore.heads(ns) + theirHeads).distinct()
-        SnapshotStore.setHeads(ns, union)
-        val latest = union.mapNotNull { SnapshotStore.snapshot(ns, it) }
-            .maxByOrNull { it.lamport }?.id ?: union.lastOrNull()
-        if (latest != null) SnapshotStore.setLocalRef(ns, latest)
-    }
-
-    /** 冲突/删除提示写 inbox (§5.3) — Agent 直接编辑文件消除冲突标记即可。 */
-    private fun writeInbox(outcome: MergeOutcome, peerName: String, ns: String) {
-        try {
-            val dir = File(DataPaths.AGENTS, "$agentName/inbox")
-            dir.mkdirs()
-            val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val safeNs = ns.replace(Regex("[^A-Za-z0-9_-]"), "_")
-            val prefix = if (outcome.conflicts.isEmpty()) "merge_notice" else "merge_conflict"
-            val file = File(dir, "${prefix}_${safeNs}_$stamp.md")
-            file.writeText(buildString {
-                appendLine("# 工作区合并提示 (${outcome.conflicts.size} 个文件)")
-                appendLine("> 命名空间: $ns")
-                appendLine("> 来自: $peerName")
-                appendLine("> 时间: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}")
-                appendLine()
-                outcome.inboxNotes.forEach { appendLine(it) }
-                outcome.warnings.forEach { appendLine("- 告警: $it") }
-                appendLine()
-                appendLine("请直接编辑这些文件消除冲突标记 (<<<<<<< / ======= / >>>>>>>)，完成后无需额外操作。")
-            })
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "TwinSyncV3.writeInbox")
-        }
-    }
+    /** 对端基准的文件名键 — 用本机通讯录 id (稳定且不受对端自报字段影响, 防两个对端共享同一基准)。 */
+    private fun peerKey(peer: TwinPeerInfo): String = peer.peerId
 }
-

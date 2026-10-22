@@ -499,7 +499,7 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 
 ### 3.5.1 记忆孪生架构 (plugin-memory-twin v0.22.0 + P1 对象库 + P2 协议 v0.3 + P3 记忆账本 + P4 设备库存 + P4.5 能力卡收敛 2026-10-23)
 
-29 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起) + **协议 v0.3 三方合并** (P2) + **只增记忆账本/归纳视图** (P3) + **设备/能力库存** (P4) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
+30 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起) + **协议 v0.3 三方合并** (P2) + **只增记忆账本/归纳视图** (P3) + **设备/能力库存** (P4) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
 
 **设计**: 孪生 = 同步 `{agent}/` 工作区文档 + `{AGENTS}/twin/ledger/<agent>/entries.jsonl` (账本在工作区外, 单列命名空间)。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trumanshow.md/{date}_dream[.vN].md) + `memory/` 全部; **排除**: inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。(CLI.md 已随 v0.34.3 移除, 不再生成/同步)
 
@@ -511,6 +511,7 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 | `TwinWorkspace.kt` | 同步范围/清单 (SHA-256 + mtime)/L·M·D·S 分类/冲突落盘; 扫描委托 kernel `WorkspaceSnapshotSource` |
 | `TwinSyncEngine.kt` | 双栈调度 — v0.3 纯 pull (`TwinSyncV3`) / v0.2 冻结路径 (`WS_MANIFEST→WS_PULL`) + 心跳保活 + QoS 自适应 |
 | `TwinSyncV3.kt` | 协议 v0.3 纯 pull 驱动: HELLO→ACK→TREE_WALK→OBJ_GET→三方合并→提交/快进采纳头 |
+| `TwinSyncCommitWriter.kt` | 落盘/提交层: 合并结果写工作区 + 提交快照 + 推进 heads/local/按对端 base + 合并 inbox |
 | `TwinSyncSpaces.kt` | 命名空间适配 (`ws-<agent>` 工作区 / `dev` 设备库存 / `ledger-<agent>` 记忆账本) — 同一套消息, 不同扫描/写入 |
 | `TwinAcpHandler.kt` | `AcpHandler` 实现 — 处理 12 种孪生 ACP 消息 (8 旧 + 4 个 v0.3) |
 | `TwinPairingEngine.kt` | 短码验证配对协议 (4 步: ANNOUNCE→CHALLENGE→VERIFY→CONFIRM) |
@@ -579,8 +580,13 @@ if-else 关键词链里, 型号一换代就静默判错, 且判错直接改变�
   删除-修改保留修改方为 `.kept-<device>.md` + inbox / 非 UTF-8 或 >256KB 取较新一方 + `.conflict` 备份。
 - 冲突不弹 UI: 写 `{agent}/inbox/merge_conflict_<ns>_<时间>.md`; 文件内冲突标记为
   `<<<<<<< ours (设备名)` / `=======` / `>>>>>>> theirs (设备名)`。
-- 收敛: 合并后内容与对端树一致 → 直接采纳对端 heads (`setHeads` + `setLocalRef`), 不造新快照;
-  base 恒为 `refs/<ns>/local` (上次成功同步头), **不回退成"最近提交"**。
+- 收敛: 合并后内容与对端树一致 (或合并结果与本机既有 head 内容相同) → 并集收敛 heads
+  (`setHeads` + `setLocalRef`), 不造新快照; 否则每轮都会新增合并提交互相追。
+- **base 按对端隔离** (`refs/<ns>/base-<peer>`, 2026-10-23 P0 修复): 三方合并的 base 取"与该对端
+  上次一致的那个快照", **不用**命名空间级 `refs/<ns>/local` —— 网状多对端下, 拿别个对端的基准
+  会给第三端首个基准, 把"该端从未有过的文件"判成"对端删除", 删掉本机真实记忆文件并把删除传播
+  出去 (回归: `TwinThirdPeerMergeTest`)。缺该对端基准 = 与它从未同步过 → §5.2"无共同基准"分支
+  (本机为主 + 对端内容 `.conflict` + inbox)。`local` 退化为历史/GC 种子, 不再参与 base 选择。
 
 #### 记忆账本与归纳视图 (P3, 2026-10-23 — `docs/memory-git-sync-design.md` §6)
 

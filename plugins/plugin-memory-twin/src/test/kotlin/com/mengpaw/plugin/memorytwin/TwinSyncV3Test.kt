@@ -144,7 +144,7 @@ class TwinSyncV3Test {
 
     @Test
     fun `heads 不同时只请求缺失 tree 与缺失 blob 并完成合并`() = runTest {
-        // 本机: soul.md 与 base 一致 (h1 是 local ref)
+        // ① 本机: soul.md 与 base 一致 (h1 是 local ref)
         writeWorkspace("soul.md", "旧内容\n")
         writeWorkspace("same.md", "未变内容\n")
         val base = SnapshotStore.commit(
@@ -156,6 +156,8 @@ class TwinSyncV3Test {
             "base", agent, "dev-local"
         )
         SnapshotStore.setLocalRef(ns, base)
+        // P0: 三方合并的 base 是**按对端**的 ref (不是命名空间级 local) — 模拟"已与 peer-b 同步过"
+        SnapshotStore.setBaseRef(ns, "peer-b", base)
 
         // 对端: soul.md 改动 + 新增 new.md (对象在共享库中, 之后手工删除模拟"本机没有")
         val remote = commitSnapshot(
@@ -285,6 +287,8 @@ class TwinSyncV3Test {
             "base", agent, "dev-local"
         )
         SnapshotStore.setLocalRef(ns, base)
+        // P0: 删除传播以**按对端**的基准判定 (与 peer-b 上次一致的头)
+        SnapshotStore.setBaseRef(ns, "peer-b", base)
         // 对端只保留 soul.md
         val remote = commitSnapshot("ws-remote-2", "dev-remote", mapOf("soul.md" to "保留内容\n"))
 

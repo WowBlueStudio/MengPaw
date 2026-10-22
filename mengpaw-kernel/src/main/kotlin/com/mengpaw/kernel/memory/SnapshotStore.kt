@@ -44,7 +44,6 @@ object SnapshotStore {
 
     private const val BLOB_PREFIX = "blob "
     private const val DAY_MS = 24L * 60 * 60 * 1000
-    private val REF_UNSAFE = Regex("[^\\p{L}\\p{N}_-]")
 
     // ── blob ────────────────────────────────────────────────────────
 
@@ -133,19 +132,40 @@ object SnapshotStore {
         val newHeads = LinkedHashSet(current)
         newHeads.removeAll(effectiveParents.toSet())
         newHeads.add(id)
-        writeRef(namespace, "heads", newHeads.toList())
-        // 注意: **不要**在这里前进 local — local 的语义是"上次成功同步头" (= 三方合并 base)。
+        SnapshotRefs.setHeads(namespace, newHeads.toList())
+        // 注意: **不要**在这里前进 local — local 的语义是"上次成功同步头" (= 历史/GC 种子)。
         // 本地提交若写了它, 下一次同步会拿一个对端没有的快照当 base, 合并会误判成
         // "对端删掉了我本地的改动"。local 只由同步层在真正对齐后通过 [setLocalRef] 写入。
         return id
     }
 
-    /** 显式设置合并 base — 仅同步层使用 (双方对齐后写入)。 */
+    /** 显式设置 local ref — 仅同步层使用 (双方对齐后写入; **不再是合并 base**)。 */
     @Synchronized
     fun setLocalRef(namespace: String, id: String) {
-        if (!ObjectStore.isObjectId(id)) return
-        writeRef(namespace, "local", listOf(id))
+        SnapshotRefs.setLocal(namespace, id)
     }
+
+    /**
+     * 与**某个对端**的合并基准 — `refs/<ns>/base-<peer>` (§4.5 的按对端细化, P0 修复)。
+     *
+     * 为什么必须按对端: `local` 的语义是"本机上次成功同步头", 而同步是网状多对端 —
+     * 拿命名空间级 `local` 当第三端的第一份基准, 会把"该对端从来没有过的文件"误判成
+     * "对端已删除", 进而删掉本机真实记忆文件并把删除传播给其他端
+     * (`TwinThirdPeerMergeTest` 回归)。缺该对端基准 = 与它从未同步过 → 走 §5.2
+     * "无共同基准"分支 (本机为主 + 对端内容 `.conflict` + inbox), 绝不删本机文件。
+     *
+     * @return 基准快照 id; 未与该对端同步过 → null
+     */
+    fun baseRef(namespace: String, peerKey: String): String? = SnapshotRefs.base(namespace, peerKey)
+
+    /** 记录与某个对端的合并基准 — 仅同步层在双方对齐后写入。 */
+    @Synchronized
+    fun setBaseRef(namespace: String, peerKey: String, id: String) {
+        SnapshotRefs.setBase(namespace, peerKey, id)
+    }
+
+    /** 全部对端基准 — GC 种子用 (基准快照可能已不在 heads 里, 清掉会让下一轮退化成无基准合并)。 */
+    fun baseRefs(namespace: String): List<String> = SnapshotRefs.bases(namespace)
 
     /**
      * 显式设置 heads — 仅同步层在**快进采纳对端头**时使用 (不产生新快照, 避免合并提交互刷)。
@@ -153,7 +173,7 @@ object SnapshotStore {
      */
     @Synchronized
     fun setHeads(namespace: String, ids: List<String>) {
-        writeRef(namespace, "heads", ids.filter { ObjectStore.isObjectId(it) }.distinct())
+        SnapshotRefs.setHeads(namespace, ids)
     }
 
     /** 读取对象原始字节 (P2 拉取对端快照/清单对象用); 缺失/损坏 → null。 */
@@ -171,10 +191,10 @@ object SnapshotStore {
     }
 
     /** 当前 heads (一行一个 sha; 缺失/损坏 → 空列表)。 */
-    fun heads(namespace: String): List<String> = readRef(namespace, "heads")
+    fun heads(namespace: String): List<String> = SnapshotRefs.heads(namespace)
 
-    /** 本机上次**成功同步**头 (= 合并 base); 本地提交不前进, 无 → null。 */
-    fun localRef(namespace: String): String? = readRef(namespace, "local").firstOrNull()
+    /** 本机上次**成功同步**头 (历史/GC 种子; 合并 base 见 [baseRef]); 本地提交不前进, 无 → null。 */
+    fun localRef(namespace: String): String? = SnapshotRefs.local(namespace)
 
     /** 读取快照元数据; 缺失/损坏 → null。 */
     fun snapshot(namespace: String, id: String): Snapshot? {
@@ -221,6 +241,8 @@ object SnapshotStore {
         val seeds = LinkedHashSet<String>()
         seeds.addAll(heads(namespace))
         localRef(namespace)?.let { seeds.add(it) }
+        // P0: 对端基准快照同样要保活 — 被清掉会让下一轮同步退化成"无共同基准" (冲突噪音)
+        seeds.addAll(baseRefs(namespace))
         seeds.forEach { markReachable(namespace, it, keep) }
 
         // 保留策略: 所有可解析的 snapshot 对象按 wall 倒序, 达龄或属于最近 keepCount 个
@@ -336,35 +358,7 @@ object SnapshotStore {
         }
     }
 
-    // ── 内部: refs / 时钟 ───────────────────────────────────────────
-
-    private fun readRef(namespace: String, name: String): List<String> {
-        val file = refFile(namespace, name)
-        if (!file.isFile) return emptyList()
-        return try {
-            file.readLines().map { it.trim() }
-                .filter { ObjectStore.isObjectId(it) }.distinct()
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "SnapshotStore.readRef($namespace/$name)")
-            emptyList()
-        }
-    }
-
-    private fun writeRef(namespace: String, name: String, ids: List<String>) {
-        val file = refFile(namespace, name)
-        try {
-            file.parentFile?.mkdirs()
-            val suffix = if (ids.isEmpty()) "" else "\n"
-            ObjectStore.writeTextAtomic(file, ids.joinToString("\n", postfix = suffix))
-        } catch (e: Exception) {
-            ErrorCollector.report(e, "SnapshotStore.writeRef($namespace/$name)")
-        }
-    }
-
-    private fun refFile(namespace: String, name: String): File {
-        val safe = namespace.replace(REF_UNSAFE, "_").ifBlank { "default" }
-        return File(File(DataPaths.TWIN_STORE, "refs"), "$safe/$name")
-    }
+    // ── 内部: 时钟 (refs 见 [SnapshotRefs]) ─────────────────────────
 
     private fun readClock(): Long = try {
         File(DataPaths.TWIN_CLOCK).readText().trim().toLongOrNull() ?: 0L
