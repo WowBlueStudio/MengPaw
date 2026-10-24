@@ -37,10 +37,11 @@
 - README 按新结构重写并纠正技术栈; 开发指南 §3.5.1 / §5.1 / §3.7 同步。
 
 ### 发行
-- Shell APK `v0.49.0`（versionCode 49000）—— **本轮仅版本号与文档，未构建 / 未打 tag / 未推送**。
-- 测试（本轮改动模块实测）: kernel **885** / plugin-memory-twin **114** / plugin-skill **55**，0 failures；
-  全量口径待发布前 `./gradlew test` 实测后回填 §3.7。
-- 插件本轮有变更（`plugin-memory-twin` 代码 + `plugin-skill` 技能文档）→ 发布时须同批打 `plugins-v0.49.0` 并上传 AAR。
+- Shell APK `mengpaw-shell-v0.49.0-release.apk`（versionCode 49000，15.02 MB）已构建并验签
+  （`CN=MengPaw, OU=Studio, O=WowBlue`）；`v0.49.0` / `plugins-v0.49.0` 双 tag 已推送 GitHub + Gitee。
+- 测试（`./gradlew test` 双套合并口径）：**主仓库 4 模块 2053 用例，0 failures** —
+  kernel 885 + core 128 + shell 320 + plugins 720；harness 独立仓库本轮无变更（v0.2.1 口径）。
+- 插件：16 个内置插件 AAR 已构建并随 `plugins-v0.49.0` 上传（本轮 `memory-twin` 与 `skill` 文档有变更）。
 
 ## v0.48.2 (2026-09-27) — 手机端长任务断点续跑（三层机制）
 
