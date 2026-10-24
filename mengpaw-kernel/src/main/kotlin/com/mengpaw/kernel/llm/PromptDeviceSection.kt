@@ -53,14 +53,14 @@ internal object PromptDeviceSection {
             append(
                 if (lang == PromptEngine.AgentLanguage.CHINESE) {
                     "- 查详情：device.info <名称>；按能力找端：device.find <能力>\n" +
-                        "- 你只登记自己那一行；其他端的环境由它们自己登记，不要替它们补写。\n" +
-                        "- 文件里出现冲突标记（<<<<<<< / ======= / >>>>>>>）时，先裁决冲突再执行任务。\n"
+                        "- 你只登记自己那一行；其他端的环境由它们自己登记，不要替它们补写。\n"
                 } else {
                     "- Details: device.info <name>; find by capability: device.find <capability>\n" +
-                        "- You only register your own row; other ends register theirs — never fill them in.\n" +
-                        "- When a file contains conflict markers (<<<<<<< / ======= / >>>>>>>), resolve them before executing.\n"
+                        "- You only register your own row; other ends register theirs — never fill them in.\n"
                 }
             )
+            // 注: 冲突裁决常驻指引只在 [PromptMemorySection] 注入一次 — 设备段是条件段
+            // (无库存时不出现), 在这里重复会让两段同时命中时白烧 token。
             append("\n完整内容: cat ${DataPaths.TWIN_DEVICES}/${DeviceIndexWriter.INDEX_NAME}")
         }
     }

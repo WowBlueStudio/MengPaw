@@ -6,6 +6,7 @@ package com.mengpaw.kernel.device
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.llm.PromptEngine
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -135,7 +136,10 @@ class DeviceIndexWriterTest {
         assertTrue("应登记本机那一行: $before", before.contains("你寄存于"))
         assertTrue("其余端应出现: $before", before.contains("其余 1 端"))
         assertTrue("应有单写者约束: $before", before.contains("你只登记自己那一行"))
-        assertTrue("应有冲突裁决约束: $before", before.contains("冲突标记"))
+        assertTrue("应给查询入口: $before", before.contains("device.find"))
+        // 冲突裁决指引只在 PromptMemorySection 注入一次(去重) — 这里断言"不重复"
+        assertEquals("冲突裁决指引不得在设备段重复注入", 1,
+            Regex("冲突标记").findAll(before).count())
 
         Thread.sleep(10) // 保证 index.md mtime 变化
         writeForeign(inventory("cccc3333", "手机", "2026-10-22T23:00+08:00", plugins = listOf("camera")))
