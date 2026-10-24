@@ -127,6 +127,13 @@ internal class TwinSyncProtocol(
                 lastConflicts = conflicts,
                 lastSyncAt = System.currentTimeMillis()
             )
+            // P1-4: 结果落盘 — 重启后 `twin.status` 仍能回答"上次同步成没成"
+            TwinStateStore.save(
+                lastSyncAt = System.currentTimeMillis(),
+                filesReceived = received,
+                conflicts = conflicts,
+                lastError = if (writeErrors > 0) "有 $writeErrors 个文件写入失败" else ""
+            )
             // P1: 写入失败不再被静默吞掉 — 回传可读错误, 但不中断其余文件
             // P1 修正: filesSent 应为**实际发出的文件数** (send 载荷条目), 旧实现填的是"我们待拉取的路径数"
             TwinSyncResult(received, manifest.send.size, conflicts,
@@ -135,6 +142,8 @@ internal class TwinSyncProtocol(
             throw e
         } catch (e: Exception) {
             ErrorCollector.report(e, "TwinSyncEngine.syncWithPeer($peerId)")
+            // P1-4: 失败也落盘 (保留上次成功时间, 只更新错误) — 重启后仍能看到"上次为什么没成"
+            TwinStateStore.save(0L, 0, 0, e.message ?: "同步异常")
             TwinSyncResult(0, 0, 0, "同步异常: ${e.message}", "请重试。若持续失败，检查对端 ACP 状态和网络连通性。")
         }
     }

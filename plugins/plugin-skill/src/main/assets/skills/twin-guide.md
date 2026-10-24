@@ -72,7 +72,7 @@ source: plugin
 | `memory.log [n]` | 看快照历史（时间/来源设备/变更文件数/说明） | 只读 |
 | `memory.show <path> [snapshot]` | 看某文件在某快照里的内容 | 只读；缺省最近快照 |
 | `memory.diff [--to <snapshot>]` | 当前工作区 vs 快照的 unified diff | 只读；回滚前先看 |
-| `memory.restore <path> [snapshot]` | 把 `.md` 恢复成快照内容 | **会覆盖当前文件**；MID + 门禁表内命令，Agent 工具调用**必须附 `reason`** |
+| `memory.restore <path> [snapshot]` | 把同步范围内的文本文件（`.md` / 模型规则 json）恢复成快照内容 | **会覆盖当前文件**；MID + 门禁表内命令，Agent 工具调用**必须附 `reason`** |
 | `memory.gc [--keep 30d]` | 清理不可达对象，回报删除数与库体积 | 按 30 天/200 快照取宽保留 |
 
 ### device.*（多端库存）
@@ -84,6 +84,7 @@ source: plugin
 | `device.info <名称>` | 单端完整库存（硬件/传感器/相机/Agent 能力/来源） |
 | `device.find <能力>` | 按能力找端（browser/vision/camera/gps/tablet，支持中文别名） |
 | `device.refresh` | 重测本机硬件与能力并登记（有差异才写） |
+| `device.retire` | 本机退役（`status=retired`，其他端选端/路由会跳过它；`device.refresh` 恢复） |
 
 - 库存文件 `{AGENTS}/twin/devices/<deviceId>.md`：**只能登记自己那一行**，不要替别的设备补写或改行（对端写入会被单写者保护拒绝并记 inbox）。
 - `devices/index.md` 是本机生成的视图（含相对时效），**不参与同步**。

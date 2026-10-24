@@ -107,7 +107,16 @@ internal class TwinLifecycleCommands(
     }
 
     suspend fun cmdStatus(args: List<String>, ctx: ExecutionContext): ExecutionResult {
-        if (!state.isRunning) return ExecutionResult.ok("孪生服务: 未启动。使用 twin.start 启动。")
+        // P1-4: 服务未启动时也要能回答"上次同步成没成" — 读落盘状态, 而不是直接一句"未启动"
+        if (!state.isRunning) {
+            val p = TwinStateStore.load()
+            return ExecutionResult.ok(buildString {
+                appendLine("孪生服务: 未启动。使用 twin.start 启动。")
+                appendLine("- 上次同步: ${if (p.hasSynced) formatTime(p.lastSyncAt) else "从未"}")
+                if (p.hasSynced) appendLine("- 上次接收: ${p.filesReceived} 个文件, 冲突 ${p.conflicts}")
+                if (p.lastError.isNotBlank()) appendLine("- 上次错误: ${p.lastError}")
+            })
+        }
 
         val stateFlow = state.syncEngine.syncState.value
         return ExecutionResult.ok(buildString {
@@ -119,13 +128,15 @@ internal class TwinLifecycleCommands(
             appendLine("- 同步阶段: ${stateFlow.phase}")
             appendLine("- 在线节点: ${stateFlow.onlinePeers}/${stateFlow.totalPeers}")
             appendLine("- QoS: ${state.syncEngine.qosLevel.name}")
-            appendLine("- 上次同步: ${
-                if (stateFlow.lastSyncAt > 0) java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
-                    .format(java.util.Date(stateFlow.lastSyncAt)) else "从未"
-            }")
+            appendLine("- 上次同步: ${if (stateFlow.lastSyncAt > 0) formatTime(stateFlow.lastSyncAt) else "从未"}")
             if (stateFlow.lastFilesReceived > 0 || stateFlow.lastConflicts > 0) {
                 appendLine("- 上次接收: ${stateFlow.lastFilesReceived} 个文件, 冲突 ${stateFlow.lastConflicts}")
             }
+            TwinStateStore.load().lastError.takeIf { it.isNotBlank() }?.let { appendLine("- 上次错误: $it") }
         })
     }
+
+    /** 时间戳 → `HH:mm:ss` (状态输出统一口径)。 */
+    private fun formatTime(ts: Long): String =
+        java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(ts))
 }

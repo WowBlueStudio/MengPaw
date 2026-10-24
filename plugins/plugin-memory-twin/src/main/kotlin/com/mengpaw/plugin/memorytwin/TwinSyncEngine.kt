@@ -43,7 +43,16 @@ class TwinSyncEngine(
 ) {
     // ── State ──────────────────────────────────────────────────────
 
-    private val _syncState = MutableStateFlow(TwinSyncState())
+    // 启动时载入上次同步结果 (P1-4) — 否则重启后 `twin.status` 一律显示"从未同步"
+    private val _syncState = MutableStateFlow(
+        TwinStateStore.load().let {
+            TwinSyncState(
+                lastFilesReceived = it.filesReceived,
+                lastConflicts = it.conflicts,
+                lastSyncAt = it.lastSyncAt
+            )
+        }
+    )
     val syncState: StateFlow<TwinSyncState> = _syncState.asStateFlow()
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())

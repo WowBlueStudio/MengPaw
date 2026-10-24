@@ -95,6 +95,31 @@ class DeviceCommandsTest {
     }
 
     @Test
+    fun `retire 标记本机退役 且 refresh 可恢复`() = runTest {
+        assertTrue(run("refresh").success)
+        assertFalse("初始应为 active", DeviceInventoryStore.readLocal()!!.isRetired)
+
+        val retired = run("retire")
+        assertTrue(retired.error, retired.success)
+        assertTrue("应提示退役: ${retired.output}", retired.output.contains("已标记退役"))
+        assertTrue("库存行状态应为 retired", DeviceInventoryStore.readLocal()!!.isRetired)
+
+        val again = run("retire")
+        assertTrue("重复退役应幂等", again.success)
+        assertTrue(again.output.contains("已是退役状态"))
+
+        assertTrue("refresh 应恢复", run("refresh").success)
+        assertFalse("refresh 后应写回 active", DeviceInventoryStore.readLocal()!!.isRetired)
+    }
+
+    @Test
+    fun `retire 无库存行时明确失败`() = runTest {
+        val r = run("retire")
+        assertFalse(r.success)
+        assertTrue("应指路 device.refresh: ${r.error}", r.error.orEmpty().contains("device.refresh"))
+    }
+
+    @Test
     fun `refresh 硬件变化后重写`() = runTest {
         assertTrue(run("refresh").success)
         val firstText = DeviceInventoryStore.readLocal()!!.cpuCores

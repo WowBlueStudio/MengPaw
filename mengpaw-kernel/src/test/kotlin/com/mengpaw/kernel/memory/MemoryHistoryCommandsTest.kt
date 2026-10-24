@@ -104,7 +104,7 @@ class MemoryHistoryCommandsTest {
     }
 
     @Test
-    fun `restore 恢复内容且拒绝非 md`() = runTest {
+    fun `restore 恢复 md 与模型规则 拒绝范围外文件`() = runTest {
         assertTrue(run("commit", "-m", "旧版").success)
         val oldId = SnapshotStore.history("ws-$agent", 20).first().id
         File(workspace, "soul.md").writeText("# 灵魂\n\n被改坏\n")
@@ -115,10 +115,23 @@ class MemoryHistoryCommandsTest {
         assertTrue(restored.output.contains("已恢复"))
         assertEquals("# 灵魂\n\n最初版本\n", File(workspace, "soul.md").readText())
 
-        File(workspace, "twin-model-rules.json").writeText("{}")
-        val rejected = run("restore", "twin-model-rules.json")
-        assertFalse("非 .md 必须拒绝", rejected.success)
-        assertTrue(rejected.error.orEmpty().contains(".md"))
+        // 模型规则也在同步范围内 (WorkspaceSnapshotSource 白名单) → 可恢复
+        File(workspace, WorkspaceSnapshotSource.ROOT_RULES_FILE).writeText("""{"version":1,"rules":[]}""")
+        assertTrue(run("commit", "-m", "含规则").success)
+        val rulesSnap = SnapshotStore.history("ws-$agent", 20).first().id
+        File(workspace, WorkspaceSnapshotSource.ROOT_RULES_FILE).writeText("""{"version":1,"rules":[{"id":"x"}]}""")
+        val rulesRestored = run("restore", WorkspaceSnapshotSource.ROOT_RULES_FILE, rulesSnap)
+        assertTrue(rulesRestored.error, rulesRestored.success)
+        assertTrue(
+            "规则文件应恢复成快照内容: ${rulesRestored.output}",
+            File(workspace, WorkspaceSnapshotSource.ROOT_RULES_FILE).readText().contains("\"rules\":[]")
+        )
+
+        // 范围外 (非 md / 非规则文件) 仍必须拒绝
+        File(workspace, "notes.txt").writeText("x")
+        val rejected = run("restore", "notes.txt")
+        assertFalse("范围外文件必须拒绝", rejected.success)
+        assertTrue(rejected.error.orEmpty().contains("同步范围内"))
     }
 
     @Test

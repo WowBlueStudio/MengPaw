@@ -25,7 +25,7 @@ import java.util.Locale
  * memory.log [n]                  — 最近 n 个快照 (时间/设备/变更文件数/说明)
  * memory.show <path> [snapshot]   — 某文件在某快照的内容 (缺省最近快照)
  * memory.diff [--to <snapshot>]   — 当前工作区 vs 快照的 unified diff
- * memory.restore <path> [snap]    — 把 .md 文件恢复成快照内容 (MID; Agent 工具调用需 reason)
+ * memory.restore <path> [snap]    — 把同步范围内的文本文件恢复成快照内容 (.md / twin-model-rules.json; MID, 需 reason)
  * memory.gc [--keep 30d]          — 清理不可达对象, 回报删除数与库体积
  * ```
  *
@@ -154,6 +154,14 @@ object MemoryHistoryCommands {
      * [com.mengpaw.kernel.security.HighRiskCommandGate.HIGH_RISK] 在命令行展开前强制
      * (缺 reason → REASON_REQUIRED); 用户直接敲 CLI 文本形态不经过该门禁。
      */
+    /**
+     * 可恢复范围 = **同步范围内的文本文件**: `.md` 或根目录 `twin-model-rules.json`。
+     * 与 [WorkspaceSnapshotSource] 的白名单同源 — 快照里本来就只有这些, 再宽也没东西可恢复。
+     */
+    private fun isRestorable(relPath: String): Boolean =
+        relPath.endsWith(".md", ignoreCase = true) ||
+            relPath.trimStart('/', '\\') == WorkspaceSnapshotSource.ROOT_RULES_FILE
+
     private suspend fun restore(args: List<String>, ctx: ExecutionContext): ExecutionResult {
         val pos = positional(args)
         val rawPath = pos.getOrNull(0)
@@ -162,8 +170,10 @@ object MemoryHistoryCommands {
                     "(MID 风险; Agent 工具调用需附 reason 意图声明, 由 HighRiskCommandGate 校验)",
                 errorCode = ErrorCodes.ERR_INVALID_INPUT
             )
-        if (!rawPath.endsWith(".md", ignoreCase = true)) {
-            return ExecutionResult.fail("memory.restore 只恢复 .md 文件 — $rawPath 不是 Markdown")
+        if (!isRestorable(rawPath)) {
+            return ExecutionResult.fail(
+                "memory.restore 只恢复同步范围内的文本文件 (.md 或 ${WorkspaceSnapshotSource.ROOT_RULES_FILE}) — $rawPath"
+            )
         }
         val agent = agentName(ctx)
         val ns = namespaceOf(agent)

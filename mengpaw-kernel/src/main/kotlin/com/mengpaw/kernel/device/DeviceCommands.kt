@@ -24,6 +24,7 @@ data class InventoryRefresh(
  * device.info <name>      — 单端完整库存
  * device.find <capability>— 按能力找端 (browser / vision / camera / tablet ...)
  * device.refresh          — 重测本机并提交库存 (有差异才写)
+ * device.retire           — 本机退役 (status=retired, 其他端不再路由过来; device.refresh 可恢复)
  * ```
  *
  * 只写本机行 ([DeviceInventoryStore.write] 单写者校验); 对端的行由 `dev` 命名空间同步落盘。
@@ -35,7 +36,8 @@ object DeviceCommands {
         "list" to ::list,
         "info" to ::info,
         "find" to ::find,
-        "refresh" to ::refresh
+        "refresh" to ::refresh,
+        "retire" to ::retire
     )
 
     /** 能力查询别名 (中英/口语 → 库存关键词)。 */
@@ -222,6 +224,32 @@ object DeviceCommands {
     }
 
     // ── 内部 ───────────────────────────────────────────────────────
+
+    /**
+     * 本机退役 — 只改自己那一行 (单写者), 其他端路由/选端时会跳过 `status=retired`。
+     * 恢复用 `device.refresh` (重新采集会写回 active)。
+     */
+    private suspend fun retire(args: List<String>, ctx: ExecutionContext): ExecutionResult {
+        val localId = DeviceInventoryStore.localDeviceId()
+        val existing = DeviceInventoryStore.readLocal()
+            ?: return ExecutionResult.fail("本机还没有库存行 — 先执行 device.refresh 生成")
+        if (existing.isRetired) {
+            return ExecutionResult.ok("本机已是退役状态 (${existing.deviceName}) — 恢复: device.refresh")
+        }
+        val updated = existing.copy(
+            status = DeviceInventory.STATUS_RETIRED,
+            observedAt = nowIso()
+        )
+        return when (DeviceInventoryStore.write(updated, localId)) {
+            InventoryWrite.WRITTEN, InventoryWrite.UNCHANGED -> ExecutionResult.ok(
+                "本机已标记退役: ${existing.deviceName}\n" +
+                    "- 其他端选端/路由会跳过它; 库存行随 dev 命名空间同步出去\n" +
+                    "- 恢复: device.refresh"
+            )
+            InventoryWrite.REJECTED_FOREIGN -> ExecutionResult.fail("拒绝写入: 只能改本机那一行 ($localId)")
+            InventoryWrite.FAILED -> ExecutionResult.fail("写入失败 — 检查 ${DataPaths.TWIN_DEVICES} 权限")
+        }
+    }
 
     /** 去掉时间戳后的库存视图 — "有差异才写"只比库存字段 (§7.4), 时间新鲜度不算差异。 */
     private fun DeviceInventory.withoutTimestamps(): DeviceInventory =

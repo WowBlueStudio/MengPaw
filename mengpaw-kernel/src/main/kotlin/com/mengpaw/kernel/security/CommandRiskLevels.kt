@@ -43,6 +43,8 @@ object CommandRiskLevels {
         "device.info" to RiskLevel.LOW,
         "device.find" to RiskLevel.LOW,
         "device.refresh" to RiskLevel.LOW,
+        // 退役会让其他端不再把任务路由过来 (影响调度结果, 但可 device.refresh 恢复) → 中危
+        "device.retire" to RiskLevel.MID,
         // 记忆孪生 (17 条, 2026-10-22 P0 补齐): 状态/同步/能力查询类只读或幂等拉取 → 普通;
         // 解绑与设备丢失广播会破坏既有信任关系 → 中危 (见下方 MID 段)。
         "twin.start" to RiskLevel.LOW,

@@ -154,7 +154,7 @@ class PromptEngine {
             ## 常用命令 (权威来源: self.tools)
             - 不确定用什么 → self.search <描述>; 完整清单 → self.tools [ns]; 端口/网络 → self.ports
             - 记忆三轨: agent.memory.keep / agent.memory.record / agent.memory.project.save; 输出目录: agent.output
-            - 工作区历史: memory.commit 存档 / memory.log 看快照 / memory.diff 对比 / memory.restore 回滚 .md (中危需 reason)
+            - 工作区历史: memory.commit 存档 / memory.log 看快照 / memory.diff 对比 / memory.restore 回滚文本文件 (中危需 reason)
             - 多端库存: device.list 看全部端 / device.find <能力> 找端 / device.refresh 刷新本机
             - 自动更新: update.check (详情 `skill.run self-update`)
 
@@ -266,7 +266,7 @@ class PromptEngine {
             ## Common Commands (authority: self.tools)
             - Unsure which command? `self.search <desc>`; full listing `self.tools [ns]`; ports/network `self.ports`
             - Memory tracks: agent.memory.keep / agent.memory.record / agent.memory.project.save; output dir: agent.output
-            - Workspace history: memory.commit (snapshot) / memory.log / memory.diff / memory.restore (.md rollback, mid-risk needs reason)
+            - Workspace history: memory.commit (snapshot) / memory.log / memory.diff / memory.restore (text-file rollback, mid-risk needs reason)
             - Multi-device inventory: device.list (all ends) / device.find <capability> / device.refresh (re-measure this device)
             - Auto update: update.check (details `skill.run self-update`)
 
