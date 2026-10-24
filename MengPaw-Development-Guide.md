@@ -2,7 +2,7 @@
 
 > 📄 灵感来源: [ATTRIBUTIONS.md](ATTRIBUTIONS.md) — QwenPaw · Hermes · OpenClaw · Claude Code · ReAct · ComfyUI · LangChain · CrewAI · Dify · Tavily · Arco Design · Material Design 3
 
-> **版本**: 0.48.2 | **更新**: 2026-10-22 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(154文件) + AgentRuntime + **Harness平台抽象层(harness/ 8接口 + 独立仓库 D:\MengPaw\harness, kernel 内联副本已删 · v0.2.1 检查点保留策略)** + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + **进程管理(proc.ps/info/kill)** + **幽灵引用守护(RetiredReferenceScanTest/SkillDocReferenceTest)** + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生工作区文件同步 + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读→备份→{date}_dream.md→到期删除) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.9.0
+> **版本**: 0.49.0 | **更新**: 2026-10-24 | **开发**: Codex + DeepSeek Harness | **架构**: 微内核(154文件) + AgentRuntime + **Harness平台抽象层(harness/ 8接口 + 独立仓库 D:\MengPaw\harness, kernel 内联副本已删 · v0.2.1 检查点保留策略)** + 16插件模块(全部内置随壳更新) + 12外置插件(独立仓库 mengpaw-connectors, MIT) + **浏览器独立仓库 (mengpaw-browser → WowBlueStudio/MengPaw-Browser, 经 JitPack 依赖本仓库共享地基, v0.8.x 独立版本线)** + 双许可(社区AGPL + 商业授权) + 单轨记忆(三轨持有全部记忆) + 进化系统(evolution.* + 静默分支进化) + BM25命令检索(self.search) + 端口单一事实源(self.ports) + **进程管理(proc.ps/info/kill)** + **幽灵引用守护(RetiredReferenceScanTest/SkillDocReferenceTest)** + 四模式自适应调度(REACT/GOAL/SWARM/FLEET) + 6斜杠模式菜单(modes.md) + 孪生 Git 化同步(对象库/协议v0.3/三方合并/记忆账本/设备库存) + 孪生模型能力判定进化(规则/证据/中性未知) + 梦境管道(读账本→带 sources 视图→不删分片) + 持久会话上下文(Claude Code模式) + 结构化压缩归档(QwenPaw模式) + 工具结果裁剪(QwenPaw模式) + 6项性能优化 + 技能闭环(派生/索取/进化) + 对话需求跟踪(规则式目标栈) + 浏览器 v0.9.0
 
 ---
 
@@ -675,7 +675,7 @@ twin.lost <peer> / twin.recover <peer>
 
 中英文系统提示词含完整的记忆孪生使用指南: 功能概述 / 状态检查 / 节点发现 / 手动同步 / 任务委派 / 能力对比 / 路由推荐 / 配对方式 / 启动前提 / 解绑方式。
 
-#### P1 对象库已落地 (2026-10-22, 框架 0.48.2 工作区)
+#### P1 对象库已落地 (2026-10-22, 框架 0.49.0 工作区)
 
 按 `docs/memory-git-sync-design.md` §3 落地**内容寻址对象库 + 单机快照历史**（纯 JVM, 不接协议, P2 才接传输）:
 

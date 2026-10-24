@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.49.0 (2026-10-24) — 记忆孪生 Git 化（对象库 / 协议 v0.3 / 记忆账本 / 设备库存）
+
+> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——
+> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，
+> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成
+> "对端已删除"并传播删除。本轮把存储与同步整体换成 Git 式账本。
+
+### 新增
+- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、
+  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。
+- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,
+  不同才拉缺失对象; 四类型均过信任门 + IP 绑定; 旧 v0.2 对端自动走冻结路径。
+- **三方合并** `TreeMerge`/`MergeText`: L 类 frontmatter 键级 + 正文 diff3、M 类追加并集、规则文件按 id 并集、
+  D 类单写者冲突告警、删除-修改保留修改方、>256KB/非 UTF-8 兜底; 冲突落文件标记 + inbox 任务。
+- **记忆账本** `entries.jsonl` 只增 (13 字段/三重上限/按 entryId 并集) + 独立 `ledger-<agent>` 命名空间同步;
+  编辑/撤回 = 追加 revision + `supersedes`; 归纳降级为带 `sources[]` 的可重建视图 (不删分片, 重跑 `.v2/.v3`)。
+- **设备库存** `device.self/list/info/find/refresh/retire` + `devices/<id>.md` 单写者模型 + 采集器 SPI;
+  库存随 `dev` 命名空间同步, 提示词注入「你的设备与能力」段 (独立缓存指纹)。
+- **Agent 认知层**: `twin-guide` 重写为 v0.3 语义、配对 inbox 指引纠错、工作区模板补 4 条、`twin.*` 全量检索关键词。
+
+### 修复
+- 内容通道载荷两端统一 `{content, mtime}`（修掉"有差异必异常"; mtime 真传后冲突检测才生效）。
+- 三方合并 base 改为**按对端隔离** (`refs/<ns>/base-<peer>`), 修复第三端首次同步删除本机记忆; 头收敛改并集, 不再丢弃本地 head。
+- 5 连击配对身份口径（联系人名 ↔ 设备指纹）对齐, 信任落到真实 ID 并保留名字别名。
+- ACP 敏感消息 IP 绑定改为**先校验后绑定**（原实现先写后查, 判定恒真）。
+- 清单哈希收发统一 16 字符协议形态（原发送截断/接收比全量, 永不相等 → 每轮重推工作区）; 内容相同不落盘。
+- 撤回的中期记忆不再被归纳（revision/superseded 块排除）; `project.rm` 对齐 tombstone; `memory.restore` 真正校验 `reason`。
+- **plan 模式**改走 `HighRiskCommandGate`（原直接拼串, 门禁表内命令在 plan 下无 reason 校验）。
+- `twin.status` 统计持久化（重启不再显示"从未"）+ 对象库/账本健康度; 自动同步启停可查; `filesSent` 语义修正。
+- 恢复链下沉 IO / 检查点分级截断与意图日志去 fsync (`edd6cea5` / `bf56824f` / `edee0883`)。
+
+### 文档
+- 新增 `docs/memory-git-sync-design.md`（P0–P4 设计与拆改）、`docs/audit/memory-git-2026-10-23.md`（21 问 + 九维）、
+  `docs/evolution-points.md`（E1–E8 + 纠错）、`docs/night-sprint/`（四张任务卡与共享纪律）。
+- README 按新结构重写并纠正技术栈; 开发指南 §3.5.1 / §5.1 / §3.7 同步。
+
+### 发行
+- Shell APK `v0.49.0`（versionCode 49000）—— **本轮仅版本号与文档，未构建 / 未打 tag / 未推送**。
+- 测试（本轮改动模块实测）: kernel **885** / plugin-memory-twin **114** / plugin-skill **55**，0 failures；
+  全量口径待发布前 `./gradlew test` 实测后回填 §3.7。
+- 插件本轮有变更（`plugin-memory-twin` 代码 + `plugin-skill` 技能文档）→ 发布时须同批打 `plugins-v0.49.0` 并上传 AAR。
+
 ## v0.48.2 (2026-09-27) — 手机端长任务断点续跑（三层机制）
 
 > 触发: Agent 长任务中途被杀/进程重启后只能从头再来 —— 检查点每 5 步一次且只存进度摘要,
