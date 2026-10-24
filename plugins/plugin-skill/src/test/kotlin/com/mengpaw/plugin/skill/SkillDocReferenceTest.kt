@@ -3,6 +3,9 @@
 
 package com.mengpaw.plugin.skill
 
+import com.mengpaw.kernel.cli.BuiltinCommandIndex
+import com.mengpaw.kernel.cli.CommandSearch
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -31,6 +34,9 @@ class SkillDocReferenceTest {
 
     /** 已整体移除的文档 — 不得作为"命令参考"来源出现。 */
     private val RETIRED_FILES = listOf("CLI.md", "cli.md")
+
+    /** 允许作为「示例/历史」出现、不要求真实注册的命令 — 每条必须写明原因。 */
+    private val ALLOWED_DOC_REFS = emptySet<String>()
 
     /** 允许提及退役对象的行/文件 — 必须是**说明其已删**的语境, 不是教 Agent 用它。 */
     private val ALLOW_MARKERS = listOf(
@@ -106,5 +112,88 @@ class SkillDocReferenceTest {
             Regex("\\bfs\\.[a-z]+").containsMatchIn(line) && !line.contains("root-fs", ignoreCase = true)
         }
         assertTrue("疑似已删 fs.* 引用: ${suspicious.joinToString("\n")}", suspicious.isEmpty())
+    }
+
+    // ── 命令引用存在性 (防下一次腐化) ──────────────────────────────
+
+    /**
+     * twin-guide 是 Agent 获取孪生/记忆历史/设备库存能力的唯一手册, 命令改名或插件退役后
+     * 它不会自动更新 —— 本用例把手册里的引用逐条对回**真实注册源**:
+     * `twin.*` 对照 `MemoryTwinPlugin.metadata.commands`, `memory.*` / `device.*`
+     * (含 `agent.memory.*`) 对照 `BuiltinCommandIndex`。
+     *
+     * 不直接依赖 plugin-memory-twin 模块: 插件之间不得互相依赖 (项目红线), 因此按源码
+     * 解析它的命令注册块; 解析为空 = 失败 (防止"解析不到 → 全放过"的假绿)。
+     */
+    @Test
+    fun `twin-guide 引用的命令必须真实存在`() {
+        val guide = File(skillsDir, "twin-guide.md")
+        assertTrue("孪生手册应存在: ${guide.absolutePath}", guide.isFile)
+
+        val refs = commandRefsIn(guide.readText())
+        assertTrue("twin-guide 应引用 twin/memory/device 命令 (否则覆盖不到新能力)", refs.isNotEmpty())
+        assertTrue("twin-guide 应至少引用一条 twin.* 命令", refs.any { it.startsWith("twin.") })
+
+        val ghosts = ghostsOf(refs, builtinCommands(), twinCommands())
+        assertTrue(
+            "twin-guide 引用了不存在/未注册的命令 (Agent 照做必败):\n${ghosts.joinToString("\n")}",
+            ghosts.isEmpty()
+        )
+    }
+
+    /** 反向用例: 夹具里注入幽灵命令 → 校验必须检出 (守护自身不可失效)。 */
+    @Test
+    fun `幽灵命令注入必须被守护发现`() {
+        val fixture = """
+            # 反例夹具 — 以下命令都不存在
+            - `memory.nonexistent` (幽灵)
+            - `device.nonexistent` (幽灵)
+            - `twin.nonexistent` (幽灵)
+        """.trimIndent()
+        val ghosts = ghostsOf(commandRefsIn(fixture), builtinCommands(), twinCommands())
+        assertEquals(
+            "夹具中的幽灵命令必须全部检出: $ghosts",
+            listOf("device.nonexistent", "memory.nonexistent", "twin.nonexistent"),
+            ghosts
+        )
+    }
+
+    /** 文档里的命令引用: `twin.*` / `memory.*` / `device.*` / `agent.memory.*`。
+     *  前瞻排除 `/`：`memory/memory.md` 这类文件路径不是命令。 */
+    private fun commandRefsIn(text: String): Set<String> =
+        Regex(
+            "(?<![A-Za-z0-9_./-])((?:agent\\.)?(?:memory|device)\\.[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9]*)*" +
+                "|twin\\.[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9]*)*)"
+        ).findAll(text).map { it.groupValues[1] }.toSet()
+
+    /** 引用 → 幽灵列表; 白名单条目视为「示例/历史」放行。 */
+    private fun ghostsOf(refs: Set<String>, builtin: Set<String>, twin: Set<String>): List<String> =
+        refs.filter { ref ->
+            if (ref in ALLOWED_DOC_REFS) return@filter false
+            if (ref.startsWith("twin.")) ref !in twin else ref !in builtin
+        }.sorted()
+
+    /** 内核命令索引 (BuiltinCommandIndex → CommandSearch)。用完清空, 不污染其他用例。 */
+    private fun builtinCommands(): Set<String> {
+        CommandSearch.clear()
+        try {
+            BuiltinCommandIndex.buildAll()
+            return CommandSearch.all().map { it.fullName }.toSet()
+        } finally {
+            CommandSearch.clear()
+        }
+    }
+
+    /** `MemoryTwinPlugin.metadata.commands` 的命令集 — 按源码注册块解析 (插件间不相互依赖)。 */
+    private fun twinCommands(): Set<String> {
+        val source = File(
+            "../plugin-memory-twin/src/main/kotlin/com/mengpaw/plugin/memorytwin/MemoryTwinPlugin.kt"
+        )
+        assertTrue("孪生命令注册源应存在: ${source.absolutePath}", source.isFile)
+        val block = source.readText().substringAfter("commands = listOf(", "")
+        val names = Regex("\"(twin\\.[a-z0-9.]+)\"").findAll(block)
+            .map { it.groupValues[1] }.toSet()
+        assertTrue("应解析出孪生命令注册块 (实际解析: $names)", names.size >= 15)
+        return names
     }
 }

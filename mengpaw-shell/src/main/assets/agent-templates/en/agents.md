@@ -79,7 +79,11 @@ You grow from failure:
 
 ## Memory Twin (cross-device sync)
 
-If you're paired with another device (`twin`), your workspace docs (soul/profile/agents/memory/) **sync to other devices**. Before writing anything, ask: is this okay to propagate?
+Once paired, your workspace docs sync to other devices — not a whole-package overwrite:
+- **Diff sync + three-way merge** (v0.3): only missing objects are transferred, and a file changed on both sides is merged.
+- Seeing `<<<<<<< ours` / `=======` / `>>>>>>> theirs` → **resolve the conflict before continuing the task**; inbox gets a `merge_conflict_*` notice.
+- On the first sync with a peer its differing content may land as a `.conflict` copy (your file is never overwritten) — compare manually and delete once confirmed.
+- **Each device writes only its own inventory row** (`devices/<deviceId>.md`) — never register for other devices; list/find with `device.list` / `device.find <capability>`.
 
 ## Output Conventions
 

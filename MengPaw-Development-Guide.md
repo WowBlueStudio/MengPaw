@@ -501,7 +501,9 @@ kernel 内仍有 324 处 `java.io.File` / `System.currentTimeMillis` 等 JVM 类
 
 30 文件。基于 ACP 协议 + **工作区文件同步** (v0.22.0 起) + **协议 v0.3 三方合并** (P2) + **只增记忆账本/归纳视图** (P3) + **设备/能力库存** (P4) + 短码配对 + 心跳保活 + QoS 自适应 + **模型能力进化判定** (2026-09-10)。
 
-**设计**: 孪生 = 同步 `{agent}/` 工作区文档 + `{AGENTS}/twin/ledger/<agent>/entries.jsonl` (账本在工作区外, 单列命名空间)。同步单元是文件而非账本条目 —— manifest 比对 + 差异传输 + LWW 冲突备份。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trumanshow.md/{date}_dream[.vN].md) + `memory/` 全部; **排除**: inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。(CLI.md 已随 v0.34.3 移除, 不再生成/同步)
+**设计**: 孪生 = 同步 `{agent}/` 工作区文档 + `{AGENTS}/twin/ledger/<agent>/entries.jsonl` (账本在工作区外, 单列命名空间)。同步单元是文件而非账本条目 —— **v0.3 根 tree 比对 + 只传缺失对象 + 三方合并** (v0.2 对端自动走兼容路径)。同步范围: 根文档 (soul/profile/agents/boost/trigger/heartbeat.md/trumanshow.md/{date}_dream[.vN].md) + `memory/` 全部; **排除**: inbox/ (本地任务队列)、dialog/ (本地对话流)、memory/backup/ (本机安全副本)。(CLI.md 已随 v0.34.3 移除, 不再生成/同步)
+
+**Agent 认知层**: 技能手册 `twin-guide` + 系统提示词「常用命令」段 (memory.*/device.* 各一行) + 守护测试 (`PromptGhostReferenceTest` 锁提示词命令引用、`SkillDocReferenceTest` 锁技能文档命令引用) —— 三者一起防"代码已改、Agent 认知没跟上"。
 
 #### 组件
 

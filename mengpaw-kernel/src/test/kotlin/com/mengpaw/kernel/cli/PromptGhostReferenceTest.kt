@@ -85,6 +85,31 @@ class PromptGhostReferenceTest {
     }
 
     @Test
+    fun `prompt memory and device refs exist in command index`() {
+        // 1.7 守护扩容: 提示词里出现的 memory.* / device.* 必须能在命令索引里检索到 —
+        // 注册表存在 ≠ Agent 检索得到 (IndexCoverageTest 只锁实现↔索引, 不锁提示词↔索引)。
+        val src = File("src/main/kotlin/com/mengpaw/kernel/llm/PromptEngine.kt")
+        assumeTrue("PromptEngine.kt 应存在 (Gradle 测试工作目录 = 模块根)", src.exists())
+
+        val refs = commandRefs(src.readText())
+            .filter { it.startsWith("memory.") || it.startsWith("device.") }
+        assertTrue("提示词应至少引用一条 memory.* / device.* 命令 (功能存在性 1.1)", refs.isNotEmpty())
+
+        CommandSearch.clear()
+        try {
+            BuiltinCommandIndex.buildAll()
+            val indexed = CommandSearch.all().map { it.fullName }.toSet()
+            val missing = refs.filter { it !in indexed }.sorted()
+            assertTrue(
+                "提示词引用的命令不在 BuiltinCommandIndex (Agent 检索不到): ${missing.joinToString()}",
+                missing.isEmpty()
+            )
+        } finally {
+            CommandSearch.clear()
+        }
+    }
+
+    @Test
     fun `retired namespaces never appear as command references`() {
         // 已退役命名空间: 在源码里出现即为幽灵命令引用 (注释中的历史说明由 RetiredReferenceScanTest 放行)
         val root = File("src/main/kotlin/com/mengpaw/kernel")
@@ -104,23 +129,28 @@ class PromptGhostReferenceTest {
         assertTrue("内核源码出现已退役命名空间: ${hits.take(10)}", hits.isEmpty())
     }
 
-    /** 提取文本中的幽灵内核命令引用 (命名空间必须在 [KERNEL_NS] 内)。
-     *  含"已删/已移除/已退役"的行是历史说明, 先剔除再扫描。 */
-    private fun ghostsIn(text: String, registered: Set<String>): List<String> {
-        val scannable = text.lines()
-            .filterNot { line -> ALLOW_MARKERS.any { line.contains(it) } }
-            .joinToString("\n")
-        val refs = Regex("(?<![A-Za-z0-9])[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)*")
-            .findAll(scannable).map { it.value }.toSet()
-        return refs.filter { ref ->
+    /** 提取文本中的幽灵内核命令引用 (命名空间必须在 [KERNEL_NS] 内)。 */
+    private fun ghostsIn(text: String, registered: Set<String>): List<String> =
+        commandRefs(text).filter { ref ->
             val ns = ref.substringBefore(".")
             if (ns !in KERNEL_NS) return@filter false
             if (ref in SELF_ACP_KEYS) return@filter false
-            if (ref.endsWith(".md") || ref.endsWith(".html") || ref.endsWith(".txt") ||
-                ref.endsWith(".json") || ref.endsWith(".kt") || ref.endsWith(".kts")
-            ) return@filter false
             ref !in registered
-        }.toList()
+        }
+
+    /** 提取 `namespace.command` 形态引用; 含"已删/已移除/已退役"的行是历史说明, 先剔除再扫描。
+     *  文件名后缀 (.md/.json 等) 不是命令, 一并排除。 */
+    private fun commandRefs(text: String): Set<String> {
+        val scannable = text.lines()
+            .filterNot { line -> ALLOW_MARKERS.any { line.contains(it) } }
+            .joinToString("\n")
+        return Regex("(?<![A-Za-z0-9])[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)*")
+            .findAll(scannable).map { it.value }
+            .filterNot { ref ->
+                ref.endsWith(".md") || ref.endsWith(".html") || ref.endsWith(".txt") ||
+                    ref.endsWith(".json") || ref.endsWith(".kt") || ref.endsWith(".kts")
+            }
+            .toSet()
     }
 
 }
@@ -134,5 +164,6 @@ private val ALLOW_MARKERS = listOf("已退役", "已移除", "已删", "退役",
 /** self.acp 子命令注册在 SelfAcpCommands (构建测试注册表未覆盖) — 真实存在, 非幽灵。 */
 private val SELF_ACP_KEYS = setOf("self.acp.fingerprint", "self.acp.trusted")
 
-/** 内核命名空间 — 注册表对照范围。动态/插件命名空间不在其中。 */
-private val KERNEL_NS = setOf("self", "agent", "plugin", "evolution")
+/** 内核命名空间 — 注册表对照范围。动态/插件命名空间不在其中。
+ *  memory/device 为 P1/P4 新增内核命令组 (1.7 守护扩容), 必须与注册表对照。 */
+private val KERNEL_NS = setOf("self", "agent", "plugin", "evolution", "memory", "device")
