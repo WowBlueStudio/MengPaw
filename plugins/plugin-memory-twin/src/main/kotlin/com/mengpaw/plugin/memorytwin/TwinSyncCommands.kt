@@ -46,7 +46,9 @@ internal class TwinSyncCommands(
             if (result.filesReceived > 0 || result.conflicts > 0) {
                 appendLine("- 接收文件: ${result.filesReceived}")
                 appendLine("- 发送文件: ${result.filesSent}")
-                appendLine("- 冲突 (已存 .conflict 备份): ${result.conflicts}")
+                // v0.3: 冲突落在文件内标记, `.conflict` 只是无共同基准/大文件兜底时的副本 —
+                // 旧文案说"已存 .conflict 备份"会让 Agent 去错地方找冲突。
+                appendLine("- 冲突: ${result.conflicts} (文件内已写 <<<<<<< / ======= / >>>>>>> 标记, 详见 inbox merge_conflict_*)")
                 appendLine("- 使用 twin.status 查看详情")
             } else {
                 appendLine("- 无差异文件 (工作区已一致)")
@@ -91,11 +93,12 @@ internal class TwinSyncCommands(
         return when (mode?.lowercase()) {
             "wifi" -> {
                 state.syncEngine.qosLevel = TwinSyncEngine.QosLevel.WIFI
-                ExecutionResult.ok("QoS: WiFi — 全量同步 (每 60 秒)\n内容: 账本 + 身份 + 梦境")
+                ExecutionResult.ok("QoS: WiFi — 自动同步每 60 秒 (差异同步: 只传缺失对象)")
             }
             "mobile" -> {
                 state.syncEngine.qosLevel = TwinSyncEngine.QosLevel.MOBILE
-                ExecutionResult.ok("QoS: 移动网络 — 仅关键记忆 (每 5 分钟)\n数据量更小，不传梦境和身份文档")
+                // v0.3 实测: mobile 只拉长周期, 不做内容筛选 — 旧文案声称"仅关键记忆"会让 Agent 误判
+                ExecutionResult.ok("QoS: 移动网络 — 自动同步每 5 分钟 (仍为差异同步; 不做内容筛选)")
             }
             "metered" -> {
                 state.syncEngine.qosLevel = TwinSyncEngine.QosLevel.METERED
@@ -106,8 +109,8 @@ internal class TwinSyncCommands(
                 appendLine("QoS 策略: ${state.syncEngine.qosLevel.name}")
                 appendLine()
                 appendLine("可选: wifi | mobile | metered")
-                appendLine("- wifi: 全量同步, 每 60 秒 (默认)")
-                appendLine("- mobile: 仅关键记忆, 每 5 分钟")
+                appendLine("- wifi: 自动同步每 60 秒 (默认)")
+                appendLine("- mobile: 自动同步每 5 分钟 (不做内容筛选)")
                 appendLine("- metered: 暂停自动同步, 手动触发")
             })
         }

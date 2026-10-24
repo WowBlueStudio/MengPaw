@@ -54,6 +54,27 @@ class MemoryTwinPlugin : Plugin {
             "twin.model",
             "twin.delegate", "twin.route",
             "twin.lost", "twin.recover"
+        ),
+        // BM25 检索关键词 (self.search) — 缺省只按"命名空间+命令名"命中,
+        // Agent 用「记忆同步 / 设备列表 / 哪个设备跑」这类自然语言会搜不到。
+        commandKeywords = mapOf(
+            "start" to CommandKeywords(listOf("启动孪生", "开启同步"), listOf("start twin sync")),
+            "stop" to CommandKeywords(listOf("停止孪生", "关闭同步"), listOf("stop twin sync")),
+            "status" to CommandKeywords(listOf("孪生状态", "同步状态", "上次同步"), listOf("twin status", "sync status")),
+            "peers" to CommandKeywords(listOf("设备列表", "节点列表", "对端设备"), listOf("peers", "devices")),
+            "peer.info" to CommandKeywords(listOf("设备详情", "节点信息"), listOf("peer info")),
+            "peer.add" to CommandKeywords(listOf("手动添加设备", "添加节点"), listOf("add peer")),
+            "pair" to CommandKeywords(listOf("配对", "绑定设备", "记忆孪生配对"), listOf("pair device")),
+            "unpair" to CommandKeywords(listOf("解绑", "取消配对"), listOf("unpair device")),
+            "sync" to CommandKeywords(listOf("同步", "记忆同步", "跨设备同步", "工作区同步"), listOf("sync workspace")),
+            "sync.auto" to CommandKeywords(listOf("自动同步", "定时同步"), listOf("auto sync")),
+            "sync.qos" to CommandKeywords(listOf("同步频率", "省流量", "按流量计费"), listOf("sync interval", "metered")),
+            "capabilities" to CommandKeywords(listOf("能力对比", "硬件能力", "设备能力"), listOf("capabilities")),
+            "model" to CommandKeywords(listOf("模型能力", "上下文长度", "视觉能力"), listOf("model profile")),
+            "delegate" to CommandKeywords(listOf("委派任务", "远程执行"), listOf("delegate task")),
+            "route" to CommandKeywords(listOf("任务路由", "哪个设备跑", "选设备"), listOf("route task")),
+            "lost" to CommandKeywords(listOf("设备丢失", "丢失设备"), listOf("device lost")),
+            "recover" to CommandKeywords(listOf("找回设备", "恢复设备"), listOf("recover device"))
         )
     )
 
