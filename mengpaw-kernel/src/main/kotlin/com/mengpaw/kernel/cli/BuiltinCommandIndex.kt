@@ -4,7 +4,12 @@
 package com.mengpaw.kernel.cli
 
 /**
- * 内置命令索引工厂 — 为所有 ~150 条内核/插件命令生成 BM25 检索索引.
+ * 内核命令索引工厂 — 为**内核注册**的命令生成 BM25 静态种子.
+ *
+ * 边界 (勿误读): **插件命令不在这里**。插件激活时由 `PluginManager` 按 `Plugin.commands`
+ * + `PluginMetadata.commandKeywords` 动态注册 (如 `twin.*` / `framework.*` / 技能插件)。
+ * 两条通道最终都进 `CommandSearch`; 内核命令漏种子会被 [IndexCoverageTest] 抓住,
+ * 插件命令漏关键词则由各插件自己的元数据测试兜底 (`MemoryTwinMetadataTest` 等)。
  *
  * 每条命令配备: 中英文同义词表 (BM25 的 "树枝"), 描述, 用法.
  * Agent 用自然语言查询时, 同义词桥接 LLM 用词和命令描述之间的语义鸿沟.

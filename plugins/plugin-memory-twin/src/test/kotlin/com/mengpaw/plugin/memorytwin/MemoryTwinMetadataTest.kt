@@ -35,11 +35,11 @@ class MemoryTwinMetadataTest {
     }
 
     @Test
-    fun `核心命令都配了关键词`() {
-        // 这几个是 Agent/用户最常自然语言描述的, 缺了就等于搜不到
-        val required = setOf("sync", "peers", "status", "pair", "route", "model")
-        val missing = required.filterNot { it in metadata.commandKeywords }
-        assertTrue("核心命令缺关键词: $missing", missing.isEmpty())
+    fun `每条注册命令都配了关键词_self_search 全量可达`() {
+        // 插件命令不进 BuiltinCommandIndex (那是内核静态种子), 检索靠这张表 —
+        // 漏一条就等于 self.search 搜不到那条命令, 所以要求全覆盖而不是"核心几条"。
+        val missing = commandShortNames.filterNot { it in metadata.commandKeywords }
+        assertTrue("这些命令没有关键词, self.search 搜不到: $missing", missing.isEmpty())
     }
 
     @Test

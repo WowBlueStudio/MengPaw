@@ -133,7 +133,24 @@ internal class TwinLifecycleCommands(
                 appendLine("- 上次接收: ${stateFlow.lastFilesReceived} 个文件, 冲突 ${stateFlow.lastConflicts}")
             }
             TwinStateStore.load().lastError.takeIf { it.isNotBlank() }?.let { appendLine("- 上次错误: $it") }
+            // 健康度数字 (按需输出, 不进提示词): Agent 判断"对象库/账本是否还在长"时用
+            try {
+                val objects = com.mengpaw.kernel.memory.SnapshotStore.objectCount()
+                val bytes = com.mengpaw.kernel.memory.SnapshotStore.storeSizeBytes()
+                appendLine("- 对象库: $objects 个对象 / ${formatBytes(bytes)}")
+                val ledger = com.mengpaw.kernel.memory.MemoryLedger.entries(MemoryTwinPlugin.agentName).size
+                appendLine("- 记忆账本: $ledger 条")
+            } catch (_: Exception) {
+                // 健康度只是附加信息, 采集失败不影响状态主体
+            }
         })
+    }
+
+    /** 字节数 → 人类可读 (状态输出用)。 */
+    private fun formatBytes(bytes: Long): String = when {
+        bytes >= 1024L * 1024L -> String.format(java.util.Locale.ROOT, "%.1f MB", bytes / 1024.0 / 1024.0)
+        bytes >= 1024L -> String.format(java.util.Locale.ROOT, "%.1f KB", bytes / 1024.0)
+        else -> "$bytes B"
     }
 
     /** 时间戳 → `HH:mm:ss` (状态输出统一口径)。 */

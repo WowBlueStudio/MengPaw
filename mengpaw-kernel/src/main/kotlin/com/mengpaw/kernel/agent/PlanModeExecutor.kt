@@ -8,9 +8,20 @@ import com.mengpaw.kernel.cli.ErrorCodes
 import com.mengpaw.kernel.cli.ExecutionResult
 import com.mengpaw.kernel.error.ErrorCollector
 import com.mengpaw.kernel.error.ErrorType
+import com.mengpaw.kernel.llm.ToolCall
+import com.mengpaw.kernel.security.HighRiskCommandGate
 import com.mengpaw.kernel.security.Sanitizer
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+
+/**
+ * plan 步骤的 action → 门禁求值 (plan 模式唯一入口)。
+ *
+ * 抽成顶层函数是为了可单测: 只要执行器调用它, plan 模式下的高危命令就与 ReAct 工具路径
+ * 同规则 (必须 reason、按模板展开、JSON 参数不会退化成位置拼接)。
+ */
+internal fun gatePlanAction(action: ToolCall): HighRiskCommandGate.GateResult =
+    HighRiskCommandGate.evaluate(action)
 
 /**
  * Plan-mode executor: structured plan generation and step-by-step execution.
@@ -157,13 +168,20 @@ class PlanModeExecutor(
             // 对 public API 属性做智能转换 — 先取局部变量再判空
             val action = parsed.action
             if (action != null) {
-                val cmd = "${action.name} ${action.parameters.values.joinToString(" ")}"
-                val result = action.paramFormatError()?.let {
-                    ExecutionResult.fail(it, errorCode = ErrorCodes.PARAM_FORMAT_ERROR)
-                } ?: pipelineManager.buildPipeline().execute(cmd, context)
+                // P0 修复: 原实现直接 `name + values` 拼命令行 —— 绕过 HighRiskCommandGate,
+                // 导致 plan 模式下所有门禁表内命令 (memory.restore / root.* / sys.camera.photo 等)
+                // 既不校验 reason 也不按模板展开 (JSON 参数被当位置参数硬拼)。
+                // 现在与 ReAct 工具路径共用同一判定: 被拒 → 直接把门禁错误回给模型, 不执行。
+                val gate = gatePlanAction(action)
+                val result = if (gate.error != null) {
+                    ExecutionResult.fail(gate.error, errorCode = gate.errorCode)
+                } else {
+                    pipelineManager.buildPipeline().execute(gate.commandLine, context)
+                }
                 val observation = if (result.success) result.output
                     else (result.errorCode?.let { "Error [$it]: ${result.error}" } ?: "Error: ${result.error}")
-                sessionManager.addMessage(stepSession.id, com.mengpaw.kernel.session.Message("assistant", "Command: $cmd\nResult: $observation"))
+                sessionManager.addMessage(stepSession.id, com.mengpaw.kernel.session.Message("assistant",
+                    "Command: ${gate.commandLine}\nResult: $observation"))
             }
         }
         return "Step completed (max iterations reached): ${step.description}"
