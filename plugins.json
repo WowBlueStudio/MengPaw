@@ -1,7 +1,7 @@
 {
   "marketplace": "MengPaw Plugin Marketplace",
   "version": 9,
-  "updated": "2026-09-19",
+  "updated": "2026-10-24",
   "plugins": [
     {
       "id": "concise-plugin",
@@ -17,7 +17,7 @@
       ],
       "checksum": "sha256:cf6acfebf8fbdab203076b87a0f8e913eca6ea9333d53c108bfb6f47c2cf303e",
       "size": 7440,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "dream-plugin",
@@ -29,9 +29,9 @@
       "status": "builtin",
       "minCoreVersion": "0.2.0",
       "commands": [],
-      "checksum": "sha256:c10cb97132ab3278c866c31f3f9796fded077b8d9d436ca8ae00ff3139ad5427",
-      "size": 3129,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "checksum": "sha256:47becde056951309a8c0b83ad4a70cbe27ceca4dfd43c395e745467161824e40",
+      "size": 3155,
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "evolution-plugin",
@@ -45,7 +45,7 @@
       "commands": [],
       "checksum": "sha256:ab0c12db4ba680f05dce07f6a9bf7ee669d1c8d001618f24567e4d5eb43f8c62",
       "size": 3135,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "tavily-plugin",
@@ -63,7 +63,7 @@
       ],
       "checksum": "sha256:ab121f541be212f54a85949a8df59fadf1ab181baadd0019bb8fa3e175a601e9",
       "size": 21596,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "framework-plugin",
@@ -93,7 +93,7 @@
       ],
       "checksum": "sha256:0574d358452bc9d3eb0f3b5bb8df75f7df427dea62b741d11f82fc5a31440067",
       "size": 110950,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "net-plugin",
@@ -111,7 +111,7 @@
       ],
       "checksum": "sha256:3693f599011abec46f9921afb2a39e00a5defc65ade373914ed3ba7c82cd3cd4",
       "size": 17467,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "memory-twin-plugin",
@@ -140,9 +140,9 @@
         "twin.lost",
         "twin.recover"
       ],
-      "checksum": "sha256:f1842d5066ba8608c99a4deaebe9c3c26d7749664f62fbfbebf795e528deda33",
-      "size": 302592,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "checksum": "sha256:320bbb541b188e3f6666c289070becbb65a71dfcdbd311d7dfeb5c8e6a928c19",
+      "size": 377457,
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "skill-plugin",
@@ -165,9 +165,9 @@
         "skill.enable",
         "skill.disable"
       ],
-      "checksum": "sha256:e04d58ef5f5ec844c3f9d9a039c37f6acf7e6605fc37dbaf8d47dfef1827319a",
-      "size": 105541,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "checksum": "sha256:32081c71e19f225a02df06fb23a4d18a16be6fd3b5c19d023e5a8cf41e53251a",
+      "size": 107877,
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "clipboard-plugin",
@@ -185,7 +185,7 @@
       ],
       "checksum": "sha256:ca859348c1729f46741ae2d8e1fdf78aadb8a3b9f0cc48e3c52ebd255665bbff",
       "size": 7262,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "dev-plugin",
@@ -206,7 +206,7 @@
       ],
       "checksum": "sha256:dc9e4cc80d320aff8aae8edc0d2c6451ed62d0e3e113dc37d05f694de92234d5",
       "size": 35529,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "update-plugin",
@@ -230,7 +230,7 @@
       ],
       "checksum": "sha256:2fcb14e1b0d5eac9ff32d8bcc9ccad36c10121a41b4e75cbb129501164151159",
       "size": 56173,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "translate-plugin",
@@ -342,7 +342,7 @@
       ],
       "checksum": "sha256:2f65c8cfd8348f6f16cbfbfdfe153c163fd9ee0bde1e3019c99091ae54d358c8",
       "size": 282874,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "comfy-plugin",
@@ -447,7 +447,7 @@
       ],
       "checksum": "sha256:033500b7ebbddc58039b46dc62bd73e88799713a7baf34bf4358379cea65d6c2",
       "size": 46834,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "termux-plugin",
@@ -466,7 +466,7 @@
       ],
       "checksum": "sha256:70e59f922e95403a6442bc0c390e9e78efa443c108e896acf839d6fe60439afc",
       "size": 44500,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "tools-plugin",
@@ -485,7 +485,7 @@
       ],
       "checksum": "sha256:72f1ad537fd62c0ff1b91dbb65fd5524d71c753c424e88be3aa4cc6b0c48c177",
       "size": 36739,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "office-plugin",
@@ -503,7 +503,7 @@
       ],
       "checksum": "sha256:91b333fc9bdfe6cf74e06d60fec4f6e9e532dc9462677f1cb0be101f9578c7f6",
       "size": 21466,
-      "changelog": "> 触发: 用户实测 Agent 查询公众号文章连环失败 (tavily.extract 报语法错 / 声称 net.curl 不存在 /\n> skill.run browser-spider 重试无效 / grep -n 参数被\"吞掉\")。彻查后定性: 3 条是模型幻觉,\n> 1 条是真框架缺陷; 且顺带挖出 v0.36.x「命令去重」遗留的系统性腐烂 (49 处幽灵引用 + 保护链断裂)。\n\n### 修复 — Agent 读到的指令必须是真的\n- **清理 8 个文件里 Agent 每轮都会读到的必败指令**: `PromptEngine` 英文分支 `fs.cat`、`PlanModeExecutor`\n  计划提示词、`PromptFirewall` 策略文本、`EvolutionProvider` 错误示例、`AgentToolsSummaryMiddleware`\n  (每轮注入系统提示词)、`RootPlugin`/`SkillManageCommands`/`SkillFlowCommands`/`TribeContextTrim`\n- **浏览器\"提炼网页要点\"链路修"
+      "changelog": "> 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——\n> ① 内容通道收发载荷形态不一致（发送端扁平字符串 / 接收端按 `{content,mtime}` 解析），**只要真有差异就抛异常**，\n> 跨设备接收实际从未成功; ② 三方合并 base 用命名空间级 `local`，第三台设备首次同步会把本机文件判成\n> \"对端已删除\"并传播删除。本轮把存储与同步整体换成 Git 式账本。\n\n### 新增\n- **对象库** `memory.commit/log/show/diff/restore/gc`: 内容寻址 blob/tree/snapshot (SHA-256 + zlib)、\n  `tmp`→`rename` 原子写、按可达性 GC; `local` 只由同步层写 (`setLocalRef`), 本地提交不前进。\n- **协议 v0.3** `SYNC_HELLO / SYNC_ACK / TREE_WALK / OBJ_GET`: 纯 pull; 根 tree 相同则一轮结束,\n  不同才拉缺失对象; 四类型均过信任"
     },
     {
       "id": "connector-openclaw-plugin",
