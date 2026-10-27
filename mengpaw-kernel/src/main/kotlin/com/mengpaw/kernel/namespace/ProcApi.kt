@@ -3,6 +3,7 @@
 
 package com.mengpaw.kernel.namespace
 
+import com.mengpaw.kernel.ProcIdentity
 import java.io.File
 
 /**
@@ -47,16 +48,11 @@ internal object ProcApi {
         emptyList()
     }
 
-    /** 当前进程的 pid (纯 JVM: `ProcessHandle.current().pid()`; 降级用 `java.lang.Process` 不可得时 -1)。 */
-    fun currentPid(): Long = try {
-        val cls = handleClass
-        if (cls != null) {
-            val current = cls.getMethod("current").invoke(null)
-            cls.getMethod("pid").invoke(current) as Long
-        } else -1L
-    } catch (e: Throwable) {
-        -1L
-    }
+    /**
+     * 当前进程的 pid (单一事实源见 [ProcIdentity]) — 桌面 JVM 走 `ProcessHandle` 反射,
+     * Android 降级读 `/proc/self`, 均不可得时 -1。
+     */
+    fun currentPid(): Long = ProcIdentity.currentPid()
 
     /** 按 pid 取句柄 (不存在/不可见返回 null)。 */
     fun of(pid: Long): Any? = try {

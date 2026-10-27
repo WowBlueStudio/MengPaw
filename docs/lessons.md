@@ -2047,3 +2047,32 @@ tag + 双远端 push → GitHub release + Gitee release 上传 → 验证 26 个
    只有未加引号传参才会截断。→ 教训: 反编译结论要回源码复核一次再当事实用。
 
 
+## 52. Android 缺类事故: 文档写了纪律、代码没守 ⇒ 任意任务开局即崩 (2026-10-27, v0.49.0 后)
+
+① **现象与根因**: 真机任意任务提交即 `执行出错: Failed resolution of: Ljava/lang/ProcessHandle;`。
+   根因是 `ResumeLock.kt:48` 的构造器**默认参数**写着 `ProcessHandle.current().pid()` ——
+   `ProcessHandle` 是 Java 9 API, **Android 全平台没有**, 而 `ResumeLock()` 是 ReAct 开局必经点
+   (`AgentReActLoop` 每任务第一步构造), 于是 `default argument` 求值当场抛错, 与任务内容无关。
+   → 判据: **"开局公共路径"上的任何一行都按平台最弱能力审核** (低版本 Android / 缺类环境)。
+
+② **"文档已经写了" ≠ "代码守住了"**: `docs/lessons.md:264`、`docs/harness-android-port.md` §1.3、
+   `CHANGELOG v0.48.0` 三处都写明"不得静态引用 `ProcessHandle`", 而 `harness-android-port.md:1049`
+   甚至在已知问题表里**点名本行为未修复**(第 22 条)。仍然带病上线。→ 教训: 纪律必须落成**测试门禁**；
+   本轮新增 `AndroidMissingClassGuardTest`(剥离注释与字符串字面量后扫 `\bProcessHandle\b`,
+   反射形式 `Class.forName("java.lang.ProcessHandle")` 合法放行)。
+
+③ **R8 `-dontwarn` 是掩盖, 不是修复**: `proguard-common.pro` 的
+   `-dontwarn java.lang.ProcessHandle` 只让 release 构建别中断, 构建期与运行期是两道关;
+   `-dontwarn` 面向的是"分析期缺类", 运行期缺类照样 `NoClassDefFoundError`/`Failed resolution`。
+   → 判据: 凡是需要 `-dontwarn` 的缺类, 同时要有一个"运行期降级路径 + 门禁测试"。
+
+④ **修法与取值链**: 新 `kernel/ProcIdentity.kt` = `object` 单点, `currentPid()` 三级降级
+   (反射 `ProcessHandle` → `/proc/self` 规范化路径解析 → `-1`), 全链路 `runCatching`, 进程内 `lazy` 缓存;
+   `ProcApi.currentPid()` 改为委托它 (消灭双份实现)。Android 上 pid 有真实值 (`/proc/self` 自身可读),
+   诊断字段不再恒 `-1`。
+
+⑤ **同类巡检口径** (本轮已扫: kernel / shell / plugins / harness 生产源码): `.toList()` 全是
+   Kotlin 集合扩展(非 Java 16 `Stream.toList`), 无 `List.of`/`Map.of`/`Files.readString`/`Optional`
+   静态引用 —— **唯一命中就是 `ResumeLock`**。往后再加 Java 9+ API 时, 先问"Android 有没有这个类"。
+
+

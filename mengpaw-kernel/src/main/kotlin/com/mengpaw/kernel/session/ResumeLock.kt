@@ -5,6 +5,7 @@ package com.mengpaw.kernel.session
 
 import com.mengpaw.kernel.DataPaths
 import com.mengpaw.kernel.KernelLog
+import com.mengpaw.kernel.ProcIdentity
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -38,14 +39,21 @@ import java.nio.file.StandardCopyOption
  *
  * ## 可测性
  * [dir] 与 [clock] 均由构造器注入 — 测试用临时目录 + 假时钟, 不做墙钟阈值断言。
- * 纯 `java.io.File` / `java.nio` 实现 (kernel 既有惯例, 见 [SessionEventLog] 的原子写), 无 Android 依赖。
+ * 纯 `java.io.File` / `java.nio` 实现 (kernel 既有惯例, 见 [SessionEventLog] 的原子写), 无 Android 依赖;
+ * 进程标识经 [ProcIdentity] 平台安全取值 (Java 9 `ProcessHandle` 在 Android 上不存在, 不得静态引用)。
  */
 class ResumeLock(
     private val dir: String = DataPaths.CHECKPOINTS,
     private val clock: () -> Long = { System.currentTimeMillis() },
     private val ttlMs: Long = DEFAULT_TTL_MS,
-    /** 进程标识 — 仅用于诊断 (谁持有锁), 不参与判据。 */
-    private val pid: Long = ProcessHandle.current().pid(),
+    /**
+     * 进程标识 — 仅用于诊断 (谁持有锁), 不参与判据。
+     *
+     * **必须经 [ProcIdentity] 取值**: `ProcessHandle` 是 Java 9 API, Android 全平台没有,
+     * 此处原先直接写 `ProcessHandle.current().pid()` 会让 Android 上**每个 Agent 任务开局**
+     * 就抛 `Failed resolution of: Ljava/lang/ProcessHandle;` (构造器默认参数求值)。
+     */
+    private val pid: Long = ProcIdentity.currentPid(),
 ) {
 
     /** 锁持有者信息 (落盘内容)。 */

@@ -845,6 +845,7 @@ Manifest 声明 ≠ 授权, 前台服务通知不显示, 用户误判"通知栏�
 | 租期 `WAKELOCK_DURATION_MS` | 30 min | 单次租期上限, 到期必须重新判定 — 绝不无限持锁到电池耗尽 |
 | 续租阈值 `RENEW_THRESHOLD_MS` | 15 min | 30 − 15 = 留 15 min 安全余量; 且 10 (看门狗) < 15 (阈值) 保证任何一次看门狗都能在租约到期前补租 |
 | 看门狗 `WATCHDOG_INTERVAL_MS` | 10 min | 与既有 `TriggerEngine` 系统唤醒同频 (`MainActivity` 里 `registerSystemWake(this, 10)`), 不额外增加唤醒次数; 优先 `setExactAndAllowWhileIdle` 穿透 Doze, 无精确闹钟权限 (`canScheduleExactAlarms() == false`) 时回退**免权限的 `setAndAllowWhileIdle`** (仍可穿透 Doze, 只是时间精度放宽) |
+| 进程标识 (`ResumeLock` 的 `pid`) | `ProcIdentity.currentPid()` | **`ProcessHandle` 是 Java 9 API, Android 全平台没有** — 静态引用会让构造器默认参数求值时就抛 `Failed resolution: Ljava/lang/ProcessHandle;`(2026-10-27 真机事故: 任意任务开局即失败)。`ProcIdentity` 走 反射 → `/proc/self` → `-1` 三级降级且永不抛; `AndroidMissingClassGuardTest` 静态扫描锁死此纪律 |
 | 续跑锁 TTL | 10 min | **不续租**, 故只能取"长到不打断正常续跑、短到不把用户锁在门外": 恢复后最坏一步 (60s 工具超时 + LLM 往返) 远小于 10 min, 而进程被系统杀死后鬼锁最多挡用户 10 min (Android 上 `release` 无 finalizer 保证) |
 | 单条 content 截断 | 最近 20 条 8000 字符 / 更早 200 字符 | **分级**: 续跑只用最近上下文的全文 (8000 字符约 2-4K token); 更早的只留 `role + 200 字符` 且丢 `reasoning` (思维链只需最后一个 assistant 轮次回传, 丢了 DeepSeek 端点会 400), 完整历史在本会话归档里有底 |
 | messages 条数上限 | 最近 200 条 | 分级后单档从 ~1.6M 降到 ~0.2M 字符量级, 避免长任务每次落盘全量重写造成的 IO 放大 |
