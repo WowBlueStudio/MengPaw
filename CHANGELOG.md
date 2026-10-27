@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.49.1 (2026-10-27) — Android 缺类崩溃根治（任意任务开局即失败）
+
+> 触发: v0.49.0 装到真机后，**任何任务**一提交就报「执行出错: Failed resolution of: Ljava/lang/ProcessHandle;」。
+> 根因: `ResumeLock` 构造器的**默认参数**写着 `ProcessHandle.current().pid()` —— `ProcessHandle` 是
+> **Java 9 API，Android 全平台没有**；而 `ResumeLock()` 是 ReAct 循环的开局必经点，默认参数在构造时求值，
+> 于是与任务内容无关地当场崩。R8 的 `-dontwarn java.lang.ProcessHandle` 只掩盖构建期告警，掩盖不了运行期缺类
+> （这条纪律 lessons / `docs/harness-android-port.md` / v0.48.0 CHANGELOG 都写过，代码却没守住）。
+
+### 修复
+- **`ResumeLock` 进程标识改经平台安全层**: 新增 `kernel/ProcIdentity.kt`，`currentPid()` 三级降级
+  （反射 `ProcessHandle` → `/proc/self` 规范化路径解析 → `-1`），全链路 `runCatching` + `lazy` 缓存，永不抛。
+  Android 上拿到 `/proc/self` 的真实 pid，诊断字段不再恒 `-1`。
+- **`ProcApi.currentPid()` 改为委托 `ProcIdentity`**（消灭双份实现，`proc.*` 与续跑锁共用同一取值口径）。
+
+### 新增
+- **门禁测试 `AndroidMissingClassGuardTest`**: 剥离注释与字符串字面量后扫描 `\bProcessHandle\b`
+  （`Class.forName("java.lang.ProcessHandle")` 反射形式合法放行），把「生产源码不得静态引用 Java 9 API」
+  从文档纪律变成可执行断言 —— 下次再有人直接写 `ProcessHandle.x` 会红。
+- **`ProcIdentityTest`**（3 用例）: pid 形态 / `lazy` 缓存一致性 / `/proc/self` 降级容错 / JVM 类可用性。
+
+### 文档
+- 开发指南 §3.8 参数表补「进程标识」一行（取值链与事故判据）、§3.7 测试快照更新、头部版本/日期。
+- `docs/lessons.md` 第 52 节: 「文档写了纪律、代码没守」+「R8 `-dontwarn` 是掩盖不是修复」两条判据，
+  以及本轮全仓 Java 9+ API 巡检口径（唯一命中即为本行）。
+- 本地审计文档 `docs/harness-android-port.md` 已知问题第 22 条（点名本行未修复）已标记为修复。
+
+### 发行
+- Shell APK `mengpaw-shell-v0.49.1-release.apk`（versionCode 49001，15.02 MB）已构建并验签
+  （`CN=MengPaw, OU=Studio, O=WowBlue`）；`v0.49.1` 单 tag 推送 GitHub + Gitee。
+- 插件本轮无变更（`plugins/` 与 `plugins.json` 自 v0.49.0 起零提交），不打 `plugins-v0.49.1`；
+  harness 独立仓库亦无变更（保持 v0.2.1）。
+- 测试（`./gradlew test` 双套合并口径）：**主仓库 4 模块 2057 用例，0 failures**
+  — kernel 889 + core 128 + shell 320 + plugins 720（4 skipped 为既有 `assumeTrue` 跳过）。
+
 ## v0.49.0 (2026-10-24) — 记忆孪生 Git 化（对象库 / 协议 v0.3 / 记忆账本 / 设备库存）
 
 > 触发: 孪生自 v0.22.0 起是「清单 + 全文传输 + LWW」。终审审计发现两处致命缺陷 ——
